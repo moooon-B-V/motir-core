@@ -49,6 +49,7 @@ export declare const operation_getSprint: ValidateFunction;
 export declare const operation_getWorkItem: ValidateFunction;
 export declare const operation_getWorkItemActivity: ValidateFunction;
 export declare const operation_getWorkItemDispatchPrompt: ValidateFunction;
+export declare const operation_listProjectRepositories: ValidateFunction;
 export declare const operation_listProjectSprints: ValidateFunction;
 export declare const operation_listProjectWorkItems: ValidateFunction;
 export declare const operation_listProjects: ValidateFunction;

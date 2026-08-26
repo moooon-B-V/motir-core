@@ -306,9 +306,23 @@ invariant, not a default.**
 
 | What is at the path                                                                       | Outcome   | Reported as                               |
 | ----------------------------------------------------------------------------------------- | --------- | ----------------------------------------- |
-| A git repository whose `origin` matches the row's clone URL                               | untouched | `already present`                         |
+| A git repository (`<path>/.git` is present)                                               | untouched | `already present`                         |
 | Anything that is not a git repository (a file, a non-empty directory, an empty directory) | untouched | `already present (not a git repository)`  |
-| A git repository whose `origin` points somewhere else                                     | untouched | `already present (origin is <other-url>)` |
+| A git repository whose `origin` points somewhere else                                     | untouched | reported as `already present` — see below |
+
+**⚠️ THE WRONG-REMOTE CASE IS NOT SEPARATELY REPORTED, AND THAT IS A DELIBERATE TRADE
+AGAINST A STRONGER INVARIANT.** Telling a wrong-remote checkout from a right one requires
+running `git remote get-url origin` IN THAT PATH — a read, and harmless in itself, but a
+git invocation nonetheless. The invariant this section is worth having is the one a test
+can hold in both directions for every future branch of the planner: **for a repository
+whose resolved path exists, NO git command is issued at all**, asserted over the injected
+`CommandRunner`'s recorded invocations. A classification that spends one git call weakens
+that guard to "no WRITING git command", which is a judgement about each command rather
+than a property of the code — and the guard is the thing that keeps this correct once
+somebody adds a branch nobody reviewed. So the three cases above are collapsed to what
+the FILESYSTEM alone can answer, and the wrong-remote checkout is left to the person who
+put it there. (`motir doctor`'s **Repo checkouts** row is where a diagnosis of an
+existing checkout belongs if one is ever wanted; it is not this command's business.)
 
 Three reasons this is stated as an invariant:
 
@@ -319,7 +333,7 @@ Three reasons this is stated as an invariant:
    pass that repaired checkouts would be the first place the CLI broke that rule.
 2. **A wrong-remote checkout is a person's problem to resolve.** Motir cannot know whether
    it is a mistake or a deliberate fork, and guessing destroys work in the case where it
-   guesses wrong.
+   guesses wrong — which is also why not naming it (above) costs so little.
 3. **Rung-1 confirms the cost of the alternative.** `vcstool`, which does update existing
    directories to match its manifest, ships a `--skip-existing` flag for exactly this
    complaint — and the flag has a standing bug where an existing repository is still moved

@@ -22,6 +22,8 @@ import type {
   ActivityValue,
   CommentsPage,
   ProjectList,
+  ProjectRepository,
+  ProjectRepositoryList,
   ProjectSummary,
   ReadyItemSummary,
   ReadyPage,
@@ -89,6 +91,8 @@ type ProjectsBody = SuccessBody<'listProjects'>;
 type ReadyBody = SuccessBody<'getProjectReadySet'>;
 /** One page of a project's sprints. */
 type SprintsBody = SuccessBody<'listProjectSprints'>;
+/** One page of a project's repository set. */
+type RepositoriesBody = SuccessBody<'listProjectRepositories'>;
 /** The work-item detail aggregate. */
 type DetailBody = SuccessBody<'getWorkItem'>;
 /** One page of the activity stream, in whichever view was asked for. */
@@ -213,6 +217,43 @@ export function toSprintList(pages: readonly SprintsBody[]): SprintList {
   const sprints: SprintSummary[] = [];
   for (const page of pages) sprints.push(...rowsOf(page).map(toSprintSummary));
   return { sprints };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The project's repository SET (Story MOTIR-3584 · MOTIR-3586)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One repository row — a field-for-field carry; the two shapes agree.
+ *
+ * Every coordinate is nullable and is passed THROUGH rather than defaulted, and
+ * that is the whole discipline here: `cloneUrl: null` is a real answer (either
+ * the row names no repository yet, or its provider is one this build cannot
+ * address), and a `?? ''` would turn "Motir does not know where this lives" into
+ * a URL git will fail on. `established` is the discriminator a materializing
+ * client branches on, published by the server so nobody re-derives it.
+ */
+export function toProjectRepository(repo: RowOf<RepositoriesBody>): ProjectRepository {
+  return {
+    id: repo.id,
+    role: repo.role,
+    label: repo.label,
+    name: repo.name,
+    repoRef: repo.repoRef,
+    cloneUrl: repo.cloneUrl,
+    defaultBranch: repo.defaultBranch,
+    archived: repo.archived,
+    state: repo.state,
+    established: repo.established,
+  };
+}
+
+/** The whole set, assembled from every page the caller walked — IN ORDER, which
+ *  is load-bearing: the first row is the project's PRIMARY repository. */
+export function toProjectRepositoryList(pages: readonly RepositoriesBody[]): ProjectRepositoryList {
+  const repositories: ProjectRepository[] = [];
+  for (const page of pages) repositories.push(...rowsOf(page).map(toProjectRepository));
+  return { repositories };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

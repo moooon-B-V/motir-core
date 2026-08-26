@@ -256,6 +256,10 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--repo <name>',
         description: 'Mark THIS directory as a single repo’s checkout (writes a "." override).',
       },
+      {
+        flags: '--no-clone',
+        description: 'Bind only — do not clone the project’s missing checkouts.',
+      },
     ],
   },
   {

@@ -580,6 +580,27 @@ export function v1Claim(key: string, over: Record<string, unknown> = {}) {
   };
 }
 
+/** One row of a project's repository SET, as `/api/v1` publishes it — an
+ *  ESTABLISHED row by default; pass overrides for a `proposed` one. */
+export function v1ProjectRepository(
+  name: string,
+  over: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: `repo-${name}`,
+    role: 'web',
+    label: null,
+    name,
+    repoRef: `moooon/${name}`,
+    cloneUrl: `https://github.com/moooon/${name}.git`,
+    defaultBranch: 'main',
+    archived: false,
+    state: 'connected',
+    established: true,
+    ...over,
+  };
+}
+
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
     body: {
@@ -595,6 +616,11 @@ export const DEFAULT_V1: V1Script = {
   },
   'GET /api/v1/projects': { body: v1Page([v1Project('PROD', 'Prodect')]) },
   'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([]) },
+  // The repository SET (MOTIR-3586). EMPTY by default, deliberately: `motir
+  // link` reads it on every bind now, and the default script must not decide
+  // for a suite that its link also CLONES something. A suite that wants a
+  // materializing link scripts this key with rows of its own.
+  'GET /api/v1/projects/{projectKey}/repositories': { body: v1Page([]) },
   'GET /api/v1/projects/{projectKey}/sprints': { body: v1Page([]) },
   'GET /api/v1/work-items/{key}': {
     status: 404,
