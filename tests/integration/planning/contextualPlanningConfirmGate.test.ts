@@ -227,45 +227,30 @@ async function planFromItem(
 async function engineProposes(
   planId: string,
   proposals: Parameters<typeof plansService.addProposals>[1],
+  afterClose?: (planItemIds: string[]) => Promise<void>,
 ): Promise<void> {
   await plansService.addProposals(planId, proposals, svcCtx());
   await plansService.markPlanned(planId, svcCtx());
+  if (!afterClose) return;
+  const rows = await adminDb.planItem.findMany({
+    where: { planId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  await afterClose(rows.map((r) => r.id));
 }
 
 /**
- * The same playback, but writing the PlanItems UNDERNEATH the service
- * (MOTIR-3539).
+ * ⚠️ WHY EVERY REFUSAL CASE BELOW CLOSES A **VALID** PLAN AND THEN BREAKS IT.
  *
- * `addProposals` now refuses an unresolvable intra-plan `planItem:` ref AT THE
- * APPEND, so a plan carrying one can no longer be built through the public door
- * — which is the point of that card. The APPROVE-time ref gate this file also
- * covers has not become dead code, it has become the BACKSTOP: every plan
- * appended before that check shipped is sitting in exactly this state, and
- * approve is where they are still caught. So the one case that needs a dangling
- * ref seeds it directly and the assertion is unchanged.
+ * Since MOTIR-3573 `markPlanned` runs the confirmation gate before it writes
+ * `planned`, so a plan carrying a KNOWABLE defect never reaches the review
+ * queue — which is that card's whole point, and is asserted in
+ * `tests/integration/plans/authoringGates.test.ts`. The only way such a plan now
+ * reaches the CONFIRM route is the way one arises in production: the world, or
+ * the proposal set, moved after the close. That is precisely what the approve
+ * gate is for, so these cases assert something stronger than they used to.
  */
-async function engineProposesUnchecked(
-  planId: string,
-  proposals: Parameters<typeof plansService.addProposals>[1],
-): Promise<void> {
-  for (const p of proposals) {
-    await adminDb.planItem.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        planId,
-        op: p.op,
-        workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
-        parentRef: p.parentRef ?? null,
-        blockedByRefs: p.blockedByRefs ?? [],
-        ...(p.op === 'add' && p.proposedFields
-          ? { proposedFields: p.proposedFields as object }
-          : {}),
-        ...(p.op === 'modify' && p.patch ? { patch: p.patch as object } : {}),
-      },
-    });
-  }
-  await plansService.markPlanned(planId, svcCtx());
-}
 
 /** Everything an approve could touch, for a byte-identical no-write check. */
 async function treeSnapshot(): Promise<unknown> {
@@ -733,15 +718,19 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
       { origin: 'cadence' },
     );
 
-    const illegal: Parameters<typeof plansService.addProposals>[1] = [
+    const legal: Parameters<typeof plansService.addProposals>[1] = [
       {
         op: 'add',
         proposedFields: { title: 'Illegal child', kind: 'subtask' },
-        parentRef: epic.id,
+        parentRef: story.id,
       },
     ];
-    await engineProposes(userPlanId, illegal);
-    await engineProposes(cadencePlanId, illegal);
+    /** Re-parent onto the epic after the close — a subtask may not hang there. */
+    const reparent = async ([addId]: string[]) => {
+      await adminDb.planItem.update({ where: { id: addId! }, data: { parentRef: epic.id } });
+    };
+    await engineProposes(userPlanId, legal, reparent);
+    await engineProposes(cadencePlanId, legal, reparent);
 
     const before = await treeSnapshot();
     for (const planId of [userPlanId, cadencePlanId]) {
@@ -766,19 +755,19 @@ describe('every rejection class leaves the database untouched — through the an
     proposals: Parameters<typeof plansService.addProposals>[1],
     expected: { status: number; code: string },
     anchorId: string,
-    /** How the run's proposals reach the plan. Defaults to the real append; the
-     *  dangling-ref case passes the unchecked seeder, because that shape is no
-     *  longer appendable through the service (MOTIR-3539). */
-    append: typeof engineProposes = engineProposes,
+    afterClose?: (planItemIds: string[]) => Promise<void>,
   ): Promise<void> {
     const { planId } = await planFromItem(anchorId, 'Do the thing');
-    // Snapshot AFTER the run has opened, not before. The subject of these cases
-    // is what a REFUSED APPROVE writes, and opening the anchored thread takes the
-    // planning-target lock (MOTIR-2787) — a coordination marker on the anchor,
-    // not a proposal. Anchoring `before` ahead of it would make every case here
-    // assert the lock instead of the refusal.
+    // Snapshot IMMEDIATELY BEFORE THE APPROVE — after the run has opened, after
+    // the proposals are appended, and after any post-close drift. The subject of
+    // these cases is what a REFUSED APPROVE writes, so everything that legitimately
+    // happens first belongs in the baseline: opening the anchored thread takes the
+    // planning-target lock (MOTIR-2787), and since MOTIR-3573 a case that needs an
+    // unapprovable plan produces it by moving the WORLD after the close (a target
+    // that ships while the plan waits). Anchoring `before` ahead of either would
+    // make the case assert those instead of the refusal.
+    await engineProposes(planId, proposals, afterClose);
     const before = await treeSnapshot();
-    await append(planId, proposals);
 
     const err = await approvePlanRequest(planId).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanRequestError);
@@ -787,9 +776,17 @@ describe('every rejection class leaves the database untouched — through the an
     expect(failure.code).toBe(expected.code);
 
     expect(await treeSnapshot()).toEqual(before);
-    // Still `planned`, and still offered by the rail — a refusal is recoverable
+    // Still UNDECIDED, and still offered by the rail — a refusal is recoverable
     // in place, not a run the user has to start over.
-    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    //
+    // ⚠️ NOT NECESSARILY `planned` SINCE MOTIR-3579. A refusal for
+    // `PLAN_TARGET_IMMUTABLE` means a target finished while the plan waited, and
+    // `approvePlan` now leaves such a plan `stale` rather than letting it go on
+    // claiming to be approvable (AMENDMENT 9 D1). The property this case owns is
+    // that nothing was WRITTEN and the plan is still in front of the reviewer —
+    // so it asserts the undecided SET, and each case pins its own status below.
+    const after = (await adminDb.plan.findUnique({ where: { id: planId } }))?.status;
+    expect(['planned', 'stale']).toContain(after);
     expect(await readPendingProposal(planId)).not.toBeNull();
   }
 
@@ -797,28 +794,34 @@ describe('every rejection class leaves the database untouched — through the an
     const epic = await seedItem({ kind: 'epic', title: 'Epic' });
     const anchor = await seedItem({ kind: 'story', title: 'Anchor' });
     await expectRefused(
-      [{ op: 'add', proposedFields: { title: 'Bad child', kind: 'subtask' }, parentRef: epic.id }],
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Bad child', kind: 'subtask' },
+          parentRef: anchor.id,
+        },
+      ],
       { status: 400, code: 'PLAN_GRAMMAR_VIOLATION' },
       anchor.id,
+      async ([addId]) => {
+        // A subtask may not hang off an epic — re-parented after the close.
+        await adminDb.planItem.update({ where: { id: addId! }, data: { parentRef: epic.id } });
+      },
     );
   });
 
   it('a DANGLING intra-plan parentRef — 400, nothing written', async () => {
     const anchor = await seedItem({ kind: 'story', title: 'Anchor' });
     await expectRefused(
-      [
-        {
-          op: 'add',
-          proposedFields: { title: 'Orphan', kind: 'task' },
-          parentRef: `${TEMP_REF_PREFIX}missing`,
-        },
-      ],
+      [{ op: 'add', proposedFields: { title: 'Orphan', kind: 'task' } }],
       { status: 400, code: 'INVALID_PLAN_REF_GRAPH' },
       anchor.id,
-      // ⚠️ Seeded underneath the service — see `engineProposesUnchecked`. The
-      // append refuses this shape now; approve is the backstop for the plans
-      // that predate it, and that is what this case still covers.
-      engineProposesUnchecked,
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { parentRef: `${TEMP_REF_PREFIX}missing` },
+        });
+      },
     );
   });
 
@@ -830,35 +833,47 @@ describe('every rejection class leaves the database untouched — through the an
         {
           op: 'add',
           proposedFields: { title: 'Blocked twice', kind: 'task' },
-          blockedByRefs: [blocker.id, blocker.id],
+          blockedByRefs: [blocker.id],
         },
       ],
       { status: 400, code: 'INVALID_PLAN_REF_GRAPH' },
       anchor.id,
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { blockedByRefs: [blocker.id, blocker.id] },
+        });
+      },
     );
   });
 
   it('a modify targeting DONE work — 409, nothing written', async () => {
     const anchor = await seedItem({ kind: 'story', title: 'Anchor' });
     const shipped = await seedItem({ kind: 'task', title: 'Shipped' });
-    for (const status of ['in_progress', 'in_review', 'done'] as const) {
-      await workItemsService.updateStatus(shipped.id, status, svcCtx());
-    }
     await expectRefused(
       [{ op: 'modify', workItemId: shipped.id, patch: { title: 'Rewritten' } }],
       { status: 409, code: 'PLAN_TARGET_IMMUTABLE' },
       anchor.id,
+      async () => {
+        // The DRIFT the approve gate exists for: the target ships while the plan
+        // waits in the queue.
+        for (const status of ['in_progress', 'in_review', 'done'] as const) {
+          await workItemsService.updateStatus(shipped.id, status, svcCtx());
+        }
+      },
     );
   });
 
   it('a remove targeting CANCELLED work — 409, nothing written', async () => {
     const anchor = await seedItem({ kind: 'story', title: 'Anchor' });
     const dropped = await seedItem({ kind: 'task', title: 'Dropped' });
-    await workItemsService.updateStatus(dropped.id, 'cancelled', svcCtx());
     await expectRefused(
       [{ op: 'remove', workItemId: dropped.id }],
       { status: 409, code: 'PLAN_TARGET_IMMUTABLE' },
       anchor.id,
+      async () => {
+        await workItemsService.updateStatus(dropped.id, 'cancelled', svcCtx());
+      },
     );
   });
 
@@ -870,7 +885,7 @@ describe('every rejection class leaves the database untouched — through the an
     const before = await treeSnapshot();
     const a = await plansService.addProposals(
       planId,
-      [{ op: 'add', proposedFields: { title: 'A', kind: 'story' } }],
+      [{ op: 'add', proposedFields: { title: 'A', kind: 'task' } }],
       svcCtx(),
     );
     const aId = a.items[0]!.id;
@@ -879,18 +894,21 @@ describe('every rejection class leaves the database untouched — through the an
       [
         {
           op: 'add',
-          proposedFields: { title: 'B', kind: 'story' },
+          proposedFields: { title: 'B', kind: 'subtask' },
           parentRef: `${TEMP_REF_PREFIX}${aId}`,
         },
       ],
       svcCtx(),
     );
     const bId = b.items.find((i) => i.proposedFields?.title === 'B')!.id;
+    // `task` → `subtask` so the chain is grammatically legal and the plan can
+    // CLOSE at all; the loop is then closed after the close, which is the only
+    // way a cycle now reaches approve (MOTIR-3573).
+    await plansService.markPlanned(planId, svcCtx());
     await adminDb.planItem.update({
       where: { id: aId },
       data: { parentRef: `${TEMP_REF_PREFIX}${bId}` },
     });
-    await plansService.markPlanned(planId, svcCtx());
 
     const err = await approvePlanRequest(planId).catch((e: unknown) => e);
     expect((err as InstanceType<typeof PlanRequestError>).status).toBe(400);
@@ -903,13 +921,16 @@ describe('every rejection class leaves the database untouched — through the an
     // real errors rather than over hand-built ones.
     const anchor = await seedItem({ kind: 'story', title: 'Anchor' });
     const shipped = await seedItem({ kind: 'task', title: 'Shipped' });
-    for (const status of ['in_progress', 'in_review', 'done'] as const) {
-      await workItemsService.updateStatus(shipped.id, status, svcCtx());
-    }
     const { planId } = await planFromItem(anchor.id, 'Redo it');
-    await engineProposes(planId, [
-      { op: 'modify', workItemId: shipped.id, patch: { title: 'Rewritten' } },
-    ]);
+    await engineProposes(
+      planId,
+      [{ op: 'modify', workItemId: shipped.id, patch: { title: 'Rewritten' } }],
+      async () => {
+        for (const status of ['in_progress', 'in_review', 'done'] as const) {
+          await workItemsService.updateStatus(shipped.id, status, svcCtx());
+        }
+      },
+    );
     const immutable = await approvePlanRequest(planId).catch((e: unknown) => e);
     expect(planDecisionErrorCode(immutable)).toBe('immutable');
 

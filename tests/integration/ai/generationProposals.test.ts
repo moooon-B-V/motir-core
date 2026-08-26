@@ -463,9 +463,9 @@ describe('POST /api/internal/ai/plan-proposals — generate_tree RE-RUN isolatio
     { op: 'add' as const, proposedFields: { title: 'Epic: Auth', kind: 'epic' } },
     { op: 'add' as const, proposedFields: { title: 'Story: Login', kind: 'story' } },
     { op: 'add' as const, proposedFields: { title: 'Story: Signup', kind: 'story' } },
-    { op: 'add' as const, proposedFields: { title: 'Subtask: Login form', kind: 'subtask' } },
-    { op: 'add' as const, proposedFields: { title: 'Subtask: Session cookie', kind: 'subtask' } },
-    { op: 'add' as const, proposedFields: { title: 'Subtask: Logout', kind: 'subtask' } },
+    { op: 'add' as const, proposedFields: { title: 'Subtask: Login form', kind: 'task' } },
+    { op: 'add' as const, proposedFields: { title: 'Subtask: Session cookie', kind: 'task' } },
+    { op: 'add' as const, proposedFields: { title: 'Subtask: Logout', kind: 'task' } },
   ];
 
   it('a mid-frontier failure then a re-submit lands in a FRESH plan — the resulting plan holds each add exactly once, the abandoned partial plan stays isolated, no WorkItem', async () => {

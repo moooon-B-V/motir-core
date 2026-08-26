@@ -244,6 +244,99 @@ describe('validate_plan — the FOREST verdict a PAT can now reach', () => {
     expect(text(await call(client, 'validate_plan', { planId }))).toContain('backlog');
   });
 
+  // ── THE REJECTIONS SECTION (MOTIR-3575) ───────────────────────────────────
+  //
+  // ⚠️ THE RENDERED TEXT IS THE DELIVERABLE HERE, NOT THE VERDICT.
+  // `planValidityService`'s own suite already proves `rejections` is COMPUTED —
+  // every rejection class, over real Postgres. What only exists on this surface
+  // is the SENTENCE an agent reads, and the whole point of MOTIR-3575 is that a
+  // caller must be able to tell the two failure families apart: a rejection
+  // means the plan is MALFORMED and re-sequencing cannot help, a blocker means
+  // it reaches outside itself. A summary that renders one family as the other,
+  // or drops it, is the defect — and it would pass every structured assertion.
+
+  /** A `generating` plan carrying a ref that resolves to nothing. Broken UNDER
+   *  the service on purpose: since MOTIR-3573 the pure ref checks run at the
+   *  append, and the resolvable-against-the-live-tree arm runs at the close — so
+   *  a dangling work-item id is exactly what `validate_plan` exists to catch
+   *  BEFORE `final: true`, and seeding it is how a caller's own typo arrives. */
+  async function planWithDanglingParent(fx: WorkItemFixture): Promise<string> {
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'add', proposedFields: { title: 'Hangs off nothing', kind: 'task' } },
+    ]);
+    const [row] = await adminDb.planItem.findMany({ where: { planId }, select: { id: true } });
+    await adminDb.planItem.update({
+      where: { id: row!.id },
+      data: { parentRef: 'wi_does_not_exist' },
+    });
+    return planId;
+  }
+
+  it('renders the REJECTION as its own labelled section, saying re-sequencing will not help', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await planWithDanglingParent(fx);
+    const client = await connectClient(fx.ctx);
+
+    const res = await call(client, 'validate_plan', { planId });
+    const out = text(res);
+
+    expect(struct(res).valid).toBe(false);
+    // The LABEL is what separates the two families for a reader.
+    expect(out).toContain('APPROVE WOULD REFUSE IT');
+    expect(out).toContain('INVALID_PLAN_REF_GRAPH');
+    expect(out).toContain('dangling');
+    // …and the instruction that makes the verdict actionable at the only moment
+    // it is cheap: after `final: true` the proposals are frozen.
+    expect(out).toContain('Fix this BEFORE `final: true`');
+    expect(out).toContain('is reported at a time');
+    // No blockers here, so that section must NOT appear — a summary that always
+    // prints both would read as two problems where there is one.
+    expect(out).not.toContain('neither in the plan nor done');
+  });
+
+  it('renders a rejection with NO reason without a dangling separator', async () => {
+    const fx = await makeWorkItemFixture();
+    const done = await mk(fx, 'Already shipped', 'task');
+    // `todo → done` is not a legal edge in this workflow; walk the real ladder
+    // rather than writing the row, so the fixture cannot drift from the product.
+    await workItemsService.updateStatus(done.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(done.id, 'done', fx.ctx);
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'modify', workItemId: done.id, patch: { title: 'Rewrite it' } },
+    ]);
+    const client = await connectClient(fx.ctx);
+
+    const out = text(await call(client, 'validate_plan', { planId }));
+
+    // `PLAN_TARGET_IMMUTABLE` is the one rejection class that carries NO
+    // `reason` — the code says the whole thing. The line renders the code alone
+    // rather than a code followed by an empty ` / `, which is the sort of
+    // artefact a reader takes for a truncated message.
+    expect(out).toContain('APPROVE WOULD REFUSE IT');
+    expect(out).toContain('PLAN_TARGET_IMMUTABLE');
+    expect(out).not.toContain('PLAN_TARGET_IMMUTABLE / ');
+  });
+
+  it('the VALID arm promises BOTH answers, not finishability alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'add', proposedFields: { title: 'A clean proposal', kind: 'task' } },
+    ]);
+    const client = await connectClient(fx.ctx);
+
+    const out = text(await call(client, 'validate_plan', { planId }));
+
+    // ⚠️ THE OLD SENTENCE PROMISED ONLY FINISHABILITY, and a reader took it as
+    // *this plan is sound* — which is what made a plan the approve button then
+    // refused safe to close. VALID now says both halves out loud.
+    expect(out).toContain('is VALID');
+    expect(out).toContain('ACCEPTED by approve');
+    expect(out).toContain('can be finished');
+  });
+
   it('an unknown plan id is a clean PLAN_NOT_FOUND, never an internal error', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);

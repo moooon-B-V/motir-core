@@ -2336,11 +2336,11 @@ export of the timeline.
 **This part SUPERSEDES the four-value lifecycle at the top of this file** (the `Plan.status` line
 under _The model_, and Panel A's status-pill list). Both now carry a pointer here.
 
-**The spec it draws is `docs/decisions/agent-authored-plans.md` AMENDMENT 8** (MOTIR-3574), which
+**The spec it draws is `docs/decisions/agent-authored-plans.md` AMENDMENT 9** (MOTIR-3574), which
 settles the name, the transitions and what happens to the incumbent staleness engine. This part
 draws what that decided; it invents nothing.
 
-> **The transitions, quoted from AMENDMENT 8:**
+> **The transitions, quoted from AMENDMENT 9:**
 >
 > | from → to          | trigger                                                       |
 > | ------------------ | ------------------------------------------------------------- |
@@ -2422,7 +2422,7 @@ what would put a plan there.)
 
 `declined` reads _"Plan declined — your tree was left untouched"_ — an ENDING. `stale` is not an
 ending, so its line must say what happened **and** what the reader can do, and it must not offer the
-repair AMENDMENT 8 established does not exist:
+repair AMENDMENT 9 established does not exist:
 
 > **"Plan out of date — work it changes has since been finished. Approve is unavailable; decline it,
 > or wait in case the work reopens."**
@@ -2438,13 +2438,13 @@ so"_. A pill in a list does not answer that, so the rail places it:
 - **On the item node**, the same `danger` chip on the offending proposal's own card, so the canvas
   and the rail agree without the reader cross-referencing.
 
-Under AMENDMENT 8's UNIFY disposition the engine reports these as a **fatal** `target_terminal`
+Under AMENDMENT 9's UNIFY disposition the engine reports these as a **fatal** `target_terminal`
 reason beside its existing advisory ones, so the rail is rendering a list it is already handed — it
 is not a second computation.
 
 ### §6 — The two "stale"s on one row, said once
 
-After AMENDMENT 8 a row can carry both the advisory count (_"3 may be out of date"_, peach) and the
+After AMENDMENT 9 a row can carry both the advisory count (_"3 may be out of date"_, peach) and the
 `Stale` status (rose). They are **the same engine at two severities**, and the row keeps both: the
 count is _some proposals drifted_, the pill is _this plan cannot be approved_. Rendered together
 before this was fixed; they read as two different facts, which is the requirement. The rail is where
@@ -2474,7 +2474,7 @@ compile error until it is filled:
 2. **`whenFor`** — §3 above: `default:` is `createdAt`.
 3. **`staleCountFor`** short-circuits on `plan.status !== 'planned'`, so a **`stale` row would show
    no advisory count at all** — precisely backwards, since it is the row most likely to have one.
-   Widen it to `planned | stale`, which is the same widening AMENDMENT 8 D3 already puts on
+   Widen it to `planned | stale`, which is the same widening AMENDMENT 9 D3 already puts on
    `computePlanStaleness`'s own guard.
 4. **`awaitingReview`** is `view.status === 'planned'`, and §2 wants it to stay that way — recorded
    here so the widening in (3) is not copied into it by symmetry. The accent border is deliberately

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import * as plansModule from '@/lib/services/plansService';
 import { plansService } from '@/lib/services/plansService';
@@ -70,6 +71,49 @@ async function plannedPlan(
   return plan.id;
 }
 
+/**
+ * A `planned` plan carrying a defect the CLOSE itself would now refuse.
+ *
+ * ⚠️ REQUIRED SINCE MOTIR-3573. `markPlanned` runs this same gate before it
+ * writes `planned`, so a plan with a KNOWABLE defect can no longer reach the
+ * review queue at all — which is that card's whole point. The only way such a
+ * plan now reaches `approvePlan` is the way one actually arises in production:
+ * the proposal set was EDITED after the close. That is precisely the case this
+ * gate exists for — `validateProposals.ts`: *"the approved proposal set can be
+ * edited between generation and approve (`updateProposal`), so the proposal is
+ * NOT trusted here"* — so closing valid and then breaking it makes each test
+ * below assert something STRONGER than it did, not weaker.
+ */
+async function plannedThenBroken(
+  fx: WorkItemFixture,
+  proposals: Parameters<typeof plansService.addProposals>[1],
+  breakIt: (itemIds: string[]) => Promise<void>,
+  opts: { sourceJobId?: string } = {},
+): Promise<string> {
+  const planId = await plannedPlan(fx, proposals, opts);
+  const items = await adminDb.planItem.findMany({
+    where: { planId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  await breakIt(items.map((i) => i.id));
+  return planId;
+}
+
+/** Rewrite one proposal's stored `proposedFields`, as a post-close edit would. */
+async function patchProposedFields(
+  planItemId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: planItemId } });
+  await adminDb.planItem.update({
+    where: { id: planItemId },
+    data: {
+      proposedFields: { ...(row.proposedFields as object), ...patch } as Prisma.InputJsonValue,
+    },
+  });
+}
+
 /** A snapshot of everything an approve could touch, for a byte-identical check. */
 async function treeSnapshot(fx: WorkItemFixture): Promise<unknown> {
   const items = await adminDb.workItem.findMany({
@@ -103,10 +147,22 @@ async function treeSnapshot(fx: WorkItemFixture): Promise<unknown> {
  * untouched: the tree byte-identical, the plan still `planned` (so the user can
  * fix the proposal and approve again), and no PlanItem written back an id.
  */
+/**
+ * ⚠️ `expectedStatusAfter` EXISTS BECAUSE ONE REJECTION CLASS NOW MOVES THE PLAN
+ * (MOTIR-3579). Every rejection here still writes NOTHING to the tree — that is
+ * the property this helper is for, and it is unchanged. What changed is the
+ * PLAN row: `PlanTargetImmutableError` means a target finished while the plan
+ * waited, which is the one Class B rejection no close-time gate can foresee, so
+ * `approvePlan` now leaves the plan `stale` rather than `planned`. A plan that
+ * cannot be approved must stop claiming it can — `agent-authored-plans.md`
+ * AMENDMENT 9 D1. The default stays `planned`, so every other class asserts
+ * exactly what it did before.
+ */
 async function expectRejectedWithNoWrite(
   fx: WorkItemFixture,
   planId: string,
   expected: new (...args: never[]) => Error,
+  expectedStatusAfter: 'planned' | 'stale' = 'planned',
 ): Promise<Error> {
   const before = await treeSnapshot(fx);
 
@@ -121,7 +177,7 @@ async function expectRejectedWithNoWrite(
   expect(await treeSnapshot(fx)).toEqual(before);
 
   const plan = await plansService.getPlan(planId, fx.ctx);
-  expect(plan.status).toBe('planned');
+  expect(plan.status).toBe(expectedStatusAfter);
   expect(plan.items.filter((i) => i.op === 'add').every((i) => i.workItemId === null)).toBe(true);
   return thrown!;
 }
@@ -130,12 +186,23 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
   it('rejects an add whose REAL parent may not hold it, writing nothing', async () => {
     const fx = await makeWorkItemFixture();
     const epicId = await seedItem(fx, 'The epic', 'epic');
+    const storyId = await seedItem(fx, 'The story', 'story', epicId);
     // A subtask may NOT hang off an epic (`lib/issues/parentRules.ts`). Before
     // this gate the only backstop was the DB trigger — a raw SQLSTATE 23514
     // surfacing as a 500, mid-transaction.
-    const planId = await plannedPlan(fx, [
-      { op: 'add', proposedFields: { title: 'Illegal child', kind: 'subtask' }, parentRef: epicId },
-    ]);
+    const planId = await plannedThenBroken(
+      fx,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Illegal child', kind: 'subtask' },
+          parentRef: storyId,
+        },
+      ],
+      async ([addId]) => {
+        await adminDb.planItem.update({ where: { id: addId! }, data: { parentRef: epicId } });
+      },
+    );
 
     const err = await expectRejectedWithNoWrite(fx, planId, PlanGrammarError);
     expect((err as PlanGrammarError).reason).toBe('illegal_parent');
@@ -152,13 +219,17 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
       fx.ctx,
     );
     const bugRef = `${TEMP_REF_PREFIX}${withItems.items[0]!.id}`;
-    // A bug may parent ONLY subtasks — a story under it is illegal.
-    await plansService.addProposals(
+    // Generated legally — a subtask under a bug — then re-kinded to a story
+    // after the close, which a bug may NOT parent.
+    const child = await plansService.addProposals(
       plan.id,
-      [{ op: 'add', proposedFields: { title: 'A story', kind: 'story' }, parentRef: bugRef }],
+      [{ op: 'add', proposedFields: { title: 'A story', kind: 'subtask' }, parentRef: bugRef }],
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
+    await patchProposedFields(child.items.find((i) => i.parentRef === bugRef)!.id, {
+      kind: 'story',
+    });
 
     await expectRejectedWithNoWrite(fx, plan.id, PlanGrammarError);
     const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
@@ -167,9 +238,11 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
 
   it('rejects a top-level subtask (a kind that requires a parent)', async () => {
     const fx = await makeWorkItemFixture();
-    const planId = await plannedPlan(fx, [
-      { op: 'add', proposedFields: { title: 'Orphan', kind: 'subtask' } },
-    ]);
+    const planId = await plannedThenBroken(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Orphan', kind: 'task' } }],
+      async ([addId]) => patchProposedFields(addId!, { kind: 'subtask' }),
+    );
     await expectRejectedWithNoWrite(fx, planId, PlanGrammarError);
   });
 
@@ -204,18 +277,17 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
   // assertion is unchanged and only the seeding moved.
   it('rejects a dangling parentRef, writing nothing', async () => {
     const fx = await makeWorkItemFixture();
-    const plan = await plansService.createPlan(fx.projectId, { title: 'Proposed' }, fx.ctx);
-    await adminDb.planItem.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        planId: plan.id,
-        op: 'add',
-        proposedFields: { title: 'Hangs off nothing', kind: 'task' },
-        parentRef: `${TEMP_REF_PREFIX}nope`,
+    const planId = await plannedThenBroken(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Hangs off nothing', kind: 'task' } }],
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { parentRef: `${TEMP_REF_PREFIX}nope` },
+        });
       },
-    });
-    await plansService.markPlanned(plan.id, fx.ctx);
-    const err = await expectRejectedWithNoWrite(fx, plan.id, PlanRefGraphError);
+    );
+    const err = await expectRejectedWithNoWrite(fx, planId, PlanRefGraphError);
     expect((err as PlanRefGraphError).reason).toBe('dangling');
   });
 
@@ -223,22 +295,35 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
     const fx = await makeWorkItemFixture();
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
     const foreignId = await seedItem(other, 'Foreign parent', 'story');
-    const planId = await plannedPlan(fx, [
-      { op: 'add', proposedFields: { title: 'Cross-tenant', kind: 'task' }, parentRef: foreignId },
-    ]);
+    const planId = await plannedThenBroken(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Cross-tenant', kind: 'task' } }],
+      async ([addId]) => {
+        await adminDb.planItem.update({ where: { id: addId! }, data: { parentRef: foreignId } });
+      },
+    );
     await expectRejectedWithNoWrite(fx, planId, PlanRefGraphError);
   });
 
   it('rejects a duplicated blocker (the is_blocked_by edge is unique) before it 500s', async () => {
     const fx = await makeWorkItemFixture();
     const blockerId = await seedItem(fx, 'The blocker');
-    const planId = await plannedPlan(fx, [
-      {
-        op: 'add',
-        proposedFields: { title: 'Blocked twice', kind: 'task' },
-        blockedByRefs: [blockerId, blockerId],
+    const planId = await plannedThenBroken(
+      fx,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Blocked twice', kind: 'task' },
+          blockedByRefs: [blockerId],
+        },
+      ],
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { blockedByRefs: [blockerId, blockerId] },
+        });
       },
-    ]);
+    );
     const err = await expectRejectedWithNoWrite(fx, planId, PlanRefGraphError);
     expect((err as PlanRefGraphError).reason).toBe('duplicate');
   });
@@ -248,7 +333,7 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
     const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
     const first = await plansService.addProposals(
       plan.id,
-      [{ op: 'add', proposedFields: { title: 'A', kind: 'story' } }],
+      [{ op: 'add', proposedFields: { title: 'A', kind: 'task' } }],
       fx.ctx,
     );
     const second = await plansService.addProposals(
@@ -256,19 +341,25 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
       [
         {
           op: 'add',
-          proposedFields: { title: 'B', kind: 'story' },
+          proposedFields: { title: 'B', kind: 'subtask' },
           parentRef: `${TEMP_REF_PREFIX}${first.items[0]!.id}`,
         },
       ],
       fx.ctx,
     );
     const bId = second.items.find((i) => i.proposedFields?.title === 'B')!.id;
-    // Close the loop: A's parent is B, B's parent is A.
+    await plansService.markPlanned(plan.id, fx.ctx);
+    // ⚠️ The pair is `task` → `subtask` so the chain is GRAMMATICALLY LEGAL and
+    // the plan can reach `planned` at all — the close now runs the grammar too
+    // (MOTIR-3573). Once the loop is closed the acyclic check fires first, so
+    // `cycle` is still the reason, which is the more specific one.
+    // Close the loop AFTER the close: A's parent is B, B's parent is A. The
+    // acyclic check is PURE and now also runs at the append, so a cycle can only
+    // reach approve as a post-close edit (MOTIR-3573).
     await adminDb.planItem.update({
       where: { id: first.items[0]!.id },
       data: { parentRef: `${TEMP_REF_PREFIX}${bId}` },
     });
-    await plansService.markPlanned(plan.id, fx.ctx);
 
     const err = await expectRejectedWithNoWrite(fx, plan.id, PlanRefGraphError);
     expect((err as PlanRefGraphError).reason).toBe('cycle');
@@ -333,12 +424,15 @@ describe('the confirmation gate — done-work immutability', () => {
   it('rejects a modify of a DONE work item, leaving the target untouched', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Shipped work');
-    await markDone(fx, targetId);
     const planId = await plannedPlan(fx, [
       { op: 'modify', workItemId: targetId, patch: { title: 'Rewritten' } },
     ]);
+    // The target reaches `done` AFTER the close — the only way a terminal target
+    // now reaches approve, since `markPlanned` refuses one that is already
+    // terminal (MOTIR-3573). This is the drift the approve gate is FOR.
+    await markDone(fx, targetId);
 
-    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError);
+    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError, 'stale');
     expect((err as PlanTargetImmutableError).workItemId).toBe(targetId);
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Shipped work');
@@ -348,10 +442,10 @@ describe('the confirmation gate — done-work immutability', () => {
   it('rejects a remove of a CANCELLED item — terminal is the `done` CATEGORY, not the key', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Dropped work');
-    await workItemsService.updateStatus(targetId, 'cancelled', fx.ctx);
     const planId = await plannedPlan(fx, [{ op: 'remove', workItemId: targetId }]);
+    await workItemsService.updateStatus(targetId, 'cancelled', fx.ctx);
 
-    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError);
+    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError, 'stale');
     expect((err as PlanTargetImmutableError).status).toBe('cancelled');
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.archivedAt).toBeNull();
@@ -418,8 +512,14 @@ describe('the confirmation gate — done-work immutability', () => {
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Racing target');
     expect(target.status).toBe('done');
+    // ⚠️ `stale`, NOT `planned` (MOTIR-3579). This case is the sharpest one for
+    // the backstop: the transition commits AFTER the pre-transaction gate has
+    // already passed, so the refusal comes from the in-transaction pass under the
+    // row lock — precisely the race the eager listener can lose. The approve is
+    // still refused and the tree is still untouched; what the backstop adds is
+    // that the plan stops claiming to be approvable on its way out.
     const plan = await plansService.getPlan(planId, fx.ctx);
-    expect(plan.status).toBe('planned');
+    expect(plan.status).toBe('stale');
   });
 });
 
@@ -472,16 +572,23 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
   it('applies identically however the plan was TRIGGERED — a cadence job and a user turn', async () => {
     const fx = await makeWorkItemFixture();
     const epicId = await seedItem(fx, 'The epic', 'epic');
-    const illegal = {
+    const storyId = await seedItem(fx, 'The story', 'story', epicId);
+    const legal = {
       op: 'add' as const,
       proposedFields: { title: 'Illegal child', kind: 'subtask' },
-      parentRef: epicId,
+      parentRef: storyId,
+    };
+    /** Re-parent the add onto the epic after the close, which a subtask may not have. */
+    const breakIt = async ([addId]: string[]) => {
+      await adminDb.planItem.update({ where: { id: addId! }, data: { parentRef: epicId } });
     };
     // The cadence watcher / `/ready` nudge stamps a sourceJobId; a user turn
     // does not. The gate lives on the ONE persist path, so the trigger is
     // irrelevant by construction — assert it.
-    const fromCadence = await plannedPlan(fx, [illegal], { sourceJobId: 'job_cadence_1' });
-    const fromUser = await plannedPlan(fx, [illegal]);
+    const fromCadence = await plannedThenBroken(fx, [legal], breakIt, {
+      sourceJobId: 'job_cadence_1',
+    });
+    const fromUser = await plannedThenBroken(fx, [legal], breakIt);
 
     await expectRejectedWithNoWrite(fx, fromCadence, PlanGrammarError);
     await expectRejectedWithNoWrite(fx, fromUser, PlanGrammarError);

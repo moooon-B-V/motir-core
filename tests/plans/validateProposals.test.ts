@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertProposalSetSelfConsistent,
   collectReferencedWorkItemIds,
   validatePlanProposals,
   type LiveWorkItemState,
@@ -362,6 +363,112 @@ describe('validatePlanProposals — done-work immutability', () => {
     expect(() =>
       validate([add('p1')], { terminalStatusKeys: new Set(['done', 'cancelled', 'todo']) }),
     ).not.toThrow();
+  });
+});
+
+describe('assertProposalSetSelfConsistent — the PURE half, which runs at the APPEND', () => {
+  // MOTIR-3573. `plansService.addProposals` calls this before its first insert,
+  // and `validatePlanProposals` calls it as its own step 1 — one implementation,
+  // so the two stages cannot disagree about what a self-consistent plan is.
+  //
+  // ⚠️ Its SIGNATURE is the contract: no `liveById`, no `terminalStatusKeys`.
+  // A function that cannot see the workspace cannot be tempted to read it, which
+  // is what makes it affordable on every append.
+
+  it('accepts an empty set, and a set of plain top-level adds', () => {
+    expect(() => assertProposalSetSelfConsistent([])).not.toThrow();
+    expect(() => assertProposalSetSelfConsistent([add('a'), add('b')])).not.toThrow();
+  });
+
+  it('rejects the same blocker listed twice, naming the proposal', () => {
+    try {
+      assertProposalSetSelfConsistent([add('a', { blockedByRefs: [REAL_TARGET, REAL_TARGET] })]);
+      expect.unreachable('a duplicated blocker must be refused');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('duplicate');
+      expect((err as PlanRefGraphError).planItemId).toBe('a');
+    }
+  });
+
+  it('rejects a duplicate on EITHER side of a modify patch', () => {
+    for (const where of ['blockedByAdd', 'blockedByRemove'] as const) {
+      expect(() =>
+        assertProposalSetSelfConsistent([
+          modify('m', { patch: { [where]: [REAL_TARGET, REAL_TARGET] } }),
+        ]),
+      ).toThrow(PlanRefGraphError);
+    }
+  });
+
+  it('rejects a proposal that references ITSELF', () => {
+    try {
+      assertProposalSetSelfConsistent([add('a', { blockedByRefs: [`${TEMP_REF_PREFIX}a`] })]);
+      expect.unreachable('a self-reference must be refused');
+    } catch (err) {
+      expect((err as PlanRefGraphError).reason).toBe('cycle');
+    }
+  });
+
+  it('rejects a parentRef CYCLE, at two lengths', () => {
+    const pair = [
+      add('a', { parentRef: `${TEMP_REF_PREFIX}b` }),
+      add('b', { parentRef: `${TEMP_REF_PREFIX}a` }),
+    ];
+    expect(() => assertProposalSetSelfConsistent(pair)).toThrow(PlanRefGraphError);
+
+    const triple = [
+      add('a', { parentRef: `${TEMP_REF_PREFIX}b` }),
+      add('b', { parentRef: `${TEMP_REF_PREFIX}c` }),
+      add('c', { parentRef: `${TEMP_REF_PREFIX}a` }),
+    ];
+    expect(() => assertProposalSetSelfConsistent(triple)).toThrow(PlanRefGraphError);
+  });
+
+  it('accepts a deep chain and a diamond — neither is a cycle', () => {
+    expect(() =>
+      assertProposalSetSelfConsistent([
+        add('c', { parentRef: `${TEMP_REF_PREFIX}b` }),
+        add('b', { parentRef: `${TEMP_REF_PREFIX}a` }),
+        add('a'),
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      assertProposalSetSelfConsistent([
+        add('a'),
+        add('b', { parentRef: `${TEMP_REF_PREFIX}a` }),
+        add('c', { parentRef: `${TEMP_REF_PREFIX}a` }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('⚠️ IGNORES a REAL ref that resolves to nothing — that arm needs a read, so it belongs to the CLOSE', () => {
+    // The whole reason the pure half can run on every append: it never asks a
+    // question whose answer lives in the workspace. `markPlanned` catches this.
+    expect(() =>
+      assertProposalSetSelfConsistent([add('a', { parentRef: 'wi_does_not_exist' })]),
+    ).not.toThrow();
+    expect(() =>
+      assertProposalSetSelfConsistent([add('a', { blockedByRefs: ['wi_does_not_exist'] })]),
+    ).not.toThrow();
+  });
+
+  it('⚠️ IGNORES a temp-ref naming no add in the set — same reason, one axis over', () => {
+    // Deliberate: at the append the batch's own proposals have no ids yet, so a
+    // temp-ref pointing "forward" is indistinguishable from one pointing at a
+    // proposal this call is about to write. `assertRefsResolvable` decides it.
+    expect(() =>
+      assertProposalSetSelfConsistent([add('a', { parentRef: `${TEMP_REF_PREFIX}later` })]),
+    ).not.toThrow();
+  });
+
+  it('is what `validatePlanProposals` runs — the same rejection arrives through the full gate', () => {
+    try {
+      validate([add('a', { blockedByRefs: [REAL_TARGET, REAL_TARGET] })]);
+      expect.unreachable('the full gate must inherit the pure verdict');
+    } catch (err) {
+      expect((err as PlanRefGraphError).reason).toBe('duplicate');
+    }
   });
 });
 

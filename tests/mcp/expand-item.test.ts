@@ -226,8 +226,8 @@ describe('expand_item — the Plan approval gate (no work item is created)', () 
     await plansService.addProposals(
       planId,
       [
-        { op: 'add', proposedFields: { title: 'Proposed child A', kind: 'subtask' } },
-        { op: 'add', proposedFields: { title: 'Proposed child B', kind: 'subtask' } },
+        { op: 'add', proposedFields: { title: 'Proposed child A', kind: 'task' } },
+        { op: 'add', proposedFields: { title: 'Proposed child B', kind: 'task' } },
       ],
       fx.ctx,
     );

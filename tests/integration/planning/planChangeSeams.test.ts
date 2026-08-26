@@ -611,9 +611,6 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     // hold when the proposal arrives from a conversation, not only from the
     // plan-detail surface — and it must be all-or-nothing.
     const shipped = await seedItem({ kind: 'story', title: 'Shipped' });
-    for (const status of ['in_progress', 'in_review', 'done'] as const) {
-      await workItemsService.updateStatus(shipped.id, status, svcCtx());
-    }
 
     await openSessionRoute();
     await appendTurnRoute(
@@ -626,18 +623,28 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
       { op: 'modify', workItemId: shipped.id, patch: { title: 'Rewritten' } },
       { op: 'add', proposedFields: { title: 'Should not land', kind: 'story' } },
     ]);
+    // The target SHIPS while the plan waits — the drift the approve gate exists
+    // for, and since MOTIR-3573 the only way a terminal target reaches approve
+    // at all: a plan whose target is already terminal is refused at the CLOSE.
+    for (const status of ['in_progress', 'in_review', 'done'] as const) {
+      await workItemsService.updateStatus(shipped.id, status, svcCtx());
+    }
 
     const res = await approvePlan(planId);
     expect(res.status).toBe(409);
     expect(((await res.json()) as { code: string }).code).toBe('PLAN_TARGET_IMMUTABLE');
 
     // The DONE item is untouched — the guarantee that actually matters — and the
-    // refused plan is still `planned`, so it stays decidable.
+    // refused plan is still DECIDABLE, which is what "stays in the queue" means.
     const titles = (await adminDb.workItem.findMany({ where: { projectId: fx.projectId } })).map(
       (r) => r.title,
     );
     expect(titles).toEqual(['Shipped']);
-    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    // ⚠️ `stale`, NOT `planned` (MOTIR-3579). The plan's target finished while it
+    // waited, so it can no longer be approved and stops claiming it can —
+    // `agent-authored-plans.md` AMENDMENT 9 D1/D5. It is still live and still
+    // declinable; what it is not is a plan wearing a button that cannot work.
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('stale');
   });
 
   it('does not approve a conversation’s plan without a caller the workspace knows', async () => {

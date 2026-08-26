@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertTriangle, Bot, Check, RotateCw, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Bot, Check, OctagonAlert, RotateCw, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
@@ -19,6 +19,9 @@ import type { PlanStatusDto, StaleReason } from '@/lib/dto/plans';
 const STATUS_TINT: Record<PlanStatusDto, string> = {
   generating: 'bg-(--el-tint-sky) text-(--el-text-strong)',
   planned: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
+  // The same rose the LIST row's square takes (`PlanRow`'s `STATUS_TINT`), so
+  // the two surfaces agree — Part XI §2.
+  stale: 'bg-(--el-tint-rose) text-(--el-text-strong)',
   approved: 'bg-(--el-tint-mint) text-(--el-text-strong)',
   declined: 'bg-(--el-muted) text-(--el-text-secondary)',
 };
@@ -87,8 +90,15 @@ export function PlanReviewRail({
   codeOutcome,
 }: PlanReviewRailProps) {
   const t = useTranslations('planReview');
+  // ⚠️ `stale` IS NOT DECIDED, and keeping it out of this predicate is the whole
+  // point (MOTIR-3578, AMENDMENT 9 D6). The plan is LIVE and awaiting action;
+  // read as decided it would render the read-only outcome block and lose the
+  // reviewer their controls entirely. Written as an explicit two-way test rather
+  // than `!== 'planned'` so a sixth status is a question somebody has to answer
+  // here rather than an answer they inherit.
   const decided = review.status === 'approved' || review.status === 'declined';
   const planned = review.status === 'planned';
+  const stalePlan = review.status === 'stale';
   // ⚠️ A `generating` PLAN CAN BE ENDED, and this rail was the only thing saying
   // otherwise (MOTIR-3240, `design/ai-planning/design-notes.md` Part VIII §4).
   // `plansService.declinePlan` has accepted `generating` since MOTIR-3189 and
@@ -232,7 +242,18 @@ export function PlanReviewRail({
               <Button
                 variant="ghost"
                 onClick={onDecline}
-                disabled={!planned || busy}
+                // ⚠️ A `stale` PLAN CAN BE DECLINED, and the button must say so
+                // (MOTIR-3579, AMENDMENT 9 D4). Declining is one of a stale
+                // plan's only two exits — the other is waiting for the drift to
+                // reverse — so a disabled control here would make the status a
+                // dead end wearing a live face, which is the shape MOTIR-3240
+                // found on `generating`: the service accepted the act and the
+                // rail was the only thing saying otherwise.
+                //
+                // It is enabled TOGETHER WITH `declinePlan`'s guard widening, in
+                // one commit, so the rail never offers a button the service
+                // rejects.
+                disabled={(!planned && !stalePlan) || busy}
                 leftIcon={<X className="size-4" aria-hidden="true" />}
               >
                 {t('declineCta')}
@@ -242,6 +263,26 @@ export function PlanReviewRail({
                 — "Review unlocks when generation completes" — was true of both
                 buttons and is now true of one, and a hint under two buttons that
                 describes only one is how the live control reads as disabled too. */}
+            {/* ⚠️ THE `stale` LINE IS AN OUTCOME, NOT A HINT, which is why it is
+                its own paragraph above the shared one rather than a fourth
+                branch inside it (Part XI §5). `declined`'s line is an ENDING —
+                *your tree was left untouched* — and this one is not: it has to
+                say what happened AND what is left to do, and it must not offer
+                a repair that does not exist. AMENDMENT 9 D4 established there is
+                no `stale → generating` edge, so the copy names the two real
+                exits and nothing else. */}
+            {stalePlan ? (
+              <p
+                data-testid="plan-stale-outcome"
+                className="flex items-start gap-1.5 text-sm font-medium text-(--el-text)"
+              >
+                <OctagonAlert
+                  className="mt-0.5 size-4 shrink-0 text-(--el-danger)"
+                  aria-hidden="true"
+                />
+                {t('staleStatusOutcome')}
+              </p>
+            ) : null}
             <p className="text-center text-xs text-(--el-text-secondary)">
               {planned
                 ? review.stale
@@ -249,7 +290,9 @@ export function PlanReviewRail({
                   : t('approveHint')
                 : generating
                   ? t('discardHint')
-                  : t('reviewLocked')}
+                  : stalePlan
+                    ? t('staleReviewHint')
+                    : t('reviewLocked')}
             </p>
           </>
         )}

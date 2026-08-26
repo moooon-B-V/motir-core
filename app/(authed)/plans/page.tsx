@@ -154,9 +154,19 @@ export default async function PlansPage({
             // wrong answer to *nothing is generating* — the reader's next move
             // is a different tab, which is why the strip stays above this and
             // the copy names where the plans actually are.
+            // ⚠️ `stale` TAKES ITS OWN DESCRIPTION (MOTIR-3578,
+            // `design/ai-planning/design-notes.md` Part XI §4). The shared one
+            // — *this project's other plans are in the remaining tabs* — is a
+            // WAYFINDING line, right for a reader who knows what the tab means
+            // and is looking for their plan. Nobody knows what a stale plan is
+            // on first meeting the tab, so its empty state does the other job
+            // the register allows: name the state, then say in one sentence
+            // what would put a plan there.
             <EmptyState
               title={t(`tabEmpty.${status}Title`)}
-              description={t('tabEmpty.description')}
+              description={
+                status === 'stale' ? t('tabEmpty.staleDescription') : t('tabEmpty.description')
+              }
             />
           ) : (
             // KEYED ON THE STATUS so React REMOUNTS rather than reconciling two

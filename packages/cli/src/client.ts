@@ -733,7 +733,13 @@ export interface PlanJobState {
  */
 export interface PlanOutcome {
   planId: string;
-  status: 'generating' | 'planned' | 'approved' | 'declined';
+  /** ⚠️ FIVE MEMBERS since MOTIR-3578. `stale` means the plan reached a reviewer
+   *  and can no longer be approved, because a `modify`/`remove` target it holds
+   *  reached a terminal status after the plan closed. It is NOT decided and NOT
+   *  declined — the plan is live, and if the drift reverses it returns to
+   *  `planned` on its own. A caller asking *is this over?* must not read it as
+   *  an ending; a caller asking *can I approve this?* must read it as a no. */
+  status: 'generating' | 'planned' | 'stale' | 'approved' | 'declined';
   origin: string;
   jobId: string | null;
   itemCount: number;
@@ -773,7 +779,13 @@ export interface PlanProposal {
  *  just how many items it produced. */
 export interface PlanWithItems {
   id: string;
-  status: 'generating' | 'planned' | 'approved' | 'declined';
+  /** ⚠️ FIVE MEMBERS since MOTIR-3578. `stale` means the plan reached a reviewer
+   *  and can no longer be approved, because a `modify`/`remove` target it holds
+   *  reached a terminal status after the plan closed. It is NOT decided and NOT
+   *  declined — the plan is live, and if the drift reverses it returns to
+   *  `planned` on its own. A caller asking *is this over?* must not read it as
+   *  an ending; a caller asking *can I approve this?* must read it as a no. */
+  status: 'generating' | 'planned' | 'stale' | 'approved' | 'declined';
   title: string | null;
   summary: string | null;
   sourceJobId: string | null;

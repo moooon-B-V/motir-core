@@ -266,7 +266,13 @@ describe('planReviewService.getPlanReview', () => {
     const plan = await plansService.createPlan(fx.projectId, { title: 'Payouts plan' }, fx.ctx);
     await plansService.addProposals(
       plan.id,
-      [{ op: 'add', parentRef: parent.id, proposedFields: { title: 'Seller ledger' } }],
+      [
+        {
+          op: 'add',
+          parentRef: parent.id,
+          proposedFields: { title: 'Seller ledger', kind: 'subtask' },
+        },
+      ],
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
@@ -322,7 +328,13 @@ describe('planReviewService.getPlanReview', () => {
     const plan = await plansService.createPlan(fx.projectId, { title: 'Orphan plan' }, fx.ctx);
     await plansService.addProposals(
       plan.id,
-      [{ op: 'add', parentRef: parent.id, proposedFields: { title: 'Orphaned proposal' } }],
+      [
+        {
+          op: 'add',
+          parentRef: parent.id,
+          proposedFields: { title: 'Orphaned proposal', kind: 'subtask' },
+        },
+      ],
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
@@ -351,7 +363,13 @@ describe('planReviewService.getPlanReview', () => {
     const plan = await plansService.createPlan(fx.projectId, { title: 'Canvas plan' }, fx.ctx);
     await plansService.addProposals(
       plan.id,
-      [{ op: 'add', parentRef: task.id, proposedFields: { title: 'A proposed subtask' } }],
+      [
+        {
+          op: 'add',
+          parentRef: task.id,
+          proposedFields: { title: 'A proposed subtask', kind: 'subtask' },
+        },
+      ],
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
@@ -405,7 +423,11 @@ describe('planReviewService.getPlanReview', () => {
           parentRef: `planItem:${first.items[0]!.id}`,
           proposedFields: { title: 'A proposed story', kind: 'story' },
         },
-        { op: 'add', parentRef: doomed.id, proposedFields: { title: 'An orphaned proposal' } },
+        {
+          op: 'add',
+          parentRef: doomed.id,
+          proposedFields: { title: 'An orphaned proposal', kind: 'subtask' },
+        },
       ],
       fx.ctx,
     );
@@ -602,9 +624,13 @@ describe('planReviewService.getPlanReview', () => {
         {
           op: 'modify',
           workItemId: inFlight.id,
-          // The duplicate is deliberate: the same blocker named twice must not
-          // become two edges between the same pair of nodes.
-          patch: { blockedByAdd: [`planItem:${addId}`, `planItem:${addId}`] },
+          // ⚠️ ONE ref, not two. The duplicate this test used to send is now
+          // refused at the APPEND (MOTIR-3573) — a blocker named twice is a
+          // pure property of the proposal set, so it never reaches a plan at
+          // all and the review layer can no longer be handed one. That
+          // rejection is covered in `authoringGates.test.ts`; the subject here
+          // is the RESOLUTION of the ref into `blockedByNodeIds`.
+          patch: { blockedByAdd: [`planItem:${addId}`] },
         },
       ],
       fx.ctx,
@@ -621,12 +647,12 @@ describe('planReviewService.getPlanReview', () => {
     // …and both ends sit on the same level, so `mergePlanLevel` can draw it.
     expect(add.parentNodeId).toBe(story.id);
     expect(modify.parentNodeId).toBe(story.id);
-    // The `links` diff row is UNCHANGED — this is a SECOND reader of the patch,
-    // not a move of the first. It counts the patch's REFS, so the deliberate
-    // duplicate above reads `+2` there while the edge set holds one: the diff
-    // row says what the plan WROTE, the edge set says what will be DRAWN, and
-    // only the second one can be double-counted into two arrows.
-    expect(modify.changes).toContainEqual({ field: 'links', from: null, to: '+2 blockers' });
+    // The `links` diff row is a SECOND reader of the patch, not a move of the
+    // first: it counts the patch's REFS, while `blockedByNodeIds` is what will
+    // be DRAWN. The two still answer separately — they simply agree at one now
+    // that a duplicate can no longer be appended (MOTIR-3573), so the count the
+    // diff row reports is the count the plan actually wrote.
+    expect(modify.changes).toContainEqual({ field: 'links', from: null, to: '+1 blocker' });
   });
 
   it('follows the node id an approved `add` BECAME — the edge survives materialize (MOTIR-3366)', async () => {
