@@ -21,7 +21,7 @@ import {
   UserNotFoundError,
   WrongCurrentPasswordError,
 } from '@/lib/users/errors';
-import { sendEvent } from '@/lib/jobs/sendEvent';
+import { sendAuthEmail } from '@/lib/auth/authMail';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { deletePublicAsset, putPublicAsset } from '@/lib/blob/uploader';
@@ -416,10 +416,18 @@ export const usersService = {
    * Order inside the transaction: lock self → validate (same-email, rate-limit,
    * not-already-taken) → clear our own / expired stale claims on this address →
    * insert (the guarded write). The confirmation email is a post-commit
-   * side-effect (CLAUDE.md "side-effects outside the tx"): a send failure must
-   * NOT roll back the request, so the enqueue runs after the `$transaction`
-   * resolves and rides the best-effort `sendEvent` (which swallows transport
-   * errors — the durable `email.send` job owns retries).
+   * side-effect (CLAUDE.md "side-effects outside the tx"), so the enqueue runs
+   * after the `$transaction` resolves and a DELIVERY failure stays the durable
+   * `email.send` job's to retry.
+   *
+   * ⚠️ AN ENQUEUE FAILURE REJECTS (MOTIR-3583). Post-commit is why the send is
+   * outside the transaction; it is NOT a reason to hide the outcome. The
+   * pending row exists only to be answered by a confirm link, so a request
+   * whose link was never queued is a dead end wearing a success message — the
+   * caller is told, and the route turns it into a 503. The write is not rolled
+   * back and does not need to be: `clearReusableForEmail` releases this user's
+   * own prior claim, so the retry the user is now being invited to make
+   * succeeds.
    */
   async requestEmailChange(
     userId: string,
@@ -482,11 +490,10 @@ export const usersService = {
       return { token, newEmail: normalized, recipientName: self.name };
     });
 
-    // Post-commit side-effect: enqueue the confirmation email. Best-effort —
-    // `sendEvent` swallows transport failures, and delivery runs in the durable
-    // `email.send` job — so a mail outage never fails an already-committed
-    // request.
-    await sendEvent('email.send', {
+    // Post-commit side-effect: enqueue the confirmation email. STRICT — see the
+    // docstring: delivery runs in the durable `email.send` job, but an enqueue
+    // that never happened leaves the user waiting on a link nothing will send.
+    await sendAuthEmail({
       workspaceId: null,
       idempotencyKey: result.token,
       to: result.newEmail,

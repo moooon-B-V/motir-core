@@ -15,6 +15,7 @@ the same primitives — no Pencil→code gap.
 | **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
 | **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
 | **Two-factor authentication**  | **`two-factor.mock.html`** (HTML mock)                 | The `Security › Two-factor authentication` pane: enrol an authenticator app, email as a labelled lower-security fallback, ten single-use recovery codes, the browsers that stopped being asked, and the way out. Adds a SECOND entry to the rail's Security group — that row is the access path. Multi-panel (off · on · enrol · codes shown once · low/exhausted/turn-off/errors · dark). **Gates MOTIR-1220**; the login challenge is `../auth/two-factor-challenge.mock.html`.                        |
+| **Passkeys**                   | **`passkeys.mock.html`** (HTML mock)                   | The `Security` pane's PASSKEYS card — register a WebAuthn credential, see the ones you hold, rename one, remove one. Its OWN card between the two-factor state card and the methods list, never a third row inside them. Adds NO rail entry: it is a new section on a pane that already has a door. Multi-panel (zero · populated · registering · rename · remove · refusals · dark). **Gates MOTIR-3612**; the sign-in half is `../auth/passkey-sign-in.mock.html`.                                     |
 | **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                        |
 
 ## Why the whole area (the corner that was cut, then fixed)
@@ -1486,11 +1487,17 @@ Drawn: **off** (panel 1) · **enrolled** (2) · **enrolling, both steps** (3) ·
 codes** (5) · **turn-off step-up** (5) · **a rejected confirming code** (5) ·
 **dark** (6).
 
-**Not drawn, deliberately: a passkey row.** Story 8.12 (MOTIR-1214) adds
+~~**Not drawn, deliberately: a passkey row.** Story 8.12 (MOTIR-1214) adds
 WebAuthn as a third method, and the methods card is built as a LIST so that row
-lands beside the other two without a re-layout. Drawing it here would specify a
-surface this story does not build — the mistake `account-settings.mock.html`'s
-own scope guard records about Appearance.
+lands beside the other two without a re-layout.~~ **DISCHARGED by MOTIR-3609 —
+and the prediction was half right.** The row DID land in the methods list
+without a re-layout, exactly as this line expected, and `passkeys.mock.html`
+draws it. What the line did not anticipate is that the row is READ-ONLY: every
+control lives in a card of its own above, because a passkey replaces the
+password rather than following it. So the methods card gained a row and gained
+no control — see **Passkeys — `passkeys.mock.html`** below, and note that
+`two-factor.mock.html` itself is NOT amended: this file is where the correction
+lives, which is what "amended in the notes, not in the frozen mock" means.
 
 ## The workflow spec this design is grounded in (the design-content dependency)
 
@@ -1537,3 +1544,234 @@ asset (MOTIR-1205's).
   spent-code rule is disabled text (1.4.3 exempts it).
 - No Tier-0 `--color-*` outside the token block; no raw `rounded-*` / `p-*` /
   `h-9` on any control's own box.
+
+---
+
+# Passkeys — `passkeys.mock.html`
+
+**Story 8.12 (MOTIR-1214) · Subtask MOTIR-3609, Surface A.** The `Security`
+pane's **passkeys** card: register a WebAuthn credential, see the ones you hold,
+rename one, remove one. **Gates MOTIR-3612** (the card + its island). The SIGN-IN
+half of the same subtask is a separate asset in its own area —
+`../auth/passkey-sign-in.mock.html` — because it renders in the signed-out
+`(auth)` frame; the two cite each other and neither re-specifies the other.
+
+`two-factor.mock.html` is NOT amended and is not re-exported. It is the record of
+what 8.11 decided, and this asset composes the pane it drew rather than editing
+it — the correction to its "not drawn, deliberately" line lives in this file,
+above.
+
+## Grounded in shipped reality (rung 2 — what was verified, and where)
+
+**The pane was RENDERED before anything was drawn.** A production build
+(`next build` + `next start`), signed in as a real account,
+`/settings/account/security` screenshotted at 1440×1000 @2x, plus `/sign-in` for
+Surface B. Reading `TwoFactorManager.tsx` would not have been enough, and one
+thing it settled is a divergence nobody had recorded:
+
+- ⚠️ **THE FROZEN MOCK AND THE RUNNING PANE DISAGREE ABOUT THE EMAIL ROW.**
+  `two-factor.mock.html` draws its control as a **Switch**; the shipped
+  `MethodRow` renders the text **"Set up an authenticator first"**, because the
+  plugin's OTP arm is server-level and a per-user switch would write nowhere —
+  which `lib/auth/index.ts`'s own comment says. This board follows the PANE. The
+  frozen mock is not wrong about what was decided; it is stale about what
+  shipped, and that is what a frozen asset is for.
+- The area shell (rail + identity header + grouped nav + `Card` panes), the page
+  head, the `.mrow` method-row grammar and every control primitive are copied
+  1:1 from `two-factor.mock.html` / `account-settings.mock.html`, so the two
+  surfaces are diffable.
+- The MECHANISM is `@better-auth/passkey`, registered by **MOTIR-3610**. Every
+  control here maps to an endpoint it mounts (below), so nothing on this surface
+  is a capability that would have to be invented.
+- `authenticatorSelection.userVerification: 'required'` is pinned at
+  registration (MOTIR-3610), which is why the copy may say a passkey is two
+  factors **on its own** (NIST SP 800-63B) without qualifying it.
+- The read-only `Passkey` row in the methods card is `TwoFactorStatusDTO.methods`
+  containing `'passkey'` (**MOTIR-3611**) — and it is drawn with two-factor
+  **OFF**, because that DTO adds it on `passkeyCount >= 1` regardless of
+  `enabled`. That is the seam 8.13 reads, and drawing it any other way would
+  contradict the code that ships underneath it.
+
+## The ACCESS PATH — an EXISTING rail row, and no new one is proposed
+
+The rail's Security group keeps the two rows it already has
+(`lib/settings/accountSettingsNav.ts`). The passkeys card is a new **section** on
+the pane the `twoFactor` entry already opens, and the board draws the pane in its
+rail so the placement is unambiguous rather than described in prose.
+
+**Why not a third Security row.** A row of its own would split one subject —
+"how do I prove it is me?" — across two pages, and the first thing a reader
+would then have to do is compare them. It would also require the reader to
+already know the word _passkey_ to find the thing that explains what a passkey
+is. The one argument for a separate row is discoverability, and the card's
+position at the top of a pane the reader is already on buys that more cheaply.
+
+## Why its OWN card, and not a row inside "What you'll be asked for"
+
+The story's reason, stated once so the build does not relitigate it: **a passkey
+replaces the password, it does not follow it.** A screen that files it under
+"second factor" teaches the reader that they still need the authenticator app,
+or that removing the passkey leaves them locked out. Both are false and both are
+expensive to unlearn. GitHub and Linear both present passkeys separately, which
+is rung 1 agreeing.
+
+The methods card still gains a **read-only** `Passkey` row, because the account
+genuinely holds that method and a list that omitted it would be lying by
+omission. Its control is the words **"Managed above"** with an up-arrow — not a
+link, because the target is 200px up the same page and a link there would be a
+navigation that does not navigate.
+
+## ⚠️ The amendment this design asks of the SHIPPED hero (panel 2)
+
+The pane's first card says **"Two-factor authentication is off"**. With a passkey
+registered that sentence sits directly above a card explaining that the reader
+already has two factors, and a reader who notices is right to be confused.
+
+**So when `methods` contains `'passkey'` and `enabled` is false, the hero gains
+one callout** — _"Your passkey already counts as a second factor. An
+authenticator app adds a fallback for the days your device is not with you."_ —
+and nothing else changes: same title, same button, same copy. It is additive, it
+is derivable from the DTO MOTIR-3611 already ships, and MOTIR-3612 owns building
+it. Naming it here is the point: it is the one change to a SHIPPED element this
+story needs, and a card that only reads its own section would never find it.
+
+## Panels
+
+1. **Zero state** — three cards: the shipped 2FA hero, the new passkeys card,
+   the shipped methods list. The empty state spends its words on what a passkey
+   IS, because most readers have never knowingly used one and "Add a passkey"
+   alone answers nothing.
+2. **Populated** — three rows, plus the hero's amendment and the methods card's
+   read-only `Passkey` row.
+3. **Registering** — the pending row, and a labelled stand-in for the browser's
+   own sheet.
+4. **Rename** — the modal.
+5. **Remove** — the confirmation, with the last-passkey consequence.
+6. **The three reader-visible refusals**, drawn as the reader sees them; the
+   error codes are in the board's captions, never on the page.
+7. **Dark parity** — the populated pane on `data-theme="dark"`.
+
+## Per-control map — primitive, endpoint, tokens
+
+| Control                       | Primitive                                                                | Endpoint (`@better-auth/passkey`)                                                   |
+| ----------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Add a passkey**             | `Button variant="primary" size="sm"` in `Card` header                    | `authClient.passkey.addPasskey()` → generate-register-options → verify-registration |
+| **The list**                  | rows in `Card` body, `--el-border-soft` hairlines                        | the Server-Component read `passkeyService.listForUser` (MOTIR-3611)                 |
+| **Synced / This device only** | `Pill`                                                                   | `deviceType` — `multiDevice` / `singleDevice`                                       |
+| **Rename**                    | `Button variant="ghost" size="sm"` → `Modal` + `FormField` + `Input`     | `auth.api.updatePasskey` (`…/api/auth/passkey/update-passkey`)                      |
+| **Remove**                    | `Button variant="ghost" size="sm"` → `Modal` + `Button variant="danger"` | `auth.api.deletePasskey` (`…/api/auth/passkey/delete-passkey`)                      |
+| **Passkey (methods)**         | the shipped `MethodRow`, control replaced by text                        | none — it is a read of `TwoFactorStatusDTO.methods`                                 |
+
+## Two decisions this asset makes so the code card does not have to
+
+**Rename is a MODAL, not an inline edit.** The row is already dense — name, chip,
+date, two controls — and an inline field either pushes the controls out of reach
+or grows the row in the middle of a list. A modal also gives the 64-character
+bound somewhere to be **stated** rather than silently enforced. The value is the
+current name, selected, so the common case is type-and-save.
+
+**The row's Remove does NOT use red LABEL text**, and this is a measurement
+rather than a preference. `--el-danger` is 4.51:1 on the light page and **4.25:1
+on the dark one**, so a red label fails AA in dark; graphics need only 3:1. The
+hue therefore goes in the trash GLYPH and the label stays on `--el-text`
+(17.4:1, both themes). The weight this costs is bought back by the confirmation,
+where a solid danger FILL is correct because the act really is destructive.
+
+## The refusals, and the one that draws nothing
+
+`PASSKEY_ERROR_CODES` has fourteen members; three reach a reader on this surface
+and they take three shapes:
+
+- **`PREVIOUSLY_REGISTERED`** — an inline notice, not an error: the reader asked
+  for something they already have. _"This device already has a passkey for Motir.
+  Use it to sign in, or add one from a different device."_
+- **`CHALLENGE_NOT_FOUND`** — the plugin's challenge cookie lapsed after 300
+  seconds. _"That took more than 5 minutes, so we started over."_ The copy states
+  the number the server enforces, read from the passkey constants module, never a
+  second literal.
+- **`REGISTRATION_CANCELLED` / `AUTH_CANCELLED`** — **nothing is drawn.** The
+  reader dismissed their own browser's sheet, which is a decision. A red banner
+  here tells someone they did something wrong when they did not.
+
+## The default NAME, and why the register flow proposes one
+
+Two rows have to be tellable apart, and `name` is the only field that does it —
+`deviceType` collapses to two values and the date collapses to one for anyone
+who adds two passkeys in a sitting. The plugin's `name` is optional and it
+proposes nothing, so an unnamed list is the default outcome unless we choose
+otherwise. **The register call supplies a default read from the browser at
+registration** ("MacBook Pro", "Chrome on Windows"), and the reader renames it
+whenever they like. The DTO keeps `name` **nullable** rather than defaulting
+server-side, so a row nobody named stays distinguishable from one somebody did.
+
+## The copy, and the `en` keys it needs
+
+All under `settings.account.passkeys.*`. Every `en` key needs its `zh` twin
+(`tests/i18n-catalog.test.ts`).
+
+`title` · `subtitle` · `add` · `empty.{title,body,promise}` ·
+`row.{added,synced,singleDevice}` · `row.{rename,remove}` ·
+`registering.{title,body}` ·
+`rename.{title,desc,label,helper,cancel,save}` ·
+`remove.{title,desc,lastWarning,keep,confirm}` ·
+`errors.{previouslyRegistered,challengeExpired}` ·
+`method.{name,badge,desc,managedAbove}` · `hero.passkeyCounts`.
+
+**`errors.cancelled` is deliberately ABSENT** — there is no string, because
+nothing is shown.
+
+## States drawn, and the one that is NOT
+
+Drawn: **zero** (1) · **populated** (2) · **registering** (3) · **rename** (4) ·
+**remove confirm, last passkey** (5) · **the three refusals** (6) · **dark** (7).
+
+**Not drawn, deliberately: the operating system's own passkey sheet.** It is the
+browser's surface — we cannot style it, position it or read anything from it — so
+panel 3 stands it in with a labelled placeholder. Drawing it would specify a
+screen we do not own and cannot change.
+
+**Also not drawn: a "remove ALL passkeys" control.** Nothing asks for one, the
+list is short by construction, and a bulk destructive action on credentials is a
+surface that deserves its own thought rather than a corner of this one.
+
+## The workflow spec this design is grounded in (the design-content dependency)
+
+This asset invents no behaviour. Each flow it draws is defined by a sibling card,
+and the design cites them rather than deciding them:
+
+- **MOTIR-3610** — the plugin, the seven endpoints, the ten `passkey` fields the
+  rows render, the 300-second challenge cookie, the 64-character name bound, and
+  `userVerification: 'required'`.
+- **MOTIR-3611** — the `PasskeyDTO` the list renders, and `'passkey'` in
+  `TwoFactorStatusDTO.methods` independent of `enabled`.
+- **MOTIR-3612** — the card that BUILDS this surface.
+- **MOTIR-3613** — the sign-in affordance, in the other asset.
+
+## How the render was produced
+
+1. The shipped pane was screenshotted first (production build, real session,
+   1440×1000 @2x) and the board was composed against that render, not against
+   the source.
+2. The token block, the `[data-theme='dark']` block, the area shell and every
+   control class are copied 1:1 from `two-factor.mock.html`; the passkey rules
+   are APPENDED at the end of the style block, never edited into the copy.
+3. Every icon is a real lucide path at `viewBox="0 0 24 24"`, read from
+   `lucide-react`'s own `dist` — `fingerprint-pattern`, `laptop`, `usb`, `cloud`,
+   `plus`.
+4. The `.png` is exported with `node scripts/render-design-mock.mjs --width 1200`.
+
+## Self-review
+
+- No nested interactive elements: a passkey row is a row, and the two buttons in
+  it are the only focusable things.
+- Ink/surface pairs: every caption on `--el-surface` / `--el-muted` /
+  `--el-surface-soft` is `--el-text-secondary`; `--el-text-muted` appears only on
+  the white card.
+- The one destructive control that carries the danger hue as TEXT is the
+  confirmation's filled button, where the ink is `--el-danger-text` on an
+  `--el-danger` fill — the pairing that token exists for.
+- The `Synced` chip carries a glyph and `This device only` does not, and the
+  asymmetry is deliberate: the cloud says where else the credential lives, and
+  there is no mark for "nowhere else" that would not be inventing a claim.
+- No Tier-0 `--color-*` outside the token block; no raw `rounded-*` / `p-*` /
+  `h-*` on any control's own box.

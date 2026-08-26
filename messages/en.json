@@ -878,7 +878,8 @@
         "sendFailed": "We couldn’t send the code. Try again, or use your authenticator app.",
         "generic": "Something went wrong. Try again."
       }
-    }
+    },
+    "couldntSendResetLink": "We couldn’t send the reset email just now. Please try again in a moment."
   },
   "shell": {
     "nav": {
@@ -2493,6 +2494,7 @@
             "same": "That's already your email address.",
             "taken": "That email is already in use by another account.",
             "rateLimited": "Too many requests. Please try again in a little while.",
+            "sendFailed": "We couldn’t send the confirmation email just now. Please try again in a moment.",
             "generic": "Something went wrong. Please try again."
           }
         },

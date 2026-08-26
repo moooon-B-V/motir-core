@@ -8,7 +8,7 @@ import { twoFactor } from 'better-auth/plugins/two-factor';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { resolveBaseUrl, resolveBaseUrlTrimmed } from '@/lib/baseUrl';
-import { sendEvent } from '@/lib/jobs/sendEvent';
+import { sendAuthEmail } from '@/lib/auth/authMail';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
@@ -127,8 +127,15 @@ export const auth = betterAuth({
     // The body still lives in lib/emailTemplates/passwordReset.tsx; the
     // template is rendered inside the job by emailService (per CLAUDE.md,
     // no email body strings in the wiring layer).
+    // ⚠️ STRICT (MOTIR-3583) — a reset mail that cannot be QUEUED must not be
+    // reported as sent. Better-Auth swallows what this hook throws
+    // (`runInBackgroundOrAwait` is a bare try/catch) and answers
+    // `{ status: true }` regardless, so the throw is not what corrects the
+    // response: the POST wrapper below reads the per-request record
+    // `sendAuthEmail` leaves and answers 503 instead. See
+    // `lib/auth/authMail.ts`.
     sendResetPassword: async ({ user, url, token }) => {
-      await sendEvent('email.send', {
+      await sendAuthEmail({
         workspaceId: null,
         idempotencyKey: token,
         to: user.email,

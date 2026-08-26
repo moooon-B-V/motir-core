@@ -13,6 +13,7 @@ export type EmailChangeErrorCode =
   | 'SAME_EMAIL'
   | 'EMAIL_TAKEN'
   | 'EMAIL_CHANGE_RATE_LIMITED'
+  | 'AUTH_EMAIL_UNAVAILABLE'
   | 'USER_NOT_FOUND'
   | 'UNAUTHENTICATED'
   | 'BAD_REQUEST'

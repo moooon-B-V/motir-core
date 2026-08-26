@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
 import { twoFactorService } from '@/lib/services/twoFactorService';
+import { AuthEmailUnavailableError } from '@/lib/auth/authMail';
 import { TWO_FACTOR_OTP_PERIOD_MINUTES } from '@/lib/auth/twoFactorConfig';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
@@ -97,22 +98,31 @@ describe('dispatchOtpEmail', () => {
     expect(emailEvents.events[0]!.data.data).toMatchObject({ recipientName: 'there' });
   });
 
-  it('SWALLOWS an enqueue failure — `sendEvent`’s contract, pinned here because the consequence is bad', async () => {
-    // Not this method's choice: `dispatchToLanes` catches a transport failure on
-    // both lanes and logs it, because every other caller emits after a committed
-    // mutation and a throw there would turn a saved change into a 500 with a
-    // reverting optimistic UI.
+  it('REJECTS an enqueue failure — INVERTED from the pinned swallow (MOTIR-3583)', async () => {
+    // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, and it is inverted rather than
+    // deleted because the swallow was a real, deliberate contract and the record
+    // of why it did not fit HERE is the point.
     //
-    // Pinned as a test rather than left implicit because the consequence on THIS
-    // path is the bad one — no committed mutation for the user to keep, so the
-    // challenge says "check your email" and no code ever arrives. Filed as its
-    // own bug; making `sendEvent` strict for one event is a change to a contract
-    // every emitter depends on, and is not this card's to make.
+    // What it pinned: `dispatchToLanes` caught a transport failure on both lanes
+    // and logged it, because every other caller emits after a committed mutation
+    // and a throw there would turn a saved change into a 500 with a reverting
+    // optimistic UI (PROD-443). Correct for those callers, and still their
+    // contract — `tests/authEmailStrictEnqueue.test.ts` holds a work-item
+    // transition to it.
+    //
+    // Why it did not fit: there is no committed mutation for the user to keep on
+    // this path, so the swallow preserved nothing. The challenge screen said
+    // "check your email", no code arrived, and the retry failed the same silent
+    // way. `dispatchOtpEmail` takes the strict door now (`lib/auth/authMail.ts`),
+    // and the log line stays — it was never the problem, it was just the only
+    // signal that existed. It moves, though: the strict lane in `dispatchToLanes`
+    // rethrows instead of logging, so `sendAuthEmail` is what writes it now.
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(inngest, 'send').mockRejectedValueOnce(new Error('queue unreachable'));
 
-    await expect(twoFactorService.dispatchOtpEmail(ARGS)).resolves.toBeUndefined();
-    // It is at least LOUD in the log — the only signal that exists today.
+    await expect(twoFactorService.dispatchOtpEmail(ARGS)).rejects.toBeInstanceOf(
+      AuthEmailUnavailableError,
+    );
     expect(logged.mock.calls.flat().join(' ')).toContain('email.send');
   });
 });
