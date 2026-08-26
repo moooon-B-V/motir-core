@@ -198,5 +198,24 @@
  *   unresolvable value is refused with the existing `INVALID_READY_FILTER` →
  *   422 rather than silently matching everything, and an `ancestor` key from
  *   another project is refused identically to one that never existed.
+ * - `1.20.0` — MOTIR-3586 adds `listProjectRepositories`,
+ *   `GET /api/v1/projects/{projectKey}/repositories`: the project's repository
+ *   SET, in set order, each row carrying the checkout `name`, `repoRef`,
+ *   `cloneUrl`, `defaultBranch`, `archived`, its establish `state` and the
+ *   derived `established` discriminator. A PAT-authenticated client could not
+ *   learn which repositories a project has at all — the only repository-set read
+ *   in the product is session-cookie authenticated and returns the establish
+ *   step's whole view model — so a CLI could not fetch the code before a work
+ *   item had been picked. Additive: one new operation (§8's first allowed
+ *   change) and one new resource (`ProjectRepository`); no declared shape
+ *   changed. Gated on `project:browse`, already in `CLI_TOKEN_GRANT` — the
+ *   grant is NOT widened. See
+ *   `docs/decisions/link-materializes-the-checkouts.md` §2 and §7.
+ *
+ *   ⚠️ THIS NUMBER IS A SERIALIZED RESOURCE. Every in-flight additive pull
+ *   request claims the next MINOR, so read `V1_CONTRACT_VERSION` on
+ *   `origin/main` before merging and RENUMBER if a sibling has taken it since —
+ *   the entry names the OPERATION rather than a position precisely so that stays
+ *   one line (the 1.14.0 → 1.17.0 note above is the same process working).
  */
-export const V1_CONTRACT_VERSION = '1.19.0';
+export const V1_CONTRACT_VERSION = '1.20.0';
