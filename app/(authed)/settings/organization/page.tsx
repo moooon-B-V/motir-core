@@ -1,7 +1,9 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 import { Lock } from 'lucide-react';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -16,6 +18,7 @@ import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { hasAiEntitlement } from '@/lib/billing/aiEntitlement';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { billingService } from '@/lib/services/billingService';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
@@ -109,29 +112,19 @@ export default async function OrganizationSettingsPage() {
   const foldInWorkspace = isWorkspaceTierRevealed(orgWorkspaces.length)
     ? null
     : (orgWorkspaces[0] ?? null);
-  const { total: memberCount } = await organizationsService.listMembers({
-    organizationId: org.id,
-    actorUserId: session.user.id,
-    limit: 1,
-  });
-
-  // Acceptance-video card (MOTIR-1635): the toggle is only effective for an org
-  // ENTITLED to paid-AI features. That is not the same question as "does it hold
-  // a paid plan" (MOTIR-2545): `getAiAccess` returns the inert
-  // `notApplicableAiAccess()` sentinel for a self-hosted build AND for a `meta`
-  // organization, and reading `hasPaidAiPlan` off it answered "no" for an org
-  // the paywall explicitly does not apply to — showing moooon an Upgrade button
-  // and disabling its own toggle. `hasAiEntitlement` reads the DTO the way its
-  // contract says to, and is the same predicate `AiPaywall` gates on.
+  // MOTIR-3448 — allocation row 13: SERIAL → ONE WAVE, plus the frame.
   //
-  // No `isCloudBilling()` branch here: `getAiAccess` already short-circuits to
-  // that sentinel off-cloud, before any read, so the predicate returns true
-  // there exactly as the old `: true` arm did — one code path, one place the
-  // rule lives.
-  const hasAcceptancePlan = hasAiEntitlement(
-    await billingService.getAiAccess({ actorUserId: session.user.id, organizationId: org.id }),
-  );
-
+  // ⚠️ THE MEASUREMENT DIFFERS FROM THE ALLOCATION, and the smaller number is the
+  // true one. The asset counts THREE serial reads here — `listUserWorkspaces`,
+  // `listMembers`, `getAiAccess`. `listUserWorkspaces` is already concurrent: it
+  // rides the gate's own `Promise.all` beside `getWorkspaceContext` and
+  // `cookies()`, and it has to, because `resolveActiveOrganization` consumes it.
+  // So the genuine win is TWO — `listMembers` and `getAiAccess`, which need only
+  // `org.id` and the actor and were written one after the other for no reason.
+  // Still the largest single win in the family.
+  //
+  // `resolveActiveOrganization` stays ABOVE the boundary: it decides the
+  // no-active-org state AND supplies the org name the header interpolates.
   return (
     <div className="mx-auto flex max-w-[45rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
@@ -143,13 +136,77 @@ export default async function OrganizationSettingsPage() {
         </p>
       </header>
 
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <OrgPaneBody
+          orgId={org.id}
+          orgName={org.name}
+          role={current.role}
+          isAdmin={isAdmin}
+          actorUserId={session.user.id}
+          acceptanceVideoEnabled={org.acceptanceVideoEnabled}
+          orgWorkspaceCount={orgWorkspaces.length}
+          foldInWorkspace={foldInWorkspace}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+/**
+ * The org pane's two reads, below the boundary and now in ONE wave.
+ *
+ * `allSettledOrThrow` rather than a bare `Promise.all`: both arms open a
+ * transaction, so a rejection on one must not leave the other running
+ * unobserved (MOTIR-3066).
+ */
+async function OrgPaneBody({
+  orgId,
+  orgName,
+  role,
+  isAdmin,
+  actorUserId,
+  acceptanceVideoEnabled,
+  orgWorkspaceCount,
+  foldInWorkspace,
+}: {
+  orgId: string;
+  orgName: string;
+  role: React.ComponentProps<typeof OrgGeneralCard>['role'];
+  isAdmin: boolean;
+  actorUserId: string;
+  acceptanceVideoEnabled: boolean;
+  orgWorkspaceCount: number;
+  foldInWorkspace: { id: string } | null;
+}) {
+  const t = await getTranslations('orgAdmin');
+  const [{ total: memberCount }, aiAccess] = await allSettledOrThrow([
+    organizationsService.listMembers({ organizationId: orgId, actorUserId, limit: 1 }),
+    // Acceptance-video card (MOTIR-1635): the toggle is only effective for an org
+    // ENTITLED to paid-AI features. That is not the same question as "does it hold
+    // a paid plan" (MOTIR-2545): `getAiAccess` returns the inert
+    // `notApplicableAiAccess()` sentinel for a self-hosted build AND for a `meta`
+    // organization, and reading `hasPaidAiPlan` off it answered "no" for an org
+    // the paywall explicitly does not apply to — showing moooon an Upgrade button
+    // and disabling its own toggle. `hasAiEntitlement` reads the DTO the way its
+    // contract says to, and is the same predicate `AiPaywall` gates on.
+    //
+    // No `isCloudBilling()` branch here: `getAiAccess` already short-circuits to
+    // that sentinel off-cloud, before any read, so the predicate returns true
+    // there exactly as the old `: true` arm did — one code path, one place the
+    // rule lives.
+    billingService.getAiAccess({ actorUserId, organizationId: orgId }),
+  ]);
+  const hasAcceptancePlan = hasAiEntitlement(aiAccess);
+
+  return (
+    <>
       {isAdmin ? (
         <>
           <OrgGeneralCard
-            orgId={org.id}
-            initialName={org.name}
-            role={current.role}
-            workspaceCount={orgWorkspaces.length}
+            orgId={orgId}
+            initialName={orgName}
+            role={role}
+            workspaceCount={orgWorkspaceCount}
             memberCount={memberCount}
           />
 
@@ -159,8 +216,8 @@ export default async function OrganizationSettingsPage() {
           {isCloudBilling() ? <BillingCard /> : null}
 
           <AcceptanceVideoCard
-            orgId={org.id}
-            initialEnabled={org.acceptanceVideoEnabled}
+            orgId={orgId}
+            initialEnabled={acceptanceVideoEnabled}
             hasPlan={hasAcceptancePlan}
             canManage={isAdmin}
           />
@@ -172,19 +229,19 @@ export default async function OrganizationSettingsPage() {
         <EmptyState
           icon={<Lock className="h-12 w-12" aria-hidden />}
           title={t('states.forbiddenTitle')}
-          description={t('states.forbiddenDescription', { org: org.name })}
+          description={t('states.forbiddenDescription', { org: orgName })}
         />
       )}
 
       {foldInWorkspace ? (
         <WorkspaceFoldInSection
           workspaceId={foldInWorkspace.id}
-          actorUserId={session.user.id}
-          workspaceCount={orgWorkspaces.length}
+          actorUserId={actorUserId}
+          workspaceCount={orgWorkspaceCount}
         />
       ) : null}
 
       {isAdmin ? <DangerZoneCard /> : null}
-    </div>
+    </>
   );
 }
