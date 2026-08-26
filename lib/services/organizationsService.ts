@@ -9,7 +9,11 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { withOrgContext } from '@/lib/organizations/context';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import { entitlementsService } from '@/lib/services/entitlementsService';
-import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withUserContext,
+  withWorkspaceContext,
+} from '@/lib/workspaces/context';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import {
   AlreadyOrgMemberError,
@@ -325,12 +329,40 @@ export const organizationsService = {
   // ── Membership management (asymmetric direction, 6.10.2 §5) ───────────────
 
   /**
-   * Add a user to the ORG with an org role — and NOTHING else. Adding to the
-   * org creates NO workspace membership (an org-only member in zero workspaces
-   * is a valid state — e.g. a billing admin — and a plain org member reaches
-   * only workspaces they're explicitly added to). The actor must be an org
-   * owner/admin. Idempotency: a duplicate (organizationId, userId) raises
-   * AlreadyOrgMemberError.
+   * Add a user to the ORG with an org role — plus, at EXACTLY ONE workspace, that
+   * workspace's membership (6.10.2 §5's count-1 arm, MOTIR-3501).
+   *
+   * §5's asymmetry is unchanged at every other count: adding to the org creates NO
+   * workspace membership, because an org-only member in zero workspaces is a valid
+   * state (a billing admin) and a plain org member reaches only workspaces they are
+   * explicitly added to. That reasoning holds while the workspace tier offers a
+   * CHOICE. §6 hides the tier entirely below two workspaces, so at count 1 the old
+   * rule placed the invitee into a tier with no UI, no switcher and no
+   * add-to-workspace action anywhere on the org roster — an onboarding dead end
+   * whose only visible exit (create a workspace) splits the team in two.
+   *
+   * ⚠️ THE COUNT IS THE ORGANIZATION'S, NOT THE ACTOR'S, and that distinction is
+   * the whole card. `workspace`'s RLS used to admit a row only via the caller's own
+   * memberships, so this read answered with the ACTOR's slice — 1 where the truth
+   * was 2 — and a count-1 predicate built on it would fire in a TWO-workspace org
+   * whenever the inviting admin happened to belong to one of them, creating exactly
+   * the membership §5 withholds. `workspace_org_member_read` (MOTIR-3512) is what
+   * makes the honest count readable here. §6's DISCLOSURE arm reads the opposite
+   * predicate — the VIEWER's count — and the two must not be unified; the ADR now
+   * says which governs which.
+   *
+   * ⚠️ AND THE WRITE NEEDS `app.workspace_id` BOUND. `membership_insert_active_or_bootstrap`
+   * gates the INSERT on `"workspaceId" = current_setting('app.workspace_id')`, which
+   * an org context never binds — without the bind this raises `new row violates
+   * row-level security policy for table "workspace_membership"`. This is the exact
+   * downward mirror of `workspacesService.addMember`, which binds the ORG guc
+   * mid-transaction for the upward auto-join. Same SECURITY constraint as that call:
+   * the id comes from a TRUSTED resolution — the org's own workspace row, read
+   * inside this transaction — never from request input.
+   *
+   * The actor must be an org owner/admin. Idempotency: a duplicate
+   * (organizationId, userId) raises AlreadyOrgMemberError; a duplicate workspace
+   * membership is swallowed, exactly as `ensureOrgMembership` does upward.
    */
   async addMember(input: {
     organizationId: string;
@@ -345,6 +377,41 @@ export const organizationsService = {
           await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
           await organizationMembershipRepository.create(
             { organizationId: input.organizationId, userId: input.userId, role: input.role },
+            tx,
+          );
+
+          // §5's count-1 arm. The read guards the write, so it takes `tx` and runs
+          // in the same transaction — an org member must never exist without the
+          // workspace row this arm owes them.
+          const workspaces = await workspaceRepository.listByOrganization(input.organizationId, tx);
+          if (workspaces.length !== 1) return;
+          const sole = workspaces[0]!;
+
+          // Bind the workspace GUC before the tenant-table statement, not after —
+          // the INSERT policy reads it. `sole.id` came from the org's own row, one
+          // statement up, which is the trusted resolution this helper requires.
+          await bindWorkspaceContext(tx, sole.id);
+
+          // ⚠️ CHECK FIRST — do NOT create-and-swallow-the-duplicate here. The
+          // row legitimately already exists whenever the user was added to the
+          // workspace DIRECTLY (which upward-joined them to the org) and is now
+          // being given an explicit org role, so this is a common path rather
+          // than a race. And catching a unique violation would not save it:
+          // Postgres ABORTS the whole transaction on the failed statement, so
+          // swallowing the error in JS leaves a dead transaction and the
+          // org-membership INSERT above is rolled back at commit — measured, as
+          // `the count-1 arm writes BOTH rows in ONE transaction` in
+          // `tests/organizations-service.test.ts`, which returned 0 org
+          // memberships against exactly that shape.
+          const existing = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+            input.userId,
+            sole.id,
+            tx,
+          );
+          if (existing) return;
+
+          await workspaceMembershipRepository.create(
+            { userId: input.userId, workspaceId: sole.id, role: 'member' },
             tx,
           );
         },

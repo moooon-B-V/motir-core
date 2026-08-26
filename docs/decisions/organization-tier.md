@@ -243,11 +243,46 @@ in only one direction:
   **workspace** (a `WorkspaceMembership` create) MUST also create their
   `OrganizationMembership` (role `member`) in that workspace's org if absent, in the
   **same transaction**. You cannot be in a workspace without being in its org.
-- **Org add ⟹ NO workspace (no downward propagation).** Adding a user to the **org**
-  creates **only** an `OrganizationMembership`. A plain org `member` reaches **only** the
-  workspaces they are **explicitly** added to (an org owner/admin still spans all _by
-  role_, per §4). So an **"org-only" member in zero workspaces is a valid state** — e.g.
-  a billing admin who administers the org but works in no workspace.
+- **Org add ⟹ NO workspace (no downward propagation) — EXCEPT at exactly ONE workspace.**
+  Adding a user to the **org** creates **only** an `OrganizationMembership`. A plain org
+  `member` reaches **only** the workspaces they are **explicitly** added to (an org
+  owner/admin still spans all _by role_, per §4). So an **"org-only" member in zero
+  workspaces is a valid state** — e.g. a billing admin who administers the org but works
+  in no workspace.
+
+  **⚠️ THE COUNT-1 ARM (MOTIR-3501, amended 2026-08-26 — the clause this ADR was missing).**
+  When the org has **exactly one** workspace, an org add **also** creates that
+  workspace's `WorkspaceMembership` (role `member`), in the **same transaction**.
+
+  The asymmetry above is justified by there being a **choice** to withhold: a plain org
+  member reaches only the workspaces someone explicitly put them in, which presupposes
+  that "which workspace?" is a question with more than one answer. **§6 hides the
+  workspace tier entirely below two workspaces**, so at count 1 the two clauses combined
+  into a dead end: the invitee was placed into a tier with no UI, no switcher and no
+  add-to-workspace action anywhere on the org roster, and their one visible exit — create
+  a workspace — flipped the org out of the collapsed state and split the team. The
+  billing-admin carve-out is only meaningful once a choice exists, which is the same
+  predicate §6 already uses. **At ≥ 2 the asymmetry stands entirely unchanged.**
+
+  **⚠️ WHOSE COUNT — the clause NEITHER §5 NOR §6 stated, and they need OPPOSITE answers.**
+  "One workspace" is ambiguous between the **organization's** workspace count and the
+  **viewer's** count within that org, and the two coincide only when the viewer belongs to
+  every workspace in the org — the founder case, which is why the ambiguity survived.
+  - **This clause (§5, MEMBERSHIP) reads the ORGANIZATION's count.** Whether an invitee is
+    auto-joined must not depend on which workspaces the _inviting admin_ happens to belong
+    to. Under an actor-scoped read this arm would fire in a **two**-workspace org whose
+    admin belongs to one of them, creating precisely the membership this section
+    withholds.
+  - **§6's DISCLOSURE arm reads the VIEWER's count.** A rendered entry point answers "does
+    this person have a choice to make?", and a workspace they are not a member of offers
+    them none.
+
+  **Do not unify them.** Reading the org's count required a row-level policy that did not
+  exist (`workspace_org_member_read`, MOTIR-3512): `workspace`'s RLS admitted a row only
+  via the caller's own memberships, so the read answered with the actor's slice and did so
+  **silently** — a denied read narrows rather than raising, and 1-where-the-truth-is-2 is
+  indistinguishable from a small org.
+
 - **Removal.** Removing a user from the **org** cascades loss of access to **every**
   workspace under it (the gate). Removing them from a **workspace** leaves the org
   membership intact (they remain an org member, just lose that workspace).
@@ -311,6 +346,21 @@ data.)
 
 Only **two** count-driven reveals exist: the workspace switcher at workspace #2, and the
 org menu's switch-org section at org #2.
+
+**⚠️ WHOSE COUNT — every reveal in this section reads the VIEWER's (MOTIR-3502, amended
+2026-08-26).** "The org has ≥ 2 workspaces" above means **the workspaces the viewer
+belongs to within the active org**, not the organization's total. That is what has always
+shipped (`ShellTierNav` counts the list the authed layout hands it, which is
+`listUserWorkspaces(session.user.id)` filtered to the active org) and it is the right
+predicate for a DISCLOSURE rule: a rendered entry point answers _"does this person have a
+choice to make?"_, and a workspace they are not a member of offers them none.
+
+**This is the OPPOSITE of the predicate §5's count-1 membership arm reads, deliberately.**
+That arm reads the ORGANIZATION's count, because whether an invitee is stranded must not
+depend on their inviter's memberships. The two coincide only when the viewer belongs to
+every workspace in the org — the founder case, which is why the ambiguity went unnoticed
+in both clauses. **Neither clause stated whose count until now; both must, and they must
+not be unified.** See §5's count-1 arm for the membership half.
 
 **Settings collapse (binding on 6.10.5).** At **one** workspace the workspace-settings
 **surface** is hidden, but the workspace tier still does the work underneath: the single
