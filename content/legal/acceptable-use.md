@@ -156,6 +156,42 @@ the same place and routes it correctly.
 children, or that presents an immediate threat to someone's safety, is handled immediately
 and reported to the authorities.
 
+**That last part is also an obligation, not only a policy.** Where we become aware of
+information giving rise to a suspicion that **a criminal offence involving a threat to the
+life or safety of a person has taken place, is taking place or is likely to** — Article 18
+of the Digital Services Act — we promptly inform the law enforcement or judicial
+authorities of the Member State concerned, or Europol where no Member State is identified,
+and give them everything we hold that is relevant.
+
+## Where we sit under the Digital Services Act
+
+**Motir is an online platform.** It is a hosting service that stores information you
+provide and **disseminates it to the public** — the public projects, where anyone can read
+a roadmap and any signed-in visitor can post to it. That is what puts us in scope, and we
+would rather state it than leave you to work it out.
+
+**Articles 16, 17 and 18 apply to us, and the sections above implement them**: the notice
+and action mechanism, the statement of reasons for every restriction, and the duty to
+inform the authorities about a suspected offence threatening someone's life or safety.
+
+**Articles 20 to 28 — the additional duties on online platforms — do not currently apply
+to us.** Article 19 exempts providers that are micro or small enterprises within the
+meaning of Recommendation 2003/361/EC, and moooon B.V. is one.
+
+**We implement the two that matter most to you anyway, as a voluntary commitment.** The
+internal complaint route and the out-of-court dispute settlement option described under
+_Contesting a decision_ are Article 20 and Article 21 in shape, and we are offering them
+because a restriction you cannot argue with is a bad experience whatever the law requires.
+Treat them as binding on us: we do not intend to withdraw them, and we would rather not
+change how we treat you on the day an exemption lapses.
+
+**The exemption is conditional, and we will not rely on it quietly.** It ends if moooon
+B.V. ceases to be a micro or small enterprise — which turns on headcount and turnover,
+counted with any linked or partner enterprises — and Article 19(2) then allows twelve
+months before Articles 20 to 28 attach. **When that happens the obligations that arrive
+are transparency reporting, trusted-flagger priority, the misuse-suspension policy, and
+the protection-of-minors measures**, and this page changes with them.
+
 ## What we may do
 
 Proportionate to the breach and the risk:
