@@ -1,6 +1,7 @@
 import type { JobHandler } from '../defineJob';
 import type { RetryPolicyName } from '../retries';
 import type { CatchUpPolicy } from '../catchUp';
+import type { DebounceOption } from './debounce';
 
 // The ENGINE-SIDE job registry (Story MOTIR-3414 · Subtask MOTIR-3421).
 //
@@ -50,6 +51,12 @@ export interface EngineJobDefinition {
    *  `lib/jobs/engine/idempotency.ts`; see there for why an unknown template
    *  throws rather than degrading to "not deduped". */
   idempotency: string | undefined;
+  /** The `debounce` the job declared, or `undefined` (MOTIR-3483). Validated at
+   *  registration and applied at ENQUEUE by the dispatcher — see
+   *  `lib/jobs/engine/debounce.ts`. Recorded here for the same reason
+   *  `idempotency` is: the option was forwarded to Inngest and dropped before
+   *  this table, so the engine could not have honoured it. */
+  debounce: DebounceOption | undefined;
   /** The raw handler, invoked by the engine's runner with a synthesized context. */
   handler: JobHandler;
 }

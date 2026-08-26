@@ -254,7 +254,19 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // MOTIR-3336's, minted in 2026. Conferring it on a stored `read` row would
     // let a token issued years ago for work-item reads pull a project's
     // accumulated planning lessons, which are distilled from its own work.
-    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage', 'lesson:view'];
+    //
+    // ⚠️ AND `lesson:reinforce` IS THE FOURTH (MOTIR-3553). Same route, same
+    // reason, one key further: `reinforce_lesson` is the first MCP tool to
+    // assert it, which made it grantable, and the key was minted in that change
+    // — later than every one of the three above. Conferring it on a stored
+    // `work_items:write` row would let a token issued years ago for work-item
+    // edits start recording occurrences against a project's lesson corpus.
+    const POSTDATE_THE_SCOPES: PermissionKey[] = [
+      'ai:decide_plan',
+      'lesson:manage',
+      'lesson:view',
+      'lesson:reinforce',
+    ];
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );

@@ -122,6 +122,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   get_plan_status: 'project:browse',
   get_plan: 'project:browse',
 
+  // ── lesson:reinforce — recording that a lesson's mistake recurred ─────────
+  // Its own key, not `lesson:manage`: this changes nothing a lesson SAYS, and
+  // the service asserts exactly what is declared here (§3's rule).
+  reinforce_lesson: 'lesson:reinforce',
+
   // ── work_item:edit — the work-item writes ────────────────────────────────
   create_work_item: 'work_item:edit',
   // OPENS a plan, and creates no work item — but `plansService.createPlan` runs
@@ -341,6 +346,26 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   // could open a plan and never fill it, because this grant held one key of the
   // pair).
   'lesson:view',
+  // ⚠️ `lesson:reinforce` — WIDENED DELIBERATELY for `reinforce_lesson` (Bug
+  // MOTIR-3547 · MOTIR-3553), and argued here rather than assumed, on the same
+  // terms `lesson:view` was. It sits AFTER `lesson:view` because that is catalog
+  // order, which this list is declared in (see the note at the top).
+  //
+  // The argument: a sandboxed `motir run` agent is again THE caller this exists
+  // for. The runbook already instructs every run to consult the mistakes corpus
+  // before it builds; what it could not do until now is say that a lesson it
+  // consulted described the thing that just went wrong. Without that, the corpus
+  // decays on a timer no amount of use resets — every hit invisible, so the
+  // lessons being relied on most look identical to the ones nobody has read
+  // since they were seeded.
+  //
+  // What it grants is deliberately small: an ADDITIVE, IDEMPOTENT record, keyed
+  // on an occurrence ref so a replay writes nothing. It cannot change what a
+  // lesson says, cannot retire one, and cannot create one. That is exactly why
+  // it is not `lesson:manage` — granting THAT to reach this would hand every
+  // device-minted token the ability to retire a lesson, trading a policy
+  // capability for a bookkeeping one in a grant that is deliberately narrow.
+  'lesson:reinforce',
   'work_item:edit',
   'comment:add',
   'ai:plan',

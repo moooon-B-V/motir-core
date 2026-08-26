@@ -122,6 +122,16 @@ const eslintConfig = defineConfig([
         'error',
         { paths: [EMAIL_RESTRICTION], patterns: [INNGEST_RESTRICTION] },
       ],
+      // ⚠️ AND ITS STDOUT IS AN INTERFACE, NOT DEBUG OUTPUT (MOTIR-3564). This
+      // process has no request, no response and no UI: its boot line, its drain
+      // line and its exit line are the whole of what an operator — or a lane —
+      // can observe. `tests/e2e/_helpers/job-worker-process.ts` RESOLVES on
+      // `[worker] started as`, so the line is load-bearing rather than
+      // incidental. The file carried three `no-console` warnings before this
+      // override existed, which meant `--max-warnings=0` refused any commit that
+      // touched it; the honest fix is to say the rule does not apply here rather
+      // than to sprinkle three disables over lines that are doing their job.
+      'no-console': 'off',
     },
   },
 

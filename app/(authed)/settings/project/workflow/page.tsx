@@ -1,10 +1,13 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { projectStatusAutomationService } from '@/lib/services/projectStatusAutomationService';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { WorkflowEditor } from './_components/WorkflowEditor';
 import { StatusAutomationEditor } from './_components/StatusAutomationEditor';
 import { guardSettingsPage } from '../_guard';
@@ -46,20 +49,16 @@ export default async function ProjectWorkflowPage() {
   // actually asserts. The page is reached only by an actor who holds its registry
   // key (the guard above), so the edit affordances are simply on.
   const isAdmin = true;
-  const workflow = await workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId);
-  // Story MOTIR-1615 · MOTIR-1622 — the two status-derivation switches live on
-  // THIS page (design/projects/design-notes.md §1): they govern how a status move
-  // propagates along the workflow, and this is where `workflowPolicyMode`, the
-  // other "how do status moves behave here" switch, already lives. Browse-gated
-  // read, so a member sees the configuration; the write is re-gated in the
-  // service.
-  const statusAutomation = await projectStatusAutomationService.getStatusAutomation(
-    ctx.project.identifier,
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  );
 
+  // MOTIR-3558 — allocation row 3: SERIAL → CONCURRENT, plus the frame. The two
+  // reads below are independent (one takes the project id, the other the key)
+  // and were written one after the other for no reason. The gate is done at this
+  // line, so the boundary is safe here and would not have been one line up.
   return (
     <div className="mx-auto flex max-w-[48rem] flex-col gap-6">
+      {/* REAL, painted from the gate: the title is a plain `t(...)` and the
+          subtitle interpolates only `ctx.project.name`, which the gate already
+          resolved. Neither waits on the reads below. */}
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">
           {t('workflow.title')}
@@ -73,9 +72,59 @@ export default async function ProjectWorkflowPage() {
         </p>
       </header>
 
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <WorkflowPaneBody
+          projectId={ctx.projectId}
+          projectKey={ctx.project.identifier}
+          projectName={ctx.project.name}
+          workspaceId={ctx.workspaceId}
+          userId={ctx.userId}
+          isAdmin={isAdmin}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+/**
+ * The pane's two reads, below the boundary and now in ONE wave.
+ *
+ * Story MOTIR-1615 · MOTIR-1622 — the two status-derivation switches live on
+ * THIS page (design/projects/design-notes.md §1): they govern how a status move
+ * propagates along the workflow, and this is where `workflowPolicyMode`, the
+ * other "how do status moves behave here" switch, already lives. Browse-gated
+ * read, so a member sees the configuration; the write is re-gated in the
+ * service.
+ *
+ * `allSettledOrThrow` rather than a bare `Promise.all`: both arms open a
+ * transaction, so a rejection on one must not leave the other running
+ * unobserved (MOTIR-3066).
+ */
+async function WorkflowPaneBody({
+  projectId,
+  projectKey,
+  projectName,
+  workspaceId,
+  userId,
+  isAdmin,
+}: {
+  projectId: string;
+  projectKey: string;
+  projectName: string;
+  workspaceId: string;
+  userId: string;
+  isAdmin: boolean;
+}) {
+  const [workflow, statusAutomation] = await allSettledOrThrow([
+    workflowsService.getWorkflow(projectId, workspaceId),
+    projectStatusAutomationService.getStatusAutomation(projectKey, { userId, workspaceId }),
+  ]);
+
+  return (
+    <>
       <StatusAutomationEditor
-        projectKey={ctx.project.identifier}
-        projectName={ctx.project.name}
+        projectKey={projectKey}
+        projectName={projectName}
         settings={statusAutomation}
         isAdmin={isAdmin}
       />
@@ -86,6 +135,6 @@ export default async function ProjectWorkflowPage() {
         policyMode={workflow.policyMode}
         isAdmin={isAdmin}
       />
-    </div>
+    </>
   );
 }

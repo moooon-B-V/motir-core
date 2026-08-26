@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect, notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
@@ -6,6 +7,7 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { BillingClient } from './_components/BillingClient';
 
 // The org billing & plans surface (Story 8.1.7, design/billing panels 1–6, 8) —
@@ -43,20 +45,43 @@ export default async function OrganizationBillingPage() {
 
   const org = current.organization;
 
-  // The seat count (one seat per member, ADR §3) for the seat preview + the
-  // panel-6 seat calc — resolved here the same way the org settings page does.
-  const { total: memberCount } = await organizationsService.listMembers({
-    organizationId: org.id,
-    actorUserId: session.user.id,
-    limit: 1,
-  });
-
+  // MOTIR-3448 — allocation row 14: THE FRAME ONLY, and a small one — the client
+  // island already owns its per-screen states, so all this buys is that the seat
+  // read no longer holds the whole route.
+  //
+  // ⚠️ THIS ROUTE DECIDES EXISTENCE, and it is the one the whole in-page decision
+  // was measured on: off-cloud it `notFound()`s, and with a route-level boundary
+  // above it that 404 came back 200 (`tests/e2e/billing-selfhost.spec.ts`,
+  // `motir-core/CLAUDE.md`). The `notFound()` is the FIRST statement in this
+  // function and the boundary is the last, so nothing can flush before the
+  // status is settled.
   return (
     <div className="mx-auto max-w-[64rem]">
       {/* The header lives inside BillingClient so it swaps with the active
           screen (home / Motir AI / Motir seats), each with its own breadcrumb. */}
       <span className="sr-only">{t('title')}</span>
-      <BillingClient orgId={org.id} orgName={org.name} memberCount={memberCount} />
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <BillingPaneBody orgId={org.id} orgName={org.name} actorUserId={session.user.id} />
+      </Suspense>
     </div>
   );
+}
+
+/** The seat count (one seat per member, ADR §3) for the seat preview + the
+ *  panel-6 seat calc — resolved the same way the org settings page does. */
+async function BillingPaneBody({
+  orgId,
+  orgName,
+  actorUserId,
+}: {
+  orgId: string;
+  orgName: string;
+  actorUserId: string;
+}) {
+  const { total: memberCount } = await organizationsService.listMembers({
+    organizationId: orgId,
+    actorUserId,
+    limit: 1,
+  });
+  return <BillingClient orgId={orgId} orgName={orgName} memberCount={memberCount} />;
 }

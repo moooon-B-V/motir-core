@@ -803,6 +803,14 @@
       .modal.modal-sm {
         max-width: 24rem;
       }
+      /* The shown-once phase (Panel 5) is WIDER than the 28rem default, because
+         the secret it exists to show is 53 characters and 28rem does not hold
+         them (MOTIR-3545). This is the same 42rem the create phase already uses
+         for its permission grid, so the panel does not resize under the reader
+         between Create and the reveal. */
+      .modal.modal-wide {
+        max-width: 42rem;
+      }
       .modal-title {
         font-family: var(--font-serif);
         font-size: 20px;
@@ -898,22 +906,29 @@
         gap: 8px;
         align-items: stretch;
       }
+      /* ⚠️ This field may NEVER truncate. It renders the one and only view of
+         a secret the product cannot show again, so an ellipsis, a clip or a
+         scroll here is a token the reader silently cannot copy by eye
+         (MOTIR-3545 — the earlier spec was `white-space: nowrap; overflow:
+         hidden; text-overflow: ellipsis` at a fixed `--height-input`, drawn
+         holding a 42-char placeholder, and that is why the width was thought
+         sufficient). It GROWS instead: no fixed height, and `word-break:
+         break-all` so a base64url secret — whose only natural break
+         opportunity is a `-`, present in about half of them — wraps at any
+         character rather than overflowing to the one that happens to exist.
+         Mirrors the shipped `<code>` in `CreateTokenModal.tsx`, 12px included. */
       .secret-field {
         flex: 1;
         min-width: 0;
-        display: flex;
-        align-items: center;
-        height: var(--height-input);
-        padding: 0 var(--spacing-input-x);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
         border-radius: var(--radius-input);
         border: 1px solid var(--el-border-strong);
         background: var(--el-surface);
         font-family: var(--font-mono);
-        font-size: 13px;
+        font-size: 12px;
+        line-height: 1.625;
         color: var(--el-text);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        word-break: break-all;
       }
       .callout {
         display: flex;
@@ -1740,14 +1755,17 @@
 
     <!-- ════════════ PANEL 5 — shown-once state ════════════ -->
     <div class="panel-label">
-      5 · Shown once — the same Modal after creation: the full secret in a read-only monospace field
-      with a Copy button, and the one-time warning callout. "Done" closes; the secret is never shown
-      again.
+      5 · Shown once — the same Modal after creation, at the create phase's 42rem rather than
+      narrowing back to 28rem: the full secret in a read-only monospace field with a Copy button,
+      and the one-time warning callout. "Done" closes; the secret is never shown again. The token
+      drawn here is a REAL-SHAPE one — 53 characters, carrying a <code>-</code> — because the field
+      is specified by whether the whole of it is legible, and a shorter placeholder cannot say
+      (MOTIR-3545).
     </div>
     <div class="panel">
       <div class="mstage">
         <div class="overlay-tint"></div>
-        <div class="modal">
+        <div class="modal modal-wide">
           <div class="modal-head">
             <h3 class="modal-title">Token created</h3>
             <p class="modal-desc">Copy your token now — for security, Motir won't show it again.</p>
@@ -1760,7 +1778,7 @@
               <label for="m-secret">Your new token</label>
               <div class="secret-row">
                 <div class="secret-field" id="m-secret">
-                  motir_pat_AbC1dEf2GhI3jKl4MnO5pQr6StU7vWx8
+                  motir_pat_AbC1dEf2GhI3jKl4MnO5pQ-6StU7vWx8yZa0BcD1eF2
                 </div>
                 <button class="btn btn-secondary">
                   <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>Copy

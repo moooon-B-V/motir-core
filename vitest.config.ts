@@ -157,6 +157,26 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story MOTIR-3440 · Subtask MOTIR-3449 — the two ARRIVAL PRIMITIVES this
+        // story added. `PageSkeleton` is the wrapper/header/reveal every in-page
+        // frame composes (MOTIR-3531); `SettingsPaneFrame` is the settings
+        // family's pane frame, which all eleven settings panes mount (MOTIR-3558).
+        // Both are pinned in `thresholds` below and both were MEASURED first, per
+        // the note above: 100 statements / 100 branches / 100 functions / 100
+        // lines apiece, on this branch.
+        //
+        // ⚠️ THE STORY'S SEVENTEEN CHANGED `page.tsx` FILES ARE NOT HERE, and
+        // that is a stated gap rather than an oversight. They are async Server
+        // Components: covering one in vitest means rendering it, and rendering it
+        // means AWAITING it — which is the opposite of the pending state this
+        // story is about. This repo has no RSC render harness, so no `app/**/
+        // page.tsx` has ever been in this report. Their behaviour is asserted
+        // structurally instead (`tests/navigation/*-arrival.test.ts`, 59 tests)
+        // and end to end. Adding them here without that harness would either
+        // report near-zero and gate nothing, or force a threshold low enough to
+        // be meaningless — the loosening this block's own note warns against.
+        'components/ui/PageSkeleton.tsx',
+        'components/settings/SettingsPaneFrame.tsx',
         // Story MOTIR-2256 · Subtask MOTIR-2302 — the permission MODEL and its
         // enforcement seam. Every administrative gate in the product now routes
         // through these four files, and until this story they were not in the
@@ -1427,6 +1447,20 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // Story MOTIR-3440 · Subtask MOTIR-3449 — the two arrival primitives,
+        // MEASURED at 100/100/100/100 each before being pinned (see `include`).
+        'components/ui/PageSkeleton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/settings/SettingsPaneFrame.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-2282 · Subtask MOTIR-2264 — every file this story added,
         // named explicitly and MEASURED before being pinned (all six are at 100%
         // lines / branches / functions on this branch). The glob form matters for

@@ -143,6 +143,13 @@ export const PERMISSIONS = [
   // `project:manage_access` sits with `member:manage` and not here.
   'lesson:view',
   'lesson:manage',
+  // MOTIR-3553 — RECORDING that a lesson's mistake happened again. Beside its
+  // siblings for the same domain reason, and SEPARATE from `lesson:manage` for a
+  // reason the two acts make obvious once stated: managing a lesson CHANGES the
+  // standing instructions the planner is given, and reinforcing one changes
+  // nothing about what it says. Folding it into `manage` would mean a routine
+  // run had to be able to RETIRE a lesson in order to record that one applied.
+  'lesson:reinforce',
   'work_item:edit',
   'work_item:delete',
   'work_item:triage',
@@ -234,6 +241,10 @@ const PERMISSION_META: Record<
   // no moment where the catalog advertises a key nothing resolves through.
   'lesson:view': { domain: 'project', enforcement: 'enforced' }, // MOTIR-3336
   'lesson:manage': { domain: 'project', enforcement: 'enforced' }, // MOTIR-3336
+  // `enforced` on arrival, like the two above and for this file's own rule:
+  // `PLANNED_PERMISSIONS` is empty and pinned there, so the predicate
+  // (`canReinforceLessons`, lib/projects/access.ts) lands in the same change.
+  'lesson:reinforce': { domain: 'project', enforcement: 'enforced' }, // MOTIR-3553
   'work_item:edit': { domain: 'work_item', enforcement: 'enforced' },
   'work_item:delete': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
   'work_item:triage': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354

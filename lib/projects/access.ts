@@ -210,3 +210,22 @@ export function canViewLessons(i: ProjectAccessInputs): boolean {
 export function canManageLessons(i: ProjectAccessInputs): boolean {
   return hasPermission(i, 'lesson:manage');
 }
+
+/**
+ * Whether the actor may RECORD that a lesson's mistake happened again
+ * (Subtask MOTIR-3553 · Bug MOTIR-3547).
+ *
+ * ⚠️ SEPARATE from {@link canManageLessons}, and the separation is the point.
+ * Managing a lesson changes what the planner is told; reinforcing one changes
+ * nothing it says — it records that an occurrence matched it, which is
+ * additive, idempotent and the thing we want a routine run doing freely. Folded
+ * into `lesson:manage`, every dispatched agent would need the ability to RETIRE
+ * a lesson in order to be allowed to say one applied.
+ *
+ * Held by the same role that holds `lesson:view`, because reinforcing a lesson
+ * presupposes having read it — a grant to reinforce what you cannot see would
+ * describe no real caller.
+ */
+export function canReinforceLessons(i: ProjectAccessInputs): boolean {
+  return hasPermission(i, 'lesson:reinforce');
+}

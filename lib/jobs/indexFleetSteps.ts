@@ -1,16 +1,9 @@
 import { indexFleetConfig } from '@/lib/orchestrator';
-import {
-  INDEX_ADMISSION_BUDGETS,
-  INDEX_FLEET_TIME_BUDGETS,
-  INITIAL_INDEX_POLL_STATE,
-  indexAdmissionWaitMs,
-  indexPollWaitMs,
-  type IndexDispatchOutcome,
-  type IndexPollResult,
-  type IndexSession,
+import type {
+  IndexDispatchOutcome,
+  SupervisionSteps,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
-import type { IndexAdmissionVerdict } from '@/lib/services/codeGraphIndexAdmissionService';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
 import type {
@@ -19,10 +12,9 @@ import type {
   IndexTarget,
 } from '@/lib/services/codeGraphIndexService';
 
-// THE DURABLE STEP SHAPE for `system.code-graph-index` (Story MOTIR-1981 ·
-// MOTIR-2027) — the last card of the dispatch chain. The job stops fetching
-// bytes and starts driving `codeGraphIndexDispatchService` as durable steps, so
-// NO REPO TARBALL EVER ENTERS A VERCEL FUNCTION AGAIN.
+// THE INDEX FLEET'S JOB-SIDE DRIVER for `system.code-graph-index` and
+// `system.code-graph-refresh` (Story MOTIR-1981 · MOTIR-2027 · MOTIR-2057), as
+// COLLAPSED by MOTIR-3484.
 //
 // `docs/decisions/code-graph-index-fleet.md` §2 (every failure of the old path
 // descends from one shape) and §6 (the ledger contract that forces one row per
@@ -30,49 +22,60 @@ import type {
 //
 //   step  resolve-target                 DB reads only — UNCHANGED
 //     ↓   (the three no-op verdicts return here, exactly as before)
-//   step  assert-fleet-configured        the gate, BEFORE anything is spent
+//         assert-fleet-configured        the gate, BEFORE anything is spent
 //   for each projectId of target.projectIds:
-//   step    index-admit:<pid>:<n>        the CAP — one locked decision (bounded)
-//   step    sleep index-admit-wait:<n>   ctx.step.sleep — the QUEUE, if deferred
-//     ↓     …until admitted
-//   step    index-boot:<projectId>       mint + resolve + provision   (bounded)
-//   step    sleep index-wait:<pid>:<n>   ctx.step.sleep — costs no invocation
-//   step    index-poll:<pid>:<n>         ONE describe                 (bounded)
-//     ↓     …until a `done` verdict
-//   step    index-settle:<projectId>     teardown + the typed outcome (bounded)
+//           codeGraphIndexDispatchService.runIndexContainer(…, { steps })
+//             step  index-admit:<pid>    the CAP — the whole backoff, memoized once
+//             step  index-boot:<pid>     mint + resolve + provision
+//                   …then an ordinary loop: await, poll, await, poll…
+//             step  index-settle:<pid>   teardown + the typed outcome
+//   step  cancel-offboarding
 //
-// ⚠️ WHY STEPPED, AND NOT A LOOP INSIDE ONE STEP. An index run is minutes;
-// `app/api/inngest/route.ts` pins `maxDuration = 300`. This is the MOTIR-2007
-// shape applied to a second workload — there, an hour-long supervision loop
-// inside one invocation meant every CI job over ~5 minutes had its supervisor
-// killed: the intent stuck, the container's cost unrecorded, and the run
-// dead-lettered while the job had actually succeeded. A STEP, NOT A RUN, IS THE
+// ⚠️ WHAT THIS FILE USED TO SAY, AND WHY IT NO LONGER SAYS IT (MOTIR-3484).
+// Four blocks here argued the shape from Vercel. The longest opened *"⚠️ WHY
+// STEPPED, AND NOT A LOOP INSIDE ONE STEP. An index run is minutes;
+// `app/api/inngest/route.ts` pins `maxDuration = 300` … A STEP, NOT A RUN, IS THE
 // UNIT THE PLATFORM'S TIMEOUT APPLIES TO (`docs/jobs.md` rule 1), so the WAITING
-// is `ctx.step.sleep` — which holds no invocation AND no concurrency slot, per
-// Inngest's documented semantics (MOTIR-3245 settled this: *"a function run that
-// is sleeping … does not count against your concurrency limit"*), MEASURED on
-// the shipped scheduler against a `step.run` control by MOTIR-3246
-// (`scripts/experiments/inngest-sleep-concurrency.mjs`;
-// `docs/decisions/job-lane-occupancy.md` §1) — and every `step.run`
-// does one small thing.
+// is `ctx.step.sleep`"*. Every word of that was TRUE, and every word of it was
+// about a platform we left: `Dockerfile` ends `CMD ["node", "server.js"]` and
+// motir-core has run as a long-lived Fly process since MOTIR-2384. **A supervisor
+// can be an ordinary `async` function with a `while` loop and an `await` again**,
+// so it is one — and it lives in `codeGraphIndexDispatchService`, which already
+// carried that composition as its "not the production path" twin.
 //
-// ⚠️ SO WHAT THIS LOOP OCCUPIES IS ~128 SUB-SECOND STEPS, NOT THIRTY MINUTES,
-// and the distinction is load-bearing enough to state here rather than only in
-// the record: the waits below are free, the `step.run`s are not, and the slot is
-// RELEASED between every poll. The worst a queued run waits behind one
-// supervisor is therefore ONE poll, not one container's life — which is the
-// difference the bug that produced this comment turned on (§2 does the
-// arithmetic: `min(3000 · 2^(n−1), 15000)` reaches 1 800 s in 122 polls, plus
-// six non-poll steps). `codeGraphIndexDispatchService` is built for exactly
-// this: its three operations are individually bounded and its poll NEVER THROWS,
-// because in a stepped world teardown cannot be reached from a `catch`
-// (PRODECT_FINDINGS #39).
+// The blocks are CORRECTED rather than deleted, here and at each of their homes,
+// because a future reader has to be able to see that the world changed and not
+// merely that the code did. What went with them:
 //
-// ⚠️ STEP IDS ARE KEYED BY `projectId`, NEVER BY LOOP POSITION. The id is what
-// Inngest memoizes against, so it must identify the SAME unit of work on every
+//   • `admitWithBackoff` — sixty separately-memoized `index-admit:<pid>:<n>`
+//     steps, whose per-attempt ids existed for one reason: a single
+//     `index-admit:<pid>` would have frozen the first `deferred` answer forever
+//     and an index that waited could never be admitted. Nothing memoizes an
+//     in-process loop, so the loop is a loop again and the whole of it sits in
+//     ONE step (`docs/decisions/job-queue-foundation.md` §13.3(c) says why it
+//     must be a step at all rather than plain control flow).
+//   • The stepped poll loop — `index-wait:<pid>:<n>` / `index-poll:<pid>:<n>`,
+//     roughly 128 checkpoints per 30-minute index, each a database write.
+//   • The stepped `finally` — teardown written as a step reachable from both
+//     exits, because a real `finally` could not be trusted across invocations. It
+//     is an ordinary `finally` again, in the service's loop.
+//
+// ⚠️ WHAT DID NOT GO: THE DURABILITY. `docs/decisions/job-queue-foundation.md`
+// §13 decides which `ctx.step` calls a supervision loop keeps — the SIDE EFFECT,
+// never the WAIT — and §13.4 tables the disposition of every call site that used
+// to be here. The three that remain (`index-admit`, `index-boot`, `index-settle`)
+// are the ones that claim capacity, provision a billed container, and destroy
+// one. A worker restart replays them from `job_step` and the loop re-attaches to
+// the same container rather than booting a second.
+//
+// ⚠️ STEP IDS ARE STILL KEYED BY `projectId`, NEVER BY LOOP POSITION — and the
+// rule matters MORE now, not less. It used to be one caveat among many in a file
+// full of ids; there are three ids left and each one carries more. The id is what
+// the ledger memoizes against, so it must identify the SAME unit of work on every
 // replay; a positional index would silently re-point at another project if the
-// workspace's project list changed between attempts. The poll and its preceding
-// sleep also carry the ITERATION, so a replay reproduces the same sequence.
+// workspace's project list changed between passes. That is also why
+// `resolve-target` stays a memoized step (§13.1 limb 2): its `projectIds` ARE the
+// identity the three below are keyed by.
 //
 // ⚠️ THE LEDGER CONTRACT DOES NOT MOVE (§6). Whatever the fan-out does
 // internally — one container per (repo × project), MOTIR-2026 — the JOB still
@@ -84,15 +87,12 @@ import type {
 // and a run that did not index every project THROWS rather than returning a
 // diminished success — see {@link IndexDispatchFailedError}.
 //
-// ⚠️ THE ADMISSION CAP IS A LOOP OF STEPS, NOT A WAIT INSIDE ONE (MOTIR-1990).
-// Each `index-admit:<pid>:<n>` is ONE locked decision, in milliseconds; the
-// QUEUEING between attempts is `ctx.step.sleep`, which holds no invocation at
-// all. The attempt number is in the step id for the same reason the poll's is:
-// the id is what Inngest memoizes against, so a single `index-admit:<pid>` would
-// pin the FIRST answer forever and a deferral would become a permanent one — an
-// index that waits could never be admitted. Over the cap means WAIT; nothing is
-// dropped, and exhausting the whole budget FAILS the run rather than skipping the
-// repo (§6: a `succeeded` row is a permanent claim that the repo is indexed).
+// ⚠️ THE ADMISSION CAP IS STILL "OVER THE CAP MEANS WAIT, NEVER DROP"
+// (MOTIR-1990). Nothing about the collapse touches the cap, the budgets or the
+// waiting: `codeGraphIndexAdmissionService` and `lib/ciFleet/limits.ts` are
+// untouched by this card because a regression there costs money, and exhausting
+// the whole waiting budget still FAILS the run rather than skipping the repo
+// (§6: a `succeeded` row is a permanent claim that the repo is indexed).
 //
 // ⚠️ `system.code-graph-refresh` DRIVES THIS SAME SHAPE (MOTIR-2057). MOTIR-2027
 // left it on the in-process `runCodeGraphIndexSteps` (§11: "Still building
@@ -103,12 +103,6 @@ import type {
 // jobs are now one code path, differing ONLY in their event and in the refresh
 // job's per-repo debounce — that difference is config on the job, not a mode
 // flag in here, which is why they can share this function without one.
-//
-// So EVERY caller of this file supervises containers, and the notes below about
-// the ledger, the admission cap and step-id keying hold for a refresh run
-// exactly as for a first index. `codeGraphSteps.ts` is gone: nothing calls the
-// in-process shape, and leaving it importable is how a third caller would have
-// re-adopted the same defect.
 
 /**
  * A dispatched index container did not index its project.
@@ -121,8 +115,8 @@ import type {
  * graph, forever, to every reader (§6).
  *
  * The message carries the dispatch service's NAMED exit class, never a bare
- * number: "the parser died on this tree" (`graph_unbuildable`), "motir-ai
- * refused the pointer" (`pointer_unrecorded`) and "the kernel OOM-killed it"
+ * number: "the parser died on this tree" (`graph_unbuildable`), "motir-ai refused
+ * the pointer" (`pointer_unrecorded`) and "the kernel OOM-killed it"
  * (`out_of_memory`) are three different on-call responses, and the operator
  * reads them off the failed run.
  */
@@ -141,7 +135,26 @@ export class IndexDispatchFailedError extends Error {
 }
 
 /**
- * Drive ONE repo's container-based index as durable steps.
+ * Adapt a job's `ctx.step` to the seam the dispatch service composes against.
+ *
+ * ONE cast, at the boundary — the same shape and the same reason as
+ * `lib/jobs/engine/runner.ts`'s single cast. Inngest's `step.run` types its
+ * result as `Jsonify<T>` (which is what the `as IndexTarget` at the
+ * `resolve-target` call site below has always been for), and the engine's shim
+ * round-trips through JSON on BOTH the first execution and the replay so the two
+ * cannot disagree. Every value that crosses this seam is declared
+ * JSON-serializable by contract — `IndexAdmission`, `IndexSession` and
+ * `IndexDispatchOutcome` all carry ISO strings rather than `Date`s, and say so.
+ */
+function stepSeam(ctx: JobContext): SupervisionSteps {
+  return {
+    run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
+      ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
+  };
+}
+
+/**
+ * Drive ONE repo's container-based index.
  *
  * Returns the same {@link IndexRepoResult} the in-process shape returned — the
  * ledger's contract — or throws {@link IndexDispatchFailedError} for a container
@@ -174,6 +187,12 @@ export async function runIndexFleetSteps(
   // trip the ownership check depends on. The `??` mirrors `defineJob`'s own
   // fallback for a trigger that carries no id.
   //
+  // ⚠️ AND IT STILL HOLDS ON THE POSTGRES ENGINE. `buildEngineContext`
+  // (`lib/jobs/engine/runner.ts`) sets `event.id` from `run.eventId` and `runId`
+  // from the queue row's id, both stable for the life of the run — so this
+  // expression names the same dispatch on every pass there exactly as it did on
+  // Inngest (`docs/decisions/job-queue-foundation.md` §13.2).
+  //
   // ⚠️ Computed ONCE here and passed down, rather than inline at the use site.
   // MOTIR-3358 added a SECOND cross-pass claim that had to hold the same value,
   // and hoisting it was what stopped the two drifting apart; that second consumer
@@ -186,13 +205,16 @@ export async function runIndexFleetSteps(
   // missing variable at once and throws. A path that quietly returned "nothing
   // to do" when unconfigured would still let this job record a `succeeded`
   // `job_run` carrying an `output.repoRef` for a repo nothing ever indexed —
-  // indistinguishable from success everywhere downstream. Its own step, so the
-  // deployment fault is one named checkpoint rather than N boot failures, and so
-  // it fires BEFORE the first container is billed.
-  await ctx.step.run('assert-fleet-configured', () => {
-    indexFleetConfig();
-    return { configured: true };
-  });
+  // indistinguishable from success everywhere downstream. It fires BEFORE the
+  // first container is billed, which is the whole of what it is for.
+  //
+  // ⚠️ IT IS NO LONGER ITS OWN STEP (MOTIR-3484 · §13.4). It used to be one, "so
+  // the deployment fault is one named checkpoint rather than N boot failures" —
+  // a real benefit when a checkpoint was the unit an operator read, and not worth
+  // a memo row now. Under §13.1's test it is a READ of process configuration that
+  // throws: run it a second time and nothing exists twice. It throws identically
+  // on every pass, which is exactly what a deployment fault should do.
+  indexFleetConfig();
 
   await indexEveryProject(ctx, services, input, target, dispatchId);
 
@@ -202,10 +224,11 @@ export async function runIndexFleetSteps(
 /**
  * Dispatch one container per project for this repo, and supervise each to its end.
  *
- * Split out of {@link runIndexFleetSteps} by MOTIR-3358. That card's changed-path
- * claim needed a `try` around the whole loop and is gone (MOTIR-3380), but the
- * split is kept: it keeps the handler's top level readable as resolve → gate →
- * dispatch-every-project → finish.
+ * ⚠️ IT NO LONGER CONTAINS THE SUPERVISION — that is the collapse. The loop, the
+ * admission backoff and the teardown all live in
+ * `codeGraphIndexDispatchService.runIndexContainer`, which this drives through
+ * the step seam. What is left here is what is genuinely the JOB's: the per-repo
+ * fan-out over projects, and turning a dispatch outcome into the ledger contract.
  */
 async function indexEveryProject(
   ctx: JobContext,
@@ -215,6 +238,8 @@ async function indexEveryProject(
   /** See its definition in {@link runIndexFleetSteps} — the cross-pass identity. */
   dispatchId: string,
 ): Promise<void> {
+  const steps = stepSeam(ctx);
+
   for (const projectId of target.projectIds) {
     const dispatchInput = {
       installationId: input.installationId,
@@ -228,7 +253,7 @@ async function indexEveryProject(
       defaultBranch: input.defaultBranch,
       // The dispatching run, carried into the run-scoped motir-ai credential
       // for attribution. Read once at the top of the handler and consumed
-      // INSIDE a memoized step, so a replay pass (which Inngest re-invokes
+      // INSIDE a memoized step, so a replay pass (which re-invokes the handler
       // with the same run) never re-mints against a different identity.
       runId: ctx.runId,
       // The dispatch's identity, which owns the ADMISSION SLOT (MOTIR-2160).
@@ -237,77 +262,21 @@ async function indexEveryProject(
       dispatchId,
     };
 
-    // ⚠️ THE CAP, BEFORE ANY CONTAINER IS BOOTED. Nothing below can run without
-    // the ticket this produces — `bootIndexContainer` requires it — so the
-    // global and per-workspace bounds are structural here, not conventional.
-    const admission = await admitWithBackoff(ctx, services, dispatchInput, projectId);
-    if (admission.outcome === 'deferred') {
-      throw dispatchFailure(target.repoRef, projectId, {
-        outcome: 'admission_deferred',
-        reason: admission.reason,
-        detail: admission.detail,
-      });
-    }
-
-    const booted = await ctx.step.run(`index-boot:${projectId}`, () =>
-      services.codeGraphIndexDispatch.bootIndexContainer(dispatchInput, admission.admission),
-    );
-    // Nothing was provisioned — no container to supervise or tear down. The
-    // outcome is terminal, and it is a FAILURE: no project was indexed, so the
-    // run must not go on to claim the repo.
-    if (booted.phase === 'terminal')
-      throw dispatchFailure(target.repoRef, projectId, booted.outcome);
-
-    const session: IndexSession = booted.session;
-    let state = INITIAL_INDEX_POLL_STATE;
-    let verdict: Extract<IndexPollResult, { done: true }> | null = null;
-
-    for (
-      let iteration = 1;
-      iteration <= INDEX_FLEET_TIME_BUDGETS.maxPollIterations;
-      iteration += 1
-    ) {
-      // Free waiting: Inngest schedules the resume, so the interval costs a
-      // checkpoint rather than an invocation. `indexPollWaitMs` is PURE — a
-      // function of the iteration, never of the clock — because a replay pass
-      // re-derives every sleep in the loop, and a wall-clock input would make
-      // two passes of the same run disagree about how long to wait.
-      await ctx.step.sleep(`index-wait:${projectId}:${iteration}`, indexPollWaitMs(iteration));
-      // ONE provider read, then return. This is the step the card exists to
-      // bound; `pollIndexContainer` never throws, because a throw here would end
-      // the run WITHOUT teardown.
-      const polled: IndexPollResult = await ctx.step.run(
-        `index-poll:${projectId}:${iteration}`,
-        () => services.codeGraphIndexDispatch.pollIndexContainer(session, state),
-      );
-      if (polled.done) {
-        verdict = polled;
-        break;
-      }
-      state = polled;
-    }
-
-    // ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP — the stepped form of
-    // the `finally` a synchronous supervisor would have relied on. The loop can
-    // only exit with a `done` verdict or by exhausting the static iteration
-    // ceiling, and both arrive here.
-    const outcome: IndexDispatchOutcome = await ctx.step.run(`index-settle:${projectId}`, () =>
-      services.codeGraphIndexDispatch.settleIndexContainer(
-        session,
-        verdict ?? {
-          done: true,
-          reason: 'job_timed_out',
-          startedAt: state.startedAt,
-          exitCode: null,
-          failureDetail: `supervision hit the ${INDEX_FLEET_TIME_BUDGETS.maxPollIterations}-poll ceiling`,
-        },
-      ),
+    // ⚠️ THE CAP IS INSIDE, BEFORE ANY CONTAINER IS BOOTED. `runIndexContainer`
+    // queues for admission first and `bootIndexContainer` REQUIRES the ticket it
+    // hands back, so the global and per-workspace bounds are structural rather
+    // than conventional — a type error, not a review comment.
+    const outcome: IndexDispatchOutcome = await services.codeGraphIndexDispatch.runIndexContainer(
+      dispatchInput,
+      { steps },
     );
 
     // ⚠️ ONLY EXIT 0 INDEXED. `verdict.indexed` is true for that and nothing
     // else — an unobserved exit, a torn-down-but-unclassified run and a failed
     // teardown all leave it false — so this is the single place the run decides
-    // whether the repo may be claimed.
+    // whether the repo may be claimed. Every non-`settled` outcome (a deferred
+    // admission, a refused provision, an unpullable image, a failed teardown)
+    // reaches the same throw carrying its own discriminator.
     if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
       throw dispatchFailure(target.repoRef, projectId, outcome);
     }
@@ -337,7 +306,9 @@ async function finishIndexRun(
   //
   // Its OWN step, and the LAST one: it runs only when every project's container
   // exited 0 (the loop above throws otherwise), so a partial index never cancels a
-  // removal it did not actually reverse. Quiet by construction — `cancelQuietly`
+  // removal it did not actually reverse. It KEEPS its step under §13.1's test —
+  // it is a write, and it is the run's last act, so a resume past it should not
+  // re-touch the offboarding queue. Quiet by construction — `cancelQuietly`
   // swallows, because a queue write must never fail an index that succeeded.
   await ctx.step.run('cancel-offboarding', async () => ({
     cancelled: await codeGraphOffboardingService.cancelQuietly({
@@ -353,47 +324,6 @@ async function finishIndexRun(
     indexed: true,
     repoRef: target.repoRef,
     projectsIndexed: target.projectIds.length,
-  };
-}
-
-/**
- * Ask for admission, sleeping between attempts, until it is granted or the
- * waiting budget is exhausted — the durable form of "over the cap means WAIT".
- *
- * Every attempt is its OWN step id. That is the load-bearing detail: Inngest
- * memoizes by id, so one shared id would freeze the first `deferred` answer for
- * the life of the run and the queue would never move.
- *
- * The sleep is `ctx.step.sleep`, so a container waiting an hour for capacity
- * costs zero invocations and cannot be killed by `maxDuration` — the same reason
- * supervision waits that way (`docs/jobs.md` rule 1).
- */
-async function admitWithBackoff(
-  ctx: JobContext,
-  services: JobServices,
-  dispatchInput: Parameters<JobServices['codeGraphIndexDispatch']['admitIndexContainer']>[0],
-  projectId: string,
-): Promise<IndexAdmissionVerdict> {
-  let verdict: IndexAdmissionVerdict = {
-    outcome: 'deferred',
-    reason: 'gate_unavailable',
-    detail: 'admission was never attempted',
-  };
-  for (let attempt = 1; attempt <= INDEX_ADMISSION_BUDGETS.maxAttempts; attempt += 1) {
-    verdict = (await ctx.step.run(`index-admit:${projectId}:${attempt}`, () =>
-      services.codeGraphIndexDispatch.admitIndexContainer(dispatchInput),
-    )) as IndexAdmissionVerdict;
-    if (verdict.outcome !== 'deferred') return verdict;
-    if (attempt < INDEX_ADMISSION_BUDGETS.maxAttempts) {
-      await ctx.step.sleep(
-        `index-admit-wait:${projectId}:${attempt}`,
-        indexAdmissionWaitMs(attempt),
-      );
-    }
-  }
-  return {
-    ...verdict,
-    detail: `index admission was refused for ${INDEX_ADMISSION_BUDGETS.maxAttempts} attempts (${verdict.reason}): ${verdict.detail}`,
   };
 }
 

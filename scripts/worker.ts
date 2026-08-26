@@ -45,7 +45,44 @@ import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
 // registered every job. See the warning above — this is not an unused import.
 import '@/lib/jobs/registry';
 
+/**
+ * ⚠️ THE E2E BOUNDARY SEAM, AND WHY IT IS INSTALLED HERE RATHER THAN IN
+ * `instrumentation.ts` (Story MOTIR-3417 · MOTIR-3564).
+ *
+ * Every other external boundary in the E2E lane is stubbed by a
+ * `lib/test-*-mock.ts` that `instrumentation.ts` installs behind a flag.
+ * `instrumentation.ts` is a NEXT.JS HOOK: it runs once per Next server boot, and
+ * this process is not a Next server — it is a plain Node bundle
+ * (`pnpm build:worker`). So a seam registered there is invisible here.
+ *
+ * That matters for exactly one boundary and it is this story's: the index
+ * SUPERVISOR mints a motir-ai run credential and resolves a GitHub tarball
+ * redirect, and the supervisor is a JOB. The process that makes both calls is
+ * this one. A seam installed only in the app server would leave the calls
+ * un-stubbed where they actually happen — the MOTIR-3498 shape, one layer up
+ * (there it was `EMAIL_PROVIDER` set on the webServer only, and every
+ * engine-routed send went to the console provider while every signal stayed
+ * green).
+ *
+ * DORMANT BY DEFAULT AND REFUSED OUTSIDE THE HARNESS. `installCodeGraphBoundaryMock`
+ * requires BOTH `E2E_TEST_CODE_GRAPH=1` and `E2E_PROD_HARNESS=1` — the second is
+ * set by `playwright.config.ts` and by no real deployment. The import is dynamic,
+ * so a production worker never even loads `undici`'s mock machinery.
+ */
+async function installE2ESeams(): Promise<void> {
+  const { codeGraphMockEnabled } = await import('@/lib/test-code-graph-mock');
+  if (!codeGraphMockEnabled()) return;
+  const { installSharedMockAgent } = await import('@/lib/test-mock-agent');
+  const { installCodeGraphBoundaryMock } = await import('@/lib/test-code-graph-mock');
+  installCodeGraphBoundaryMock(installSharedMockAgent());
+  console.info('[worker] E2E_TEST_CODE_GRAPH active — index-writer seam mocked.');
+}
+
 async function main(): Promise<void> {
+  // Before anything claims a run: a supervised job's first act is an external
+  // call, so the seam has to be in place before the loop starts.
+  await installE2ESeams();
+
   // The triggering event's payload lives on `job_event`; a cron run has no event
   // and gets an empty payload, mirroring what a scheduled Inngest run hands a
   // handler today.

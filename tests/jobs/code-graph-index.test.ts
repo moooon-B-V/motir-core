@@ -8,7 +8,6 @@ import { jobServices } from '@/lib/jobs/services';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
-import { INDEX_ADMISSION_BUDGETS } from '@/lib/services/codeGraphIndexDispatchService';
 import {
   DEFAULT_INDEX_IN_FLIGHT_CAP,
   indexInFlightCap,
@@ -18,6 +17,7 @@ import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import { githubProvider } from '@/lib/git/providers/github';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { createStepApi } from '@/lib/jobs/engine/step';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
@@ -26,7 +26,8 @@ import {
   INDEX_TARBALL_URL,
   indexEventFor,
   indexJobRuns,
-  indexSleepSteps,
+  driveIndexFleetFast,
+  INDEX_FAST_SUPERVISION,
   indexStepIds,
   refreshEventFor,
   refreshJobRuns,
@@ -62,11 +63,16 @@ import {
 // step ids it was called with are directly assertable — the closest thing to
 // observing the executor's checkpoints from a unit test.
 //
-// ⚠️ `step.sleep` HANGS `InngestTestEngine` UNLESS ITS STATE IS SUPPLIED. The
-// engine only records state for steps that RAN, and a sleep never "runs" — so an
-// un-stubbed sleep is re-found forever and `execute()` never resolves (it fails
-// as a test TIMEOUT, which reads like a slow test rather than a missing stub).
-// `sleepSteps()` pre-fulfils them; supply more than the loop can use.
+// ⚠️ THERE ARE NO `step.sleep` CALLS LEFT TO PRE-FULFIL (MOTIR-3484). This note
+// used to explain that an un-stubbed sleep is re-found forever by
+// `InngestTestEngine` and `execute()` never resolves, so `sleepSteps()` supplied
+// their state. The waits are ordinary `await`s inside the dispatch service now,
+// and the problem is the mirror image: at the SHIPPED cadence a four-poll test
+// would sleep 45 real seconds. `driveIndexFleetFast()` (in the shared fixture)
+// shortens the cadence through the service's own options seam and changes
+// nothing else — the composition, the steps, the gate and the ledger are all
+// real. The cadence itself is asserted BY VALUE elsewhere, which is where a
+// number belongs.
 
 // The world this suite drives is the SHARED index-fleet fixture
 // (`tests/helpers/indexFleet.ts`), so the seam suite that reads the ledger's
@@ -76,7 +82,6 @@ const TARBALL_URL = INDEX_TARBALL_URL;
 const REPO_REF = INDEX_REPO_REF;
 const seedWorkspace = seedIndexWorkspace;
 const stepIds = indexStepIds;
-const sleepSteps = indexSleepSteps;
 const indexRuns = indexJobRuns;
 const indexEvent = (installationId: string, workspaceId: string) =>
   indexEventFor({ installationId, workspaceId, eventId: `evt-${installationId}` });
@@ -92,6 +97,10 @@ beforeEach(async () => {
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
   resetTarballBodyTrap();
+  // The supervision loop is a real `await` now (MOTIR-3484), so a job-level test
+  // would otherwise sleep at the shipped cadence. Re-applied per test because
+  // `afterEach` restores mocks.
+  driveIndexFleetFast();
 });
 
 afterEach(async () => {
@@ -122,58 +131,91 @@ afterAll(async () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE SHAPE — boot → poll(×N) → settle, per project, as separate durable steps.
+// THE SHAPE, AS COLLAPSED BY MOTIR-3484 — admit → boot → (loop) → settle, per
+// project, with THREE durable steps and an ordinary loop between two of them.
+//
+// ⚠️ WHAT THIS SECTION USED TO ASSERT, AND WHY IT DOES NOT ANY MORE. It asserted
+// `index-admit:<pid>:<n>` / `index-wait:<pid>:<n>` / `index-poll:<pid>:<n>` as
+// separate checkpoints, "the property that makes a step, not the run, the unit
+// `maxDuration` applies to". That was a true assertion about a Vercel ceiling,
+// and it stopped describing anything the moment motir-core became a long-lived
+// Fly process (MOTIR-2384). The DURABILITY it was standing in for is unchanged
+// and is what is asserted now: the operations that CLAIM, PROVISION and TEAR DOWN
+// are memoized, so a worker restart cannot do any of them twice.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('system.code-graph-index — durable steps, never a supervision loop', () => {
-  it('drives boot → poll → settle as SEPARATE steps per project, sleeping in between', async () => {
+describe('system.code-graph-index — ONE composition, memoized at the side effects', () => {
+  it('drives the dispatch service through the step seam, with admit / boot / settle as the only steps', async () => {
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-shape', 2);
     stubIndexFleet();
     containerExitsWith(0);
-    // The in-process composition exists for scripts and the service's own suite.
-    // A job that called it would rebuild the hour-long invocation MOTIR-2007
-    // removed for CI — so the assertion is that the JOB never touches it.
-    const inProcess = vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer');
+    // ⚠️ THE ASSERTION IS INVERTED FROM WHAT IT WAS, deliberately. It used to be
+    // that the JOB must NEVER call `runIndexContainer` — "a job that called it
+    // would rebuild the hour-long invocation MOTIR-2007 removed for CI". That
+    // ceiling is gone, and having ONE composition instead of two kept in
+    // agreement by hand is this card's actual deliverable. So the job must call
+    // it, and must call it with a step seam.
+    const composed = vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer');
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
-    expect(inProcess).not.toHaveBeenCalled();
+    expect(composed).toHaveBeenCalled();
+    for (const call of composed.mock.calls) {
+      expect(call[1]?.steps, 'the job must supply the durable seam').toBeDefined();
+    }
+    // ⚠️ COUNT THE MEMOIZED WORK, NOT THE CALLS. `composed` is called on EVERY
+    // replay pass, because Inngest re-invokes the handler from the top at each
+    // step boundary and `runIndexContainer` is ordinary code between the steps it
+    // drives. What must happen exactly once per project is the BOOT — and it
+    // does, because that is the half that sits inside a memoized step. This is
+    // the durability property stated as an assertion rather than as a comment.
+    expect(boot).toHaveBeenCalledTimes(2);
+    expect(fakeOrchestrator.provisioned).toHaveLength(2);
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
     expect(ids[0]).toBe('resolve-target');
-    expect(ids[1]).toBe('assert-fleet-configured');
-    // Each project's phases are DISTINCT checkpoints, in order — the property
-    // that makes a step, not the run, the unit `maxDuration` applies to. The cap
-    // is the first of them (MOTIR-1990): nothing may be booted before a
-    // `fleet_in_flight_slot` has been taken for it.
-    for (const projectId of projectIds) {
-      const own = ids.filter((id) => id.endsWith(`:${projectId}`) || id.includes(`:${projectId}:`));
-      expect(own[0]).toBe(`index-admit:${projectId}:1`);
-      expect(own[1]).toBe(`index-boot:${projectId}`);
-      expect(own[2]).toBe(`index-poll:${projectId}:1`);
-      expect(own.at(-1)).toBe(`index-settle:${projectId}`);
-    }
+    // ⚠️ AND `assert-fleet-configured` IS NO LONGER A STEP. It is a read of
+    // process configuration that throws; under §13.1's test nothing exists twice
+    // if it runs again. It still runs, still first, still before anything is
+    // billed — the failing-deployment case below is what asserts that.
+    expect(ids).not.toContain('assert-fleet-configured');
 
-    // ⚠️ NO STEP CONTAINS A SUPERVISION LOOP. The boot step's own resolved value
-    // is a SESSION awaiting supervision — not a settled outcome — so the boot
-    // cannot have waited for the container inside its own step. A regression
-    // that awaited the run inside `bootIndexContainer` fails right here.
+    for (const projectId of projectIds) {
+      const own = ids.filter((id) => id.endsWith(`:${projectId}`));
+      // The three that CLAIM, PROVISION and TEAR DOWN — in order, and nothing
+      // else. The admission backoff is INSIDE the first of them rather than
+      // spread across sixty ids (§13.3(c) says why it must be a step at all).
+      expect(own).toEqual([
+        `index-admit:${projectId}`,
+        `index-boot:${projectId}`,
+        `index-settle:${projectId}`,
+      ]);
+    }
+    // Not one poll or wait checkpoint survives — roughly 128 database writes per
+    // 30-minute index, which is what the collapse buys.
+    expect(
+      ids.filter((id) => id.startsWith('index-poll:') || id.startsWith('index-wait:')),
+    ).toEqual([]);
+
+    // ⚠️ THE BOOT STILL DOES NOT SUPERVISE. Its resolved value is a SESSION
+    // awaiting supervision, not a settled outcome — so a regression that awaited
+    // the container inside `bootIndexContainer` fails right here, exactly as it
+    // did before the collapse.
     for (const call of boot.mock.results) {
       expect(await call.value).toMatchObject({ phase: 'supervising' });
     }
   }, 30_000);
 
-  it('supervises across MANY poll steps, then settles — a container outliving one invocation', async () => {
+  it('supervises across MANY polls without writing a step per poll', async () => {
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-long', 1);
     stubIndexFleet();
     // Not terminal until the fourth poll: a container that ran for longer than
-    // the supervising invocation could itself have lasted.
+    // any single invocation of the old shape could have lasted.
     const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
       codeGraphIndexDispatchService,
     );
@@ -193,28 +235,34 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
-    expect(poll).toHaveBeenCalledTimes(4);
+    // At least the four the container needed. It is not EXACTLY four, and the
+    // reason is worth stating: the loop is ordinary code between two steps, so an
+    // Inngest replay pass re-enters it and re-polls a container it has already
+    // watched. Those reads are idempotent and the outcome is memoized — the
+    // engine, which does not re-invoke from the top, runs the loop once.
+    expect(poll.mock.calls.length).toBeGreaterThanOrEqual(4);
     const projectId = projectIds[0]!;
-    // Four polls means four checkpoints, each its own invocation budget — and a
-    // sleep between every pair, which costs no invocation at all.
-    expect(stepIds(ctx)).toEqual(
-      expect.arrayContaining([
-        `index-poll:${projectId}:1`,
-        `index-poll:${projectId}:4`,
-        `index-settle:${projectId}`,
-      ]),
-    );
+    // ⚠️ THE PROPERTY THE COLLAPSE BUYS, asserted as a CONSTANT rather than as a
+    // sequence: four polls, and the step count is the same three it would have
+    // been for one. Today's shape wrote a sleep checkpoint AND a result row per
+    // poll, and replayed every earlier one on each resume.
+    const own = stepIds(ctx).filter((id) => id.endsWith(`:${projectId}`));
+    expect(own).toEqual([
+      `index-admit:${projectId}`,
+      `index-boot:${projectId}`,
+      `index-settle:${projectId}`,
+    ]);
     expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
-    // Teardown was reached — the guarantee the whole stepped shape exists for.
+    // Teardown was reached — the guarantee the whole shape exists for, now held
+    // by an ordinary `finally` rather than by a step reachable from both exits.
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     expect(fakeOrchestrator.teardowns).toHaveLength(1);
   }, 30_000);
 
   it('NEVER materializes the repo tarball in the function', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-bytes', 2);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-bytes', 2);
     stubIndexFleet();
     containerExitsWith(0);
     // The two ways bytes used to enter this process: the buffering provider
@@ -226,7 +274,6 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     expect(result).toMatchObject({ indexed: true });
@@ -260,7 +307,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
   it.each([1, 2])(
     'writes ONE succeeded run with ONE repoRef for a workspace with %i project(s)',
     async (projectCount) => {
-      const { workspaceId, projectIds, installationId } = await seedWorkspace(
+      const { workspaceId, installationId } = await seedWorkspace(
         `cgf-ledger${projectCount}`,
         projectCount,
       );
@@ -270,7 +317,6 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
       const engine = new InngestTestEngine({ function: codeGraphIndex });
       const { result } = await engine.execute({
         events: [indexEvent(installationId, workspaceId)],
-        steps: sleepSteps(projectIds),
       });
 
       // One container PER (repo × project) — the fan-out really did widen.
@@ -298,14 +344,13 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
   );
 
   it('the enqueue gate reads the run back as exactly one indexed repoRef', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-gate', 2);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-gate', 2);
     stubIndexFleet();
     containerExitsWith(0);
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     // Read BACK through the consumer, not through the row: the contract is what
@@ -340,7 +385,11 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     expect(runs[0]!.status).toBe('succeeded');
     expect(runs[0]!.output).toEqual({ indexed: false, reason: 'installation_missing' });
     // Nothing was spent: not the config gate, not a container.
-    expect(stepIds(ctx)).not.toContain('assert-fleet-configured');
+    // Nothing past `resolve-target` ran: no admission, no boot, no settle. (The
+    // config gate is no longer a step of its own — MOTIR-3484 — so its ABSENCE
+    // from the id list proves nothing; the id list being EMPTY of index work
+    // does.)
+    expect(stepIds(ctx).filter((id) => id.startsWith('index-'))).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
   });
 
@@ -356,7 +405,11 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     expect(result).toEqual({ indexed: false, reason: 'no_projects' });
     const runs = await indexRuns();
     expect(runs[0]!.output).toEqual({ indexed: false, reason: 'no_projects' });
-    expect(stepIds(ctx)).not.toContain('assert-fleet-configured');
+    // Nothing past `resolve-target` ran: no admission, no boot, no settle. (The
+    // config gate is no longer a step of its own — MOTIR-3484 — so its ABSENCE
+    // from the id list proves nothing; the id list being EMPTY of index work
+    // does.)
+    expect(stepIds(ctx).filter((id) => id.startsWith('index-'))).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
   });
 
@@ -372,7 +425,11 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     expect(error).toBeUndefined();
     expect(result).toEqual({ indexed: false, reason: 'workspace_missing' });
     expect(fakeOrchestrator.provisioned).toEqual([]);
-    expect(stepIds(ctx)).not.toContain('assert-fleet-configured');
+    // Nothing past `resolve-target` ran: no admission, no boot, no settle. (The
+    // config gate is no longer a step of its own — MOTIR-3484 — so its ABSENCE
+    // from the id list proves nothing; the id list being EMPTY of index work
+    // does.)
+    expect(stepIds(ctx).filter((id) => id.startsWith('index-'))).toEqual([]);
     // ⚠️ THIS VERDICT ALONE HAS NO LEDGER ROW, and that is `job_run.workspaceId`'s
     // FK rather than a gap here: `recordStart` catches the P2003 for a tenant that
     // is already gone (MOTIR-1545) and returns null, so there is no row to flip.
@@ -420,7 +477,6 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, error, ctx } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps([]),
     })) as { result?: unknown; error?: unknown; ctx: Parameters<typeof stepIds>[0] };
 
     // ⚠️ NO THROW IS THE WHOLE POINT. A throw is what Inngest retries, and five
@@ -467,7 +523,6 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     const engine = new InngestTestEngine({ function: codeGraphRefresh });
     const { result, error } = (await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
-      steps: sleepSteps([]),
     })) as { result?: unknown; error?: unknown };
 
     expect(error).toBeUndefined();
@@ -482,14 +537,13 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     // ⚠️ THE CONTROL. Without it, every assertion above would still pass if the
     // gate refused everything, and "GitLab is not indexed" would be indistinguishable
     // from "indexing is broken".
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-github-ctl', 1);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-github-ctl', 1);
     stubIndexFleet();
     containerExitsWith(0);
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     expect(result).toMatchObject({ indexed: true, repoRef: REPO_REF });
@@ -510,18 +564,19 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     const ids = stepIds(ctx);
     for (const projectId of projectIds) {
+      expect(ids).toContain(`index-admit:${projectId}`);
       expect(ids).toContain(`index-boot:${projectId}`);
-      expect(ids).toContain(`index-poll:${projectId}:1`);
       expect(ids).toContain(`index-settle:${projectId}`);
     }
     // A positional id would re-point at a DIFFERENT project if the workspace's
-    // project list changed between attempts. None exists.
-    expect(ids.filter((id) => /^index-(boot|settle):\d+$/.test(id))).toEqual([]);
+    // project list changed between attempts. None exists — and the rule matters
+    // MORE after the collapse, not less: there are three ids left and each one
+    // carries more (MOTIR-3484).
+    expect(ids.filter((id) => /^index-(admit|boot|settle):\d+$/.test(id))).toEqual([]);
   }, 30_000);
 
   it('a replay after the project list changed resumes the MEMOIZED project', async () => {
@@ -551,10 +606,7 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: [
-        { id: 'resolve-target', handler: () => resolved },
-        ...sleepSteps([memoizedProjectId, drifted.id]),
-      ],
+      steps: [{ id: 'resolve-target', handler: () => resolved }],
     });
 
     // It resumed the SAME project's work. The drifted project is not indexed by
@@ -579,10 +631,7 @@ describe('a container that did not index FAILS the run', () => {
   ] as const)(
     'exit %s surfaces the NAMED class %s, and records no success',
     async (code, name) => {
-      const { workspaceId, projectIds, installationId } = await seedWorkspace(
-        `cgf-x${code ?? 'null'}`,
-        1,
-      );
+      const { workspaceId, installationId } = await seedWorkspace(`cgf-x${code ?? 'null'}`, 1);
       stubIndexFleet();
       containerExitsWith(code);
 
@@ -591,7 +640,6 @@ describe('a container that did not index FAILS the run', () => {
       // subclass name flattens to `Error`) rather than rejecting `execute()`.
       const { result, error } = (await engine.execute({
         events: [indexEvent(installationId, workspaceId)],
-        steps: sleepSteps(projectIds),
       })) as { result?: unknown; error?: { message?: string } };
 
       expect(result).toBeUndefined();
@@ -614,14 +662,13 @@ describe('a container that did not index FAILS the run', () => {
   );
 
   it('stops at the FIRST failing project rather than booting the rest', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-firstfail', 3);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-firstfail', 3);
     stubIndexFleet();
     containerExitsWith(30);
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     // One container, not three. A retry RESUMES from the memoized steps, so
@@ -630,7 +677,7 @@ describe('a container that did not index FAILS the run', () => {
   }, 30_000);
 
   it('a container that never STARTED fails as never_started, carrying supervision’s own detail', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-nostart', 1);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-nostart', 1);
     stubIndexFleet();
     // The boot deadline firing is a wall-clock event (120s), so it is driven at
     // the poll rather than by waiting: the provider reported a machine, and it
@@ -646,7 +693,6 @@ describe('a container that did not index FAILS the run', () => {
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, error } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     })) as { result?: unknown; error?: { message?: string } };
 
     expect(result).toBeUndefined();
@@ -661,14 +707,13 @@ describe('a container that did not index FAILS the run', () => {
   }, 30_000);
 
   it('a provider that refuses to boot fails the run — no container, no success', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-noboot', 1);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-noboot', 1);
     stubIndexFleet();
     fakeOrchestrator.failNextProvision('no capacity in iad');
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, error } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     })) as { result?: unknown; error?: { message?: string } };
 
     expect(result).toBeUndefined();
@@ -706,7 +751,10 @@ describe('an unconfigured index fleet fails the run loudly', () => {
     // LOUD: the run fails, naming what to set — never a quiet "nothing to do".
     expect(result).toBeUndefined();
     expect(error?.message).toMatch(/set /i);
-    expect(stepIds(ctx)).toContain('assert-fleet-configured');
+    // ⚠️ THE GATE IS NO LONGER ITS OWN STEP (MOTIR-3484), so what proves it fired
+    // is that the run FAILED naming what to set while NOTHING was admitted,
+    // booted or billed — which is what the gate was ever for.
+    expect(stepIds(ctx).filter((id) => id.startsWith('index-'))).toEqual([]);
     // Nothing was attempted or billed.
     expect(boot).not.toHaveBeenCalled();
     expect(fakeOrchestrator.provisioned).toEqual([]);
@@ -722,16 +770,25 @@ describe('an unconfigured index fleet fails the run loudly', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE ADMISSION CAP, as durable steps — over the cap means WAIT (MOTIR-1990).
+// THE ADMISSION CAP — over the cap means WAIT (MOTIR-1990), inside ONE step.
+//
+// ⚠️ THE SHAPE CHANGED AND THE RULE DID NOT (MOTIR-3484). This section used to
+// assert that a deferral produces ANOTHER attempt under a DIFFERENT step id
+// (`index-admit:<pid>:1`, `:2`, `:3`) with `ctx.step.sleep` between them — and
+// that was load-bearing: one shared id would have let Inngest memoize the first
+// `deferred` answer for the life of the run, so "wait" would silently have become
+// "drop". Nothing memoizes an in-process loop, so the sixty ids collapse to one
+// step containing the whole backoff, and the property to assert is the one that
+// always mattered: it ASKS AGAIN, and it boots once admitted.
+//
+// It stays a step at all — rather than plain control flow before the boot step —
+// for the reason `docs/decisions/job-queue-foundation.md` §13.3(c) gives: a
+// resume that re-asked admission after the settle step had released the slot
+// would be granted a fresh one and never release it.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('the admission cap queues in STEPS, and nothing is dropped', () => {
-  // ⚠️ THE SHAPE THE CARD TURNS ON. A deferral must produce ANOTHER attempt under
-  // a DIFFERENT step id, with `ctx.step.sleep` between them. One shared id would
-  // let Inngest memoize the first `deferred` answer for the life of the run, and
-  // an index that waits could then never be admitted — "wait" would silently
-  // become "drop".
-  it('asks again under a NEW step id after a deferral, and boots once admitted', async () => {
+describe('the admission cap queues, and nothing is dropped', () => {
+  it('asks again after a deferral, inside ONE memoized step, and boots once admitted', async () => {
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-queue', 1);
     stubIndexFleet();
     containerExitsWith(0);
@@ -755,25 +812,25 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     // It waited twice and then indexed. NOTHING was dropped.
     expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
     const projectId = projectIds[0]!;
     const ids = stepIds(ctx);
-    expect(ids).toContain(`index-admit:${projectId}:1`);
-    expect(ids).toContain(`index-admit:${projectId}:2`);
-    expect(ids).toContain(`index-admit:${projectId}:3`);
-    // Every attempt is its own checkpoint, so none of them is memoized into the
-    // previous one's answer.
+    // Three asks, ONE checkpoint. The retry loop is in-process now, so the
+    // deferral cannot be frozen into a memo — the failure the per-attempt ids
+    // used to prevent has no way to occur.
+    expect(admit).toHaveBeenCalledTimes(3);
+    expect(ids.filter((id) => id.startsWith('index-admit:'))).toEqual([`index-admit:${projectId}`]);
+    // Every step id is still distinct — a repeated id is the memo trap wearing a
+    // different costume.
     expect(new Set(ids).size).toBe(ids.length);
-    // The WAITING is a sleep — it costs a checkpoint, never an invocation.
+    // And the WAITING is no longer a checkpoint of any kind.
     const sleeps = (
       ctx as unknown as { step: { sleep: { mock: { calls: unknown[][] } } } }
     ).step.sleep.mock.calls.map((call) => String(call[0]));
-    expect(sleeps).toContain(`index-admit-wait:${projectId}:1`);
-    expect(sleeps).toContain(`index-admit-wait:${projectId}:2`);
+    expect(sleeps).toEqual([]);
   }, 30_000);
 
   // The cap is STRUCTURAL on this path, not conventional: `bootIndexContainer`
@@ -789,7 +846,6 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: sleepSteps(projectIds),
     });
 
     expect(boot).toHaveBeenCalledTimes(1);
@@ -806,7 +862,7 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
   // `output.repoRef` — that row is a permanent claim, to every reader, that the
   // repo has a code graph.
   it('FAILS the run when admission is never granted — it never claims the repo', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-starved', 1);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-starved', 1);
     stubIndexFleet();
     vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
       outcome: 'deferred',
@@ -818,7 +874,6 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
     const { error } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
       // Enough sleeps for the whole waiting budget.
-      steps: sleepSteps(projectIds, INDEX_ADMISSION_BUDGETS.maxAttempts),
     });
 
     // The named failure, not a bare throw: the operator reads the reason off it.
@@ -874,7 +929,6 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
       events: [refreshEventFor({ installationId, workspaceId })],
       // Enough sleeps for the whole waiting budget — the second run WAITS, and
       // only fails once the budget is exhausted. Nothing is dropped silently.
-      steps: sleepSteps(projectIds, INDEX_ADMISSION_BUDGETS.maxAttempts),
     });
 
     // NOT ONE container for the second run — the first one's is the only one.
@@ -896,7 +950,7 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
   // a replay, not an overlap — the case MOTIR-2002 asserted for the CI fleet by
   // call count, asserted here by container count.
   it('still admits the SAME run’s replayed admit step, and boots exactly once', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-replay', 1);
+    const { workspaceId, installationId } = await seedWorkspace('cgf-replay', 1);
     stubIndexFleet();
     containerExitsWith(0);
     // ⚠️ Bind the REAL method BEFORE spying, or the fall-through re-enters the spy.
@@ -915,7 +969,6 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
     const engine = new InngestTestEngine({ function: codeGraphRefresh });
     const { result } = await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
-      steps: sleepSteps(projectIds),
     });
 
     expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
@@ -1007,7 +1060,6 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     const engine = new InngestTestEngine({ function: codeGraphRefresh });
     const { result, ctx } = await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
-      steps: sleepSteps(projectIds),
     });
 
     // The ledger row a refresh writes is unchanged in SHAPE — one per repo, one
@@ -1016,13 +1068,15 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
     expect(ids[0]).toBe('resolve-target');
-    expect(ids[1]).toBe('assert-fleet-configured');
+    // The SAME three steps the first index writes — one code path, differing only
+    // in the event and in the refresh job's debounce (MOTIR-2057), which is why
+    // this suite asserts the shape on both jobs rather than trusting the sharing.
     for (const projectId of projectIds) {
-      const own = ids.filter((id) => id.endsWith(`:${projectId}`) || id.includes(`:${projectId}:`));
-      expect(own[0]).toBe(`index-admit:${projectId}:1`);
-      expect(own[1]).toBe(`index-boot:${projectId}`);
-      expect(own[2]).toBe(`index-poll:${projectId}:1`);
-      expect(own.at(-1)).toBe(`index-settle:${projectId}`);
+      expect(ids.filter((id) => id.endsWith(`:${projectId}`))).toEqual([
+        `index-admit:${projectId}`,
+        `index-boot:${projectId}`,
+        `index-settle:${projectId}`,
+      ]);
     }
 
     // ⚠️ THE DEFECT, INVERTED. A push used to buffer `motir-core`'s whole tree
@@ -1043,14 +1097,13 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
   }, 30_000);
 
   it('fails the run and claims nothing when a refresh container dies', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-refresh-x', 1);
+    const { workspaceId, installationId } = await seedWorkspace('cgj-refresh-x', 1);
     stubIndexFleet();
     containerExitsWith(30);
 
     const engine = new InngestTestEngine({ function: codeGraphRefresh });
     const { result, error } = (await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
-      steps: sleepSteps(projectIds),
     })) as { result?: unknown; error?: { message?: string } };
 
     expect(result).toBeUndefined();
@@ -1101,17 +1154,15 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     // sequences is the direct form of "they share one path, and it is the index
     // job's own" — a copied-and-edited shape fails here even when both are green
     // in isolation.
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-parity', 2);
+    const { workspaceId, installationId } = await seedWorkspace('cgj-parity', 2);
     stubIndexFleet();
     containerExitsWith(0);
 
     const indexRun = await new InngestTestEngine({ function: codeGraphIndex }).execute({
       events: [indexEventFor({ installationId, workspaceId, eventId: 'evt-parity-index' })],
-      steps: sleepSteps(projectIds),
     });
     const refreshRun = await new InngestTestEngine({ function: codeGraphRefresh }).execute({
       events: [refreshEventFor({ installationId, workspaceId, eventId: 'evt-parity-refresh' })],
-      steps: sleepSteps(projectIds),
     });
 
     expect(indexRun.result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
@@ -1136,4 +1187,120 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     const indexConfig = (codeGraphIndex as unknown as { opts: Record<string, unknown> }).opts;
     expect(indexConfig['debounce']).toBeUndefined();
   }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT THE COLLAPSE BUYS, MEASURED (MOTIR-3484) — the `job_step` count.
+//
+// The old shape wrote a sleep checkpoint AND a result row per poll, and replayed
+// every earlier one on each resume: `indexFleetSteps.ts` counted "roughly 128
+// `step.run` round trips per 30-minute index, each one a database write", so a
+// loop that polls N times performed on the order of N² memo lookups. The whole
+// point of the collapse is that the number is now a CONSTANT — and a regression
+// there is silent, because the run still succeeds.
+//
+// Driven through the ENGINE's real `createStepApi`, because `job_step` is what
+// this measures and only the engine writes those rows. Millisecond budgets, so
+// the two runs differ in POLL COUNT and in nothing else.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the step ledger a supervised run writes is a CONSTANT', () => {
+  /** One `job_queue` row plus the engine step API bound to it. */
+  async function engineSteps(jobId: string) {
+    const run = await adminDb.jobQueueRun.create({
+      data: {
+        jobId,
+        eventName: jobId,
+        runAt: new Date(),
+        maxAttempts: 5,
+        eventId: null,
+        workspaceId: null,
+      },
+    });
+    return { runId: run.id, steps: createStepApi({ runId: run.id, workspaceId: null }) };
+  }
+
+  async function dispatchInputFor(slug: string) {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace(slug, 1);
+    const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    return {
+      installationId,
+      providerId: 'github' as const,
+      organizationId: workspace.organizationId,
+      workspaceId,
+      projectId: projectIds[0]!,
+      repoOwner: 'moooon',
+      repoName: 'motir-core',
+      repoRef: REPO_REF,
+      defaultBranch: 'main',
+      runId: `run-${slug}`,
+      dispatchId: `evt-${slug}`,
+    };
+  }
+
+  /** Supervise one container to completion, terminal after `pollsBeforeExit` polls. */
+  async function superviseCounting(slug: string, pollsBeforeExit: number) {
+    stubIndexFleet();
+    const input = await dispatchInputFor(slug);
+    const { runId, steps } = await engineSteps('system.code-graph-index');
+
+    const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
+      codeGraphIndexDispatchService,
+    );
+    let polls = 0;
+    vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockImplementation(
+      async (session, previous, options) => {
+        polls += 1;
+        if (polls >= pollsBeforeExit) {
+          for (const id of fakeOrchestrator.liveContainerIds()) {
+            fakeOrchestrator.completeJob(id, { exitCode: 0 });
+          }
+        }
+        return realPoll(session, previous, options);
+      },
+    );
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(input, {
+      ...INDEX_FAST_SUPERVISION,
+      steps,
+    });
+    const rows = await adminDb.jobStep.findMany({
+      where: { runId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return {
+      outcome,
+      polls,
+      stepIdsWritten: rows.map((r) => r.stepId),
+      projectId: input.projectId,
+    };
+  }
+
+  it('writes THREE step rows however many times it polled', async () => {
+    const quick = await superviseCounting('cgf-steps-1', 1);
+    expect(quick.outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    expect(quick.stepIdsWritten).toEqual([
+      `index-admit:${quick.projectId}`,
+      `index-boot:${quick.projectId}`,
+      `index-settle:${quick.projectId}`,
+    ]);
+
+    vi.restoreAllMocks();
+    fakeOrchestrator.reset();
+    driveIndexFleetFast();
+
+    // ⚠️ THE SAME SUPERVISION AT A DIFFERENT POLL BUDGET — this is what makes the
+    // number a PROPERTY rather than a coincidence of one fixture. Asserting "it
+    // is small" would pass on a shape that writes one row per poll and happened
+    // to poll twice.
+    const long = await superviseCounting('cgf-steps-2', 8);
+    expect(long.outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    expect(long.polls).toBeGreaterThanOrEqual(8);
+    expect(long.stepIdsWritten).toHaveLength(3);
+    expect(long.stepIdsWritten).toHaveLength(quick.stepIdsWritten.length);
+    // And not one of them is a sleep checkpoint — the row kind the old shape
+    // wrote once per poll.
+    const kinds = await adminDb.jobStep.findMany({ select: { kind: true } });
+    expect(kinds.every((k) => k.kind === 'run')).toBe(true);
+  }, 60_000);
 });

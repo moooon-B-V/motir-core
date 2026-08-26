@@ -312,6 +312,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // non-member must read the key as not-found rather than learn what
         // somebody else's project has recorded about its own mistakes.
         search_lessons: { projectKey: 'PROD', query: 'leak?' },
+        // MOTIR-3553. Aimed at tenant A's project like its neighbours: a
+        // cross-tenant caller must be refused before anything is recorded.
+        reinforce_lesson: {
+          projectKey: 'PROD',
+          lessonId: 'les_whatever',
+          occurrenceRef: 'MOTIR-1',
+        },
         // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
         // cross-tenant caller must read the key as not-found — never a 403 that
         // confirms it exists, and never a file landing in another workspace.
@@ -746,6 +753,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         search_lessons: {
           projectKey: 'PROD',
           query: 'pinning a repository on a card that ships code',
+        },
+        // MOTIR-3553 — the lesson WRITE. Same note as its search sibling above:
+        // it is refused at the scope gate, and motir-ai is unconfigured in this
+        // suite either way.
+        reinforce_lesson: {
+          projectKey: 'PROD',
+          lessonId: 'les_whatever',
+          occurrenceRef: 'MOTIR-1',
         },
         // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
         // cross-tenant caller must read the key as not-found — never a 403 that

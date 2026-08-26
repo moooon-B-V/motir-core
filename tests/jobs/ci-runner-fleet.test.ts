@@ -12,7 +12,6 @@ import {
   pollWaitMs,
   FLEET_TIME_BUDGETS,
 } from '@/lib/services/ciRunnerBootService';
-import { maxDuration } from '@/app/api/inngest/route';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import {
@@ -24,6 +23,9 @@ import {
 } from '@/lib/jobs/definitions/ciRunnerFleet';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { createStepApi } from '@/lib/jobs/engine/step';
+import { withSystemContext } from '@/lib/workspaces/context';
+import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
@@ -300,12 +302,16 @@ describe('the boot and reap handlers DELEGATE', () => {
     expect(result).toEqual({ outcome: 'unknown_intent' });
   });
 
-  it('the boot handler NEVER calls runIntent — that would rebuild the hour-long invocation', async () => {
-    // ⚠️ THE REGRESSION GUARD (MOTIR-2007). `runIntent` still exists as the
-    // in-process composition the service suites drive, and it still supervises
-    // to the end in ONE call — which is exactly the shape that could not fit
-    // inside `maxDuration`. A handler reaching for it would silently restore the
-    // defect while every other test kept passing.
+  it('the boot handler DRIVES runIntent, through the durable step seam', async () => {
+    // ⚠️ THIS GUARD IS INVERTED FROM WHAT IT WAS, and the inversion is the card
+    // (MOTIR-3485). It used to read "the boot handler NEVER calls runIntent —
+    // that would rebuild the hour-long invocation", because `runIntent`
+    // supervises to the end in ONE call and that could not fit inside
+    // `maxDuration`. There is no invocation ceiling to fit inside: motir-core
+    // runs as a long-lived Fly process (MOTIR-2384). Having ONE composition
+    // rather than two kept in agreement by hand is now the deliverable, so the
+    // handler must call it — and must hand it the step seam, or the boot and the
+    // teardown stop being memoized and a worker restart mints a second runner.
     const runIntent = vi.spyOn(ciRunnerBootService, 'runIntent');
     vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
       phase: 'terminal',
@@ -315,7 +321,12 @@ describe('the boot and reap handlers DELEGATE', () => {
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)] });
 
-    expect(runIntent).not.toHaveBeenCalled();
+    expect(runIntent).toHaveBeenCalled();
+    expect(runIntent.mock.calls[0]![0]).toBe(intentId);
+    expect(
+      runIntent.mock.calls[0]![1]?.steps,
+      'the handler must supply the durable seam',
+    ).toBeDefined();
   });
 
   it('the reaper handler delegates and returns the sweep counts', async () => {
@@ -425,8 +436,9 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
     });
     vi.spyOn(ciRunnerBootService, 'settleSupervision').mockResolvedValue(SETTLED_OUTCOME);
 
+    superviseFast();
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
-    await engine.execute({ events: [bootEvent(intentId)], steps: sleepSteps(10) });
+    await engine.execute({ events: [bootEvent(intentId)] });
 
     const run = await adminDb.jobRun.findFirstOrThrow();
     expect(run.status).toBe('succeeded');
@@ -471,33 +483,43 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOTIR-2007 — THE DURABLE POLL LOOP: a CI job may outlive the invocation that
-// supervises it.
+// TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP — MOTIR-2007's guarantee,
+// RE-PROVEN after MOTIR-3485 changed the mechanism that holds it.
 //
-// The defect: supervision watched a container synchronously for up to 3,600s
-// inside ONE invocation whose ceiling is `maxDuration = 300`. Every CI job over
-// ~5 minutes was killed mid-loop — no teardown, no usage row, a dead-lettered
-// run for a job that had passed, and an intent holding a fleet slot against the
-// fail-CLOSED ceiling until the reaper aged it out 70 minutes later.
+// The original defect: supervision watched a container synchronously for up to
+// 3,600s inside ONE invocation whose ceiling was `maxDuration = 300`. Every CI
+// job over ~5 minutes was killed mid-loop — no teardown, no usage row, a
+// dead-lettered run for a job that had passed, and an intent holding a fleet slot
+// against the fail-CLOSED ceiling until the reaper aged it out 70 minutes later.
+// MOTIR-2007 fixed it by making the wait a `ctx.step.sleep`, and this section's
+// assertion used to be that a run whose SLEEPS ALREADY SUM PAST `maxDuration`
+// still reaches its teardown STEP.
 //
-// So the assertion is not "supervision works" — it is that a run whose SLEEPS
-// ALREADY SUM PAST `maxDuration` still reaches its teardown step. Driven through
-// `InngestTestEngine` across the real step boundaries, never by shortening the
-// deadline until it fits inside one invocation.
+// ⚠️ THAT PREMISE HAS EXPIRED AND THE GUARANTEE HAS NOT. There is no invocation
+// ceiling to outlive — motir-core is a long-lived Fly process (MOTIR-2384) — so
+// "sums past `maxDuration`" is no longer a meaningful quantity, and the teardown
+// is an ordinary `finally` rather than a step reachable from two exits.
+// `docs/decisions/job-queue-foundation.md` §13.4 requires the property be
+// RE-PROVEN per exit path rather than inherited, because a `finally` reaches a
+// THIRD exit the stepped form never could. So the three cases below are: a `done`
+// verdict, the iteration CEILING, and a THROW from inside the loop.
 //
-// ⚠️ `step.sleep` HANGS `InngestTestEngine` UNLESS ITS STATE IS SUPPLIED. The
-// engine only records state for steps that RAN, and a sleep never "runs" — so an
-// un-stubbed sleep is re-found forever and `execute()` never resolves (it fails
-// as a test TIMEOUT, which reads like a slow test rather than a missing stub).
-// `sleepSteps()` pre-fulfils them; supply more than the loop can use.
+// ⚠️ AND THE WAITS ARE REAL `await`s NOW, so the cadence has to be shortened or a
+// twenty-poll test sleeps for minutes. `superviseFast()` does it through the
+// service's own options seam and changes nothing else — the composition, the
+// steps and the ledger are all real. (It replaces `sleepSteps()`, which
+// pre-fulfilled `supervise-wait:<n>` state because an un-stubbed `step.sleep`
+// hangs `InngestTestEngine` forever. There are no sleeps left to stub.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Pre-fulfilled `step.sleep` state, so the engine can cross the boundaries. */
-function sleepSteps(count: number) {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `supervise-wait:${i + 1}`,
-    handler: () => null,
-  }));
+/** Millisecond poll cadence for a job-level test, and an optional per-pass ceiling. */
+function superviseFast(over: { maxPollIterations?: number } = {}) {
+  const real = ciRunnerBootService.runIntent.bind(ciRunnerBootService);
+  return vi
+    .spyOn(ciRunnerBootService, 'runIntent')
+    .mockImplementation((id, options) =>
+      real(id, { pollIntervalMs: 1, maxPollIntervalMs: 2, ...over, ...options }),
+    );
 }
 
 /** A supervising session — the JSON shape `bootIntent` hands across the step
@@ -530,26 +552,30 @@ const NOT_DONE = {
   consecutiveReadFailures: 0,
 };
 
-describe('a container that OUTLIVES the invocation ceiling still reaches teardown', () => {
-  /** How many polls it takes for the loop's own sleeps to sum past `maxDuration`. */
-  function pollsToOutliveTheCeiling(): number {
+describe('a container that outlives many polls still reaches teardown', () => {
+  /** How many polls the SHIPPED cadence would have needed to span an hour-long job. */
+  function pollsToSpanAJob(): number {
     let elapsed = 0;
     let polls = 0;
-    while (elapsed <= maxDuration * 1000) {
+    while (elapsed <= FLEET_TIME_BUDGETS.jobTimeoutMs) {
       polls += 1;
       elapsed += pollWaitMs(polls);
     }
     return polls;
   }
 
-  it('supervises PAST maxDuration across many steps, then settles — the whole defect, inverted', async () => {
-    const polls = pollsToOutliveTheCeiling();
-    // Sanity on the premise: this really is longer than one invocation may live.
+  it('supervises across MANY polls, then settles — on a `done` verdict', async () => {
+    const polls = pollsToSpanAJob();
+    // Sanity on the premise: at the shipped cadence this really is a full-length
+    // CI job's worth of supervision, not two polls in a trench coat. The number
+    // is derived from `jobTimeoutMs` rather than from `maxDuration`, which is the
+    // correction — the container's hard kill is the quantity that still exists.
     const scheduled = Array.from({ length: polls }, (_, i) => pollWaitMs(i + 1)).reduce(
       (a, b) => a + b,
       0,
     );
-    expect(scheduled).toBeGreaterThan(maxDuration * 1000);
+    expect(scheduled).toBeGreaterThan(FLEET_TIME_BUDGETS.jobTimeoutMs);
+    superviseFast();
 
     vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
       phase: 'supervising',
@@ -571,18 +597,21 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
       .mockResolvedValue(SETTLED_OUTCOME);
 
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
-    const { result } = await engine.execute({
-      events: [bootEvent(intentId)],
-      steps: sleepSteps(polls + 5),
-    });
+    const { result } = await engine.execute({ events: [bootEvent(intentId)] });
 
-    // ⚠️ TEARDOWN RAN. This is the line the card exists for: before it, the
-    // supervising invocation was killed here and `settleIntent` /
-    // `recordContainerUsage` / `deregisterQuietly` never happened at all.
+    // ⚠️ TEARDOWN RAN, and it ran ONCE. This is the line MOTIR-2007 exists for:
+    // before it, the supervising invocation was killed here and `settleIntent` /
+    // `recordContainerUsage` / `deregisterQuietly` never happened at all. It is
+    // still exactly once because `settle-runner` is a MEMOIZED step, which is
+    // what an Inngest replay pass cannot re-execute.
     expect(settle).toHaveBeenCalledTimes(1);
     expect(settle.mock.calls[0]![1]).toMatchObject({ done: true, reason: 'job_completed' });
-    // It really did cross many boundaries rather than collapsing into one poll.
-    expect(poll.mock.calls.length).toBe(polls);
+    // It really did poll many times rather than collapsing into one. Not EXACTLY
+    // `polls`: Inngest re-invokes the handler from the top at each step boundary,
+    // and the loop is ordinary code between two steps, so a replay pass re-enters
+    // it. Those reads are idempotent and the outcome is memoized; the engine,
+    // which does not re-invoke from the top, runs the loop once.
+    expect(poll.mock.calls.length).toBeGreaterThanOrEqual(polls);
     // And the run REPORTS the settled outcome — no dead-letter, no
     // `FUNCTION_INVOCATION_TIMEOUT` for a job that succeeded. Compared through
     // the JSON projection because that is what BOTH surfaces apply: Inngest
@@ -607,8 +636,9 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
     });
     vi.spyOn(ciRunnerBootService, 'settleSupervision').mockResolvedValue(SETTLED_OUTCOME);
 
+    superviseFast();
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
-    await engine.execute({ events: [bootEvent(intentId)], steps: sleepSteps(10) });
+    await engine.execute({ events: [bootEvent(intentId)] });
 
     const run = await adminDb.jobRun.findFirstOrThrow();
     expect(run.status).toBe('succeeded');
@@ -639,12 +669,14 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
       .spyOn(ciRunnerBootService, 'settleSupervision')
       .mockResolvedValue(SETTLED_OUTCOME);
 
+    superviseFast();
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
-    const { result } = await engine.execute({
-      events: [bootEvent(intentId)],
-      steps: sleepSteps(10),
-    });
+    const { result } = await engine.execute({ events: [bootEvent(intentId)] });
 
+    // ⚠️ STILL EXACTLY ONCE EACH, and the reason is unchanged: both sit inside
+    // memoized steps, which a replay pass serves from `job_step` rather than
+    // re-executing. The loop between them re-enters on every pass; the two
+    // operations that COST money do not.
     expect(boot).toHaveBeenCalledTimes(1);
     expect(settle).toHaveBeenCalledTimes(1);
     // Both surfaces agree — what MOTIR-2002 was restoring by other means, now a
@@ -660,40 +692,39 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
     // does something surprising (a frozen `now`, a provider that never reports
     // terminal). A durable loop with no static bound is a runaway that bills per
     // iteration — and, worse, one that exits without teardown.
-    const ceiling = FLEET_TIME_BUDGETS.maxPollIterations;
-    Object.defineProperty(FLEET_TIME_BUDGETS, 'maxPollIterations', {
-      value: 3,
-      configurable: true,
+    //
+    // ⚠️ LOWERED THROUGH THE OPTIONS SEAM, not by redefining the exported
+    // constant. The loop reads its ceiling from `options.maxPollIterations ??
+    // MAX_POLL_ITERATIONS` and clamps to the shipped value, so a test may lower
+    // it and cannot raise it — which is a better shape than mutating a frozen
+    // budget object and restoring it in a `finally`.
+    superviseFast({ maxPollIterations: 3 });
+    vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
+      phase: 'supervising',
+      session: SESSION,
     });
-    try {
-      vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
-        phase: 'supervising',
-        session: SESSION,
-      });
-      // NEVER terminal — the pathological case the ceiling exists for.
-      const poll = vi.spyOn(ciRunnerBootService, 'pollOnce').mockResolvedValue(NOT_DONE);
-      const settle = vi
-        .spyOn(ciRunnerBootService, 'settleSupervision')
-        .mockResolvedValue(SETTLED_OUTCOME);
+    // NEVER terminal — the pathological case the ceiling exists for.
+    const poll = vi.spyOn(ciRunnerBootService, 'pollOnce').mockResolvedValue(NOT_DONE);
+    const settle = vi
+      .spyOn(ciRunnerBootService, 'settleSupervision')
+      .mockResolvedValue(SETTLED_OUTCOME);
 
-      const engine = new InngestTestEngine({ function: ciRunnerBoot });
-      await engine.execute({ events: [bootEvent(intentId)], steps: sleepSteps(10) });
+    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    await engine.execute({ events: [bootEvent(intentId)] });
 
-      expect(poll).toHaveBeenCalledTimes(3);
-      // The container is still torn down, with a verdict that SAYS why rather
-      // than reporting a clean completion it never observed.
-      expect(settle).toHaveBeenCalledTimes(1);
-      expect(settle.mock.calls[0]![1]).toMatchObject({
-        done: true,
-        reason: 'job_timed_out',
-        failureDetail: expect.stringContaining('poll ceiling'),
-      });
-    } finally {
-      Object.defineProperty(FLEET_TIME_BUDGETS, 'maxPollIterations', {
-        value: ceiling,
-        configurable: true,
-      });
-    }
+    // Three per pass, and the pass count is Inngest's business (see the note on
+    // the `done`-verdict case above). What matters is that the loop ENDED rather
+    // than running to the shipped 2,000.
+    expect(poll.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(poll.mock.calls.length).toBeLessThan(FLEET_TIME_BUDGETS.maxPollIterations);
+    // The container is still torn down, with a verdict that SAYS why rather
+    // than reporting a clean completion it never observed.
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(settle.mock.calls[0]![1]).toMatchObject({
+      done: true,
+      reason: 'job_timed_out',
+      failureDetail: expect.stringContaining('poll ceiling'),
+    });
   });
 
   it('a boot that provisioned NOTHING never polls and never tears down', async () => {
@@ -716,5 +747,189 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
       reason: 'project_cap',
       detail: 'at the cap',
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT THE COLLAPSE MUST NOT LOSE (MOTIR-3485) — the three properties whose
+// MECHANISM changed, each re-proven rather than inherited.
+//
+// `docs/decisions/job-queue-foundation.md` §13.4 names them: teardown on every
+// exit path (a `finally` now, not a step reachable from two exits), the boot
+// happening once across a restart (memoization, unchanged), and this job's
+// SINGLE attempt surviving a worker restart (the reclaim's refund).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the guarantees the collapse changed the mechanism of', () => {
+  /** One `job_queue` row for this job, plus the ENGINE step API bound to it. */
+  async function engineRun() {
+    const run = await adminDb.jobQueueRun.create({
+      data: {
+        jobId: 'system.ci-runner-boot',
+        eventName: 'system.ci-runner-boot',
+        runAt: new Date(),
+        // `retryPolicy: 'none'` — ONE attempt, which is what makes the refund
+        // below a correctness property rather than a nicety.
+        maxAttempts: 1,
+        eventId: null,
+        workspaceId: null,
+      },
+    });
+    return { runId: run.id, steps: createStepApi({ runId: run.id, workspaceId: null }) };
+  }
+
+  const FAST = { pollIntervalMs: 1, maxPollIntervalMs: 2 } as const;
+  const DONE_VERDICT = {
+    done: true as const,
+    reason: 'job_completed' as const,
+    startedAt: NOT_DONE.startedAt,
+    bootLatencyMs: NOT_DONE.bootLatencyMs,
+    failureDetail: null,
+  };
+
+  it('writes a CONSTANT number of step rows however many times it polled', async () => {
+    // The property the collapse buys, and a regression in it is silent because
+    // the run still succeeds. The old shape wrote a sleep checkpoint AND a result
+    // row per poll — 2,400 steps for one hour-long CI job, by
+    // `MAX_POLL_INTERVAL_MS`'s own comment.
+    vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
+      phase: 'supervising',
+      session: SESSION,
+    });
+    vi.spyOn(ciRunnerBootService, 'settleSupervision').mockResolvedValue(SETTLED_OUTCOME);
+    const poll = vi.spyOn(ciRunnerBootService, 'pollOnce');
+    for (let i = 0; i < 7; i += 1) poll.mockResolvedValueOnce(NOT_DONE);
+    poll.mockResolvedValue(DONE_VERDICT);
+
+    const { runId, steps } = await engineRun();
+    await ciRunnerBootService.runIntent('i-const', { ...FAST, steps });
+
+    expect(poll.mock.calls.length).toBe(8);
+    const rows = await adminDb.jobStep.findMany({ where: { runId } });
+    expect(rows.map((r) => r.stepId).sort()).toEqual(['boot-runner', 'settle-runner']);
+    // Not a sleep checkpoint among them — the row kind the old shape wrote once
+    // per poll.
+    expect(rows.every((r) => r.kind === 'run')).toBe(true);
+  });
+
+  it('tears down when a poll THROWS from inside the loop — the exit a step could not reach', async () => {
+    // ⚠️ THE THIRD EXIT PATH, and the one that is NEW. The stepped form reached
+    // teardown from the loop's two normal exits (a `done` verdict, the iteration
+    // ceiling) and could not reach it from a throw at all: the Inngest executor
+    // finalizes a terminally-failed step before anything scheduled from a `catch`
+    // could run (PRODECT_FINDINGS #39). An ordinary `finally` does reach it.
+    //
+    // `pollOnce` is contracted never to throw, and that contract is unchanged and
+    // still the primary guarantee — this asserts the BACKSTOP behind it, because
+    // §13.4 requires the property be re-proven for the mechanism that now holds
+    // it rather than inherited from the one that used to.
+    vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
+      phase: 'supervising',
+      session: SESSION,
+    });
+    const settle = vi
+      .spyOn(ciRunnerBootService, 'settleSupervision')
+      .mockResolvedValue(SETTLED_OUTCOME);
+    vi.spyOn(ciRunnerBootService, 'pollOnce')
+      .mockResolvedValueOnce(NOT_DONE)
+      .mockRejectedValue(new Error('the provider adapter blew up mid-loop'));
+
+    const { runId, steps } = await engineRun();
+
+    // The error still propagates — a supervision that failed must not report a
+    // clean outcome — but the container is destroyed on the way out.
+    await expect(ciRunnerBootService.runIntent('i-throw', { ...FAST, steps })).rejects.toThrow(
+      /blew up mid-loop/,
+    );
+
+    expect(settle).toHaveBeenCalledTimes(1);
+    // With the ceiling verdict, because no poll ever returned `done` — so the
+    // settled intent SAYS supervision ended without observing a completion,
+    // rather than reporting one it never saw.
+    expect(settle.mock.calls[0]![1]).toMatchObject({ done: true, reason: 'job_timed_out' });
+    const rows = await adminDb.jobStep.findMany({ where: { runId } });
+    expect(rows.map((r) => r.stepId).sort()).toEqual(['boot-runner', 'settle-runner']);
+  });
+
+  it('a worker RESTART resumes the same container and boots exactly once', async () => {
+    // The restart, driven rather than simulated: two passes over the SAME
+    // `job_queue` row, which is exactly what a lease reclaim produces — the
+    // runner rebuilds the context and calls the handler from the top, and the
+    // shim serves each completed step from `job_step`.
+    const boot = vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
+      phase: 'supervising',
+      session: SESSION,
+    });
+    const settle = vi
+      .spyOn(ciRunnerBootService, 'settleSupervision')
+      .mockResolvedValue(SETTLED_OUTCOME);
+    const poll = vi.spyOn(ciRunnerBootService, 'pollOnce');
+    // Pass one dies mid-supervision, after the boot step has been memoized.
+    poll.mockRejectedValueOnce(new Error('the worker went away'));
+
+    const { runId, steps } = await engineRun();
+    await expect(ciRunnerBootService.runIntent('i-restart', { ...FAST, steps })).rejects.toThrow(
+      /went away/,
+    );
+    expect(boot).toHaveBeenCalledTimes(1);
+
+    // ⚠️ A SECOND STEP API OVER THE SAME RUN — a different worker process, the
+    // same durable ledger. Nothing in `createStepApi` is per-process except the
+    // scope it is built from, which is the queue row's id.
+    const resumed = createStepApi({ runId, workspaceId: null });
+    poll.mockResolvedValue(DONE_VERDICT);
+    const outcome = await ciRunnerBootService.runIntent('i-restart', {
+      ...FAST,
+      steps: resumed,
+    });
+
+    // ⚠️ THE ASSERTION THE CARD TURNS ON. `bootIntent` admits, claims the intent,
+    // MINTS A GITHUB RUNNER REGISTRATION and provisions a machine. Running it
+    // twice would leave a second runner registered and a second machine billed —
+    // and it did not run twice, because the boot sits inside a memoized step and
+    // the resumed pass replayed it.
+    expect(boot).toHaveBeenCalledTimes(1);
+    // The resumed pass supervised the SAME session, out of that memo.
+    expect(poll.mock.calls.at(-1)![0]).toMatchObject({ intentId: SESSION.intentId });
+    // Through the JSON projection, because the resumed pass reads the outcome
+    // back OUT of `job_step` — the shim's documented contract, which applies
+    // `roundTrip` to what it RETURNS as well as to what it stores so that a
+    // handler cannot work in-process and throw on resume.
+    expect(JSON.parse(JSON.stringify(outcome))).toEqual(SETTLED_JSON);
+    // And the settle ran once across BOTH passes: the first pass's `finally`
+    // wrote it, and the second replayed it.
+    expect(settle).toHaveBeenCalledTimes(1);
+  });
+
+  it("and the restart does NOT consume this job's single attempt", async () => {
+    // ⚠️ THE ONE JOB IN THE FLEET WHERE THIS IS A CORRECTNESS PROPERTY.
+    // `retryPolicy: 'none'` is a budget of exactly ONE, so if a worker restart
+    // spent it, a deploy mid-CI-job would dead-letter a run that was fine — the
+    // MOTIR-2007 outcome by another route. Asserted against the worker's REAL
+    // reclaim path, not against the comment that claims it.
+    const { runId } = await engineRun();
+
+    const claimed = await withSystemContext((tx) =>
+      jobQueueRepository.claimDueRuns('worker-a', 5, 1, tx),
+    );
+    expect(claimed.map((r) => r.id)).toContain(runId);
+    // The claim SPENDS the attempt — which is what makes the refund necessary.
+    expect((await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: runId } })).attempts).toBe(
+      1,
+    );
+
+    // The worker dies: its 1 ms lease expires and a live worker reclaims the row.
+    await adminDb.jobQueueRun.update({
+      where: { id: runId },
+      data: { leaseExpiresAt: new Date(Date.now() - 60_000) },
+    });
+    await withSystemContext((tx) => jobQueueRepository.reclaimExpiredLeases(tx));
+
+    const after = await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: runId } });
+    expect(after.state).toBe('pending');
+    // REFUNDED. The budget is intact, so the resumed run is a resume rather than
+    // a dead-letter.
+    expect(after.attempts).toBe(0);
+    expect(after.attempts).toBeLessThan(after.maxAttempts);
   });
 });

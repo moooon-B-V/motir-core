@@ -142,7 +142,13 @@ describe('fan-out — one event, N subscribers', () => {
 
     const result = await dispatchEventToEngine('work-item/transitioned', { workspaceId: ws });
 
-    expect(result).toEqual({ eventId: null, enqueued: [], alreadyEnqueued: [], failed: [] });
+    expect(result).toEqual({
+      eventId: null,
+      enqueued: [],
+      alreadyEnqueued: [],
+      coalesced: [],
+      failed: [],
+    });
     // Not even a `job_event` row: one per emit, for the whole migration, that
     // nothing would ever consume.
     expect(await adminDb.jobEvent.count()).toBe(0);

@@ -85,7 +85,7 @@ build inside a memory- and time-bounded function. Measured, not characterised:
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
 | **OOM on a large repo**                | `instance was killed because it ran out of available memory` — `motir-core`, **5/5 attempts**, 2026-08-02 (logged as MOTIR-1976, archived when this story superseded the patch)                                                | the fetch happens in a container sized for it               |
 | **180 s motir-ai deadline**            | the upload call's own client deadline, `180_000` ms in `lib/ai/motirAiClient.ts` (deleted with the call in MOTIR-2138); **3 repos dead-lettered** on `MotirAiUnavailableError … within 180000ms`                               | the expensive parse leaves the synchronous call             |
-| **`maxDuration = 300`**                | `app/api/inngest/route.ts:38`; MOTIR-1974's checkpointing exists only to fit under it                                                                                                                                          | the work is not on Vercel                                   |
+| **`maxDuration = 300`**                | `app/api/inngest/route.ts:38`; MOTIR-1974's checkpointing exists only to fit under it. **⚠️ SEE §7.5 — this ceiling has since gone with Vercel itself, and the checkpointing it justified is gone with it (MOTIR-3484)**       | the work is not on Vercel                                   |
 | **200 MB ingress ceiling**             | `CODE_GRAPH_MAX_BODY_BYTES`, `motir-ai/src/app.ts` — recorded in `docs/decisions/code-access-for-planning.md:51`. Never reached, but structurally next                                                                         | the upload becomes an ~8–80 MB graph, not a ~350 MB tarball |
 | **tarball re-fetched PER PROJECT**     | bytes cannot cross an Inngest step boundary — the MOTIR-1974 note, in `lib/jobs/codeGraphSteps.ts` until MOTIR-2057 deleted it                                                                                                 | one container fetches once and builds once                  |
 | **motir-ai is the throughput ceiling** | `indexParseGate = new Semaphore(1)` (`motir-ai/src/codegraph/indexConcurrency.ts:102`); ~**924 MB** peak RSS per index (MOTIR-1515); `fly.toml` scales on `soft_limit = 20` **requests**, which long index requests never trip | the build leaves motir-ai; capacity becomes container count |
@@ -368,6 +368,50 @@ probing it needs the production `INNGEST_EVENT_KEY` (a Fly secret) and is human-
 environments and documents nothing about an unresolvable key — so on Cloud the first two findings
 are a documented promise and the last two are unknown, not known-good. Same shape as the concurrency
 fairness numbers in `docs/jobs.md`, which are also dev-server-only and say so.
+
+### §7.5 — AMENDMENT 2026-08-26 (MOTIR-3488): the invocation ceiling this record reasons from is GONE, and the stepped shape went with it
+
+§2's table lists **`maxDuration = 300`** among the five failures a container removes, noting that
+"MOTIR-1974's checkpointing exists only to fit under it". §11's _"one container per (repo × project)
+per debounced push"_ and §7.3/§7.4 reason from the shape that checkpointing produced. All of it was
+true, and one of its premises has expired.
+
+**What changed, and it is not this record's subject.** `app/api/inngest/route.ts` declares
+`maxDuration = 300`, which is a Next.js route-segment directive the DEPLOYMENT PLATFORM enforces.
+motir-core has run as a long-lived Fly process since MOTIR-2384 — `Dockerfile` ends
+`CMD ["node", "server.js"]` — and the Postgres job engine's worker is its own process group with a
+renewed lease. Nothing kills a long-running handler.
+
+**What MOTIR-3484 therefore did.** `lib/jobs/indexFleetSteps.ts` drove
+`codeGraphIndexDispatchService` as durable steps — `index-admit:<pid>:<n>` ×60, `index-boot:<pid>`,
+`index-wait:<pid>:<n>` / `index-poll:<pid>:<n>` up to 500, `index-settle:<pid>` — while the SAME
+service already carried the composition without the step ids, marked _"NOT THE PRODUCTION PATH"_ for
+exactly this reason. There is ONE composition again: the job drives `runIndexContainer` through an
+optional step seam, and the loop is an ordinary `while` with an `await`.
+
+**§2's CONCLUSION IS UNTOUCHED, and the distinction matters.** Every other row of that table — the
+OOM, the 180 s deadline, the ingress ceiling, the per-project re-fetch, motir-ai as the throughput
+ceiling — is about where the WORK runs, and the answer is still a container. Only the `maxDuration`
+row was about the SHAPE of the supervisor, and that row now records history rather than a live
+constraint. **A container is still the decision; the stepping never was one.**
+
+**§7.3 and §7.4 are unaffected in substance.** The admission cap, the `dispatchId`-owned slot and the
+debounce's coalescing are all properties of the WORK, not of the supervisor's shape:
+`codeGraphIndexAdmissionService` and `lib/ciFleet/limits.ts` are untouched by MOTIR-3417 by explicit
+instruction, because a regression there costs money. What §7.4 measured about Inngest's debounce is
+now half the story — the Postgres engine implements the option itself (MOTIR-3483) and honours the
+`timeout` cap §7.4 found does not fire, which is documented beside the measurement in
+`docs/jobs.md` § The engine's debounce.
+
+**What replaces the ceiling as the reason for a step.** Not duration — a WORKER RESTART.
+`docs/decisions/job-queue-foundation.md` §13 states the rule (the durable boundary is the SIDE
+EFFECT, never the WAIT) and tables the disposition of every call site. For this fleet: `resolve-target`,
+`index-admit:<pid>`, `index-boot:<pid>`, `index-settle:<pid>` and `cancel-offboarding` keep their
+steps; the waits and the polls do not. The ledger contract §6 fixes — ONE `job_run` per repo,
+`succeeded`, one `output.repoRef` — is unchanged and is asserted through the real worker in
+`tests/jobs/supervisor-cutover-story-gate.test.ts`.
+
+**And §11's "one container per (repo × project) per debounced push" still holds**, on both lanes.
 
 ## §8 — Decision 7
 

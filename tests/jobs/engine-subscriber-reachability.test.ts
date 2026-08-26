@@ -156,6 +156,10 @@ describe('the job manifest is complete on the emit path', () => {
         maxAttempts: d.maxAttempts,
         retryPolicy: d.retryPolicy,
         idempotency: d.idempotency,
+        // `debounce` (MOTIR-3483) is on BOTH tables, and belongs on this one for
+        // the same reason `idempotency` does: the coalescing key is resolved
+        // from the payload and `run_at` decided at ENQUEUE, on the emit path.
+        debounce: d.debounce,
       })),
     );
     // …and the manifest carries NO handler, which is the one field that would

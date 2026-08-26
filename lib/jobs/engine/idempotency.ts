@@ -1,48 +1,55 @@
+import {
+  parseEventExpression,
+  resolveEventExpression,
+  type EventExpressionTerm,
+} from './eventExpression';
+
 // EVENT-LEVEL IDEMPOTENCY, RESOLVED (Story MOTIR-3415 · Subtask MOTIR-3459).
 //
 // `defineJob`'s `idempotency` option is an Inngest CEL template evaluated against
 // the triggering event — `'event.data.idempotencyKey'` is the only form in the
 // tree, declared by `lib/jobs/definitions/emailSend.ts`, which is the only job
 // that declares one at all. Inngest evaluates it server-side; the Postgres engine
-// has to evaluate it itself, and this is where.
+// has to evaluate it itself, and this is the door onto the resolver that does.
 //
-// ⚠️ THE RESOLVER IS TOTAL OVER WHAT IT ACCEPTS, AND THROWS ON THE REST.
+// ⚠️ THE GRAMMAR AND THE TOTALITY MOVED, THE CONTRACT DID NOT (MOTIR-3483).
+// This file used to carry its own single-`event.data.<field>` regex. The debounce
+// key is a CONCATENATION of the same terms, so the parser and the resolver now
+// live in `./eventExpression.ts` and serve BOTH options — one dialect that cannot
+// drift, rather than two that agree until either grows a form. Everything the old
+// header argued for is unchanged and is argued there: an expression the engine
+// cannot evaluate throws at REGISTRATION rather than degrading to "not deduped",
+// because the symptom of the silent arm is a second password-reset email to a
+// real person on the retry path nobody exercises by hand.
 //
-// The tempting shape is to return `null` for a template this does not
-// understand, so an unfamiliar job "just isn't deduped". That is the silent arm:
-// a future job declaring `'event.data.user.id'` or `'event.ts'` would keep its
-// `idempotency` option, keep passing review, and quietly stop deduplicating — and
-// the symptom is a second password-reset email to a real person, on the retry
-// path nobody exercises by hand. A lookup keyed off a value must be total over
-// what that value can hold, so an unrecognised template fails LOUDLY, at
-// REGISTRATION, where a definition module is evaluated and every process that
-// loads the registry will see it.
-//
-// Supporting a richer template is a deliberate change: extend `TEMPLATE` and its
-// resolver together, and add the case to
-// `tests/jobs/engine-idempotency.test.ts`.
-
-/** The one template form in use: `event.data.<field>`, one level deep. */
-const TEMPLATE = /^event\.data\.([A-Za-z_$][A-Za-z0-9_$]*)$/;
+// What stays HERE is the one thing that is specific to this option: what a
+// resolved key is USED for, and what its absence means.
 
 /**
- * Validate an `idempotency` template at REGISTRATION time.
+ * Validate an `idempotency` template at REGISTRATION time, and return the field
+ * it selects.
  *
- * Called from `defineJob`, so a job declaring a template the engine cannot
- * evaluate fails as its module is evaluated rather than silently losing its
- * dedup at dispatch. Returns the field name the template selects.
+ * ⚠️ THE IDEMPOTENCY DOOR IS DELIBERATELY NARROWER THAN THE GRAMMAR — one field
+ * term, no literals, no concatenation. The grammar accepts more because the
+ * debounce key needs more; a dedup key does not, and the two narrowings it
+ * enforces are both worth having. A literal-only key would collide EVERY event
+ * of the job into one row (the exact failure the resolver's `null` arm exists to
+ * avoid), and a composed dedup key has no consumer in the tree, so accepting one
+ * would be a shape nothing tests. Widening this is a deliberate change with a
+ * caller behind it.
  */
 export function parseIdempotencyTemplate(jobId: string, template: string): string {
-  const match = TEMPLATE.exec(template.trim());
-  if (match === null) {
+  const terms = parseEventExpression(jobId, 'idempotency', template);
+  const only = terms.length === 1 ? terms[0] : undefined;
+  if (only === undefined || only.kind !== 'field') {
     throw new Error(
       `Job "${jobId}" declares idempotency: ${JSON.stringify(template)}, which the Postgres ` +
-        `job engine cannot evaluate. The supported form is "event.data.<field>". ` +
-        `Extend lib/jobs/engine/idempotency.ts to support this template — do NOT drop the ` +
-        `option, because a job that keeps it and stops deduplicating fails silently.`,
+        `job engine cannot evaluate as a dedup key. The supported form is exactly one ` +
+        `"event.data.<field>" term — a composed key has no consumer in this tree and a ` +
+        `literal-only one would collide every event of this job into a single run.`,
     );
   }
-  return match[1]!;
+  return only.field;
 }
 
 /**
@@ -64,7 +71,6 @@ export function resolveIdempotencyKey(
 ): string | null {
   if (template === undefined) return null;
   const field = parseIdempotencyTemplate(jobId, template);
-  const payload = (data ?? {}) as Record<string, unknown>;
-  const value = payload[field];
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  const terms: EventExpressionTerm[] = [{ kind: 'field', field }];
+  return resolveEventExpression(terms, data);
 }

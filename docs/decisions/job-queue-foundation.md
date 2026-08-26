@@ -713,5 +713,215 @@ job-suite's greenness is measured on a module graph production never has.
 
 Planning bug filed under MOTIR-1465.
 
+## §13 — What a supervision loop keeps as a durable STEP, and what it may spend as a plain `await` (MOTIR-3482)
+
+**Amendment, 2026-08-26.** §1–§10 chose a foundation, §11 settled what a missed cron tick does and
+§12 settled how the emit path finds its subscribers. This settles the question the container
+supervisors raise and no other job does: **when the worker process dies half an hour into
+supervising a running container, what is the handler allowed to have forgotten?**
+
+It is asked now because [MOTIR-3417] deletes the stepped shape those loops were written in. That
+shape exists for a reason that has expired — `app/api/inngest/route.ts` pins `maxDuration = 300`,
+and `lib/jobs/indexFleetSteps.ts` says in its own words that _"A STEP, NOT A RUN, IS THE UNIT THE
+PLATFORM'S TIMEOUT APPLIES TO, so the WAITING is `ctx.step.sleep`"_. `Dockerfile` ends
+`CMD ["node", "server.js"]` and the worker is its own long-lived Fly process group, so that ceiling
+binds nothing any more. **But the ceremony and the durability are the same `ctx.step` calls**, so
+"delete the ceremony" is not an instruction anyone can follow until the line between them is drawn
+once, in one place, for both loops.
+
+### §13.1 — The rule
+
+> **A supervision loop's durable boundary is the SIDE EFFECT, never the WAIT.**
+>
+> 1. **`step.run` wraps every operation that PROVISIONS, CLAIMS or TEARS DOWN something outside
+>    this process** — anything whose second execution would leave a second thing existing: a
+>    container, a registered runner, a capacity slot, a destroyed machine, a metered usage row.
+> 2. **`step.run` ALSO wraps a result that later steps are KEYED BY**, so a resume cannot re-point
+>    them at different work. This limb is not about repetition cost; it is about identity.
+> 3. **Everything else is ordinary control flow** — the interval between polls, the poll itself,
+>    the loop counter, the classification of what came back, the waiting inside a backoff. A plain
+>    `await` in a plain `while`.
+> 4. **A step id still names the UNIT OF WORK, never a loop position.** That rule survives the
+>    collapse unchanged and matters more afterwards, because there are far fewer step ids left and
+>    each one carries more.
+>
+> **The test to apply to a step you are about to delete: _if this ran a second time, what would
+> exist twice?_** A container, a runner registration, a slot, a usage row ⇒ keep the step. A wait,
+> a read, a counter, a verdict ⇒ drop it. **If the answer is not obvious, KEEP the step** — one
+> extra `job_step` row is a bounded cost and a duplicated external effect is not.
+>
+> **And the corollary for everything dropped: a restart forgets it.** So _no verdict may depend on
+> the ABSENCE of an in-memory observation._ Either re-derive the observation from the source (the
+> happy path in `pollIndexContainer` already does — `if (status.startedAt && !startedAt) …`), or
+> gate the verdict on positive evidence. A branch that reads "we have not seen it start" is, after
+> the collapse, indistinguishable from "we have forgotten that we saw it start."
+
+### §13.2 — Why this is safe, read off the worker rather than assumed
+
+The rule is only defensible because of what `lib/jobs/engine/worker.ts` actually does, and each of
+these is a property of that file rather than a hope about it:
+
+- **A long run is the NORMAL case.** A claim carries a lease (`LEASE_MS` = 60 s) renewed by a
+  heartbeat every `RENEW_MS` = 20 s — a 3× margin, so two consecutive missed beats are needed
+  before a live worker looks dead. The header says so outright: _"a run legitimately longer than
+  the lease is the normal case, not the exception (the container supervisors sleep for half an
+  hour)."_ **So an in-memory wait needs no `step.sleep` to survive a live worker.** The heartbeat
+  is what distinguishes a long run from a dead one; nothing about duration alone can.
+- **A reclaim re-invokes the handler FROM THE TOP.** `lib/jobs/engine/runner.ts`'s `runQueuedJob`
+  builds a fresh context and calls `def.handler`; `createStepApi` in `lib/jobs/engine/step.ts` then
+  serves each `step.run` from `job_step` when a row exists. So a memoized step is what makes
+  re-entry cheap, and an un-memoized side effect is what makes it dangerous. That asymmetry IS the
+  rule.
+- **Both attempt refunds are real.** `jobQueueRepository.reclaimExpiredLeases` and
+  `releaseClaims` both write `"attempts" = GREATEST("attempts" - 1, 0)`, so a worker death and a
+  graceful drain each cost zero attempts. A supervisor may therefore be restarted repeatedly
+  without eating a retry budget — which is what makes `retryPolicy: 'none'` on
+  `system.ci-runner-boot` survive a deploy (§13.4).
+- **The cross-pass identities survive.** `buildEngineContext` sets `event.id` from `run.eventId`
+  and `runId` from the queue row's id — both stable for the life of the run — so
+  `dispatchId = ctx.event.id ?? ctx.runId` (`indexFleetSteps.ts`, MOTIR-2160) names the same
+  dispatch on every pass.
+- **The wall clock is anchored to the SESSION, not to the loop.** `pollIndexContainer` computes
+  `elapsed` from `session.bootedAt`, a field on the memoized boot result, so `indexTimeoutMs`
+  (1 800 000) keeps bounding a container across a restart. `ciRunnerBootService`'s `jobTimeoutMs`
+  (3 600 000) is anchored the same way.
+
+**And the option this rejects, with its reason on the record: keeping everything durable.** It is
+correct, and it is what the engine gives for free — but on our engine a `step.sleep` is not free
+the way Inngest's was. Each one is a `JobStepYield`, a re-enqueue, a re-claim by some worker and a
+replay of the handler from the top, during which every earlier step is re-read from `job_step`. A
+loop that polls _N_ times therefore performs on the order of _N²_ memo lookups and 2*N* row writes;
+`indexFleetSteps.ts` counts the shipped figure at _"roughly 128 sub-second steps"_ per 30-minute
+index. Porting that shape would move the cost from a platform we no longer pay onto a database we
+do. **The option at the other extreme — nothing durable at all — is rejected outright:** a restart
+would re-execute the boot, which provisions a SECOND billed container and takes a second admission
+slot, which is the exact failure the whole fleet is built around not having.
+
+### §13.3 — The three consequences, each disposed of
+
+**(a) The poll ITERATION counter restarts, so `maxPollIterations` stops bounding TOTAL polls per
+container. ACCEPTED — the ceiling was never the real bound, and the real one survives.**
+
+`INDEX_FLEET_TIME_BUDGETS.maxPollIterations` is 500 and `FLEET_TIME_BUDGETS.maxPollIterations` is
+2 000, and both files already say what they are for: _"not the bound that matters — it is the bound
+that still holds if the clock does something surprising."_ The bound that matters is the wall clock,
+and §13.2 shows it is anchored on the memoized `session.bootedAt` rather than on the loop. So after
+a restart the FIRST poll of the new pass re-evaluates `elapsed` from the original boot instant, and
+a container already past `indexTimeoutMs` settles immediately rather than being watched for another
+500 polls.
+
+What the ceiling becomes is a **per-pass runaway guard**, and it should be described that way in
+the code rather than silently demoted. **Deriving the count from elapsed time instead is refused**:
+it would make the guard depend on the very clock it exists to be independent of.
+
+The residue, stated rather than hidden: total polls across a run are bounded by
+_(number of restarts) × (polls until the deadline)_, so an unbounded restart loop is unbounded in
+poll count while remaining bounded in container lifetime. That is acceptable because a worker that
+cannot survive one supervision is a worker-level fault an operator sees, and because every one of
+those polls is a read — under §13.1's test, nothing exists twice.
+
+**(b) The `catch`-arm `startedAt` read. FIXED, not accepted — and the fix is the third option:
+the failed-read arm may not reach a BOOT-deadline verdict at all.**
+
+Today `pollIndexContainer`'s `deadlineVerdict` is consulted from both the happy path and the
+provider-read `catch`, and its first arm is `if (!startedAt && elapsed >= bootDeadlineMs)` →
+`provision_failed` / `never_started`. On the happy path that is sound, because `startedAt` has just
+been re-derived from the provider's own status. In the `catch` arm there is no successful read, so
+`!startedAt` means _either_ "the container never started" _or_ "this pass has not managed to ask
+yet" — and after the collapse the second reading becomes reachable at any elapsed time, because a
+restart resets the in-memory value. A container running healthily for twenty minutes, met by a
+reclaim and one failed provider read, would be classified `never_started`.
+
+**The disposition is §13.1's corollary applied literally: a boot-deadline verdict requires positive
+evidence, so it may only be reached from a SUCCESSFUL read.** The failed-read arm evaluates the
+overall `indexTimeoutMs` bound only — which depends on `session.bootedAt` and not on any in-memory
+observation, and which still guarantees that an unreadable provider can never extend a container
+past its timeout. Teardown is unaffected: both arms still return a `done` verdict, so the only exit
+remains `settleIndexContainer`.
+
+Two notes on scope. This is a latent defect **today**, not one the collapse introduces: a first
+read failing at `elapsed > bootDeadlineMs` on a slow-but-live boot misclassifies on the shipped
+code too. What the collapse changes is how often the second reading is reachable. And the fix is
+owned by [MOTIR-3484], which is the card that edits that file; the CI fleet's `pollContainerOnce`
+is to be read for the same shape by [MOTIR-3485].
+
+**Persisting the observed `startedAt` as a memoized step was considered and REJECTED.** It reads as
+the obvious fix and it is a trap of exactly the kind this record exists to catch: a `step.run` with
+a fixed id memoizes its FIRST answer forever, so `index-started:<projectId>` observed before the
+container started would pin `null` for the life of the run — the same defect as a single
+`index-admit:<projectId>` freezing a `deferred` verdict, which is why that id carries an attempt
+number today.
+
+**(c) A reclaim re-asking ADMISSION. SAFE, and read rather than assumed.**
+
+`codeGraphIndexAdmissionService.admit` opens by resolving `slotRef = indexSlotRef(projectId,
+repoRef)` and calling `slots.findByRef(...)`; when a row exists it returns `heldVerdict(held,
+slotRef, request.dispatchId)`. `heldVerdict` compares `held.ownerRef` with the asking
+`dispatchId` and — **when they match — returns `{ outcome: 'already_held', admission }`**, an
+`IndexAdmission` ticket carrying the existing `slotRef` and its original `admittedAt`. A different
+holder gets `{ outcome: 'deferred', reason: 'repo_index_in_flight' }` instead. Since §13.2 shows
+`dispatchId` is stable across passes, **a resumed run re-asking admission recovers its own slot
+rather than taking a second one**, and `bootIndexContainer` accepts that ticket exactly as it
+accepts a fresh `admitted` one — both arms of `waitForAdmission`'s return type already are
+`'admitted' | 'already_held'`.
+
+**But there is an ORDERING obligation that follows from it, and it is the non-obvious half.** The
+admission ask must sit INSIDE a memoized step, not before one. If the backoff loop becomes a plain
+`await` while the boot stays memoized, then a resume that lands **after** the settle step has
+already released the slot would re-ask admission, be granted a FRESH slot, replay the boot and the
+settle from their memos, and never release the new one — a slot leaked until its TTL, on a path
+where nothing looks wrong. **So `waitForAdmission` collapses into ONE memoized step of its own
+(`index-admit:<projectId>`, the backoff loop inside it) rather than into the surrounding
+control flow.** It is a CLAIM under §13.1's first limb, and the fact that it also happens to
+contain a wait does not move it.
+
+### §13.4 — Applying the rule: the disposition of every `ctx.step` call in the two loops
+
+Recorded per call site so [MOTIR-3484] and [MOTIR-3485] apply a decision rather than re-derive one.
+
+| loop  | today's step                 | disposition           | why                                                                                                                                                                                   |
+| ----- | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| index | `resolve-target`             | **KEEP**              | limb 2 — its `projectIds` are the identity every later step is keyed by; a re-read could re-point the fan-out mid-run                                                                 |
+| index | `assert-fleet-configured`    | **DROP**              | a read of process configuration that throws; a second evaluation leaves nothing behind                                                                                                |
+| index | `index-admit:<pid>:<n>` ×60  | **KEEP, as ONE step** | a CLAIM (limb 1), with the backoff loop inside it — §13.3(c)'s ordering obligation. The per-attempt ids go: they existed only so Inngest would not freeze the first `deferred` answer |
+| index | `index-admit-wait:<pid>:<n>` | **DROP**              | a wait                                                                                                                                                                                |
+| index | `index-boot:<projectId>`     | **KEEP**              | provisions a container — the canonical limb-1 case                                                                                                                                    |
+| index | `index-wait:<pid>:<n>`       | **DROP**              | a wait                                                                                                                                                                                |
+| index | `index-poll:<pid>:<n>`       | **DROP**              | one provider read and a classification                                                                                                                                                |
+| index | `index-settle:<projectId>`   | **KEEP**              | tears down, meters, and releases the slot                                                                                                                                             |
+| index | `cancel-offboarding`         | **KEEP**              | a write; and the run's last act, so a resume past it should not re-touch the offboarding queue                                                                                        |
+| CI    | `boot-runner`                | **KEEP**              | admits, claims, mints a JIT registration and provisions — four limb-1 effects in one operation                                                                                        |
+| CI    | `supervise-wait:<n>`         | **DROP**              | a wait                                                                                                                                                                                |
+| CI    | `supervise-poll:<n>`         | **DROP**              | one provider read                                                                                                                                                                     |
+| CI    | `settle-runner`              | **KEEP**              | tears down, de-registers the runner, meters, and settles the intent                                                                                                                   |
+
+**Two properties that must SURVIVE the collapse with a different mechanism, and must be re-proven
+rather than inherited:**
+
+- **Teardown is reached on every path out of the loop.** It is currently a step reachable from both
+  exits precisely because a `finally` could not be trusted across invocations. On a long-lived
+  worker an ordinary `try`/`finally` is trustworthy again — and the guarantee changes mechanism, so
+  it needs a test per exit path (a `done` verdict, the iteration ceiling, a throw from inside the
+  loop) rather than the old comment.
+- **`system.ci-runner-boot`'s single attempt.** `retryPolicy: 'none'` is a correctness decision —
+  a retry re-enters from the top — and it survives a restart only because of the refund quoted in
+  §13.2. **A worker restart mid-supervision does NOT consume it**; a genuine handler failure does.
+  That is the one job in the tree where the difference between a reclaim and a failure is the
+  difference between resuming and dead-lettering, so [MOTIR-3485] asserts it against the worker's
+  real reclaim path rather than citing this paragraph.
+
+### §13.5 — What this does NOT settle
+
+- **Whether the supervisors move to the engine at all.** [MOTIR-3417] settled that.
+- **The debounce.** Its own sibling; §9's rejected-pg-boss note is the decision it implements.
+- **The admission cap and `lib/ciFleet/limits.ts`.** [MOTIR-3417] forbids touching either, because
+  container admission is a different resource and a regression there costs money.
+- **Any change to a poll cadence, a backoff or a budget.** Every value in
+  `INDEX_FLEET_TIME_BUDGETS`, `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is unchanged by
+  this rule; it moves where durability lives, not how long anything waits.
+
+[MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
+[MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
+[MOTIR-3485]: https://app.motir.co/items/MOTIR-3485
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss

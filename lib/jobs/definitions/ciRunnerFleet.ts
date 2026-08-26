@@ -1,12 +1,6 @@
 import { defineJob } from '../defineJob';
 import { dispatchSystemEvent } from '../sendEvent';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
-import {
-  FLEET_TIME_BUDGETS,
-  INITIAL_POLL_STATE,
-  pollWaitMs,
-  type PollResult,
-} from '@/lib/services/ciRunnerBootService';
 
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
@@ -182,81 +176,66 @@ export const ciRunnerBoot = defineJob(
     //
     // ⚠️ IT IS NOT WHAT STOPS A SECOND CONTAINER. That is `admit`'s atomic
     // `pending → provisioning` claim, and — since MOTIR-2007 — the fact that the
-    // boot now sits inside a memoized step, so a replay pass never re-runs it.
+    // boot sits inside a MEMOIZED step, so a replay pass never re-runs it. The
+    // collapse (MOTIR-3485) keeps both: the claim is untouched and inside
+    // `bootIntent`, and `boot-runner` is still a step.
+    //
+    // ⚠️ AND A WORKER RESTART DOES NOT SPEND THIS BUDGET — VERIFIED against the
+    // worker rather than assumed, because with a budget of exactly ONE the
+    // difference between a reclaim and a failure is the difference between
+    // resuming and dead-lettering a CI job that was fine.
+    // `jobQueueRepository.reclaimExpiredLeases` and `releaseClaims` both write
+    // `"attempts" = GREATEST("attempts" - 1, 0)`, so a dead worker and a graceful
+    // drain each REFUND the attempt `claimDueRuns` spent at the claim
+    // (`lib/jobs/engine/worker.ts`: *"a reclaim and a drain both refund the
+    // attempt"*). A genuine handler failure is counted on the failure path, where
+    // there is something to record. `tests/jobs/ci-runner-fleet.test.ts` asserts
+    // it against the real reclaim rather than citing this comment.
     retryPolicy: 'none',
   },
   async (ctx, services) => {
     const { intentId } = ctx.event.data as { intentId: string };
 
-    // ⚠️ THE DURABLE POLL LOOP (MOTIR-2007). Supervising a container takes up to
-    // an hour; ONE INVOCATION of `app/api/inngest/route.ts` gets `maxDuration =
-    // 300` (MOTIR-1974). Doing it synchronously — which is what this handler used
-    // to do — meant every CI job over ~5 minutes had its supervisor killed with
-    // `FUNCTION_INVOCATION_TIMEOUT`: no teardown, no usage row, a dead-lettered
-    // run for a job that had actually passed, and an intent left holding a fleet
-    // slot against the fail-closed ceiling until the reaper aged it out 70
-    // minutes later.
+    // ⚠️ THE DURABLE POLL LOOP IS GONE, AND MOTIR-2007'S FINDING IS NOT REVERSED
+    // — only its remedy (MOTIR-3485). This block used to read: *"Supervising a
+    // container takes up to an hour; ONE INVOCATION of
+    // `app/api/inngest/route.ts` gets `maxDuration = 300` (MOTIR-1974). Doing it
+    // synchronously … meant every CI job over ~5 minutes had its supervisor
+    // killed with `FUNCTION_INVOCATION_TIMEOUT`: no teardown, no usage row, a
+    // dead-lettered run for a job that had actually passed, and an intent left
+    // holding a fleet slot against the fail-closed ceiling until the reaper aged
+    // it out 70 minutes later."*
     //
-    // So the RUN spans the hour and no STEP does. Each step below is a fixed,
-    // small piece of work; the waiting happens in `ctx.step.sleep`, which holds
-    // no invocation at all. This is Inngest's canonical shape for long external
-    // work; `lib/jobs/indexFleetSteps.ts` is the same move for the index fleet
-    // (MOTIR-2027, and MOTIR-2057 for the refresh caller).
+    // Every word of that incident is still true, and the constraint that caused
+    // it has gone: `Dockerfile` ends `CMD ["node", "server.js"]` and motir-core
+    // has run as a long-lived Fly process since MOTIR-2384, so there is no
+    // invocation to be killed. The supervision is an ordinary loop again, and it
+    // lives in `ciRunnerBootService.runIntent` — which already carried it, marked
+    // "not the production path" for exactly this reason.
     //
-    // ⚠️ AND IT RETIRES MOTIR-2002's MEMO. With every phase inside a step,
-    // Inngest's memoization gives once-per-RUN semantics for free: the boot (and
-    // its admission claim) executes on the first pass and replays from the memo
-    // on every later one. The `supervision_key` / `supervision_outcome` columns
-    // that bought that property for the un-stepped body are dropped in this same
-    // change — the shape fix subsumes the patch.
-    const booted = await ctx.step.run('boot-runner', () =>
-      services.ciRunnerBoot.bootIntent(intentId),
-    );
-    // Nothing was provisioned — no container, so nothing to supervise or tear
-    // down. The outcome IS the run's result.
-    if (booted.phase === 'terminal') return booted.outcome;
-
-    const { session } = booted;
-    let state = INITIAL_POLL_STATE;
-    let verdict: Extract<PollResult, { done: true }> | null = null;
-
-    for (let iteration = 1; iteration <= FLEET_TIME_BUDGETS.maxPollIterations; iteration += 1) {
-      // Free waiting: Inngest schedules the resume, so the interval costs a
-      // checkpoint rather than an invocation. `pollWaitMs` is PURE — a function
-      // of the iteration, never of the clock — because a replay pass re-derives
-      // every sleep in the loop and a wall-clock input would make two passes of
-      // the same run disagree about how long to wait.
-      await ctx.step.sleep(`supervise-wait:${iteration}`, pollWaitMs(iteration));
-      // ONE provider read, then return. This is the step the card exists to
-      // bound, and `pollOnce` never throws — a throw here would end the run
-      // WITHOUT teardown, because a step scheduled from a catch is never
-      // executed by the real executor (PRODECT_FINDINGS #39).
-      const polled: PollResult = await ctx.step.run(`supervise-poll:${iteration}`, () =>
-        services.ciRunnerBoot.pollOnce(session, state),
-      );
-      if (polled.done) {
-        verdict = polled;
-        break;
-      }
-      state = polled;
-    }
-
-    // ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP — the stepped form of
-    // the `finally` this handler used to rely on, and the fleet's third teardown
-    // guarantee. The loop can only exit with a `done` verdict or by exhausting
-    // the static iteration ceiling, and both arrive here.
-    return ctx.step.run('settle-runner', () =>
-      services.ciRunnerBoot.settleSupervision(
-        session,
-        verdict ?? {
-          done: true,
-          reason: 'job_timed_out',
-          startedAt: state.startedAt,
-          bootLatencyMs: state.bootLatencyMs,
-          failureDetail: `supervision hit the ${FLEET_TIME_BUDGETS.maxPollIterations}-poll ceiling`,
-        },
-      ),
-    );
+    // ⚠️ WHAT THE STEPS ARE FOR NOW. Not an invocation ceiling: a WORKER RESTART.
+    // `docs/decisions/job-queue-foundation.md` §13 keeps a step around the
+    // operations that PROVISION, CLAIM or TEAR DOWN — `bootIntent` admits, claims
+    // the intent, mints a JIT runner registration and provisions a machine, and
+    // `settleSupervision` destroys it, de-registers the runner, meters it and
+    // settles the intent. The waiting and the polling are ordinary calls, because
+    // forgetting them costs nothing.
+    //
+    // ⚠️ AND IT STILL RETIRES MOTIR-2002's MEMO, for the same reason it always
+    // did: the boot executes on the first pass and replays from `job_step` on
+    // every later one, so `supervision_key` / `supervision_outcome` stay dropped.
+    // That property is a property of the STEP, and the step is still here.
+    return services.ciRunnerBoot.runIntent(intentId, {
+      steps: {
+        run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
+          // ONE cast, at the boundary — the same shape and reason as
+          // `lib/jobs/engine/runner.ts`'s single cast. Inngest types a step's
+          // result as `Jsonify<T>`, and every value crossing this seam
+          // (`SupervisionSession`, `RunIntentOutcome`) is declared
+          // JSON-serializable by contract and says so at its definition.
+          ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
+      },
+    });
   },
 );
 

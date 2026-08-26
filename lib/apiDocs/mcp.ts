@@ -609,6 +609,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "Search recorded lessons by meaning — the shared corpus and this project's own — before you plan or build.",
     descriptionFingerprint: '0266605e57b9',
   },
+  reinforce_lesson: {
+    summary:
+      'Record that a lesson you found describes something that just went wrong — whether or not you also change it.',
+    descriptionFingerprint: '264d63e358fd',
+  },
   expand_item: {
     summary:
       "Submit an AI expansion of one container item. Spends the owner's credits; proposals await approval.",

@@ -125,6 +125,9 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // and what its planner learned is not part of what `public` publishes.
   'lesson:view',
   'lesson:manage',
+  // MOTIR-3553 — beside them, and role-gated for the same reason. It sits with
+  // `lesson:view` rather than below it: reinforcing presupposes reading.
+  'lesson:reinforce',
 ];
 
 /**

@@ -1202,6 +1202,55 @@ export async function searchLessons(input: SearchLessonsRequest): Promise<RawRan
   return body.lessons as RawRankedLesson[];
 }
 
+export interface ReinforceLessonRequest {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  lessonId: string;
+  /** The caller's identity for the EVENT — what makes the call idempotent. */
+  occurrenceRef: string;
+}
+
+/** What the reinforce route answers with. */
+export interface RawReinforcedLesson {
+  id: string;
+  title: string;
+  scope: string;
+  lastOccurredAt: string;
+  recurrenceCount: number;
+  /** Whether THIS call is the one that counted; `false` is a replay, not an error. */
+  counted: boolean;
+}
+
+/**
+ * Record that an occurrence matched a lesson (Bug MOTIR-3547 · MOTIR-3553).
+ *
+ * ⚠️ It reaches GLOBAL rows as well as this project's own — the upstream route
+ * resolves over both scopes deliberately, because the entire curated corpus is
+ * global and MOTIR-3323 established it must be reinforceable. Another tenant's
+ * lesson still raises `not_found`.
+ */
+export async function reinforceLesson(input: ReinforceLessonRequest): Promise<RawReinforcedLesson> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/lessons/${encodeURIComponent(input.lessonId)}/reinforce`, {
+    method: 'POST',
+    headers: { ...authHeaders(serviceToken), 'content-type': 'application/json' },
+    body: JSON.stringify({
+      coreWorkspaceId: input.coreWorkspaceId,
+      coreProjectId: input.coreProjectId,
+      occurrenceRef: input.occurrenceRef,
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawReinforcedLesson>;
+  // A 200 whose shape is wrong is an unavailable upstream, not a silent
+  // success — the same arm the lesson search takes, and for the sharper reason
+  // here: a caller that reads a malformed body as "recorded" stops recording.
+  if (typeof body.id !== 'string' || typeof body.counted !== 'boolean') {
+    throw new MotirAiUnavailableError('reinforce-lesson response missing `id` / `counted`');
+  }
+  return body as RawReinforcedLesson;
+}
+
 export async function getLesson(query: LessonDetailQuery): Promise<RawLesson> {
   const { url, serviceToken } = config();
   const params = new URLSearchParams({

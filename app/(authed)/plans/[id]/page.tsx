@@ -59,29 +59,44 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
   // every plan page-view. A repo-set read failure NEVER breaks the plan page — the
   // plan is the page's subject and the step is an addition to it — so it degrades
   // to "no step" and the permanent door (MOTIR-1764) still leads back.
-  let repoView: ProjectRepoEstablishViewDto | null = null;
-  let projectKey: string | null = null;
   // The project KEY is read for every plan, not only an approved one: the canvas
   // renders the committed roadmap LEVEL a proposal lands in (MOTIR-3083) and that
   // per-level read is keyed by it. The repository-set read stays scoped to an
   // approved plan — it is the establish step's, and a `planned` plan has nothing
   // to establish.
-  try {
-    const project = await projectsService.assertProjectInWorkspace(
-      review.projectId,
-      ctx.workspaceId,
-    );
-    projectKey = project.identifier;
-  } catch (err) {
-    console.error('[plans/[id]] could not resolve the project:', err);
-  }
-  if (review.status === 'approved' && projectKey) {
-    try {
-      repoView = await projectRepoEstablishService.getEstablishView(review.projectId, ctx);
-    } catch (err) {
-      console.error('[plans/[id]] could not read the project repository set:', err);
-    }
-  }
+  //
+  // MOTIR-3445 — the two run in ONE wave. Both take `review.projectId`, which the
+  // gate read above already returned, so neither depends on the other: they were
+  // serial only because they were written in sequence. The `projectKey` in the
+  // old condition guarded the FIRST read's result and was never an input to the
+  // second (which takes `review.projectId` directly), so hoisting the condition
+  // to the plan's own status is behaviour-preserving; the guard moves to where
+  // the value is actually consumed, in the props below.
+  //
+  // ⚠️ THE CONDITIONAL STAYS CONDITIONAL — `getEstablishView` is issued only for
+  // an approved plan, exactly as before. What changed is that when it IS issued
+  // it overlaps the project resolution instead of following it.
+  //
+  // Each read keeps its OWN catch: either may fail without taking the page down,
+  // and a bare `Promise.all` would let one rejection discard the other's result.
+  const [projectKey, repoView]: [string | null, ProjectRepoEstablishViewDto | null] =
+    await Promise.all([
+      projectsService
+        .assertProjectInWorkspace(review.projectId, ctx.workspaceId)
+        .then((project) => project.identifier)
+        .catch((err: unknown) => {
+          console.error('[plans/[id]] could not resolve the project:', err);
+          return null;
+        }),
+      review.status === 'approved'
+        ? projectRepoEstablishService
+            .getEstablishView(review.projectId, ctx)
+            .catch((err: unknown) => {
+              console.error('[plans/[id]] could not read the project repository set:', err);
+              return null;
+            })
+        : Promise.resolve(null),
+    ]);
 
   return (
     <div className="flex flex-col gap-4">

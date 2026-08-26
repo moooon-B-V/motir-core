@@ -483,6 +483,10 @@
     "lesson_manage": {
       "label": "Change the lesson library",
       "description": "Retire a lesson or add one — both change the standing instructions the planner is given."
+    },
+    "lesson_reinforce": {
+      "label": "Record a lesson recurrence",
+      "description": "Note that a lesson's mistake happened again. It changes nothing the lesson says."
     }
   },
   "localeToggle": {

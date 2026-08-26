@@ -622,6 +622,195 @@ describe('putSignedArtifact — a retryable refusal is retried (MOTIR-3313)', ()
   });
 });
 
+// MOTIR-3565 — the store's `x-amz-request-id`, on EVERY attempt.
+//
+// MOTIR-3313 has no established cause and every remaining route to one runs
+// through the store, which cannot look anything up without ids. The two ids the
+// incident holds came out of the error XML body, so they name exactly one thing:
+// the write that FAILED. What a store-side lookup needs is the CONTRAST — the
+// refusal set against its accepted neighbours, which is the whole shape of the
+// incident (a 45.9 MB refusal between a 2.1 MB and an 89.3 MB success). A
+// 190-PUT probe against Tigris established that EVERY response carries the
+// header, successes included; the uploader was reading nothing off the response
+// at all.
+//
+// ⚠️ THESE TESTS ASSERT NO CAUSE, exactly as the block above does not. An id in
+// a log claims nothing about rate limits, key prefixes or shards — it only makes
+// the next occurrence answerable. The retry policy is untouched, and the block
+// below pins that.
+describe('putSignedArtifact — the store’s request id is logged on every attempt (MOTIR-3565)', () => {
+  function target() {
+    return {
+      token: signedPutUrl('acceptance/w/s/uuid-trace.zip'),
+      contentType: 'application/zip',
+      pathname: 'acceptance/w/s/uuid-trace.zip',
+    };
+  }
+
+  function traceFile(): string {
+    const file = path.join(tmpDir(), 't.zip');
+    fs.writeFileSync(file, 'trace-bytes');
+    return file;
+  }
+
+  /** A response whose `headers.get` answers like a real `fetch` Headers does. */
+  function withRequestId(id: string | null, rest: Record<string, unknown>) {
+    return {
+      headers: { get: (name: string) => (name === 'x-amz-request-id' ? id : null) },
+      ...rest,
+    };
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('an ACCEPTED PUT logs its id — the neighbour half the incident is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => withRequestId('1787275315546191428', { ok: true, status: 200 })),
+    );
+    // Held by reference rather than asserted through `console.log` by name —
+    // naming it is what trips the no-console lint rule (same as the blocks below).
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await expect(putSignedArtifact('video', traceFile(), target())).resolves.toBeUndefined();
+
+    const out = logSpy.mock.calls.flat().join('\n');
+    expect(out).toContain('1787275315546191428');
+    // Which artifact it belongs to, so two ids in one job are tellable apart.
+    expect(out).toContain('Acceptance video upload accepted');
+  });
+
+  it('a REFUSED PUT carries its id into the retry line AND the thrown message', async () => {
+    // Two DIFFERENT ids, because the point is one id PER ATTEMPT: a store that
+    // refuses twice issues two writes, and collapsing them to one loses the
+    // second. The retry announcement carries the first; the throw carries the
+    // last, which is the one a lookup starts from.
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        calls += 1;
+        return withRequestId(`req-attempt-${calls}`, {
+          ok: false,
+          status: 503,
+          text: async () => '<Code>SlowDown</Code>',
+        });
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(
+      putSignedArtifact('trace', traceFile(), target(), {
+        attempts: 2,
+        baseDelayMs: 1,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow(/request id req-attempt-2/);
+
+    expect(warnSpy.mock.calls.flat().join('\n')).toContain('req-attempt-1');
+  });
+
+  it('an ABSENT header does not throw — a placeholder is logged, and the publish completes', async () => {
+    // ⚠️ THE POINT: a store is free to stop sending the header, and the publish
+    // is not free to die when it does. Both terminal outcomes are exercised,
+    // because a reader that only ever ran on the accepted path would still take
+    // the whole lane down on the refused one.
+    for (const res of [
+      withRequestId(null, { ok: true, status: 200 }),
+      // No `headers` key AT ALL — the shape most of this suite's stubs use, and
+      // the one a naive `res.headers.get(…)` dies on.
+      { ok: true, status: 200, text: async () => '' },
+    ]) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => res),
+      );
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await expect(putSignedArtifact('video', traceFile(), target())).resolves.toBeUndefined();
+
+      const out = logSpy.mock.calls.flat().join('\n');
+      expect(out).toContain('(no x-amz-request-id)');
+      // The failure this guards is a placeholder that reads as an uploader bug.
+      expect(out).not.toContain('undefined');
+      logSpy.mockRestore();
+    }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 500, text: async () => 'nope' })),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(
+      putSignedArtifact('trace', traceFile(), target(), {
+        attempts: 2,
+        baseDelayMs: 1,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow(/\(no x-amz-request-id\)/);
+    expect(warnSpy.mock.calls.flat().join('\n')).toContain('(no x-amz-request-id)');
+  });
+
+  it('NO part of the presigned grant reaches the log — not the signature, not the URL', async () => {
+    // ⚠️ `target.token` is a live presigned signature and `moooon-B-V/motir-core`
+    // is a public repository with public job logs. A grep over the source proves
+    // no `console.*` NAMES the token; this proves none of it is EMITTED, which
+    // survives a future line that reaches the URL by another route.
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        calls += 1;
+        return calls === 1
+          ? withRequestId('req-refused', {
+              ok: false,
+              status: 503,
+              text: async () => '<Code>SlowDown</Code>',
+            })
+          : withRequestId('req-accepted', { ok: true, status: 200 });
+      }),
+    );
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const t = target();
+    await putSignedArtifact('trace', traceFile(), t, { baseDelayMs: 1, sleep: async () => {} });
+
+    const emitted = [...logSpy.mock.calls, ...warnSpy.mock.calls].flat().join('\n');
+    // Both attempts were logged — so the assertions below are about a log that
+    // actually ran, not a silent one.
+    expect(emitted).toContain('req-refused');
+    expect(emitted).toContain('req-accepted');
+    expect(emitted).not.toContain(t.token);
+    expect(emitted).not.toContain('X-Amz-Signature');
+    expect(emitted).not.toContain('s3.example');
+  });
+
+  // ⚠️ MOTIR-3313 SETTLED THE RETRY POLICY, and this card changes none of it —
+  // it adds observability to the existing control flow. Read off the FILE rather
+  // than off a moving branch, so a later edit to the constants fails here.
+  it('leaves the retry policy exactly as MOTIR-3313 left it', () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), 'scripts/upload-acceptance-video.mjs'),
+      'utf8',
+    );
+    expect(src).toContain(
+      'const RETRYABLE_PUT_STATUSES = new Set([408, 429, 500, 502, 503, 504]);',
+    );
+    expect(src).toContain('const PUT_ATTEMPTS = 4;');
+    expect(src).toContain('const PUT_BASE_DELAY_MS = 500;');
+    // The line MOTIR-3313 declared untouchable — it counts RECORDINGS, and it is
+    // what told the truth during the incident. ⚠️ It is CONCATENATED in the
+    // source (`… owned acceptance ` + `recording(s) …`), so a grep for the whole
+    // phrase matches zero times against a file that plainly contains it — assert
+    // the fragment that is really there. What it READS at runtime is pinned by
+    // the `Published N of M` assertions in the exit-verdict block below.
+    expect(src).toContain('owned acceptance ');
+    // And the id is read off the RESPONSE, not parsed back out of the error XML.
+    expect(src).toContain("res.headers.get('x-amz-request-id')");
+  });
+});
+
 // MOTIR-3409 — when the retry is EXHAUSTED, which artifact was it?
 //
 // The block above pins that a transient refusal is retried. This one pins what

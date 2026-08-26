@@ -44,7 +44,13 @@ import { permissionColumnsForTokens, type PermissionMeta } from './permissionMet
 //   * SHOWN-ONCE — after the create POST returns the plaintext secret (7.8.1
 //     returns it exactly once), the modal flips to a read-only monospace secret
 //     field + Copy + the peach one-time warning. "Done" closes; the secret is
-//     wiped on close and never shown again.
+//     wiped on close and never shown again. This phase is the ONLY moment the
+//     secret is legible anywhere, so the field is sized and wrapped to show all
+//     53 of its characters at every viewport (MOTIR-3545): the panel keeps the
+//     form phase's 42rem rather than narrowing back to `md`, and the field
+//     BREAKS at any character. The two halves are not interchangeable — width
+//     answers the desktop reader, `break-all` answers the `w-[90vw]` floor a
+//     narrow viewport imposes. See the comments at each.
 // On a successful create the new row (carrying its granted scopes) is handed
 // back via `onCreated` so the island inserts it OPTIMISTICALLY (the
 // page-state-after-mutation contract).
@@ -329,11 +335,17 @@ export function CreateTokenModal({
       title={shown ? t('created.title') : t('createModal.title')}
       description={shown ? t('created.description') : t('createModal.description')}
       size="md"
-      // The form phase WIDENS to ~42rem so all six permission scopes show at
-      // once — width, not scroll (Yue, 2026-06-16). The shown-once phase keeps
-      // the 7.7.2 `md` width. tailwind-merge lets this className override the
-      // size variant's `max-w`.
-      className={shown ? undefined : 'max-w-[42rem]'}
+      // BOTH phases are ~42rem. The form phase widened first, so all six
+      // permission scopes show at once — width, not scroll (Yue, 2026-06-16).
+      // The shown-once phase kept the 7.7.2 `md` width until MOTIR-3545, where
+      // 28rem was measured too narrow for the secret it exists to show: a PAT
+      // is ALWAYS 53 chars (`motir_pat_` + 43 base64url), which needs ~360px of
+      // monospace against the ~245px `md` leaves once the Copy button and the
+      // panel padding are taken out. At 42rem the field gets ~471px and the
+      // secret lands on one line — and the two phases no longer resize under
+      // the reader between Create and the reveal. tailwind-merge lets this
+      // className override the size variant's `max-w`.
+      className="max-w-[42rem]"
     >
       {shown ? (
         <div className="flex flex-col gap-4">
@@ -342,9 +354,22 @@ export function CreateTokenModal({
               {t('created.secretLabel')}
             </span>
             <div className="flex items-stretch gap-2">
+              {/* `break-all` is what actually guarantees the whole secret is
+                  READABLE, and the width above is not a substitute for it
+                  (MOTIR-3545). The panel is `w-[90vw]` UNDER a `max-w`, so a
+                  narrow viewport gets a field far below the ~360px 53 chars
+                  need whatever the cap says. Without a break rule the string
+                  has no break opportunity except a `-`, which base64url
+                  supplies in about half of all secrets — and a `-` is the
+                  WORST case, not the mild one: the line breaks after it, the
+                  over-long run before it is clipped, and the result reads as a
+                  neatly wrapped, complete token with characters missing.
+                  `overflow-x-auto` used to sit here and never helped: an
+                  overlay scrollbar is invisible at rest, so it turned a visible
+                  cut into a silent one. */}
               <code
                 data-testid="api-token-secret"
-                className="min-w-0 flex-1 overflow-x-auto rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) py-(--spacing-input-y) font-mono text-xs leading-relaxed text-(--el-text)"
+                className="min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) py-(--spacing-input-y) font-mono text-xs leading-relaxed break-all text-(--el-text)"
               >
                 {secret}
               </code>
