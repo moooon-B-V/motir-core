@@ -49,6 +49,12 @@ let loading: Promise<void> | null = null;
  * the engine first, so by the time it asks about Inngest the load has happened.
  */
 export async function ensureJobManifestLoaded(): Promise<void> {
+  // ⚠️ SHORT-CIRCUIT ON AN ALREADY-POPULATED MANIFEST. The worker, the serve
+  // route and nineteen test files import `lib/jobs/registry.ts` for their own
+  // reasons and have already paid for this; the `import()` would resolve from
+  // the module cache anyway, and returning first makes that a branch rather than
+  // a microtask.
+  if (manifestJobs().length > 0) return;
   loading ??= import('@/lib/jobs/registry').then(() => undefined);
   await loading;
 }

@@ -5,7 +5,7 @@ import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 import { manifestSubscribers } from './manifest';
 import { ensureJobManifestLoaded } from './subscribers';
 import { resolveIdempotencyKey } from './idempotency';
-import { routedToEngine } from './cutover';
+import { routedToEngine, routedJobIds } from './cutover';
 import { notifyQueuedJob } from './notify';
 
 // FAN-OUT (Story MOTIR-3414 · Subtask MOTIR-3423) — one emitted event becomes
@@ -96,11 +96,45 @@ export async function dispatchEventToEngine(
   opts?: { idempotencyKey?: string | null; logger?: Pick<Console, 'warn'> },
 ): Promise<DispatchResult> {
   const log = opts?.logger ?? console;
-  // ⚠️ FIRST, ALWAYS. The manifest is populated by evaluating the definition
-  // modules, and nothing on a request path does that on its own — without this
-  // the subscriber set reads empty and the cutover switch cannot move anything
-  // (MOTIR-3458; ADR §11). It is memoised, so this is one dynamic import per
-  // process and a resolved promise thereafter.
+
+  // ⚠️ NOTHING ROUTED ⇒ NOTHING TO RESOLVE, and therefore nothing to LOAD.
+  //
+  // The subscriber set exists only to be filtered by `routedToEngine`, so when
+  // the routing set is empty the answer is "enqueue nothing" whatever the
+  // manifest says. Returning here is not an optimisation of a correct path — it
+  // IS the correct path, one step earlier.
+  //
+  // It matters because loading the manifest is expensive and lands somewhere
+  // costly. Emitting is POST-COMMIT on a request path and `createWorkItem`
+  // AWAITS it, so the load would sit inside a user's mutation: the first
+  // dispatch in a fresh process measured **6224 ms** (the second, 0 ms), and
+  // `tests/integration/work-items/revisions.test.ts` went red on a one-second
+  // freshness window it had always met. The bill is the SERVICE BAG the
+  // definitions reach through `defineJob` — `lib/jobs/services.ts` alone is
+  // 8808 ms, against 3 ms for the manifest module and 158 ms for the registry
+  // once services are warm.
+  //
+  // So before any job is cut over — which is the state of every deployment today
+  // and of every test that does not set the routing set — the emit path pays
+  // NOTHING. The load happens on the first emit AFTER an operator routes a job,
+  // which is the one moment it is actually needed.
+  //
+  // ⚠️ AND IT MUST STAY BEFORE THE LOAD, not after. Warming eagerly instead was
+  // tried twice and is unsafe here: calling it during module evaluation, and
+  // then from a `setTimeout(0)`, both re-entered a module graph that was still
+  // initializing — vite-node resolves imports through promises, so a macrotask
+  // interleaves with graph evaluation — and eleven job suites failed to load
+  // with `ReferenceError: Cannot access '__vite_ssr_import_3__' before
+  // initialization`. The same temporal-dead-zone shape ADR §11 measured at build
+  // time, one level down.
+  if (routedJobIds().size === 0) {
+    return { eventId: null, enqueued: [], alreadyEnqueued: [], failed: [] };
+  }
+
+  // The manifest is populated by evaluating the definition modules, and nothing
+  // on a request path does that on its own — without this the subscriber set
+  // reads empty and the cutover switch cannot move anything (MOTIR-3458).
+  // Memoised: one dynamic import per process, a resolved promise thereafter.
   await ensureJobManifestLoaded();
   const subscribers = manifestSubscribers(name).filter((d) => routedToEngine(d.id));
   if (subscribers.length === 0) {

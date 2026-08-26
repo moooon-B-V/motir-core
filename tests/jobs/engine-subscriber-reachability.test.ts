@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 
 // THE EMIT PATH RESOLVES THE REAL SUBSCRIBER SET (Story MOTIR-3415 · MOTIR-3458).
 //
@@ -63,8 +64,24 @@ async function fanOutVisibleToTheEmitPath(eventName: string): Promise<string[]> 
     .sort();
 }
 
+// ⚠️ SOMETHING MUST BE ROUTED FOR THE EMIT PATH TO RESOLVE SUBSCRIBERS AT ALL.
+// `dispatchEventToEngine` returns before loading the manifest when the routing
+// set is empty — correctly, because with nothing routed the answer is "enqueue
+// nothing" whatever the manifest holds, and the load is expensive enough that
+// paying it on every emit of an un-cut-over deployment was a real regression.
+// So this guard routes a job first, which is also the state it is describing:
+// the question it asks is whether an operator who HAS cut a job over gets the
+// real subscriber set.
+const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
+
 beforeEach(() => {
   vi.resetModules();
+  process.env[JOB_ENGINE_JOBS_ENV] = 'status-derivation/transitioned';
+});
+
+afterEach(() => {
+  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
+  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 describe('the job manifest is complete on the emit path', () => {

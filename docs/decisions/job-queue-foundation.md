@@ -462,6 +462,51 @@ works:
    bundler splits the definitions into their own chunk instead of inlining them into every route
    that emits. No job handler is involved at all.
 
+**⚠️ AND THE LOAD IS SKIPPED ENTIRELY UNTIL A JOB IS ACTUALLY ROUTED — a correction this record
+owes, because the table above priced the BUILD and the bill actually arrives on a REQUEST.**
+
+Emitting is post-commit on a request path and `workItemsService.createWorkItem` AWAITS it, so
+whatever the deferred load costs lands inside a user's mutation. Measured after MOTIR-3458 first
+shipped, in a fresh process:
+
+|                                               |             |
+| --------------------------------------------- | ----------- |
+| first `dispatchEventToEngine`                 | **6224 ms** |
+| second                                        | **0 ms**    |
+| `lib/jobs/engine/manifest.ts` alone           | 3 ms        |
+| `lib/jobs/registry.ts`, services already warm | 158 ms      |
+| **`lib/jobs/services.ts` alone**              | **8808 ms** |
+
+**The bill is the SERVICE BAG, exactly as this section predicted — and option (b) as first built still
+paid it**, because the manifest was populated by loading the whole registry and the definitions reach
+the bag through `defineJob`. Being handler-free bought the build, not the request. CI said so before
+anyone read it: `tests/integration/work-items/revisions.test.ts` went red on a one-second freshness
+window it had always met (`expected 1437 to be less than 1000`), and the failure reproduces locally
+with the fix removed (`expected 4000 to be less than 1000`).
+
+**The remedy is not to make the load cheap or early, but to notice it is not needed.** The subscriber
+set exists only to be filtered by `routedToEngine`, so when `MOTIR_POSTGRES_JOB_IDS` is empty the
+answer is _enqueue nothing_ whatever the manifest holds. `dispatchEventToEngine` therefore returns
+before loading anything when the routing set is empty — which is not an optimisation of a correct
+path, it IS the correct path one step earlier. **Before any job is cut over — the state of every
+deployment today, and of every test that does not set the routing set — the emit path pays nothing.**
+The load happens on the first emit AFTER an operator routes a job, which is the one moment it is
+needed at all, and it is memoised from then on. `ensureJobManifestLoaded` also returns immediately
+when the manifest is already populated, which covers the worker, the serve route and the nineteen
+test files that import the registry themselves.
+
+**Two things a future reader should NOT re-derive, both tried and both rejected on evidence.**
+
+- **Warming the load eagerly.** Starting it during `subscribers.ts`'s own module evaluation, and then
+  from a `setTimeout(0)`, each re-entered a module graph that was still initializing — vite-node
+  resolves imports through promises, so even a macrotask interleaves with graph evaluation — and
+  eleven job suites failed to load with `ReferenceError: Cannot access '__vite_ssr_import_3__' before
+initialization`. The same temporal-dead-zone shape as the build failure above, one level down.
+- **Making `defineJob` stop importing the bag.** Also breaks the cycle, and breaks `@inngest/test`:
+  four `system.daily-health-check` tests return `undefined`, with the import both at the top of the
+  handler and after the first `step.run`. The bag reaches the definitions through the one choke point
+  every job passes through, and that is where it belongs.
+
 **One ordering consequence, and it is load-bearing.** `hasInngestSubscribers` is synchronous and
 cannot await the loader, so it is correct only because `sendEvent` dispatches to the engine FIRST
 and asks about Inngest second. That ordering is asserted by the reachability guard rather than left
