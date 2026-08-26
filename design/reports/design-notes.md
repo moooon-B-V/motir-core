@@ -568,6 +568,26 @@ Measured against `origin/main` `9455fc3c`.
 | **settles**                | **twice, deliberately.** The picker is usable while the series is still resolving, which is the whole point: a reader who landed on the wrong sprint can switch before the wrong chart has finished arriving                                                   |
 | **verdict**                | **NONE — the chart's own pending state serves.** `BurndownReport` already renders `ReportStateMessage` for its empty and not-started cases and owns the region; the boundary goes around the chart and its fallback is that component's own, not a new drawing |
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3447. NO BOUNDARY IS ADDED, AND THE CARD CONTRADICTS ITSELF ON THIS.
+>
+> The entry's verdict — **NONE, the chart's own pending state serves** — stands. What does not is the
+> sentence that the page _"gains from this story the boundary that lets the chrome and the picker
+> paint ahead of the series."_ MOTIR-3447 asks for exactly that in an acceptance criterion, and
+> forbids it in its own boundary clause:
+>
+> - **AC** — _"Each chart page's chrome — heading, sprint picker, period controls — renders BEFORE
+>   its series resolves."_
+> - **Boundary** — _"does not change any chart component or its internal loading state."_
+>
+> **The sprint picker is a `Combobox` INSIDE `BurndownReport`** — the chart component. Painting it
+> before the series therefore requires splitting that component, which the boundary forbids; and
+> wrapping the whole component instead takes the picker behind the fallback with it, buying nothing
+> the criterion asked for. The boundary clause won, and `/reports/burndown` ships **no diff**.
+>
+> The measurement stands on its own: nothing here is parallelisable either. `getSprintCycleGraph`
+> takes `selected.id`, and the selection comes from the sprint list that also decides the no-sprints
+> empty state — genuinely serial, not incidentally so.
+
 **This answers the card's question directly:** the chart's state serves, and a frame wrapped around
 it would be a second pending vocabulary over a region that already has one. What the page gains from
 this story is the boundary that lets the chrome and the picker paint ahead of the series — not a
