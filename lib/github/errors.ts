@@ -88,3 +88,26 @@ export class GithubPullRequestNotFoundError extends Error {
     this.name = 'GithubPullRequestNotFoundError';
   }
 }
+
+/**
+ * The named REPOSITORY does not exist in the caller's workspace (Story
+ * MOTIR-3525 · MOTIR-3526): an unknown `owner/name` OR a cross-workspace probe —
+ * collapsed to ONE error so existence never leaks, exactly as
+ * {@link GithubPullRequestNotFoundError} does for a pull request.
+ *
+ * Raised by the coordinate-addressed link path, which resolves the repository
+ * from the REPO ROW's own `workspace_id` (MOTIR-1931) rather than through its
+ * installation — under Motir's shared provisioning installation the
+ * installation names no workspace at all, so the older join would have made
+ * this permanently not-found for every repository Motir created.
+ */
+export class GithubRepoNotFoundError extends Error {
+  readonly code = 'GITHUB_REPO_NOT_FOUND' as const;
+  constructor(coordinate: string) {
+    super(
+      `GitHub repository not connected in this workspace: ${coordinate}. ` +
+        'Name it as "owner/name" exactly as the repository is connected.',
+    );
+    this.name = 'GithubRepoNotFoundError';
+  }
+}

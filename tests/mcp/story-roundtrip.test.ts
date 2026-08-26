@@ -319,6 +319,17 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           contentType: 'text/markdown',
           contentBase64: 'eA==',
         },
+        // MOTIR-3526. Aimed at tenant A's item like its neighbours: the ITEM key
+        // must read as not-found BEFORE the repository is looked at, so a
+        // non-member learns neither that the card exists nor which repositories
+        // A has connected — and no row is written into A's tenant.
+        link_pull_request: {
+          key: item1,
+          repository: 'acme/web',
+          number: 7,
+          headRef: 'subtask/rogue',
+          baseRef: 'main',
+        },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },
@@ -736,6 +747,17 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           filename: 'findings.md',
           contentType: 'text/markdown',
           contentBase64: 'eA==',
+        },
+        // MOTIR-3526 — the caller's OWN item. A write-scoped tool, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate; the
+        // default-token loop asserts only that the GATE passes it, which it
+        // does before the (unconnected) repository is ever resolved.
+        link_pull_request: {
+          key: item1,
+          repository: 'acme/web',
+          number: 7,
+          headRef: 'subtask/scoped',
+          baseRef: 'main',
         },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },

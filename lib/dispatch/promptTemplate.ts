@@ -723,11 +723,28 @@ function siblingDir(repo: string, index: number): string {
  * block per repository, in set order, primary first.
  *
  * Every block is complete on its own: enter the repository, branch, work,
- * commit, push, open a pull request whose TITLE carries the key. The key in the
- * title is the load-bearing part and the one an agent would most plausibly drop
- * — the completion gate counts merges against the item's LINKED pull requests,
- * so a pull request without it is invisible to the gate and the card is held
- * forever by work that has actually shipped.
+ * commit, push, open a pull request — and then LINK it.
+ *
+ * ⚠️ CORRECTED (Story MOTIR-3525 · MOTIR-3529). This docstring used to end
+ * *"open a pull request whose TITLE carries the key. The key in the title is the
+ * load-bearing part and the one an agent would most plausibly drop — the
+ * completion gate counts merges against the item's LINKED pull requests, so a
+ * pull request without it is invisible to the gate and the card is held forever
+ * by work that has actually shipped."*
+ *
+ * That account of the STAKES was right and is kept: the completion gate does
+ * count merges against the item's LINKED pull requests, a pull request the gate
+ * cannot see does hold a card open on work that shipped, and it is exactly the
+ * thing an agent would most plausibly drop. What was wrong was the MECHANISM. A
+ * title is a string somebody typed, and hoping `resolveChangeRequestWorkItem`
+ * parses it back out fails in both directions — a dropped key is invisible, and
+ * a merely MENTIONED key closes a card the pull request never delivered.
+ *
+ * `link_pull_request` (MOTIR-3526) is the mechanism now: the agent DECLARES the
+ * link at the one moment it knows the answer with certainty. The key stays in
+ * the branch and the title as a LABEL, for a human reading a list. Do not
+ * restore the title rule from the paragraph above — its reasoning is preserved
+ * here precisely so the next reader does not re-derive it.
  */
 function multiRepoPrBlocks(
   src: DispatchPromptSource,
@@ -749,8 +766,15 @@ function multiRepoPrBlocks(
       `  3. cd ${wt}, install dependencies, and do THIS repository's half of the work here.`,
       '  4. Stage with explicit `git add <path>` — never `-A`.',
       `  5. Commit with a Conventional Commits subject that carries ${src.key}.`,
-      `  6. Push the branch and open a pull request against ${repo.defaultBranch ?? 'main'} whose`,
-      `     TITLE carries ${src.key}.`,
+      `  6. Push the branch and open a pull request against ${repo.defaultBranch ?? 'main'}.`,
+      `     Put ${src.key} in the TITLE as well, as a label for a human reading a`,
+      '     list — it is not what links the pull request.',
+      `  7. LINK it: call the link_pull_request tool with key ${src.key}, the`,
+      '     pull-request URL the previous step printed (or repository + number),',
+      `     headRef ${branch} and baseRef ${repo.defaultBranch ?? 'main'}.`,
+      '     ONCE PER REPOSITORY — each repository has its own pull request, so',
+      '     each needs its own call; the item completes only when they have all',
+      '     merged.',
     );
   });
   return lines;
@@ -847,11 +871,17 @@ function perItemPrWorkflow(src: DispatchPromptSource): string[] {
     '3. Stage with explicit `git add <path>` — never `-A`, so concurrent work in',
     '   other worktrees, or unrelated local edits, cannot ride along in your commit.',
     `4. Commit with a Conventional Commits subject that carries ${src.key}.`,
-    `5. Push the branch and open a pull request against main whose TITLE carries`,
-    `   ${src.key} (that reference is what LINKS the pull request to this work`,
-    '   item: it moves the item to Done when a human merges, and it is how the CI',
-    '   verdict on your commits finds the card).',
-    '6. STOP at the open pull request. Do not merge it and do not delete the branch.',
+    '5. Push the branch and open a pull request against main. Put',
+    `   ${src.key} in the TITLE as well — a human scanning a pull-request list`,
+    '   reads it there — but the title is a LABEL, not what links the pull',
+    '   request. Step 6 is what links it.',
+    `6. LINK it: call the link_pull_request tool with key ${src.key} and the`,
+    '   pull-request URL the previous step printed (or repository + number),',
+    `   plus headRef ${branch} and baseRef main. Do this IMMEDIATELY, while the`,
+    '   pull request is still in front of you: the stored link is what carries',
+    '   the merge back to this item, it works before any webhook delivery has',
+    '   arrived, and it holds even if the title never names the card.',
+    '7. STOP at the open pull request. Do not merge it and do not delete the branch.',
   ];
 }
 
@@ -970,7 +1000,10 @@ function outcomeProtocol(src: DispatchPromptSource): string[] {
     '    1. commit',
     '    2. push the branch',
     '    3. open the pull request',
-    `    4. move ${src.key} to Implemented with the transition_status tool`,
+    `    4. link it with the link_pull_request tool (key ${src.key}, and the`,
+    '       pull request you just opened) — once per repository if this item',
+    '       ships in more than one',
+    `    5. move ${src.key} to Implemented with the transition_status tool`,
     `       (key ${src.key}, status implemented)`,
     '',
     '  Implemented means THE CODE IS ON THE REMOTE — not "I finished typing".',

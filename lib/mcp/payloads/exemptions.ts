@@ -75,6 +75,16 @@ export const EXEMPT_TOOLS = {
     '`nothing-matched` and `unavailable` are opposite answers that both carry an empty ' +
     '`lessons`, so a caller reading the payload structurally must be able to tell them apart ' +
     '(MOTIR-3480).',
+  link_pull_request:
+    'Returns the DECLARED LINK — `{ key, created, movedFrom, pullRequest: { repo, number, url, ' +
+    'title, state, ci, linkedManually } }`. The row is a `LinkedPullRequestDto`, the shape the ' +
+    'item detail page’s Development section renders, and no `/api/v1` operation returns a ' +
+    'change request at all — the linking table is reached only through the webhook, the ' +
+    'detail-page picker and now this tool. `created` and `movedFrom` have no v1 counterpart ' +
+    'either, and both are load-bearing rather than decorative: `created` says the row existed ' +
+    'only because this call wrote it (no delivery had arrived), and `movedFrom` names the item ' +
+    'the SINGULAR FK was taken off, so a caller cannot read a move as an addition ' +
+    '(MOTIR-3526).',
   delete_sprint:
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +
