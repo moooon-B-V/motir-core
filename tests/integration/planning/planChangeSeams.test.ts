@@ -611,9 +611,6 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     // hold when the proposal arrives from a conversation, not only from the
     // plan-detail surface — and it must be all-or-nothing.
     const shipped = await seedItem({ kind: 'story', title: 'Shipped' });
-    for (const status of ['in_progress', 'in_review', 'done'] as const) {
-      await workItemsService.updateStatus(shipped.id, status, svcCtx());
-    }
 
     await openSessionRoute();
     await appendTurnRoute(
@@ -626,6 +623,12 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
       { op: 'modify', workItemId: shipped.id, patch: { title: 'Rewritten' } },
       { op: 'add', proposedFields: { title: 'Should not land', kind: 'story' } },
     ]);
+    // The target SHIPS while the plan waits — the drift the approve gate exists
+    // for, and since MOTIR-3573 the only way a terminal target reaches approve
+    // at all: a plan whose target is already terminal is refused at the CLOSE.
+    for (const status of ['in_progress', 'in_review', 'done'] as const) {
+      await workItemsService.updateStatus(shipped.id, status, svcCtx());
+    }
 
     const res = await approvePlan(planId);
     expect(res.status).toBe(409);

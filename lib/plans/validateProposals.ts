@@ -116,16 +116,35 @@ export function collectReferencedWorkItemIds(items: readonly ProposalNode[]): st
   return [...ids];
 }
 
+/** Where a ref was written, for the rejection message. */
+type RefSite = 'parentRef' | 'blockedByRefs' | 'patch.blockedByAdd' | 'patch.blockedByRemove';
+
 /**
- * Assert every ref resolves — to a same-plan `add` (temp-ref) or to a live work
- * item (real id) — and that no proposal lists the same blocker twice.
+ * Every (site, refs) pair one proposal carries, so the two passes below walk the
+ * SAME set of refs and cannot drift apart. A `modify`'s patch sides are read
+ * only for a `modify`, exactly as before.
  */
-function assertRefsResolve(
+function refSitesOf(item: ProposalNode): Array<[RefSite, readonly string[]]> {
+  const sites: Array<[RefSite, readonly string[]]> = [];
+  if (item.parentRef !== null) sites.push(['parentRef', [item.parentRef]]);
+  sites.push(['blockedByRefs', item.blockedByRefs]);
+  if (item.op === 'modify') {
+    sites.push(['patch.blockedByAdd', item.patch?.blockedByAdd ?? []]);
+    sites.push(['patch.blockedByRemove', item.patch?.blockedByRemove ?? []]);
+  }
+  return sites;
+}
+
+/**
+ * The PURE half of the ref check (MOTIR-3573): a ref list may not repeat a ref,
+ * and a proposal may not name ITSELF. Both are facts about the proposal set
+ * alone — no workspace read can change either answer — which is why they run at
+ * the APPEND rather than waiting for approve.
+ */
+function assertRefsSelfConsistent(
   item: ProposalNode,
   refs: readonly string[],
-  liveById: ValidatePlanProposalsInput['liveById'],
-  addIds: ReadonlySet<string>,
-  where: 'parentRef' | 'blockedByRefs' | 'patch.blockedByAdd' | 'patch.blockedByRemove',
+  where: RefSite,
 ): void {
   const seen = new Set<string>();
   for (const ref of refs) {
@@ -138,15 +157,32 @@ function assertRefsResolve(
     }
     seen.add(ref);
 
+    if (isTempRef(ref) && tempRefId(ref) === item.id) {
+      throw new PlanRefGraphError(
+        'cycle',
+        item.id,
+        `Proposal ${item.id} references ITSELF in ${where}.`,
+      );
+    }
+  }
+}
+
+/**
+ * The half that needs LIVE STATE: every ref resolves — to a same-plan `add`
+ * (temp-ref) or to a work item that exists in this workspace (real id). The
+ * real-id arm is what costs a batched read, which is why this pass cannot run at
+ * the append and runs at the CLOSE instead (`plansService.markPlanned`).
+ */
+function assertRefsResolvable(
+  item: ProposalNode,
+  refs: readonly string[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+  addIds: ReadonlySet<string>,
+  where: RefSite,
+): void {
+  for (const ref of refs) {
     if (isTempRef(ref)) {
       const targetId = tempRefId(ref);
-      if (targetId === item.id) {
-        throw new PlanRefGraphError(
-          'cycle',
-          item.id,
-          `Proposal ${item.id} references ITSELF in ${where}.`,
-        );
-      }
       if (!addIds.has(targetId)) {
         throw new PlanRefGraphError(
           'dangling',
@@ -165,9 +201,36 @@ function assertRefsResolve(
 }
 
 /**
+ * THE PURE GATE (MOTIR-3573) — everything about a proposal set that is knowable
+ * WITHOUT a workspace read: no ref is listed twice, no proposal references
+ * itself, and the intra-plan `parentRef` graph admits a parent-before-child
+ * order. Takes no `liveById` BY DESIGN: a real work-item id is not this
+ * function's business, and a plan may legitimately reference an item created
+ * between the append and the close.
+ *
+ * `plansService.addProposals` calls it under the plan lock before the first
+ * insert, and `validatePlanProposals` calls it as its own first step — one
+ * implementation, so the append and the approve can never disagree about what a
+ * self-consistent plan is.
+ */
+export function assertProposalSetSelfConsistent(items: readonly ProposalNode[]): void {
+  for (const item of items) {
+    for (const [where, refs] of refSitesOf(item)) {
+      assertRefsSelfConsistent(item, refs, where);
+    }
+  }
+  assertParentRefsAcyclic(items.filter((i) => i.op === 'add'));
+}
+
+/**
  * Assert the intra-plan `parentRef` graph is ACYCLIC — i.e. a parent-before-child
  * creation order exists (`materialize`'s topological walk). A cycle is caught
  * HERE, before any write, rather than by that walk mid-transaction.
+ *
+ * PURE, and it runs BEFORE resolution (MOTIR-3573), so an unresolvable temp-ref
+ * is simply not walked — `byId.get` misses and the guarded `if (parent)` skips
+ * it. The dangling ref is then reported by `assertRefsResolvable`, which is the
+ * more specific reason for it.
  */
 function assertParentRefsAcyclic(adds: readonly ProposalNode[]): void {
   const byId = new Map(adds.map((a) => [a.id, a]));
@@ -185,7 +248,7 @@ function assertParentRefsAcyclic(adds: readonly ProposalNode[]): void {
     }
     visiting.add(item.id);
     if (item.parentRef && isTempRef(item.parentRef)) {
-      // Resolution is guaranteed by `assertRefsResolve`, which runs first.
+      // A ref that resolves to nothing is left to `assertRefsResolvable`.
       const parent = byId.get(tempRefId(item.parentRef));
       if (parent) visit(parent);
     }
@@ -210,12 +273,12 @@ function effectiveParentKind(
   if (!ref) return null;
 
   if (isTempRef(ref)) {
-    // Resolution is guaranteed by `assertRefsResolve`.
+    // Resolution is guaranteed by `assertRefsResolvable`.
     const parent = addsById.get(tempRefId(ref))!;
     return issueKindOf(parent);
   }
 
-  // Resolution is guaranteed by `assertRefsResolve`.
+  // Resolution is guaranteed by `assertRefsResolvable`.
   const live = liveById.get(ref)!;
   if (!isIssueType(live.kind)) {
     // Unreachable through the schema (`work_item.kind` is an enum of exactly the
@@ -237,9 +300,14 @@ function effectiveParentKind(
  * writes nothing, ever (it is pure). An empty / all-declined plan is a valid
  * no-op and passes.
  *
- * Order matters: refs resolve → the ref graph is acyclic → the grammar holds →
- * done work is immutable. Each step's guarantees are what the next one relies
- * on, so a malformed plan always fails with the MOST specific reason.
+ * Order matters: the plan is self-consistent → its refs resolve → the grammar
+ * holds → done work is immutable. Each step's guarantees are what the next one
+ * relies on, so a malformed plan always fails with the MOST specific reason.
+ *
+ * ⚠️ STEP 1 IS THE SAME FUNCTION `addProposals` RUNS AT THE APPEND (MOTIR-3573).
+ * It is called here rather than re-implemented so the two stages cannot disagree
+ * about what a self-consistent plan is; everything below it needs `liveById` and
+ * therefore cannot move earlier than the CLOSE.
  */
 export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   const { items, liveById, terminalStatusKeys } = input;
@@ -248,32 +316,17 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   const addsById = new Map(adds.map((a) => [a.id, a]));
   const addIds = new Set(addsById.keys());
 
-  // 1. Every ref resolves, and no blocker is listed twice.
+  // 1. PURE — no blocker listed twice, no self-reference, no `parentRef` cycle.
+  //    Already enforced at the append; re-run here because the approve path
+  //    trusts nothing (a proposal set can be edited between the two).
+  assertProposalSetSelfConsistent(items);
+
+  // 2. Every ref resolves — the arm that needs the batched workspace read.
   for (const item of items) {
-    if (item.parentRef !== null) {
-      assertRefsResolve(item, [item.parentRef], liveById, addIds, 'parentRef');
-    }
-    assertRefsResolve(item, item.blockedByRefs, liveById, addIds, 'blockedByRefs');
-    if (item.op === 'modify') {
-      assertRefsResolve(
-        item,
-        item.patch?.blockedByAdd ?? [],
-        liveById,
-        addIds,
-        'patch.blockedByAdd',
-      );
-      assertRefsResolve(
-        item,
-        item.patch?.blockedByRemove ?? [],
-        liveById,
-        addIds,
-        'patch.blockedByRemove',
-      );
+    for (const [where, refs] of refSitesOf(item)) {
+      assertRefsResolvable(item, refs, liveById, addIds, where);
     }
   }
-
-  // 2. The intra-plan parent graph admits a parent-before-child order.
-  assertParentRefsAcyclic(adds);
 
   // 3. The kind-parent grammar — asked of `lib/issues/parentRules.ts`, the same
   //    matrix every human create/move is gated on. Independent of whatever the

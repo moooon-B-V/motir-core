@@ -308,7 +308,7 @@ describe('add_plan_items — CLOSING a titles-first plan (MOTIR-3193)', () => {
       planId,
       proposals: [
         { op: 'add', proposedFields: { title: 'Invoices', kind: 'story' } },
-        { op: 'add', proposedFields: { title: 'Invoice PDF', kind: 'subtask' } },
+        { op: 'add', proposedFields: { title: 'Invoice PDF', kind: 'task' } },
       ],
     });
     const [, pdfId] = ids(skeleton);
@@ -631,7 +631,7 @@ async function openWithSkeleton(
   const planId = await openPlan(client, fx);
   const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
     planId,
-    proposals: [{ op: 'add', proposedFields: { title, kind: 'subtask' } }],
+    proposals: [{ op: 'add', proposedFields: { title, kind: 'task' } }],
   });
   return { planId, itemId: ids(appended)[0]! };
 }
@@ -680,7 +680,7 @@ describe('update_plan_item — deepening a proposal before the plan closes', () 
     const proposal = read.items.find((i) => i.id === itemId)!;
     expect(proposal.proposedFields).toMatchObject({
       title: 'Invoice PDF',
-      kind: 'subtask',
+      kind: 'task',
       descriptionMd: '## What to do\n\nRender the PDF.',
       explanationMd: 'Customers ask for one every week.',
       type: 'code',

@@ -154,8 +154,8 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
       const res = await callback(fx, {
         jobId,
         proposals: [
-          { op: 'add', proposedFields: { title: 'Subtask: Login form', kind: 'subtask' } },
-          { op: 'add', proposedFields: { title: 'Subtask: Session cookie', kind: 'subtask' } },
+          { op: 'add', proposedFields: { title: 'Subtask: Login form', kind: 'task' } },
+          { op: 'add', proposedFields: { title: 'Subtask: Session cookie', kind: 'task' } },
         ],
       });
       expect(res.status).toBe(200);

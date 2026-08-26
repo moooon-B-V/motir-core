@@ -38,6 +38,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import {
+  assertProposalSetSelfConsistent,
   collectReferencedWorkItemIds,
   validatePlanProposals,
   type LiveWorkItemState,
@@ -414,6 +415,30 @@ function topoOrderAdds(adds: PlanItem[]): PlanItem[] {
 //     that actually gates the write.
 // Both calls run the same pure function, so there is no second code path and no
 // way to reach `materialize` around it.
+
+/**
+ * The synthetic id an INCOMING proposal wears inside the append-time gate
+ * (MOTIR-3573). A proposal has no id until `planItemRepository.create` writes
+ * one (`PlanItem.id` is `@default(cuid())` and `ProposalInput` carries no id
+ * field), so a rejection can only identify it by its POSITION in the batch —
+ * which is what the caller sent and can therefore act on.
+ */
+const INCOMING_PROPOSAL_ID_PREFIX = 'incoming#';
+
+/** Project an unsaved `ProposalInput` onto the gate's shape, by batch position.
+ *  Mirrors the `PlanItemUncheckedCreateInput` built below field for field, so
+ *  the gate judges exactly what the insert would write. */
+function toIncomingProposalNode(p: ProposalInput, index: number): ProposalNode {
+  return {
+    id: `${INCOMING_PROPOSAL_ID_PREFIX}${index}`,
+    op: p.op,
+    workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
+    parentRef: p.parentRef ?? null,
+    blockedByRefs: p.blockedByRefs ?? [],
+    proposedFields: (p.proposedFields ?? null) as ProposalNode['proposedFields'],
+    patch: (p.patch ?? null) as ProposalNode['patch'],
+  };
+}
 
 /** Project a Prisma `PlanItem` row onto the gate's minimal proposal shape. */
 function toProposalNode(item: PlanItem): ProposalNode {
@@ -1817,19 +1842,41 @@ export const plansService = {
           if (!fresh) throw new PlanNotFoundError(planId);
           if (fresh.status !== 'generating') throw new PlanNotGeneratingError(planId, fresh.status);
 
-          // The targets this plan ALREADY claims, read under the row lock the
-          // append holds — so a second call cannot observe a stale set. Grown
-          // in-loop as well, because a duplicate inside ONE batch never reaches
-          // the database to be caught by anything.
+          // The plan's already-appended proposals, read under the row lock the
+          // append holds — so a second call cannot observe a stale set.
           //
-          // Skipped entirely when the batch targets nothing existing, which is
-          // the common shape: a skeleton layer is all `add`s, and MOTIR-3193's
-          // CLOSE sends no proposals at all. Neither can collide with anything,
-          // so neither pays for the read.
-          const targetsExisting = proposals.some((p) => p.op !== 'add' && p.workItemId);
-          const claimed = targetsExisting
-            ? claimedTargets(await planItemRepository.findByPlan(planId, tx))
-            : new Map<string, PlanTargetOp>();
+          // ⚠️ READ UNCONDITIONALLY (MOTIR-3573). It used to be skipped when the
+          // batch targeted nothing existing, which was right while the only
+          // reader was the duplicate-target check below. The self-consistency
+          // gate that follows judges the plan's WHOLE ref graph — a duplicate
+          // edge or a `parentRef` cycle can be closed by the proposal being
+          // added — and a batch-only view cannot see that, so the read is now
+          // owed on every append.
+          const existingItems = await planItemRepository.findByPlan(planId, tx);
+
+          // THE PURE REF-GRAPH GATE, AT THE APPEND (MOTIR-3573). Everything
+          // knowable about a proposal set WITHOUT a workspace read runs here,
+          // before the first insert, so the author is told while the plan is
+          // still theirs to fix. The same function runs again inside
+          // `approvePlan`'s gate, which is what stops the two from disagreeing.
+          //
+          // What deliberately does NOT run here is the arm that needs
+          // `liveById`: a real work-item id that resolves to nothing is left to
+          // `markPlanned` (the close), because the read is not free and a plan
+          // may legitimately reference an item created between the two.
+          //
+          // A rejection escapes as itself — `containPrismaFailure` re-throws
+          // anything that is not a Prisma error — so the caller is told its
+          // proposals ARE at fault, which `PlanPersistenceError` would deny.
+          assertProposalSetSelfConsistent([
+            ...existingItems.map(toProposalNode),
+            ...proposals.map(toIncomingProposalNode),
+          ]);
+
+          // The targets this plan ALREADY claims. Grown in-loop as well, because
+          // a duplicate inside ONE batch never reaches the database to be caught
+          // by anything.
+          const claimed = claimedTargets(existingItems);
 
           for (const p of proposals) {
             if (p.op !== 'add' && p.workItemId) {
@@ -1921,6 +1968,44 @@ export const plansService = {
         ? opts.productName.trim()
         : null;
 
+    // The project's TERMINAL statuses, for the close-time gate below. Resolved
+    // OUT HERE because `getTerminalStatusKeys` opens its OWN workspace context
+    // and Prisma cannot nest interactive transactions — the same reason
+    // `approvePlan` resolves it before its transaction opens. Workflow statuses
+    // are project CONFIG, not a row a concurrent write moves.
+    const terminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+      plan.projectId,
+      ctx.workspaceId,
+    );
+
+    // ⚠️ THE CONFIRMATION GATE, AT THE CLOSE (MOTIR-3573) — run BEFORE the
+    // transaction opens, with NO `tx`, which is exactly `approvePlan`'s
+    // pre-transaction pass (`:2124`).
+    //
+    // `planned` is the status that puts a plan in front of a person and hands
+    // them a button, so it must not be reachable by a plan that cannot survive
+    // being approved. Everything approve would reject for is KNOWABLE now — a
+    // dangling ref and the kind-parent grammar cost one batched
+    // workspace-scoped read — and this is the last moment the plan is still
+    // editable, so a rejection is repairable rather than terminal.
+    //
+    // ⚠️ IT MUST NOT BE BOUND TO THE CLOSE'S OWN TRANSACTION, and that is a
+    // correctness constraint rather than a convenience. `withWorkspaceContext`
+    // binds `app.project_id`, and `work_item`'s project-narrowing policy reads
+    // it — so a gate bound to that transaction cannot see a work item in
+    // ANOTHER PROJECT of the same workspace, and a cross-project `blocked_by`
+    // is legal (`link_work_items`: "targets may be in another project in the
+    // same workspace") and is a first-class case for
+    // `planValidityService.validateProjectedPlan`. Bound to the transaction,
+    // the close would refuse plans that approve's own pre-transaction pass
+    // accepts — a close STRICTER than the approve it is predicting, which is
+    // the opposite of the promise this card is making. Unbound, the gate opens
+    // its own workspace-scoped context and the two verdicts agree exactly.
+    const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
+    await runPersistGate(preItems, ctx, terminalStatusKeys);
+
     const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
@@ -1931,6 +2016,18 @@ export const plansService = {
         if (fresh.status !== 'generating') {
           throw new PlanNotInExpectedStatusError(planId, fresh.status, 'generating');
         }
+
+        // The PURE half again, under the plan lock, over the set as it stands
+        // NOW. It needs no read, so unlike the gate above it can run bound to
+        // this transaction — which closes the window between the
+        // pre-transaction verdict and the lock for everything a proposal set
+        // can say about itself. The arms that need a workspace read stay
+        // outside, and `approvePlan` re-runs all of them under the row locks
+        // anyway, which is the check no close-time pass can replace: whether
+        // the world moved WHILE the plan waited.
+        const proposals = await planItemRepository.findByPlan(planId, tx);
+        assertProposalSetSelfConsistent(proposals.map(toProposalNode));
+
         const updated = await planRepository.update(
           planId,
           {

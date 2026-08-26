@@ -1644,7 +1644,7 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
     const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
     const withItems = await plansService.addProposals(
       plan.id,
-      [{ op: 'add', proposedFields: { title: 'Resize me', kind: 'subtask', storyPoints: 2 } }],
+      [{ op: 'add', proposedFields: { title: 'Resize me', kind: 'task', storyPoints: 2 } }],
       fx.ctx,
     );
     const itemId = withItems.items[0]!.id;
@@ -1698,7 +1698,7 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
     const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
     const withItems = await plansService.addProposals(
       plan.id,
-      [{ op: 'add', proposedFields: { title: 'OK', kind: 'subtask', storyPoints: 3 } }],
+      [{ op: 'add', proposedFields: { title: 'OK', kind: 'task', storyPoints: 3 } }],
       fx.ctx,
     );
     const itemId = withItems.items[0]!.id;
