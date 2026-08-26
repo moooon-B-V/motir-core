@@ -36,6 +36,17 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
  * a migration. `withdrawn` is that seventh verb, added by MOTIR-3540 exactly as
  * this comment anticipated — a proposal taken OFF a plan.
  *
+ * ⚠️ `revision_started` / `revision_ended` are the eighth and ninth, and they are
+ * not describing a change to a PROPOSAL at all — they BRACKET a revision, and the
+ * pair IS the lease `agent-authored-plans.md` AMENDMENT 9 D2 decides on. A plan
+ * holds a revision lease when the latest `revision_started` has no
+ * `revision_ended` after it and the most recent row at or after it is inside
+ * `PLAN_REVISION_LEASE_MS`; `approvePlan` / `declinePlan` refuse while it is
+ * held. Putting the lease here rather than in a table keeps it and its
+ * VISIBILITY the same record — a reviewer learns a revision is running by
+ * reading the timeline they were already reading — and costs no migration,
+ * which is the property this comment already promised.
+ *
  * ⚠️ A STRUCTURAL CORRECTION stays `edited` rather than gaining a verb of its
  * own: it changes a proposal that is still on the plan, which is what `edited`
  * already means, and its `diff` carries `correction: true` plus the fields it
@@ -52,7 +63,9 @@ export type PlanRevisionChangeKind =
   | 'withdrawn'
   | 'planned'
   | 'approved'
-  | 'declined';
+  | 'declined'
+  | 'revision_started'
+  | 'revision_ended';
 
 /**
  * WHICH AGENT performed a change, when one did — the
