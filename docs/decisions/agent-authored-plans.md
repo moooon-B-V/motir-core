@@ -1872,3 +1872,223 @@ one blocks implement the acquire, the refusal and the release.
   that scan now fails safe. Every PlanItem survives every ending, unchanged since MOTIR-3160, and
   a nullable `decisionReason` column (`reviewed` / `discarded` / `abandoned`) records which of the
   three histories a `declined` row holds. No `PlanStatus` member, no backfill, no delete.
+
+---
+
+## AMENDMENT 9 — `planned` is a PROMISE, and a plan that stops keeping it says so (MOTIR-3574, 2026-08-26)
+
+**Read against `origin/main` `5bb1928b`.** Every code claim below was checked there.
+
+### The defect this answers
+
+`planned` is not an internal bookkeeping state. It is the one status in a plan's life that means _a
+person should look at this now_, and it is the status that renders a button. Reaching it did not mean
+the plan could be approved.
+
+Measured: a plan carrying an unresolvable `parentRef` was accepted by `addProposals`, reported
+**VALID** by `validate_plan`, closed to `planned` by `markPlanned`, sat in the review queue — and
+failed at the approve button with `INVALID_PLAN_REF_GRAPH / dangling`, at which point the plan is
+immutable and the only repair is to author a whole new plan and decline this one. Three gates stood
+between authoring the bad ref and a human meeting it; none of them looked (MOTIR-3560).
+
+### D1 — THE INVARIANT
+
+> **A plan is `planned` only while it is approvable.**
+
+Anything the approve path can reject a plan for is either **knowable when the plan closes**, or **is
+not the plan's fault**. The two need opposite treatment, and before this both were the same hard throw
+at the button.
+
+`validatePlanProposals` (`lib/plans/validateProposals.ts`) raises exactly four rejections, and they
+split on one question — _could this have been known at the close?_
+
+| class | rejection                        | knowable at close?                   | where it now runs     |
+| ----- | -------------------------------- | ------------------------------------ | --------------------- |
+| **A** | `PlanRefGraphError('cycle')`     | yes, PURELY                          | the APPEND            |
+| **A** | `PlanRefGraphError('duplicate')` | yes, PURELY                          | the APPEND            |
+| **A** | `PlanRefGraphError('dangling')`  | yes, one batched read                | the CLOSE             |
+| **A** | `PlanGrammarError`               | yes, the same read                   | the CLOSE             |
+| **B** | `PlanTargetImmutableError`       | **no** — the target moved AFTERWARDS | approve, and a STATUS |
+
+Class A is discharged by MOTIR-3573: the pure half runs at `addProposals`, the batched half at
+`markPlanned`, and a rejection there leaves the plan `generating` — repairable, because the author
+still owns it. **This amendment is about Class B**, which no close-time gate can foresee.
+
+### D2 — Class B gets a STATUS, not a column
+
+AMENDMENT 6 faced the neighbouring question and answered it the other way: `Plan.decisionReason` is a
+private column _"rather than a fourth `PlanStatus` member"_, because `PlanStatus` is a public
+vocabulary and the reason was not worth its blast radius. **That precedent is right and does not reach
+this case.** The distinction is mechanical:
+
+- **`decisionReason` records why a plan ENDED.** All three values are histories of one terminal state.
+  The plan is over; nothing branches on it. A column describes.
+- **This one GATES BEHAVIOUR ON A LIVE PLAN.** It must make approve refuse, take the plan out of the
+  review queue, and open a repair path `planned` does not have. Every one of those is a status query.
+  A status decides what may happen next.
+
+Put it in a column and `planned` still would not mean approvable — which is the defect, unfixed,
+wearing a new field.
+
+### D3 — ⚠️ THE NAME: `stale`, UNIFIED with the engine that already owns the word
+
+MOTIR-3560 proposed `stale` and argued it against `outdated` and `superseded`. It never argued it
+against the codebase, where **`stale` has named something else on this exact entity since MOTIR-1340**.
+`lib/services/planStalenessService.ts` computes a per-`PlanItem` drift verdict, rolls it up as
+`PlanStalenessDto.stale`, and renders it as `staleCount` on every plan row and in the review rail. Its
+header states two contracts a blocking `PlanStatus.stale` walks straight into:
+
+> _"PURE READ. Staleness NEVER blocks approve; it WARNS, and the user decides (approve anyway /
+> decline / regenerate)."_
+
+> _"⚠️ ONLY A `planned` PLAN CAN BE STALE (MOTIR-3165). Staleness answers one question — would
+> approving this now still be correct? — and `approvePlan` / `declinePlan` each refuse unless the plan
+> is `planned`, so on a decided plan that question cannot be asked again."_
+
+**The second is a live bug, not a wording quibble.** Ship `PlanStatus.stale` and change nothing else,
+and a plan entering it stops producing per-proposal reasons — `computePlanStaleness` short-circuits at
+`plan.status !== 'planned'` — so the reviewer loses the one thing they need at the exact moment they
+need it: _which proposal went stale_. That is MOTIR-3560's own complaint arriving through MOTIR-3560's
+own fix.
+
+**DECISION: UNIFY (disposition a).** The new member is **`stale`**, and the engine is extended rather
+than left behind.
+
+**Why unify rather than pick a second word.** Read the engine's `RULES` and the family is already
+exactly this one: `parent_removed`, `blocker_removed`, and `base_revision_drift` with
+`change: 'archived'` all mean _the world moved under this proposal_. The Class B condition — a
+`modify`/`remove` target reached a terminal status — is **a missing reason code in that engine**, not a
+new concept beside it. One entity carrying two unrelated meanings of one word is the thing to avoid;
+one word at two SEVERITIES is a distinction the domain already has.
+
+**Why not (b) SEPARATE.** A second name buys nothing the severity axis does not, and costs a reader
+having to learn that a plan can be `stale`-the-status and `stale`-the-count independently. It also
+leaves the guard bug unfixed by default, because nothing forces the engine to be revisited.
+
+**Why not (c) RENAME the incumbent.** Priced rather than skipped: `PlanStalenessDto.stale`,
+`PlanItemStalenessDto.stale`, `StaleReasonCode`, `staleCount` on `PlanRowView`, the rail's rendering,
+`AutoPlanPauseDto.stale`, `planRowView.staleCountFor`, `autoPlanCadenceService`'s own guard, and the
+en/zh strings — a rename spanning a shipped DTO, a rendered count and a documented reason list, to free
+a word we then hand to a concept the same engine should be modelling anyway. It loses on cost and on
+concept.
+
+**⚠️ WHAT HAPPENS TO THE `planned`-ONLY GUARD — the clause MOTIR-3578 is closed against.**
+`computePlanStaleness`'s short-circuit **WIDENS to `planned | stale`**. MOTIR-3165's reasoning is
+preserved exactly, not overturned: it excluded _decided_ plans, because on a decided plan the question
+_would approving this now still be correct?_ no longer has meaning. A `stale` plan is **not decided** —
+it is live, it is awaiting action, and it is the plan for which that question matters most. The guard's
+predicate was a proxy for _is this plan still awaiting a decision?_, and adding a fifth status is what
+makes the proxy and the intent come apart.
+
+And the engine gains one **FATAL** reason code — `target_terminal`, carrying the target and the status
+it reached — so `StaleReason` acquires a severity axis: every existing code is `advisory`, the new one
+is `fatal`, and **`Plan.status === 'stale'` ⟺ some proposal carries a fatal reason.** The count on the
+row keeps counting all of them; the rail distinguishes them.
+
+### D4 — The transitions: THREE, not four
+
+MOTIR-3560 proposed four. One of them is **not implementable today**, and discovering that is the
+second thing this decision records.
+
+| from → to          | trigger                                                       | notes                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `planned → stale`  | a `modify`/`remove` target enters a terminal status           | eager, on `work-item/transitioned`; the approve path is the backstop                                                                                                                               |
+| `stale → planned`  | the drift REVERSES — every fatal target is non-terminal again | `done → in_progress` is a legal work-item transition, so a plan's premise can come back. Cheap, and wrong to omit: without it a plan is punished for a target that was briefly closed              |
+| `stale → declined` | the reviewer gives up                                         | `declinePlan`'s guard widens from `planned \| generating` to `planned \| generating \| stale`; the recorded `decisionReason` is **`reviewed`**, because the plan DID reach a reviewer and was read |
+
+**`stale` is reachable only from `planned`.** A `generating` plan is in front of nobody and has nothing
+to be stale about.
+
+**⚠️ `stale → generating` IS NOT IN THE TABLE, and the reason is a capability that does not exist.**
+MOTIR-3560 described it as _"the author repairs it — drop or re-target the offending proposal, then
+re-close"_. Neither move is possible: `editAddProposal` states _"Only an `add` is editable"_, a
+`modify`'s `workItemId` is in no patch shape, `addProposals` only appends, and there is no withdraw.
+Measured while building MOTIR-3573 — a plan refused at the close for a bad REF is unrepairable for the
+same reason and can only be declined.
+
+So a `stale` plan's exits are: **wait for the drift to reverse, or decline.** That is a real
+limitation, and it is strictly better than what it replaces — a plan that is `planned`, unapprovable,
+uneditable, and _still in the queue asking a reviewer to press a button that cannot work_.
+
+**⚠️ SUPERSEDED IN PART — that capability SHIPPED, between this decision being written and
+MOTIR-3578 running (2026-08-26).** AMENDMENT 8 (MOTIR-3540) landed `correctProposal` — which carries
+`parentRef`, `blockedByRefs`, `targetRepo` and a `modify`'s `patch` — and `withdrawProposal`, backed
+by a real `planItemRepository.deleteById`. So _"neither move is possible"_ above is no longer true,
+and the paragraph is kept as the record of why the table was written with three edges rather than as
+a live constraint.
+
+**What actually remains is smaller and is a DECISION, not a missing capability.** Both new methods go
+through `assertPlanProposalsEditable`, which admits `generating | planned` and refuses everything
+else — so a `stale` plan is not editable today, and the fourth edge needs that guard widened to
+`generating | planned | stale`, not a new door built. **MOTIR-3579 must re-decide D4 rather than
+inherit it**, and weigh the widening against the frozen-proposal-set assumption named below, which is
+the reason the guard is narrow in the first place.
+
+**Restoring the fourth edge needs a way to WITHDRAW or RE-TARGET a proposal, which is its own card**
+(cited in D6). It is deliberately not smuggled in here: it changes what a `planned` plan's proposal set
+means, which is the frozen-set assumption `approvePlan`'s pre-transaction repo-pin resolution rests on
+(see its own comment: _"THAT SECOND CLAUSE IS LOAD-BEARING"_).
+
+**`addProposals` / `update_plan_item` are unaffected** — both assert `generating`, no transition
+reaches `generating` from `stale`, so neither changes.
+
+### D5 — Who moves it: EAGER, with approve as the backstop
+
+**Eager is the one that satisfies the invariant.** If a plan only goes `stale` when somebody presses
+Approve, then `planned` was still lying right up until the click and the queue was still full of plans
+nobody can act on — the same defect, discovered one step later.
+
+The mover is a consumer of **`work-item/transitioned`**, emitted post-commit for every ingress, which
+is why `statusDerivation.ts` rides it rather than each caller knowing. It must be **best-effort** (a
+failure may not fail the transition that woke it), keyed on the **transition** into a terminal status
+rather than on the state, and **idempotent under a lock**.
+
+**Lazy stays as the backstop**, because the listener can lose a race: `approvePlan`'s in-transaction
+gate keeps its verdict, and on `PlanTargetImmutableError` it transitions the plan to `stale` instead of
+throwing and leaving it `planned`. One button press then never leaves the plan worse than it found it.
+
+**⚠️ One correction to MOTIR-3560's mechanism.** It states _"`PlanItem.workItemId` is already the
+reverse index."_ It is not: `PlanItem` carries `@@unique([planId, workItemId])`, `@@index([planId])`
+and `@@index([workspaceId])`, and the composite's leftmost column is `planId`, so it cannot serve a
+lookup by `workItemId` alone — which is exactly the query this listener makes on every work-item
+transition in the product. **The index is owed, with its migration.**
+
+### D6 — The cost, enumerated by file
+
+A `PlanStatus` member is a public vocabulary. Each of these owes a value:
+
+| surface                                                          | file                                                                                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| the Prisma enum + a migration                                    | `prisma/schema.prisma` (`enum PlanStatus`)                                                                                  |
+| the wire vocabulary (the type DERIVES from the array — one edit) | `lib/dto/plans.ts` — `PLAN_STATUS_DTO_VALUES`                                                                               |
+| the v1 public schema                                             | `lib/api/v1/workLoop/schema.ts` — `planStatusSchema`                                                                        |
+| the MCP tool descriptions                                        | `lib/mcp/tools/getPlan.ts`; `lib/mcp/tools/expandItem.ts` (`runGetPlanStatus`)                                              |
+| the list row's timestamp + verb                                  | `app/(authed)/plans/planRowView.ts` — `whenFor` (⚠️ its `default:` arm absorbs an unknown status silently)                  |
+| the list row's icon + tone                                       | `app/(authed)/plans/_components/PlanRow.tsx` (⚠️ `Record` maps — no exhaustiveness check)                                   |
+| the tab strip                                                    | `app/(authed)/plans/_components/PlanStatusTabs.tsx` (iterates the array, so it grows a tab; its label + empty state do not) |
+| the URL parser                                                   | `lib/planning/planStatusFilter.ts`                                                                                          |
+| the review rail                                                  | `components/planning/PlanReviewRail.tsx` — tone map, `decided`, the outcome line                                            |
+| the plan detail                                                  | `components/planning/PlanDetail.tsx` — `decided`                                                                            |
+| the catalogs + parity gate                                       | `messages/en.json`, `messages/zh.json`, `tests/i18n-catalog.test.ts`                                                        |
+| the staleness engine                                             | `lib/services/planStalenessService.ts` — the widened guard + the fatal reason                                               |
+
+**⚠️ `decided` MUST STAY FALSE for `stale`**, in both components. The plan is live and awaiting action,
+not ended. `PlanDetail`'s own comment records that a declined plan once fell into the empty state and
+SHADOWED the rail's outcome line, so this has a known failure shape.
+
+**⚠️ The compiler will not find most of these.** `PlanStatus` is a closed enum, which sounds like it
+guarantees exhaustiveness — but two icon/tone maps are `Record`s, `whenFor` has a `default:` arm, and
+two components compute _is this decided?_ by naming two statuses. Every one of them compiles unchanged
+with a fifth value in the world and renders something wrong.
+
+### Follow-ups this decision creates
+
+- **The withdraw/re-target capability** that would restore `stale → generating` — its own card, not
+  folded into the vocabulary or transition work (D4).
+- **The `PlanItem.workItemId` index** and its migration, owed by the transitions card (D5).
+
+### What this does NOT change
+
+`approvePlan` keeps BOTH its `runPersistGate` calls. They answer whether the world moved while the plan
+waited, and no check taken at the close can foresee that. The whole point of D4 is that Class B is real
+and permanent; the status makes it _legible_, not preventable.

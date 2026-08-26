@@ -306,6 +306,14 @@ export function PlanDetail({
   // It is kept because a decided plan's outcome must reach the rail regardless of
   // item count: a plan decided with genuinely zero proposals still has an outcome
   // to state, and the discovery hand-off is the wrong thing to say about it.
+  //
+  // ⚠️ `stale` IS NOT DECIDED (MOTIR-3578, AMENDMENT 9 D6). The guard's job is to
+  // keep the discovery hand-off off a plan whose outcome the rail is stating,
+  // and a `stale` plan has no outcome yet — it is live, awaiting action, and its
+  // proposals are exactly what the reviewer needs to read. Widening this to
+  // *not planned* would put the empty state over a populated plan and shadow the
+  // rail's stale line, which is the failure shape the paragraph above records
+  // happening once already for `declined`.
   const decided = review.status === 'approved' || review.status === 'declined';
   // The plan's decision, drawn on every node the plan contributes (MOTIR-3161).
   // WHICH BODY the pane shows. THE URL IS THE SINGLE SOURCE OF TRUTH (MOTIR-3239),

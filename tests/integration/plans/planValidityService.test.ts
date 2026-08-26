@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planValidityService } from '@/lib/services/planValidityService';
@@ -8,6 +9,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import type { ProposalInput } from '@/lib/dto/plans';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
@@ -413,7 +415,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const forest = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(forest).toEqual({ planId, valid: true, blockers: [] });
+    expect(forest).toEqual({ planId, valid: true, blockers: [], rejections: [] });
 
     // Proof of the defect the forest rule fixes: iterating the SINGLE-subtree
     // rule per root false-positives the cross-root edge — validating epic B's
@@ -518,7 +520,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [] });
+    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [] });
   });
 
   it('an EMPTY plan (no items, no live tree) is vacuously valid', async () => {
@@ -527,7 +529,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [] });
+    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [] });
   });
 
   // NOTE: a SAME-project blocker can never make the forest invalid — every
@@ -560,7 +562,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [] });
+    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [] });
   });
 
   it('an unknown planId throws PlanNotFoundError', async () => {
@@ -861,7 +863,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     // `PlanValidityDto` is deliberately unchanged: the forest has no single
     // subject to attribute a body-vs-edges gap to. Per-card coverage is the
     // `validateProjectedWorkItem` call, asserted above.
-    expect(forest).toEqual({ planId, valid: true, blockers: [] });
+    expect(forest).toEqual({ planId, valid: true, blockers: [], rejections: [] });
   });
 });
 
@@ -954,7 +956,15 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
 
     await markDone(gatedItem.id);
     const skipped = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(skipped).toEqual({ planId, valid: true, blockers: [] });
+    // THE SUBJECT: the done member drops out of the walk, so the cross-project
+    // blocker that gated it stops gating. Asserted on `blockers` rather than on
+    // the whole verdict, because finishing the target ALSO makes the plan
+    // unapprovable — a `modify` of terminal work — which is a true statement
+    // about a different question (MOTIR-3575), and the one the next assertion
+    // pins so it cannot drift into a silent pass.
+    expect(skipped.blockers).toEqual([]);
+    expect(skipped.rejections.map((r) => r.code)).toEqual(['PLAN_TARGET_IMMUTABLE']);
+    expect(skipped.valid).toBe(false);
   });
 
   it('a subtree whose EVERY member is done scans no BODIES either — the advisory pass returns early', async () => {
@@ -1516,5 +1526,183 @@ describe('planValidityService.validateProjectedWorkItem — THE DESIGN GATE, pro
     );
     expect(res.valid).toBe(true);
     expect(res.advisories).toEqual([]);
+  });
+});
+
+describe('validateProjectedPlan — the APPROVABILITY half (MOTIR-3575)', () => {
+  // The defect: `validate_plan` answered VALID for the plan that then failed at
+  // the approve button, and that yes is what made a plan carrying a dangling ref
+  // safe to close (MOTIR-3560). Finishability was correctly answered; nobody was
+  // asking the other question.
+
+  /** Close a plan whose proposals are already appended, past the close gate.
+   *  MOTIR-3573 refuses an unapprovable plan at `markPlanned`, which is the
+   *  point — so a plan that is unapprovable AND `planned` can only be produced
+   *  the way one arises in production: an edit after the close. */
+  async function brokenPlannedPlan(
+    fx: WorkItemFixture,
+    proposals: Parameters<typeof plansService.addProposals>[1],
+    breakIt: (planItemIds: string[]) => Promise<void>,
+  ): Promise<string> {
+    const planId = await freshPlan(fx);
+    await plansService.addProposals(planId, proposals, fx.ctx);
+    await plansService.markPlanned(planId, fx.ctx);
+    const rows = await adminDb.planItem.findMany({
+      where: { planId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    await breakIt(rows.map((r) => r.id));
+    return planId;
+  }
+
+  it('⚠️ IS INVALID for a plan the approve button would refuse, even with a clean dependency closure', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await brokenPlannedPlan(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Hangs off nothing', kind: 'task' } }],
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { parentRef: 'wi_does_not_exist' },
+        });
+      },
+    );
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+
+    // THE assertion this card exists for: it used to be `valid: true`.
+    expect(res.valid).toBe(false);
+    expect(res.blockers).toEqual([]); // the dependency closure really is clean
+    expect(res.rejections).toHaveLength(1);
+    expect(res.rejections[0]!.code).toBe('INVALID_PLAN_REF_GRAPH');
+    expect(res.rejections[0]!.reason).toBe('dangling');
+    expect(res.rejections[0]!.message).toContain('names no work item');
+  });
+
+  it('reports a GRAMMAR violation and a TERMINAL `modify` target, each with its own code', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const grammar = await brokenPlannedPlan(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Orphan', kind: 'task' } }],
+      async ([addId]) => {
+        const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: addId! } });
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: {
+            proposedFields: {
+              ...(row.proposedFields as object),
+              kind: 'subtask',
+            } as Prisma.InputJsonValue,
+          },
+        });
+      },
+    );
+    const grammarRes = await planValidityService.validateProjectedPlan(grammar, fx.ctx);
+    expect(grammarRes.valid).toBe(false);
+    expect(grammarRes.rejections[0]!.code).toBe('PLAN_GRAMMAR_VIOLATION');
+    expect(grammarRes.rejections[0]!.reason).toBe('illegal_parent');
+
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Shipped' },
+      fx.ctx,
+    );
+    const immutable = await brokenPlannedPlan(
+      fx,
+      [{ op: 'modify', workItemId: target.id, patch: { title: 'Rewritten' } }],
+      async () => {
+        // The target ships while the plan waits — the drift approve exists for.
+        for (const status of ['in_progress', 'in_review', 'done'] as const) {
+          await workItemsService.updateStatus(target.id, status, fx.ctx);
+        }
+      },
+    );
+    const immutableRes = await planValidityService.validateProjectedPlan(immutable, fx.ctx);
+    expect(immutableRes.valid).toBe(false);
+    expect(immutableRes.rejections[0]!.code).toBe('PLAN_TARGET_IMMUTABLE');
+    // Immutability has exactly one shape, so it carries no narrower reason.
+    expect(immutableRes.rejections[0]!.reason).toBeNull();
+  });
+
+  it('names the offending PROPOSAL as a `planItem:` ref — the same form `blockers` uses', async () => {
+    const fx = await makeWorkItemFixture();
+    let offending = '';
+    const planId = await brokenPlannedPlan(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Hangs off nothing', kind: 'task' } }],
+      async ([addId]) => {
+        offending = addId!;
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { parentRef: 'wi_does_not_exist' },
+        });
+      },
+    );
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.rejections[0]!.item).toBe(`${TEMP_REF_PREFIX}${offending}`);
+  });
+
+  it('⚠️ `blockers` KEEPS ITS EXACT MEANING — a finishability failure is reported unchanged, with no rejection', async () => {
+    // The regression guard for every existing caller: widening the verdict must
+    // not disturb the half that already worked.
+    const fx = await makeWorkItemFixture();
+    // CROSS-PROJECT, so it is genuinely outside the plan's forest — a
+    // same-project root is IN the forest and therefore satisfied-because-in-set.
+    const projectQ = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'GAMA',
+    });
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: projectQ.id, kind: 'task', title: 'Out-of-forest blocker' },
+      fx.ctx,
+    );
+    const planId = await freshPlan(fx);
+    const appended = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Gated', kind: 'task' },
+      blockedByRefs: [blocker.id],
+    });
+    const gatedId = itemIdByTitle(appended, 'Gated');
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.valid).toBe(false);
+    expect(res.rejections).toEqual([]);
+    expect(res.blockers).toEqual([
+      {
+        item: `${TEMP_REF_PREFIX}${gatedId}`,
+        blockedBy: blocker.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('answers for a GENERATING plan — which is the whole point, since that is when it can still be fixed', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The story' },
+      fx.ctx,
+    );
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Its subtask', kind: 'subtask' },
+      parentRef: story.id,
+    });
+
+    // Before `final: true` — no close, no `planned`.
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.valid).toBe(true);
+    expect(res.rejections).toEqual([]);
+
+    // …and a plan it calls valid CLOSES and APPROVES, which is what makes the
+    // claim mean anything at all.
+    await plansService.markPlanned(planId, fx.ctx);
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
   });
 });

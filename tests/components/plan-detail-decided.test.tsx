@@ -114,6 +114,45 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
     expect(screen.queryByText('Plan declined — your tree was left untouched')).toBeNull();
   });
 
+  // ── THE FIFTH STATUS (MOTIR-3578, AMENDMENT 9 D6) ────────────────────────
+  it('a STALE plan is NOT decided — the rail states it, and the pane keeps its proposals', () => {
+    renderWithIntl(
+      <PlanDetail
+        projectKey="PRJ"
+        initialReview={review({
+          status: 'stale',
+          itemCount: 2,
+          items: [planReviewItem({ planItemId: 'pi_1' }), planReviewItem({ planItemId: 'pi_2' })],
+        })}
+      />,
+    );
+
+    // ⚠️ THE FAILURE THIS GUARDS IS THE ONE THIS FILE ALREADY RECORDS HAPPENING.
+    // `decided` gates the discovery hand-off, and a `stale` plan has no outcome
+    // yet — it is live, awaiting action, and its proposals are exactly what the
+    // reviewer needs to read. Read as DECIDED, the rail would swap its controls
+    // for the read-only outcome block; that is MOTIR-1377's shape with a
+    // different status.
+    expect(screen.getByTestId('plan-stale-outcome').textContent).toContain(
+      'Plan out of date — work it changes has since been finished.',
+    );
+    expect(screen.queryByText('Plan declined — your tree was left untouched')).toBeNull();
+    // The proposals are still drawn — the reviewer can read what they are
+    // deciding about, which is the whole reason the plan is still in the queue.
+    expect(screen.getByTestId('plan-review-canvas').getAttribute('data-item-count')).toBe('2');
+  });
+
+  it('a genuinely EMPTY stale plan still shows the empty state — the guard did not widen', () => {
+    renderWithIntl(
+      <PlanDetail projectKey="PRJ" initialReview={review({ status: 'stale', items: [] })} />,
+    );
+
+    // The `!decided` short-circuit applies to `stale` exactly as it does to
+    // `planned`, because both are undecided. Widening `decided` to *not planned*
+    // would have flipped this and put the outcome block over an empty plan.
+    expect(screen.getByText('This plan has no proposals')).toBeTruthy();
+  });
+
   it('shows the declined outcome ALONGSIDE the cards it decided about', () => {
     // The half MOTIR-1377 could not assert, because there were no cards left to
     // show. The rows survive now, so the outcome and the record coexist.

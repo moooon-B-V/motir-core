@@ -186,7 +186,7 @@ describe('get_plan — the proposed tree survives the wire', () => {
       [
         {
           op: 'add',
-          proposedFields: { title: 'Parent proposal', kind: 'subtask', type: 'code' },
+          proposedFields: { title: 'Parent proposal', kind: 'task', type: 'code' },
           parentRef: story.id,
         },
       ],

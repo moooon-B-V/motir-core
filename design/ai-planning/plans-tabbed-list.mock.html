@@ -318,7 +318,7 @@
       }
       /* --- MOTIR-3577: the FIFTH plan STATUS (Part XI §2) -----------------
          `.pill.stale` above is the ADVISORY drift count and stays peach; this
-         is the STATUS, and after AMENDMENT 8 the two are one engine at two
+         is the STATUS, and after AMENDMENT 9 the two are one engine at two
          severities, so a row can carry both. Drawn as the shipped `Pill`
          actually paints `severity="danger"` — `--el-tint-rose` under
          `--el-text-strong`, hue in the tint, charcoal ink (finding #35) — NOT
@@ -700,7 +700,7 @@
         </p>
         <p>
           <b>AMENDED BY MOTIR-3577 for the FIFTH status, <code>stale</code></b> (ADR
-          <code>agent-authored-plans.md</code> AMENDMENT 8, design-notes <b>Part XI</b>). The enum
+          <code>agent-authored-plans.md</code> AMENDMENT 9, design-notes <b>Part XI</b>). The enum
           this asset drew as four-member is five-member: every strip below carries
           <code>Stale</code> between Planned and Approved, panel 4's measurement is RE-TAKEN and its
           disposition REVERSED because five labels no longer fit a phone, and panels 5 and 6 draw
@@ -718,7 +718,7 @@
           <span class="ref">MOTIR-3577</span>
           <span class="ref">Part VII</span>
           <span class="ref">Part XI</span>
-          <span class="ref muted">ADR AMENDMENT 8</span>
+          <span class="ref muted">ADR AMENDMENT 9</span>
           <span class="ref muted">story MOTIR-3232</span>
           <span class="ref muted">composes plans-surface.mock.html panels A + A2</span>
           <span class="ref muted">Segmented</span>
@@ -1728,7 +1728,7 @@
                 nearly fill-less <code>tone="archived"</code> chip, which says ENDED. Stale is not
                 an ending: it is a plan still in the queue whose exits are <i>wait</i> or
                 <i>decline</i>.<br /><br />
-                <b>Both at once is a real row, not an edge case.</b> After AMENDMENT 8 the advisory
+                <b>Both at once is a real row, not an edge case.</b> After AMENDMENT 9 the advisory
                 count and the status are one engine at two severities, so the peach
                 <i>2 may be out of date</i> chip and the rose <i>Stale</i> pill share a row and say
                 two different things: <i>some proposals drifted</i> and
@@ -1850,12 +1850,12 @@
                 <b>The outcome line is not <code>declined</code>'s.</b> That one reads
                 <i>Plan declined — your tree was left untouched</i>, an ENDING. This one has to say
                 what happened AND what is left to do, and it must not offer a repair that does not
-                exist: AMENDMENT 8 establishes there is no <code>stale → generating</code> edge,
+                exist: AMENDMENT 9 establishes there is no <code>stale → generating</code> edge,
                 because a proposal cannot be withdrawn or re-targeted. So the copy names the two
                 real exits — <i>decline it</i>, or <i>wait in case the work reopens</i> — and
                 Approve is drawn DISABLED rather than hidden, so the reader can see that the button
                 they came for is the one that is unavailable.<br /><br />
-                <b>The rail is rendering a list it is already handed.</b> Under AMENDMENT 8's UNIFY
+                <b>The rail is rendering a list it is already handed.</b> Under AMENDMENT 9's UNIFY
                 disposition the staleness engine reports these as a FATAL
                 <code>target_terminal</code> reason beside its existing advisory ones — this is a
                 second RENDERING of one verdict, never a second computation.<br /><br />

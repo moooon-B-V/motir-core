@@ -13,17 +13,33 @@ import { fetchPlanReview, PlanRequestError } from '@/lib/planning/planReviewClie
 /**
  * The run's PROPOSALS, or `null` when there is nothing to decide.
  *
- * A plan is reviewable only while it is `planned` AND carries items: `generating`
- * is still filling, and `approved` / `declined` is already decided. Every AI
- * surface settles a finished run through this — never through the job result,
- * whose `planDelta` is empty by construction (MOTIR-1747).
+ * A plan is reviewable only while it is UNDECIDED and carries items:
+ * `generating` is still filling, and `approved` / `declined` is already decided.
+ * Every AI surface settles a finished run through this — never through the job
+ * result, whose `planDelta` is empty by construction (MOTIR-1747).
+ *
+ * ⚠️ `stale` IS REVIEWABLE, AND THIS PREDICATE HAD TO WIDEN FOR IT
+ * (MOTIR-3579). It read `=== 'planned'`, and the fifth status is neither
+ * `planned` nor decided — so every surface that asks this question would have
+ * answered *nothing to decide* for a plan the system had just flagged, hiding
+ * the rail that states why it cannot be approved and the Decline that is one of
+ * its only two exits. Whether the reviewer can still ACT is a separate question,
+ * answered per control by `PlanReviewRail` (Approve is disabled, Decline is
+ * not); this one is only *is a person still holding this?*.
+ *
+ * ⚠️ NOTE FOR THE READER OF AMENDMENT 9 D6: this file is NOT in that table's
+ * list of surfaces a `PlanStatus` member obliges, and it should have been — it
+ * was found by a test going red, not by the enumeration. It is the same shape as
+ * `staleCountFor` and `computePlanStaleness`: a `planned` check standing in for
+ * *undecided*, which a fifth status is exactly what pulls apart.
  */
 export async function readPendingProposal(
   planId: string,
   signal?: AbortSignal,
 ): Promise<PlanReviewDto | null> {
   const review = await fetchPlanReview(planId, signal);
-  return review.status === 'planned' && review.items.length > 0 ? review : null;
+  const undecided = review.status === 'planned' || review.status === 'stale';
+  return undecided && review.items.length > 0 ? review : null;
 }
 
 /**

@@ -293,7 +293,9 @@
     "reviseRefused": "A revision is changing this plan. Try again in a moment.",
     "event_revision_started": "Revision started",
     "event_revision_ended": "Revision landed",
-    "listRevised": "Revised"
+    "listRevised": "Revised",
+    "staleStatusOutcome": "Plan out of date — work it changes has since been finished.",
+    "staleReviewHint": "Approve is unavailable. Decline it, or wait in case the work reopens."
   },
   "planEdits": {
     "submitting": "Submitting…",
@@ -5565,6 +5567,7 @@
     "status": {
       "generating": "Generating",
       "planned": "Planned",
+      "stale": "Stale",
       "approved": "Approved",
       "declined": "Declined"
     },
@@ -5573,9 +5576,11 @@
     "tabEmpty": {
       "generatingTitle": "Nothing generating",
       "plannedTitle": "Nothing waiting on you",
+      "staleTitle": "Nothing stale",
       "approvedTitle": "Nothing approved yet",
       "declinedTitle": "Nothing declined",
-      "description": "This project's other plans are in the remaining tabs."
+      "description": "This project's other plans are in the remaining tabs.",
+      "staleDescription": "A plan goes stale when work it proposes to change has since been finished. None have."
     },
     "loadingMore": "Loading…",
     "generation": {

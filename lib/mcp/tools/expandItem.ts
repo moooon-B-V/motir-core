@@ -191,7 +191,10 @@ export function registerExpandItem(server: McpServer, resolveContext: McpContext
       description:
         'Read what became of a submitted planning job — pass EITHER the `planId` or the ' +
         '`jobId` an `expand_item` call returned. Reports the plan status ' +
-        '(generating / planned / approved / declined), how many proposals it bundles, and — ' +
+        '(generating / planned / stale / approved / declined — `stale` means it reached a ' +
+        'reviewer and can no longer be approved because a target it changes has since been ' +
+        'finished; it is NOT decided, and the drift can reverse), how many proposals it ' +
+        'bundles, and — ' +
         'while it is still generating — whether the job is running or FAILED (a failed job ' +
         'writes no terminal plan state of its own — a background reconciler declines an ' +
         'empty one within the hour, so the plan status alone cannot tell you NOW). ' +

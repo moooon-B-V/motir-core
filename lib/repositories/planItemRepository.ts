@@ -22,6 +22,34 @@ export const planItemRepository = {
     });
   },
 
+  /**
+   * The proposals that TARGET a given work item — the reverse lookup
+   * (MOTIR-3579). `modify` / `remove` only: an `add` has a null `workItemId` by
+   * construction, so it can never be the target of one.
+   *
+   * ⚠️ THIS IS THE READ THE `plan_item_work_item_id_workspace_id_idx` INDEX
+   * EXISTS FOR, and it runs on EVERY status change in the tenant — the drift
+   * listener consumes `work-item/transitioned`, which every ingress emits. The
+   * `@@unique([planId, workItemId])` cannot serve it: its leftmost column is
+   * `planId`, so without the composite this is a sequential scan of every
+   * proposal in the workspace, per board drag.
+   *
+   * `workspaceId` is an explicit filter and not merely an RLS matter — RLS is
+   * inert under the dev/CI superuser, so the predicate is the actual gate
+   * (finding #26).
+   */
+  async findByWorkItemId(
+    workItemId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PlanItem[]> {
+    const client = tx ?? db;
+    return client.planItem.findMany({
+      where: { workItemId, workspaceId, op: { in: ['modify', 'remove'] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   async countByPlan(planId: string, tx?: Prisma.TransactionClient): Promise<number> {
     const client = tx ?? db;
     return client.planItem.count({ where: { planId } });
