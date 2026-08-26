@@ -79,6 +79,20 @@ export const jobQueueRepository = {
    * ⚠️ A SERIAL TEST CANNOT SEE THE DEFECT THIS PREVENTS. Two sequential claims
    * never collide; the race needs genuine concurrency against a warm pool, which
    * is what `tests/jobs/engine-worker.test.ts` drives.
+   *
+   * ⚠️ THE CLAIM ALSO CLOSES THE DEBOUNCE WINDOW (MOTIR-3483) — it clears
+   * `debounce_key` / `debounce_first_seen_at` in the same statement, and both
+   * halves of why are load-bearing. A same-key event arriving while this run
+   * EXECUTES must enqueue a NEW run rather than be folded into work that has
+   * already started, or a push during an index is silently dropped. And a retry
+   * puts this very row back to `pending` (`rescheduleAt`), where a surviving key
+   * would collide with the row that push enqueued — a unique violation on the
+   * retry path, which is the worst place to discover one.
+   *
+   * ⚠️ Neither column is in the `RETURNING` list, deliberately: nothing the
+   * worker does reads them, exactly as it reads neither `scheduled_for` nor
+   * `idempotency_key`. The row this hands back is the claim's view of a run, not
+   * a faithful `SELECT *`.
    */
   async claimDueRuns(
     workerId: string,
@@ -92,6 +106,11 @@ export const jobQueueRepository = {
              "claimed_by"       = ${workerId},
              "lease_expires_at" = (now() AT TIME ZONE 'UTC') + make_interval(secs => ${leaseMs / 1000}::double precision),
              "attempts"         = q."attempts" + 1,
+             -- THE CLAIM CLOSES THE DEBOUNCE WINDOW (MOTIR-3483) -- see the
+             -- doc comment above this method. A pending row carries the
+             -- coalescing key; a claimed one must not.
+             "debounce_key"     = NULL,
+             "debounce_first_seen_at" = NULL,
              "updated_at"       = (now() AT TIME ZONE 'UTC')
         FROM (
               SELECT "id"
@@ -247,6 +266,84 @@ export const jobQueueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<JobQueueRun> {
     return tx.jobQueueRun.create({ data });
+  },
+
+  /**
+   * ⚠️ THE DEBOUNCE CANDIDATE, LOCKED (MOTIR-3483) — the PENDING, unclaimed run
+   * this event should coalesce into, or null when there is none.
+   *
+   * Raw SQL for the same reason `claimDueRuns` is: `FOR UPDATE` is not
+   * expressible through the query builder, and CLAUDE.md lists `$queryRaw` as a
+   * legal single repository op precisely for this. Coalescing is a READ-DERIVED
+   * WRITE — read which pending row holds this key, then move its `run_at` based
+   * on what was read — so the row is locked before it is read, inside the
+   * caller's transaction, per the lock-before-a-contended-update contract.
+   *
+   * ⚠️ PLAIN `FOR UPDATE`, NOT `SKIP LOCKED`, and the difference is the point.
+   * `claimDueRuns` skips a locked row because ANOTHER row will do; here there is
+   * exactly one row that will do, and skipping it would insert a second pending
+   * run for the same key — which is the outcome this whole mechanism exists to
+   * prevent. Blocking briefly on a concurrent same-key dispatch is correct.
+   *
+   * It composes with the claim rather than fighting it: a worker claiming this
+   * row concurrently uses `SKIP LOCKED`, so it steps over a row we hold; and if
+   * the worker got there first the row is no longer `pending`, so this returns
+   * null and the caller enqueues a fresh run — which is the contracted behaviour
+   * for a push arriving mid-run.
+   *
+   * ⚠️ AND IT CANNOT COVER THE EMPTY CASE. Two concurrent FIRST arrivals for one
+   * key both lock nothing and both insert; the partial unique index
+   * `job_queue_job_debounce_key` is what makes that a recoverable `P2002`. A lock
+   * is a lock on a row, and there is no row yet.
+   */
+  async findPendingDebouncedForUpdate(
+    jobId: string,
+    debounceKey: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; debounceFirstSeenAt: Date | null } | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string; debounceFirstSeenAt: Date | null }>>`
+      SELECT "id",
+             "debounce_first_seen_at" AS "debounceFirstSeenAt"
+        FROM "job_queue"
+       WHERE "job_id"       = ${jobId}
+         AND "debounce_key" = ${debounceKey}
+         AND "state"        = 'pending'
+         AND "claimed_by" IS NULL
+       LIMIT 1
+         FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
+  /**
+   * COALESCE a new arrival into the pending run this key already holds
+   * (MOTIR-3483): push `run_at` forward and REPOINT the row at the newer event.
+   *
+   * The repoint is what makes the coalesced run carry the LATEST push rather than
+   * the first — the semantics `docs/decisions/job-queue-foundation.md` §9 names,
+   * and the reason the event payload lives in its own table rather than on the
+   * run. `debounce_first_seen_at` is deliberately NOT touched: the deferral cap
+   * is measured from the first arrival, so moving it would make a steady stream
+   * able to defer forever, which is the Inngest limit MOTIR-2994 measured and
+   * this implementation declines to reproduce.
+   *
+   * Must be called with the row already locked by
+   * {@link findPendingDebouncedForUpdate}, inside the same transaction.
+   */
+  async coalesceDebounced(
+    id: string,
+    data: { runAt: Date; eventId: string; eventName: string; workspaceId: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<JobQueueRun> {
+    return tx.jobQueueRun.update({
+      where: { id },
+      data: {
+        runAt: data.runAt,
+        eventId: data.eventId,
+        eventName: data.eventName,
+        workspaceId: data.workspaceId,
+      },
+    });
   },
 
   /**
