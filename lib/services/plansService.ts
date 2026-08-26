@@ -3072,6 +3072,39 @@ export const plansService = {
     );
   },
 
+  /**
+   * Point a plan's `sourceJobId` at the job that is now writing it (Story
+   * MOTIR-3595 · Subtask MOTIR-3599).
+   *
+   * ⚠️ THE COLUMN'S MEANING IS UNCHANGED — *which job* — it simply becomes the
+   * job that most recently WROTE this plan rather than the one that generated it.
+   * That is what every reader of it actually wants: `getOutcome` asks it what
+   * became of a plan still `generating`, the abandoned-plan sweep asks motir-ai
+   * about a `generating` plan's producer, and both are scoped to a status a
+   * revised plan is not in.
+   *
+   * It exists so the internal seams keep ONE resolution path
+   * (`findBySourceJobId`) rather than growing a second for revisions, and so the
+   * route never has to accept a caller-supplied plan id it would then have to
+   * validate. The revision LEASE is what makes a single scalar safe: one plan is
+   * revised by one job at a time, so there is never a second writer to name.
+   */
+  async bindPlanToJob(planId: string, jobId: string, ctx: ServiceContext): Promise<void> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+    await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        await planRepository.update(planId, { sourceJobId: jobId }, tx);
+      },
+    );
+  },
+
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),

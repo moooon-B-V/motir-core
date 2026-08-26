@@ -10,9 +10,10 @@ import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { NoPlanForJobError } from '@/lib/plans/errors';
+import { NoPlanForJobError, PlanNotFoundError } from '@/lib/plans/errors';
 
 import { plansService } from '@/lib/services/plansService';
+import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { PlanJobStateDto, PlanOriginDto, PlanOutcomeDto } from '@/lib/dto/plans';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -398,6 +399,103 @@ export const aiPlanEditsService = {
     return submitPlanEditJob('expand_item', { rootItemKey: itemKey }, ctx, opts);
   },
 
+  /**
+   * REVISE the plan the reviewer is holding (Story MOTIR-3595 · Subtask
+   * MOTIR-3599) — the first submit whose target is a PLAN.
+   *
+   * ⚠️ IT DOES NOT OPEN A PLAN, and that is the whole story in one line. Every
+   * sibling submit goes through `submitPlanEditJob`, whose last act is
+   * `plansService.createPlan` — correct for a pass that produces a new proposal
+   * set, and exactly wrong here: the reviewer asked for THIS plan to change, and
+   * a second plan in the review queue is the outcome they were trying to avoid by
+   * not declining. So the returned `planId` is the one that was passed in, and a
+   * test asserts the identity rather than the shape.
+   *
+   * The order is deliberate and is not the sibling's:
+   *
+   *  1. **ACQUIRE THE LEASE FIRST.** It is what serializes two reviewers pressing
+   *     Send at once, and what refuses a decision racing the revision
+   *     (`agent-authored-plans.md` AMENDMENT 10 D2). Acquiring after the submit
+   *     would let two jobs exist for one plan, the loser of the acquire having
+   *     already been dispatched.
+   *  2. **SUBMIT**, and RELEASE the lease if it throws — an unreachable motir-ai
+   *     or an out-of-credits refusal must not hold a plan for the whole lease
+   *     window over a job that never started.
+   *  3. **RE-POINT `sourceJobId`** at the revision job, which is how the internal
+   *     seams resolve *the job's plan* (`findBySourceJobId`) with no second
+   *     resolution path and no new column. The field's own meaning is unchanged —
+   *     WHICH JOB — it simply becomes the job that most recently WROTE this plan,
+   *     which is what every reader of it actually wants; and the lease is what
+   *     makes a single scalar safe, because one plan is revised by one job.
+   */
+  async submitRevise(
+    planId: string,
+    prompt: string,
+    ctx: ProjectContext,
+  ): Promise<PlanEditSubmitResult> {
+    await assertCanPlan(ctx);
+
+    // Resolved through the service, so a plan in ANOTHER project is refused as
+    // NOT-FOUND rather than as forbidden: `getPlan` asserts browse access on the
+    // plan's own project, and a caller who cannot browse it must not learn it
+    // exists (the no-existence-leak posture the whole tree keeps).
+    const plan = await plansService.getPlan(planId, ctx);
+    if (plan.projectId !== ctx.projectId) throw new PlanNotFoundError(planId);
+
+    const actor: PlanRevisionAgentActor = {
+      source: 'native',
+      harness: 'Motir',
+      model: null,
+    };
+    // Refuses `approved` / `declined` naming the status (`PlanNotEditableError`),
+    // and refuses a plan another revision already holds — both under the plan row
+    // lock, inside the acquire.
+    await plansService.acquireRevisionLease(planId, ctx, actor);
+
+    let jobId: string;
+    try {
+      const { organizationId, isMeta } = await resolveTenantOrg({
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      const code = await resolveCodeContext({
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      const repositories = await resolveProjectRepoContext(ctx.projectId, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      const submitted = await submitJob(
+        'revise_plan',
+        buildTenant(ctx, organizationId, isMeta),
+        {
+          // The PLAN is the target. `planId` is the only address a revision has —
+          // its proposals have no `MOTIR-<n>` until somebody approves them, which
+          // is the gap this job kind exists to close.
+          planId,
+          prompt,
+          generateExplanations: ctx.project.aiGenerateExplanations,
+          ...(code ? { code } : {}),
+          ...(repositories ? { repositories } : {}),
+        },
+        { userId: ctx.userId },
+      );
+      jobId = submitted.jobId;
+    } catch (err) {
+      // A job that never started must not hold the plan. Best-effort: the
+      // submit's own failure is the one the caller needs to see, so a release
+      // that also fails must not replace it.
+      await plansService
+        .releaseRevisionLease(planId, ctx, actor, { aborted: true })
+        .catch(() => undefined);
+      throw err;
+    }
+
+    await plansService.bindPlanToJob(planId, jobId, ctx);
+    return { jobId, planId };
+  },
+
   async submitReplan(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
     const wi = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -425,6 +523,10 @@ export const aiPlanEditsService = {
   },
 
   streamReplan(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
+  },
+
+  streamRevise(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId, coreProjectId);
   },
 };
