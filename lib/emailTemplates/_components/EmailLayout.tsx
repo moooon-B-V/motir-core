@@ -1,6 +1,7 @@
 import { Body, Container, Head, Hr, Html, Img, Preview, Text } from '@react-email/components';
 import type { ReactNode } from 'react';
-import { BRAND_ACCENT_HEX, waveBandDataUri } from '@/components/brand/waveBand';
+import { EMAIL_MARK_PATH, EMAIL_MARK_PX } from '@/components/brand/waveBand';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
 // Shared chrome for every Motir transactional email. Each template
 // wraps its content in <EmailLayout preview="…">…</EmailLayout> so
@@ -45,14 +46,41 @@ const brandRow = {
 // The brand mark for email (design/brand/design-notes.md §7e). Email is a
 // raster-and-tables world: Outlook's Word renderer drops inline <svg> entirely
 // and Gmail strips <style>, so the mark ships as an <img> with a LITERAL colour
-// and explicit width/height — never an inline <svg> element, never a CSS
-// variable. `alt="Motir"` is not decoration: roughly 40% of clients block images
-// by default, and the alt text is then the entire header.
+// baked into the pixels and explicit width/height — never an inline <svg>
+// element, never a CSS variable. `alt="Motir"` is not decoration: roughly 40% of
+// clients block images by default, and the alt text is then the entire header.
 //
 // One colour for both themes. Email has no reliable dark-mode signal, and
 // #5645d4 holds 6.57:1 on the white body this layout hardcodes (§4).
-const BRAND_MARK_PX = 20;
-const brandMarkSrc = waveBandDataUri({ size: BRAND_MARK_PX, fill: BRAND_ACCENT_HEX });
+//
+// ⚠️ THE SRC IS A HOSTED PNG AT AN ABSOLUTE https:// URL, AND ALL THREE WORDS
+// ARE LOAD-BEARING (MOTIR-3505). The paragraph above was here from the start and
+// is right; what sat under it was a `data:image/svg+xml` URI, which is the
+// format it had just ruled out delivered by a transport email does not accept.
+// Every one of the eight templates wraps in this layout, so the mark rendered
+// for nobody — it degraded to the alt text for 100% of recipients, not 40%,
+// which is why it shipped unnoticed. Three constraints, each with a client that
+// punishes getting it wrong:
+//
+//   RASTER, not SVG   — Gmail, Outlook and Yahoo render SVG in email in no
+//                       transport at all, hosted or inline.
+//   HOSTED, not data: — Gmail rewrites every image through its
+//                       googleusercontent.com proxy and drops sources it cannot
+//                       FETCH. A data URI has nothing to proxy.
+//   ABSOLUTE, not /…  — an email is not a document with a base URL, so a
+//                       root-relative src resolves against nothing.
+//
+// ⚠️ AND THE ORIGIN IS RESOLVED HERE rather than threaded in as a prop, which is
+// a deliberate exception to `CLAUDE.md`'s "templates read no `process.env`". That
+// rule is about a template's CONTENT — the invite link a service builds and hands
+// over. This is the shared CHROME, whose whole reason for living in
+// `_components/` is that it changes in ONE place; threading an identical origin
+// through eight templates, their prop types and their dispatching services would
+// make a ninth template's omission fail exactly the way this bug did — a silently
+// empty header. `resolveBaseUrl()` never throws and falls back to
+// `http://localhost:3000`, so the layout stays snapshot-testable and
+// preview-renderable, which is what that rule is protecting.
+const BRAND_MARK_PX = EMAIL_MARK_PX;
 
 const brandMark = {
   display: 'inline-block',
@@ -84,6 +112,7 @@ const signOff = {
 };
 
 export function EmailLayout({ preview, children, footer }: EmailLayoutProps) {
+  const brandMarkSrc = `${resolveBaseUrlTrimmed()}${EMAIL_MARK_PATH}`;
   return (
     <Html>
       <Head />

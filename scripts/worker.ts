@@ -4,6 +4,18 @@
  * What `fly.toml`'s `worker` process group runs. It does four things and nothing
  * else: import the registry, start the loop, wire the signals, and stay up.
  *
+ * As of MOTIR-3471 it also runs the SCHEDULER — the tick that turns a cron
+ * expression into a `job_queue` row. It is not a fifth thing: the scheduler owns
+ * no loop and no timer, and rides the claim loop this file already starts (see
+ * `lib/jobs/engine/scheduler.ts` for why the poll, and not a `setTimeout` chain,
+ * is the right driver). It adds no process, no machine and no environment
+ * variable — routing is still `MOTIR_POSTGRES_JOB_IDS`.
+ *
+ * ⚠️ AND IT IS THE SECOND, LOUDER REASON THE REGISTRY IMPORT BELOW IS LOAD-BEARING.
+ * `JobScheduler.start()` REFUSES an empty registry rather than scheduling nothing
+ * in silence, so deleting that import now fails the process at start-up with a
+ * named diagnosis instead of at run time with `UnknownEngineJobError`.
+ *
  * ⚠️ THE REGISTRY IMPORT IS LOAD-BEARING AND LOOKS UNUSED. `lib/jobs/engine/registry.ts`
  * is populated by `defineJob` as each definition MODULE is evaluated, so it holds
  * only the jobs something has imported. `lib/jobs/registry.ts` imports all 24
@@ -26,6 +38,7 @@ import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JobWorker } from '@/lib/jobs/engine/worker';
+import { JobScheduler } from '@/lib/jobs/engine/scheduler';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
 // Side-effect import: evaluates all 24 definition modules so `defineJob` has
@@ -44,10 +57,20 @@ async function main(): Promise<void> {
     return event?.data ?? {};
   };
 
+  // Armed BEFORE the worker starts, so an empty registry refuses at start-up
+  // rather than after the first claim — `main`'s catch turns the throw into a
+  // non-zero exit with the diagnosis, which is what makes the failure visible.
+  const scheduler = new JobScheduler();
+  scheduler.start();
+
   const worker = new JobWorker({
     async execute(run) {
       await executeWithLedger(run, await payloadFor(run));
     },
+    // The scheduler rides the claim loop (MOTIR-3471) — one tick, at the top of
+    // each poll, so a fire it enqueues is claimed by the same pass. It logs
+    // through its own injected sink, so there is nothing to report here.
+    onSchedulerTick: () => scheduler.tick().then(() => undefined),
     // The after-all-retries-exhausted hook — the engine's `onFailure`. See
     // `lib/jobs/engine/ledger.ts` for why it is not a catch inside `execute`.
     async onTerminalFailure(run, error) {

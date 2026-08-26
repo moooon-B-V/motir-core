@@ -21,7 +21,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Work-item provenance on the detail rail**       | **`provenance.mock.html`** + `provenance.png`                               | `detail.pen`/`CoreFieldsPanel` draw no provenance surface — two new READ-ONLY rail `FieldCard`s (Planning · Implementation), each a `source · harness · model` triple + the "—" unknown state. Composes the shipped rail (does not redraw); source = a tinted `Pill`-chip (six values). Story MOTIR-1685 · MOTIR-1688 (design). Gates MOTIR-1693. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Plan / Re-plan entrance (detail + quick-view)** | **`plan-replan-entrance.mock.html`** + `plan-replan-entrance.png`           | The contextual Plan / Re-plan entrance on BOTH the work-item detail page AND the quick-view / peek modal, for EVERY kind. COMPOSES the shipped surfaces — detail page (`detail.pen`), quick-view (`quick-view.mock.html`), universal workspace (`planning-workspace.mock.html` / 7.20.1), and `PlanWithAILauncher` (MOTIR-1299). **Plan / Re-plan is a CONVERSATION, not a single message** — the button opens the universal workspace directly; for Re-plan, the reason is captured as the FIRST CHAT TURN inside the workspace's chat rail (no pre-workspace form). Map scoped to item neighborhood, proposed nodes dashed, done work LOCKED. Confirm gate (MOTIR-911) as a bottom bar. Six panels: Plan button on detail · Re-plan button on detail · Plan button on quick-view · Re-plan button on quick-view · scoped workspace with conversation (Plan flow + Re-plan flow + continuing conversation) · states (loading/error/empty). Story 7.12 · MOTIR-1489 (design). Gates MOTIR-910. See below. |
 | **Child panel — List ↔ Graph**                    | **`child-panel-graph.mock.html`** + `child-panel-graph.png`                 | The Children section gains a `List` ↔ `Graph` view switcher; Graph mounts the shipped roadmap canvas **rooted at this item**, bounded in a 28rem block. COMPOSES `design/roadmap/` (node cards, edges, legend, ready highlight, breadcrumb, quick-view) — nothing there is redrawn. Five panels light + dark: the door · Graph · drilled · loading / empty-level / graph-unavailable · leaf-renders-nothing. Resolves the height, every canvas opt-in, the crumb root label, and the no-local-preference rule. Story MOTIR-2284 · MOTIR-2285 (design). Gates MOTIR-2287 + MOTIR-2288. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`                         | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. Frame MEASURED at 32rem with its own scroll in both axes. Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design). Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                        |
+| **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`                         | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. BOTH the note and the frame MEASURED at 32rem with their own scroll in both axes — the note's bound is MOTIR-3510's amendment, and it renders through `MarkdownView` (`wmde-markdown motir-prose`). Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design), amended by MOTIR-3510. Gates MOTIR-2670. See below.                                                                                                                                                                                                       |
 | **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`                       | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. **REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038):** every repository is now a LINK to the project's `project_repository` row, carrying its ROLE and — when it is not established — its establish STATE. TEN panels: the door · held · delivered · unrecorded branch · **the five delivery states** · **the destination** · one repo · none · **a `proposed` row** · editing. Story MOTIR-2725 · MOTIR-2413 (design), redrawn by MOTIR-3038. Gates MOTIR-2415 / MOTIR-3042; inherited by MOTIR-2414. See below.              |
 | **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                   |
 | **The item page at ARRIVAL / STREAMING**          | **`detail-arrival.mock.html`** + `detail-arrival.png`                       | What the page shows between the URL and the item: the page's OWN pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card) — mounted as an in-page `<Suspense>` AFTER the gate, never as a `loading.tsx` (MOTIR-3492) — and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design), amended by MOTIR-3492. Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                              |
@@ -4379,7 +4379,7 @@ measurement. Gates MOTIR-2633.
 
 ---
 
-## ⭐ Design result panel (Story MOTIR-2664 · MOTIR-2669 — `design-result.mock.html`)
+## ⭐ Design result panel (Story MOTIR-2664 · MOTIR-2669 — `design-result.mock.html`; the NOTE's bound added by MOTIR-3510)
 
 `detail.pen` and the shipped item-detail page reserve NO design-result surface,
 so the panel, its frame and its states are whole elements no design specifies —
@@ -4407,29 +4407,28 @@ is how a UI code card's implementer arrives.
 
 ### Anatomy
 
-| Element                | Primitive composed                                      | Colour token                                           | Shape token                               |
-| ---------------------- | ------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
-| Section                | `ContentSectionCard` (`Card` + header grammar)          | `--el-page-bg` on `--el-border`                        | `--radius-card`, `--spacing-card-padding` |
-| Title / gloss          | header grammar                                          | `--el-text` / `--el-text-secondary`                    | —                                         |
-| `Current` chip         | `Pill`                                                  | `--el-tint-mint` bg + `--el-text-strong` (finding #35) | `--radius-badge`, `--spacing-chip-*`      |
-| Rendered note          | `lib/markdown/render.tsx` — the SINGLE shipped renderer | `--el-text` / `--el-text-secondary`                    | —                                         |
-| Wide table in the note | scroll container                                        | `--el-border-soft`                                     | `--radius-input`                          |
-| Frame strip            | —                                                       | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
-| Mock frame             | `<iframe sandbox>`                                      | `--el-border`                                          | `--radius-input`                          |
-| Open in new tab        | `Button` secondary                                      | `--el-page-bg` / `--el-border`                         | `--radius-btn`, `--height-btn-sm`         |
-| Screenshot thumb       | `AttachmentPreview` (lightbox reused as-is)             | `--el-border` / `--el-surface-soft`                    | `--radius-input`                          |
-| Provenance chips       | `provenance.mock.html` chip grammar                     | `--el-muted` + `--el-text-secondary`                   | `--radius-badge`                          |
-| Empty state            | —                                                       | `--el-surface-soft` on `--el-border-soft`              | `--radius-input`                          |
-| Failed-to-load state   | —                                                       | `--el-tint-peach` + `--el-text-strong`                 | `--radius-input`                          |
+| Element                | Primitive composed                                                                                       | Colour token                                           | Shape token                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| Section                | `ContentSectionCard` (`Card` + header grammar)                                                           | `--el-page-bg` on `--el-border`                        | `--radius-card`, `--spacing-card-padding` |
+| Title / gloss          | header grammar                                                                                           | `--el-text` / `--el-text-secondary`                    | —                                         |
+| `Current` chip         | `Pill`                                                                                                   | `--el-tint-mint` bg + `--el-text-strong` (finding #35) | `--radius-badge`, `--spacing-chip-*`      |
+| Note strip             | —                                                                                                        | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
+| Rendered note          | `MarkdownView` — `wmde-markdown motir-prose` over `lib/markdown/render.tsx`, the SINGLE shipped renderer | `--el-text` / `--el-text-secondary`                    | `--radius-input` (bottom corners)         |
+| Wide table in the note | scroll container                                                                                         | `--el-border-soft`                                     | `--radius-input`                          |
+| Frame strip            | —                                                                                                        | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
+| Mock frame             | `<iframe sandbox>`                                                                                       | `--el-border`                                          | `--radius-input`                          |
+| Open in new tab        | `Button` secondary                                                                                       | `--el-page-bg` / `--el-border`                         | `--radius-btn`, `--height-btn-sm`         |
+| Screenshot thumb       | `AttachmentPreview` (lightbox reused as-is)                                                              | `--el-border` / `--el-surface-soft`                    | `--radius-input`                          |
+| Provenance chips       | `provenance.mock.html` chip grammar                                                                      | `--el-muted` + `--el-text-secondary`                   | `--radius-badge`                          |
+| Empty state            | —                                                                                                        | `--el-surface-soft` on `--el-border-soft`              | `--radius-input`                          |
+| Failed-to-load state   | —                                                                                                        | `--el-tint-peach` + `--el-text-strong`                 | `--radius-input`                          |
 
 ### ⚠️ The mock frame — the measurement this asset exists to pin
 
 **32rem (512px) tall, scrolling inside itself in BOTH axes.** A published mock is
 a tall multi-panel document — `acceptance-panel.mock.html` is 48 KB of stacked
 panels — so an unbounded frame would swallow a page that already has eight
-sections. Panel 2 of the mock measures it against a 900px viewport: header, note,
-frame and screenshot still leave the sections below reachable by ordinary page
-scroll.
+sections. Panel 2 of the mock measures it against a 900px viewport.
 
 - **Horizontal.** A mock wider than the content column scrolls INSIDE the frame.
   The page body never gains a horizontal scrollbar.
@@ -4443,6 +4442,56 @@ scroll.
 - Reads go through `/api/attachments/<id>/content`, which 302s to a presigned URL
   on the OBJECT-STORE host, so the document is cross-origin to the app before the
   sandbox is applied at all (the design-result decision record (MOTIR-2665) §5).
+
+### ⚠️ AMENDMENT (MOTIR-3510) — the NOTE carries the same bound, and it is INHERITED
+
+**The note is 32rem too, in a container of its own — the same measurement, the
+same grammar, nothing re-derived.** The paragraph above measured the frame and
+this asset said nothing about the note's height; the mock drew the note as the
+words _"Rendered note (first paragraphs) …"_ in every panel, so the note shipped
+with no `max-h`, no `overflow-y`, no border and no surface, and a real
+`design-notes.md` section rendered on the order of **3,000–8,000px** — six to
+sixteen times what the frame beside it is allowed. Everything below the note was
+pushed that far down: the frame, the screenshot thumbs, the provenance chips, and
+then Children, Attachments and Activity below the panel.
+
+**Why the bound is inherited rather than decided.** The frame's own argument — _a
+published artifact is a tall document, and an unbounded one swallows a page that
+already has eight sections_ — is a statement about published artifacts, not about
+iframes. The note is the taller of the two in practice: the publisher ships ONE
+`##` section (MOTIR-3145) capped for rendering at 64 KiB
+(`lib/services/designEvidenceService.ts`, `NOTE_MD_CAP_BYTES`), and this file's
+own sections run 200–350 lines. So the note takes the frame's number, not a new
+one. **A DIFFERENT number — a taller note than the frame, a strip carrying
+controls — is a design decision this amendment does not make; it would be its own
+card.**
+
+**What that changes, exactly:**
+
+|                                    |                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the bound**                      | `FRAME_HEIGHT` — ONE constant in `DesignResultPanel.tsx`, referenced by both artifacts rather than typed twice, so they cannot drift apart. `overflow-y` is added; the existing horizontal scroll stays for wide tables                                                                                                                                          |
+| **the container**                  | the frame strip's grammar, token for token — an `--el-surface-soft` strip (`--radius-input` top corners, no bottom border) over a body carrying `--radius-input` bottom corners and an `--el-border`                                                                                                                                                             |
+| **the strip's content**            | the note's SOURCE, mirroring the frame strip's source-path treatment. Nothing else — the note's only affordance stays the truncation notice and its `note_file` download link, which sit BELOW the container, where they already were                                                                                                                            |
+| **the note's typography**          | the SHIPPED prose styles. The panel applied a `markdown-body` class that **no stylesheet in the repo or in any dependency defines**, so the note rendered under Tailwind preflight: no heading scale, no list markers, no table rules. It now renders through `MarkdownView` (`wmde-markdown motir-prose`), the same wrapper the description and explanation use |
+| **what panel 2 now measures**      | BOTH artifacts, drawn at TRUE scale in the 900px ruler                                                                                                                                                                                                                                                                                                           |
+| **the drawing of everything else** | UNCHANGED — placement, the access path, the three states, the sandbox, the truncation notice, the provenance chips                                                                                                                                                                                                                                               |
+
+**The measurement panel 2 now reports, and it is a finding rather than a miss.**
+Two 32rem artifacts do not both fit above a 900px fold: the note fills the fold
+and the frame begins just under it, one ordinary scroll away. That is the correct
+trade against the alternative it replaces, where the frame began three to eight
+THOUSAND pixels down — and it is what "the three artifacts read as one result
+rather than a queue" costs at this measurement. The reader who wants all three at
+once scrolls the artifacts, not the page.
+
+**Why neither half was visible to review, which is the reusable part.** The mock
+drew the note as a placeholder one-liner and the guard asserted a class NAME
+rather than an effect. **A placeholder cannot be measured, and a class assertion
+cannot notice that the class is inert.** So panel 1 now draws the note at real
+length — one `##` section of this very file, overflowing its bound on purpose —
+and `tests/components/design-result-panel.test.tsx` asserts the rendered bound
+and the prose class that actually styles it.
 
 ### States — THREE, not five
 
@@ -5154,3 +5203,55 @@ check that makes the recipe worth writing down rather than re-derived.
 One board artefact, named so nobody reads it as design: the frames that show the frame REVEALED force
 the animation's end state, because a board is a still and a time-based state has to be frozen at the
 moment it is being drawn.
+
+---
+
+## The streaming allocation at ARRIVAL — `/items/archived` and `/items/[key]/edit` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+### `/items/archived` — the list
+
+|                            |                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **the gate**               | `getSession` → `getTranslations('issueViews')` → `getActiveProject` → `getCapabilities` (`canBrowse`)                                                                                                                                                                                |
+| **with the frame**         | the back-link to `/items` and the `<h1>`                                                                                                                                                                                                                                             |
+| **with the first content** | `searchParams` → `getLocale` → `Promise.all([getWorkflow, listArchivedWorkItems])` — already one wave — then `toArchivedRows`                                                                                                                                                        |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                                            |
+| **settles**                | **once**                                                                                                                                                                                                                                                                             |
+| **verdict**                | **NONE — reuse.** The late region is a table of work-item rows, and `app/(authed)/items/_components/IssueTreeSkeleton.tsx` is the drawn pending state for exactly that, already composed by `/items` behind its own `<Suspense>`. `/items/archived` is the same table one route over |
+
+**This is the one route in the ten where the reader arrives with the shape already in their head** —
+they came from `/items`, whose table they were just looking at. Standing in for it with the same
+skeleton the sibling route uses is what makes the two read as one surface.
+
+### `/items/[key]/edit` — the form
+
+|                            |                                                                                                                                                                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations` → `getActiveProject` → `params` → `getIssueDetail` (**`notFound()`**, and the `permanentRedirect` onto the canonical key when the alias resolves) → `getCapabilities` (**`redirect`** to the read view when `canEdit` is false) |
+| **with the frame**         | — nothing worth naming. The `<h1>` is `t('editIssue')` and could paint, but see the verdict                                                                                                                                                                      |
+| **with the first content** | — **nothing**                                                                                                                                                                                                                                                    |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                        |
+| **settles**                | **once**                                                                                                                                                                                                                                                         |
+| **verdict**                | **NONE.** Both `notFound()` and the two redirects are decided by gate reads, and the same `detail` that decides them carries every value the form renders — `issue`, `workflow`, and every relationship `RelationshipsPanel` draws                               |
+
+**THE FORM DECISION, stated as the card required it: the FORM WAITS.** It is not a preference and it
+is not a compromise — it falls out of the reads. `EditIssueForm` takes `issue` and `workflow`, both
+from `getIssueDetail`, which is a **gate** read because it decides the 404. So by the time anything
+can be flushed at all, every field's value is already in hand. There is no version of this page
+where a field renders empty and fills in later, and therefore nothing to protect against.
+
+**The one read that is genuinely behind the others is `members`** — the assignee picker's option
+list, currently issued serially after `getCapabilities`. It is **not a field the reader types into**;
+it is a picker's options. The decision is to make it **concurrent with the capabilities read** rather
+than to stream it: one round trip instead of two, and the form still arrives complete. A discarded
+`members` read on the rare `canEdit === false` redirect is cheaper than a second settle on every
+successful edit.
+
+**A route boundary is PROHIBITED here, not declined** — this route calls `notFound()`
+(`motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_).

@@ -142,6 +142,7 @@ export const automationRetentionSweep = defineJob(
   {
     id: 'system.automation-retention-sweep',
     cron: AUTOMATION_RETENTION_SWEEP_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {

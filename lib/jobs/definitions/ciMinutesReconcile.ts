@@ -51,7 +51,21 @@ export function previousPeriodStart(now: Date): Date {
 }
 
 export const ciMinutesReconcile = defineJob(
-  { id: 'system.ci-minutes-reconcile', cron: CI_MINUTES_RECONCILE_CRON, retryPolicy: 'idempotent' },
+  {
+    id: 'system.ci-minutes-reconcile',
+    cron: CI_MINUTES_RECONCILE_CRON,
+    // `latest` — skipping would mean a month is never audited at all. ⚠️ AND IT
+    // CARRIES A KNOWN LIMIT, recorded in `docs/decisions/job-queue-foundation.md`
+    // §11.6 rather than left to be rediscovered: `previousPeriodStart` reads the
+    // WALL CLOCK, not this run's fire instant, so a catch-up INSIDE the month is
+    // correct while one that lands after a month boundary reconciles the wrong
+    // month and the missed one is never audited. `all` would not help — every
+    // replayed row would read the same clock. The fix is to hand the handler its
+    // fire instant, which is out of MOTIR-3416's scope and needs a month of
+    // worker downtime to bite.
+    catchUp: 'latest',
+    retryPolicy: 'idempotent',
+  },
   async (ctx, services) => {
     // The job's clock read is confined to this one line so the pure period maths
     // above stays testable without faking time.

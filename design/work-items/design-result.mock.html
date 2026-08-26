@@ -30,6 +30,21 @@
           and child-panel-graph.mock.html — the precedent for a BOUNDED,
           scrollable embedded surface inside a section card.
 
+      ⚠️ AMENDED BY MOTIR-3510 — the NOTE is bounded and contained too. This
+      asset measured the FRAME and drew the note beside it as a placeholder
+      one-liner ("Rendered note (first paragraphs) …"), so the note shipped
+      unbounded and uncontained, and a real design-notes.md section rendered
+      3,000–8,000px tall — six to sixteen times the frame's 32rem — pushing the
+      frame, the screenshots and the provenance that far down. The frame's own
+      argument applies verbatim to the note; it was never applied because the
+      mock never drew a note at real length. The note now inherits the frame's
+      MEASUREMENT (32rem, its own scroll in both axes) and the frame's GRAMMAR
+      (an --el-surface-soft strip naming its source, over an --el-border body),
+      and panel 1 draws it at real length so the bound is visible rather than
+      asserted. The panel's note is also rendered through MarkdownView
+      (`wmde-markdown motir-prose`) rather than an inert `markdown-body` class
+      that no stylesheet defines — the typography below mirrors that.
+
       COMPOSES ONLY SHIPPED PRIMITIVES — ContentSectionCard (.card), Button
       variants (.btn-*), Pill (tint bg + --el-text-strong, finding #35), and the
       attachment thumbnail/lightbox. The one NEW element is the mock FRAME, and
@@ -43,8 +58,9 @@
             and how a reviewer REACHES a design subtask at all.
         1 · Published — the rendered note, the mock frame, the screenshot, the
             provenance line.
-        2 · The mock frame, MEASURED — 32rem tall, its own scroll in both axes,
-            the open-in-new-tab escape, and what a too-wide mock does.
+        2 · BOTH published artifacts, MEASURED — the note AND the frame, 32rem
+            each, their own scroll in both axes, their escapes, and what a
+            too-wide artifact does.
         3 · Nothing published yet — the empty state (the normal case for every
             design subtask that shipped before this feature).
         4 · Loading, and a frame that fails to load.
@@ -953,24 +969,70 @@
 
       /* ── The DESIGN RESULT panel ─────────────────────────────────────────── */
 
-      /* The rendered note. Prose from lib/markdown/render.tsx — the SAME
-         renderer the description and explanation already use. */
+      /* ⚠️ THE RENDERED NOTE — BOUNDED AND CONTAINED, exactly as the frame is
+         (MOTIR-3510). The note is the taller of the two published artifacts in
+         practice: one `##` section of a real design-notes.md runs 200–350 lines
+         and renders 3,000–8,000px, six to sixteen times what the frame is
+         allowed. The frame's own argument — "an unbounded frame would swallow a
+         page that already has eight sections" — is the note's argument, so it
+         inherits the frame's MEASUREMENT (32rem) and the frame's GRAMMAR (a
+         --el-surface-soft strip over an --el-border body). It is drawn here at
+         real length, not as a placeholder line: a placeholder cannot be
+         measured, which is why this asset drew a bound for the frame and none
+         for the note.
+         The compressed panels (2 · 5 · 6) override the height inline, the same
+         way they already override .frame's. */
+      /* The typography here MIRRORS the shipped read surface — `.motir-prose`
+         in components/ui/markdown-editor.css, applied by MarkdownView, which is
+         what the panel renders the note through. It used to carry an inert
+         `markdown-body` class that no stylesheet in the repo or in any
+         dependency defines, so the note rendered under Tailwind preflight: no
+         heading scale, no list markers, no table rules (MOTIR-3510). */
       .note {
+        height: 32rem;
+        overflow: auto;
         color: var(--el-text);
+        font-size: 0.875rem;
+        line-height: 1.6;
+        padding: 1rem;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+      }
+      /* The strip and the body are one card, as with .frame-strip + .frame. */
+      .frame-strip + .note {
+        border-radius: 0 0 var(--radius-input) var(--radius-input);
+      }
+      .note > * + * {
+        margin-top: 0.6em;
+      }
+      .note h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.3;
+        margin: 0;
       }
       .note h3 {
-        font-size: 0.9375rem;
+        font-size: 1.1rem;
         font-weight: 600;
-        margin: 0 0 0.5rem;
+        margin: 0;
       }
       .note p {
-        margin: 0 0 0.75rem;
+        margin: 0;
         color: var(--el-text-secondary);
       }
       .note ul {
-        margin: 0 0 0.75rem;
-        padding-left: 1.125rem;
+        margin: 0;
+        padding-left: 1.5rem;
+        list-style: disc;
         color: var(--el-text-secondary);
+      }
+      .note code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+        background: var(--el-surface);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
       }
       /* ⚠️ design-notes.md sections carry WIDE tables. The table scrolls inside
          its own container; the page body never scrolls sideways. */
@@ -978,23 +1040,26 @@
         overflow-x: auto;
         border: 1px solid var(--el-border-soft);
         border-radius: var(--radius-input);
-        margin-bottom: 0.75rem;
       }
       .note table {
         border-collapse: collapse;
+        border-spacing: 0;
         min-width: 42rem;
-        font-size: 0.8125rem;
       }
       .note th,
       .note td {
         text-align: left;
-        padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid var(--el-border-soft);
-        white-space: nowrap;
+        vertical-align: top;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-bottom: 1px solid var(--el-border);
       }
-      .note th {
-        color: var(--el-text-secondary);
+      .note thead th {
+        border-bottom: 1px solid var(--el-border-strong);
         font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .note tbody tr:last-child td {
+        border-bottom: 0;
       }
       .note-truncated {
         display: flex;
@@ -1281,7 +1346,8 @@
       subtask's result — the note, the page/view mock and the screenshot — without leaving Motir.
       Built to <code>the design-result decision record (MOTIR-2665)</code>. There is deliberately no
       upsell and no toggle state: §2 decided the feature has no entitlement axis, so the panel has
-      THREE states, not five.
+      THREE states, not five. <b>Amended by MOTIR-3510:</b> the note is bounded and contained at the
+      same 32rem the frame carries — see panel 2, which now measures both.
     </p>
 
     <!-- ─────────────────────────── PANEL 0 ─────────────────────────── -->
@@ -1341,8 +1407,11 @@
       <h2>1 · Published — the whole panel</h2>
       <p class="why">
         Three artifacts, each rendered the way that artifact deserves to be read: the note as
-        rendered Markdown through the single shipped renderer, the mock in a bounded sandboxed
-        frame, the screenshot through the existing lightbox.
+        rendered Markdown through the single shipped renderer and the shipped prose styles, in a
+        bounded container of its own; the mock in a bounded sandboxed frame; the screenshot through
+        the existing lightbox. <strong>The note is drawn here at REAL length</strong> — one
+        <code>##</code> section of this folder's own <code>design-notes.md</code> — because a
+        placeholder cannot be measured, and that is how it shipped unbounded (MOTIR-3510).
       </p>
       <div class="card" style="max-width: 44rem">
         <div class="card-head">
@@ -1353,18 +1422,42 @@
           </span>
         </div>
 
+        <div class="frame-strip">
+          <span>Design note</span>
+          <span class="mono">design/work-items/design-notes.md</span>
+        </div>
+        <!-- ⚠️ DRAWN AT REAL LENGTH. This is one `##` section of a real
+             design-notes.md, which is what the publisher ships — not a
+             one-line stand-in this panel used to carry. The overflow is
+             the point: a placeholder cannot be measured, and that is exactly
+             why this asset bounded the frame below and left the note
+             unbounded (MOTIR-3510). -->
         <div class="note">
-          <h3>The Design result panel</h3>
+          <h2>Design result panel</h2>
           <p>
-            The section sits in the item-detail left column, after Development. It renders on any
-            leaf with a current design result; a design subtask with none shows the empty state.
+            A <code>type: design</code> subtask's deliverable is three files in
+            <code>design/&lt;area&gt;/</code>. Until now the product showed none of them: to judge a
+            design a reviewer left Motir, found the pull request and opened raw files on GitHub.
+            This panel is where the design comes home.
           </p>
+          <h3>Placement + the access path</h3>
+          <p>
+            A <code>ContentSectionCard</code> in the item-detail left column, between Development
+            and Children — the same slot family as the acceptance panel, and detail-page only for
+            the same reason (the quick view is unchanged).
+          </p>
+          <p>
+            It renders on any leaf with a current design result. On a <code>type: design</code>
+            subtask with none it renders the EMPTY state rather than disappearing: "no design
+            published" is worth stating on the card whose job was to produce one.
+          </p>
+          <h3>Anatomy</h3>
           <div class="note-table-scroll">
             <table>
               <thead>
                 <tr>
                   <th>Element</th>
-                  <th>Primitive</th>
+                  <th>Primitive composed</th>
                   <th>Colour token</th>
                   <th>Shape token</th>
                 </tr>
@@ -1372,9 +1465,39 @@
               <tbody>
                 <tr>
                   <td>Section</td>
-                  <td>ContentSectionCard</td>
-                  <td>--el-border / --el-page-bg</td>
-                  <td>--radius-card</td>
+                  <td>ContentSectionCard (Card + header grammar)</td>
+                  <td>--el-page-bg on --el-border</td>
+                  <td>--radius-card, --spacing-card-padding</td>
+                </tr>
+                <tr>
+                  <td>Current chip</td>
+                  <td>Pill</td>
+                  <td>--el-tint-mint bg + --el-text-strong</td>
+                  <td>--radius-badge, --spacing-chip-*</td>
+                </tr>
+                <tr>
+                  <td>Note strip</td>
+                  <td>—</td>
+                  <td>--el-surface-soft on --el-border</td>
+                  <td>--radius-input (top corners)</td>
+                </tr>
+                <tr>
+                  <td>Rendered note</td>
+                  <td>MarkdownView (wmde-markdown motir-prose)</td>
+                  <td>--el-text / --el-text-secondary</td>
+                  <td>--radius-input (bottom corners)</td>
+                </tr>
+                <tr>
+                  <td>Wide table in the note</td>
+                  <td>scroll container</td>
+                  <td>--el-border-soft</td>
+                  <td>--radius-input</td>
+                </tr>
+                <tr>
+                  <td>Frame strip</td>
+                  <td>—</td>
+                  <td>--el-surface-soft on --el-border</td>
+                  <td>--radius-input (top corners)</td>
                 </tr>
                 <tr>
                   <td>Mock frame</td>
@@ -1387,6 +1510,26 @@
           </div>
           <p>
             A wide table scrolls inside its own container — the page body never scrolls sideways.
+          </p>
+          <h3>The two published artifacts are MEASURED, both at 32rem</h3>
+          <p>
+            A published mock is a tall multi-panel document and a published note is a tall document
+            too — one section of this file runs 200–350 lines. Either one, unbounded, swallows a
+            page that already has eight sections. So both are bounded and both scroll inside
+            themselves:
+          </p>
+          <ul>
+            <li>Horizontal: a wide artifact scrolls INSIDE its own box, never the page body.</li>
+            <li>The escape: <em>Open in new tab</em> for the mock, the note file for the note.</li>
+            <li>
+              The sandbox: neither <code>allow-scripts</code> nor <code>allow-same-origin</code>.
+            </li>
+          </ul>
+          <h3>States — THREE, not five</h3>
+          <p>
+            The design-result decision record decided the feature has no entitlement axis: no plan
+            gate, no org toggle. So unlike the acceptance panel there is no upsell state and no
+            toggle state to draw. Published · nothing published yet · failed to load.
           </p>
         </div>
 
@@ -1455,14 +1598,26 @@
 
     <!-- ─────────────────────────── PANEL 2 ─────────────────────────── -->
     <section class="panel">
-      <h2>2 · The mock frame, MEASURED</h2>
+      <h2>2 · BOTH published artifacts, MEASURED</h2>
       <p class="why">
-        <strong>The frame is 32rem (512px) tall and scrolls inside itself, in both axes.</strong>
+        <strong
+          >The note and the frame are each 32rem (512px) tall and each scrolls inside itself, in
+          both axes.</strong
+        >
         A published mock is a tall multi-panel document — <code>acceptance-panel.mock.html</code> is
-        48&nbsp;KB of stacked panels — so an unbounded frame would swallow a page that already has
-        eight sections. 32rem shows roughly one panel of a real mock at a glance. Measured below
-        against a 900px viewport: header + note + frame + screenshot still leave the sections below
-        reachable by ordinary page scroll.
+        48&nbsp;KB of stacked panels — and a published note is a tall document too: one
+        <code>##</code> section of a real <code>design-notes.md</code> runs 200–350 lines and
+        renders 3,000–8,000px. Either one, unbounded, swallows a page that already has eight
+        sections. 32rem shows roughly one panel of a real mock, or the first screen of a note, at a
+        glance.
+      </p>
+      <p class="why">
+        <strong>What the 900px viewport below actually shows, drawn at TRUE scale:</strong> the note
+        fills the fold, and the frame begins just under it. That is the measurement, not a miss —
+        two bounded artifacts do not both fit above one fold, and the alternative is the defect this
+        replaced, where the frame began three to eight THOUSAND pixels down. One ordinary scroll now
+        reaches the frame, the next the screenshot and the provenance. If a reader wants all three
+        at once, the artifacts are what scroll, not the page.
       </p>
       <div class="row">
         <div class="ruler">
@@ -1476,14 +1631,40 @@
                 <span class="card-title">Design result</span>
                 <span class="card-gloss">— what this card produced</span>
               </div>
+              <div class="frame-strip">
+                <span>Design note</span><span class="spacer"></span><span class="mono">32rem</span>
+              </div>
               <div class="note">
-                <p style="margin-bottom: 0.5rem">Rendered note (first paragraphs) …</p>
+                <h2>Design result panel</h2>
+                <p>
+                  A <code>type: design</code> subtask's deliverable is three files in
+                  <code>design/&lt;area&gt;/</code>. Until now the product showed none of them: to
+                  judge a design a reviewer left Motir, found the pull request and opened raw files
+                  on GitHub. This panel is where the design comes home.
+                </p>
+                <h3>Placement + the access path</h3>
+                <p>
+                  A <code>ContentSectionCard</code> in the item-detail left column, between
+                  Development and Children — the same slot family as the acceptance panel, and
+                  detail-page only for the same reason.
+                </p>
+                <p>
+                  It renders on any leaf with a current design result. On a
+                  <code>type: design</code> subtask with none it renders the EMPTY state rather than
+                  disappearing.
+                </p>
+                <h3>Anatomy</h3>
+                <p>
+                  The section, the Current chip, the note strip and its bounded body, the frame
+                  strip and its sandboxed frame, the screenshot thumb, the provenance chips — each
+                  with its <code>--el-*</code> colour role and its shape token.
+                </p>
               </div>
               <div class="frame-strip">
                 <span>Sandboxed preview</span><span class="spacer"></span
                 ><span class="mono">32rem</span>
               </div>
-              <div class="frame" style="height: 20rem">
+              <div class="frame">
                 <div class="frame-inner">
                   <div
                     style="height: 10rem; background: var(--el-tint-sky); border-radius: 8px"
@@ -1504,8 +1685,15 @@
         <div style="max-width: 24rem">
           <p class="legend">
             <strong>Horizontal.</strong> A mock wider than the content column scrolls
-            <em>inside the frame</em> (the inner block above is 46rem against a narrower column).
-            The page body never gains a horizontal scrollbar.
+            <em>inside the frame</em> (the inner block above is 46rem against a narrower column),
+            and a wide table in the note scrolls inside its own container. The page body never gains
+            a horizontal scrollbar.
+          </p>
+          <p class="legend">
+            <strong>The note's escape.</strong> The truncation notice and its
+            <em>download design-notes.md</em> link sit BELOW the container, unchanged — that is the
+            full read, and it is the only affordance the note carries. The note's strip names its
+            source and nothing else; a strip that carried controls would be a different design.
           </p>
           <p class="legend">
             <strong>The escape.</strong> <em>Open in new tab</em> is the full-width read, and it is
@@ -1566,8 +1754,9 @@
         </div>
         <div class="card" style="max-width: 26rem">
           <div class="card-head"><span class="card-title">Failed to load</span></div>
-          <div class="note">
-            <p style="margin-bottom: 0.75rem">The note and screenshot still render.</p>
+          <div class="frame-strip"><span>Design note</span></div>
+          <div class="note" style="height: 5rem">
+            <p>The note and screenshot still render, in their own bounded container.</p>
           </div>
           <div class="state state-error">
             <span class="glyph">!</span>
@@ -1610,9 +1799,18 @@
             the result from the previous run.
           </span>
         </div>
-        <div class="note">
-          <h3>The Design result panel</h3>
-          <p>…the current note…</p>
+        <div class="frame-strip">
+          <span>Design note</span>
+          <span class="mono">design/work-items/design-notes.md</span>
+        </div>
+        <!-- Compressed, as this panel compresses the frame elsewhere: what it
+             draws is the truncation pair, not the measurement (panel 2). -->
+        <div class="note" style="height: 7rem">
+          <h2>Design result panel</h2>
+          <p>
+            The current note, republished by the latest run. It is bounded and scrolls inside itself
+            exactly as panel 2 measures.
+          </p>
         </div>
         <div class="note-truncated" style="margin-top: 1rem; margin-bottom: 0">
           <span>✂</span>
@@ -1642,7 +1840,11 @@
       <div class="row">
         <div class="card narrow">
           <div class="card-head"><span class="card-title">Design result</span></div>
-          <div class="note"><p>Rendered note…</p></div>
+          <div class="frame-strip"><span>Design note</span></div>
+          <div class="note" style="height: 6rem">
+            <h2>Design result panel</h2>
+            <p>The note keeps its bound and gains its own scroll rather than squeezing.</p>
+          </div>
           <div class="frame-strip"><span>Sandboxed preview</span></div>
           <div class="frame" style="height: 14rem">
             <div class="frame-inner" style="min-width: 40rem">
@@ -1662,8 +1864,11 @@
               <span class="card-gloss">— what this card produced</span>
               <span class="card-head-right"><span class="pill pill-mint">Current</span></span>
             </div>
-            <div class="note">
-              <h3>The Design result panel</h3>
+            <div class="frame-strip">
+              <span>Design note</span><span class="spacer"></span><span class="mono">32rem</span>
+            </div>
+            <div class="note" style="height: 6rem">
+              <h2>Design result panel</h2>
               <p>The same composition, tokens flipped.</p>
             </div>
             <div class="frame-strip">

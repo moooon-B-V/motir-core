@@ -1013,3 +1013,42 @@ from that render rather than from the code:
 - Dark-theme parity verified by rendering `convention.dark.png` (toggle in the mock header) — every
   `--el-*` re-skins through the `[data-theme='dark']` `--color-*` overrides + the `--el-overlay-scrim`
   dark companion.
+
+---
+
+## The streaming allocation at ARRIVAL — `/code-health` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+> **⚠️ WHY THIS ENTRY IS HERE.** `/code-health` has **no `design/` area of its own** — the tree was
+> listed rather than assumed (`ls design`, 42 areas, no `code-health`). This area is the nearest
+> owner and the choice is named rather than left implicit: this file is titled _Coding convention &
+> code-health_, and it is the layout source of truth for **MOTIR-926, the code-health UI**. The other
+> candidate, `design/audit-coverage/`, draws the NUDGE that links to `/code-health`, not the route.
+> No new area is created for one allocation entry.
+
+|                            |                                                                                                                                                                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations('codeHealth')` → `getActiveProject`                                                                                                                                                                                              |
+| **with the frame**         | the `Header` — `t('title')` and `t('subtitle')`, and nothing else. It is already rendered identically in all three branches of this page                                                                                                                         |
+| **with the first content** | `resolveCodeContext` → `repoRefs`, then `loadCodeHealthSurfaces(repoRefs)`. **The two are serial for a real reason** — the second takes the first's output — and the second is **already concurrent internally**, through three nested `allSettledOrThrow` calls |
+| **after the page**         | — nothing from the server. `CodeHealthClient` is a client island seeded from `initialAudits` / `initialSelectedAudit` / `initialConventions`                                                                                                                     |
+| **settles**                | **once**                                                                                                                                                                                                                                                         |
+| **verdict**                | **NONE — reuse nothing, redraw nothing.** The late region is the client island, and it is seeded rather than fetched, so the only thing a boundary buys is that the `Header` paints ahead of it                                                                  |
+
+**THE COUNT IS THE TRIGGER AND NOT THE FINDING, and this is the page the story named for it.**
+Eleven `await`s reads as the second-worst page in the app. **Three of them are the gate. Two are the
+real chain, and that chain is genuinely dependent.** The rest are inside error branches that do not
+run on the happy path. `loadCodeHealthSurfaces` was already written concurrently —
+`allSettledOrThrow` over the repositories, and again over `(audit, conventions)` per repository. **A
+sweep driven by the number would have churned correct code and reported a win.**
+
+So what this surface takes from the story is exactly one thing: the boundary below the gate, so the
+title and subtitle are on screen while the audit surfaces resolve. **No read is re-ordered, no
+`allSettledOrThrow` is touched, and no asset is drawn.**
+
+**A route boundary is declined as a preference** — `/code-health` does not call `notFound()`.

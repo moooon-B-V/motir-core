@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ExternalLink,
+  FileText,
   FileWarning,
   GitCommitHorizontal,
   ImageOff,
   PanelsTopLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { renderMarkdown } from '@/lib/markdown/render';
+import { MarkdownView } from '@/components/ui/MarkdownView';
 import { AttachmentPreview, type PreviewableAttachment } from './AttachmentPreview';
 import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 
@@ -27,7 +28,19 @@ import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence
 // the item's status. Approve / request-changes and the revise loop belong to the
 // runtime design-approval gate (§7), whose surface COMPOSES this one.
 
-/** The frame height the design measured (design-notes.md § Design result panel). */
+/**
+ * The height the design measured for a PUBLISHED ARTIFACT in this panel
+ * (design-notes.md § Design result panel — "32rem (512px) tall, scrolling
+ * inside itself in BOTH axes… an unbounded frame would swallow a page that
+ * already has eight sections").
+ *
+ * The mock frame and the rendered NOTE both carry it. That argument was written
+ * about the frame and is at least as true of the note — a real `design-notes.md`
+ * section runs 200–350 lines and renders thousands of pixels tall, and the
+ * service's 64 KiB cap (`designEvidenceService.NOTE_MD_CAP_BYTES`) permits
+ * several times that. ONE constant, referenced from both, so the two artifacts
+ * cannot drift apart (MOTIR-3510).
+ */
 const FRAME_HEIGHT = 'h-[32rem]';
 
 export interface DesignResultPanelProps {
@@ -223,16 +236,36 @@ export function DesignResultPanel({ evidence, isDesignCard }: DesignResultPanelP
   const mocks = evidence.assets.filter((a) => a.kind === 'mock' && a.url);
   const images = evidence.assets.filter((a) => a.kind === 'image' && a.url);
   const noteFile = evidence.assets.find((a) => a.kind === 'note_file' && a.url);
+  // The strip names the note's SOURCE, mirroring the frame strip. The asset
+  // is read WITHOUT the `url` filter above: a GC-reclaimed blob still knows
+  // which repo file it came from, and that is all the strip renders.
+  const noteSourcePath = evidence.assets.find((a) => a.kind === 'note_file')?.sourcePath;
 
   return (
     <div>
       {evidence.noteMd ? (
-        // The note goes through the SINGLE shipped Markdown renderer — the same
-        // one the description and explanation use. `design-notes.md` sections
-        // carry wide tables, so `markdown-body`'s table container scrolls
-        // horizontally inside the section; the page body never scrolls sideways.
-        <div className="markdown-body overflow-x-auto text-sm">
-          {renderMarkdown(evidence.noteMd)}
+        // The note is a PUBLISHED ARTIFACT, so it gets the frame's treatment:
+        // a header strip naming its source over a BOUNDED, bordered body that
+        // scrolls inside itself. Same grammar, same tokens, same FRAME_HEIGHT
+        // — the two artifacts read as one result instead of a queue.
+        //
+        // It renders through MarkdownView — the shipped read surface for
+        // work-item Markdown (`wmde-markdown motir-prose`, the same styling
+        // the description and explanation get). `.motir-prose` is what supplies
+        // heading scale, list markers and table rules; it also sets the 14px
+        // body size, so no `text-sm` here. Wide tables scroll inside their own
+        // container, which `renderMarkdown` wraps them in (MOTIR-2039), so the
+        // page body never scrolls sideways.
+        <div>
+          <div className="flex items-center gap-2 rounded-t-(--radius-input) border border-b-0 border-(--el-border) bg-(--el-surface-soft) px-2.5 py-1.5 text-xs text-(--el-text-secondary)">
+            <FileText className="h-3.5 w-3.5" aria-hidden />
+            <span className="font-medium">{t('note')}</span>
+            {noteSourcePath ? <span className="truncate font-mono">{noteSourcePath}</span> : null}
+          </div>
+          <MarkdownView
+            value={evidence.noteMd}
+            className={`${FRAME_HEIGHT} overflow-x-auto overflow-y-auto rounded-b-(--radius-input) border border-(--el-border) bg-(--el-page-bg) p-4`}
+          />
         </div>
       ) : null}
 

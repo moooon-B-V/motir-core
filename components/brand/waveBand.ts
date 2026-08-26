@@ -78,12 +78,49 @@ export function waveBandSvg({ size, fill }: { size: number; fill: string }): str
   );
 }
 
+// ── The email mark (design-notes.md §7e · MOTIR-3505) ────────────────────────
+//
+// Email gets a HOSTED RASTER, and only that. This module used to export a
+// `waveBandDataUri` helper that wrapped the glyph in a `data:image/svg+xml`
+// URI, and `EmailLayout` shipped it as the mark's `src`. It rendered in no
+// mail client at all, for two independent reasons — either sufficient on its
+// own, so fixing one would have left the header still empty:
+//
+//   the `data:` TRANSPORT — Gmail rewrites every image through its
+//     googleusercontent.com proxy and drops sources it cannot FETCH. A data URI
+//     has nothing to proxy.
+//   the SVG FORMAT — Gmail, Outlook and Yahoo render SVG in email in no
+//     transport, hosted or inline.
+//
+// The helper is DELETED rather than left unused: the one surface it was written
+// for is the one surface it cannot work on, so anything still able to emit a
+// `data:` URI here is a regression waiting to be re-wired (MOTIR-3505). The
+// artwork is unchanged — the bare glyph in `BRAND_ACCENT_HEX` on transparency,
+// exactly what the data URI drew; only its transport and format moved.
+
+/** Displayed size of the email mark, in CSS px (§7e). */
+export const EMAIL_MARK_PX = 20;
+
 /**
- * The same glyph as a `data:` URI, for the ONE surface that can use neither an
- * inline `<svg>` nor a hosted file: transactional email. Outlook's Word renderer
- * drops inline SVG and Gmail strips `<style>`, so the mark ships as an `<img>`
- * with a literal colour (design-notes.md §7e).
+ * Rendered at 2× and constrained by the `<img>`'s own `width`/`height`, so the
+ * mark is sharp on a retina client. Email has no `srcset` worth relying on.
  */
-export function waveBandDataUri({ size, fill }: { size: number; fill: string }): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(waveBandSvg({ size, fill }))}`;
-}
+export const EMAIL_MARK_SCALE = 2;
+
+/** The raster's canvas — what `scripts/brand/generate-brand-icons.mts` emits. */
+export const EMAIL_MARK_CANVAS_PX = EMAIL_MARK_PX * EMAIL_MARK_SCALE;
+
+/**
+ * The file lives in `public/`, so it is served at a STABLE root path. Next's
+ * static-metadata matcher takes one optional DIGIT after `icon`, so an
+ * `app/`-convention name carrying a size would be served at no URL at all —
+ * the trap §5 already records for `icon-192.png`.
+ */
+export const EMAIL_MARK_FILE = `email-mark-${EMAIL_MARK_CANVAS_PX}.png`;
+
+/**
+ * Root-relative path of the email mark. `EmailLayout` makes it ABSOLUTE per
+ * send against `resolveBaseUrl()`: an email has no document to resolve a
+ * relative URL against, so a root-relative `src` is as dead as a `data:` one.
+ */
+export const EMAIL_MARK_PATH = `/${EMAIL_MARK_FILE}`;

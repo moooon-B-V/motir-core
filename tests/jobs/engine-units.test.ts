@@ -3,7 +3,11 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { defineJob } from '@/lib/jobs/defineJob';
+import { readFileSync } from 'node:fs';
+import { inngest } from '@/lib/jobs/client';
+import { defineJob, type DefineJobOptions } from '@/lib/jobs/defineJob';
+import { CATCH_UP_POLICY_NAMES, type CatchUpPolicy } from '@/lib/jobs/catchUp';
+import { jobSchedules } from '@/lib/jobs/schedules';
 import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
@@ -102,6 +106,122 @@ describe('the engine registry — the query surface the dispatcher and the sched
     // Module re-evaluation under HMR or a test harness must not grow the table.
     expect(engineJobs().filter((d) => d.id === id)).toHaveLength(1);
     expect(engineJob(id)?.maxAttempts).toBe(5);
+  });
+});
+
+describe('the catch-up disposition is DECLARED and cannot be omitted (MOTIR-3470)', () => {
+  // `docs/decisions/job-queue-foundation.md` §11 is the decision; this block is
+  // what makes it un-skippable. The three assertions are deliberately different
+  // KINDS: one holds at compile time, one walks the real registry, and one reads
+  // the record itself — so neither the code nor the document can move alone.
+
+  it('a `cron` job that omits `catchUp` DOES NOT TYPE-CHECK', () => {
+    // ⚠️ A COMPILE-LEVEL assertion, because a rule enforced only by review is not
+    // enforced. `@ts-expect-error` fails the build if the line below ever STOPS
+    // erroring, which is the direction that matters: it is what would happen if
+    // someone gave `catchUp` a default or made it optional.
+    // @ts-expect-error — a definition supplying `cron` must supply `catchUp`.
+    const missingCatchUp: DefineJobOptions<'system.attachment-gc'> = {
+      id: 'system.attachment-gc',
+      cron: '30 3 * * *',
+    };
+    void missingCatchUp;
+
+    // The mirror: the option is meaningless without a schedule, and an
+    // accepted-but-ignored field is a lie.
+    // @ts-expect-error — an event-triggered definition may not supply `catchUp`.
+    const catchUpWithoutCron: DefineJobOptions<'email.send'> = {
+      id: 'email.send',
+      catchUp: 'latest',
+    };
+    void catchUpWithoutCron;
+
+    // A well-formed pair compiles — otherwise the two negatives above would pass
+    // against a type that rejects everything.
+    const wellFormed: DefineJobOptions<'system.attachment-gc'> = {
+      id: 'system.attachment-gc',
+      cron: '30 3 * * *',
+      catchUp: 'latest',
+    };
+    expect(wellFormed.catchUp).toBe('latest');
+  });
+
+  it('EVERY job in the real registry that declares a cron carries a disposition', () => {
+    // Walked from `engineScheduledJobs()`, never from a transcribed list of
+    // fourteen — the enumeration that was already wrong once (the count read
+    // FILES, and `ciRunnerFleet.ts` declares two). A fifteenth cron job added
+    // later fails HERE rather than shipping with no policy.
+    const scheduled = engineScheduledJobs();
+    expect(scheduled.length).toBeGreaterThan(10);
+    for (const def of scheduled) {
+      expect(def.cron, `${def.id} declares a cron`).toBeTruthy();
+      expect(CATCH_UP_POLICY_NAMES, `${def.id} carries a known catchUp`).toContain(def.catchUp);
+    }
+
+    // And the converse: nothing event-triggered carries one, so the field can
+    // never be read on a job the scheduler does not own.
+    for (const def of engineJobs().filter((d) => d.cron === undefined)) {
+      expect(def.catchUp, `${def.id} is event-triggered`).toBeUndefined();
+    }
+  });
+
+  it('each disposition MATCHES the amendment — the code and the record cannot drift', () => {
+    // The value on each job is taken from `docs/decisions/job-queue-foundation.md`
+    // §11.4, so this reads that table back rather than restating it. Both
+    // directions are checked: a job in the registry and absent from the table is
+    // the defect the amendment says it exists to prevent, and a row in the table
+    // naming a job that no longer exists is the same defect inverted.
+    const adr = readFileSync('docs/decisions/job-queue-foundation.md', 'utf8');
+    const section = adr.slice(adr.indexOf('### §11.4'), adr.indexOf('### §11.5'));
+    expect(section.length).toBeGreaterThan(0);
+
+    const tabled = new Map<string, { cron: string; catchUp: CatchUpPolicy }>();
+    for (const line of section.split('\n')) {
+      const m =
+        /^\|\s*`(system\.[a-z0-9.-]+)`\s*\|\s*`([^`]+)`\s*\|\s*\*{0,2}`?([a-z]+)`?\*{0,2}\s*\|/.exec(
+          line,
+        );
+      if (m) tabled.set(m[1]!, { cron: m[2]!, catchUp: m[3] as CatchUpPolicy });
+    }
+
+    const registry = new Map(engineScheduledJobs().map((d) => [d.id, d]));
+    expect([...tabled.keys()].sort()).toEqual([...registry.keys()].sort());
+    for (const [id, def] of registry) {
+      expect(def.catchUp, `${id}'s disposition matches §11.4`).toBe(tabled.get(id)?.catchUp);
+      // The CRON too — §11.9 promises no schedule changes, and a table quoting a
+      // stale expression would make that promise unverifiable from the record.
+      expect(def.cron, `${id}'s cron matches §11.4`).toBe(tabled.get(id)?.cron);
+    }
+
+    // The schedule table `jobScheduleHealthService` reads is the same population,
+    // so the two registries cannot disagree about which jobs are scheduled.
+    expect(
+      jobSchedules()
+        .map((s) => s.functionId)
+        .sort(),
+    ).toEqual([...registry.keys()].sort());
+  });
+
+  it('does NOT forward `catchUp` to Inngest — `fn.opts` is unchanged by this option', () => {
+    // The option describes a scheduler Inngest does not have. Forwarding it would
+    // put an unknown key into a function's SYNCED config, and the assertion has
+    // to be on the forwarded config rather than on "the app still builds".
+    const spy = vi.spyOn(inngest, 'createFunction');
+    try {
+      defineJob(
+        { id: 'system.attachment-gc', cron: '30 3 * * *', catchUp: 'latest' },
+        () => undefined,
+      );
+      const config = spy.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+      expect(config).toBeDefined();
+      expect(config).not.toHaveProperty('catchUp');
+      // And what IS forwarded is exactly what was forwarded before: the cron
+      // trigger and the resolved retry count.
+      expect(config?.['triggers']).toEqual([{ cron: '30 3 * * *' }]);
+      expect(config?.['retries']).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

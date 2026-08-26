@@ -249,3 +249,55 @@ post-1.1.10 card-wrapped design. The older `design/auth/*.png` mockups
 predate 1.1.10 and don't reflect the shipped layout; they're correct as
 a snapshot of the design at the time 1.1.1/1.1.5 shipped, but the code is
 the source of truth going forward.
+
+---
+
+## The streaming allocation at ARRIVAL — `/invite/accept` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+**Asset ·** `invite-arrival.mock.html` / `invite-arrival.png`. **This is the only one of MOTIR-3442's
+ten surfaces whose verdict is _a frame of its own_, and therefore the only one that draws.**
+
+|                            |                                                                                                                                                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getTranslations('auth')` → `getSession` (**`redirect('/sign-in')`**) → `searchParams` → `workspaceInvitesService.inspectInvite(token)`, which selects **all four** bodies: accept · expired · used · wrong-email |
+| **with the frame**         | — **nothing.** The headline is `t('joinWorkspace', { workspaceName })` and the subhead names the inviter; both come from the read, and three of the four branches replace them outright                           |
+| **with the first content** | the whole body — one of the four `AuthShell`s                                                                                                                                                                     |
+| **after the page**         | — nothing                                                                                                                                                                                                         |
+| **settles**                | **once**                                                                                                                                                                                                          |
+| **verdict**                | **A FRAME OF ITS OWN.** This is the case rule 2 is written for: there is genuinely nothing to show until the gate resolves                                                                                        |
+
+**Why this one and not the other nine.** Every other surface in the sweep can paint a title, a
+toolbar, a switcher or a back-link from strings the gate already has. This one cannot paint a single
+character of its own copy — and it is the only surface in the story reached by a **hard navigation
+from outside the app**, from a link in an email, so `design/shell/design-notes.md` § _WINDOW 1_'s
+shell mark cannot speak for it either. There is no mounted shell. Between the click in the mail
+client and `inspectInvite` returning, the reader has nothing at all.
+
+**What the frame draws — and what makes it a stand-in rather than a guess.** All four bodies render
+the same chrome: `InviteCard` wrapping `AuthShell`, a headline line, a subhead line, and one
+full-width control. The frame is that chrome with the two text lines as placeholder bars and the
+control as a button-height block. **It cannot mispredict**, because the shape is identical whichever
+branch arrives — only the words differ.
+
+| block    | box                                | the region it becomes                                                                                                         |
+| -------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| headline | `h-7` · `w-3/4`                    | `AuthShell`'s headline — _Join {workspace}_ / _Invite expired_ / _Invite already used_ / _That invite is for another address_ |
+| subhead  | `h-4` · `w-full` + `h-4` · `w-2/3` | the subhead, which wraps to two lines in the accept and wrong-email branches                                                  |
+| control  | `h-(--height-btn-md)` · full width | `AcceptInviteButton`, or the Back button the other three render                                                               |
+
+**One correction to the card that commissioned this, on the record.** [MOTIR-3442](motir:cmt8s088r003ni1phat3x1o9q)
+describes the reader as _"a person who is not signed in to anything yet"_. The shipped route is
+`app/(authed)/invite/accept/page.tsx` and its second line is `if (!session) redirect('/sign-in')` —
+so an unauthenticated visitor never reaches this page, and the frame is for a reader who **is**
+signed in and has just followed a link from their mail client. The frame is unchanged by the
+correction; the sentence that would have justified an unauthenticated variant is not.
+
+**A route boundary is PROHIBITED for the group, and a preference here** — `/invite/accept` does not
+itself call `notFound()`, but rule 5 is one mechanism, not two: the frame is an in-page
+`<Suspense>` after the gate, like every other page's.
