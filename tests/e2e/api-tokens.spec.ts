@@ -27,6 +27,24 @@ test.describe.configure({ timeout: 120_000 });
 // copy-failed fallback.
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
+// Assert an element's content fits INSIDE its own box — no horizontally
+// clipped remainder (MOTIR-3545). The shown-once secret is the case this
+// exists for: a `textContent` read cannot see a clip, so a field that shows
+// 48 of a token's 53 characters passes every string assertion in this file.
+// The measurement is a plain layout read of an element already awaited
+// visible, so there is nothing eventually-consistent to race.
+async function expectFullyVisible(el: Locator, what: string) {
+  const box = await el.evaluate((node) => ({
+    scrollWidth: node.scrollWidth,
+    clientWidth: node.clientWidth,
+    text: node.textContent ?? '',
+  }));
+  expect(
+    box.scrollWidth,
+    `${what}: ${box.text.length} chars laid out to ${box.scrollWidth}px inside a ${box.clientWidth}px field — the remainder is clipped out of view`,
+  ).toBeLessThanOrEqual(box.clientWidth);
+}
+
 test.beforeEach(async () => {
   await resetDatabase();
 });
@@ -68,6 +86,49 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
   await expect(secret).toBeVisible();
   const secretText = ((await secret.textContent()) ?? '').trim();
   expect(secretText.startsWith('motir_pat_')).toBe(true);
+
+  // ── The secret must be SHOWN, not merely PRESENT (MOTIR-3545) ──────────
+  // Every assertion above this line reads `textContent`, and `textContent` was
+  // always complete while the rendered box CLIPPED the string — which is how a
+  // one-time reveal shipped for months missing characters with all of its
+  // tests green. The DOM text is not the deliverable here; the pixels are. So
+  // measure the BOX.
+  //
+  // `motir_pat_` (10) + base64url(32 bytes) (43) — a secret is ALWAYS 53
+  // characters, so the length is an invariant and not a sample.
+  expect(secretText).toHaveLength(53);
+  await expectFullyVisible(secret, 'the minted secret, desktop');
+
+  // The panel is `w-[90vw]` UNDER its `max-w`, so width alone cannot carry
+  // this: a narrow viewport shrinks the field regardless of the cap. Assert at
+  // the phone width, where the fix has to be the wrapping rule.
+  const desktopViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(secret).toBeVisible();
+  await expectFullyVisible(secret, 'the minted secret, 390px viewport');
+
+  // A minted secret carries a `-` only about half the time (one in 64 chars,
+  // 43 of them), and the hyphen is the WORST case rather than the mild one:
+  // it is base64url's only line-break opportunity, so the string wraps after
+  // it and the over-long run BEFORE it is clipped — a token that reads as
+  // neatly wrapped and complete while characters are missing. Leaving that to
+  // the mint would make this assertion a coin flip, so drive the shipped
+  // element with a pinned worst-case string instead. The swap is restored
+  // inside the same synchronous evaluate, so React never observes it.
+  const pinned = await secret.evaluate((node) => {
+    const real = node.textContent;
+    node.textContent = 'motir_pat_neCbhDWPEHQneyjNrgWLSnz2_eXYz9-VEAEdkAaCkl4';
+    const box = { scrollWidth: node.scrollWidth, clientWidth: node.clientWidth };
+    node.textContent = real;
+    return box;
+  });
+  expect(
+    pinned.scrollWidth,
+    `a hyphen-bearing secret laid out to ${pinned.scrollWidth}px in a ${pinned.clientWidth}px field`,
+  ).toBeLessThanOrEqual(pinned.clientWidth);
+
+  if (desktopViewport) await page.setViewportSize(desktopViewport);
+  await expect(secret).toBeVisible();
 
   // Copy → success toast.
   await createDialog.getByRole('button', { name: 'Copy' }).click();

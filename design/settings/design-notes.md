@@ -176,6 +176,34 @@ callout** (`--el-tint-peach`, `--el-text-strong`, AA; `triangle-alert` in
 `--el-warning`) — "This is the only time you'll see this token…"; footer a single
 primary **Done**.
 
+### ⚠️ The secret field is specified by LEGIBILITY, not by fit (MOTIR-3545)
+
+**A PAT is always 53 characters** — `motir_pat_` plus `base64url(32 bytes)` = 43
+(`lib/apiTokens/token.ts`). It is shown here and nowhere else, ever, so **this
+field may not truncate, clip or scroll**: an ellipsis or an off-screen remainder
+is a secret the reader cannot copy by eye and has no way to know is incomplete.
+Two things carry that, and neither substitutes for the other:
+
+- **The panel is `modal-wide` (42rem), not the 28rem default** — the same width
+  the create phase already uses, so the modal does not resize under the reader
+  between Create and the reveal. At 42rem the field gets ~471px against the
+  ~360px 53 monospace characters need, and the secret lands on one line.
+- **The field WRAPS at any character** (`word-break: break-all`, no fixed
+  height). The panel is `w-[90vw]` UNDER its `max-w`, so a narrow viewport
+  shrinks the field whatever the cap says — width alone cannot carry this. And
+  base64url's only natural break opportunity is a `-`, which occurs in roughly
+  half of all secrets: without a break rule such a token wraps AFTER the hyphen
+  and clips the over-long run before it, rendering as a neatly wrapped complete
+  token that is missing characters. That shape is the defect, not a milder
+  version of it.
+
+**The token drawn in the panel is real-shape** — 53 characters, carrying a `-`.
+The earlier revision drew a 42-character placeholder inside a `nowrap` +
+`text-overflow: ellipsis` field, which is precisely why 28rem read as
+sufficient: **a placeholder shorter than the real value cannot specify a field
+whose whole job is to hold the real value.** Any future revision of this panel
+keeps a real-shape secret in it.
+
 ## Panel 6 — Revoke confirm
 
 A destructive `Modal` (`size="sm"`, `title='Revoke "{label}"?'`): a **rose-tint
