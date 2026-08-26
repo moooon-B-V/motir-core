@@ -38,14 +38,10 @@ import {
 const REFRESH_JOB = 'system.code-graph-refresh';
 const [REPO] = E2E_INDEX_REPOS;
 
-// ⚠️ THE WAIT IS THE DECLARED DEBOUNCE WINDOW, not slowness. `codeGraphRefresh`
-// declares `period: '2m'`, and the engine implements it (MOTIR-3483) by setting
-// `run_at` two minutes after the last same-key arrival — so a single push is due
-// two minutes later BY CONTRACT. Add the worker's claim interval, the boot, a
-// poll at the shipped 3s cadence and the settle, and the floor is ~2m10s. The
-// budget below is that plus room, and shortening it would mean changing the job's
-// declaration, which is exactly what this spec must not do.
-test.describe.configure({ timeout: 360_000 });
+// A supervised run boots, polls at the shipped 3s cadence and settles, plus the
+// worker's claim interval. The declared 2m debounce window is elapsed as STATE
+// rather than slept through — see the note at the `updateMany` below.
+test.describe.configure({ timeout: 180_000 });
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -111,6 +107,17 @@ test('a push drives the index writer to a SUCCEEDED ledger row on the engine @sm
   // as a missing ledger row.
   expect(await res.json()).toMatchObject({ result: { outcome: 'refresh_enqueued' } });
 
+  // ⚠️ LET THE DEBOUNCE WINDOW ELAPSE, AS STATE. `codeGraphRefresh` declares
+  // `period: '2m'`, so the row is not due yet — and this spec is about the WRITER
+  // reaching `settleIndexContainer`, not about the window (which
+  // `code-graph-refresh-engine.spec.ts` asserts by value). Moving `run_at` into
+  // the past is what the window's passage does to the claim; sleeping two real
+  // minutes here would buy the same execution and nothing else.
+  await adminDb.jobQueueRun.updateMany({
+    where: { jobId: REFRESH_JOB, state: 'pending' },
+    data: { runAt: new Date(Date.now() - 1_000) },
+  });
+
   // ⚠️ THE AUTHORITATIVE SIGNAL IS THE LEDGER ROW, never a timer and never a
   // rendered pixel. The run is debounced (2m by declaration), claimed by the
   // worker, supervised across several polls and then settled — so the wait is on
@@ -126,8 +133,8 @@ test('a push drives the index writer to a SUCCEEDED ledger row on the engine @sm
         )?.status ?? 'none',
       {
         message: 'the refresh run should reach a terminal state on the engine',
-        timeout: 300_000,
-        intervals: [1_000],
+        timeout: 120_000,
+        intervals: [500],
       },
     )
     .toBe('succeeded');

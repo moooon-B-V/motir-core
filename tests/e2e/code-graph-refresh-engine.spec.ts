@@ -46,14 +46,20 @@ import {
 const REFRESH_JOB = 'system.code-graph-refresh';
 const [STOREFRONT, BILLING_API] = E2E_INDEX_REPOS;
 
-// ⚠️ THE BUDGET IS THE DECLARED DEBOUNCE, NOT SLOWNESS. `codeGraphRefresh`
-// declares `period: '2m'`, and the engine honours it by setting `run_at` two
-// minutes after the LAST same-key arrival — so a burst is due two minutes after
-// its last push, by contract. The restart case adds the lease: a SIGKILLed worker
-// holds its claim until `LEASE_MS` (60 s) expires, which is what makes the run
-// reclaimable. Shortening either would mean changing the job's declaration or the
-// worker's lease, which is exactly what this spec must not do.
-test.describe.configure({ timeout: 600_000, mode: 'serial' });
+// ⚠️ THE TWO LONG WAITS ARE ASSERTED, NOT SLEPT THROUGH — and the distinction is
+// what keeps this spec affordable in a bulk leg. `codeGraphRefresh` declares
+// `period: '2m'` and a SIGKILLed worker holds its claim for `LEASE_MS` (60 s), so
+// a spec that waited both out would spend ~9 minutes ASLEEP in a lane whose whole
+// bulk-leg budget is 160-280 s (`tests/e2e/shard-plan.ts` — and one such spec
+// would reintroduce precisely the imbalance that file exists to prevent).
+//
+// Each is instead asserted where it is a CLAIM and then expressed as state where
+// it is only a delay: `run_at` really is `period` past the last arrival, and
+// nothing has run while the window is open — then the row is made due. That is a
+// sharper claim than "a run appeared two minutes later", and it changes no
+// declaration: the job's `period` and the worker's lease are asserted BY VALUE in
+// `tests/jobs/supervisor-cutover-story-gate.test.ts`.
+test.describe.configure({ timeout: 240_000, mode: 'serial' });
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -122,6 +128,32 @@ async function seedWorkspace(page: Parameters<typeof signUp>[0], repos: SeedRepo
 }
 
 const queuedRows = () => adminDb.jobQueueRun.findMany({ where: { jobId: REFRESH_JOB } });
+
+/**
+ * Let the debounce window ELAPSE, expressed as state rather than as elapsed time.
+ *
+ * ⚠️ THIS IS NOT SHORTENING THE MECHANISM UNDER TEST — it is separating two
+ * assertions that waiting conflates. `run_at` being `period` past the last
+ * arrival IS the debounce; each test below asserts that VALUE explicitly, which
+ * is a sharper claim than "a run appeared two minutes later" and is the whole of
+ * what the window guarantees. What is left after that is execution, and paying
+ * two real minutes per test to observe it would put ~8 minutes of pure sleeping
+ * into a lane whose entire bulk leg budget is ~160-280 s
+ * (`tests/e2e/shard-plan.ts` — the imbalance it exists to prevent is exactly what
+ * one such spec would reintroduce).
+ *
+ * Moving `run_at` into the past is precisely what the passage of the window does
+ * to the claim; nothing else about the row is touched.
+ */
+async function elapseDebounceWindow(): Promise<void> {
+  await adminDb.jobQueueRun.updateMany({
+    where: { jobId: REFRESH_JOB, state: 'pending' },
+    data: { runAt: new Date(Date.now() - 1_000) },
+  });
+}
+
+/** The declared window, read off the shipped job rather than restated here. */
+const DEBOUNCE_PERIOD_MS = 120_000;
 const ledgerRows = () => adminDb.jobRun.findMany({ where: { functionId: REFRESH_JOB } });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -152,12 +184,25 @@ test('a same-repo BURST coalesces into ONE run carrying the LAST delivery @smoke
     `${E2E_INDEX_INSTALLATION_ID}/${STOREFRONT!.owner}/${STOREFRONT!.name}`,
   );
 
-  // …and it runs, on the engine, to the ledger contract.
+  // ⚠️ THE WINDOW ITSELF, ASSERTED RATHER THAN WAITED OUT. `codeGraphRefresh`
+  // declares `period: '2m'`, and the engine sets `run_at` that far past the LAST
+  // arrival — so the row is not yet due, and this is the claim the debounce
+  // actually makes. Sleeping through it would prove the same thing more slowly
+  // and less precisely.
+  const dueIn = rows[0]!.runAt.getTime() - Date.now();
+  expect(dueIn, 'the burst is deferred by the declared period').toBeGreaterThan(
+    DEBOUNCE_PERIOD_MS - 30_000,
+  );
+  expect(dueIn).toBeLessThanOrEqual(DEBOUNCE_PERIOD_MS);
+  expect(await ledgerRows(), 'nothing has run while the window is open').toHaveLength(0);
+
+  // …and once the window closes it runs, on the engine, to the ledger contract.
+  await elapseDebounceWindow();
   await expect
     .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
       message: 'the coalesced refresh should settle on the engine',
-      timeout: 300_000,
-      intervals: [1_000],
+      timeout: 120_000,
+      intervals: [500],
     })
     .toBe('succeeded');
 
@@ -206,11 +251,13 @@ test('a burst across TWO repos produces TWO runs — the key does not merge tena
     ].sort(),
   );
 
+  await elapseDebounceWindow();
+
   await expect
     .poll(async () => (await ledgerRows()).filter((r) => r.status === 'succeeded').length, {
       message: 'both repos should settle',
-      timeout: 300_000,
-      intervals: [1_000],
+      timeout: 120_000,
+      intervals: [500],
     })
     .toBe(2);
 
@@ -228,12 +275,13 @@ test('the coalesced run is RENDERED on the operator dashboard @smoke', async ({
 }) => {
   await seedWorkspace(page, [STOREFRONT!]);
   await push(request, STOREFRONT!, 'dash-1');
+  await elapseDebounceWindow();
 
   await expect
     .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
       message: 'the refresh should settle before the dashboard is read',
-      timeout: 300_000,
-      intervals: [1_000],
+      timeout: 120_000,
+      intervals: [500],
     })
     .toBe('succeeded');
 
@@ -251,6 +299,7 @@ test('a worker KILLED mid-index resumes on the SAME container — one boot, no o
 }) => {
   await seedWorkspace(page, [STOREFRONT!]);
   await push(request, STOREFRONT!, 'restart-1');
+  await elapseDebounceWindow();
 
   const [queued] = await queuedRows();
   expect(queued).toBeDefined();
@@ -265,22 +314,35 @@ test('a worker KILLED mid-index resumes on the SAME container — one boot, no o
         (await adminDb.jobStep.findMany({ where: { runId: queued!.id } })).some((s) =>
           s.stepId.startsWith('index-boot:'),
         ),
-      { message: 'the supervisor should boot a container', timeout: 300_000, intervals: [500] },
+      { message: 'the supervisor should boot a container', timeout: 120_000, intervals: [250] },
     )
     .toBe(true);
 
   // THE KILL — SIGKILL, not the graceful drain. A drain would let the supervisor
   // FINISH, which would prove the opposite of the story's criterion.
   await killJobWorker();
+
+  // ⚠️ THE DEAD WORKER'S LEASE, EXPIRED AS STATE. A SIGKILLed worker leaves the
+  // row `running` with a lease nobody renews, and it becomes reclaimable only
+  // once that lease passes — `LEASE_MS` is 60 s. The property under test is that
+  // the resumed pass REPLAYS THE BOOT rather than provisioning again; the lease's
+  // length is the worker's own contract and is asserted in
+  // `tests/jobs/supervisor-cutover-story-gate.test.ts`, by value. Waiting it out
+  // here would add a minute of sleeping to prove a number this spec is not about.
+  const orphaned = await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: queued!.id } });
+  expect(orphaned.state, 'the killed worker left its claim behind').toBe('running');
+  await adminDb.jobQueueRun.update({
+    where: { id: queued!.id },
+    data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
+  });
+
   await startJobWorker();
 
-  // The resumed run completes. The lease has to expire before the row is
-  // reclaimable (`LEASE_MS`, 60 s), so this is the longest wait in the file.
   await expect
     .poll(async () => (await ledgerRows())[0]?.status ?? 'none', {
       message: 'the resumed supervisor should settle the SAME container',
-      timeout: 300_000,
-      intervals: [1_000],
+      timeout: 120_000,
+      intervals: [500],
     })
     .toBe('succeeded');
 

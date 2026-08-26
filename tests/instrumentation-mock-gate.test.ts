@@ -50,6 +50,7 @@ const githubRepos = vi.hoisted(() => ({ installGithubReposMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
 const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
+const codeGraph = vi.hoisted(() => ({ installCodeGraphBoundaryMock: vi.fn() }));
 
 vi.mock('@/lib/test-mock-agent', () => ({ installSharedMockAgent }));
 vi.mock('@/lib/test-oauth-mock', () => oauth);
@@ -59,6 +60,7 @@ vi.mock('@/lib/test-github-repos-mock', () => githubRepos);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
 vi.mock('@/lib/test-lessons-mock', () => lessons);
+vi.mock('@/lib/test-code-graph-mock', () => codeGraph);
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
@@ -76,6 +78,19 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // that adds it to the shipped table, which is the whole point of the equality
   // assertion below: this file went red the moment the seam landed without it.
   E2E_TEST_LESSONS: [lessons.installLessonsBoundaryMock],
+  // MOTIR-3564 — the index-WRITER seam (the run-credential mint + the tarball
+  // redirect). Registered HERE in the same change that adds it to the shipped
+  // table, exactly as the note above describes: this file went red the moment the
+  // seam landed without it, which is the guard doing its job rather than a
+  // formality.
+  //
+  // ⚠️ IT IS THE ONE SEAM THE LANE DOES NOT TURN ON HERE, and that changes
+  // nothing about this assertion. The boundary it stubs is crossed only by the
+  // index supervisor, which is a JOB, so `playwright.config.ts` wires it on the
+  // WORKER (`scripts/worker.ts` installs it; `instrumentation.ts` is a Next.js
+  // hook the worker never runs). The table still declares it — a reader must find
+  // every seam in one place — so the table's own guard still owes it an entry.
+  E2E_TEST_CODE_GRAPH: [codeGraph.installCodeGraphBoundaryMock],
 };
 
 const ALL_INSTALLERS = Object.values(INSTALLERS).flat();
