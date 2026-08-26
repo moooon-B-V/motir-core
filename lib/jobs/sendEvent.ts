@@ -24,9 +24,33 @@ import { dispatchEventToEngine, hasInngestSubscribers } from './engine/dispatche
 // (missing) and `''` (empty) — while allowing an explicit `null`. So no event
 // is *accidentally* untenanted, but a *deliberately* cross-workspace email is
 // still expressible.
+export interface SendEventOptions {
+  /**
+   * Whether the CALLER finds out that the enqueue failed.
+   *
+   * `false` — the DEFAULT, and the contract every pre-existing call site was
+   * written against: a transport failure is swallowed + logged. Do not change
+   * it. Those callers emit POST-COMMIT, and a throw would turn a saved change
+   * into a 500 (PROD-443, spelled out below).
+   *
+   * `true` — the failure PROPAGATES. For the AUTHENTICATION emails only
+   * (MOTIR-3583), where the reasoning behind the default inverts: an auth mail
+   * is the whole operation rather than a notification about one, so there is no
+   * committed mutation for the swallow to protect and the user is told to check
+   * an inbox nothing will arrive in. The opt-in is per CALL rather than per
+   * event so that opting three call sites in leaves every other emitter's
+   * contract byte-identical — which is the property that makes this safe to
+   * change at all. Reach for it through `lib/auth/authMail.ts`, which is where
+   * the three of them live and where the failure is turned into something a
+   * surface can report.
+   */
+  strict?: boolean;
+}
+
 export async function sendEvent<N extends WorkspaceScopedEventName>(
   name: N,
   data: JobEventData<N>,
+  opts: SendEventOptions = {},
 ): Promise<void> {
   const workspaceId = (data as { workspaceId?: string | null }).workspaceId;
   if (workspaceId === undefined || workspaceId === '') {
@@ -46,6 +70,13 @@ export async function sendEvent<N extends WorkspaceScopedEventName>(
   // "snaps back but a refresh shows it moved" bug — PROD-443). Drop + log the
   // event instead; the durable state stands. The argument validation above
   // still throws — that's a programming error, not a transport one.
+  //
+  // ⚠️ EXCEPT WHERE THE CALLER ASKS OTHERWISE (MOTIR-3583). `opts.strict`
+  // re-opens exactly this decision for the AUTHENTICATION emails, where the
+  // premise of the paragraph above is false: there is no committed mutation to
+  // preserve, so swallowing preserves nothing and hides everything. It is an
+  // argument rather than a new default because the default is right for every
+  // caller that has one.
   // ── THE CUTOVER SWITCH (MOTIR-3423) ────────────────────────────────────────
   // Read in exactly two places — here (where to ENQUEUE) and `defineJob`'s
   // Inngest handler (which declines to run a job that has moved). Not one call
@@ -55,7 +86,10 @@ export async function sendEvent<N extends WorkspaceScopedEventName>(
   await dispatchToLanes(name, data, {
     caller: 'sendEvent',
     context: `workspaceId=${String(workspaceId)}`,
-    strict: false,
+    // Passed THROUGH, never flipped here: the default is the post-commit
+    // contract above, and the one class of caller that needs the other answer
+    // asks for it by argument (see {@link SendEventOptions.strict}).
+    strict: opts.strict ?? false,
   });
 }
 

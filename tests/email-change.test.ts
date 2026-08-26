@@ -10,6 +10,7 @@ import {
   InvalidEmailError,
   SameEmailError,
 } from '@/lib/users/errors';
+import { AuthEmailUnavailableError } from '@/lib/auth/authMail';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import { captureEmailEvents } from './helpers/jobs';
@@ -119,17 +120,36 @@ describe('requestEmailChange', () => {
     );
   });
 
-  it('still succeeds when the email enqueue fails (side-effect outside the tx)', async () => {
+  it('REJECTS when the enqueue fails, and the pending row survives for the retry (MOTIR-3583)', async () => {
+    // ⚠️ INVERTED. This case used to assert that the request "still succeeds
+    // when the email enqueue fails (side-effect outside the tx)", because
+    // `sendEvent` swallowed transport errors and the already-committed row had
+    // to stand.
+    //
+    // Half of that is still true and is asserted below: the write is post-commit
+    // and is NOT rolled back. What changed is who hears about it. The pending row
+    // exists only to be answered by a confirm link, so a request whose link was
+    // never queued is a dead end wearing a success message — the caller is told
+    // (`AuthEmailUnavailableError`), and the route turns it into a 503 the modal
+    // can phrase as "try again".
     const me = await makeUser('me@example.com');
-    // Make the post-commit enqueue throw. sendEvent swallows transport errors,
-    // so the already-committed request must still resolve and persist its row.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const spy = vi
       .spyOn(inngest, 'send')
       .mockRejectedValueOnce(new Error('inngest unreachable') as never);
 
-    const { token } = await usersService.requestEmailChange(me.id, 'new@example.com');
-    expect(await emailChangeRequestRepository.findByTokenUnsafe(token)).not.toBeNull();
+    await expect(usersService.requestEmailChange(me.id, 'new@example.com')).rejects.toBeInstanceOf(
+      AuthEmailUnavailableError,
+    );
+
+    // Post-commit still means post-commit: the row is there, and the retry the
+    // 503 invites clears it via `clearReusableForEmail` rather than losing the
+    // address to its own abandoned claim.
+    const pending = await adminDb.emailChangeRequest.findFirst({ where: { userId: me.id } });
+    expect(pending?.newEmail).toBe('new@example.com');
+
     spy.mockRestore();
+    logged.mockRestore();
   });
 });
 

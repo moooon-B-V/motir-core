@@ -36,6 +36,10 @@ const ERROR_KEY: Record<EmailChangeErrorCode, string> = {
   SAME_EMAIL: 'same',
   INVALID_EMAIL: 'invalid',
   EMAIL_CHANGE_RATE_LIMITED: 'rateLimited',
+  // The pending row was written and the confirm link could not be queued
+  // (MOTIR-3583) — its own copy, because "try again in a moment" is the remedy
+  // and `generic` does not say so.
+  AUTH_EMAIL_UNAVAILABLE: 'sendFailed',
   USER_NOT_FOUND: 'generic',
   UNAUTHENTICATED: 'generic',
   BAD_REQUEST: 'generic',

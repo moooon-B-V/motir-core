@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { sendEvent } from '@/lib/jobs/sendEvent';
+import { sendAuthEmail } from '@/lib/auth/authMail';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { twoFactorRepository } from '@/lib/repositories/twoFactorRepository';
@@ -188,21 +188,25 @@ export const twoFactorService = {
    * password-reset hook above it makes exactly the same call for exactly the
    * same reason.
    *
-   * ⚠️ AN ENQUEUE FAILURE IS SWALLOWED, AND THAT IS `sendEvent`'s CONTRACT
-   * RATHER THAN THIS METHOD'S CHOICE — read it before assuming otherwise, as
-   * this comment originally did. `dispatchToLanes` catches a transport failure
-   * on BOTH lanes and logs it, because every other caller emits after a
-   * committed mutation and a throw there would turn a saved change into a 500
-   * with a reverting optimistic UI. The strict door
-   * (`dispatchSystemEvent`) is `system.*`-only.
+   * ⚠️ AN ENQUEUE FAILURE REJECTS — IT IS NOT SWALLOWED (MOTIR-3583). This
+   * comment used to say the opposite, correctly, and to explain why: the
+   * default `sendEvent` contract catches a transport failure on BOTH lanes and
+   * logs it, because every OTHER caller emits after a committed mutation and a
+   * throw there would turn a saved change into a 500 with a reverting
+   * optimistic UI.
    *
-   * The consequence HERE is worse than it is for those callers and is worth
-   * naming: there is no committed mutation for the user to keep, so a dropped
-   * enqueue means the challenge screen says "check your email" and no code
-   * ever arrives — recoverable only by a retry that fails the same silent way.
-   * Filed as its own bug rather than absorbed into this card, because making
-   * `sendEvent` strict for one event is a change to a contract every emitter
-   * depends on.
+   * That reasoning has no premise here. There is no committed mutation for the
+   * user to keep, so the swallow preserved nothing and hid everything: the
+   * challenge screen said "check your email" and no code ever arrived,
+   * recoverable only by a retry that failed the same silent way. So this call
+   * goes through `sendAuthEmail`, the strict door for authentication mail,
+   * and every other emitter's contract is untouched.
+   *
+   * ⚠️ THE THROW DOES NOT REACH THE CLIENT ON ITS OWN — better-auth's
+   * two-factor plugin attaches its own `.catch` to this hook's promise and
+   * still answers `{ status: true }`. What reaches the challenge screen is the
+   * per-request record `sendAuthEmail` writes and the catch-all auth route
+   * reads; see `lib/auth/authMail.ts` for the mechanism and the verification.
    *
    * Lives here rather than inline in the auth config because composing an
    * email's inputs and dispatching it is service work (CLAUDE.md: no email
@@ -210,7 +214,7 @@ export const twoFactorService = {
    * is a hook no test can reach.
    */
   async dispatchOtpEmail(args: { userId: string; email: string; name: string; otp: string }) {
-    await sendEvent('email.send', {
+    await sendAuthEmail({
       // A sign-in is identity-scoped, and the user has not chosen a workspace
       // yet — the challenge runs BEFORE the session exists. Same call as the
       // password-reset send.
