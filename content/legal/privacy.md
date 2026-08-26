@@ -23,8 +23,8 @@ controller, and this document does not describe what they do. Ask them.
 The controller for the hosted service is:
 
 **moooon B.V.**
-«REGISTERED ADDRESS»
-Registered with the Dutch Chamber of Commerce under KvK «KVK NUMBER»
+Menkemaborg 65, 8226 TB Lelystad, Netherlands
+Registered with the Dutch Chamber of Commerce under KvK 97763144
 
 Contact for anything in this policy: **privacy@motir.co**
 
