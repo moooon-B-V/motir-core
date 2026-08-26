@@ -97,6 +97,42 @@ Two consequences, and the second is the one that matters:
    is ONE poll's duration** — not the container's life. That is a difference of three orders of
    magnitude, and it is the whole of MOTIR-3245's mechanism.
 
+### ⚠️ AMENDED 2026-08-26 (MOTIR-3488): the ~128 steps are GONE. The conclusion stands, on a different reason — and those are two different sentences
+
+**The arithmetic above is a measurement of a SHAPE that no longer exists.** MOTIR-3484 collapsed
+`indexFleetSteps.ts` and MOTIR-3485 collapsed `ciRunnerFleet.ts`'s supervisor: the waits and the
+polls are ordinary `await`s in an ordinary loop, and what remains memoized is admit / boot / settle.
+A 30-minute index writes **three** `step.run`s, not ~128, and a full-length CI supervision writes
+**two** instead of ~2 400. The counts are asserted, not estimated —
+`tests/jobs/supervisor-cutover-story-gate.test.ts` runs the same supervision at two poll counts and
+requires the step count to be identical.
+
+**The shape changed because its reason expired**, not because of anything in this record: the
+stepping existed to fit under `app/api/inngest/route.ts`'s `maxDuration = 300`, a Vercel directive,
+and motir-core has been a long-lived Fly process since MOTIR-2384.
+
+**§1's finding is untouched.** _A sleeping run holds no slot_ was measured against Inngest's
+scheduler and remains true of it; the three supervisors still run on that lane until the operator
+task flips their ids. It is simply no longer what a supervisor DOES: it does not sleep in steps any
+more.
+
+**And §2's CONCLUSION — that a supervisor is not what delays the fast lane — survives on a
+different footing, which is the part worth stating rather than reasserting.** It used to hold
+because the slot was released between ~128 polls; it now holds because:
+
+- **on the POSTGRES ENGINE there is no shared five-slot pool to occupy at all.** §3's ceiling is a
+  property of the Inngest account. The engine's worker claims with `FOR UPDATE SKIP LOCKED` at
+  `CLAIM_BATCH` per tick, and a long-running handler holds a lease rather than a slot — which is
+  why `lib/jobs/engine/worker.ts` states that a run longer than its lease is the NORMAL case.
+- **on the INNGEST lane, for as long as the supervisors are still routed there, the occupancy is
+  now the OPPOSITE of what this section measured**: a collapsed loop holds ONE invocation for the
+  container's life instead of ~128 sub-second ones. Whether that matters depends on a property of
+  Inngest Cloud that has not been measured, and MOTIR-3548 is filed against exactly that window.
+  **Do not read §2's ~10% duty cycle as describing the code as it stands.**
+
+The honest summary: §1 and §3 measure Inngest and stay; §2's arithmetic is history; §2's conclusion
+is re-grounded above and is now lane-dependent.
+
 ---
 
 ## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps

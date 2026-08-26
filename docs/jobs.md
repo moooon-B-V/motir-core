@@ -424,6 +424,15 @@ debounce: { key: "event.data.installationId + '/' + event.data.repoOwner", perio
 below. The documented limits: `period` is at least 1 second and at most 7 days,
 and debounce does not combine with batching.
 
+> ⚠️ **THIS SECTION IS ABOUT WHICH LANE A JOB IS ON (amended 2026-08-26,
+> MOTIR-3488).** Everything from "What the SCHEDULER actually does" down is a
+> measurement of **INNGEST's** executor — it is history, it is why the option is
+> written the way it is, and it stays. The **Postgres engine implements the
+> option itself** (MOTIR-3483), and the two do not behave identically: the engine
+> is stricter in one place and safer in another. **§ The engine's debounce**,
+> below the Inngest material, is that half. Read the one for the lane your job is
+> actually routed to.
+
 ### What the SCHEDULER actually does — MEASURED, not assumed
 
 A config-level assertion (`expect(fn.opts.debounce).toEqual(…)`, which
@@ -538,29 +547,106 @@ scripts/experiments/inngest-debounce-coalescing.mjs`. `LAB_SEND=serial|parallel|
 selects how the burst is delivered and `LAB_GAP_MS` spaces it out — the two knobs
 the last four rows of the table turn.
 
+### The ENGINE's debounce — the same option, implemented by us (MOTIR-3483)
+
+`docs/decisions/job-queue-foundation.md` §9 chose the mechanism while rejecting
+pg-boss, whose `singleton`/throttle options were the strongest argument for
+adopting a library at all: _"a `run_at` that is pushed forward on each same-key
+arrival, which is a column and an upsert on a table we own, not a subsystem."_
+That is what shipped. `job_queue` carries `debounce_key` and
+`debounce_first_seen_at`, and `lib/jobs/engine/debounce.ts` is the arithmetic.
+
+**How the key is resolved, and when the resolver REFUSES.** One resolver serves
+`debounce.key` and `idempotency` alike (`lib/jobs/engine/eventExpression.ts`).
+The grammar is a `+`-joined sequence of `event.data.<field>` terms and
+single-quoted literals — the shape `system.code-graph-refresh` declares — and it
+is TOTAL: an expression it cannot parse throws at REGISTRATION, as the definition
+module is evaluated, so every process that loads the registry sees it. **This is
+the one place the engine is deliberately STRICTER than Inngest**, and it is the
+finding directly above that makes it worth being: there an unresolvable key does
+not disable the debounce, it MERGES, and N unrelated events become one run with
+nothing raised to the sender. Here the job cannot start.
+
+**What pushes `run_at` forward.** The enqueue looks for a PENDING, unclaimed run
+holding `(job_id, debounce_key)`, locks it with `SELECT … FOR UPDATE`, moves its
+`run_at` to `now + period` and REPOINTS its `event_id` at the newer event — which
+is what makes the coalesced run carry the latest push rather than the first.
+Two concurrent FIRST arrivals have no row to lock, so both insert; a PARTIAL
+UNIQUE index on `(job_id, debounce_key) WHERE debounce_key IS NOT NULL AND
+state = 'pending'` catches the loser, which then RETRIES the coalesce. Reading
+that `P2002` as "already enqueued" — which is right for the idempotency
+constraint beside it — would silently discard a push.
+
+**A same-key event arriving while the debounced run is EXECUTING enqueues a NEW
+run.** The claim clears `debounce_key`, so the window belongs to a pending row
+and a push during an index is never folded into work that has already started.
+Clearing it at the claim is also what keeps a RETRY safe: `rescheduleAt` puts the
+row back to `pending`, and a row that still carried its key would collide with
+the row that push enqueued — a unique violation on the retry path.
+
+**The deferral cap FIRES here, and this is where the engine is better than what
+it replaces.** MOTIR-2994 measured that Inngest's `timeout` does not fire for a
+stream faster than ~1 event/second — the exact case it exists for. The engine
+stamps `debounce_first_seen_at` on the first arrival and refuses to push `run_at`
+past `first_seen + timeout`, whatever the arrival rate. A deliberate divergence
+from MOTIR-3413's "no job's observable behaviour changes", stated on the day it
+was made rather than discovered later — and one that can only make a run happen
+SOONER than the lane it replaces would have.
+
+**A payload that cannot supply the key gets its own row** (not coalesced, not
+merged) — the opposite of Inngest's behaviour, and the safe direction: losing
+coalescing costs money, merging loses events.
+
+**The guard** is `tests/jobs/engine-debounce.test.ts`, against real Postgres —
+including the concurrent first arrival, which a serial test cannot see.
+`tests/jobs/debounce-burst.test.ts` (the Inngest-side guard above) is its sibling,
+not its replacement: the two lanes are measured separately because they are two
+implementations.
+
 ## Wall clock — the step is the unit, and every I/O call needs a deadline
 
 **A retry budget does not help a job that runs out of TIME**, and this is the
 failure mode that has actually cost us production runs (MOTIR-1974). Three rules
 follow, and they are coupled — changing one means checking the others.
 
-**1 · The platform timeout applies to an INVOCATION, i.e. to a step.** Inngest
-checkpoints between steps and re-invokes the handler at each boundary, replaying
-completed steps from its memo without executing them. So a step is the unit of
-work that must fit inside the function timeout — never the whole run. A handler
-that does everything in one `step.run` has opted out of checkpointing entirely:
-it must fit end-to-end in a single invocation, and if it doesn't, it is killed
-mid-flight on **every** attempt and burns its whole budget getting nowhere.
-Split a long body into steps at the natural resume points (per item of a
-fan-out, per phase), and remember a step's result must be JSON-serializable —
-if a value can't cross the boundary (raw bytes, a stream), the work that
-produces it belongs INSIDE the step that consumes it.
+**1 · A step is the unit of DURABILITY. It used to be the unit of the platform's
+TIMEOUT as well, and that half has expired (amended 2026-08-26, MOTIR-3488).**
 
-**2 · `/api/inngest` declares an explicit `maxDuration`.** Every job is invoked
-through that one route, so its `maxDuration` is the ceiling on every step in the
-app. It is declared (currently `300`, the Pro serverless maximum) rather than
-inherited, because a silent platform default is a number nobody reviews against
-the work the jobs actually do.
+This rule read: _"The platform timeout applies to an INVOCATION, i.e. to a step …
+A handler that does everything in one `step.run` has opted out of checkpointing
+entirely: it must fit end-to-end in a single invocation, and if it doesn't, it is
+killed mid-flight on **every** attempt and burns its whole budget getting
+nowhere."_ **That was true, and it was true of VERCEL.** `app/api/inngest/route.ts`
+declares `maxDuration = 300`, which is a Next.js route-segment directive the
+DEPLOYMENT PLATFORM enforces; motir-core has run as a long-lived Fly process
+since MOTIR-2384 (`Dockerfile` ends `CMD ["node", "server.js"]`), and the
+Postgres job engine's worker is its own process group with a renewed lease. A
+long-running handler is not killed by anything of ours.
+
+**What is true now, and it is a different sentence:**
+
+- **On the POSTGRES ENGINE**, a run may span half an hour and that is the
+  documented NORMAL case — `lib/jobs/engine/worker.ts` says so, renewing a 60 s
+  lease every 20 s so a long run and a dead worker stay distinguishable. A step
+  is what survives a WORKER RESTART: `step.run` memoizes a completed operation in
+  `job_step`, and a reclaim re-invokes the handler from the top and replays it.
+  So the question a step answers is no longer "does this fit?" but **"if this ran
+  a second time, what would exist twice?"** —
+  `docs/decisions/job-queue-foundation.md` §13 states the rule and tables the
+  per-call-site disposition for both container supervisors.
+- **On the INNGEST lane**, the executor still re-invokes the handler at each step
+  boundary, so rule 4 below (code outside a step runs once per PASS) is unchanged
+  and still bites. What has gone is the CEILING, not the checkpointing.
+
+**2 · `/api/inngest` still declares `maxDuration = 300`, and nothing of ours
+enforces it.** Every job is invoked through that one route. The declaration is
+kept — it is the honest statement of what a SERVERLESS deployment of this app
+would get, and MOTIR-1974 declared it precisely so the number would be reviewed
+rather than inherited — but read it as a property of a platform we left, not as a
+budget any step must fit inside today. The one place it is still asserted against
+is `tests/ciFleet/fleetTimeBudgets.test.ts`, deliberately: rule 3's inequality
+needs SOME ceiling to be stated against, and re-choosing that number is its own
+work item rather than a side effect of this amendment.
 
 **3 · Every network call a job makes carries a deadline.** `fetch` has none of
 its own: an unresponsive dependency is waited on until the platform kills the
@@ -574,15 +660,26 @@ upload client itself (MOTIR-2138) — `REPO_TARBALL_TIMEOUT_MS` (60s) in
 `lib/git/provider.ts`, `RUNNER_JIT_REQUEST_TIMEOUT_MS` (15s) in
 `lib/github/runnerJitConfig.ts`, and `ORCHESTRATOR_REQUEST_TIMEOUT_MS` (30s) in
 `lib/orchestrator/errors.ts`. **Their sum along the slowest step must stay under
-`maxDuration`** — that inequality is what guarantees a hung dependency surfaces
-as a typed failure rather than as an invocation kill.
+a STATED ceiling** — currently the route's `maxDuration`, for want of a better
+number (rule 2), and no longer because a platform enforces it. That inequality is
+what guarantees a hung dependency surfaces as a typed failure.
+
+⚠️ **The inequality survives rule 1's amendment; the WORD does not, quite.**
+Nothing kills an invocation any more, so the failure it prevents has changed
+shape: a step with no clock on its calls now hangs FOREVER, holding a lease it
+keeps renewing, and a run that never returns is worse than one that is killed —
+there is no error, no attempt spent, and nothing to alert on. So the deadlines
+matter MORE than they did, and `maxDuration` is what the ceiling is still stated
+against for want of a better number (rule 2).
 
 The fleet's boot step is the worked example of the sum, because it is the one
 step that makes TWO external calls: the JIT mint and the container provision.
 Both deadlines are re-exported as `FLEET_TIME_BUDGETS.mintDeadlineMs` /
 `.containerCallDeadlineMs` and `tests/ciFleet/fleetTimeBudgets.test.ts` asserts
 their sum against `stepWorkBudgetMs` and the route's `maxDuration` — so the
-inequality is a failing test rather than a paragraph. It was a paragraph until
+inequality is a failing test rather than a paragraph. (It reads the route's
+number deliberately: rule 2 keeps that declaration as the one STATED ceiling, and
+re-choosing it is its own work item rather than a side effect of MOTIR-3488.) It was a paragraph until
 MOTIR-2011: the boot path had the right SHAPE (one small step) with no CLOCK on
 either call, and a step that makes one call still runs forever if the call does.
 
@@ -615,28 +712,46 @@ is the last pass's, so an un-stepped body that is not idempotent also makes
 Inngest's reported run output disagree with the `job_run` row (which memoized
 the first pass's).
 
-Almost always the fix is to wrap the work in a step. When the work is LONGER
-than `maxDuration` — rule 2's ceiling on one step — the answer is still steps:
-**split it into short ones and let the RUN span the time**, waiting between them
-with `step.sleep`, which holds no invocation at all. Durable execution is what
-makes a run outlive its invocations; a handler that instead does the long thing
-un-stepped has opted out of it.
+Almost always the fix is to wrap the work in a step. **This paragraph used to
+continue: _"When the work is LONGER than `maxDuration` — rule 2's ceiling on one
+step — the answer is still steps: split it into short ones and let the RUN span
+the time, waiting between them with `step.sleep`."_ On the Inngest lane that is
+still the shape. It is no longer an answer to a CEILING** (rule 1), and on the
+Postgres engine it is the wrong instrument: a `step.sleep` there is a
+`JobStepYield`, a re-enqueue, a re-claim and a replay of every earlier step, so a
+loop that polls _N_ times costs on the order of _N²_ memo lookups. **Split for
+DURABILITY, not for duration** — around the operations whose repetition would
+leave something existing twice.
 
 `system.ci-runner-boot` is the worked example, and it is worth reading as a
-sequence of two fixes (MOTIR-2002, then MOTIR-2007). Its supervision watches a
-container for up to an hour — twelve times the step ceiling. It first stayed
-un-stepped and was made explicitly **replay-aware**, memoizing its outcome onto
-the provisioning intent keyed by the dispatch. That made the outcome consistent,
-but it could not make the work FIT: the invocation was still killed at 300s, so
-teardown never ran and the intent held a fleet slot until the reaper. MOTIR-2007
-took the shape apart instead — one `step.run` to boot, then a `step.sleep` +
-one-provider-read `step.run` per poll, then a `step.run` to tear down. Every step
-is milliseconds, the run spans the hour, and the memo columns were dropped
-because step memoization gives once-per-run for free.
+sequence of THREE fixes now (MOTIR-2002, MOTIR-2007, MOTIR-3485). Its supervision
+watches a container for up to an hour. It first stayed un-stepped and was made
+explicitly **replay-aware**, memoizing its outcome onto the provisioning intent
+keyed by the dispatch. That made the outcome consistent, but it could not make
+the work FIT: the invocation was killed at 300s, so teardown never ran and the
+intent held a fleet slot until the reaper. MOTIR-2007 took the shape apart —
+one `step.run` to boot, then a `step.sleep` + one-provider-read `step.run` per
+poll, then a `step.run` to tear down. Every step was milliseconds, the run spanned
+the hour, and the memo columns were dropped because step memoization gives
+once-per-run for free.
 
-**The lesson is the ORDER of the two.** Reach for replay-awareness only when the
-work genuinely cannot be split; if it can, splitting is strictly better, because
-it fixes the wall clock as well as the repetition. And note what un-stepped code
+**MOTIR-3485 then took the poll loop back out**, because the ceiling it was
+fitting inside had gone. What is left is boot and teardown as memoized steps with
+an ordinary `while` loop between them — 2 step rows for a full-length CI job
+instead of ~2 400. **None of MOTIR-2007's guarantees was given up**: the boot
+still runs once per run (memoization, unchanged), teardown is still reached on
+every path out of the loop (an ordinary `finally`, which a long-lived process
+makes trustworthy again — and which reaches a THIRD exit the stepped form could
+not, a throw from inside the loop), and the single attempt still survives a
+restart (a lease reclaim REFUNDS it). The index fleet made the same move in
+MOTIR-3484.
+
+**The lesson is the ORDER of the three.** Reach for replay-awareness only when the
+work genuinely cannot be split. Reach for splitting when the repetition costs
+something. And **when a shape exists to satisfy a platform constraint, write down
+which constraint** — MOTIR-2007's comments did, which is the only reason anyone
+could tell, four stories later, that the shape had outlived its reason rather
+than encoding a durability requirement. And note what un-stepped code
 costs you either way: teardown cannot be reached from a `catch` (the executor
 finalizes a failed run before running a step scheduled from one — see the
 `onFailure` note above), so a stepped loop must return TYPED results rather than
@@ -646,9 +761,20 @@ throw, and route its only exit into the teardown step.
 steps that RAN, and a sleep never runs — so an un-stubbed `step.sleep` is
 re-found forever and `execute()` never resolves. It surfaces as a test TIMEOUT,
 which reads like a slow test rather than a missing stub. Pre-fulfil each sleep by
-id in the `steps` option (`{ id: 'supervise-wait:1', handler: () => null }`), and
-supply more than the loop can consume; `tests/jobs/ci-runner-fleet.test.ts`'s
-`sleepSteps()` is the helper.
+id in the `steps` option (`{ id: 'my-wait:1', handler: () => null }`), and supply
+more than the loop can consume.
+
+⚠️ **The two container supervisors no longer have one, and the OPPOSITE problem
+replaced it (MOTIR-3484 / MOTIR-3485).** They used to be this note's worked
+examples, and `sleepSteps()` helpers in
+`tests/jobs/ci-runner-fleet.test.ts` and `tests/helpers/indexFleet.ts` existed for
+them. Their waits are ordinary `await`s now, so nothing hangs — and a job-level
+test instead SLEEPS FOR REAL at the shipped cadence unless it shortens it.
+`driveIndexFleetFast()` (`tests/helpers/indexFleet.ts`) and `superviseFast()`
+(`tests/jobs/ci-runner-fleet.test.ts`) do that through the services' own options
+seam, changing the cadence and nothing else. The cadence itself is asserted BY
+VALUE in `tests/jobs/supervisor-cutover-story-gate.test.ts`, which is where a
+number belongs.
 
 **A retrying job looks identical to a healthy one.** `defineJob` writes its
 `running` ledger row in a memoized step, so a retry replays it: the row stays
