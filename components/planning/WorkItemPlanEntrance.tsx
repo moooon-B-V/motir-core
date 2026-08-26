@@ -117,6 +117,10 @@ export function WorkItemPlanEntrance({
       href={planningWorkspaceHref({ kind: 'work-item', itemKey, hasPlan: isReplan })}
       aria-label={ariaLabel}
       data-testid="work-item-plan-entrance"
+      // A hero ACTION on the badge radius, not a status chip (MOTIR-3522) —
+      // the radius is shared with 9 filter/tag chips that §4 keeps flat, so the
+      // plane is declared rather than inferred.
+      data-depth="key"
       data-mode={face}
       onClick={onActivate}
       className={cn(

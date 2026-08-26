@@ -58,6 +58,11 @@ export function BuildingInPublicHeaderLink({
     <Link
       href="/settings/project/members"
       aria-label={t('manageAriaLabel')}
+      // It LOOKS like the status badge it replaces, but it is a link to the
+      // manage surface — a control, so it takes the raised plane under
+      // `3d-immersive` where the badge radius would otherwise keep it flat
+      // (MOTIR-3522).
+      data-depth="key"
       className={cn(
         // The BuildingInPublicBadge `pill-building` visual recipe, on the anchor.
         'items-center gap-1 rounded-(--radius-badge) border border-transparent',
