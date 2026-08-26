@@ -38,6 +38,25 @@ export const emailDeliveryRepository = {
   },
 
   /**
+   * Every delivery for a set of send keys, for the operator surface
+   * (MOTIR-3517). ONE query for a whole page of runs rather than one per row —
+   * `idempotency_key` is indexed on this table and on both job ledgers, which
+   * is what makes it the join.
+   *
+   * A read, not a write, but it takes `tx` because the dashboard runs it inside
+   * `withWorkspaceContext`: the binding is what scopes it to the caller's
+   * workspace under RLS, and reading it off the singleton would silently escape
+   * that.
+   */
+  async listByIdempotencyKeys(
+    idempotencyKeys: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<EmailDelivery[]> {
+    if (idempotencyKeys.length === 0) return [];
+    return tx.emailDelivery.findMany({ where: { idempotencyKey: { in: idempotencyKeys } } });
+  },
+
+  /**
    * Move one delivery to a new state, stamping when the provider told us
    * (MOTIR-3515). Single-op, as every repository method is: the decision about
    * WHETHER this transition is allowed belongs to `resendWebhookService`, which
