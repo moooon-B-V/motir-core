@@ -10,7 +10,7 @@ import type {
   ProposalInput,
   UpdateProposalInput,
 } from '@/lib/dto/plans';
-import { InvalidProposalError } from '@/lib/plans/errors';
+import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -21,6 +21,8 @@ import {
   presentMcpPlan,
   presentMcpPlanAppend,
 } from '../payloads/workLoop';
+import { isTempRef } from '@/lib/plans/refs';
+import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { projectKeyField } from './readyFilters';
 import { GET_PLAN_TOOL_NAME } from './getPlan';
 
@@ -293,11 +295,17 @@ const patchSchema = z
     blockedByAdd: z
       .array(z.string())
       .optional()
-      .describe('Dependency edges to ADD — real work-item ids or `planItem:<id>` refs.'),
+      .describe(
+        'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or ' +
+          '`planItem:<id>` refs.',
+      ),
     blockedByRemove: z
       .array(z.string())
       .optional()
-      .describe('Dependency edges to REMOVE — real work-item ids or `planItem:<id>` refs.'),
+      .describe(
+        'Dependency edges to REMOVE — work-item keys ("ACME-7"), real work-item ids, or ' +
+          '`planItem:<id>` refs.',
+      ),
   })
   .passthrough()
   .describe(
@@ -318,16 +326,19 @@ const proposalSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Where the proposed item hangs: a REAL work-item id (to parent it under something that ' +
-        'already exists), or `planItem:<id>` naming another `add` in THIS plan — an id this ' +
-        'tool returned in `planItemIds` on an earlier call.',
+      'Where the proposed item hangs, in any of THREE forms: a work-item KEY ' +
+        '("ACME-7", the identifier every other tool takes, case-insensitive); a real ' +
+        'work-item id; or `planItem:<id>` naming another `add` in THIS plan — an id this ' +
+        'tool returned in `planItemIds` on an earlier call. A key is resolved to its id when ' +
+        'the proposal is appended, so the three are interchangeable; a key that names no work ' +
+        'item in this workspace is refused HERE, not at approve.',
     ),
   blockedByRefs: z
     .array(z.string())
     .optional()
     .describe(
-      'Dependency edges, in the same two forms as `parentRef`: real work-item ids, or ' +
-        '`planItem:<id>` refs into this plan.',
+      'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), ' +
+        'real work-item ids, or `planItem:<id>` refs into this plan.',
     ),
   baseRevision: z
     .string()
@@ -671,6 +682,98 @@ function stampProvenance(
  * item in append order under the plan's ROW LOCK, so two concurrent appends to
  * one plan serialize and neither can interleave into the other's slice.
  */
+/**
+ * `<PREFIX>-<n>` — the identifier EVERY OTHER MCP tool takes (`get_work_item`,
+ * `transition_status`, `link_work_items`, `move_to_parent`,
+ * `validate_work_item`). MOTIR-3576.
+ *
+ * ⚠️ IT CANNOT COLLIDE WITH THE TWO FORMS A REF ALREADY CARRIES, and that is
+ * what makes accepting it safe rather than ambiguous. A work-item id is a cuid
+ * (`cmta2n4os003li3phlyounsxm`) — no dash at all — and an intra-plan temp-ref is
+ * `planItem:<cuid>`, which is excluded outright below. So a ref matching this
+ * pattern is a key and nothing else.
+ */
+const WORK_ITEM_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
+
+function isWorkItemKey(ref: string): boolean {
+  return !isTempRef(ref) && WORK_ITEM_KEY_PATTERN.test(ref.trim());
+}
+
+/** Every ref one proposal carries, across all four sites. */
+function refsOfProposal(p: ProposalInput): string[] {
+  return [
+    ...(p.parentRef ? [p.parentRef] : []),
+    ...(p.blockedByRefs ?? []),
+    ...(p.patch?.blockedByAdd ?? []),
+    ...(p.patch?.blockedByRemove ?? []),
+  ];
+}
+
+/**
+ * Rewrite every `MOTIR-<n>`-form ref to the work-item ID the plan substrate
+ * stores (MOTIR-3576).
+ *
+ * ⚠️ WHY THIS EXISTS AT ALL. `parentRef` / `blockedByRefs` are documented as
+ * "a REAL work-item id", and the KEY form was neither resolved nor refused — it
+ * was ACCEPTED, stored, passed `validate_plan`, closed to `planned`, and then
+ * failed at the approve button with `dangling`, where the plan is immutable and
+ * the only repair is to author a new one. An agent that has just called
+ * `get_work_item { key: 'MOTIR-3440' }` has no reason to believe the argument
+ * changed meaning three lines later, so the plan tools now agree with the rest
+ * of the surface instead of asking the caller to remember an exception.
+ *
+ * ⚠️ AND IT RESOLVES ON THE WAY IN, never on the way out. A ref is not just an
+ * argument: it is a value stored on the row and re-read at approve, by the
+ * projection, and by `planStalenessService.isRealRef`. Translating here leaves
+ * every one of those readers untouched and the column meaning exactly what it
+ * meant; translating at read time would give it two possible contents for ever.
+ *
+ * ONE batched resolution per call, keys de-duplicated first, through the same
+ * permission-scoped services every other key-addressed tool uses — so the
+ * 404-not-403 cross-tenant contract holds unchanged.
+ */
+async function resolveKeyRefs(
+  proposals: ProposalInput[],
+  ctx: ServiceContext,
+): Promise<ProposalInput[]> {
+  const keys = [...new Set(proposals.flatMap(refsOfProposal).filter(isWorkItemKey))];
+  if (keys.length === 0) return proposals;
+
+  let ids: string[];
+  try {
+    ids = await resolveWorkItemIdsByKeys(keys, ctx);
+  } catch {
+    // A key that resolves to nothing is the SAME failure as a dangling id, and
+    // it is reported as one: one failure mode for "this ref names no work
+    // item", not two that a caller has to tell apart. The offending key is
+    // named; which of a batch's keys failed is recoverable from the message.
+    throw new PlanRefGraphError(
+      'dangling',
+      'incoming',
+      `A proposal's ref names no work item in this workspace. One of ${keys
+        .map((k) => `"${k}"`)
+        .join(', ')} could not be resolved — check the key, or pass the work item's id.`,
+    );
+  }
+
+  const byKey = new Map(keys.map((k, i) => [k, ids[i]!]));
+  const swap = (ref: string): string => byKey.get(ref) ?? ref;
+  return proposals.map((p) => ({
+    ...p,
+    parentRef: p.parentRef ? swap(p.parentRef) : p.parentRef,
+    blockedByRefs: (p.blockedByRefs ?? []).map(swap),
+    patch: p.patch
+      ? {
+          ...p.patch,
+          ...(p.patch.blockedByAdd ? { blockedByAdd: p.patch.blockedByAdd.map(swap) } : {}),
+          ...(p.patch.blockedByRemove
+            ? { blockedByRemove: p.patch.blockedByRemove.map(swap) }
+            : {}),
+        }
+      : p.patch,
+  }));
+}
+
 export async function runAddPlanItems(
   args: AddPlanItemsArgs,
   ctx: ServiceContext,
@@ -707,12 +810,17 @@ export async function runAddPlanItems(
     baseRevision: p.baseRevision ?? null,
   }));
 
+  // KEY → ID, before the service sees them (MOTIR-3576). The plan substrate's
+  // contract is unchanged: what reaches `addProposals`, and what lands in the
+  // column, is an id or a `planItem:` temp-ref exactly as before.
+  const resolved = await resolveKeyRefs(proposals, ctx);
+
   // An EMPTY batch still goes through `addProposals`: it creates nothing, and it
   // is what re-reads the plan under its row lock and refuses a plan that has
   // already left `generating` — the same refusal a non-empty close would get.
-  const appended = await plansService.addProposals(args.planId, proposals, ctx);
+  const appended = await plansService.addProposals(args.planId, resolved, ctx);
   const planItemIds = appended.items
-    .slice(appended.items.length - proposals.length)
+    .slice(appended.items.length - resolved.length)
     .map((i) => i.id);
 
   // `final` composes exactly as the internal seam composes it: append, then

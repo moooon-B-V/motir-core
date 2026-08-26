@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { buildMcpServer } from '@/lib/mcp/registry';
+import { plansService } from '@/lib/services/plansService';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { isBillableTool } from '@/lib/mcp/rateLimitGate';
 import { permissionDenial } from '@/lib/mcp/permissionGate';
@@ -1086,6 +1087,206 @@ describe('add_plan_items — one proposal per existing target (MOTIR-3194)', () 
     expect(message).not.toContain('not available');
 
     expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+    await client.close();
+  });
+});
+
+describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', () => {
+  // The defect this closes: `parentRef` / `blockedByRefs` were documented as
+  // "a REAL work-item id", and the KEY form — the identifier EVERY other tool
+  // takes — was neither resolved nor refused. It was accepted, stored, passed
+  // `validate_plan`, closed to `planned`, and failed at the approve button,
+  // where the plan is immutable and the only repair is a whole new plan.
+
+  /** The `parentRef` / `blockedByRefs` a plan actually stored, past the service. */
+  async function stored(planItemId: string) {
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: planItemId } });
+    return { parentRef: row.parentRef, blockedByRefs: row.blockedByRefs };
+  }
+
+  it('resolves a `parentRef` key to the work item’s ID, and STORES the id', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Its subtask', kind: 'subtask' },
+          parentRef: story.identifier, // "MOTIR-1" — the key, not the id
+        },
+      ],
+    });
+    expect(appended.isError).toBeFalsy();
+
+    // ⚠️ The COLUMN holds the id. The plan substrate's contract is unchanged —
+    // every downstream reader (materialize's `resolveRef`, the projection,
+    // `planStalenessService.isRealRef`) still sees an id or a temp-ref.
+    expect((await stored(ids(appended)[0]!)).parentRef).toBe(story.id);
+    await client.close();
+  });
+
+  it('resolves keys in `blockedByRefs` and in BOTH sides of a `modify` patch', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The target' });
+    const blockerA = await createTestWorkItem(fx, { kind: 'task', title: 'Blocker A' });
+    const blockerB = await createTestWorkItem(fx, { kind: 'task', title: 'Blocker B' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Blocked', kind: 'task' },
+          blockedByRefs: [blockerA.identifier],
+        },
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: {
+            blockedByAdd: [blockerA.identifier],
+            blockedByRemove: [blockerB.identifier],
+          },
+        },
+      ],
+    });
+    expect(appended.isError).toBeFalsy();
+
+    const [addId, modifyId] = ids(appended);
+    expect((await stored(addId!)).blockedByRefs).toEqual([blockerA.id]);
+    const patch = (await adminDb.planItem.findUniqueOrThrow({ where: { id: modifyId! } }))
+      .patch as { blockedByAdd: string[]; blockedByRemove: string[] };
+    expect(patch.blockedByAdd).toEqual([blockerA.id]);
+    expect(patch.blockedByRemove).toEqual([blockerB.id]);
+    await client.close();
+  });
+
+  it('is case-INSENSITIVE, exactly as `get_work_item` is', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Its subtask', kind: 'subtask' },
+          parentRef: story.identifier.toLowerCase(),
+        },
+      ],
+    });
+    expect((await stored(ids(appended)[0]!)).parentRef).toBe(story.id);
+    await client.close();
+  });
+
+  it('leaves an ID and a `planItem:` temp-ref UNTOUCHED — the discriminator misclassifies neither', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'By id', kind: 'subtask' },
+          parentRef: story.id, // a cuid — no dash, so it cannot look like a key
+        },
+      ],
+    });
+    const parentProposalId = ids(first)[0]!;
+    expect((await stored(parentProposalId)).parentRef).toBe(story.id);
+
+    const second = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'By temp-ref', kind: 'subtask' },
+          blockedByRefs: [`${TEMP_REF_PREFIX}${parentProposalId}`],
+        },
+      ],
+    });
+    expect((await stored(ids(second)[0]!)).blockedByRefs).toEqual([
+      `${TEMP_REF_PREFIX}${parentProposalId}`,
+    ]);
+    await client.close();
+  });
+
+  it('⚠️ REFUSES a key that names no work item — as `dangling`, at the APPEND, not at approve', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Hangs off nothing', kind: 'task' },
+          parentRef: `${fx.projectIdentifier}-999999`,
+        },
+      ],
+    });
+
+    expect(refused.isError).toBe(true);
+    // ONE failure mode for "this ref names no work item", not two the caller has
+    // to tell apart — the same `dangling` a bad id gets.
+    expect(text(refused)).toContain('999999');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+    await client.close();
+  });
+
+  it('⚠️ THE REGRESSION THIS CARD CAME FROM: a key-form plan appends, CLOSES and APPROVES', async () => {
+    // The original failure, end to end. Two adds under a real parent by KEY,
+    // blocked by a real item by KEY: accepted, `planned`, and — the step that
+    // used to fail — approved, materializing children under the right parent.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const closed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      final: true,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'First', kind: 'subtask' },
+          parentRef: story.identifier,
+          blockedByRefs: [blocker.identifier],
+        },
+        {
+          op: 'add',
+          proposedFields: { title: 'Second', kind: 'subtask' },
+          parentRef: story.identifier,
+        },
+      ],
+    });
+    expect(closed.isError).toBeFalsy();
+    expect(struct(closed).status).toBe('planned');
+
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
+
+    const created = await adminDb.workItem.findMany({
+      where: { projectId: fx.projectId, title: { in: ['First', 'Second'] } },
+      select: { title: true, parentId: true },
+      orderBy: { title: 'asc' },
+    });
+    expect(created).toEqual([
+      { title: 'First', parentId: story.id },
+      { title: 'Second', parentId: story.id },
+    ]);
     await client.close();
   });
 });
