@@ -2778,8 +2778,18 @@ model JobEvent {
   // The dispatcher's own sweep: events newest-first within a tenant.
   @@index([workspaceId, receivedAt(sort: Desc)])
   // Event-level dedup (`defineJob`'s `idempotency` option, one consumer today:
-  // `email.send`). Not UNIQUE: the key is scoped per subscribing job, and it is
-  // `job_queue`'s (event, job) pair that must not double-enqueue.
+  // `email.send`) — a LOOKUP index, not the constraint. Not UNIQUE because the
+  // key is scoped per subscribing job, and the pair that enforces the dedup is
+  // `job_queue`'s: `job_queue_job_idempotency_key`, a hand-written PARTIAL
+  // UNIQUE on `(job_id, idempotency_key) WHERE idempotency_key IS NOT NULL`
+  // (MOTIR-3459, migration `20260825220000_job_queue_idempotency_key`) — see
+  // the JobQueueRun note below.
+  //
+  // ⚠️ `job_queue`'s `(event_id, job_id)` unique is a DIFFERENT guarantee and is
+  // NOT this one: it stops the DISPATCHER double-enqueueing a single event, not
+  // two distinct events that share an idempotency key. This comment used to give
+  // that pair as the reason no unique was needed here, which stopped being true
+  // the moment the partial unique landed.
   @@index([idempotencyKey])
   @@map("job_event")
 }
