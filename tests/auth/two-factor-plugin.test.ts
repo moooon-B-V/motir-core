@@ -162,6 +162,35 @@ describe('the two-factor schema', () => {
   });
 });
 
+describe('the password gate is CONDITIONAL, not absent (MOTIR-1216 review)', () => {
+  // The regression this pins is a LOCKOUT, and it is invisible from the happy
+  // path: with `allowPasswordless` unset, `shouldRequirePassword` returns true
+  // for EVERY user —
+  //
+  //   if (!allowPasswordless) return true;
+  //
+  // — while `validatePassword` returns false for any user with no credential
+  // account. Motir ships Google as a peer sign-in method, so a Google-only
+  // account is ordinary; for one, `enableTwoFactor` answers INVALID_PASSWORD
+  // for a password they were never asked to set, and NOTHING about that is
+  // visible until such a user tries to turn 2FA on.
+  //
+  // Asserted off the registered options rather than by driving the endpoint:
+  // the endpoint's refusal needs a session and a credential-account fixture,
+  // and what actually decides this is one flag the plugin reads three times
+  // (enable, disable, generate-backup-codes).
+  it('registers `allowPasswordless: true`, so the gate reads the account', async () => {
+    const { auth } = await import('@/lib/auth');
+
+    const plugin = (
+      auth.options.plugins as Array<{ id?: string; options?: { allowPasswordless?: boolean } }>
+    ).find((p) => p.id === 'two-factor');
+
+    expect(plugin).toBeDefined();
+    expect(plugin?.options?.allowPasswordless).toBe(true);
+  });
+});
+
 describe('the two-factor configuration', () => {
   // The constants are what the Security pane and the challenge screen will
   // RENDER (MOTIR-1220 / MOTIR-1221), so a change to one of them changes user-

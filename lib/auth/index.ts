@@ -395,6 +395,33 @@ export const auth = betterAuth({
           });
         },
       },
+      // ⚠️ TRUE, AND IT IS NOT A RELAXATION — read `shouldRequirePassword` before
+      // changing it. Every 2FA MANAGEMENT action (enable, disable, regenerate
+      // recovery codes) is password-gated, and the gate is:
+      //
+      //   if (!allowPasswordless) return true;                       // ← unconditional
+      //   return Boolean(credentialAccount with a password);          // ← conditional
+      //
+      // So the DEFAULT (`false`) demands a password from EVERY user — including
+      // one who has never had one. Motir ships Google as a peer sign-in method
+      // with `trustedProviders: ['google']` above, so an account whose only
+      // `Account` row is `providerId: 'google'` is an ordinary Motir account, not
+      // an edge case (`design/settings/design-notes.md` treats the
+      // credential-vs-OAuth-only branch as first-class for the Profile pane). For
+      // that user `validatePassword` returns false unconditionally — no
+      // credential account, no stored hash — so `enableTwoFactor` answers
+      // `INVALID_PASSWORD` for a password they were never asked to set, and
+      // there is no wording that could explain it. They could not turn 2FA on at
+      // all.
+      //
+      // `true` makes the gate CONDITIONAL, which is strictly stronger than what
+      // it replaces: a user WITH a password is still asked for it on all three
+      // actions (the plugin's own docstring — "password is still required if a
+      // credential account exists"), and a user without one stops being locked
+      // out of the feature. Their re-auth is the session itself; Better-Auth
+      // offers no OAuth step-up to reach for, and demanding a nonexistent
+      // password is not a security control, it is an outage.
+      allowPasswordless: true,
       // FALSE, deliberately (and it is the default): enabling 2FA hands back a
       // TOTP URI and the recovery codes but leaves `twoFactorEnabled` off until
       // a code generated from that secret is accepted. That is the
