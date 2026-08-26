@@ -1,3 +1,4 @@
+import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
 import { plansService } from '@/lib/services/plansService';
 
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
@@ -199,12 +200,16 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     await plansNav.click();
     await page.waitForURL('**/plans');
 
-    // Four tabs, in lifecycle order, with `Planned` — the plans awaiting a
-    // decision — already selected.
+    // ⚠️ ONE TAB PER `PlanStatusDto`, DERIVED — never a literal count. The strip
+    // maps `PLAN_STATUS_DTO_VALUES`, so MOTIR-3560's fifth member (`stale`) made
+    // a hardcoded `4` wrong the moment it landed, and this spec went red on
+    // `main` rather than on the pull request that added it. Deriving the number
+    // from the same constant the component maps is what stops a sixth status
+    // costing another red lane (drive-by fix, MOTIR-3607).
     await expect(tabStrip(page)).toBeVisible();
-    await expect(tabStrip(page).getByRole('button')).toHaveCount(4);
+    await expect(tabStrip(page).getByRole('button')).toHaveCount(PLAN_STATUS_DTO_VALUES.length);
     await expect(tab(page, 'Planned')).toHaveAttribute('aria-pressed', 'true');
-    for (const other of ['Generating', 'Approved', 'Declined']) {
+    for (const other of ['Generating', 'Stale', 'Approved', 'Declined']) {
       await expect(tab(page, other)).toHaveAttribute('aria-pressed', 'false');
     }
 

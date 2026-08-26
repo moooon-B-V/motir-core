@@ -98,7 +98,11 @@ test('a reviewer asks for a change, and approves the plan they asked for', async
   await chapter(
     'Read the plan as it stands — this is the tree that is about to change',
     async () => {
-      await page.getByRole('radio', { name: 'List' }).click();
+      // ⚠️ `button`, not `radio`. `Segmented` renders buttons carrying
+      // `aria-pressed` — it says so in its own header — so a `radio` locator
+      // matches nothing and the failure is a 4-minute timeout rather than a
+      // missing-element error.
+      await page.getByRole('button', { name: 'List' }).click();
       const list = page.getByRole('main');
       // ⚠️ THE BEFORE, asserted explicitly. The whole change is that this tree
       // becomes a different tree, and a recording that races past the before has
