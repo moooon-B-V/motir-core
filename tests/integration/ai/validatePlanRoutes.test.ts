@@ -306,7 +306,15 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       }),
     );
     expect(valid.status).toBe(200);
-    expect(await valid.json()).toEqual({ planId: emptyPlan.id, valid: true, blockers: [] });
+    expect(await valid.json()).toEqual({
+      planId: emptyPlan.id,
+      valid: true,
+      blockers: [],
+      // The route is a thin transport, so it inherits the APPROVABILITY half
+      // verbatim (MOTIR-3575) — which is what the generator's pre-commit
+      // post-condition needs it to carry.
+      rejections: [],
+    });
 
     // Invalid: a new root add gated by a not-done cross-project item.
     const projectQ = await createTestProject({
@@ -344,6 +352,11 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
     expect(await invalid.json()).toEqual({
       planId: plan.id,
       valid: false,
+      // Finishability fails; APPROVABILITY passes — a cross-project blocker is a
+      // legal edge and resolves at the workspace tier, so the plan is malformed
+      // in no way. The two halves answering differently on one plan is exactly
+      // what makes reporting them separately worth doing (MOTIR-3575).
+      rejections: [],
       blockers: [
         {
           item: `planItem:${gatedId}`,

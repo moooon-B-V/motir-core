@@ -275,7 +275,14 @@ describe('the projection merge — the cases a plan can put in front of it', () 
 
     const detail = await projectedWorkItem(planId, gated.identifier, fx.ctx);
     expect(detail.blockedBy).toEqual([]);
-    expect((await planValidityService.validateProjectedPlan(planId, fx.ctx)).valid).toBe(true);
+    const modified = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    // THE SUBJECT: the phantom edge VANISHES from the projection, so nothing
+    // gates. Asserted on `blockers`, not on `valid` — an unresolvable ref also
+    // makes the plan unapprovable (MOTIR-3575), a true answer to a different
+    // question, pinned here so it cannot drift into a silent pass.
+    expect(modified.blockers).toEqual([]);
+    expect(modified.rejections.map((r) => r.reason)).toEqual(['dangling']);
+    expect(modified.valid).toBe(false);
   });
 
   it('drops a proposed edge whose target does not resolve, rather than gating on a phantom', async () => {
@@ -293,8 +300,13 @@ describe('the projection merge — the cases a plan can put in front of it', () 
     ]);
 
     const verdict = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(verdict.valid).toBe(true);
+    // THE SUBJECT: the phantom edge VANISHES from the projection, so nothing
+    // gates. Asserted on `blockers`, not on `valid` — an unresolvable ref also
+    // makes the plan unapprovable (MOTIR-3575), a true answer to a different
+    // question, pinned here so it cannot drift into a silent pass.
     expect(verdict.blockers).toEqual([]);
+    expect(verdict.rejections.map((r) => r.reason)).toEqual(['dangling']);
+    expect(verdict.valid).toBe(false);
   });
 
   it('a detail read of a plan-only subtree needs no stored rows at all', async () => {

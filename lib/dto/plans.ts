@@ -564,10 +564,48 @@ export interface PlanStalenessDto {
  * (MOTIR-1398) runs this as its pre-commit post-condition over the multi-root
  * epic forest it proposes.
  */
+/**
+ * One reason the approve button would REFUSE this plan (MOTIR-3575) — the
+ * APPROVABILITY half of a plan's verdict, beside `blockers`' FINISHABILITY half.
+ *
+ * ⚠️ AT MOST ONE, and that is a property of the gate rather than of this type.
+ * `validatePlanProposals` is FAIL-FAST by design: it runs before a write and
+ * stops at the first reason, so a plan with two defects reports the more
+ * specific one and the next is found after that one is fixed. Modelled as an
+ * ARRAY anyway, so a caller writes the same loop whether the gate stays
+ * fail-fast or is one day taught to collect.
+ */
+export interface PlanApprovabilityRejectionDto {
+  /** The stable code the approve path raises — what a caller branches on. */
+  code: 'INVALID_PLAN_REF_GRAPH' | 'PLAN_GRAMMAR_VIOLATION' | 'PLAN_TARGET_IMMUTABLE';
+  /** The narrower reason where the code has one (`dangling` / `duplicate` /
+   *  `cycle` / `illegal_parent` / `unknown_kind`); `null` for immutability,
+   *  which has exactly one shape. */
+  reason: string | null;
+  /** The offending proposal, as `planItem:<id>` — the same form the blockers
+   *  array uses for a proposed node, so both halves address a proposal alike. */
+  item: string;
+  /** The refusal in the words the approve path would use. */
+  message: string;
+}
+
+/**
+ * A plan's whole verdict. TWO independent questions, and a caller reading only
+ * `valid` gets both:
+ *
+ *   * `blockers` — FINISHABILITY: can every item in the projected forest be
+ *     finished once this plan materializes?
+ *   * `rejections` — APPROVABILITY: would the approve button accept it at all?
+ *
+ * Before MOTIR-3575 only the first was asked, and `valid: true` was returned for
+ * plans the button then refused — which is what made a bad plan safe to close.
+ */
 export interface PlanValidityDto {
   planId: string;
+  /** True only when BOTH questions pass. */
   valid: boolean;
   blockers: SprintBlockerDto[];
+  rejections: PlanApprovabilityRejectionDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

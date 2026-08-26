@@ -49,6 +49,7 @@ import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
   DuplicatePlanTargetError,
   InvalidProposalError,
+  PlanGrammarError,
   PlanItemNotFoundError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
@@ -59,6 +60,8 @@ import {
   PlanApproveTimedOutError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
+  PlanRefGraphError,
+  PlanTargetImmutableError,
   type PlanTargetOp,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
@@ -74,6 +77,7 @@ import type {
   PlanItemPatch,
   PlanItemProposedFields,
   PlanListPageDto,
+  PlanApprovabilityRejectionDto,
   PlanStatusCountsDto,
   PlanWithItemsDto,
   ProposalInput,
@@ -1945,6 +1949,70 @@ export const plansService = {
       throw containPrismaFailure(err, 'plan proposal append');
     }
     return toPlanWithItemsDto(result.row, result.items);
+  },
+
+  /**
+   * WOULD THE APPROVE BUTTON ACCEPT THIS PLAN? A pure READ of the same gate
+   * `approvePlan` runs, for a caller that wants the verdict without taking it
+   * (MOTIR-3575).
+   *
+   * Returns the rejections rather than throwing, because its caller is a
+   * VALIDATOR: `validate_plan` exists to be asked, and an exception is the wrong
+   * shape for an answer somebody requested. Empty ⇒ the plan is approvable as it
+   * stands.
+   *
+   * ⚠️ AT MOST ONE ENTRY. `validatePlanProposals` is fail-fast — it runs ahead of
+   * a write and stops at the first violation — so this reports the first reason,
+   * not every reason. Deliberately NOT changed: making the gate collect would
+   * change what `approvePlan` does to satisfy a read.
+   *
+   * ⚠️ IT TAKES NO LOCKS AND OPENS NO TRANSACTION, which is what makes it a read
+   * at all. `assertProposalsPersistable` is the locking twin and belongs only to
+   * approve; the verdict here is the one `approvePlan`'s PRE-transaction pass
+   * takes, and it can go stale the moment it is returned — a plan approvable now
+   * can drift before anybody presses the button, which is the whole reason approve
+   * re-takes it under the row locks.
+   */
+  async checkApprovability(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<PlanApprovabilityRejectionDto[]> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+
+    const [items, terminalStatusKeys] = await Promise.all([
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        planItemRepository.findByPlan(planId, tx),
+      ),
+      workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId),
+    ]);
+
+    try {
+      await runPersistGate(items, ctx, terminalStatusKeys);
+      return [];
+    } catch (err) {
+      if (
+        err instanceof PlanRefGraphError ||
+        err instanceof PlanGrammarError ||
+        err instanceof PlanTargetImmutableError
+      ) {
+        return [
+          {
+            code: err.code,
+            reason: err instanceof PlanTargetImmutableError ? null : err.reason,
+            item: `${TEMP_REF_PREFIX}${err.planItemId}`,
+            message: err.message,
+          },
+        ];
+      }
+      // Anything else is a real failure — a lost connection, a bug — and a
+      // validator that swallowed it would answer "approvable" for a plan it never
+      // managed to check.
+      throw err;
+    }
   },
 
   /** Mark the generation frontier complete: `generating` → `planned`. */
