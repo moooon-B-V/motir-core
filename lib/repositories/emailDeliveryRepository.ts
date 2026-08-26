@@ -1,4 +1,4 @@
-import { Prisma, type EmailDelivery } from '@/generated/prisma/client';
+import { Prisma, type EmailDelivery, type EmailDeliveryState } from '@/generated/prisma/client';
 
 // Data access for the transactional-mail delivery record (Bug MOTIR-3507 ·
 // Subtask MOTIR-3513). Single-op methods only; writes require `tx` (the
@@ -35,5 +35,41 @@ export const emailDeliveryRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<EmailDelivery | null> {
     return tx.emailDelivery.findUnique({ where: { providerMessageId } });
+  },
+
+  /**
+   * Move one delivery to a new state, stamping when the provider told us
+   * (MOTIR-3515). Single-op, as every repository method is: the decision about
+   * WHETHER this transition is allowed belongs to `resendWebhookService`, which
+   * makes it inside the transaction after locking the row.
+   */
+  async updateState(
+    id: string,
+    data: { state: EmailDeliveryState; lastEventAt: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<EmailDelivery> {
+    return tx.emailDelivery.update({ where: { id }, data });
+  },
+
+  /**
+   * Read a delivery FOR UPDATE, by the provider's id.
+   *
+   * A read that GUARDS a write, so it takes `tx` and takes the row lock — two
+   * events for the same message can arrive concurrently (Resend retries an
+   * un-acked delivery while the original is still in flight), and the
+   * monotonic-state check is a read-then-write that races without it. Returns
+   * the id alone: that is all the caller needs to issue the update, and the
+   * state comes back on the same row.
+   */
+  async lockByProviderMessageId(
+    providerMessageId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; state: EmailDeliveryState } | null> {
+    const rows = await tx.$queryRaw<{ id: string; state: EmailDeliveryState }[]>`
+      SELECT "id", "state" FROM "email_delivery"
+      WHERE "provider_message_id" = ${providerMessageId}
+      FOR UPDATE
+    `;
+    return rows[0] ?? null;
   },
 };
