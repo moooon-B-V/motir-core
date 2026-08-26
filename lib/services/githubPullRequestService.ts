@@ -208,7 +208,16 @@ export const githubPullRequestService = {
         prId = existing.id;
       } else {
         const row = {
-          provider: repo.installation.provider,
+          // ⚠️ THE REPO ROW's discriminator, never `repo.installation.provider`
+          // — MOTIR-1931's rule one layer deeper than it is usually met. The
+          // repo row resolves here because it carries its own `workspace_id`;
+          // its INSTALLATION does not, because under Motir's shared
+          // provisioning install that row's `workspace_id` is NULL and
+          // `github_installation` is policy-gated, so the join comes back null
+          // inside a workspace-bound transaction. Prisma types the include as
+          // present, so this is a runtime null the compiler cannot name — the
+          // suite is what names it.
+          provider: repo.provider,
           repoId: repo.id,
           number: input.number,
           // What the caller can truthfully assert about a pull request it just
