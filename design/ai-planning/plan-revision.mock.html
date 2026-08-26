@@ -1,0 +1,1674 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Asking Motir to revise the plan you are REVIEWING (MOTIR-3597)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for MOTIR-3597, story MOTIR-3595 ("Ask Motir to
+      revise the plan you are REVIEWING — the change lands on that plan, not in a
+      second one").
+
+      It EXTENDS the shipped review rail and redraws nothing else: not the plan
+      review canvas, not the proposal peek, not the approve / decline controls,
+      not the staleness summary, not the decided outcome, and not the plans list.
+      The only new pixels are ONE composer at the foot of the rail, TWO rows on
+      the timeline that already renders, one held state on a button that already
+      has one, and one chip in a row cluster that already has three.
+
+      Built FROM the shipped app, not from a reading of it. Panel 1 reproduces a
+      headless render of the real `components/planning/PlanReviewRail.tsx`,
+      `PlanProposalList.tsx` and `PlanChangeComposer.tsx`, bundled together with
+      the real `messages/en.json` through a real `NextIntlClientProvider` and
+      painted with the real Tailwind build over `@motir/design-system/theme.css`.
+      Every measurement quoted on this board came off that render.
+
+      Tokens: every fill, ink, border and radius below is an `--el-*` element
+      token or an element-semantic shape token, resolved to the LIGHT /
+      warm-editorial / motir values the app itself computes. No hue is invented
+      and no generic radius scale is used.
+    -->
+    <style>
+      /* --------------------------------------------------------------------
+         The element-token layer, mirroring what the running app resolves for
+         `data-theme="light" data-style="warm-editorial" data-palette="motir"`.
+         Stated here so a plain browser paints the real palette without the
+         Tailwind build, exactly as the sibling assets in this area do.
+      -------------------------------------------------------------------- */
+      :root {
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
+
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-pressed: #4534b3;
+        --el-accent-on-surface: #5645d4;
+        --el-highlight: #ff64c8;
+        --el-link: #0070d2;
+
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-danger: #e03131;
+        --el-info: #0075de;
+
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-tint-yellow: #fef7d6;
+
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-input: 8px;
+
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-input-x: 12px;
+        --spacing-btn-x: 16px;
+        --spacing-btn-y: 8px;
+        --spacing-icon-btn: 6px;
+        --height-control: 36px;
+        --height-input: 36px;
+        --height-btn-md: 40px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+
+        --font-serif: Georgia, serif;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        max-width: 1140px;
+        margin: 0 auto;
+        padding: 36px 28px 64px;
+      }
+
+      /* ---- board chrome. Annotations owe AA too, so every caption on this
+              board is `--el-text-secondary` (6.24:1 on `--el-surface`), never
+              `--el-text-muted` (4.17:1) and never `--el-text-faint`. ---- */
+      .doc-head h1 {
+        font-size: 26px;
+        margin: 0 0 8px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0 0 4px;
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 78ch;
+      }
+      .refs {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 3px 9px;
+      }
+      .ref.plain {
+        color: var(--el-text-secondary);
+      }
+
+      .panel {
+        margin-top: 38px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--font-mono);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-control);
+        padding: 2px 8px;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.55;
+        max-width: 92ch;
+      }
+      .panel-note b {
+        color: var(--el-text-strong);
+      }
+      .panel-note code,
+      .doc-head code {
+        font: 12px var(--font-mono);
+        color: var(--el-text-strong);
+      }
+      .row-of-rails {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .cap {
+        font: 600 11px var(--font-mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+
+      /* ---- the shipped rail, reproduced ---- */
+      .rail {
+        width: 352px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        min-height: 0;
+      }
+      .rail.tall {
+        height: 700px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .pill {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .rail-head h3 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+        min-width: 0;
+      }
+      .rail-head .summary {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.43;
+        color: var(--el-text-secondary);
+      }
+      .meta {
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 12px;
+        font-size: 12px;
+        line-height: 1.33;
+        color: var(--el-text-secondary);
+      }
+      .who {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+      .disc {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 9px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .glyph {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .sep {
+        color: var(--el-text-faint);
+      }
+
+      .section-label {
+        font: 700 11px var(--font-sans);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0;
+      }
+      .timeline {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .timeline li {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        flex: none;
+        margin-top: 6px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .dot.open {
+        background: var(--el-border-strong);
+      }
+      .ev {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .ev .lbl {
+        color: var(--el-text);
+        line-height: 1.35;
+      }
+      .ev .actor {
+        color: var(--el-text-secondary);
+      }
+      .ev .at {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.33;
+      }
+
+      /* ---- the decision block at the rail's foot ---- */
+      .gate {
+        margin-top: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        line-height: 1.2;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn.held {
+        opacity: 0.5;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .hint {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.4;
+      }
+      .alert {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-danger);
+      }
+
+      /* ---- THE NEW PIXELS · the revision composer ---- */
+      .ask {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border);
+      }
+      .ask-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ask-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: var(--height-input);
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .ask-input.typed {
+        color: var(--el-text);
+      }
+      .ask-input.disabled {
+        opacity: 0.6;
+      }
+      .send {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .send.off {
+        opacity: 0.5;
+      }
+      .send svg {
+        width: 16px;
+        height: 16px;
+      }
+      .ask-note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .running {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .running svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+
+      /* ---- the shipped proposal list, reproduced ---- */
+      .list {
+        width: 620px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .count {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1.125rem 1fr auto;
+        align-items: start;
+        gap: 12px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .row .kindicon {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+      }
+      .row .title-line {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        min-width: 0;
+      }
+      .row .key {
+        flex: none;
+        font: 600 12px var(--font-mono);
+        color: var(--el-text-secondary);
+      }
+      .row .title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .row .facts {
+        margin-top: 2px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 12px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .row .cluster {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .chip.add {
+        background: var(--el-tint-sky);
+      }
+      .chip.change {
+        background: var(--el-tint-lavender);
+      }
+      .chip.revised {
+        background: var(--el-tint-mint);
+      }
+      .chip svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      .keytable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 6px;
+      }
+      .keytable th,
+      .keytable td {
+        text-align: left;
+        vertical-align: top;
+        padding: 7px 12px 7px 0;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .keytable th {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .keytable td code,
+      .keytable th code {
+        font: 12px var(--font-mono);
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>Asking Motir to revise the plan you are REVIEWING</h1>
+        <p>
+          A reviewer holding a plan they want shaped differently has two levers today, and both are
+          terminal: approve it as it stands, or decline the whole tree and start over. The commonest
+          reaction to a generated plan is neither — it is <em>nearly right</em> — and there is
+          nothing to press. This asset draws the third verb.
+        </p>
+        <p>
+          It draws ONE composer at the foot of the rail, TWO rows on the timeline that already
+          renders, one HELD state on a button that already has one, and one chip in a row cluster
+          that already has three. It does not redraw the plan review canvas, the proposal peek, the
+          approve / decline controls, the staleness summary, the decided outcome or the plans list,
+          it adds no second planning workspace, and it introduces no colour that is not already in
+          the palette.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-3597</span>
+          <span class="ref plain">story MOTIR-3595</span>
+          <span class="ref plain">decision MOTIR-3596</span>
+          <span class="ref plain">builds: MOTIR-3601</span>
+          <span class="ref plain">components/planning/PlanReviewRail.tsx</span>
+          <span class="ref plain">components/planning/PlanChangeComposer.tsx</span>
+          <span class="ref plain">components/planning/PlanProposalList.tsx</span>
+          <span class="ref plain">design-notes.md Part XII</span>
+        </div>
+      </div>
+
+      <!-- ================= PANEL 1 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>The rail as it ships today — reproduced from a render, not from the source</h2>
+        </div>
+        <p class="panel-note">
+          The real <code>PlanReviewRail</code>, <code>PlanProposalList</code> and
+          <code>PlanChangeComposer</code> were bundled with the real
+          <code>messages/en.json</code> and the real theme and screenshotted headlessly before a
+          line of this board was drawn. Four things that render settled, none of them legible in the
+          <code>.tsx</code>: <b>the rail is 352px wide with 20px padding</b>, so its content column
+          is <b>310px</b>; <b>the decision block is bottom-anchored</b> by <code>mt-auto</code>, so
+          on a `planned` plan there is a large empty band between the history and the Approve
+          button;
+          <b>the hint under the buttons already carries the reason a control is unavailable</b> —
+          <em>Review unlocks when generation completes</em> — which is the grammar panel 4 reuses
+          rather than invents; and
+          <b>the shipped composer renders an `@` trigger inside its input</b>, which panel 2 has to
+          take away and says why.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">planned — today</span>
+            <aside class="rail tall">
+              <div class="rail-head">
+                <span class="pill">Ready to review</span>
+                <h3>Ask Motir to revise the plan you are REVIEWING</h3>
+                <p class="summary">Eleven proposals across three stories, in two repositories.</p>
+                <p class="meta">
+                  <span>11 proposed items</span>
+                  <span class="who">
+                    <span class="disc" aria-hidden="true">Z</span>
+                    <span>Requested by Zhu Yue</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                      />
+                    </svg>
+                    <span>written by Motir AI</span>
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p class="section-label">History</p>
+                <ol class="timeline" style="margin-top: 8px">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl"
+                        >Generation started <span class="actor">· Zhu Yue</span></span
+                      >
+                      <span class="at">Aug 26, 2026, 9:12 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl"
+                        >11 proposals appended <span class="actor">· Motir</span></span
+                      >
+                      <span class="at">Aug 26, 2026, 9:12 AM – Aug 26, 2026, 9:13 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">Plan ready <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:14 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot open" aria-hidden="true"></span>
+                    <span class="ev"><span class="lbl actor">Awaiting your review</span></span>
+                  </li>
+                </ol>
+              </div>
+              <div class="gate">
+                <span class="btn primary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approve — add 11 items to your backlog
+                </span>
+                <span class="btn ghost">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                  Decline
+                </span>
+                <p class="hint">Approve materializes the proposals into your backlog.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 2 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>AT REST — the ask, NEXT TO the two verbs and visibly not a third one</h2>
+        </div>
+        <p class="panel-note">
+          <b>THE ACCESS PATH.</b> The reviewer is already on <code>/plans/&lt;id&gt;</code>; this
+          story adds no route and no door to reach. The door it does add is this one, and it is
+          drawn in place rather than described: a one-line composer sitting
+          <b
+            >inside the bottom-anchored decision block, above Approve and Decline, separated from
+            them by the rail's own <code>--el-border</code> rule</b
+          >.
+        </p>
+        <p class="panel-note">
+          <b>Why it is NOT a third button.</b> Approve and Decline are terminal — each ends the
+          review — and a third control in that stack would be read as a third way to end it. A text
+          field is not a verb of that kind: it asks for an instruction rather than a decision, and a
+          reader who has just read two buttons does not mistake an input for a third. So the
+          relationship the card asks to be VISIBLE is carried by the rule and by the form, not by a
+          label explaining it.
+        </p>
+        <p class="panel-note">
+          <b
+            >It composes the shipped <code>PlanChangeComposer</code> — with the `@` trigger
+            SUPPRESSED, which is a real change and not a styling choice.</b
+          >
+          That trigger opens <code>useWorkItemTargetSearch</code>, which searches the project's
+          COMMITTED work items. A revision is anchored at the plan, and the things it can name are
+          PROPOSALS, which have no key to mention. Offering the picker here would search the wrong
+          universe and return rows the instruction cannot act on. The composer therefore gains one
+          prop (<code>mentions={false}</code>) and the plan-revision case does not fork a second
+          input.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">at rest</span>
+            <aside class="rail" style="height: 380px">
+              <div
+                style="
+                  flex: 1 1 auto;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: var(--el-text-secondary);
+                  font-size: 12px;
+                  border: 1px dashed var(--el-border-strong);
+                  border-radius: var(--radius-card);
+                "
+              >
+                header + history, unchanged (panel 1)
+              </div>
+              <div class="gate">
+                <div class="ask">
+                  <div class="ask-field">
+                    <span class="ask-input">Ask Motir to change this plan…</span>
+                    <span class="send off" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <span class="btn primary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approve — add 11 items to your backlog
+                </span>
+                <span class="btn ghost">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                  Decline
+                </span>
+                <p class="hint">Approve materializes the proposals into your backlog.</p>
+              </div>
+            </aside>
+          </div>
+          <div class="stack">
+            <span class="cap">composing</span>
+            <aside class="rail" style="height: 380px">
+              <div
+                style="
+                  flex: 1 1 auto;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: var(--el-text-secondary);
+                  font-size: 12px;
+                  border: 1px dashed var(--el-border-strong);
+                  border-radius: var(--radius-card);
+                "
+              >
+                header + history, unchanged (panel 1)
+              </div>
+              <div class="gate">
+                <div class="ask">
+                  <div class="ask-field">
+                    <span class="ask-input typed">Split the second story in two</span>
+                    <span class="send" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" />
+                      </svg>
+                    </span>
+                  </div>
+                  <p class="ask-note">
+                    Motir changes this plan. Nothing reaches your backlog until you approve.
+                  </p>
+                </div>
+                <span class="btn primary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approve — add 11 items to your backlog
+                </span>
+                <span class="btn ghost">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                  Decline
+                </span>
+                <p class="hint">Approve materializes the proposals into your backlog.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <p class="panel-note" style="margin-top: 14px">
+          <b>The note appears only while the field carries text.</b> At rest the placeholder is the
+          whole ask and a standing caption under it would be chrome nobody re-reads; the moment an
+          instruction exists, the one thing a reviewer needs to know is that pressing Send does not
+          approve anything. Same grammar as the shipped hint beneath the buttons — a line that says
+          what the control next to it will do.
+        </p>
+      </section>
+
+      <!-- ================= PANEL 3 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>IN FLIGHT — the plan is still `planned`, and Approve is HELD rather than offered</h2>
+        </div>
+        <p class="panel-note">
+          <b>This panel draws what MOTIR-3596 decided, and decides nothing itself.</b> AMENDMENT 10
+          D2 closes the approve / revise race with a LEASE on the plan: while a revision holds it,
+          <code>approvePlan</code> and <code>declinePlan</code> are REFUSED, the tree is untouched,
+          and neither act cancels the other — the loser retries. So the reviewer is never told their
+          revision was thrown away, and never told their approve half-landed.
+        </p>
+        <p class="panel-note">
+          <b>The rail says that with the grammar it already has.</b> Approve and Decline take the
+          shipped disabled treatment, and the hint beneath them is REPLACED — exactly as it is
+          replaced today for a <code>generating</code> plan — with the reason. This is the card's
+          own criterion that a reviewer is never offered a verb that will be refused, applied to a
+          second condition rather than to a second mechanism.
+        </p>
+        <p class="panel-note">
+          <b>And the optimistic hold is not the whole answer, deliberately.</b> A lease can be taken
+          between the render and the click, so the disabled state is a courtesy and not a guarantee.
+          The refusal that arrives anyway lands in the rail's SHIPPED <code>role="alert"</code> line
+          above the gate — one sentence, in place, with the plan still readable. Two mechanisms,
+          because the client cannot know the answer and the server can.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">revision running</span>
+            <aside class="rail tall">
+              <div class="rail-head">
+                <span class="pill">Ready to review</span>
+                <h3>Ask Motir to revise the plan you are REVIEWING</h3>
+                <p class="summary">Eleven proposals across three stories, in two repositories.</p>
+                <p class="meta">
+                  <span>11 proposed items</span>
+                  <span class="who">
+                    <span class="disc" aria-hidden="true">Z</span>
+                    <span>Requested by Zhu Yue</span>
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p class="section-label">History</p>
+                <ol class="timeline" style="margin-top: 8px">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">Plan ready <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:14 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">Revision started <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:31 AM</span>
+                    </span>
+                  </li>
+                </ol>
+              </div>
+              <div class="gate">
+                <div class="running">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  <span>Motir is changing this plan — “Split the second story in two”</span>
+                </div>
+                <div class="ask">
+                  <div class="ask-field">
+                    <span class="ask-input disabled">Ask Motir to change this plan…</span>
+                    <span class="send off" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <span class="btn primary held">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approve — add 11 items to your backlog
+                </span>
+                <span class="btn ghost held">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                  Decline
+                </span>
+                <p class="hint">Approve unlocks when the revision lands.</p>
+              </div>
+            </aside>
+          </div>
+          <div class="stack">
+            <span class="cap">the refusal that arrives anyway</span>
+            <aside class="rail" style="height: 300px">
+              <div
+                style="
+                  flex: 1 1 auto;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: var(--el-text-secondary);
+                  font-size: 12px;
+                  border: 1px dashed var(--el-border-strong);
+                  border-radius: var(--radius-card);
+                "
+              >
+                header + history, unchanged
+              </div>
+              <div class="gate">
+                <p class="alert">A revision is changing this plan. Try again in a moment.</p>
+                <div class="ask">
+                  <div class="ask-field">
+                    <span class="ask-input disabled">Ask Motir to change this plan…</span>
+                    <span class="send off" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <span class="btn primary held">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approve — add 11 items to your backlog
+                </span>
+                <p class="hint">Approve unlocks when the revision lands.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 4 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>LANDED — the timeline says WHAT happened and WHO; the count says how much</h2>
+        </div>
+        <p class="panel-note">
+          Two rows, in the sequence and the grammar Part X fixed — one label, one actor clause, one
+          timestamp, no badge and no second treatment. <b>The pair BRACKETS the revision</b>, which
+          is also what makes them the lease (MOTIR-3596): <em>Revision started</em> with no
+          <em>Revision landed</em> after it, inside the window, is a held plan. So the reviewer
+          learns a revision is running by reading the timeline they were already reading, and the
+          product needed no second place to record it.
+        </p>
+        <p class="panel-note">
+          <b>The MODEL is not in the clause</b>, for the reason Part X measured: at the rail's 298px
+          text column a model name costs every row a second line, and the header carries it once
+          already. It rides the row's <code>title</code>.
+          <b>And a WITHDRAWAL is legible here and nowhere else</b> — a proposal taken off the plan
+          leaves no row in the list to mark — so the count moving from <em>11</em> to <em>10</em> in
+          the header, beside a row that says one proposal was withdrawn, is the complete account. No
+          third surface is added to carry it.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">landed</span>
+            <aside class="rail tall">
+              <div class="rail-head">
+                <span class="pill">Ready to review</span>
+                <h3>Ask Motir to revise the plan you are REVIEWING</h3>
+                <p class="summary">Eleven proposals across three stories, in two repositories.</p>
+                <p class="meta">
+                  <span>10 proposed items</span>
+                  <span class="who">
+                    <span class="disc" aria-hidden="true">Z</span>
+                    <span>Requested by Zhu Yue</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                      />
+                    </svg>
+                    <span>written by Motir AI</span>
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p class="section-label">History</p>
+                <ol class="timeline" style="margin-top: 8px">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">Plan ready <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:14 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">Revision started <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:31 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">2 proposals edited <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:31 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl"
+                        >1 proposal withdrawn <span class="actor">· Motir</span></span
+                      >
+                      <span class="at">Aug 26, 2026, 9:32 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="ev">
+                      <span class="lbl">Revision landed <span class="actor">· Motir</span></span>
+                      <span class="at">Aug 26, 2026, 9:32 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot open" aria-hidden="true"></span>
+                    <span class="ev"><span class="lbl actor">Awaiting your review</span></span>
+                  </li>
+                </ol>
+              </div>
+              <div class="gate">
+                <div class="ask">
+                  <div class="ask-field">
+                    <span class="ask-input">Ask Motir to change this plan…</span>
+                    <span class="send off" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <span class="btn primary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approve — add 10 items to your backlog
+                </span>
+                <span class="btn ghost">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                  Decline
+                </span>
+                <p class="hint">Approve materializes the proposals into your backlog.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 5 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <h2>WHAT CHANGED — a revised proposal read against an unchanged one, in the LIST</h2>
+        </div>
+        <p class="panel-note">
+          <b>The list, not the canvas — and that is a decision, not a convenience.</b> The canvas
+          already has an emphasis mode: Part IX's <em>Show changes</em> rings every PROPOSAL on the
+          level and dims the committed cards around it. It answers
+          <em>which of these is proposed?</em>
+          A reviewer coming back from a revision is asking a different question —
+          <em>which of these moved since I looked?</em> — and putting a second ring on the same
+          canvas to mean a second thing would give one surface two highlight languages. The list
+          groups by op and carries a per-row chip cluster already, so the recency fact goes there.
+        </p>
+        <p class="panel-note">
+          <b>The marker is the SHIPPED <code>Pill</code>, in the SHIPPED slot.</b> The row's right
+          cluster already renders a <em>Stale</em> pill, a status pill and the op chip; a
+          <em>Revised</em> pill joins it in front of the op chip, at <code>severity="info"</code> —
+          the hue in the tint background under <code>--el-text-strong</code>, the recipe every other
+          chip on this row uses. <b>The op chip does not change</b>: op says WHICH kind of change
+          this proposal is, the pill says THAT this one moved. Orthogonal, like Part IX §L2 —
+          neither is an alternative to the other.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">list view, after the revision</span>
+            <div class="list">
+              <div>
+                <div class="group-head">
+                  <span class="section-label">Adds</span>
+                  <span class="count">7</span>
+                </div>
+                <ul class="rows">
+                  <li class="row">
+                    <svg
+                      class="kindicon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--el-accent-on-surface)"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m3 17 2 2 4-4" />
+                      <path d="m3 7 2 2 4-4" />
+                      <path d="M13 6h8" />
+                      <path d="M13 12h8" />
+                      <path d="M13 18h8" />
+                    </svg>
+                    <div style="min-width: 0">
+                      <div class="title-line">
+                        <span class="key">no key yet</span>
+                        <span class="title">The job-token door onto `correctProposal`</span>
+                      </div>
+                      <div class="facts">
+                        <span>subtask · code · 5 pts · 60 min · motir-core</span>
+                        <span>under Revise a landed plan</span>
+                      </div>
+                    </div>
+                    <div class="cluster">
+                      <span class="chip add">add</span>
+                    </div>
+                  </li>
+                  <li class="row" style="background: var(--el-surface-soft)">
+                    <svg
+                      class="kindicon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--el-accent-on-surface)"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m3 17 2 2 4-4" />
+                      <path d="m3 7 2 2 4-4" />
+                      <path d="M13 6h8" />
+                      <path d="M13 12h8" />
+                      <path d="M13 18h8" />
+                    </svg>
+                    <div style="min-width: 0">
+                      <div class="title-line">
+                        <span class="key">no key yet</span>
+                        <span class="title">The revision affordance on the review surface</span>
+                      </div>
+                      <div class="facts">
+                        <span>subtask · code · 3 pts · 40 min · motir-core</span>
+                        <span>under Revise a landed plan</span>
+                      </div>
+                    </div>
+                    <div class="cluster">
+                      <span class="chip revised">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                        Revised
+                      </span>
+                      <span class="chip add">add</span>
+                    </div>
+                  </li>
+                  <li class="row" style="background: var(--el-surface-soft)">
+                    <svg
+                      class="kindicon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--el-accent-on-surface)"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m3 17 2 2 4-4" />
+                      <path d="m3 7 2 2 4-4" />
+                      <path d="M13 6h8" />
+                      <path d="M13 12h8" />
+                      <path d="M13 18h8" />
+                    </svg>
+                    <div style="min-width: 0">
+                      <div class="title-line">
+                        <span class="key">no key yet</span>
+                        <span class="title">The in-flight state and the held Approve</span>
+                      </div>
+                      <div class="facts">
+                        <span>subtask · code · 2 pts · 30 min · motir-core</span>
+                        <span>under Revise a landed plan</span>
+                      </div>
+                    </div>
+                    <div class="cluster">
+                      <span class="chip revised">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                        Revised
+                      </span>
+                      <span class="chip add">add</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <div class="group-head">
+                  <span class="section-label">Updates</span>
+                  <span class="count">3</span>
+                </div>
+                <ul class="rows">
+                  <li class="row">
+                    <svg
+                      class="kindicon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--el-accent-on-surface)"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 7v14" />
+                      <path
+                        d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                      />
+                    </svg>
+                    <div style="min-width: 0">
+                      <div class="title-line">
+                        <span class="key">MOTIR-3410</span>
+                        <span class="title">The plan review surface</span>
+                      </div>
+                      <div class="facts"><span>story · code · 5 pts · motir-core</span></div>
+                    </div>
+                    <div class="cluster">
+                      <span class="chip change">change</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note" style="margin-top: 14px">
+          <b
+            >The row tint is NOT a second signal — it is the shipped hover fill, drawn here only so
+            the two rows are separable on a static board.</b
+          >
+          A build card must read the pill as the marker and nothing else. Adding a persistent row
+          fill would be a colour carrying meaning, which the chip already carries with a word in it.
+        </p>
+      </section>
+
+      <!-- ================= PANEL 6 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">6</span>
+          <h2>Every string, and the token role of every element</h2>
+        </div>
+        <p class="panel-note">
+          New message keys, namespace <code>planReview</code> unless stated.
+          <b>Each needs its `zh` twin</b> or the catalog parity gate fails.
+        </p>
+        <table class="keytable">
+          <tr>
+            <th>key</th>
+            <th>string</th>
+            <th>where</th>
+          </tr>
+          <tr>
+            <td><code>revisePlaceholder</code></td>
+            <td>Ask Motir to change this plan…</td>
+            <td>
+              the composer's placeholder AND its accessible name, which track each other (the
+              shipped composer's contract)
+            </td>
+          </tr>
+          <tr>
+            <td><code>reviseNote</code></td>
+            <td>Motir changes this plan. Nothing reaches your backlog until you approve.</td>
+            <td>under the field, only while it carries text</td>
+          </tr>
+          <tr>
+            <td><code>reviseRunning</code></td>
+            <td>Motir is changing this plan — “{prompt}”</td>
+            <td>
+              the in-flight band above the composer; the instruction is echoed so the reviewer knows
+              which ask is running
+            </td>
+          </tr>
+          <tr>
+            <td><code>approveHintRevising</code></td>
+            <td>Approve unlocks when the revision lands.</td>
+            <td>
+              REPLACES the hint under the buttons, exactly as <code>discardHint</code> does for a
+              generating plan
+            </td>
+          </tr>
+          <tr>
+            <td><code>reviseRefused</code></td>
+            <td>A revision is changing this plan. Try again in a moment.</td>
+            <td>
+              the shipped <code>role="alert"</code> line, for the refusal that beats the disabled
+              state
+            </td>
+          </tr>
+          <tr>
+            <td><code>event_revision_started</code></td>
+            <td>Revision started</td>
+            <td>timeline</td>
+          </tr>
+          <tr>
+            <td><code>event_revision_ended</code></td>
+            <td>Revision landed</td>
+            <td>
+              timeline — “landed”, not “finished”: it names what arrived, in the tense the other
+              rows use
+            </td>
+          </tr>
+          <tr>
+            <td><code>listRevised</code></td>
+            <td>Revised</td>
+            <td>the row pill</td>
+          </tr>
+          <tr>
+            <td><code>reviseAria</code></td>
+            <td>Ask Motir to change this plan</td>
+            <td><code>aria-label</code> on the composer's form region</td>
+          </tr>
+        </table>
+        <p class="panel-note" style="margin-top: 18px">
+          <b>Token roles — every element, and nothing invented.</b>
+        </p>
+        <table class="keytable">
+          <tr>
+            <th>element</th>
+            <th>colour</th>
+            <th>shape / size</th>
+          </tr>
+          <tr>
+            <td>the composer's separator rule</td>
+            <td><code>--el-border</code></td>
+            <td>1px top border on the block</td>
+          </tr>
+          <tr>
+            <td>the input</td>
+            <td>
+              fill <code>--el-page-bg</code>, border <code>--el-border</code>, ink
+              <code>--el-text</code>, placeholder <code>--el-text-secondary</code>
+            </td>
+            <td>
+              <code>--radius-input</code>, <code>--height-input</code>,
+              <code>--spacing-input-x</code>
+            </td>
+          </tr>
+          <tr>
+            <td>Send</td>
+            <td><code>--el-accent</code> fill, <code>--el-accent-text</code> mark</td>
+            <td><code>--radius-btn</code>; the shipped <code>Button size="sm"</code></td>
+          </tr>
+          <tr>
+            <td>the note under the field</td>
+            <td>
+              <code>--el-text-secondary</code> (6.24:1 on <code>--el-surface</code>; muted is 4.17:1
+              and would fail)
+            </td>
+            <td>12px / 1.4</td>
+          </tr>
+          <tr>
+            <td>the in-flight band</td>
+            <td>
+              <code>--el-tint-sky</code> fill under <code>--el-text-strong</code> — the one tint no
+              plan STATUS spends, so it cannot be read as a status
+            </td>
+            <td><code>--radius-card</code>, <code>--spacing-control-x/y</code></td>
+          </tr>
+          <tr>
+            <td>the held Approve / Decline</td>
+            <td>unchanged — the shipped disabled treatment</td>
+            <td>unchanged</td>
+          </tr>
+          <tr>
+            <td>the refusal line</td>
+            <td>
+              <code>--el-danger</code> — the shipped <code>actionError</code> recipe, reused byte
+              for byte
+            </td>
+            <td>12px, 500</td>
+          </tr>
+          <tr>
+            <td>the timeline's two new rows</td>
+            <td>
+              unchanged — <code>--el-accent</code> dot, <code>--el-text</code> label,
+              <code>--el-text-secondary</code> actor + timestamp
+            </td>
+            <td>unchanged</td>
+          </tr>
+          <tr>
+            <td>the <em>Revised</em> pill</td>
+            <td>
+              <code>Pill severity="info"</code> — the hue in the tint, ink
+              <code>--el-text-strong</code>
+            </td>
+            <td><code>--radius-badge</code>, <code>--spacing-chip-x/y</code></td>
+          </tr>
+        </table>
+        <p class="panel-note" style="margin-top: 18px">
+          <b>a11y.</b> The composer is a real <code>&lt;form&gt;</code> with an accessible name; the
+          field's name TRACKS its placeholder, which is the shipped composer's own contract. The
+          in-flight band is not an alert — nothing failed — so it is ordinary content inside the
+          rail's existing live region, and its state is carried by THREE cues that are not colour: a
+          word, a glyph, and two controls that changed. The <em>Revised</em> pill contains its own
+          word, so no row's state is conveyed by colour alone. The held buttons keep their labels
+          and gain no title-only explanation — the hint beneath them is real text.
+        </p>
+        <p class="panel-note">
+          <b>Page state after the revision lands</b> (the enforced contract). The revision arrives
+          from a JOB while the reviewer sits on the page, and <code>/plans/[id]</code> is a Server
+          Component, so <code>router.refresh()</code> re-runs
+          <code>planReviewService.getPlanReview</code> and IS what updates the canvas, the list, the
+          rail's item count, the timeline and the Approve state.
+          <b
+            >What it cannot reach is any client island seeded by a
+            <code>useState(initialProps)</code> initializer</b
+          >
+          — the List/Canvas switcher and any expanded proposal own theirs — so those need a tick
+          they watch, not a refresh. The UI card enumerates each surface and names which mechanism
+          carries it in its pull-request body; assuming the refresh covers all of them is the
+          recurring bug that contract exists to prevent.
+        </p>
+      </section>
+    </div>
+  </body>
+</html>
