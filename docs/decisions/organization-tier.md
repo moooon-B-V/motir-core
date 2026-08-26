@@ -370,6 +370,55 @@ Settings home (entered as the org's settings) **folds in** the workspace-config 
 config → the single `Workspace`). At ws #2 those sections **split** into a per-workspace
 Settings area; the existing workspace's data does not move.
 
+**⚠️ WHO CAN REACH THE FOLD-IN — the clause §6d was missing (MOTIR-3519, decided
+2026-08-26).** The collapse hides a surface and relocates its contents, which is a claim
+about an AUDIENCE that this section never made: the surface being hidden
+(`/settings/workspace`) is gated on **workspace membership**, and the surface hosting the
+fold-in (`/settings/organization`) was gated on the **org owner/admin role**, whole-page.
+A workspace invitee is a plain org `member` (§5's upward invariant joins them with
+`role: member`), so the collapse as first specified closed the source to them and refused
+the destination — leaving no route to their team roster and, critically, **no route to
+Leave workspace at all**.
+
+**THE RULE, stated on roles and surfaces rather than on one page.** In the collapsed
+state there is exactly ONE settings home, and it **gates per SECTION, never per page**:
+
+| section                                                                                                            | who sees it                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| org-scoped (org name, billing, org danger zone, the org roster)                                                    | org **owner/admin** only — a plain org member sees the forbidden treatment for these, exactly as panel 5d specifies |
+| the folded-in workspace-config sections (name, members, danger zone, and the `workspaceId`-scoped config surfaces) | any member **of that workspace**, which is the same gate the standalone area applies at ws ≥ 2                      |
+| nothing at all                                                                                                     | a non-member of the org — 404, never 403 (the standing cross-tenant posture)                                        |
+
+**A hidden tier may not remove a capability.** Progressive disclosure decides what the
+product NAMES, not what a user may DO. So the general form, which every future surface
+built on §6 inherits: **relocating a surface preserves its gate.** If the destination
+admits fewer actors than the source, the destination's gate is what must change — not the
+set of people who can act.
+
+**Leave workspace, by name**, because it is the one capability with no alternative
+surface anywhere in the product (`leaveWorkspaceAction` has a single consumer):
+
+| workspace count | org role                               | where Leave lives                                           |
+| --------------- | -------------------------------------- | ----------------------------------------------------------- |
+| 1               | any org member who is in the workspace | the folded-in danger zone on `/settings/organization`       |
+| ≥ 2             | any workspace member                   | the standalone `/settings/workspace` danger zone, unchanged |
+
+Note that **rename and delete are membership-gated too**, not admin-gated
+(`workspacesService.renameWorkspace` / `deleteWorkspace` both assert membership only), so
+hosting these sections for a plain member widens nothing — it restores the reach they
+already have at ws ≥ 2.
+
+**Panel 5d's whole-page forbidden treatment is NARROWED, not overturned.** It was written
+when this page carried org-scoped cards ONLY, and at that time per-page and per-section
+were the same rule. §6d's fold-in is what makes them differ; the per-section reading is
+what panel 5d means once the page hosts two tiers' sections.
+
+**This clause is the THIRD of three that must be read together**, and taking one without
+the others is how each of them was written wrong: §5's **count-1 arm** (an org add joins
+the sole workspace), the **whose-count** clause (§5's membership arm reads the
+ORGANIZATION's count, §6's disclosure arm reads the VIEWER's), and this one (a hidden
+surface's contents keep their own gate).
+
 **"Inherit" is a behavioural illusion, NOT a data relationship (binding on 6.10.4).**
 There is **no org → workspace config inheritance** in the model — no org-level config
 defaults, no override rows, no runtime resolution; config is purely `Workspace`-scoped.
