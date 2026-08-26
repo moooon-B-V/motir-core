@@ -25,6 +25,8 @@ import {
   renderNothingPushed,
   renderReplanSubmitted,
   renderRepositoriesBlock,
+  materializeDispatchCheckouts,
+  renderMaterialization,
   resolveDispatchTarget,
   resolveDispatchTargets,
 } from '../dispatch.js';
@@ -502,15 +504,37 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   const targets = resolveDispatchTargets(
     link.dir,
     link.config,
-    (dispatch.targetRepos ?? []).map((repo) => repo.name),
+    // The clone URL travels WITH the name (MOTIR-3588).
+    (dispatch.targetRepos ?? []).map((repo) => ({ name: repo.name, cloneUrl: repo.cloneUrl })),
   );
-  const target = targets[0] ?? resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
+  const target =
+    targets[0] ??
+    resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo, {
+      cloneUrl: dispatch.targetRepoCloneUrl ?? null,
+    });
 
   info('');
   info(`── ${entry.key} — ${entry.title ?? ''}`);
   info(`   ${target.cwd}  (${cwdReasonLabel(target)})`);
   for (const line of renderRepositoriesBlock(targets)) info(`   ${line.trimStart()}`);
   info('   its own branch off origin/main, its own pull request');
+
+  // ⚠️ MATERIALIZE BEFORE THE SPAWN (MOTIR-3588) — the same rule `deliver()`
+  // applies, through the same function, because batch prints its own lines
+  // rather than going through it and a second implementation is how the two
+  // drift. A clone that fails skips this item instead of launching an agent
+  // against a prompt that cannot run.
+  const materialized = materializeDispatchCheckouts(
+    link.dir,
+    targets.length > 0 ? targets : [target],
+  );
+  for (const line of renderMaterialization(materialized)) info(`   ${line.trimStart()}`);
+  if (materialized.failures.length > 0) {
+    return {
+      kind: 'skipped',
+      skip: { key: entry.key, title: entry.title, reason: 'checkout_unavailable' },
+    };
+  }
 
   // BEFORE the spawn (MOTIR-3052), so the prompt is on the stream even when the
   // agent then fails, times out or is killed — and one block per dispatched

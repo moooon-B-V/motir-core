@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { materializeCheckouts, type RepoSetClient } from '../src/commands/link.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
-import type { LinkConfig, ProjectRepository } from '../src/client.js';
+import type { ProjectRepository } from '../src/client.js';
+import type { LinkConfig } from '../src/config/linkConfig.js';
 
 // `motir link`'s MATERIALIZE step (Story MOTIR-3584 · Subtask MOTIR-3587) — the
 // I/O half, driven with a stub client and a recording `CommandRunner` so no

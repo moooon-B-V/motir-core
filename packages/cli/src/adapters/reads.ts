@@ -494,9 +494,13 @@ type JobHandleBody = SuccessBody<'submitWorkItemExpansion'>;
 /**
  * The dispatch prompt.
  *
- * `targetRepoCloneUrl` and `targetRepoDefaultBranch` are DROPPED: nothing in
- * `packages/cli/src` reads either, and a view-model field with no reader is not
- * carried over. `resolveDispatchTarget` routes on `targetRepo` alone.
+ * ⚠️ `targetRepoCloneUrl` / `targetRepoDefaultBranch` are CARRIED AGAIN
+ * (MOTIR-3588). They were dropped under the field-with-no-reader rule, and that
+ * was correct while `resolveDispatchTarget` routed on `targetRepo` alone. The
+ * reader now exists: a dispatch whose target checkout is missing materializes it
+ * from that URL instead of launching the agent at the workspace root against a
+ * git workflow that cannot run outside a repository. The rule is unchanged — a
+ * field with no reader is still dropped; this one acquired one.
  *
  * ⚠️ `advisories` is re-shaped by PASSING THROUGH, deliberately. The wire's
  * union is open — `severity` is a bare string, and ADR §8 documents it as
@@ -511,6 +515,16 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
     prompt: body.prompt,
     parentKey: body.parentKey,
     targetRepo: body.targetRepo,
+    // Absent from an older server stays ABSENT rather than becoming an explicit
+    // `null`: `exactOptionalPropertyTypes` makes those different types, and the
+    // resolution reads "no clone URL" from both, so nothing is lost by keeping
+    // the distinction honest.
+    ...(body.targetRepoCloneUrl === undefined
+      ? {}
+      : { targetRepoCloneUrl: body.targetRepoCloneUrl }),
+    ...(body.targetRepoDefaultBranch === undefined
+      ? {}
+      : { targetRepoDefaultBranch: body.targetRepoDefaultBranch }),
     // MOTIR-3133 — the SET, carried because the launcher resolves a checkout per
     // element; and MOTIR-3136 — `delivery` with it, because the run REPORTS what
     // has already shipped, which is the only thing that distinguishes a resume

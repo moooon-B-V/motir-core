@@ -461,6 +461,22 @@ export interface DispatchPrompt {
   parentKey: string | null;
   targetRepo: string | null;
   /**
+   * WHERE `targetRepo` is cloned from, and the branch a fresh clone lands on
+   * (MOTIR-3588) — the single-repository counterpart of `targetRepos[].cloneUrl`.
+   *
+   * ⚠️ CARRIED AGAIN, having been DROPPED under the field-with-no-reader rule
+   * (MOTIR-2212). The reader now exists: a dispatch whose target checkout is
+   * missing MATERIALIZES it from this URL rather than launching the agent at the
+   * workspace root against a git workflow that cannot run there.
+   *
+   * `null` is a real answer with TWO meanings the resolution deliberately
+   * collapses into one: the card pins no repository, or Motir cannot derive a
+   * clone URL for its provider. Either way there is nothing to clone from, and
+   * the preserved bootstrap path is what answers.
+   */
+  targetRepoCloneUrl?: string | null;
+  targetRepoDefaultBranch?: string | null;
+  /**
    * EVERY repository the item ships in (MOTIR-3131), ordered, primary first —
    * `targetRepos[0]?.name ?? null === targetRepo`, always.
    *
