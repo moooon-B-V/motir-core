@@ -153,12 +153,25 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     // the left unchanged. No group is broken across the columns (the assertion
     // below proves that).
     //
-    // ⚠️ THE ASSET IS NOW TWO ROWS BEHIND, not one. The note above asked for a
-    // re-measure "when the set next grows", and it has grown twice since. That is
-    // a DESIGN card, not this one — recorded here and surfaced on the pull
-    // request rather than absorbed silently, because the numbers below going
-    // green is exactly what would otherwise hide it.
-    expect(rows(left)).toBe(5);
+    // ⚠️ 2026-08-26 (MOTIR-3553): TEN to ELEVEN, and the next "look again".
+    // `reinforce_lesson` is the first MCP tool to assert `lesson:reinforce`, so
+    // that key became grantable by the same derivation the three before it
+    // arrived through — and the **project** group grew again, to four
+    // (`project:browse` + the three lesson keys, which the catalog keeps
+    // contiguous beside it). The split is 6/5, with the LEFT column taking the
+    // new row and the right unchanged: still balanced within one row, still no
+    // group broken across the columns (the assertion below proves it), and the
+    // three invariants above — balance, totality, no split group — are what
+    // actually hold this. The two literals are a TRIPWIRE on the numbers, not a
+    // second statement of the rule.
+    //
+    // ⚠️ THE ASSET IS NOW THREE ROWS BEHIND, not two. The note above asked for a
+    // re-measure "when the set next grows", and it has now grown three times
+    // since MOTIR-2578 measured it. That is a DESIGN card, not this one —
+    // recorded here and surfaced on the pull request rather than absorbed
+    // silently, because the numbers below going green is exactly what would
+    // otherwise hide it.
+    expect(rows(left)).toBe(6);
     expect(rows(right)).toBe(5);
   });
 

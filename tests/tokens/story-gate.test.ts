@@ -142,9 +142,16 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
     // loses nothing by not gaining it. `tests/mcp/scopes.test.ts`'s
     // `KNOWN_LOSSES` and `tests/tokens/grant.test.ts`'s `POSTDATE_THE_SCOPES`
     // name the same pair from their own ends.
+    // MOTIR-3553 adds the THIRD, by the same rule and again not as an allowance:
+    // `reinforce_lesson` asserts `lesson:reinforce`, minted in this very change
+    // and therefore later than all three of the keys above. A legacy row never
+    // had this tool and loses nothing by not gaining it; conferring it would let
+    // a token issued years ago for work-item edits start writing to a project's
+    // lesson corpus — the same shape as the two above, one door further in.
     const POSTDATES_THE_SIX: Partial<Record<McpToolName, true>> = {
       add_lesson: true,
       search_lessons: true,
+      reinforce_lesson: true,
     };
     for (const name of MCP_TOOL_NAMES) {
       const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);
