@@ -179,6 +179,18 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // dispatched agent can actually call it (MOTIR-3058; MOTIR-3051 is the
   // counter-example this deliberately avoids).
   attach_file: 'work_item:edit',
+  // `link_pull_request` (Story MOTIR-3525 · MOTIR-3526) — declaring which work
+  // item a pull request delivers is EDITING that work item, so it takes the same
+  // key the picker's own write path sits behind, and the SERVICE asserts it too
+  // rather than leaning on this gate alone.
+  //
+  // ⚠️ `CLI_TOKEN_GRANT` ALREADY CARRIES `work_item:edit` and is NOT widened by
+  // this card — the whole point of choosing this key over a new one. That is
+  // recorded here rather than reasoned about at the call site, because the
+  // opposite failure ships GREEN: a tool that registers, passes every suite
+  // against a workspace PAT, and refuses the sandboxed agent it was built for
+  // (MOTIR-3058 and MOTIR-3051, twice on this same constant).
+  link_pull_request: 'work_item:edit',
 
   // ── sprint:manage — the sprint lifecycle + membership ────────────────────
   // `sprintsService.assertCanManageSprints` and `backlogService.assertCanGroom`

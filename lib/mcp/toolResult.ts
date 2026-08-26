@@ -78,6 +78,11 @@ import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
+import {
+  GithubNotConnectedError,
+  GithubPullRequestNotFoundError,
+  GithubRepoNotFoundError,
+} from '@/lib/github/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
@@ -293,6 +298,18 @@ export function toToolError(err: unknown): CallToolResult {
   // one), but it reaches an agent through the same call and is equally
   // actionable — the message names the entitlement and the limit.
   if (err instanceof EntitlementExceededError) {
+    return toolError(err.code, err.message);
+  }
+  // The pull-request LINK door's typed refusals (MOTIR-3526). All three are
+  // things the agent can act on in one hop — name the repository as it is
+  // connected, check the number, connect the repository — and all three collapse
+  // "absent" and "someone else's" into ONE message, so a cross-workspace probe
+  // learns nothing (the 404-not-403 rule, carried onto a coordinate).
+  if (
+    err instanceof GithubRepoNotFoundError ||
+    err instanceof GithubPullRequestNotFoundError ||
+    err instanceof GithubNotConnectedError
+  ) {
     return toolError(err.code, err.message);
   }
   if (err instanceof InvalidReadyCursorError || err instanceof InvalidSearchCursorError) {

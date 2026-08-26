@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **49 tools**.
+`initialize` handshake and registers **50 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1045,6 +1045,84 @@ not `lesson:manage` — checked **before** any call to motir-ai.
 
 **Output** — `structuredContent`: the recorded lesson's `id`, `title`, its three
 axes as stored, and `sourceRef`.
+
+#### `link_pull_request`
+
+Declare **which work item a pull request belongs to** — called immediately after
+opening one, once per pull request. The caller is the first party that knows the
+answer with certainty, and it knows it before GitHub's own webhook does.
+
+**Why this exists.** Until this tool, an executing agent could only put
+`MOTIR-<n>` in the branch or the title and hope
+`changeRequestStatusSync.resolveChangeRequestWorkItem` parsed it back out. That
+guess fails in both directions, and both have been measured on live cards: a
+title that DROPS the key is invisible to the completion gate, so a card is held
+open by work that has already shipped; a title that merely MENTIONS one closes
+that card whether or not the pull request delivered it.
+
+**The parse is not retired.** It remains the FALLBACK for a pull request opened
+outside a run — by a person, by Dependabot, by a script — where a guess is the
+only thing available and is a reasonable one. What changed is which mechanism is
+**primary**: the link is a stored fact and the sync prefers it, so a merge moves
+the card whether or not any title ever named it.
+
+⚠️ **It MOVES the link; it does not add one.** A work item's pull-request link is
+a **single FK** (`github_pull_request.work_item_id`), so a second call naming a
+DIFFERENT work item takes the link off the first — the result's `movedFrom`
+names it, so a caller cannot read a move as an addition. Two pull requests may
+point at one work item; one pull request cannot point at two.
+
+⚠️ **It works BEFORE any webhook delivery** — that is the case it exists for. The
+detail page's "+ Link pull request" picker can only choose a pull request Motir
+has already ingested, and addresses it by an internal id an agent has never seen.
+This tool addresses the pull request the way GitHub does, by **repository +
+number**, and writes the row when there is none yet. So the two arms are
+deliberately asymmetric:
+
+| state when called | what is written                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **no row yet**    | the row, from your `headRef` / `baseRef` / `title`, `state: "open"`, `merged: false`, plus the link (`created: true`) |
+| **a row already** | **only** the link — your ref/title arguments are ignored, because a delivery has already spoken for those fields      |
+
+The division of authority is what keeps the two from fighting: **you are
+authoritative about the LINK, the webhook is authoritative about STATE.**
+`linked_manually` is that boundary, and it already existed — every later delivery
+refreshes `state` / `merged` / `headRef` / `baseRef` / `title` and leaves
+`work_item_id` alone.
+
+Put the key in the BRANCH anyway: a human reads a branch list, and the
+design-result publisher finds its card from any resolvable key in the ref. It is
+a label now, not the mechanism.
+
+| Input        | Type   | Required | Notes                                                                                  |
+| ------------ | ------ | -------- | -------------------------------------------------------------------------------------- |
+| `key`        | string | yes      | Work item identifier.                                                                  |
+| `url`        | string | \*       | The full pull-request URL — the line `gh pr create` prints, passed through verbatim.   |
+| `repository` | string | \*       | `"owner/name"` as the repository is connected (case-insensitive). Goes with `number`.  |
+| `number`     | number | \*       | The pull-request number. Goes with `repository`.                                       |
+| `headRef`    | string | yes      | The branch the pull request is FROM. Seeds the row when there is none; else ignored.   |
+| `baseRef`    | string | yes      | The branch it TARGETS. Same rule.                                                      |
+| `title`      | string | no       | Its title, for the row this call may create. The first delivery supplies the real one. |
+
+\* Address the pull request **either** with `url` **or** with `repository` +
+`number` — not neither. Both forms are accepted, and if both are given they must
+AGREE: a disagreement is refused (`INVALID_PULL_REQUEST_REF`) rather than
+resolved by preferring one, because picking arbitrarily would link a real pull
+request that is not the one the caller meant, under a success message.
+
+**Output** — `structuredContent`: `key`, `created` (the row existed only because
+this call wrote it), `movedFrom` (the item the link was taken off, or null), and
+`pullRequest` — the same `LinkedPullRequestDto` the item page's Development
+section renders.
+
+An unknown or cross-workspace **repository** (`GITHUB_REPO_NOT_FOUND`) and an
+unknown item key are both refused with no existence leak — the repository is
+resolved from the repo row's own workspace, never through its installation
+(MOTIR-1931), so a repository Motir created resolves like any other.
+
+Requires the work-item edit permission (`work_item:edit`) — linking a pull
+request to a card is editing that card. It is already in the CLI's fixed grant,
+so a dispatched agent can call it.
 
 #### `attach_file`
 
