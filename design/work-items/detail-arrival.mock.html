@@ -1,11 +1,22 @@
 <!doctype html>
 <!--
-  THE WORK-ITEM PAGE AT ARRIVAL, AND WHILE IT STREAMS (MOTIR-3432).
+  THE WORK-ITEM PAGE AT ARRIVAL, AND WHILE IT STREAMS (MOTIR-3432; the frame's
+  MOUNT POINT corrected by MOTIR-3492).
 
   The design of record for what /items/<KEY> shows between the click and the
-  item: the route-shaped pending frame, the three-tier allocation of every
+  item: the page's own pending frame, the three-tier allocation of every
   region, and how many times the page is allowed to settle. Read it with
   design/work-items/design-notes.md.
+
+  ⚠️ THE FRAME'S DRAWING IS UNCHANGED; WHERE IT MOUNTS IS NOT. This asset was
+  drawn for a route-shaped app/(authed)/items/[key]/loading.tsx (MOTIR-3435).
+  That file cannot exist: a loading.tsx fallback renders as soon as its
+  ancestor layouts resolve, which flushes the response head and fixes the
+  status at 200 — and this page's notFound() is a documented "no existence
+  leak" contract. It was reverted. The frame below is now the fallback of an
+  in-page <Suspense> wrapping the page's TIER-2 body, placed AFTER the gate, so
+  it is released once the status is already committed. Everything the frame is
+  MADE of, and the whole three-tier allocation, stand unchanged.
 
   IT COMPOSES, IT DOES NOT REDRAW. The shell's pending grammar — the pulse
   vocabulary, the 120ms reveal, the no-shift rule — is
@@ -3602,9 +3613,11 @@
     <h1 class="board-title">The work-item page at arrival, and while it streams</h1>
     <p class="board-sub">
       What a reader sees between typing an <code>/items/&lt;KEY&gt;</code> URL and reading the item:
-      the route-shaped pending frame, which regions land late, what each shows meanwhile, and how
-      many times the page is allowed to settle. <b>MOTIR-3432</b> · the code cards are
-      <b>MOTIR-3435</b> and <b>MOTIR-3436</b>.
+      the page&rsquo;s own pending frame, which regions land late, what each shows meanwhile, and
+      how many times the page is allowed to settle. <b>MOTIR-3432</b> drew it;
+      <b>MOTIR-3492</b> corrected where the frame MOUNTS. <b>MOTIR-3436</b>&rsquo;s late stack
+      SHIPPED; <b>MOTIR-3435</b>&rsquo;s <code>loading.tsx</code> was reverted and its frame is now
+      an in-page <code>&lt;Suspense&gt;</code> placed after the page&rsquo;s gate.
     </p>
 
     <section class="panel">
@@ -3622,7 +3635,8 @@
       <div class="board-col">
         <figure class="board-frame">
           <figcaption class="board-cap">
-            ARRIVAL · the route-shaped frame — revealed at 120 ms, from the shell grammar
+            ARRIVAL · the page's own frame — an in-page &lt;Suspense&gt; after the gate, revealed at
+            120 ms
           </figcaption>
           <div class="board-device" style="width: 1180px">
             <div class="board-frozen">
@@ -3724,9 +3738,14 @@
             </div>
           </div>
           <p class="board-note">
-            Not the group frame: this one has the item page&rsquo;s real geometry — the eyebrow row,
-            the wide title, the <code>1fr / 18rem</code> split and the rail&rsquo;s card. It
-            COMPOSES the shell primitive and supplies only its body.
+            The page&rsquo;s own geometry — the eyebrow row, the wide title, the
+            <code>1fr / 18rem</code> split and the rail&rsquo;s card. It COMPOSES the shell
+            primitive and supplies only its body.
+            <b
+              >It is released by an in-page <code>&lt;Suspense&gt;</code> placed AFTER the
+              page&rsquo;s gate</b
+            >, so the 404 this route owes a missing or cross-workspace key is decided before
+            anything is flushed (MOTIR-3492).
           </p>
         </figure>
         <figure class="board-frame">
@@ -4918,8 +4937,8 @@
             <td><code>h-8 w-[34rem]</code></td>
             <td>the <code>&lt;h1 class="font-serif text-2xl"&gt;</code></td>
             <td>
-              <b>32px</b>, the same box the group frame&rsquo;s title block uses. A title that WRAPS
-              to two lines is the one place the page can settle taller — see below.
+              <b>32px</b>, the same box the shell grammar&rsquo;s generic title block uses. A title
+              that WRAPS to two lines is the one place the page can settle taller — see below.
             </td>
           </tr>
           <tr>

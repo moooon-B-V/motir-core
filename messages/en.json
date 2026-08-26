@@ -5231,7 +5231,19 @@
       },
       "showChanges": "Show changes",
       "showChangesCount": "{n} of {total}",
-      "showChangesNone": "No proposed changes on this level"
+      "showChangesNone": "No proposed changes on this level",
+      "group": {
+        "title": "Not in an epic",
+        "count": "{count} items",
+        "countOne": "1 item",
+        "aria": "Not in an epic — {count} work items outside every epic"
+      },
+      "more": {
+        "label": "+ {count} more",
+        "showing": "Showing {shown} of {total}",
+        "showAll": "Show all",
+        "aria": "This level is truncated: showing {shown} of {total}. Show all."
+      }
     }
   },
   "github": {

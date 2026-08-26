@@ -916,8 +916,23 @@ group's `layout.tsx` awaits its session and redirects before it renders
 unauthenticated visitor is bounced, never shown a frame.
 
 `design/shell/navigation-pending.mock.html` + `design/shell/design-notes.md`
-§ _The navigation-pending grammar_ is the design of record: the frame block by
-block, the argument for 120ms, and the no-shift mapping.
+§ _The navigation-pending grammar_ is the design of record, in its SECOND
+revision (MOTIR-3492): the wait's three windows and which instrument covers
+each, the frame block by block, the argument for 120ms, the no-shift mapping,
+the rule for which surfaces earn a frame, and the decision to scope the
+BOUNDARIES rather than the 30 assertions above. Its short form: **the frame is
+an in-page `<Suspense>` placed after the page's own gate, every page's frame is
+its own, and no `loading.tsx` is added under `app/(authed)`.**
+
+**The ROUTE-GROUP instrument above is the one that asset weighs and declines,
+for this group only** — it is a route-level boundary, so it still carries the
+30-assertion locator cost, and scoping it around eleven deciders scattered
+across `settings/`, `items/`, `plans/`, `sprints/`, `dashboard/` and
+`direction/` is a tree-wide restructuring where an in-page `<Suspense>` is one
+line in one page. **That is a judgement about this group, not about the
+instrument**: `/explore` was the opposite case — two routes, one boundary worth
+keeping, no spec asserting unscoped against it — and there the group is
+correct.
 
 ---
 

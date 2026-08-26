@@ -826,6 +826,12 @@ function roadmapDoneStatusKeys(statuses: WorkflowStatusDto[]): Set<string> {
  * design pins 50 per node; the max caps a forged `?take`. */
 const TREE_LEVEL_PAGE_SIZE = 50;
 const TREE_LEVEL_MAX_TAKE = 200;
+/** The ceiling a roadmap level's "Show all" raises {@link TREE_LEVEL_MAX_TAKE} to
+ *  (MOTIR-3490). Reached only when the reader has already been told the level is
+ *  truncated and asked for the rest, so it trades one heavier read for the
+ *  epics that were being dropped silently — but it is still a CEILING: past it
+ *  the truncation tile shows again rather than the read growing without bound. */
+const ROADMAP_LEVEL_ALL_TAKE = 2000;
 
 /** Clamp the caller's paging into the safe range (a forged ?take/?offset can't
  * blow the read up). */
@@ -3375,7 +3381,7 @@ export const workItemsService = {
     projectId: string,
     parentId: string | null,
     ctx: ServiceContext,
-    opts: { scope?: 'project' | 'sprint' } = {},
+    opts: { scope?: 'project' | 'sprint'; all?: boolean } = {},
   ): Promise<ProjectRoadmapDto> {
     const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
@@ -3400,7 +3406,7 @@ export const workItemsService = {
         sprintRepository.findActiveByProject(projectId, project.workspaceId, tx),
       );
       if (!activeSprint) {
-        return { nodes: [], edges: [], offLevelBlockers: [] };
+        return { nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 };
       }
       sprintId = activeSprint.id;
     }
@@ -3408,7 +3414,15 @@ export const workItemsService = {
     // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
     // The tenant gate and `report:view` are both awaited above; neither the
     // tree-level read nor the status list refuses.
-    const [rows, statuses] = await Promise.all([
+    // THE LEVEL CAP IS NOW REPORTED, NOT SILENT (MOTIR-3490). `take` stays
+    // `TREE_LEVEL_MAX_TAKE` for the ordinary read; `opts.all` raises it to the
+    // hard ceiling, which is what the canvas's "Show all" asks for once its
+    // truncation tile has told the reader rows are missing. The ceiling is a
+    // ceiling and not `undefined` on purpose — an unbounded level read is a
+    // whole-tree round-trip wearing a different name (mistake #91), and at the
+    // ceiling the tile simply shows again, which is honest.
+    const take = opts.all === true ? ROADMAP_LEVEL_ALL_TAKE : TREE_LEVEL_MAX_TAKE;
+    const [rowsPage, statuses, levelTotal] = await Promise.all([
       withWorkspaceServiceContext(project.workspaceId, (tx) =>
         workItemRepository.findProjectTreeLevel(
           projectId,
@@ -3416,7 +3430,7 @@ export const workItemsService = {
           parentId,
           DEFAULT_SORT,
           {
-            take: TREE_LEVEL_MAX_TAKE,
+            take,
             offset: 0,
           },
           sprintId,
@@ -3424,7 +3438,27 @@ export const workItemsService = {
         ),
       ),
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
+      // The level's TRUE size, under the same predicate + sprint arm as the read
+      // above — this is the `M` in "Showing N of M", and a count taken under a
+      // different predicate would report on a different level.
+      withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workItemRepository.countProjectTreeLevel(
+          projectId,
+          project.workspaceId,
+          parentId,
+          sprintId,
+          tx,
+        ),
+      ),
     ]);
+    // `findProjectTreeLevel` deliberately returns `take + 1` rows — the has-more
+    // PROBE the paged `/items` tree uses to decide whether to offer another page
+    // (`buildTreeLevel` slices it off). This read never sliced, so a capped level
+    // has always returned 201 nodes for a 200-row cap: harmless while nothing
+    // compared the two, and wrong the moment `levelTotal` does. Slice it here, so
+    // the level returns exactly as many rows as it claims and "Showing 200 of 210"
+    // is a true sentence.
+    const rows = rowsPage.slice(0, take);
     const doneKeys = roadmapDoneStatusKeys(statuses);
     // TERMINAL keys = the whole `done` CATEGORY, INCLUDING `cancelled` — the
     // dependency-satisfaction rule (distinct from `doneKeys`, which is the
@@ -3535,7 +3569,7 @@ export const workItemsService = {
       inActiveSprint: sprintId != null && s.sprintId === sprintId,
     }));
 
-    return { nodes, edges, offLevelBlockers };
+    return { nodes, edges, offLevelBlockers, levelTotal };
   },
 
   /**
@@ -3792,7 +3826,7 @@ export const workItemsService = {
           null,
           tx,
         ),
-        workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null, tx),
+        workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null, null, tx),
       ]),
     );
     return buildTreeLevel(rows, take, total);
@@ -3830,6 +3864,7 @@ export const workItemsService = {
           parent.projectId,
           parent.workspaceId,
           parentId,
+          null,
           tx,
         ),
       ]),

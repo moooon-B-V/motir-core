@@ -3130,11 +3130,22 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     parentId: string | null,
+    sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? db;
+    // The SAME level predicate `findProjectTreeLevel` builds, sprint arm included
+    // (MOTIR-3490). A count taken with a different predicate than the read it
+    // reports on is worse than no count: the roadmap's truncation tile says
+    // "Showing N of M", and in sprint scope an unscoped M would claim rows the
+    // level could never show. Kept literally parallel to the read's `parentPred`
+    // so the two cannot drift.
     const parentPred =
-      parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+      sprintId != null && parentId === null
+        ? Prisma.sql`w."id" IN ${topInSprintMembersSql(projectId, workspaceId, sprintId)}`
+        : parentId === null
+          ? Prisma.sql`w."parentId" IS NULL`
+          : Prisma.sql`w."parentId" = ${parentId}`;
     const rows = await client.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS "count"
         FROM "work_item" w

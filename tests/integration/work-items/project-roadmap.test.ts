@@ -141,6 +141,9 @@ describe('workItemsService.getProjectRoadmap — per-level read', () => {
       nodes: [],
       edges: [],
       offLevelBlockers: [],
+      // MOTIR-3490 — the level's true size rides the same DTO. An empty level
+      // is `0 of 0`, which is what makes it honest rather than merely empty.
+      levelTotal: 0,
     });
   });
 
@@ -393,4 +396,63 @@ describe('workItemsService.getProjectRoadmap — the status label + category (bu
     expect(node.statusLabel).toBe('ghost_status');
     expect(node.statusCategory).toBeNull();
   });
+});
+
+// ── MOTIR-3490 · the level's TRUE size, and the cap that used to be silent ────
+// `getProjectRoadmap` caps its read at TREE_LEVEL_MAX_TAKE (200) under a
+// key-ASCENDING sort, so overflow discarded the HIGHEST keys — the most recently
+// created epics — with no cursor and no affordance. `levelTotal` is what makes
+// that visible, and `opts.all` is the escape the canvas's "Show all" asks for.
+describe('levelTotal + the Show-all escape (MOTIR-3490)', () => {
+  it('reports the level total beside the rows, on a level that fits whole', async () => {
+    const fx = await makeFixture();
+    await buildForest(fx);
+
+    const level = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
+    // Two roots, and the total agrees — nothing was dropped, so the canvas draws
+    // no truncation tile.
+    expect(level.nodes).toHaveLength(2);
+    expect(level.levelTotal).toBe(2);
+  });
+
+  it("counts a PARENT's level, not the project — the total is about this level", async () => {
+    const fx = await makeFixture();
+    const f = await buildForest(fx);
+
+    const level = await workItemsService.getProjectRoadmap(fx.projectId, f.E.id, fx.ctx);
+    expect(level.nodes).toHaveLength(2); // Story A, Story B
+    expect(level.levelTotal).toBe(2); // NOT the project's 9 items
+  });
+
+  it('a root set OVER the cap is truncated — and every epic is reachable with all', async () => {
+    const fx = await makeFixture();
+    // 210 root epics. The read caps at 200, so ten are dropped — and because the
+    // sort is key-ASC, the ten lost are the ten most recently created.
+    const created: string[] = [];
+    for (let i = 0; i < 210; i += 1) {
+      const e = await createWorkItem(fx, { kind: 'epic', title: `Epic ${i}` });
+      created.push(e.id);
+    }
+
+    const capped = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
+    // The read is short, and THIS is the number that used to be unknowable: the
+    // canvas now has both halves of "Showing 200 of 210".
+    expect(capped.nodes).toHaveLength(200);
+    expect(capped.levelTotal).toBe(210);
+
+    // The newest epic is exactly what the cap was dropping.
+    const lastId = created[created.length - 1]!;
+    expect(capped.nodes.some((n) => n.id === lastId)).toBe(false);
+
+    // Show all — the level comes back whole, and the dropped epics are reachable.
+    const all = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      all: true,
+    });
+    expect(all.nodes).toHaveLength(210);
+    expect(all.levelTotal).toBe(210);
+    expect(all.nodes.some((n) => n.id === lastId)).toBe(true);
+    // Every epic created is on the level — the AC's "still reach every epic".
+    const ids = new Set(all.nodes.map((n) => n.id));
+    expect(created.every((id) => ids.has(id))).toBe(true);
+  }, 120_000);
 });
