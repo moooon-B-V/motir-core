@@ -237,7 +237,8 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'link',
     signature: '',
-    description: 'Bind this workspace-root folder to a server + workspace + project.',
+    description:
+      'Bind this workspace-root folder to a project, and clone the repositories it is missing.',
     helpGroup: HELP_GROUP.setup,
     options: [
       {
