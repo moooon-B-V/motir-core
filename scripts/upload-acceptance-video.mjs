@@ -551,6 +551,49 @@ const PUT_BASE_DELAY_MS = 500;
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * What is logged in place of the store's request id when the response did not
+ * carry one (MOTIR-3565). A LITERAL, so a log line stays parseable either way —
+ * `undefined` in the middle of a sentence reads as a bug in the uploader rather
+ * than as a header the store chose not to send.
+ */
+const NO_REQUEST_ID = '(no x-amz-request-id)';
+
+/**
+ * The store's own correlation id for ONE PUT, off the RESPONSE (MOTIR-3565).
+ *
+ * ⚠️ WHY THIS EXISTS, and why it is read on the ACCEPTED path too. MOTIR-3313 is
+ * an unexplained 503 on one artifact's PUT, and every route to a cause now runs
+ * through the store, which cannot look anything up without ids. This function
+ * used not to exist: `putSignedArtifact` returned the instant `res.ok` was true
+ * and, on a refusal, kept only `res.status` and the body — so the id was
+ * discarded on every attempt, accepted and refused alike.
+ *
+ * The two ids the incident does hold came out of the error XML (`<RequestId>`),
+ * which the uploader logs wholesale as `detail`. That yields exactly one thing:
+ * the id of the write that FAILED. What a store-side lookup needs is the
+ * CONTRAST — the refused write set against its accepted neighbours, which is the
+ * whole shape of this incident (a 45.9 MB refusal between a 2.1 MB and an
+ * 89.3 MB success). A 190-PUT probe against Tigris confirmed the header is on
+ * EVERY response, successes included; we simply never looked.
+ *
+ * ⚠️ This asserts NOTHING about why the store refused. It is observability, not
+ * a hypothesis — the retry policy above stays exactly as MOTIR-3313 left it.
+ *
+ * ⚠️ TOTAL BY CONSTRUCTION. A store is free to stop sending the header, and a
+ * response object in a test is free to be a bare `{ ok, status }` literal with
+ * no `headers` at all — the publish is not free to die on either. Hence the
+ * guard clause: `headers` may be absent, and `get` may not be a function, and
+ * this must never be the line that takes the lane down.
+ *
+ * @param {{ headers?: { get?: (name: string) => string | null } }} res
+ * @returns {string} the id, or `NO_REQUEST_ID` — never `undefined`.
+ */
+function putRequestId(res) {
+  if (typeof res?.headers?.get !== 'function') return NO_REQUEST_ID;
+  return res.headers.get('x-amz-request-id') || NO_REQUEST_ID;
+}
+
+/**
  * PUT one artifact to the presigned URL the mint returned (MOTIR-2389), RETRYING
  * a retryable status (MOTIR-3313).
  *
@@ -586,6 +629,12 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * VIDEO propagate. `Published N of M` counts RECORDINGS and still tells the truth
  * under both.
  *
+ * ⚠️ EVERY attempt logs the store's `x-amz-request-id` (MOTIR-3565) — the
+ * accepted one as well as the refused, which is the half a store-side lookup
+ * needs and the half we were throwing away. See `putRequestId` for why, and for
+ * the one thing that must never join it in the log: `target.token` is a live
+ * presigned signature and this repository's job logs are public.
+ *
  * @param {'video' | 'trace'} label
  * @param {string} filePath
  * @param {{ token: string, contentType: string, pathname: string }} target
@@ -608,10 +657,25 @@ export async function putSignedArtifact(label, filePath, target, retry = {}) {
       headers: { 'content-type': target.contentType },
       body,
     });
-    if (res.ok) return;
+    // Read on EVERY attempt, BEFORE branching on `res.ok` — the accepted write's
+    // id is the half the incident is missing (MOTIR-3565).
+    const requestId = putRequestId(res);
+    if (res.ok) {
+      // The neighbour ids. Cheap, one line per artifact, and the only reason the
+      // next refusal is answerable rather than another round of guessing.
+      // ⚠️ NEVER `target.token` — it is a presigned URL carrying a live
+      // signature, and this repository's job logs are public. The id and the
+      // label are the whole payload.
+      console.log(
+        `Acceptance ${label} upload accepted — request id ${requestId} ` +
+          `(attempt ${attempt} of ${attempts}) — MOTIR-3313.`,
+      );
+      return;
+    }
 
     const detail = await res.text().catch(() => '');
-    last = `Acceptance ${label} upload failed: ${res.status} ${detail}`.trim();
+    last =
+      `Acceptance ${label} upload failed: ${res.status} [request id ${requestId}] ${detail}`.trim();
     if (!RETRYABLE_PUT_STATUSES.has(res.status) || attempt === attempts) break;
 
     // Exponential, with jitter so two artifacts in one job never line their
@@ -620,8 +684,8 @@ export async function putSignedArtifact(label, filePath, target, retry = {}) {
     // this log should see how hard it was to get the bytes in.
     const delay = baseDelayMs * 2 ** (attempt - 1);
     console.warn(
-      `Acceptance ${label} upload got ${res.status}; retrying in ${delay}ms ` +
-        `(attempt ${attempt} of ${attempts}) — MOTIR-3313.`,
+      `Acceptance ${label} upload got ${res.status} (request id ${requestId}); ` +
+        `retrying in ${delay}ms (attempt ${attempt} of ${attempts}) — MOTIR-3313.`,
     );
     await sleep(delay + Math.floor(Math.random() * baseDelayMs));
   }
