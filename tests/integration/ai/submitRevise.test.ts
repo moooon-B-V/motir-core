@@ -99,7 +99,7 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
     expect(context).not.toHaveProperty('targetKeys');
   });
 
-  it('ACQUIRES the lease and BINDS the plan to the revision job', async () => {
+  it('ACQUIRES the lease and BINDS the plan to the revision job — ONE act, one transaction', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx);
     await aiPlanEditsService.submitRevise(planId, 'Split it', projectCtx(fx));
@@ -120,7 +120,7 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
     );
   });
 
-  it('RELEASES the lease when the submit throws — a job that never started holds nothing', async () => {
+  it('a FAILED submit leaves the plan EXACTLY as it found it — nothing to unwind', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx);
     (submitJob as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
@@ -131,12 +131,15 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
       aiPlanEditsService.submitRevise(planId, 'Split it', projectCtx(fx)),
     ).rejects.toBeInstanceOf(MotirAiError);
 
-    const rows = await adminDb.planRevision.findMany({
-      where: { planId },
-      orderBy: { changedAt: 'asc' },
-    });
-    expect(rows.at(-1)!.changeKind).toBe('revision_ended');
-    // The plan is decidable again, immediately — not in ten minutes.
+    // The lease is taken AFTER the submit — and it is what binds the plan to the
+    // job — so a submit that never returned an id has written nothing at all.
+    // There is no half-state to unwind, which is the point of that ordering.
+    const rows = await adminDb.planRevision.findMany({ where: { planId } });
+    expect(rows.some((r) => r.changeKind === 'revision_started')).toBe(false);
+    expect(
+      (await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).sourceJobId,
+    ).toBeNull();
+    // The plan is decidable, immediately — not in ten minutes.
     await plansService.approvePlan(planId, fx.ctx);
   });
 

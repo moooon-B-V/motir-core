@@ -196,6 +196,23 @@ export interface PlanReviewItemDto {
   /** The `modify` diff (old→new) — empty for `add` / `remove`. */
   changes: PlanItemChangeDto[];
   /** This item is flagged stale (`reasons.length > 0`). */
+  /**
+   * This proposal MOVED in the plan's latest revision (Subtask MOTIR-3601;
+   * `design-notes.md` Part XII §E).
+   *
+   * ⚠️ A RECENCY fact, and NOT the same question `op` answers. `op` says WHICH
+   * KIND of change this proposal is; this says THAT this one moved since the
+   * reviewer last looked. Orthogonal, exactly as Part IX §L2 holds for the
+   * canvas's emphasis — a build must not read either as an alternative to the
+   * other.
+   *
+   * Derived from the trail's `planItemId`, so it needs no column: the rows
+   * written between the latest `revision_started` and its terminator name every
+   * proposal that revision touched. False on every plan that has never been
+   * revised, which is every plan written before this story.
+   */
+  revised: boolean;
+
   stale: boolean;
   staleReasons: StaleReason[];
   /** `remove` / drifted `modify`: the live target is archived or hard-deleted. */
@@ -282,6 +299,23 @@ export interface PlanHistoryEventDto {
 }
 
 /** The whole plan-detail review model. */
+/**
+ * A revision in flight, as the review surface reads it (Subtask MOTIR-3601).
+ *
+ * Present ⟺ the lease is HELD. There is no `inFlight: false` shape, deliberately:
+ * a null is one check at the call site and cannot be misread as *a revision that
+ * finished*, which a `{ inFlight: false }` object routinely is.
+ */
+export interface PlanRevisionStateDto {
+  /** The harness running it, when the trail recorded one. */
+  heldBy: string | null;
+  /** When the lease ages out if the job never reports back — the ONLY thing that
+   *  recovers a plan whose revision job died. */
+  expiresAt: string;
+  /** WHEN it started, so the surface can say how long it has been running. */
+  startedAt: string;
+}
+
 export interface PlanReviewDto {
   id: string;
   projectId: string;
@@ -334,6 +368,24 @@ export interface PlanReviewDto {
   /** The lifecycle timeline (created → planned → decision). */
   history: PlanHistoryEventDto[];
   /** The proposed items, enriched for the canvas. */
+  /**
+   * The REVISION the reviewer is watching, or null when none is running (Story
+   * MOTIR-3595 · Subtask MOTIR-3601; `design/ai-planning/design-notes.md`
+   * Part XII §C).
+   *
+   * ⚠️ DERIVED FROM THE PLAN'S OWN TRAIL — no column, no table. A
+   * `revision_started` with no `revision_ended` after it, inside the lease
+   * window, IS the lease (`agent-authored-plans.md` AMENDMENT 10 D2), and it is
+   * the same pair the timeline renders. So the surface that must disable Approve
+   * and the surface that tells the reviewer WHY read one fact from one place.
+   *
+   * `heldBy` is the HARNESS, never the model — the discriminator Part X §4 fixed
+   * for the timeline clause, reused here for the same reason: a harness name is
+   * what a reader recognises and a model is one level of detail below what a
+   * held button needs to say.
+   */
+  revision: PlanRevisionStateDto | null;
+
   items: PlanReviewItemDto[];
   /** Roll-up: any item is stale (the plan-level "N may be out of date"). */
   stale: boolean;

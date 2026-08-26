@@ -45,6 +45,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     items: [],
     stale: false,
     staleCount: 0,
+    revision: null,
     ...over,
   };
 }

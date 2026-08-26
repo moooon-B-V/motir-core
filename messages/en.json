@@ -284,7 +284,16 @@
     "executorHuman": "Human",
     "executorAgent": "Coding agent",
     "minutes": "{n} min",
-    "viewTriggerAria": "View proposal"
+    "viewTriggerAria": "View proposal",
+    "revisePlaceholder": "Ask Motir to change this plan…",
+    "reviseNote": "Motir changes this plan. Nothing reaches your backlog until you approve.",
+    "reviseRunning": "Motir is changing this plan…",
+    "reviseRunningBy": "{harness} is changing this plan…",
+    "approveHintRevising": "Approve unlocks when the revision lands.",
+    "reviseRefused": "A revision is changing this plan. Try again in a moment.",
+    "event_revision_started": "Revision started",
+    "event_revision_ended": "Revision landed",
+    "listRevised": "Revised"
   },
   "planEdits": {
     "submitting": "Submitting…",

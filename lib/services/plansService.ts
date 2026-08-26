@@ -2987,6 +2987,7 @@ export const plansService = {
     planId: string,
     ctx: ServiceContext,
     actor: PlanRevisionAgentActor,
+    opts: { jobId?: string } = {},
   ): Promise<{ planId: string; expiresAt: Date }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -3005,13 +3006,32 @@ export const plansService = {
         await assertNoRevisionInFlight(planId, tx);
 
         const at = new Date();
+        // ⚠️ THE BIND RIDES THE ACQUIRE, in the same transaction and under the
+        // same row lock — it is not a second act and must not be a second door.
+        //
+        // `sourceJobId` is how the internal seams resolve *the job's plan*
+        // (`findBySourceJobId`), so the revision job cannot call back until it is
+        // pointed here. Doing it separately would leave a window where the plan
+        // is LEASED to a job the seams cannot resolve, and would add a mutation
+        // door that writes no trail row — which `planTrailCompleteness` refuses,
+        // correctly: every plan mutation is on the record or it is not a mutation
+        // this service performs.
+        //
+        // The column's meaning is unchanged — WHICH JOB — it becomes the job that
+        // most recently WROTE this plan, which is what every reader of it wants
+        // (`getOutcome` and the abandoned-plan sweep are both scoped to
+        // `generating`, which a revised plan is not). The lease is what makes a
+        // single scalar safe: one plan is revised by one job.
+        if (opts.jobId) {
+          await planRepository.update(planId, { sourceJobId: opts.jobId }, tx);
+        }
         await planRevisionsService.recordRevision(
           {
             planId,
             changeKind: REVISION_STARTED_KIND,
             ...generationActor(fresh, ctx),
             actor,
-            diff: { revision: true },
+            diff: { revision: true, ...(opts.jobId ? { jobId: opts.jobId } : {}) },
           },
           tx,
         );
@@ -3033,6 +3053,27 @@ export const plansService = {
    * that a race then decided must still be closeable; refusing here would leave a
    * `revision_started` with no terminator on a plan nobody can act on.
    */
+  /**
+   * IS a revision holding this plan? A READ — no lock, no write.
+   *
+   * It exists so a submit can refuse a held plan BEFORE it spends an AI job; the
+   * ACQUIRE remains the authority and re-checks under the lock, because anything
+   * read outside the lock is a courtesy rather than a guarantee.
+   */
+  async readRevisionLease(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<{ heldBy: string | null; expiresAt: Date } | null> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) =>
+      revisionLeaseOf(await planRevisionRepository.listByPlan(planId, tx), new Date()),
+    );
+  },
+
   async releaseRevisionLease(
     planId: string,
     ctx: ServiceContext,
@@ -3068,39 +3109,6 @@ export const plansService = {
           tx,
         );
         return { planId, released: true };
-      },
-    );
-  },
-
-  /**
-   * Point a plan's `sourceJobId` at the job that is now writing it (Story
-   * MOTIR-3595 · Subtask MOTIR-3599).
-   *
-   * ⚠️ THE COLUMN'S MEANING IS UNCHANGED — *which job* — it simply becomes the
-   * job that most recently WROTE this plan rather than the one that generated it.
-   * That is what every reader of it actually wants: `getOutcome` asks it what
-   * became of a plan still `generating`, the abandoned-plan sweep asks motir-ai
-   * about a `generating` plan's producer, and both are scoped to a status a
-   * revised plan is not in.
-   *
-   * It exists so the internal seams keep ONE resolution path
-   * (`findBySourceJobId`) rather than growing a second for revisions, and so the
-   * route never has to accept a caller-supplied plan id it would then have to
-   * validate. The revision LEASE is what makes a single scalar safe: one plan is
-   * revised by one job at a time, so there is never a second writer to name.
-   */
-  async bindPlanToJob(planId: string, jobId: string, ctx: ServiceContext): Promise<void> {
-    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planRepository.findById(planId, ctx.workspaceId, tx),
-    );
-    if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
-    await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      async (tx) => {
-        const locked = await planRepository.lockById(planId, tx);
-        if (!locked) throw new PlanNotFoundError(planId);
-        await planRepository.update(planId, { sourceJobId: jobId }, tx);
       },
     );
   },

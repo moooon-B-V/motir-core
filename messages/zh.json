@@ -284,7 +284,16 @@
     "executorHuman": "人工",
     "executorAgent": "编码智能体",
     "minutes": "{n} 分钟",
-    "viewTriggerAria": "查看提议"
+    "viewTriggerAria": "查看提议",
+    "revisePlaceholder": "请 Motir 修改此计划…",
+    "reviseNote": "Motir 会修改此计划。在你批准之前，不会有任何内容进入你的待办列表。",
+    "reviseRunning": "Motir 正在修改此计划…",
+    "reviseRunningBy": "{harness} 正在修改此计划…",
+    "approveHintRevising": "修订完成后即可批准。",
+    "reviseRefused": "此计划正在被修订，请稍后重试。",
+    "event_revision_started": "修订开始",
+    "event_revision_ended": "修订已完成",
+    "listRevised": "已修订"
   },
   "planEdits": {
     "submitting": "提交中…",

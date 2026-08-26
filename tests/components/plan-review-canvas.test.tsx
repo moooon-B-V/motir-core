@@ -192,6 +192,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     changes: [],
     stale: false,
     staleReasons: [],
+    revised: false,
     targetMissing: false,
     ...over,
   };

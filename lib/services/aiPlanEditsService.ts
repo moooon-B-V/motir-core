@@ -10,7 +10,12 @@ import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { NoPlanForJobError, PlanNotFoundError } from '@/lib/plans/errors';
+import {
+  NoPlanForJobError,
+  PlanNotEditableError,
+  PlanNotFoundError,
+  PlanRevisionInFlightError,
+} from '@/lib/plans/errors';
 
 import { plansService } from '@/lib/services/plansService';
 import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
@@ -447,10 +452,18 @@ export const aiPlanEditsService = {
       harness: 'Motir',
       model: null,
     };
-    // Refuses `approved` / `declined` naming the status (`PlanNotEditableError`),
-    // and refuses a plan another revision already holds — both under the plan row
-    // lock, inside the acquire.
-    await plansService.acquireRevisionLease(planId, ctx, actor);
+
+    // ── TWO CHEAP REFUSALS BEFORE A JOB IS SPENT ─────────────────────────────
+    // The ACQUIRE below is the authority and re-checks both under the plan row
+    // lock. These are here so the two refusals a reviewer actually hits — a
+    // decided plan, and a plan somebody is already revising — cost nothing: a
+    // job dispatched and then refused is an AI call the org paid for and nobody
+    // can read.
+    if (plan.status !== 'generating' && plan.status !== 'planned') {
+      throw new PlanNotEditableError(planId, plan.status);
+    }
+    const held = await plansService.readRevisionLease(planId, ctx);
+    if (held) throw new PlanRevisionInFlightError(planId, held.heldBy, held.expiresAt);
 
     let jobId: string;
     try {
@@ -483,16 +496,25 @@ export const aiPlanEditsService = {
       );
       jobId = submitted.jobId;
     } catch (err) {
-      // A job that never started must not hold the plan. Best-effort: the
-      // submit's own failure is the one the caller needs to see, so a release
-      // that also fails must not replace it.
-      await plansService
-        .releaseRevisionLease(planId, ctx, actor, { aborted: true })
-        .catch(() => undefined);
+      // Nothing to unwind: the lease is taken BELOW, so a submit that never
+      // returned a job id has left the plan exactly as it found it.
       throw err;
     }
 
-    await plansService.bindPlanToJob(planId, jobId, ctx);
+    // ⚠️ ACQUIRE AFTER THE SUBMIT, because the acquire is what BINDS the plan to
+    // this job (`sourceJobId`) and the id does not exist until motir-ai answers.
+    // Folding the bind into the acquire is what keeps them atomic — a plan leased
+    // to a job the internal seams cannot resolve would be worse than either
+    // failure alone — and it is why there is no separate bind door.
+    //
+    // The residual race, stated rather than hidden: two reviewers pressing Send
+    // in the same instant both dispatch, and the loser's acquire is REFUSED. Its
+    // job is then orphaned — it resolves no plan by `sourceJobId` and fails its
+    // first callback, writing nothing. That costs one wasted AI call on a genuine
+    // simultaneous race, which the pre-check above already removes for every
+    // non-simultaneous one, and it is the cheaper end of the trade: the
+    // alternative holds a lease over a job that may never exist.
+    await plansService.acquireRevisionLease(planId, ctx, actor, { jobId });
     return { jobId, planId };
   },
 
