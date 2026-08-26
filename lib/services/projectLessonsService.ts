@@ -3,6 +3,7 @@ import {
   createLesson,
   getLesson,
   getLessons,
+  reinforceLesson,
   retireLesson,
   searchLessons,
   type RawLesson,
@@ -22,6 +23,7 @@ import type {
   ProjectLessonDTO,
   ProjectLessonsPageDTO,
   RankedLessonDTO,
+  ReinforcedLessonDTO,
 } from '@/lib/dto/projectLessons';
 
 // The project LESSON LIBRARY service (Subtask MOTIR-3337 · Story MOTIR-3329) —
@@ -359,6 +361,51 @@ export const projectLessonsService = {
       ...(input.sourceRef ? { sourceRef: input.sourceRef } : {}),
     });
     return toLessonDTO(raw);
+  },
+
+  /**
+   * RECORD that an occurrence matched this lesson (Subtask MOTIR-3553 · Bug
+   * MOTIR-3547) — the write that closes the loop `search_lessons` opens.
+   *
+   * ⚠️ GATED ON `lesson:reinforce`, NOT `lesson:manage`, and the gate runs
+   * BEFORE the upstream call — the same placement `searchLessons` uses, and for
+   * the same reason: a caller without the permission causes no work at all, not
+   * merely no write. Its own key because this changes nothing a lesson SAYS;
+   * see `canReinforceLessons` for why folding it into `manage` would make a
+   * routine run able to retire a lesson in order to record that one applied.
+   *
+   * ⚠️ IT REACHES GLOBAL ROWS. The upstream resolves over `global OR this
+   * tenant` deliberately (MOTIR-3323: the entire curated corpus is global and
+   * must be reinforceable). Another tenant's lesson raises `not_found` upstream
+   * and surfaces here as the same refusal an unknown id does.
+   *
+   * The upstream errors are NOT swallowed. Unlike `listLessons`, which degrades
+   * to an empty section so a settings page stays usable, a caller here asked to
+   * RECORD something: an outage reported as success is a lost occurrence and a
+   * corpus that quietly stops counting, which is the defect this whole change
+   * exists to fix.
+   */
+  async reinforceLesson(
+    projectId: string,
+    ctx: AccessActorContext,
+    input: { lessonId: string; occurrenceRef: string },
+  ): Promise<ReinforcedLessonDTO> {
+    await projectAccessService.assertPermission(projectId, ctx, 'lesson:reinforce');
+
+    const raw = await reinforceLesson({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+      lessonId: input.lessonId,
+      occurrenceRef: input.occurrenceRef,
+    });
+    return {
+      id: raw.id,
+      title: raw.title,
+      scope: raw.scope,
+      lastOccurredAt: raw.lastOccurredAt,
+      recurrenceCount: raw.recurrenceCount,
+      counted: raw.counted,
+    };
   },
 
   /**

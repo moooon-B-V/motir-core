@@ -98,7 +98,16 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
     // caller a narrower grant would lock out. The argument for widening lives at
     // the constant, as `token-permissions.md` §3 requires.
     expect([...CLI_TOKEN_GRANT].sort()).toEqual(
-      ['ai:plan', 'comment:add', 'lesson:view', 'project:browse', 'work_item:edit'].sort(),
+      [
+        'ai:plan',
+        'comment:add',
+        'lesson:view',
+        // MOTIR-3553 — widened deliberately; the argument is on the constant and
+        // in `attachFileTool.test.ts`'s pin beside it.
+        'lesson:reinforce',
+        'project:browse',
+        'work_item:edit',
+      ].sort(),
     );
   });
 
@@ -173,7 +182,14 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
     // reads pull a project's accumulated planning lessons, which are distilled
     // from its own work and can name specifics of it. A stale row may not gain
     // that, so the tool is a named LOSS below rather than a widening here.
-    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage', 'lesson:view'];
+    const POSTDATE_THE_SCOPES: PermissionKey[] = [
+      'ai:decide_plan',
+      'lesson:manage',
+      'lesson:view',
+      // MOTIR-3553. Same reason as its two lesson siblings: it did not exist
+      // when the six strings were written, so no stale token may acquire it.
+      'lesson:reinforce',
+    ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );
@@ -214,6 +230,15 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // lessons. The loss is correct, and naming it is what keeps this check
       // exhaustive rather than what excuses it.
       search_lessons: true,
+      // MOTIR-3553. A FOURTH loss, of the same kind as the two above: no legacy
+      // scope ever gated `reinforce_lesson`, because `lesson:reinforce` did not
+      // exist when the six strings were written. Its `TOOL_SCOPES` entry files
+      // it under `work_items:write` as the nearest bucket in a table this story
+      // deprecates; `LEGACY_SCOPE_PERMISSIONS` is deliberately NOT widened to
+      // match, so a stale `work_items:write` row cannot start writing to a
+      // project's lesson corpus. The loss is correct, and naming it is what
+      // keeps this check exhaustive rather than what excuses it.
+      reinforce_lesson: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {
