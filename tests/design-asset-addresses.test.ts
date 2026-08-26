@@ -812,6 +812,36 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(public)/explore/opengraph-image.tsx',
     why: "Two point-in-time citations (the read-but-not-re-rendered list, and Panel 6's section-card label) naming the file MOTIR-1150 lifted the ad-hoc M-tile's inline hexes from, at the path it had when that card drew the asset. MOTIR-3491 moved it into `app/(public)/explore/(square)/` — a metadata image file is resolved for the page in its OWN segment, so when the square's page moved into the route group that scopes its `loading.tsx`, leaving this behind silently dropped every og:image tag from /explore. The asset is history and stays as drawn; correcting it from that bug's branch would also have published the brand mark's design result onto the bug (MOTIR-3130).",
   },
+  // ── A path the design says must NEVER exist (MOTIR-3492) ──────────────────
+  // The inverse of every other row here: these are not paths an asset expects
+  // to find, they are the files the design forbids. A `loading.tsx` fallback
+  // renders once its ancestor layouts resolve — before the page function runs —
+  // which flushes the response head and fixes the status at 200, so a
+  // `notFound()` reached later renders the not-found BODY under a 200. Eleven
+  // `app/(authed)` pages call `notFound()`, five of them under `settings/`.
+  // `motir-core/CLAUDE.md` § *A `loading.tsx` may NOT sit above a route that
+  // decides existence* carries the rule and the A/B;
+  // `tests/navigation/loading-boundary-guard.test.ts` is the guard on the shape.
+  //
+  // These rows are asserted TIGHT like every other, and here that cuts the
+  // useful way round: the day one of these files is created, its finding stops
+  // firing, the row goes stale and THIS suite goes red. The exemption is also
+  // an alarm.
+  {
+    file: 'design/shell/design-notes.md',
+    path: 'app/(authed)/settings/loading.tsx',
+    why: 'MOTIR-3492 — named as the file the settings family may NOT have, because five of the eleven existence-deciding authed routes sit under `settings/`. Its absence is the design.',
+  },
+  {
+    file: 'design/work-items/design-notes.md',
+    path: 'app/(authed)/items/[key]/loading.tsx',
+    why: 'MOTIR-3492 — the boundary MOTIR-3435 shipped and that was reverted, named in the amendment that explains why the frame moved in-page. `/items/[key]` calls `notFound()` as a documented no-existence-leak contract.',
+  },
+  {
+    file: 'design/work-items/detail-arrival.mock.html',
+    path: 'app/(authed)/items/[key]/loading.tsx',
+    why: 'The same reverted file, named in the mock header comment so a reader of the asset alone learns why the frame is not a route file. Same reason it must stay absent.',
+  },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
     file: 'design/epic-privacy/design-notes.md',
