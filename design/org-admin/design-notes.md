@@ -146,8 +146,26 @@ have more than one"; Linear's single-workspace view is equally clean.)
     `app/(authed)/settings/organization/members/page.tsx` (the paginated roster);
     the existing `app/(authed)/settings/workspace/*` is the workspace-config
     surface that is **folded into** the org Settings page at one workspace and
-    **re-surfaced standalone** at ws ≥ 2. All org-owner/admin gated (404-not-403
-    for a non-org member; the forbidden treatment of panel 5d for a non-admin).
+    **re-surfaced standalone** at ws ≥ 2.
+
+    ⚠️ **GATED PER SECTION, NOT PER PAGE** (MOTIR-3519 · `organization-tier.md`
+    §6d). This line previously read "All org-owner/admin gated", four lines below
+    the fold-in it describes — so the host refused the very people whose sections
+    were being folded into it. A workspace invitee is a plain org `member`, and
+    the collapse would have left them no route to their team roster and **no route
+    to Leave workspace at all**. The corrected rule:
+    - **org-scoped** sections (org name, billing, org danger zone, the roster) —
+      org **owner/admin** only; a plain org member gets panel 5d's forbidden
+      treatment **for those sections**, which is what 5d means once the page hosts
+      two tiers;
+    - **folded-in workspace** sections — any member **of that workspace**, the same
+      gate the standalone area applies at ws ≥ 2 (rename and delete are
+      membership-gated, not admin-gated, so this widens nothing);
+    - **non-member of the org** — 404, never 403, unchanged.
+
+    The general form, which every surface built on §6 inherits: **relocating a
+    surface preserves its gate.** A hidden tier may change what the product NAMES,
+    never what a user may DO.
 
 The page shells reuse the `/items` + workspace-settings grammar: a serif `h2`
 title + a muted subtitle, then a `stack` of `Card`s.

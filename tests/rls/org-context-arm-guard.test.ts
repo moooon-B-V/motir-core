@@ -354,8 +354,16 @@ describe('the guard has been SEEN to fail', () => {
     // guard must still report the site. An arm inventory that only described the
     // FROM clause would call this healthy, which is precisely how the fix could
     // have shipped while the sum stayed at zero.
+    // ⚠️ TWO policy names, not one, since MOTIR-3512. Reconstructing "the arm
+    // set as it stood before that migration" means removing EVERY org arm
+    // `workspace` has acquired since, and it now has two:
+    // `workspace_org_service_read` (userless, MOTIR-2956) and
+    // `workspace_org_member_read` (user-bound, MOTIR-3512). Excluding only the
+    // first leaves the table armed and the control proves nothing — which is
+    // the control working, not a reason to weaken it.
     const withoutJoinArm = await armedTables(ORG_SERVICE_CONTEXT.gucs[0]!, [
       'workspace_org_service_read',
+      'workspace_org_member_read',
     ]);
     expect(withoutJoinArm.has('attachment'), 'the FROM clause is still armed').toBe(true);
     expect(withoutJoinArm.has('workspace'), 'the JOIN target is not').toBe(false);

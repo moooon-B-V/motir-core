@@ -110,6 +110,11 @@ export interface TopNavProps {
    * Omission fails closed.
    */
   platformStaff?: boolean;
+  /** The active org reveals the WORKSPACE tier — forwarded to the user menu,
+   *  whose "Workspace settings" row is absent below the threshold (MOTIR-3502 ·
+   *  `lib/workspaces/tierDisclosure.ts`). Defaults FALSE, so an omitted prop
+   *  hides the row rather than leaking it. */
+  workspaceTierRevealed?: boolean;
   /** The session user's unread notification count for the active workspace —
    * the bell's initial badge value (resolved once in the layout, then polled by
    * the client). Null when there's no active workspace (the bell is hidden). */
@@ -149,6 +154,7 @@ export async function TopNav({
   aiConfigured,
   user,
   platformStaff = false,
+  workspaceTierRevealed = false,
   initialUnreadCount,
   buildInPublicProjectKey,
   buildingInPublic,
@@ -279,7 +285,12 @@ export async function TopNav({
           {initialUnreadCount !== null ? (
             <NotificationBell initialUnreadCount={initialUnreadCount} />
           ) : null}
-          <UserMenu name={user.name} email={user.email} platformStaff={platformStaff} />
+          <UserMenu
+            name={user.name}
+            email={user.email}
+            platformStaff={platformStaff}
+            workspaceTierRevealed={workspaceTierRevealed}
+          />
         </div>
       </nav>
     </header>

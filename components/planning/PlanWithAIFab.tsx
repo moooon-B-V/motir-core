@@ -95,11 +95,17 @@ export interface PlanWithAIFabProps {
 const ORB_STYLE: CSSProperties = {
   backgroundImage:
     'radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight)))',
+  // ⚠️ Read from a variable, with the literal as its FALLBACK — an inline
+  // `box-shadow` beats every stylesheet rule, so this is the only seam a
+  // [data-style] block has onto the orb's depth (MOTIR-3522, same treatment as
+  // PlanWithAILauncher's HERO_STYLE). `--plan-orb-shadow` is set in the
+  // `[data-style='3d-immersive']` block of packages/design-system/theme.css.
   boxShadow: [
-    'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent)',
-    '0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent)',
-    '0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent)',
-  ].join(', '),
+    'var(--plan-orb-shadow,',
+    'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),',
+    '0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),',
+    '0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent))',
+  ].join(' '),
 };
 
 export function PlanWithAIFab({ context = { kind: 'project' }, className }: PlanWithAIFabProps) {
@@ -129,6 +135,10 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
           type="button"
           aria-label={label}
           title={label}
+          // A key, not a chip (MOTIR-3522): `rounded-full` is also worn by two
+          // Switch tracks, a colour swatch, an avatar and a tag remove-×, so the
+          // radius cannot carry the role and the orb declares it.
+          data-depth="key"
           style={ORB_STYLE}
           onPointerDown={onPointerDown}
           onClickCapture={onClickCapture}

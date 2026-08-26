@@ -160,10 +160,57 @@ forgotten field). `null` is what the `job_run` row stores — its `workspace_id`
 FK is nullable. Do **not** invent a `"system"` sentinel string: that's not a
 real workspace id and would violate the FK on insert.
 
-System events (the `system.*` namespace) are untenanted by design and are NOT
-dispatched through `sendEvent` at all — they're **cron-triggered** (e.g.
-`system.daily-health-check`, see **Scheduled jobs**) or driven by the in-process
-test harness. (`sendEvent`'s type excludes the `system.*` namespace.)
+System events (the `system.*` namespace) are untenanted by design, so
+`sendEvent`'s type still excludes them — a system payload's `workspaceId` is
+optional, and widening one function to accept both namespaces would mean dropping
+the explicit-tenant assertion for the workspace-scoped events too. Many are
+**cron-triggered** (e.g. `system.daily-health-check`, see **Scheduled jobs**) or
+driven by the in-process test harness. The ones that are EMITTED go through
+`sendSystemEvent` — see the emit seam directly below.
+
+## The emit seam — every event goes through one of three doors (MOTIR-3456)
+
+**Nothing outside `lib/jobs/` calls `inngest.send`.** There are exactly three
+ways to emit an event, all in `lib/jobs/sendEvent.ts`:
+
+| door                              | for                                                | on a transport failure |
+| --------------------------------- | -------------------------------------------------- | ---------------------- |
+| `sendEvent(name, data)`           | workspace-scoped events                            | swallowed + logged     |
+| `sendSystemEvent(name, data)`     | `system.*` events                                  | swallowed + logged     |
+| `dispatchSystemEvent(name, data)` | `system.*`, for a caller that must SEE the failure | **rethrown**           |
+
+**Why the rule exists, in one line: the per-job cutover switch is read in that
+module, so an emitter that bypasses it is an emitter the switch cannot route.**
+A job named in `MOTIR_POSTGRES_JOB_IDS` whose event was sent straight through the
+client is enqueued on neither lane — the engine never hears about it and
+`defineJob`'s Inngest handler declines to run it.
+
+**The strict door is not an inconsistency.** Two callers legitimately need the
+failure rather than a log line: `ciRunnerFleet`'s provision sweep emits inside a
+`step.run`, where a thrown error buys a free retry of the step, and
+`dispatchCiRunnerBoot` REPORTS `'send_failed'` to its caller. Both behaved that
+way before they were routed through this module, and moving WHERE an event is
+dispatched must not silently change WHETHER a caller finds out that it failed.
+
+**Two things enforce this, and they cover different halves.**
+
+- **ESLint** — `INNGEST_CLIENT_RESTRICTION` in `eslint.config.mjs` refuses an
+  import of `@/lib/jobs/client` from outside `lib/jobs/**`, `scripts/worker.ts`,
+  `app/api/inngest/**` and `scripts/experiments/**` (the measurement harnesses,
+  which exist to drive the vendor directly). ⚠️ Note it restricts OUR CLIENT, not just the
+  `inngest` package. The older `INNGEST_RESTRICTION` guards the package, and for
+  a long time it guarded the door nobody uses: four `system.*` emitters bypassed
+  the switch under a green lint run because they imported our own thin wrapper
+  one file over.
+- **A guard test** — `tests/jobs/emit-seam.test.ts` asserts on the TypeScript AST
+  that `inngest.send` is CALLED in exactly two files (`sendEvent.ts` and
+  `dlq.ts`). ESLint cannot cover this half: one of the original bypasses lived
+  INSIDE `lib/jobs/**`, where the import is legitimate. The test counts calls
+  rather than grepping the string, because the tree carries `inngest.send()` in
+  several comments and one seed fixture.
+
+If one of these fails, it is telling you the switch cannot reach your job — the
+fix is a door above, not a disable comment.
 
 ## Canonical job: `email.send`
 
@@ -647,6 +694,94 @@ runs, so the Replay button does what it says. The new key is derived from the
 re-run (no double-delivery), while a genuinely new failure replays
 independently. A job with **no** idempotency key was always replayed
 unconditionally and is unaffected. See `PRODECT_FINDINGS.md` #40.
+
+## Event-level idempotency on the Postgres engine (MOTIR-3459)
+
+`defineJob`'s `idempotency` option is an Inngest CEL template evaluated against
+the triggering event. **`email.send` is the only job in the tree that declares
+one**, as `'event.data.idempotencyKey'`. Inngest evaluates it server-side; the
+engine evaluates it itself, in `lib/jobs/engine/idempotency.ts`.
+
+**Which templates the resolver accepts.** Exactly one form: `event.data.<field>`,
+one level deep. **Anything else THROWS at registration** — as the definition
+module is evaluated, so every process that loads the registry fails loudly. That
+is deliberate and is the opposite of the tempting behaviour: a resolver returning
+`null` for a template it does not recognise would let a future job keep its
+`idempotency` option, keep passing review, and quietly stop deduplicating. The
+symptom of that is a second password-reset email to a real person, on the retry
+path nobody exercises by hand. To support a richer template, extend the resolver
+and its test together — never drop the option.
+
+A missing or non-string VALUE resolves to `null`, which means "do not dedupe".
+That is not the same silent arm: the template has already been validated, so it
+means the EVENT carried no key. Deduping on a synthesised placeholder would
+collide every such event with every other one and drop all but the first.
+
+**How it dedupes: a constraint, not a lookup.** The resolved key is denormalised
+onto `job_queue.idempotency_key` at enqueue, under a PARTIAL UNIQUE index on
+`(job_id, idempotency_key) WHERE idempotency_key IS NOT NULL`, and a `P2002` is
+read as "already enqueued". A check-then-insert would be a read-derived write
+with a race in the middle, and the race here is two clicks on one button. This is
+the same pattern the dispatcher already applies to its `(event_id, job_id)`
+constraint.
+
+### ⚠️ Engine dedup is UNBOUNDED where Inngest's is WINDOWED — chosen, not inherited
+
+**This is a real difference in observable behaviour, and it was decided rather
+than absorbed.** Inngest dedupes same-key events inside a window; a unique
+constraint dedupes forever.
+
+Forever is the better behaviour for the keys actually in use — a password-reset
+token and an invite token should each produce ONE email, not one per window — and
+it is race-free where a windowed query is not. It is recorded here because
+MOTIR-3413's scope boundary says no job's observable behaviour changes, and an
+argued exception written down on the day it is made is a decision, while the same
+exception found six months later by someone comparing lanes is a bug report. If a
+window is ever wanted instead, that is its own decision and it needs the window's
+number and where the number came from.
+
+**A DLQ replay is not affected on either lane.** `lib/jobs/dlq.ts` re-shapes the
+key to `{original}:replay:{dlqId}` before re-emitting, on the Inngest arm AND the
+engine arm. The engine arm had nothing to be dropped by until dedup existed;
+replaying with the original key would now be swallowed as a duplicate and hand
+the operator a success toast for a run that never happened.
+
+## Cutting a job over to the Postgres engine — the operator's view
+
+**`MOTIR_POSTGRES_JOB_IDS` is a comma-separated set of `defineJob` ids.** An id
+in the set runs on the Postgres engine; an id absent from it runs on Inngest.
+Absent is the default, which is a safety property: a job nobody has thought about
+cannot be silently migrated, because the only way onto the new engine is for
+someone to name it.
+
+- **It is read LIVE**, on every emit (`lib/jobs/engine/cutover.ts`), not captured
+  at module load. A change takes effect without a deploy.
+- **Rolling back is removing the id.** Same one-line change, same immediacy. That
+  reversibility is what the whole migration is built on.
+
+**How to confirm a job actually moved.** Two tables, both for that job id:
+
+- `job_queue` — a row per enqueued run (`job_id`, `event_id`, `state`).
+- `job_run` — the ledger row the operator dashboard renders (`function_id`,
+  `started_at`, `status`).
+
+A `job_queue` row with no `job_run` row means it was enqueued and not yet
+claimed; neither means the event never reached the engine at all.
+
+**⚠️ What the INNGEST dashboard shows for a migrated job, and why it is not a
+failure.** The Inngest function stays registered — the serve route mounts every
+job, and an event with a SPLIT subscriber set still reaches Inngest for the
+subscribers that have not moved. So Inngest keeps delivering to the migrated job,
+and `defineJob`'s guard returns immediately:
+
+```json
+{ "skipped": "routed-to-postgres-engine", "jobId": "email.send" }
+```
+
+**That is the system working correctly.** It returns a marker rather than
+`undefined` for exactly this reason: a silent no-op on that dashboard is
+indistinguishable from a job that broke, and the obvious response to "it looks
+like it did not run" is to roll back something that was fine.
 
 ## Operator dashboard
 

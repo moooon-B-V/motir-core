@@ -28,6 +28,25 @@ const JOB_ENGINE_RESTRICTION = {
     'The Postgres job engine is internal to the jobs runtime. Import it only in lib/jobs/** or scripts/worker.ts; elsewhere use sendEvent() / defineJob() from @/lib/jobs.',
 };
 
+// The Inngest CLIENT boundary (Story MOTIR-3415 · MOTIR-3456).
+//
+// ⚠️ THIS EXISTS BECAUSE `INNGEST_RESTRICTION` GUARDS THE DOOR NOBODY USES. That
+// rule restricts the `inngest` PACKAGE, and it has held since Story 1.6 — but
+// every emitter that bypassed `sendEvent` imported `@/lib/jobs/client`, our own
+// thin wrapper around that package, which is not the SDK and so was never
+// restricted. Four `system.*` events reached Inngest without the per-job cutover
+// switch ever being consulted, under a green lint run.
+//
+// A boundary that can be walked around by importing one file over is a
+// convention, not a guard. So the restriction moves from the vendor's name onto
+// ours as well: outside the jobs runtime, the worker entrypoint and the serve
+// route, reach the queue through sendEvent() / sendSystemEvent() / defineJob().
+const INNGEST_CLIENT_RESTRICTION = {
+  group: ['@/lib/jobs/client', '**/lib/jobs/client'],
+  message:
+    'Import the Inngest client only in lib/jobs/**, scripts/worker.ts or app/api/inngest/. Elsewhere emit through sendEvent() / sendSystemEvent() from @/lib/jobs/sendEvent, so the per-job cutover switch is consulted.',
+};
+
 // Async-email boundary (Story 1.6 · Subtask 1.6.3). The provider primitive
 // `@/lib/email` (`sendEmail`) may be imported ONLY by lib/services/emailService.ts,
 // which the `email.send` job calls. Every other caller — auth wiring, the
@@ -75,7 +94,7 @@ const eslintConfig = defineConfig([
         'error',
         {
           paths: [EMAIL_RESTRICTION],
-          patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION],
+          patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION, INNGEST_CLIENT_RESTRICTION],
         },
       ],
     },
@@ -128,7 +147,7 @@ const eslintConfig = defineConfig([
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION] },
+        { patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION, INNGEST_CLIENT_RESTRICTION] },
       ],
     },
   },

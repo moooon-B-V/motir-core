@@ -70,7 +70,14 @@ describe('the account menu for a PLATFORM-STAFF user', () => {
   });
 
   it('keeps the ordinary rows — the door is added, never a substitution', () => {
-    renderWithIntl(<UserMenu name="Ops" email="ops@moooon.net" platformStaff />);
+    // `workspaceTierRevealed` is passed explicitly because the Workspace
+    // settings row became conditional in MOTIR-3502 and now defaults to hidden.
+    // This case is about the staff door not DISPLACING the ordinary rows, so it
+    // asks for the menu in the state where all of them exist; the tier rule
+    // itself is covered by `workspace-tier-entry-points.test.tsx`.
+    renderWithIntl(
+      <UserMenu name="Ops" email="ops@moooon.net" platformStaff workspaceTierRevealed />,
+    );
     openMenu();
 
     expect(screen.getByRole('link', { name: /account settings/i })).toBeTruthy();

@@ -113,6 +113,12 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   await createWorkspace(page, 'Acme Co.');
 
   // ─── Rename the active workspace via settings ───
+  // ⚠️ The OWNER's reads in this spec deliberately stay on `/settings/workspace`
+  // (MOTIR-3502 · §6d). They hold TWO workspaces in their org from the
+  // `createWorkspace` above, which is the REVEALED state — the standalone area
+  // renders for them exactly as it does on `main`. The INVITEE's reads below
+  // moved to the fold-in, because the invitee is at one workspace. Between them
+  // the spec now exercises both sides of the reveal threshold.
   await gotoAuthed(page, '/settings/workspace');
   await expect(page.getByRole('heading', { name: 'Workspace settings' })).toBeVisible();
   const nameInput = page.getByLabel('Workspace name');
@@ -159,9 +165,16 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // Accepting switches the active workspace to the joined one. The invitee now
   // belongs to two orgs (their own + the owner's) with ONE workspace in each,
   // so the workspace switcher is hidden in both (Story 6.10.5 progressive
-  // disclosure reveals it only at ≥2 workspaces in the active org). Confirm the
-  // join switched the active workspace via the workspace-settings name field.
-  await gotoAuthed(inviteePage, '/settings/workspace');
+  // disclosure reveals it only at ≥2 workspaces in the active org).
+  //
+  // ⚠️ RE-POINTED (MOTIR-3502 · organization-tier.md §6d). This used to read the
+  // name off `/settings/workspace`, precisely BECAUSE the switcher is hidden —
+  // and that is now the collapsed state, in which the workspace area 404s and
+  // its sections are hosted by the single Settings home instead. The invitee is
+  // a plain org `member`, so this is also the end-to-end proof of §6d's
+  // per-section gate: they reach the page, the org-scoped cards are refused, and
+  // their workspace sections render.
+  await gotoAuthed(inviteePage, '/settings/organization');
   await expect(inviteePage.getByLabel('Workspace name')).toHaveValue('Acme Renamed');
 
   // ─── Owner now sees the invitee in the members list ───
@@ -189,8 +202,15 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // ─── Invitee leaves "Acme Renamed" ───
   // Ensure "Acme Renamed" is the invitee's active workspace before leaving
   // (accept switched to it; nothing has changed it since). Single workspace in
-  // that org → switcher hidden, so verify via the settings name field.
-  await gotoAuthed(inviteePage, '/settings/workspace');
+  // that org → switcher hidden, so verify via the folded-in name field.
+  //
+  // ⚠️ THIS IS THE ASSERTION THE WHOLE §6d GATE DECISION TURNS ON. Leave has
+  // exactly ONE surface in the product (`DangerZoneCard`), and the collapse
+  // closes the standalone area. If the folded-in danger zone were not reachable
+  // by a plain org member, this click would have nowhere to happen — a teammate
+  // who accepted an invite could not get out. MOTIR-3519 decided the per-section
+  // gate for exactly this reason; this line is what proves it end to end.
+  await gotoAuthed(inviteePage, '/settings/organization');
   await expect(inviteePage.getByLabel('Workspace name')).toHaveValue('Acme Renamed');
   await inviteePage.getByRole('button', { name: 'Leave' }).click();
   // The invitee still has their own auto-created workspace, so leaving
@@ -198,7 +218,7 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // That sole workspace lives in their own org → switcher hidden, so confirm
   // the fallback via the settings name field.
   await inviteePage.waitForURL('**/dashboard');
-  await gotoAuthed(inviteePage, '/settings/workspace');
+  await gotoAuthed(inviteePage, '/settings/organization');
   await expect(inviteePage.getByLabel('Workspace name')).toHaveValue("e2e-ws-invitee's Workspace");
 
   // Owner's members list is back to just themselves.

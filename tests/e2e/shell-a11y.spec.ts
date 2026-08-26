@@ -62,9 +62,15 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     ready: async (page) => expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible(),
   },
   {
-    path: '/settings/workspace',
+    // ⚠️ `/settings/organization`, not `/settings/workspace` (MOTIR-3502 ·
+    // organization-tier.md §6d). This sweep signs up a fresh user, who gets ONE
+    // auto-created workspace — the COLLAPSED state, in which the workspace area
+    // 404s and its Name / Members / Danger-zone sections are hosted here
+    // instead. So this entry sweeps strictly MORE markup than it used to: the
+    // org-scoped cards plus the three folded-in workspace cards.
+    path: '/settings/organization',
     ready: async (page) =>
-      expect(page.getByRole('heading', { name: 'Workspace settings' })).toBeVisible(),
+      expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible(),
   },
   {
     path: '/settings/project',

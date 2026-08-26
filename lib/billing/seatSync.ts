@@ -1,4 +1,4 @@
-import { inngest } from '@/lib/jobs/client';
+import { sendSystemEvent } from '@/lib/jobs/sendEvent';
 import { isCloudBilling } from '@/lib/billing/availability';
 
 // Best-effort, POST-COMMIT enqueue of a scaled-tracker seat-quantity resync for
@@ -21,17 +21,16 @@ import { isCloudBilling } from '@/lib/billing/availability';
 // without an active scaled-tracker subscription (the common case).
 export async function enqueueScaledTrackerSeatSync(organizationId: string): Promise<void> {
   if (!isCloudBilling()) return;
-  try {
-    await inngest.send({ name: 'system.billing-seat-sync', data: { organizationId } });
-  } catch (err) {
-    // Transport failure (Inngest unreachable / unconfigured) must NOT fail the
-    // already-committed membership change. Drop + log; the absolute recompute-
-    // from-truth design means a later membership change (or a manual replay)
-    // re-derives the correct quantity — no drift accumulates.
-    console.error(
-      `enqueueScaledTrackerSeatSync(${organizationId}) failed to enqueue; the membership ` +
-        `change committed but the seat resync was dropped:`,
-      err,
-    );
-  }
+  // Through `sendSystemEvent`, not `inngest.send` (MOTIR-3456): the per-job
+  // cutover switch is read there, so an emitter that calls the client directly
+  // is an emitter the switch cannot route.
+  //
+  // NO local try/catch any more, and that is not a dropped guarantee — it is the
+  // removal of a second copy of the same policy. `sendSystemEvent` is
+  // best-effort by construction: a transport failure (Inngest unreachable /
+  // unconfigured) is swallowed and logged there, so it can never fail the
+  // already-committed membership change. The absolute recompute-from-truth
+  // design still means a later membership change (or a manual replay) re-derives
+  // the correct quantity — no drift accumulates.
+  await sendSystemEvent('system.billing-seat-sync', { organizationId });
 }

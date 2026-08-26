@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
@@ -6,17 +5,22 @@ import { Lock } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import {
+  isWorkspaceTierRevealed,
+  preferredOrganizationId,
+  scopeWorkspacesToActiveOrg,
+} from '@/lib/workspaces/tierDisclosure';
+import { getWorkspaceContext } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { hasAiEntitlement } from '@/lib/billing/aiEntitlement';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { buttonVariants } from '@/components/ui/Button';
 import { billingService } from '@/lib/services/billingService';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
 import { BillingCard } from './_components/BillingCard';
-import { WorkspaceConfigCard } from './_components/WorkspaceConfigCard';
+import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
 import { DangerZoneCard } from './_components/DangerZoneCard';
 
 // Organization settings (Story 6.10.5, design/org-admin panel 2) — the
@@ -31,8 +35,33 @@ export default async function OrganizationSettingsPage() {
 
   const t = await getTranslations('orgAdmin');
 
-  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const current = await organizationsService.resolveActiveOrganization(session.user.id, orgCookie);
+  // ⚠️ RESOLVE THE ACTIVE ORG THE WAY THE SHELL DOES — the ACTIVE WORKSPACE's org
+  // wins, and the cookie is only the fallback for a user with no active workspace
+  // (an org-only member). This page used to read the cookie ALONE, so it could
+  // disagree with the header about which org is active: a user whose org cookie
+  // still pointed at their own org, while their active workspace lived in
+  // another, saw the header say `Acme` and this page render a different org's
+  // settings.
+  //
+  // That was survivable while the page was whole-page admin-gated — the users it
+  // could happen to were refused anyway. §6d's fold-in is what makes it bite: the
+  // page now hosts the ACTIVE workspace's sections, so resolving a different org
+  // means hosting the wrong workspace's Name / Members / Danger zone. Both
+  // MOTIR-3502 E2E failures were this, not the gate.
+  //
+  // `preferredOrganizationId` is the same helper the (authed) layout composes, so
+  // the two cannot drift again.
+  const [ctx, myWorkspaces, cookieStore] = await Promise.all([
+    getWorkspaceContext(),
+    workspacesService.listUserWorkspaces(session.user.id),
+    cookies(),
+  ]);
+  const activeWorkspace = ctx ? (myWorkspaces.find((w) => w.id === ctx.workspaceId) ?? null) : null;
+  const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
+  const current = await organizationsService.resolveActiveOrganization(
+    session.user.id,
+    preferredOrganizationId(activeWorkspace, orgCookie),
+  );
 
   if (!current) {
     return (
@@ -49,31 +78,37 @@ export default async function OrganizationSettingsPage() {
   const isAdmin =
     current.role === ORGANIZATION_ROLE.owner || current.role === ORGANIZATION_ROLE.admin;
 
-  if (!isAdmin) {
-    return (
-      <div className="mx-auto max-w-[45rem]">
-        <EmptyState
-          icon={<Lock className="h-12 w-12" aria-hidden />}
-          title={t('states.forbiddenTitle')}
-          description={t('states.forbiddenDescription', { org: org.name })}
-          action={
-            <Link
-              href="/dashboard"
-              className={buttonVariants({ variant: 'secondary', size: 'md' })}
-            >
-              {t('states.backToWorkspace')}
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
+  // ⚠️ GATED PER SECTION, NOT PER PAGE (MOTIR-3519 · organization-tier.md §6d).
+  //
+  // This used to `return` panel 5d's forbidden EmptyState for the whole page.
+  // That was right while the page carried ORG-scoped cards only — per-page and
+  // per-section were then the same rule. §6d's fold-in is what makes them
+  // differ: below the workspace-tier reveal threshold this page HOSTS the
+  // workspace's Name / Members / Danger-zone sections, and those are gated on
+  // WORKSPACE MEMBERSHIP, not on the org role. Keeping the whole-page refusal
+  // would have closed the only remaining route to them — including the only
+  // route in the product to **Leave workspace** — for a plain org member, who is
+  // exactly what a workspace invitee is (§5's upward invariant joins them as
+  // `member`).
+  //
+  // So the refusal moves DOWN to the org-scoped cards, and the rule it applies
+  // is the general one §6d states: relocating a surface preserves its GATE. A
+  // hidden tier changes what the product NAMES, never what a user may DO.
+  //
+  // A non-member of the org never reaches here at all — `resolveActiveOrganization`
+  // returns null for them and the no-active-org state above answers, which keeps
+  // the 404-not-403 posture intact.
 
-  // Counts for the general-card footer + the fold-in card (membership-scoped to
-  // the active org). The workspace fold-in only shows at exactly one workspace.
-  const orgWorkspaces = (await workspacesService.listUserWorkspaces(session.user.id)).filter(
-    (w) => w.organizationId === org.id,
-  );
+  // Counts for the general-card footer + the fold-in (membership-scoped to the
+  // active org — the same population the shell's reveal test counts, via the
+  // same helper, so this page and the nav can never disagree about the tier).
+  const orgWorkspaces = scopeWorkspacesToActiveOrg(myWorkspaces, org.id);
+  // §6d: below the reveal threshold `/settings/workspace` does not exist (it
+  // 404s), so this page hosts its sections instead. An org-only member with no
+  // workspace at all has nothing to fold in.
+  const foldInWorkspace = isWorkspaceTierRevealed(orgWorkspaces.length)
+    ? null
+    : (orgWorkspaces[0] ?? null);
   const { total: memberCount } = await organizationsService.listMembers({
     organizationId: org.id,
     actorUserId: session.user.id,
@@ -108,31 +143,48 @@ export default async function OrganizationSettingsPage() {
         </p>
       </header>
 
-      <OrgGeneralCard
-        orgId={org.id}
-        initialName={org.name}
-        role={current.role}
-        workspaceCount={orgWorkspaces.length}
-        memberCount={memberCount}
-      />
+      {isAdmin ? (
+        <>
+          <OrgGeneralCard
+            orgId={org.id}
+            initialName={org.name}
+            role={current.role}
+            workspaceCount={orgWorkspaces.length}
+            memberCount={memberCount}
+          />
 
-      {/* The live billing "door" (8.1.7, design/billing panel 1) replaces the
-          passive placeholder — cloud-only (ADR §6): off-cloud there is no
-          billing surface at all, so the card simply doesn't render. */}
-      {isCloudBilling() ? <BillingCard /> : null}
+          {/* The live billing "door" (8.1.7, design/billing panel 1) replaces the
+              passive placeholder — cloud-only (ADR §6): off-cloud there is no
+              billing surface at all, so the card simply doesn't render. */}
+          {isCloudBilling() ? <BillingCard /> : null}
 
-      <AcceptanceVideoCard
-        orgId={org.id}
-        initialEnabled={org.acceptanceVideoEnabled}
-        hasPlan={hasAcceptancePlan}
-        canManage={isAdmin}
-      />
+          <AcceptanceVideoCard
+            orgId={org.id}
+            initialEnabled={org.acceptanceVideoEnabled}
+            hasPlan={hasAcceptancePlan}
+            canManage={isAdmin}
+          />
+        </>
+      ) : (
+        // Panel 5d's forbidden treatment, applied to the ORG-SCOPED sections
+        // rather than to the page. The member keeps whatever this page hosts for
+        // them below.
+        <EmptyState
+          icon={<Lock className="h-12 w-12" aria-hidden />}
+          title={t('states.forbiddenTitle')}
+          description={t('states.forbiddenDescription', { org: org.name })}
+        />
+      )}
 
-      {orgWorkspaces.length <= 1 ? (
-        <WorkspaceConfigCard workspaceCount={orgWorkspaces.length} />
+      {foldInWorkspace ? (
+        <WorkspaceFoldInSection
+          workspaceId={foldInWorkspace.id}
+          actorUserId={session.user.id}
+          workspaceCount={orgWorkspaces.length}
+        />
       ) : null}
 
-      <DangerZoneCard />
+      {isAdmin ? <DangerZoneCard /> : null}
     </div>
   );
 }

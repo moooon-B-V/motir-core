@@ -5,6 +5,8 @@ import { resolveRetries, type RetryPolicyName } from './retries';
 import type { CatchUpPolicy } from './catchUp';
 import { registerSchedule } from './schedules';
 import { registerEngineJob } from './engine/registry';
+import { registerJobManifest } from './engine/manifest';
+import { parseIdempotencyTemplate } from './engine/idempotency';
 import { routedToEngine } from './engine/cutover';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
@@ -261,16 +263,25 @@ export function defineJob<N extends JobEventName>(
   // ⚠️ PURELY ADDITIVE. It builds no Inngest object, changes no config, and runs
   // for every job whether or not the cutover switch (MOTIR-3423) routes that job
   // to the new engine. Until it does, this table is written and never read.
+  const engineTrigger = cron !== undefined ? undefined : triggerEvent;
+  // `maxRetries` is Inngest's count of ADDITIONAL attempts; the engine counts
+  // TOTAL attempts, which is what `job_queue.max_attempts` stores and what
+  // `lib/jobs/retries.ts` states its policies in. +1 is that translation, in the
+  // one place it happens.
+  const maxAttempts = maxRetries + 1;
+
+  // ⚠️ VALIDATE THE TEMPLATE HERE, as the definition module is evaluated, so a
+  // job the engine cannot dedupe fails loudly at load rather than silently
+  // stopping deduplication at dispatch (MOTIR-3459).
+  if (idempotency !== undefined) parseIdempotencyTemplate(id, idempotency);
+
   registerEngineJob({
     id,
-    trigger: cron !== undefined ? undefined : triggerEvent,
+    trigger: engineTrigger,
     cron,
-    // `maxRetries` is Inngest's count of ADDITIONAL attempts; the engine counts
-    // TOTAL attempts, which is what `job_queue.max_attempts` stores and what
-    // `lib/jobs/retries.ts` states its policies in. +1 is that translation, in
-    // the one place it happens.
-    maxAttempts: maxRetries + 1,
+    maxAttempts,
     retryPolicy: options.retryPolicy,
+    idempotency,
     // The catch-up disposition, beside the `cron` it qualifies (MOTIR-3470). It
     // rides the ENGINE registration and NOT the Inngest `config` object below —
     // it is an engine-side fact about a scheduler Inngest does not have, exactly
@@ -278,6 +289,18 @@ export function defineJob<N extends JobEventName>(
     // an unknown key in a function's synced config for no reader.
     catchUp,
     handler,
+  });
+
+  // …and the HANDLER-FREE view of the same registration, for the emit path
+  // (MOTIR-3458, ADR §12). Registered HERE, beside its sibling, so the two
+  // cannot drift: a job cannot be defined without appearing in both.
+  registerJobManifest({
+    id,
+    trigger: engineTrigger,
+    cron,
+    maxAttempts,
+    retryPolicy: options.retryPolicy,
+    idempotency,
   });
 
   // Terminal-failure handler (1.6.6). Inngest invokes `onFailure` ONCE, after a

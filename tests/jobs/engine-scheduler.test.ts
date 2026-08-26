@@ -77,6 +77,11 @@ function def(over: Partial<EngineJobDefinition> = {}): EngineJobDefinition {
     id: 'system.attachment-gc',
     trigger: undefined,
     cron: '30 3 * * *',
+    // Stated rather than omitted, like every sibling field: `EngineJobDefinition`
+    // keeps its optionals as `T | undefined` REQUIRED so a registration cannot
+    // silently drop one. `idempotency` (MOTIR-3459) joined after this fixture was
+    // written; a scheduled job declares none.
+    idempotency: undefined,
     catchUp: 'latest',
     maxAttempts: 5,
     retryPolicy: 'idempotent',
