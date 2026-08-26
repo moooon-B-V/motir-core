@@ -291,8 +291,9 @@ describe('the ENVELOPE changed and the GRAMMAR did not (MOTIR-3131)', () => {
       expect(body.prompt).toContain(
         'This item has no session lineage, so it ships as ONE pull request of its own.',
       );
+      // MOTIR-3529 renumbered this: the LINK call is step 6, so the STOP is 7.
       expect(body.prompt).toContain(
-        '6. STOP at the open pull request. Do not merge it and do not delete the branch.',
+        '7. STOP at the open pull request. Do not merge it and do not delete the branch.',
       );
       // ONE worktree instruction, not N.
       expect(body.prompt.match(/git worktree add/g)).toHaveLength(1);

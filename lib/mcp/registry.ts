@@ -37,6 +37,7 @@ import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
 import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
+import { LINK_PULL_REQUEST_TOOL_NAME, registerLinkPullRequest } from './tools/linkPullRequest';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
@@ -111,6 +112,7 @@ export const MCP_TOOL_NAMES = [
   ADD_LESSON_TOOL_NAME,
   SEARCH_LESSONS_TOOL_NAME,
   ATTACH_FILE_TOOL_NAME,
+  LINK_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   WHOAMI_TOOL_NAME,
@@ -238,6 +240,11 @@ export function registerMcpTools(
   // The general attachment door (MOTIR-3058) — the agent-facing half of
   // MOTIR-3057's `/api/v1` route, over the same service path.
   registerAttachFile(target, resolveContext);
+  // The pull-request LINK door (Story MOTIR-3525 · MOTIR-3526) — an executing
+  // agent declares which card its pull request delivers, at the one moment it
+  // knows with certainty. The branch/title parse stays as the fallback for a
+  // pull request opened outside a run.
+  registerLinkPullRequest(target, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(target, resolveContext);
   // The SEMANTIC query (MOTIR-3101) — a second tool BESIDE the substring search,
