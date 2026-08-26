@@ -57,15 +57,26 @@ export interface PlanWithAILauncherProps {
 // Accent-dominant gradient + the outer aura. White (the accent's ink) sheens the
 // top edge; the pink (`--el-highlight`) lives only in the outer glow. All
 // palette-derived (the surface-material colour grammar — color-mix over --el-*).
+//
+// ⚠️ THE SHADOW READS FROM A VARIABLE, and the literal below is its FALLBACK —
+// not indirection for its own sake (MOTIR-3522). An INLINE `box-shadow` beats
+// every stylesheet rule, so while this pill painted its own shadow directly no
+// [data-style] block could give it depth: under `3d-immersive` it was the one
+// control on the page that stayed flat no matter how the style layer was
+// widened. The variable is the seam that lets a style re-point it —
+// `--plan-hero-shadow` is set in the `[data-style='3d-immersive']` block of
+// packages/design-system/theme.css, which adds the key's base edge. Every other
+// style falls through to this literal, unchanged.
 const HERO_STYLE: CSSProperties = {
   backgroundImage:
     'linear-gradient(135deg, var(--el-accent), color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight)))',
   boxShadow: [
-    'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent)',
-    'inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent)',
-    '0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent)',
-    '0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent)',
-  ].join(', '),
+    'var(--plan-hero-shadow,',
+    'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),',
+    'inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),',
+    '0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),',
+    '0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent))',
+  ].join(' '),
 };
 
 export function PlanWithAILauncher({
@@ -81,6 +92,10 @@ export function PlanWithAILauncher({
     <Link
       href={planningWorkspaceHref(context)}
       aria-label={label}
+      // The plane this control sits on (MOTIR-3522). A pill on the badge radius
+      // is a flat chip by default — correct for the 9 filter/tag chips that
+      // share the radius, wrong for this one, which is a hero ACTION.
+      data-depth="key"
       style={HERO_STYLE}
       className={cn(
         // Layout + pill shape (radius/height/padding via shape tokens so the

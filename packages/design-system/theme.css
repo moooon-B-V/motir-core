@@ -1255,26 +1255,84 @@
   padding-top: 0.25rem;
 }
 
-/* ── 3D / Immersive — PHYSICAL BUTTONS ──────────────────────────────────────
+/* ── 3D / Immersive — CONTROL DEPTH: every control sits on a named plane ────
    In a 3D design a button is not flat: it has visible THICKNESS (a solid base
    edge) and presses DOWN onto it on click (translateY + the base compresses) —
-   the standard 3D/skeuomorphic button. This must cover EVERY button, not just
-   the <Button> primitive: the ~35 hand-rolled `rounded-(--radius-btn)` <button>s
-   (the /issues toolbar triggers — Filter / Advanced / Saved / the Tree-List
-   switcher — links-styled-as-buttons, etc.) were flat. So the GLOBAL rule on the
-   button-radius class is the baseline (a neutral `--el-border-strong` edge, which
-   suits the outline/toolbar buttons); FILLED variants override it with a
-   colour-matched edge (primary → `--el-accent-pressed`, danger → a darkened
-   `--el-danger` — palette-derived, so the axes stay disjoint); ghost stays flat
-   (the quiet button). box-shadow is not a colour-painting property, so the
-   material-rule test skips these. The press overrides the base `active:scale`
-   with a more physical translateY. */
-/* `button.rounded-(--radius-input)` catches DROPDOWN-TRIGGER buttons styled as an
-   input (the board switcher, combobox / picker triggers) so they're physical
-   keys too — scoped to `button` so a real <input>/<textarea> text field (same
-   radius) is NEVER raised. */
-[data-style='3d-immersive'] .rounded-\(--radius-btn\),
-[data-style='3d-immersive'] button.rounded-\(--radius-input\) {
+   the standard 3D/skeuomorphic button. §4's plane ladder in
+   docs/styles/3d-immersive.md is the spec; this block is its implementation.
+
+   ⚠️ THE ROLE DECIDES THE PLANE, AND A RADIUS UTILITY DOES NOT CARRY THE ROLE
+   (MOTIR-3522). This rule used to match `.rounded-(--radius-btn)` alone, on the
+   reasoning that the button radius identifies a button. It does not: the app
+   emits SEVEN radius utilities on interactive tags, and each of the other six
+   mixes families that want opposite treatments —
+
+     `--radius-badge` is worn by 3 hero action buttons (Plan with AI, Re-plan,
+        the build-in-public link) AND by 9 filter/tag chips and segmented tabs,
+        which §4 says stay flat pills;
+     `--radius-control` is worn by ~63 square icon buttons (real keys) AND by
+        ~51 menu / option / full-width list rows AND by inline text
+        affordances that only ever wanted a focus ring;
+     `rounded-full` is worn by the Plan-with-AI orb (a key) AND by two Switch
+        tracks, a colour swatch, an avatar and a tag remove-×.
+
+   So widening the old rule by radius would have raised switches, swatches,
+   avatars and chips. Depth is keyed on the ROLE instead, which reaches the
+   element two ways:
+
+     1. `data-depth` — the EXPLICIT hook, and the one to reach for. `key` puts a
+        control on the raised plane, `flat` takes it off. Emitted by the
+        primitives that know their own role and set by hand on the handful of
+        hand-rolled controls the default below gets wrong.
+     2. a RADIUS DEFAULT for the un-annotated majority, chosen so the default is
+        SAFE: the button radii and the square icon-button shape are keys;
+        everything else interactive is QUIET (flat at rest, but it still
+        presses). A control that should be raised and is not looks understated;
+        one raised that should not be looks broken.
+
+   `tests/theme/immersive-control-depth.test.ts` enumerates the radius utilities
+   the codebase actually emits on interactive tags and fails when one has no
+   classification here — the promise is bound to class names, so something has
+   to break when a new control class appears.
+
+   The GLOBAL baseline edge is a neutral `--el-border-strong` (it suits the
+   outline/toolbar buttons); FILLED variants override it with a colour-matched
+   edge (primary → `--el-accent-pressed`, danger → a darkened `--el-danger` —
+   palette-derived, so the axes stay disjoint); ghost stays flat (the quiet
+   button). box-shadow is not a colour-painting property, so the material-rule
+   test skips these. The press overrides the base `active:scale` with a more
+   physical translateY.
+
+   ⚠️ SPECIFICITY: the key set is wrapped in `:where()` so it contributes
+   NOTHING beyond the `[data-style]` attribute (0,1,0). That is deliberate — the
+   `[data-variant]` overrides below are (0,2,0) and the flat overrides after
+   them are (0,2,0), so both still win. Adding a plain `:is()` here silently
+   inverts that. */
+
+/* THE KEY SET — controls that carry real thickness.
+   `button.rounded-(--radius-input)` catches DROPDOWN-TRIGGER buttons styled as
+   an input (the board switcher, combobox / picker triggers) — scoped to
+   `button` so a real <input>/<textarea> text field (same radius) is NEVER
+   raised; it is RECESSED instead, below.
+   The `.justify-center` limb is the square icon-button shape: a centred control
+   on the control radius is a key (the 3-dots trigger, the fullscreen toggle,
+   every close ×). A row is never centred — it is `w-full` and `text-left`. */
+[data-style='3d-immersive']
+  :where(
+    .rounded-\(--radius-btn\),
+    button.rounded-\(--radius-input\),
+    :is(button, a).rounded-\(--radius-control\).justify-center,
+    [data-depth='key']
+  ):not(
+    :where(
+      [role='switch'],
+      [role='radio'],
+      [role='checkbox'],
+      [role='menuitem'],
+      [role='option'],
+      [data-depth='flat']
+    )
+  ) {
   box-shadow:
     0 3px 0 0 var(--el-border-strong),
     0 5px 10px -3px rgba(15, 15, 15, 0.18);
@@ -1297,10 +1355,37 @@
 [data-style='3d-immersive'] [data-variant='ghost'] {
   box-shadow: none;
 }
-/* Press DOWN onto the base — the button drops by its thickness and the base
-   edge compresses, like a real key. Overrides the base `active:scale`. */
-[data-style='3d-immersive'] .rounded-\(--radius-btn\):active:not(:disabled),
-[data-style='3d-immersive'] button.rounded-\(--radius-input\):active:not(:disabled) {
+
+/* THE FLAT SET — rows, chips and switches, which §4 keeps on their parent's
+   plane. These come AFTER the key set and carry (0,2,0), so they win over its
+   (0,1,0) wherever the two overlap (a centred control inside an open menu, a
+   `data-depth='flat'` icon button). A menu row raised inside an already-floating
+   popover reads as debris, not depth — the overlay is the thing that floats. */
+[data-style='3d-immersive']
+  :is(
+    [role='menuitem'],
+    [role='option'],
+    [role='menuitemcheckbox'],
+    [role='menuitemradio'],
+    [role='switch'],
+    [data-depth='flat']
+  ),
+[data-style='3d-immersive']
+  :is([data-surface='popover'], [data-menu-surface])
+  :is(button, a).rounded-\(--radius-control\),
+[data-style='3d-immersive'] :is(button, a).w-full.rounded-\(--radius-control\) {
+  box-shadow: none;
+}
+
+/* THE PRESS — the raised set drops by its thickness and the base edge
+   compresses, like a real key. Overrides the base `active:scale`. */
+[data-style='3d-immersive']
+  :where(
+    .rounded-\(--radius-btn\),
+    button.rounded-\(--radius-input\),
+    :is(button, a).rounded-\(--radius-control\).justify-center,
+    [data-depth='key']
+  ):active:not(:disabled) {
   transform: translateY(3px);
   box-shadow:
     0 1px 0 0 var(--el-border-strong),
@@ -1318,6 +1403,67 @@
 }
 [data-style='3d-immersive'] [data-variant='ghost']:active:not(:disabled) {
   box-shadow: none;
+}
+
+/* THE QUIET PRESS — a control with no resting thickness still has to answer the
+   pointer, or the style reads as flat wherever it is not a key: menu rows, list
+   rows, nav links, inline affordances, the ghost button. One pixel of travel is
+   the whole treatment; it is what separates "quiet" from "inert". */
+[data-style='3d-immersive']
+  :where(:is(button, a).rounded-\(--radius-control\), [data-variant='ghost']):active:not(
+    :disabled
+  ) {
+  transform: translateY(1px);
+}
+
+/* THE RECESSED SET — text fields are pressed INTO the surface, not raised off
+   it. §4's "on the face" left them with a 1px border and no depth at all on a
+   page where every panel carries a four-layer float, which is the other half of
+   what MOTIR-3522 reported (the roadmap's search box). A raised text field is
+   wrong — you type into a well — so this is the inverse of the key treatment,
+   not a copy of it. `[data-surface='input']` is the Input primitive's shell;
+   the bare element selectors catch the hand-rolled fields. Checkbox and radio
+   are excluded: they are chips, not wells. */
+[data-style='3d-immersive']
+  :where(
+    [data-surface='input'],
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+    textarea,
+    select
+  ) {
+  box-shadow:
+    inset 0 2px 6px -2px rgba(15, 15, 15, 0.26),
+    inset 0 1px 2px 0 rgba(15, 15, 15, 0.05);
+}
+
+/* Hero controls paint their own shadow in an INLINE style, which beats every
+   rule above — an inline declaration is not something a style layer can reach.
+   So the two of them read their shadow from a variable instead, with the base
+   look as the `var()` fallback, and this is where the key's base edge is added
+   to it. Palette-derived throughout; the colour axis stays disjoint.
+   Consumed by components/planning/PlanWithAILauncher.tsx (--plan-hero-shadow)
+   and components/planning/PlanWithAIFab.tsx (--plan-orb-shadow).
+
+   ⚠️ ON `body`, NOT ON THE BARE `[data-style]` TOKEN BLOCK. Both values READ
+   `--el-*`, and `tests/theme/styleRegistry.test.ts` holds a bare token block to
+   the colour/style axis split — a `[data-style='…'] { … }` block may set only
+   shape/feel tokens, never anything naming a palette token, and
+   `tests/theme/shapeSwapLint.test.ts` additionally requires such a block to
+   override every shape role. A descendant rule is neither, which is where the
+   immersive background (which reads `--el-*` for the same reason) already
+   lives. Custom properties inherit, so every control below `body` sees these. */
+[data-style='3d-immersive'] body {
+  --plan-hero-shadow:
+    0 4px 0 0 var(--el-accent-pressed),
+    inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+    0 9px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+    0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+  --plan-orb-shadow:
+    0 5px 0 0 var(--el-accent-pressed),
+    inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+    0 12px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+    0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
 }
 
 /* ── 3D / Immersive — DROPDOWNS / POPOVERS / MENUS unfold in 3D ──────────────
