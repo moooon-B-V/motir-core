@@ -361,6 +361,17 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'subject. (MOTIR-3480)',
   ],
   [
+    'tests/monitoring/sentry-wiring.test.ts',
+    'Spends no budget and resolves no store. It reaches the resolver only because it ' +
+      'imports `RATE_LIMIT_EXCLUDED_PATHS` from `@/lib/rateLimit/guard` — a frozen array of ' +
+      'PATHS — to assert that the Sentry tunnel (`/monitoring`) and the constant naming it ' +
+      'have not drifted apart. It reads as a subject because of one line elsewhere in the ' +
+      "file: `new ApiV1Error('RATE_LIMITED', 429, …)`, constructed to check that Sentry’s " +
+      '`beforeSend` DROPS an expected typed domain 4xx. Same shape as ' +
+      '`retryAfterPluralisation.test.ts` at the top of this list — a refusal it wrote as an ' +
+      'input, not one a limiter reached. (MOTIR-1162)',
+  ],
+  [
     'tests/password-reset.test.ts',
     'The 429 here is Better-Auth’s OWN limiter — `rateLimit.customRules` in ' +
       '`lib/auth/index.ts`, bound to `/request-password-reset` — reached by calling ' +
