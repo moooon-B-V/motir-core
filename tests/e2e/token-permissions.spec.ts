@@ -225,11 +225,12 @@ test('a token grants what was ticked — and a real write is refused by name', a
       (r) => /\/api\/me\/api-tokens\/[^/]+$/.test(r.url()) && r.request().method() === 'DELETE',
     );
     await confirmDialog.getByRole('button', { name: 'Revoke token', exact: true }).click();
-    expect((await revoked).status()).toBe(200);
+    expect((await revoked).status()).toBe(204);
 
-    await expect(
-      page.getByRole('row', { name: /read-only-agent/ }).getByText('Revoked'),
-    ).toBeVisible();
+    // Revoking DELETES the token (MOTIR-3546), so the row goes rather than
+    // greying out. The seam assertion below is unchanged and is the one that
+    // matters: the credential is dead either way.
+    await expect(page.getByRole('row', { name: /read-only-agent/ })).toHaveCount(0);
     await beat();
 
     // The credential is dead at the seam too, not merely greyed out in a table.

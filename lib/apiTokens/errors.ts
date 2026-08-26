@@ -91,6 +91,20 @@ export class InvalidApiTokenError extends Error {
   }
 }
 
+/**
+ * A presented token whose row still carries `revoked_at`.
+ *
+ * ⚠️ RETAINED AS A TRANSITION GUARD ONLY (MOTIR-3546). Revoking now DELETES the
+ * row, so nothing writes this column any more and the migration cleared every
+ * row that had it. It survives because `fly.toml` runs migrations BEFORE the
+ * new image takes traffic: during a rolling release the OLD image is still
+ * stamping `revoked_at`, and without this arm such a token would come back
+ * VALID once the rollout finished. It is deleted together with the column.
+ *
+ * Never distinguished on the wire: `/api/v1` and the MCP gate collapse all five
+ * 401 causes into one undifferentiated `unauthenticated`
+ * (`docs/decisions/public-api-conventions.md` §"Distinguishing 401 causes").
+ */
 export class ApiTokenRevokedError extends Error {
   readonly code = 'API_TOKEN_REVOKED' as const;
   constructor() {

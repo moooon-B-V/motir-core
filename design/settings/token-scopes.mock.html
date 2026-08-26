@@ -750,10 +750,6 @@
       .ttable .meta.muted {
         color: var(--el-text-secondary);
       }
-      .ttable tr.revoked td .label,
-      .ttable tr.revoked td .meta {
-        color: var(--el-text-secondary);
-      }
       .code-chip {
         font-family: var(--font-mono);
         font-size: 12px;
@@ -2373,12 +2369,19 @@
                   </button>
                 </td>
               </tr>
-              <tr class="revoked">
+              <tr>
                 <td><span class="label">old-ci-runner</span></td>
                 <td><span class="code-chip">motir_pat_M4tT…</span></td>
                 <td>
                   <span class="scope-cell">
                     <span class="pill pill--neutral">Custom</span>
+                    <button
+                      class="disclose"
+                      aria-label="Show scopes for old-ci-runner"
+                      aria-expanded="false"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
                   </span>
                 </td>
                 <td>
@@ -2388,8 +2391,12 @@
                   >
                 </td>
                 <td><span class="meta muted">02 Apr 2026</span></td>
-                <td><span class="meta muted">—</span></td>
-                <td class="right"><span class="pill pill--neutral">Revoked</span></td>
+                <td><span class="meta muted">14 May 2026</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token old-ci-runner">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>

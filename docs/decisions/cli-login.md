@@ -405,9 +405,19 @@ theirs — mitigation item 1 above) and in the **Settings → Account → API to
 list, where a row reading `CLI · workbox` beside its last-used timestamp makes
 "disconnect that machine" an obvious, complete action.
 
-**Revocation in Settings is the ONLY kill switch.** `apiTokensService.revoke`
-stamps `revokedAt`; `verify` then throws `ApiTokenRevokedError` and both gates 401. There is no other stop: no server-side session to expire, no device
-registry, no remote wipe of the config file.
+**Revocation in Settings is the ONLY kill switch.**
+`apiTokensService.deleteToken` **DELETES the row**; `verify` then finds no row
+and throws `InvalidApiTokenError`, and both gates 401. There is no other stop:
+no server-side session to expire, no device registry, no remote wipe of the
+config file.
+
+> **AMENDED 2026-08-26 (MOTIR-3546).** This clause used to read _"stamps
+> `revokedAt`; `verify` then throws `ApiTokenRevokedError`"_. Revocation is now
+> a hard delete, so a revoked credential leaves the owner's token list instead of
+> sitting in it for ever with no way to remove it. Nothing about the kill switch
+> changes for a CLI user: the next call still 401s, immediately. `ApiTokenRevokedError`
+> survives only as a transition guard for the rolling-deploy window and goes when
+> the column does.
 
 And `motir auth logout` is **not** revocation. It calls
 `removeCredential(serverUrl)`, which deletes the local copy and nothing else

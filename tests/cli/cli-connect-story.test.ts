@@ -388,7 +388,7 @@ describe('architecture guards — asserted against the migrated database, not th
     ).not.toHaveProperty('isError', true);
     await working.close();
 
-    await apiTokensService.revoke(fx.ownerId, listed[0]!.id);
+    await apiTokensService.deleteToken(fx.ownerId, listed[0]!.id);
 
     // Revocation kills it at the REAL gate, not merely in the service: the
     // transport refuses the bearer outright, so the SDK cannot even connect.

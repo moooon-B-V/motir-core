@@ -150,7 +150,7 @@ describe('/api/v1 conformance — the documented client journey, over a real soc
 
     // ── 4. No token / garbage token / revoked token → 401, INDISTINGUISHABLE
     const revoked = await createV1Caller();
-    await apiTokensService.revoke(revoked.user.id, revoked.tokenId);
+    await apiTokensService.deleteToken(revoked.user.id, revoked.tokenId);
 
     const unauthorised = await Promise.all([
       call('/api/v1/me'),
