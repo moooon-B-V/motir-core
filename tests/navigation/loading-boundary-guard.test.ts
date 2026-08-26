@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -274,5 +274,319 @@ describe('a client-only view switch does not ask the server (MOTIR-3437)', () =>
     const correct = 'const go = (n) => shallowPush(`${pathname}?view=${n}`);';
     expect(/router\.(push|replace)\(/.test(offending)).toBe(true);
     expect(/router\.(push|replace)\(/.test(correct)).toBe(false);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Guard 3 — THE SERIAL-READ RATCHET (MOTIR-3449)
+// ══════════════════════════════════════════════════════════════════════════
+//
+// Guard 1 asserts no route resolves to a `loading.tsx` above a decider. This is
+// its streaming twin and asserts the other half: that no page ARRIVES SERIAL.
+// They live in one file deliberately — both rule on the same walk of `app/`, and
+// a second harness would mean two populations that could disagree about what a
+// page is.
+//
+// ── WHAT IT COUNTS, and why the definition is the interesting part ─────────
+// Per page: the `await`s in the DEFAULT-EXPORTED function's own body that are
+// not inside a concurrency helper. Three deliberate exclusions, each of which
+// changes the number a lot:
+//
+//   1. Only the PAGE FUNCTION's body. Awaits inside a `…PaneBody` helper are
+//      BELOW the boundary and do not delay the first flush — counting them would
+//      punish exactly the restructuring this story performed.
+//   2. A `Promise.all` / `allSettledOrThrow` argument block collapses to ONE.
+//      That is the whole point: six reads in one wave is one round trip.
+//   3. REQUEST-LOCAL resolutions are not reads. `params`, `searchParams`,
+//      `getTranslations`, `getFormatter`, `getLocale`, `cookies()`, `headers()`
+//      resolve from the request or a per-request cache and cost no round trip.
+//      Counting them inflated every gated page by two to four and moved the
+//      ceiling above the thing it is supposed to catch — measured, and the
+//      reason this list exists rather than a simpler rule.
+//
+// ── THE CEILING IS 4, AND HERE IS THE MEASUREMENT ─────────────────────────
+// Taken on `parent/MOTIR-3440-remaining-pages-stream` at ffdcd835, over the 87
+// pages under `app/` that carry a default export:
+//
+//     reads  0   1   2   3   4   5   6
+//     pages 10   9  13  28  19   7   1
+//
+// The mode is 3 — `getSession` → `getActiveProject` → `guardSettingsPage`, the
+// gate floor a permission-gated page cannot go below. 4 is that floor plus one
+// genuine read. Everything at 5 or 6 is either a decider whose chain is real or
+// a page outside this story, and each is listed below with which.
+//
+// After this story's sweep all thirteen settings panes sit at 3 or 4. Before it,
+// the same pages carried their reads one after another; the number moved because
+// the reads did, not because the counter is lenient.
+const SERIAL_READ_CEILING = 4;
+
+/** Awaits that resolve from the request or a per-request cache — not round trips. */
+const REQUEST_LOCAL = new Set([
+  'params',
+  'searchParams',
+  'getTranslations',
+  'getFormatter',
+  'getLocale',
+  'cookies',
+  'headers',
+]);
+
+/** Source with comments stripped — a claim in prose is not a claim in code. */
+function withoutComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+}
+
+/**
+ * The default-exported page function's own body, bounded by the next TOP-LEVEL
+ * declaration.
+ *
+ * ⚠️ NOT bounded by the first `\n}`: these pages destructure their props with a
+ * multi-line type annotation, so that closes the PARAMETER object and yields an
+ * empty body — silently, as a zero count that passes.
+ */
+function defaultExportBody(src: string): string | null {
+  const i = src.indexOf('export default async function');
+  if (i === -1) return null;
+  const rest = src.slice(i);
+  const n = rest.slice(1).search(/\n(?:export |async function|function |const |\/\*\*)/);
+  return n === -1 ? rest : rest.slice(0, n + 1);
+}
+
+/** Replace each concurrency helper's ARGUMENT block with a single await. */
+function collapseWaves(body: string): string {
+  const re = /(?:Promise\.all|Promise\.allSettled|allSettledOrThrow)\s*\(\s*\[/g;
+  let out = '';
+  let i = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    if (m.index < i) continue;
+    out += body.slice(i, m.index) + 'await __WAVE__()';
+    let depth = 1;
+    let j = re.lastIndex;
+    while (j < body.length && depth > 0) {
+      if (body[j] === '[') depth++;
+      else if (body[j] === ']') depth--;
+      j++;
+    }
+    i = j;
+    re.lastIndex = j;
+  }
+  return out + body.slice(i);
+}
+
+/** The page's serial READ count, by the definition above. */
+export function serialReadCount(src: string): number | null {
+  const body = defaultExportBody(withoutComments(src));
+  if (body === null) return null;
+  const calls = [...collapseWaves(body).matchAll(/\bawait\s+([A-Za-z_$][\w$.]*)/g)].map(
+    (x) => x[1]!,
+  );
+  return calls.filter((c) => !REQUEST_LOCAL.has(c.split('.')[0]!)).length;
+}
+
+// ── The debt list, and it only ever SHRINKS ───────────────────────────────
+//
+// Every page above the ceiling, with WHICH of the two reasons applies. A new
+// entry is a serial chain being parked, not a rule being bent.
+const SERIAL_READ_DEBT: { page: string; count: number; why: string }[] = [
+  {
+    page: 'app/(authed)/items/[key]/page.tsx',
+    count: 6,
+    why: 'A genuine chain on a DECIDER. `getIssueDetail` needs the key from the params, `resolveAliasedIssueKey` runs only when that misses (a 308 alias), and `getPermissions` is about the item the detail just returned. MOTIR-3436 already collapsed the twenty-nine reads that COULD be one wave; what is left is the part that cannot be.',
+  },
+  {
+    page: 'app/(authed)/items/[key]/edit/page.tsx',
+    count: 5,
+    why: 'The same chain as the detail page it edits, one read shorter, and for the same reason: the detail read decides the notFound() and the alias resolution only runs when it misses. MOTIR-3444 made its two post-gate reads one wave, which is the whole of what was available here.',
+  },
+  {
+    page: 'app/(authed)/settings/project/ai-planning/lessons/[lessonId]/page.tsx',
+    count: 5,
+    why: 'ALL GATE. Two permission gates run here rather than one — the settings area guard and `guardLessonLibrary` — and the read that follows them decides the notFound(). MOTIR-3559 measured this page and specified a zero diff: there is nothing after the gate to make concurrent, which is also why it earns no frame.',
+  },
+  {
+    page: 'app/(authed)/roadmap/page.tsx',
+    count: 5,
+    why: 'A concurrency change was BUILT here and deliberately REVERTED (MOTIR-3445). `getActiveSprint` sits after an early return for the empty/onboarding branch, and `tests/planning/roadmapPageStreaming.test.tsx` asserts it is never called on that branch — a third read on a first-run project is a cost this surface was measured to avoid paying.',
+  },
+  {
+    page: 'app/(authed)/plans/page.tsx',
+    count: 5,
+    why: 'Measured by MOTIR-3445 and left undiffed. The capabilities read gates which tab strip renders and `buildPlanRowViews` consumes the wave that follows it, so the order is a dependency rather than a habit.',
+  },
+  {
+    page: 'app/(authed)/settings/workspace/page.tsx',
+    count: 5,
+    why: 'OUT OF THIS STORY. `resolveWorkspaceTierDisclosure` decides whether this route exists at all (below the reveal threshold it 404s and `/settings/organization` hosts its sections instead), so it precedes the context and summary reads. Not among the twenty-six heavy surfaces this story swept.',
+  },
+  {
+    page: 'app/(onboarding)/onboarding/page.tsx',
+    count: 5,
+    why: 'OUT OF THIS STORY — the onboarding group is not in the authed sweep. Its chain threads a workspace service context through the migrate read and the pending-idea read, which is a dependency, but it has not been measured by anyone and should be before it is called one.',
+  },
+  {
+    page: 'app/(onboarding)/onboarding/discovery/page.tsx',
+    count: 5,
+    why: 'OUT OF THIS STORY, and the same chain as its sibling above — the two share a shape and would be measured together whenever the onboarding group is swept.',
+  },
+];
+
+describe('no page arrives SERIAL — the ratchet (MOTIR-3449)', () => {
+  const { pages } = walk(APP, { pages: [], loading: new Set<string>() });
+  const counted = pages
+    .map((dir) => {
+      const file = ['page.tsx', 'page.ts'].map((n) => join(dir, n)).find((f) => existsSync(f))!;
+      return { page: rel(file), count: serialReadCount(readFileSync(file, 'utf8')) };
+    })
+    .filter((r): r is { page: string; count: number } => r.count !== null);
+
+  it('has a non-empty population to rule on — the walk actually found the tree', () => {
+    expect(counted.length).toBeGreaterThan(50);
+  });
+
+  it('no page exceeds the ceiling except the ones listed, with their reasons', () => {
+    const listed = new Set(SERIAL_READ_DEBT.map((d) => d.page));
+    const offenders = counted
+      .filter((r) => r.count > SERIAL_READ_CEILING && !listed.has(r.page))
+      .map((r) => `${r.page} (${r.count} serial reads, ceiling ${SERIAL_READ_CEILING})`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('carries no debt entry that has stopped applying — the list only shrinks', () => {
+    // The day a listed page comes back under the ceiling, the entry must go or
+    // this fails. That is what makes the list a ratchet rather than a graveyard.
+    const now = new Map(counted.map((r) => [r.page, r.count]));
+    const stale = SERIAL_READ_DEBT.filter(
+      (d) => !now.has(d.page) || now.get(d.page)! <= SERIAL_READ_CEILING,
+    ).map((d) => d.page);
+    expect(stale).toEqual([]);
+  });
+
+  it('records each listed page’s count accurately — the list cannot drift from the tree', () => {
+    const now = new Map(counted.map((r) => [r.page, r.count]));
+    const drifted = SERIAL_READ_DEBT.filter((d) => now.get(d.page) !== d.count).map(
+      (d) => `${d.page}: listed ${d.count}, measured ${now.get(d.page)}`,
+    );
+    expect(drifted).toEqual([]);
+  });
+
+  it('every debt entry states a REASON, not just a path', () => {
+    for (const d of SERIAL_READ_DEBT) expect(d.why.length).toBeGreaterThan(80);
+  });
+
+  it('the debt list may not GROW — adding to it is a reviewed act', () => {
+    // Pinned exactly. A card that needs a ninth entry has to change this number
+    // in the same diff, which is the review this guard exists to force.
+    expect(SERIAL_READ_DEBT).toHaveLength(8);
+  });
+
+  it('FIRES on a page carrying a fresh serial chain — demonstrated, not assumed', () => {
+    // A guard nobody has seen fire is indistinguishable from one that cannot.
+    //
+    // ⚠️ The fixtures below are joined line arrays rather than template literals,
+    // so their top-level declarations sit at column 0 the way a real file's do.
+    // An indented fixture silently defeats `defaultExportBody`'s bound — it looks
+    // for the NEXT top-level declaration — and the helper-component case then
+    // reads the helper's awaits as the page's and passes for the wrong reason.
+    const fixture = [
+      'export default async function SabotagedPage() {',
+      '  const session = await getSession();',
+      '  const ctx = await getActiveProject();',
+      '  const a = await serviceOne.read(ctx);',
+      '  const b = await serviceTwo.read(ctx);',
+      '  const c = await serviceThree.read(ctx);',
+      '  return null;',
+      '}',
+    ].join('\n');
+    expect(serialReadCount(fixture)).toBe(5);
+    expect(serialReadCount(fixture)!).toBeGreaterThan(SERIAL_READ_CEILING);
+  });
+
+  it('and does NOT fire when the same reads are ONE wave — the fix must clear it', () => {
+    // The mirror of the test above: the guard has to be satisfiable by the
+    // restructuring it is asking for, or it is a tax rather than a ratchet.
+    const fixed = [
+      'export default async function FixedPage() {',
+      '  const session = await getSession();',
+      '  const ctx = await getActiveProject();',
+      '  const [a, b, c] = await allSettledOrThrow([',
+      '    serviceOne.read(ctx),',
+      '    serviceTwo.read(ctx),',
+      '    serviceThree.read(ctx),',
+      '  ]);',
+      '  return null;',
+      '}',
+    ].join('\n');
+    expect(serialReadCount(fixed)).toBe(3);
+    expect(serialReadCount(fixed)!).toBeLessThanOrEqual(SERIAL_READ_CEILING);
+  });
+
+  it('counts a helper component’s reads as BELOW the flush, not on the page', () => {
+    // The restructuring this story performed moves reads into a `…PaneBody`
+    // below the boundary. If those counted, the guard would punish the fix.
+    const streamed = [
+      'export default async function StreamedPage() {',
+      '  const session = await getSession();',
+      '  const ctx = await getActiveProject();',
+      '  return null;',
+      '}',
+      '',
+      'async function Body({ ctx }) {',
+      '  const a = await serviceOne.read(ctx);',
+      '  const b = await serviceTwo.read(ctx);',
+      '  const c = await serviceThree.read(ctx);',
+      '  return null;',
+      '}',
+    ].join('\n');
+    expect(serialReadCount(streamed)).toBe(2);
+  });
+
+  it('does not count request-local resolutions as reads', () => {
+    const local = [
+      'export default async function LocalPage({ params }) {',
+      '  const session = await getSession();',
+      "  const t = await getTranslations('x');",
+      '  const { id } = await params;',
+      '  const sp = await searchParams;',
+      '  const f = await getFormatter();',
+      '  const c = await cookies();',
+      '  return null;',
+      '}',
+    ].join('\n');
+    // Only `getSession` is a round trip.
+    expect(serialReadCount(local)).toBe(1);
+  });
+});
+
+// ── The /items NON-REGRESSION — the story's one deliberate absence ─────────
+//
+// `/items` renders its header and `[Filter] · [Tree ▾] · [+ New]` toolbar
+// synchronously and streams only its table, behind
+// `<Suspense fallback={<IssueTreeSkeleton/>}>`. A `loading.tsx` at
+// `app/(authed)/items/` would sit ABOVE that and replace a toolbar the reader
+// can already use with a skeleton — a page made WORSE by being swept.
+//
+// Nothing else in the repository explains why that directory has no boundary,
+// so without this the next person sweeping for missing boundaries adds one and
+// quietly undoes it. Guard 1 cannot catch it: `/items` does not call
+// `notFound()`, so a boundary there is legal by that rule and wrong by this one.
+describe('/items keeps its toolbar in the first flush (MOTIR-3449)', () => {
+  it('has NO loading.tsx of its own', () => {
+    expect(existsSync(join(APP, '(authed)', 'items', 'loading.tsx'))).toBe(false);
+  });
+
+  it('and no ancestor gives it one either', () => {
+    const { loading } = walk(APP, { pages: [], loading: new Set<string>() });
+    expect(nearestBoundary(join(APP, '(authed)', 'items'), loading)).toBeNull();
+  });
+
+  it('renders its toolbar ABOVE its only boundary, from the gate', () => {
+    const src = withoutComments(readFileSync(join(APP, '(authed)', 'items', 'page.tsx'), 'utf8'));
+    const boundary = src.indexOf('<Suspense');
+    expect(boundary).toBeGreaterThan(-1);
+    // The table's skeleton is the fallback; the toolbar is not inside it.
+    expect(src).toMatch(/fallback=\{<IssueTreeSkeleton/);
+    expect(src.slice(boundary)).not.toMatch(/IssueToolbar|<Filter/);
   });
 });
