@@ -89,6 +89,29 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * unbalances a bin-packer, and the calibration note above says a local reading
  * runs at or below the CI cost.
  *
+ * ⚠️ `jobs-scheduled-engine.spec.ts` (MOTIR-3473) is the same story, one card
+ * later — brand new, and the guard caught it with no entry on its first CI run.
+ * Same LOCAL provenance, measured on 2026-08-25 against a production build.
+ *
+ * ⚠️ BUT ITS NUMBER IS A CEILING, NOT AN AVERAGE, AND THAT IS THE POINT. Its
+ * catch-up scenario waits for a REAL `* * * * *` fire to pass on the scheduler's
+ * own watch — the only way to observe the `skip` disposition, which suppresses a
+ * fire from before start-up and is therefore indistinguishable from `latest`
+ * through the lane's long-running shared worker. That wait is uniformly 0–60 s
+ * depending on where in the minute the spec starts, so this spec's cost is not a
+ * point value — and two back-to-back runs against the same server MEASURED that
+ * directly: the catch-up scenario took **10.1 s** in one and **51.0 s** in the
+ * next, a 41 s swing from nothing but the wall clock. Totals were 23.3 s and
+ * 61.8 s of test bodies; the sum of per-test maxima is 64.2 s, and the true
+ * worst case is that plus the ~9 s the longer run still had left to wait.
+ *
+ * **85.0 is recorded, the worst case rather than the observation**, because this
+ * file's own argument cuts that way: under-estimating is the direction that
+ * unbalances a bin-packer, and a spec whose true cost can exceed its entry by a
+ * minute is exactly the input that produced the `bulk-4` degradation this plan
+ * exists to fix. A leg packed against the ceiling is merely early; one packed
+ * against the average is occasionally over.
+ *
  * ⚠️ IT ALSO RUNS A THIRD PROCESS. This spec's lane starts the Postgres job
  * engine's worker (`tests/e2e/_helpers/job-worker-process.ts`), whose startup is
  * paid ONCE in `globalSetup` and therefore does NOT appear in this per-spec cost.
@@ -190,6 +213,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-dashboard.spec.ts': 7.4,
   'jobs-flow.spec.ts': 89.7,
   'jobs-postgres-engine.spec.ts': 22.0,
+  'jobs-scheduled-engine.spec.ts': 85.0,
   'labels-components-watch.spec.ts': 27.6,
   'link-search-flow.spec.ts': 12.6,
   'mcp-docs.spec.ts': 2.2,

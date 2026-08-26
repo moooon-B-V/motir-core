@@ -263,9 +263,14 @@ test('a scheduled job NOT routed to the engine produces no engine rows at all', 
   await clearJobRouting();
   await signUp(page, OPERATOR_EMAIL);
 
-  // Long enough for several scheduler ticks of the lane's worker (its idle poll
-  // ceiling is 5s), so this is an observation rather than a race won.
-  await page.waitForTimeout(15_000);
+  // ⚠️ A BOUNDED WINDOW, and the one place this spec waits on a clock rather than
+  // a signal — deliberately, because the assertion is a NEGATIVE and there is no
+  // authoritative signal for "the scheduler ticked and correctly did nothing".
+  // Eight seconds is chosen against the worker's own IDLE_MAX_MS of 5 s, so at
+  // least one full scheduler tick has certainly happened; anything longer is cost
+  // without evidence, on a lane whose leg balance is load-bearing
+  // (`tests/e2e/shard-plan.ts`).
+  await page.waitForTimeout(8_000);
 
   expect(await adminDb.jobQueueRun.count({ where: { scheduledFor: { not: null } } })).toBe(0);
 
