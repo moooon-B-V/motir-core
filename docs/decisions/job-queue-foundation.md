@@ -295,5 +295,170 @@ the alternative does not actually avoid it — MOTIR-3426's crash-resume and two
 _our_ step shim and _our_ dispatcher either way — and because §4 makes the libraries unusable here
 for reasons that have nothing to do with the quality of their claim loops.
 
+## §11 — What a missed tick does: the catch-up policy, per job (MOTIR-3468)
+
+**Amendment, 2026-08-25.** §4–§8 chose a foundation and settled the dispatcher, the claim and the
+retry model. They did not answer the question that only appears once the _scheduler_ is ours:
+**the worker was down across a scheduled fire — does that fire run late, or is it lost?** Inngest
+answered it for us and it never had to be written down. MOTIR-3416 builds the scheduler
+(`engineScheduledJobs()` has existed since MOTIR-3421 with no caller), so the answer is now a
+decision this project owns, and an undeclared one is how a sweep stops running for a week
+unnoticed.
+
+### §11.1 — Three dispositions, because "catches up" is under-specified
+
+"Catch up" names three different behaviours, and a policy that does not choose between them has not
+been made:
+
+| disposition  | what the scheduler does on restart                                      |
+| ------------ | ----------------------------------------------------------------------- |
+| **`all`**    | enqueue **every** fire the expression owed across the gap, oldest first |
+| **`latest`** | enqueue **only the most recent** owed fire; the older ones are dropped  |
+| **`skip`**   | enqueue **nothing**; the next scheduled fire is the next run            |
+
+### §11.2 — `retryPolicy` is NOT a catch-up licence
+
+`attachmentGc`, `rateLimitSweep`, `ciMinutesReconcile` and nine others declare
+`retryPolicy: 'idempotent'`. That says a handler may safely run the SAME tick twice. It says nothing
+about whether a tick that is now six hours **stale** is still worth running. The two are independent
+axes and conflating them is how a sweep gets replayed against a world that has moved on: a fleet
+provisioner is perfectly idempotent and still provisions against a fleet state that no longer exists.
+
+**So every row below is justified by STALENESS, and no row cites a retry policy.**
+
+### §11.3 — The discriminator: what does waiting for the NEXT fire cost?
+
+A scheduled job's work is either **convergent** — re-derived from current state, so one run answers
+for every fire it missed — or **per-fire**, owning a period or a cohort no later run will redo. All
+fourteen of Motir's are convergent; each is a sweep over `WHERE <predicate on now>`. That collapses
+the question to latency:
+
+- The next scheduled fire is **imminent** (a minute away) and the missed work is convergent ⇒ the
+  catch-up buys nothing measurable, and after a long outage it would fan out a burst against a
+  batch-capped external call for the sake of that minute ⇒ **`skip`**.
+- The next scheduled fire is an hour, a day or a month away ⇒ waiting is a real cost paid by a
+  person or a bill ⇒ run it once, now ⇒ **`latest`**.
+- Each fire owns work no later fire redoes ⇒ **`all`**.
+
+### §11.4 — The table (one row per scheduled job)
+
+The row set is derived from the registry, not transcribed: `engineScheduledJobs()` is the authority,
+and `tests/jobs/engine-units.test.ts` fails when a job in it carries no disposition, so a fifteenth
+cron job cannot ship without joining this table.
+
+| job id                              | cron                       | disposition | why — the staleness argument                                                                                                                                                                                                                                                                                            |
+| ----------------------------------- | -------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system.abandoned-plan-sweep`       | `10 * * * *`               | `latest`    | Reconciles `generating` plans from live state. One pass sees every plan six missed passes would have; the pause it lifts is hourly-grained.                                                                                                                                                                             |
+| `system.attachment-gc`              | `30 3 * * *`               | `latest`    | A missed night is a night of un-collected orphans, and nothing else collects them — so it must not be skipped. One pass re-reads the whole orphan set; the cursor bound means a backlog drains across the following nights, which is the cadence the sweep was designed for.                                            |
+| `system.auto-plan-cadence-tick`     | `20 * * * *`               | `latest`    | Every gate is re-derived per run, and a project that fired now holds an undecided plan, so replaying older fires is a guaranteed no-op. An hour of drained ready-set is worth one catch-up.                                                                                                                             |
+| `system.automation-retention-sweep` | `15 4 * * *`               | `latest`    | A 90-day retention window is a commitment; a skipped day defers it by a day. The predicate is `expires_at < now`, so one pass covers the gap.                                                                                                                                                                           |
+| `system.ci-actions-gate-sweep`      | `30 * * * *`               | `latest`    | The RESUME half has a deadline: GitHub drops a queued job that finds no runner after 24 h, and an org that topped up cannot re-meter while its Actions are off. An hour of that deadlock is exactly what the hourly cadence exists to bound.                                                                            |
+| `system.ci-minutes-reconcile`       | `0 4 3 * *`                | `latest`    | Monthly. Skipping means the month is never audited. See §11.6 — the one job whose _correct_ disposition is `all`, and cannot be until it reads its fire instant.                                                                                                                                                        |
+| `system.ci-runner-provision-sweep`  | `* * * * *`                | **`skip`**  | The next fire is at most 60 seconds away, so the catch-up saves less than the claim loop's own poll interval — while a six-hour outage would enqueue 360 rows fanning out against a batch ceiling that exists to protect GitHub's registration limit. The one job where the catch-up is measurably worse than the wait. |
+| `system.ci-runner-reap`             | `7,17,27,37,47,57 * * * *` | `latest`    | Not `skip`, despite the ten-minute cadence: an orphaned container bills for every minute it survives, so after an outage the immediate reap reclaims spend the next fire would not. Reaping reads current orphans, so one pass suffices.                                                                                |
+| `system.code-graph-offboard-sweep`  | `45 4 * * *`               | `latest`    | The retention window §14.5 commits to is the same class of commitment as the automation sweep's. A daily gap is a day of retention owed; one pass re-reads the whole due queue.                                                                                                                                         |
+| `system.daily-health-check`         | `0 9 * * *`                | `latest`    | See §11.7 — the disposition interacts with the probe this job carries, and `skip` would make a routine restart across 09:00 report as a fault.                                                                                                                                                                          |
+| `system.filter-subscription-tick`   | `0 * * * *`                | `latest`    | A worker back at 14:03 having missed the 14:00 fire delivers the 14:00 hour's digests correctly, because the handler scans the CURRENT UTC hour. The per-occurrence idempotency key collapses a duplicate. See §11.6 for what a catch-up cannot recover.                                                                |
+| `system.migrate-onboarding-sweep`   | `7,22,37,52 * * * *`       | `latest`    | What it repairs is a person's wedged onboarding run, and it re-derives from durable state. Fifteen more minutes on top of an outage is paid by a user who is already waiting.                                                                                                                                           |
+| `system.plan-target-lock-sweep`     | `*/10 * * * *`             | `latest`    | A stranded lease holds an item NOBODY can plan, with no user-facing remedy. Ten minutes is the cadence that was chosen against exactly that cost; a catch-up honours it on restart.                                                                                                                                     |
+| `system.rate-limit-sweep`           | `10 4 * * *`               | `latest`    | Nothing else deletes a `rate_limit_counter` row. One pass; the per-run bound is deliberate ("a backlog drains over several days rather than locking a large slice of a hot table in one pass"), which is also why this is not `all`.                                                                                    |
+
+### §11.5 — Why `all` has no members today, and stays in the vocabulary anyway
+
+Thirteen `latest`, one `skip`, zero `all`. That is a finding, not an omission: **every scheduled job
+Motir has is a convergent sweep**, so N missed fires and one missed fire have the same remedy. Naming
+`all` for a job in that class would enqueue N rows that each recompute the same answer — cost with no
+information.
+
+The member is kept because the class it names is real and one job is one change away from joining it
+(§11.6). Its criterion is written down so a future job can be classified rather than defaulted:
+**a job takes `all` when a fire owns work no later fire will redo** — it closes a named period, drains
+a cohort selected by its own fire time, or emits something a consumer counts per interval.
+
+### §11.6 — What a caught-up run carries, and the one thing it cannot carry
+
+A caught-up run is an ordinary `job_queue` row. Specifically (MOTIR-3469, MOTIR-3471):
+
+- **`scheduled_for` is the FIRE instant, never the enqueue instant.** It is the per-tick key
+  `@@unique([jobId, scheduledFor])` dedups on, which is what makes two workers ticking the same
+  minute produce one run.
+- **`run_at` is that same fire instant**, so a caught-up run is immediately claimable and the claim's
+  `ORDER BY run_at` puts it ahead of anything enqueued since — oldest owed work first.
+- **`event_name` is `scheduled.<job_id>`**, late or on time, so `jobScheduleHealthService` reads it
+  with no change (§11.7).
+
+**Can a handler tell it is late? Today: no — and that is a stated gap, not an oversight.** The engine
+hands a cron run an empty payload (`scripts/worker.ts`'s `payloadFor` returns `{}` for a row with a
+null `event_id`), so `scheduled_for` sits on the row and never reaches `ctx`. Every job in the table
+is unaffected, because a convergent sweep does not need to know. **One job would be:**
+`ciMinutesReconcile` derives its period from `previousPeriodStart(new Date())` — the month before
+_now_, not the month before its fire. Inside a month that is identical and correct. Across a month
+boundary it is not: a worker down from 3 September to 5 October reconciles September twice and never
+audits August, and `all` would not save it — both rows would read the same clock. **The fix is to
+give the handler its fire instant, not to change this job's disposition**, and it is deliberately out
+of MOTIR-3416's scope: the story ends at the jobs firing on the engine, and this needs an outage
+spanning a whole month to bite. `system.filter-subscription-tick` has the same shape one order of
+magnitude down — it scans the current UTC hour, so a fire missed by more than an hour delivers the
+wrong hour's digests — and the same remedy.
+
+### §11.7 — What the schedule-health probe means after the cutover, and why `daily-health-check` catches up
+
+`lib/services/jobScheduleHealthService.ts` is **unchanged by this decision**, and its meaning is not.
+
+- Today it detects a **stale Inngest app registry**: a cron job that has stopped firing because the
+  cloud's registered function list fell behind the deployed build (`docs/jobs.md` § Registration —
+  five jobs dead for a month).
+- For a job routed to the engine the same silence means **a dead worker or a stalled scheduler**.
+  Same probe, same tolerance, different diagnosis. `docs/jobs.md` carries the operator-facing form.
+
+**Its tolerance is what makes `latest` the right disposition for the probe's own host job.** `judge()`
+holds a job to the fire BEFORE the most recent one, so exactly one missed tick is forgiven. With
+`latest`, a worker that restarts after an outage enqueues the missed 09:00 fire, the probe runs, and
+`lastRunAt` is stamped — the tolerance keeps meaning what it was designed to mean. With `skip`, a
+routine restart spanning 09:00 would leave `system.daily-health-check` two ticks stale the following
+day, and the probe's first act would be to **report itself overdue and dead-letter** — a fault report
+manufactured by the catch-up policy rather than observed. A checker that fails because of how it is
+scheduled is worse than no checker.
+
+The one `skip` job is `system.ci-runner-provision-sweep`, whose tolerance is ~2 minutes: any outage
+long enough to matter trips the probe whether or not the missed fire is replayed, so skipping costs
+the probe nothing.
+
+### §11.8 — Where the disposition is DECLARED: beside the cron, not in a second list
+
+**Decided: a required `catchUp` option on `defineJob`, carried onto `EngineJobDefinition` by
+`registerEngineJob`, typed so a definition supplying `cron` cannot omit it and an event-triggered
+definition cannot supply it.**
+
+This repository has already made this argument twice and both times in the file that would have
+drifted. `lib/jobs/schedules.ts`: _"a hand-maintained array is a second source of truth that a new job
+forgets to join."_ `lib/jobs/engine/registry.ts`: _"Two lists drift; one list cannot."_ `defineJob` is
+the single choke point every job passes through, so a declaration there is complete **by
+construction** — the same property the schedule table and the engine registry already depend on.
+
+**No default.** A default is precisely how a cron job added next year inherits a disposition nobody
+chose for it, which is the failure this section exists to prevent, one turn of the crank later. The
+type is what enforces it; `tests/jobs/engine-units.test.ts` asserts it at run time as well, walking
+`engineScheduledJobs()` rather than a transcribed list of fourteen — the enumeration that was already
+wrong once (§8: the count read FILES, and `ciRunnerFleet.ts` declares two).
+
+**Rejected: a `Map<jobId, CatchUpPolicy>` beside the scheduler.** Cheaper to write, and a second list
+by construction: a new cron job compiles, registers, schedules and fires without ever appearing in it,
+and the omission surfaces only as an unexplained replay after the next outage.
+
+**Rejected: reading the disposition from the ADR.** A policy whose only home is a document is a policy
+nothing enforces. This section is the REASONING; the code is the record.
+
+### §11.9 — What §11 does not settle
+
+- **The scheduler's own placement and start-up guard** are MOTIR-3471's (the worker process, beside
+  the claim loop; a refusal to start against an empty registry).
+- **The production flip** — which ids are actually in `MOTIR_POSTGRES_JOB_IDS` — is an operator action
+  and a property of the deployment. Nothing here transcribes it.
+- **A job's own schedule.** No cron expression changes; MOTIR-3416 asserts the fourteen constants
+  against their shipped values. The wake-cost argument in `ciRunnerFleet.ts`'s
+  `CI_RUNNER_REAP_CRON` comment (fourteen distinct wake-minutes on a suspend-when-idle compute) is a
+  separate work item and is not weighed here.
+
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss

@@ -154,7 +154,20 @@ export class IndexFleetImageUnpullableError extends Error {
 }
 
 export const dailyHealthCheck = defineJob(
-  { id: 'system.daily-health-check', cron: DAILY_HEALTH_CHECK_CRON, retryPolicy: 'none' },
+  {
+    id: 'system.daily-health-check',
+    cron: DAILY_HEALTH_CHECK_CRON,
+    // `latest` — and this job is the one where the disposition feeds back into
+    // the probe it carries (`docs/decisions/job-queue-foundation.md` §11.7).
+    // `judge()` forgives exactly one missed tick, so catching up on restart
+    // stamps `lastRunAt` and keeps that tolerance meaning what it was designed to
+    // mean. Under `skip`, a routine worker restart spanning 09:00 would leave this
+    // job two ticks stale and its own first act the next day would be to report
+    // ITSELF overdue and dead-letter — a fault manufactured by the schedule
+    // rather than observed.
+    catchUp: 'latest',
+    retryPolicy: 'none',
+  },
   async (ctx, services): Promise<DailyHealthCheckResult> => {
     // `step.run` memoizes the read, so the verdict is captured once per run
     // rather than re-derived on every replay of the handler body.

@@ -1,5 +1,6 @@
 import type { JobHandler } from '../defineJob';
 import type { RetryPolicyName } from '../retries';
+import type { CatchUpPolicy } from '../catchUp';
 
 // The ENGINE-SIDE job registry (Story MOTIR-3414 · Subtask MOTIR-3421).
 //
@@ -31,6 +32,16 @@ export interface EngineJobDefinition {
   trigger: string | undefined;
   /** The cron expression, when this is a scheduled job. */
   cron: string | undefined;
+  /**
+   * What the scheduler owes this job for a fire the worker was down across —
+   * present exactly when `cron` is (MOTIR-3470). `defineJob`'s options type makes
+   * a scheduled definition unable to omit it and an event-triggered one unable to
+   * supply it, so this table is complete BY CONSTRUCTION in the same way the
+   * header describes for the table as a whole: a cron job cannot exist without a
+   * declared disposition. `docs/decisions/job-queue-foundation.md` §11 is the
+   * decision and `lib/jobs/catchUp.ts` the vocabulary.
+   */
+  catchUp: CatchUpPolicy | undefined;
   /** Total attempts INCLUDING the first — resolved from the named policy at declaration. */
   maxAttempts: number;
   /** The named policy, kept for the operator surface and the ledger. */

@@ -40,6 +40,7 @@ export const ciActionsGateSweep = defineJob(
   {
     id: 'system.ci-actions-gate-sweep',
     cron: CI_ACTIONS_GATE_SWEEP_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {

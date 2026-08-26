@@ -29,6 +29,28 @@ const WORKER_BUNDLE = path.resolve('.worker/worker.mjs');
 
 let worker: ChildProcess | undefined;
 
+/**
+ * ⚠️ A SECOND, SPEC-OWNED WORKER — and it exists for ONE property the lane's
+ * shared worker structurally cannot show (Story MOTIR-3416 · Subtask MOTIR-3473).
+ *
+ * The `skip` catch-up disposition suppresses a fire from BEFORE the scheduler
+ * started. The lane's worker starts in `globalSetup`, before every spec, so by
+ * construction every fire a spec can observe is one that scheduler WAS watching
+ * for — `skip` and `latest` are indistinguishable through it, however long the
+ * spec waits. Only a scheduler that starts DURING the spec can be shown to have
+ * missed something, and that is what a worker restart across a fire is.
+ *
+ * It takes its OWN routing file rather than sharing the lane's, which is what
+ * keeps the two workers from scheduling each other's jobs: `routedJobIdsFromFile`
+ * reads `MOTIR_POSTGRES_JOB_IDS_FILE` per call, so handing this child a different
+ * path gives it a private view of the switch while the lane's worker and the app
+ * server keep reading the shared one, untouched.
+ *
+ * Claiming is NOT routed — either worker may claim any pending row — so this adds
+ * a claimant and never a second scheduler for the same job.
+ */
+let specWorker: ChildProcess | undefined;
+
 /** True when the E2E lane should run a worker at all. */
 export function jobWorkerEnabled(): boolean {
   return process.env['E2E_JOB_WORKER'] === '1';
@@ -112,6 +134,73 @@ export async function stopJobWorker(): Promise<void> {
   if (!child) return;
   worker = undefined;
 
+  await new Promise<void>((resolve) => {
+    const done = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve();
+    }, 15_000);
+    child.on('exit', () => {
+      clearTimeout(done);
+      resolve();
+    });
+    child.kill('SIGTERM');
+  });
+}
+
+/**
+ * Start an ADDITIONAL worker owned by the calling spec, with a PRIVATE routing
+ * file. See the `specWorker` note above for why a spec ever needs one.
+ *
+ * Resolves on the worker's own startup line, like `startJobWorker`.
+ */
+export async function startSpecJobWorker(routingFile: string): Promise<Date> {
+  if (specWorker) throw new Error('[e2e-spec-worker] one is already running; stop it first');
+  if (!existsSync(WORKER_BUNDLE)) {
+    throw new Error(
+      `[e2e-spec-worker] ${WORKER_BUNDLE} is missing — run \`pnpm build:worker\` first.`,
+    );
+  }
+
+  const child = spawn(process.execPath, [WORKER_BUNDLE], {
+    env: {
+      ...process.env,
+      NODE_ENV: process.env['NODE_ENV'] ?? 'production',
+      E2E_PROD_HARNESS: '1',
+      // The private view of the cutover switch — the whole point of this worker.
+      MOTIR_POSTGRES_JOB_IDS_FILE: routingFile,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  specWorker = child;
+
+  return new Promise<Date>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('[e2e-spec-worker] the worker did not announce itself within 30s'));
+    }, 30_000);
+    const onLine = (buf: Buffer) => {
+      const text = buf.toString();
+      process.stderr.write(`[e2e-spec-worker] ${text}`);
+      if (text.includes('[worker] started as')) {
+        clearTimeout(timer);
+        // The moment its scheduler began watching, which is what every `skip`
+        // assertion is stated against.
+        resolve(new Date());
+      }
+    };
+    child.stdout?.on('data', onLine);
+    child.stderr?.on('data', onLine);
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`[e2e-spec-worker] exited before starting (code ${code})`));
+    });
+  });
+}
+
+/** Stop the spec-owned worker, letting it drain. Idempotent. */
+export async function stopSpecJobWorker(): Promise<void> {
+  const child = specWorker;
+  if (!child) return;
+  specWorker = undefined;
   await new Promise<void>((resolve) => {
     const done = setTimeout(() => {
       child.kill('SIGKILL');

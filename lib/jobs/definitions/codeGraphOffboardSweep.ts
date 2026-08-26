@@ -44,6 +44,7 @@ export const codeGraphOffboardSweep = defineJob(
   {
     id: 'system.code-graph-offboard-sweep',
     cron: CODE_GRAPH_OFFBOARD_SWEEP_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {

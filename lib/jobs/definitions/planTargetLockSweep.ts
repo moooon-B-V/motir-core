@@ -50,6 +50,7 @@ export const planTargetLockSweep = defineJob(
   {
     id: 'system.plan-target-lock-sweep',
     cron: PLAN_TARGET_LOCK_SWEEP_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {

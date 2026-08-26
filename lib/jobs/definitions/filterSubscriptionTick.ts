@@ -26,6 +26,7 @@ export const filterSubscriptionTick = defineJob(
   {
     id: 'system.filter-subscription-tick',
     cron: FILTER_SUBSCRIPTION_TICK_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   (ctx, services) => {

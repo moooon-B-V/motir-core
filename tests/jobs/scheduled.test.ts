@@ -138,7 +138,7 @@ describe('system.daily-health-check scheduled job', () => {
     const spy = vi.spyOn(inngest, 'createFunction');
     try {
       defineJob(
-        { id: 'system.daily-health-check', cron: DAILY_HEALTH_CHECK_CRON },
+        { id: 'system.daily-health-check', cron: DAILY_HEALTH_CHECK_CRON, catchUp: 'latest' },
         () => undefined,
       );
       const config = spy.mock.calls.at(-1)?.[0] as
