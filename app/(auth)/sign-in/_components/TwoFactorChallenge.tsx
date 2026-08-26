@@ -113,8 +113,15 @@ export function TwoFactorChallenge({
       if (res.error) throw new Error('send failed');
       reset('email');
     } catch {
-      // The enqueue is best-effort inside `sendEvent` (MOTIR-3583), so a failure
-      // here is the one the endpoint itself reports — not a dropped event.
+      // ⚠️ THIS BRANCH NOW ALSO CATCHES A DROPPED ENQUEUE (MOTIR-3583). The
+      // comment here used to say the opposite — that a failure reaching this
+      // point is one the endpoint itself reports, "not a dropped event" —
+      // because `sendEvent` swallowed the transport failure and answered
+      // `{ status: true }` on an outage. It was true, and it was the defect:
+      // the reader was moved to the "we emailed you a code" view with no code
+      // coming. `dispatchOtpEmail` is strict now, and the catch-all auth route
+      // turns the recorded failure into a 503, so `sendOtp()` reports it and
+      // the reader is told to try again or use their authenticator.
       setError(t('errors.sendFailed'));
     } finally {
       setSending(false);

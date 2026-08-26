@@ -26,6 +26,24 @@ import { AuthShell, FormAlert } from '../_components/AuthShell';
  * Rate limiting (3/hour per IP) lives in lib/auth/index.ts. If we hit
  * the limit, Better-Auth returns 429; we surface a clear inline alert
  * rather than silently flipping to the confirmation screen.
+ *
+ * ⚠️ THE SAME EXCEPTION NOW APPLIES TO A MAIL OUTAGE (Bug MOTIR-3583). The
+ * confirmation screen is a PROMISE that a message is on its way, and until this
+ * branch existed it was shown even when the send could not be QUEUED — so the
+ * reader waited on an inbox nothing would ever arrive in, and the "try another
+ * email" retry failed the identical silent way. `sendResetPassword` is strict
+ * now and the catch-all auth route answers 503 when the enqueue failed
+ * (`lib/auth/authMail.ts`), so a 503 shows the alert instead of the promise.
+ *
+ * ⚠️ AND IT IS A KNOWN, BOUNDED COST TO ANTI-ENUMERATION — stated here rather
+ * than discovered later. Better-Auth only calls the send hook when the account
+ * EXISTS, so during a mail outage an unknown address still gets the
+ * confirmation screen while a known one gets the alert. That window opens only
+ * while the queue is down, is not something an attacker can provoke, and the
+ * alternative is a permanent silent dead end for the real user in exactly the
+ * conditions where they cannot reach support either. Every other status is
+ * still folded into the confirmation screen, which is what keeps the ordinary
+ * case indistinguishable.
  */
 export default function ResetPasswordPage() {
   const t = useTranslations('auth');
@@ -51,9 +69,16 @@ export default function ResetPasswordPage() {
         setSubmitting(false);
         return;
       }
+      // 503 == "the email could not be queued" (MOTIR-3583). The ONLY other
+      // status we branch on, and for the same reason as the 429: showing the
+      // confirmation screen here would promise a delivery that cannot happen.
+      if (res.status === 503) {
+        setPageError(t('couldntSendResetLink'));
+        setSubmitting(false);
+        return;
+      }
       // We deliberately don't read or branch on res.ok any further —
-      // anti-enumeration: any non-rate-limit result shows the same
-      // confirmation screen.
+      // anti-enumeration: any other result shows the same confirmation screen.
       setState('confirmation');
       setSubmitting(false);
     } catch {

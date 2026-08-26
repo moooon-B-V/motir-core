@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { AuthEmailUnavailableError } from '@/lib/auth/authMail';
 import { usersService } from '@/lib/services/usersService';
 import {
   EmailChangeRateLimitedError,
@@ -62,6 +63,13 @@ export async function POST(req: Request): Promise<Response> {
       return NextResponse.json({ code: err.code }, { status: 429 });
     if (err instanceof UserNotFoundError)
       return NextResponse.json({ code: err.code }, { status: 401 });
+    // The pending row is written and the confirm link could not be QUEUED
+    // (MOTIR-3583) — 503, because the remedy is to try again rather than to
+    // change anything about the request. The row is not rolled back and does
+    // not need to be: `requestEmailChange` clears this user's own prior claim
+    // on the address, so the retry this status invites succeeds.
+    if (err instanceof AuthEmailUnavailableError)
+      return NextResponse.json({ code: err.code }, { status: 503 });
     throw err;
   }
 }

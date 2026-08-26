@@ -221,6 +221,16 @@ Please wait an hour and try again." (`auth.tooManyRequests`). A network failure
 shows "We couldn't reach the server. Check your connection and try again."
 (`auth.couldntReachServer`).
 
+**Nor is a MAIL OUTAGE (MOTIR-3583), and it is the third string in the same
+`FormAlert` slot.** On 503 — the auth route's answer when a reset email could not
+be QUEUED — the alert carries "We couldn't send the reset email just now. Please
+try again in a moment." (`auth.couldntSendResetLink`). It is a page-scoped
+failure with the same treatment as the other two, and it exists because screen 05
+is a PROMISE: showing "Check your inbox" for a message that was never enqueued
+leaves the reader waiting on an inbox nothing will arrive in. Every OTHER status
+still folds into screen 05 unchanged, so the anti-enumeration property below
+holds outside the outage window.
+
 ## 05 — Reset password · sent confirmation · desktop
 
 `05-reset-confirmation-desktop.png` · ships at `/reset-password`,

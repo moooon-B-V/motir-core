@@ -62,7 +62,17 @@ export function EmailField({ email }: EmailFieldProps) {
           variant: 'error',
           title: t('email.toast.errorTitle'),
           description: t(
-            `email.modal.errors.${code === 'EMAIL_TAKEN' ? 'taken' : code === 'EMAIL_CHANGE_RATE_LIMITED' ? 'rateLimited' : 'generic'}`,
+            `email.modal.errors.${
+              code === 'EMAIL_TAKEN'
+                ? 'taken'
+                : code === 'EMAIL_CHANGE_RATE_LIMITED'
+                  ? 'rateLimited'
+                  : // The confirm link could not be queued (MOTIR-3583) — "try
+                    // again in a moment", not `generic`.
+                    code === 'AUTH_EMAIL_UNAVAILABLE'
+                    ? 'sendFailed'
+                    : 'generic'
+            }`,
           ),
         });
       }
