@@ -2857,6 +2857,27 @@ model JobQueueRun {
   /// the event payload is in hand. NULL for every job that declares no template,
   /// and for an event that carries no value for it.
   idempotencyKey String?     @map("idempotency_key")
+  /// THE COALESCING KEY (MOTIR-3483), resolved from `defineJob`'s `debounce.key`
+  /// expression at ENQUEUE — the same moment and for the same reason as
+  /// `idempotency_key` above. A same-key event arriving while this row is still
+  /// PENDING pushes its `run_at` forward and repoints its `event_id` at the new
+  /// event, instead of enqueuing a second run.
+  ///
+  /// ⚠️ CLEARED BY THE CLAIM, and that is what makes the whole mechanism exact.
+  /// The debounce window belongs to a PENDING row; once a worker has claimed the
+  /// run, the window is over and a same-key push must enqueue a NEW run rather
+  /// than be silently folded into work that has already started. Clearing it at
+  /// the claim is also what keeps the partial unique index below satisfiable
+  /// across a RETRY: a `rescheduleAt` puts the row back to `pending`, and a row
+  /// that still carried its key would then collide with the fresh row a push
+  /// enqueued while it was running — a unique violation on the retry path, which
+  /// is the worst possible place to discover one.
+  debounceKey    String?     @map("debounce_key")
+  /// WHEN THIS ROW'S DEBOUNCE WINDOW FIRST OPENED — stamped once, at the first
+  /// arrival, and never moved. `debounce.timeout` is measured from it, so a
+  /// steady stream cannot defer a run forever. NULL on every row that carries no
+  /// `debounce_key`.
+  debounceFirstSeenAt DateTime? @map("debounce_first_seen_at")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
@@ -2917,6 +2938,17 @@ model JobQueueRun {
   /// carrying a `WHERE` the differ cannot express is ignored instead of being
   /// reported as a spurious rename. **Do not add an `@@index` on those two
   /// columns** — that is precisely what would arm the trap.
+  ///
+  /// ⚠️ THE SAME IS TRUE OF THE DEBOUNCE CONSTRAINT (MOTIR-3483) —
+  /// `job_queue_job_debounce_key`, on `(job_id, debounce_key) WHERE debounce_key
+  /// IS NOT NULL AND state = 'pending'`, created in
+  /// `20260826010000_job_queue_debounce`. It is what makes the coalescing race
+  /// recoverable rather than silent: two concurrent same-key dispatches that both
+  /// find no pending row cannot both insert, because `SELECT … FOR UPDATE` has
+  /// nothing to lock when the set is EMPTY. The loser reads a `P2002` and
+  /// coalesces into the winner instead. **Do not add an `@@index` on
+  /// `(job_id, debounce_key)`** — nothing claims that column list today, which is
+  /// exactly why the differ ignores the partial index rather than mis-pairing it.
   @@map("job_queue")
 }
 

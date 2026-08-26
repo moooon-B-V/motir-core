@@ -74,9 +74,11 @@ function def(over: Partial<EngineJobDefinition> = {}): EngineJobDefinition {
     cron: '* * * * *',
     // Stated rather than omitted, like every sibling field: `EngineJobDefinition`
     // keeps its optionals as `T | undefined` REQUIRED so a registration cannot
-    // silently drop one. `idempotency` (MOTIR-3459) joined after this fixture was
-    // written; a scheduled job declares none.
+    // silently drop one. `idempotency` (MOTIR-3459) and `debounce` (MOTIR-3483)
+    // each joined after this fixture was written, and each was added here because
+    // the type made omitting it an error — which is the property working.
     idempotency: undefined,
+    debounce: undefined,
     catchUp: 'latest',
     maxAttempts: 3,
     retryPolicy: 'transient',

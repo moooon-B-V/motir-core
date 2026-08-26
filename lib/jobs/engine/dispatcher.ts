@@ -5,8 +5,10 @@ import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 import { manifestSubscribers } from './manifest';
 import { ensureJobManifestLoaded } from './subscribers';
 import { resolveIdempotencyKey } from './idempotency';
+import { debouncedRunAt, resolveDebounceKey } from './debounce';
 import { routedToEngine, routedJobIds } from './cutover';
 import { notifyQueuedJob } from './notify';
+import type { JobManifestEntry } from './manifest';
 
 // FAN-OUT (Story MOTIR-3414 · Subtask MOTIR-3423) — one emitted event becomes
 // one RUN per subscribing job.
@@ -61,6 +63,29 @@ import { notifyQueuedJob } from './notify';
 //    recorded in `docs/jobs.md` rather than left to be discovered. Forever is the
 //    right behaviour for the keys in use: a password-reset token and an invite
 //    token should each produce ONE email, not one per window.
+//
+// 5. ⚠️ DEBOUNCE IS THE SAME PATTERN ONE STEP FURTHER (MOTIR-3483). A job
+//    declaring `debounce` resolves its coalescing key here and, instead of
+//    inserting a second run, PUSHES the pending one's `run_at` forward and
+//    repoints it at the newer event. `docs/decisions/job-queue-foundation.md` §9
+//    chose that shape while rejecting pg-boss: "a `run_at` that is pushed forward
+//    on each same-key arrival, which is a column and an upsert on a table we own,
+//    not a subsystem."
+//
+//    It differs from dedup in what it needs and therefore in how it is written.
+//    Dedup asks "does this exist?", which a UNIQUE constraint answers with no
+//    read at all. Coalescing has to READ the pending row (its
+//    `debounce_first_seen_at`, for the deferral cap) and then WRITE based on what
+//    it read — a read-derived write, so the row is locked with `SELECT … FOR
+//    UPDATE` inside one transaction, per CLAUDE.md's lock-before-a-contended-
+//    update contract.
+//
+//    ⚠️ AND THE LOCK CANNOT COVER THE FIRST ARRIVAL, which is where the `P2002`
+//    pattern comes back. Two concurrent first pushes for one key lock nothing —
+//    there is no row yet — and both insert. The partial unique index catches the
+//    loser, and the loser's answer is NOT "already enqueued": it retries the
+//    coalesce, so the winner's row ends up carrying the LATEST of the two events.
+//    Reading it as already-enqueued would silently discard a push.
 
 /** What one dispatch did — returned so `sendEvent` can log it and the tests can assert it. */
 export interface DispatchResult {
@@ -70,6 +95,13 @@ export interface DispatchResult {
   enqueued: string[];
   /** Job ids that were already enqueued for this event — the idempotent path, not an error. */
   alreadyEnqueued: string[];
+  /**
+   * Job ids whose event was COALESCED into a pending debounced run rather than
+   * enqueued (MOTIR-3483). Its own field rather than a fold into `enqueued` or
+   * `alreadyEnqueued`, because it is neither: a run was neither created nor left
+   * untouched — an existing one was moved and repointed at this event.
+   */
+  coalesced: string[];
   /** Job ids whose enqueue failed, with the reason. Their siblings still landed. */
   failed: Array<{ jobId: string; error: string }>;
 }
@@ -128,7 +160,7 @@ export async function dispatchEventToEngine(
   // initialization`. The same temporal-dead-zone shape ADR §12 measured at build
   // time, one level down.
   if (routedJobIds().size === 0) {
-    return { eventId: null, enqueued: [], alreadyEnqueued: [], failed: [] };
+    return { eventId: null, enqueued: [], alreadyEnqueued: [], coalesced: [], failed: [] };
   }
 
   // The manifest is populated by evaluating the definition modules, and nothing
@@ -138,7 +170,7 @@ export async function dispatchEventToEngine(
   await ensureJobManifestLoaded();
   const subscribers = manifestSubscribers(name).filter((d) => routedToEngine(d.id));
   if (subscribers.length === 0) {
-    return { eventId: null, enqueued: [], alreadyEnqueued: [], failed: [] };
+    return { eventId: null, enqueued: [], alreadyEnqueued: [], coalesced: [], failed: [] };
   }
 
   const payload = (data ?? {}) as { workspaceId?: string | null };
@@ -158,13 +190,32 @@ export async function dispatchEventToEngine(
 
   const enqueued: string[] = [];
   const alreadyEnqueued: string[] = [];
+  const coalesced: string[] = [];
   const failed: Array<{ jobId: string; error: string }> = [];
+  /** Set when at least one row became claimable NOW. A debounced row is due in the
+   *  future, so waking a worker for it would be a poll that finds nothing. */
+  let dueNow = false;
 
   // Sequential and individually guarded — property (1) in the header. A
   // `Promise.all` would be faster and would make one rejection reject the whole
   // batch, which is the behaviour this must not have.
   for (const sub of subscribers) {
+    // Property (5): the job's own coalescing key, resolved PER SUBSCRIBER
+    // because the option is declared per job. Null for every job that declares
+    // none, AND for an event whose payload cannot supply one — which means "this
+    // event gets its own row", never "merge it with everything else".
+    const debounceKey = resolveDebounceKey(sub.debounce, data, sub.id);
     try {
+      if (sub.debounce !== undefined && debounceKey !== null) {
+        const outcome = await enqueueDebounced(sub, sub.debounce, debounceKey, {
+          eventId: event.id,
+          eventName: name,
+          workspaceId,
+        });
+        (outcome === 'enqueued' ? enqueued : coalesced).push(sub.id);
+        continue;
+      }
+
       await withSystemContext((tx) =>
         jobQueueRepository.create(
           {
@@ -183,6 +234,7 @@ export async function dispatchEventToEngine(
         ),
       );
       enqueued.push(sub.id);
+      dueNow = true;
     } catch (err) {
       if (isUniqueViolation(err)) {
         // Property (2): the constraint did its job. Not an error.
@@ -201,13 +253,86 @@ export async function dispatchEventToEngine(
 
   // Wake a listening worker so the run starts now rather than at its next poll
   // boundary. Best-effort by construction — see `notify.ts`.
-  if (enqueued.length > 0) {
+  if (dueNow) {
     await withSystemContext(async (tx) => {
       await notifyQueuedJob((sql) => tx.$executeRawUnsafe(sql));
     });
   }
 
-  return { eventId: event.id, enqueued, alreadyEnqueued, failed };
+  return { eventId: event.id, enqueued, alreadyEnqueued, coalesced, failed };
+}
+
+/**
+ * ONE debounced subscriber's enqueue: coalesce into the pending run this key
+ * already holds, or open a new window (MOTIR-3483).
+ *
+ * The read and the write are ONE transaction with the candidate row locked —
+ * `findPendingDebouncedForUpdate` takes `FOR UPDATE` — because deciding the new
+ * `run_at` from the row's `debounce_first_seen_at` is a read-derived write.
+ *
+ * ⚠️ A `P2002` HERE IS NOT "ALREADY ENQUEUED", and reading it that way would
+ * silently drop a push. It means a CONCURRENT first arrival won the insert
+ * between our empty read and our own, so the correct answer is to retry the
+ * whole transaction ONCE: the second pass finds the winner's row, locks it, and
+ * coalesces this event into it — which is exactly the outcome a serialized pair
+ * of arrivals would have produced.
+ *
+ * One retry rather than a loop: the second pass can only lose the same way if a
+ * THIRD arrival both inserted and was claimed in the interval, and at that point
+ * reporting the failure is more useful than spinning on a request path.
+ */
+async function enqueueDebounced(
+  sub: JobManifestEntry,
+  debounce: NonNullable<JobManifestEntry['debounce']>,
+  debounceKey: string,
+  event: { eventId: string; eventName: string; workspaceId: string | null },
+): Promise<'enqueued' | 'coalesced'> {
+  const attempt = async (): Promise<'enqueued' | 'coalesced'> =>
+    withSystemContext(async (tx) => {
+      const pending = await jobQueueRepository.findPendingDebouncedForUpdate(
+        sub.id,
+        debounceKey,
+        tx,
+      );
+      const now = new Date();
+      if (pending) {
+        await jobQueueRepository.coalesceDebounced(
+          pending.id,
+          {
+            runAt: debouncedRunAt(debounce, now, pending.debounceFirstSeenAt),
+            eventId: event.eventId,
+            eventName: event.eventName,
+            workspaceId: event.workspaceId,
+          },
+          tx,
+        );
+        return 'coalesced';
+      }
+      await jobQueueRepository.create(
+        {
+          jobId: sub.id,
+          eventId: event.eventId,
+          eventName: event.eventName,
+          workspaceId: event.workspaceId,
+          // The first arrival opens the window: due one whole `period` from now,
+          // with nothing to cap against yet.
+          runAt: debouncedRunAt(debounce, now, null),
+          maxAttempts: sub.maxAttempts,
+          idempotencyKey: null,
+          debounceKey,
+          debounceFirstSeenAt: now,
+        },
+        tx,
+      );
+      return 'enqueued';
+    });
+
+  try {
+    return await attempt();
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    return attempt();
+  }
 }
 
 /**

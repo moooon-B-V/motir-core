@@ -38,6 +38,13 @@
 //     the answer — and an answer the browser faked was never written, which is
 //     precisely what MOTIR-1823's reload step has to prove.
 //
+//   - E2E_TEST_CODE_GRAPH=1 → lib/test-code-graph-mock intercepts the INDEX
+//     WRITER's two boundaries: motir-ai's POST /v1/code-graph/run-credential and
+//     api.github.com's installation-token mint + `/tarball/` 302. Crossed only by
+//     the index SUPERVISOR, which is a job — so the LANE wires this on the WORKER
+//     (scripts/worker.ts), not here. See that module's header for why the app
+//     server must not get MOTIR_AI_URL.
+//
 //   - E2E_TEST_GITHUB_REPOS=1 → lib/test-github-repos-mock intercepts the
 //     repo-PROVISIONING and COLLABORATOR calls to api.github.com (create, the
 //     readiness read, the CI stub, the admin invite), so the repository-set
@@ -155,6 +162,26 @@ export async function register() {
       install: async (agent) => {
         const { installAiJobsBoundaryMock } = await import('@/lib/test-ai-jobs-mock');
         installAiJobsBoundaryMock(agent);
+      },
+    },
+    {
+      // ⚠️ THE ONE SEAM THIS LANE DOES NOT TURN ON HERE (MOTIR-3564). It is in
+      // the table so a reader finds every seam in one place and so a future
+      // SERVER-side caller has a door — but the boundary it stubs is crossed
+      // only by the index SUPERVISOR, which is a job and runs in the worker.
+      // The worker is a plain Node bundle and never executes this hook, so it
+      // installs the same seam itself (`scripts/worker.ts`), and
+      // `tests/e2e/_helpers/job-worker-process.ts` gives it the env.
+      //
+      // Setting `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` on the APP server
+      // would not be redundant, it would be wrong: `lib/ai/availability.ts`
+      // reads exactly that pair process-wide, so it flips the whole lane
+      // cloud-on and four specs assert the OFF state against this server.
+      flag: 'E2E_TEST_CODE_GRAPH',
+      message: 'index-writer seam mocked (run-credential mint + tarball redirect).',
+      install: async (agent) => {
+        const { installCodeGraphBoundaryMock } = await import('@/lib/test-code-graph-mock');
+        installCodeGraphBoundaryMock(agent);
       },
     },
   ];
