@@ -1,8 +1,8 @@
 ---
 title: Privacy Policy
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Privacy Policy
@@ -13,8 +13,6 @@ status: draft
 source, and anyone can run it on their own infrastructure. If you are using such an
 install, **your data never reaches moooon B.V.**, the operator of that install is the
 controller, and this document does not describe what they do. Ask them.
-
-> **⚠️ DRAFT — not yet reviewed by counsel and not yet published.** Pending MOTIR-3621.
 
 ---
 

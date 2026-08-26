@@ -1,8 +1,8 @@
 ---
 title: Data Processing Agreement
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Data Processing Agreement
@@ -10,9 +10,6 @@ status: draft
 **This agreement covers the hosted Motir service at `app.motir.co`, operated by moooon
 B.V.** It does not apply to a self-hosted installation: if you run Motir yourself, no
 data reaches moooon B.V. and there is nothing for us to process on your behalf.
-
-> **⚠️ DRAFT — not yet reviewed by counsel, and not a document to send to a customer in
-> this state.** Pending MOTIR-3621.
 
 **This is a template, available on request.** It is not required to use the service and
 signing it is not a condition of your subscription. It exists so that a customer who is

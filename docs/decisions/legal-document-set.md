@@ -307,6 +307,33 @@ cap and the choice-of-law carve-out hold under Dutch law, whether the
 subprocessor disclosures are complete, and whether the AUP's takedown rights are
 enforceable. That is a review engagement, and it is the gate on **publication**.
 
+### ⚠️ AMENDED 2026-08-26 — counsel review was DEFERRED, and the documents were approved without it
+
+**This section decided the path; the path was then changed by the founder, and the record
+says so rather than leaving §8 describing something that did not happen.**
+
+The four-step path above — vetted template, agent drafts, counsel reviews, founder
+approves — ran three of its four steps. **Counsel review was deferred**, deliberately, on
+the founder's decision, and the six documents were approved on an **agent analysis against
+the regulations they cite**. That analysis found and fixed four defects: the missing Dutch
+`opzet of bewuste roekeloosheid` carve-out and the consumer cap, the absent DSA Art. 16/17
+machinery, an SCC module misapplied to an intra-EEA leg, and three clauses (third-party
+services, confidentiality, indemnification) that both comparator products carry.
+
+**Counsel review is not legally required** — no rule anywhere obliges a lawyer to draft or
+review these; the obligations bind the controller and the content, never the author. So
+this is a risk decision rather than a compliance gap, and it is recorded as one.
+
+**Where the residual risk sits, named rather than averaged away:** Dutch civil-code
+application (Art. 6:248(2) BW, the _grijze lijst_), SCC module selection — where the first
+draft was outright wrong — and DSA scope, including whether the Art. 19 micro-enterprise
+exemption survives the linked-and-partner-enterprise test. **The recommendation on the
+record is to buy a scoped review before the first paying B2B customer**, which is when the
+DPA is first read adversarially.
+
+**The published documents carry no claim either way**, which is normal — no product's terms
+state their review provenance. The provenance lives here and on MOTIR-3621.
+
 ### ⚠️ This splits three cards, because drafting and reviewing are different executors
 
 MOTIR-1158, MOTIR-1159 and MOTIR-1160 each bundle both atoms, and the bundle is
@@ -355,7 +382,10 @@ consequence — submitted as a plan for approval, per §9.
 2. **The three email aliases** (§4) — a Spaceship console action, so a `manual`
    atom. MOTIR-2596 provisioned the mailbox, not the aliases. They must resolve
    before MOTIR-1134 publishes copy that prints them.
-3. **Counsel review** (§8) — the gate on publication, not on drafting.
+3. ~~**Counsel review** (§8) — the gate on publication, not on drafting.~~ **DEFERRED
+   2026-08-26** on the founder's decision; the set was approved on agent analysis
+   instead (see the amendment in §8). Recommended before the first paying B2B
+   customer.
 4. **The Cookie Policy is an enumeration** (§6) — a card that adds a cookie
    amends it. The 2FA cookies reached the product without touching MOTIR-1159,
    which is how the four-entry list went stale in the first place.

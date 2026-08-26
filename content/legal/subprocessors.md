@@ -1,8 +1,8 @@
 ---
 title: Subprocessors
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Subprocessors
@@ -11,10 +11,6 @@ status: draft
 It does not describe a self-hosted installation.** If you run Motir yourself, you are
 your own controller and you choose your own subprocessors; none of the companies below
 receives your data unless you configure it to.
-
-> **⚠️ DRAFT — not yet reviewed by counsel and not yet published.** Pending
-> MOTIR-3621. The transfer-basis column is incomplete by design: see
-> _Transfer bases_ below.
 
 moooon B.V. (Menkemaborg 65, 8226 TB Lelystad, Netherlands, KvK 97763144) uses the companies below to
 provide the hosted service. We publish this list so that a customer acting as a
