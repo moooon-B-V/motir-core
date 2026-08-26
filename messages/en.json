@@ -6268,6 +6268,7 @@
   "designResult": {
     "title": "Design result",
     "gloss": "— what this card produced",
+    "note": "Design note",
     "openInNewTab": "Open in new tab",
     "frameTitle": "Design mock — {path}",
     "frameFailed": "The mock could not be loaded",

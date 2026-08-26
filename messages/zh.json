@@ -6264,6 +6264,7 @@
   "designResult": {
     "title": "设计结果",
     "gloss": "— 这张卡片产出的内容",
+    "note": "设计说明",
     "openInNewTab": "在新标签页打开",
     "frameTitle": "设计稿 — {path}",
     "frameFailed": "无法加载设计稿",

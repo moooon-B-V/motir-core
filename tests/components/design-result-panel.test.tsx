@@ -85,17 +85,90 @@ describe('nothing published yet', () => {
   });
 });
 
+/** The note's rendered region — the element the prose styles actually land on. */
+function noteRegion(container: HTMLElement): HTMLElement | null {
+  return container.querySelector<HTMLElement>('.motir-prose');
+}
+
 describe('the published panel', () => {
-  it('renders the note through the shipped Markdown renderer', async () => {
+  it('renders the note through the shipped Markdown renderer AND the shipped prose styles', async () => {
     const { container } = await renderReady(
       <DesignResultPanel evidence={evidence()} isDesignCard />,
     );
 
     // A real heading element, not the raw `## …` source — i.e. it went through
-    // a Markdown render, and the `markdown-body` class is the shipped path's.
+    // a Markdown render.
     expect(screen.getByRole('heading', { name: 'The Design result panel' })).toBeTruthy();
-    expect(container.querySelector('.markdown-body')).toBeTruthy();
     expect(screen.queryByText(/^## /)).toBeNull();
+
+    // ⚠️ Assert the class that STYLES it, not merely a class that is present.
+    // This assertion used to name `markdown-body`, which is defined in no
+    // stylesheet in the repo or in any dependency — so it passed forever while
+    // the note rendered with Tailwind preflight in force: no heading scale, no
+    // list markers, no table rules (MOTIR-3510). `motir-prose` is the shipped
+    // read surface's, via MarkdownView.
+    const note = noteRegion(container);
+    expect(note).toBeTruthy();
+    expect(container.querySelector('.markdown-body')).toBeNull();
+    // The heading is INSIDE that region, so the styles reach the content.
+    expect(note!.contains(screen.getByRole('heading', { name: 'The Design result panel' }))).toBe(
+      true,
+    );
+  });
+
+  it('BOUNDS the note at the frame height and scrolls it inside itself', async () => {
+    const { container } = await renderReady(
+      <DesignResultPanel evidence={evidence()} isDesignCard />,
+    );
+
+    // The measurement the design pinned for the frame is the note's too — a
+    // real `design-notes.md` section is the taller of the two artifacts.
+    const note = noteRegion(container)!;
+    expect(note.className).toContain('h-[32rem]');
+    expect(note.className).toContain('overflow-y-auto');
+    // Wide tables still scroll sideways inside the note rather than widening
+    // the page.
+    expect(note.className).toContain('overflow-x-auto');
+
+    // And it is CONTAINED — a header strip naming the source sits directly
+    // above it, sharing the frame's grammar.
+    const strip = note.previousElementSibling as HTMLElement | null;
+    expect(strip).toBeTruthy();
+    expect(strip!.textContent).toContain('Design note');
+    expect(strip!.className).toContain('border-b-0');
+    expect(note.className).toContain('border-(--el-border)');
+  });
+
+  it('keeps a LONG note inside its bounded container', async () => {
+    // The defect this card fixed: a real section is 200–350 lines of headings,
+    // paragraphs and wide tables, and it used to set the page's height — the
+    // mock frame, the screenshots and the provenance were pushed thousands of
+    // pixels down. Length must change nothing about the note's box.
+    const longNote = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `### Section ${i}\n\nA paragraph of the published note.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n`,
+    ).join('\n');
+
+    const { container } = await renderReady(
+      <DesignResultPanel evidence={evidence({ noteMd: longNote })} isDesignCard />,
+    );
+
+    const note = noteRegion(container)!;
+    expect(note.className).toContain('h-[32rem]');
+    expect(note.className).toContain('overflow-y-auto');
+
+    // Every heading of the long note lives inside that one bounded region —
+    // nothing escapes it, and there is exactly one such region.
+    const headings = screen.getAllByRole('heading', { name: /^Section \d+$/ });
+    expect(headings).toHaveLength(40);
+    for (const heading of headings) expect(note.contains(heading)).toBe(true);
+    expect(container.querySelectorAll('.motir-prose')).toHaveLength(1);
+
+    // The artifacts BELOW it are still siblings of the note, not descendants
+    // pushed down by it: the frame follows the note in the panel.
+    expect(container.querySelector('iframe')).toBeTruthy();
+    expect(note.contains(container.querySelector('iframe'))).toBe(false);
   });
 
   it('shows the provenance the publish recorded', async () => {
@@ -151,7 +224,7 @@ describe('the published panel', () => {
       />,
     );
 
-    expect(container.querySelector('.markdown-body')).toBeNull();
+    expect(noteRegion(container)).toBeNull();
     expect(screen.queryByRole('link', { name: /CI run/ })).toBeNull();
     expect(screen.queryByText('Screenshot')).toBeNull();
     // The frame — the one thing that WAS published — is still there.
