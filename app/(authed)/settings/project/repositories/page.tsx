@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Pause } from 'lucide-react';
@@ -6,6 +7,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
 import { guardSettingsPage } from '../_guard';
@@ -56,10 +58,52 @@ export default async function ProjectRepositoriesPage() {
   const refused = await guardSettingsPage('repositories', ctx);
   if (refused) return refused;
 
-  const view = await projectRepoRoomService.getRoomView(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  // MOTIR-3558 — allocation row 5: THE FRAME ONLY. One read, so there is nothing
+  // to make concurrent.
+  //
+  // ⚠️ ONLY the <h1> is tier 1 here, and that is the asset's call rather than a
+  // convenience: the lead line chooses between two strings on
+  // `view.rows.length`, and the summary line renders at all only when the view
+  // has something in it. Both are therefore ABOUT the pending read and cannot be
+  // painted ahead of it — so the header is SPLIT, with the title above the
+  // boundary and its two paragraphs below. Every other pane in this card paints
+  // its whole header from the gate.
+  return (
+    <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('title')}</h1>
+      </header>
+
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <RepositoriesPaneBody
+          projectId={ctx.projectId}
+          projectKey={ctx.project.identifier}
+          projectName={ctx.project.name}
+          userId={ctx.userId}
+          workspaceId={ctx.workspaceId}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+/** The room read and everything that depends on it — the lead line, the summary
+ *  line, the CI-paused banner and the rows. */
+async function RepositoriesPaneBody({
+  projectId,
+  projectKey,
+  projectName,
+  userId,
+  workspaceId,
+}: {
+  projectId: string;
+  projectKey: string;
+  projectName: string;
+  userId: string;
+  workspaceId: string;
+}) {
+  const t = await getTranslations('repositoryTakeover');
+  const view = await projectRepoRoomService.getRoomView(projectId, { userId, workspaceId });
 
   // ONE timestamp for the whole render, threaded into the rows: `Date.now()` in
   // a client render would disagree with the server's by the round-trip and the
@@ -70,18 +114,15 @@ export default async function ProjectRepositoriesPage() {
   const hasAny = view.rows.length > 0 || view.connected.length > 0;
 
   return (
-    <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('title')}</h1>
+    <>
+      <div className="flex flex-col gap-1">
         <p className="font-sans text-sm text-(--el-text-muted)">
-          {view.rows.length > 0
-            ? t('lead', { projectName: ctx.project.name })
-            : t('leadConnected', { projectName: ctx.project.name })}
+          {view.rows.length > 0 ? t('lead', { projectName }) : t('leadConnected', { projectName })}
         </p>
         {hasAny ? (
           <p className="font-sans text-sm text-(--el-text-helper)">{t('summary', counts)}</p>
         ) : null}
-      </header>
+      </div>
 
       {view.ciPaused ? (
         <div
@@ -127,11 +168,11 @@ export default async function ProjectRepositoriesPage() {
       ) : null}
 
       <RepositoriesRoom
-        projectKey={ctx.project.identifier}
+        projectKey={projectKey}
         view={view}
         connectHref="/settings/workspace/github"
         nowIso={nowIso}
       />
-    </div>
+    </>
   );
 }
