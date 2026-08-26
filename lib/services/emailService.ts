@@ -29,6 +29,7 @@ import {
   automationRuleFailedEmail,
   type AutomationRuleFailedEmailProps,
 } from '@/lib/emailTemplates/automationRuleFailed';
+import { twoFactorOtpEmail, type TwoFactorOtpEmailProps } from '@/lib/emailTemplates/twoFactorOtp';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -72,7 +73,8 @@ export type TransactionalEmail =
       to: string;
       template: 'automation-rule-failed';
       data: AutomationRuleFailedEmailProps;
-    };
+    }
+  | { to: string; template: 'two-factor-otp'; data: TwoFactorOtpEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -153,6 +155,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return filterSubscriptionEmail(message.data);
     case 'automation-rule-failed':
       return automationRuleFailedEmail(message.data);
+    case 'two-factor-otp':
+      return twoFactorOtpEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

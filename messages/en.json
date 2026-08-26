@@ -681,6 +681,14 @@
       "expires": "This invite expires in 7 days.",
       "ignore": "Don't know {inviter}? You can safely ignore this email."
     },
+    "twoFactorOtp": {
+      "subject": "{code} is your Motir verification code",
+      "preview": "Your Motir verification code",
+      "greeting": "Hi {name},",
+      "lede": "You're signing in to Motir. Enter this code to finish:",
+      "expires": "This code expires in {minutes, plural, one {# minute} other {# minutes}}.",
+      "security": "Didn't try to sign in? Someone may have your password — change it and review your two-factor settings. We'll never ask you for this code."
+    },
     "passwordReset": {
       "subject": "Reset your Motir password",
       "preview": "Reset your Motir password",

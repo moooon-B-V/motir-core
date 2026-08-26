@@ -681,6 +681,14 @@
       "expires": "此邀请将在7天后过期。",
       "ignore": "不认识 {inviter}？你可以放心忽略此邮件。"
     },
+    "twoFactorOtp": {
+      "subject": "{code}是你的Motir验证码",
+      "preview": "你的Motir验证码",
+      "greeting": "你好，{name}：",
+      "lede": "你正在登录Motir。输入此验证码以完成登录：",
+      "expires": "此验证码将在{minutes}分钟后过期。",
+      "security": "不是你本人的操作？可能有人知道了你的密码——请立即修改密码并检查两步验证设置。我们绝不会向你索要此验证码。"
+    },
     "passwordReset": {
       "subject": "重置你的Motir密码",
       "preview": "重置你的Motir密码",
