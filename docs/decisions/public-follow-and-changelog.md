@@ -147,8 +147,9 @@ The shape 8.9.3 builds:
 
 ```prisma
 model PublicFollow {
-  id        String @id @default(cuid())
-  projectId String @map("project_id")
+  id          String @id @default(cuid())
+  workspaceId String @map("workspace_id") // denormalized from the project, for RLS — see below
+  projectId   String @map("project_id")
 
   // Exactly one of these is set — enforced by a CHECK constraint, not by
   // convention (see §7).
@@ -167,24 +168,60 @@ model PublicFollow {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@unique([projectId, email])
   @@index([projectId, digestOptIn])
+  @@index([workspaceId])
   @@map("public_follow")
 }
 ```
 
-**No `workspace_id`, deliberately** — and this is the one place the newest-table
-convention does NOT apply. `public_follow` follows `public_request_vote`, which
-also carries none: the row's tenancy is inherited from its project, the writer is
-by construction NOT a member of that workspace, and a public request arrives on a
-connection with **no `app.workspace_id` bound at all** (measured and recorded in
-`20260815200000_public_project_join_read_policies`). A `workspace_id = current_setting(...)`
-policy on this table would deny every write it exists to accept. §7 gives the
-policy set instead.
+> ### ⚠️ AMENDMENT 1 (2026-08-26, same run) — `workspace_id` IS carried, and `public_request_vote` is the WRONG precedent for this table
+>
+> **This paragraph originally said the opposite**, and it was falsified while
+> 8.9.3 was being built rather than by argument, so the reasoning is kept in
+> place rather than deleted. What it said: `public_follow` carries **no**
+> `workspace_id`, mirroring `public_request_vote`, because a public write arrives
+> on a connection with no `app.workspace_id` bound and a workspace-keyed policy
+> would deny every write the table exists to accept.
+>
+> **The premise is true and the conclusion does not follow, because the two
+> tables differ on exactly the axis that matters.** A `public_request_vote` row
+> ALWAYS has a `user_id` — a vote requires sign-in — so its owner policy
+> (`user_id = current_setting('app.user_id')`) covers every row on the table. A
+> `public_follow` row created by the **email-only tier has no user at all**, so
+> an owner policy can never reach it, and any arm added to cover it must key on
+> something an anonymous connection has. The only such key is _"this project is
+> public"_ — which is true for every row on the table, so a `FOR ALL` arm of that
+> shape makes **the entire follower list readable, and enumerable, by any unbound
+> connection.** That is a subscriber-email leak sitting in the last line of
+> defence, and it is invisible in a test that only ever queries by token.
+>
+> **The repair is not a narrower arm; it is having a tenant to bind.** The row's
+> workspace is known at write time — it is the project's, resolved server-side
+> from the public identifier the request already names — so
+> `withWorkspaceServiceContext(project.workspaceId, …)` (`lib/workspaces/context.ts`)
+> binds `app.workspace_id` and nothing else: no `app.user_id`, no
+> `app.system_admin`. It is documented for exactly this shape, _"a TRUSTED path
+> that operates within ONE workspace WITHOUT an acting user"_, and its security
+> constraint is met — the id comes from a trusted row lookup, never from user
+> input.
+>
+> So `public_follow` takes the **standard** newest-table shape after all:
+> `workspace_id` NOT NULL, denormalized from the project (the same denormalization
+> `WorkItemLink` makes, and for the same reason — every read starts with a
+> workspace gate), and ONE ordinary workspace policy. **There is no anonymous
+> arm, so there is no enumeration surface.** §7's policy set is amended to match.
+>
+> **The general shape worth carrying forward:** a public-write table whose rows
+> may have NO acting user cannot be secured by an owner policy, and reaching for
+> an anonymous arm to cover the gap widens SELECT along with the INSERT you
+> wanted. Bind the tenant instead — and check whether the precedent you are
+> copying has a `user_id` on every row before copying its policy set.
 
 **Both relations are modelled on both sides** (`Project.publicFollows`,
 `User.publicFollows`) — the FK-`@relation` rule in `motir-core/CLAUDE.md`, no
@@ -205,6 +242,36 @@ sees. A curated entity would additionally mean a build-in-public project has to
 be _maintained_ to look alive, which is precisely the failure mode a
 derived-from-the-tracker changelog exists to avoid — the whole pitch is _the plan
 IS the changelog_.
+
+> #### ⚠️ AMENDMENT 2 (2026-08-26, same run) — "done-category" is one status too wide, and the public roadmap already knew
+>
+> The paragraph above says the changelog reuses the reports' predicate so
+> _"shipped"_ has one definition. Building 8.9.3 found the case where reusing it
+> verbatim would make a **false public claim**: `cancelled` is a
+> `done`-CATEGORY status in `lib/workflows/defaultWorkflow.ts`, so
+> `category = 'done'` announces abandoned work as shipped, in a feed, permanently.
+>
+> **The reports are right to count it and the changelog is right not to**, and
+> that is not a contradiction: a report measures RESOLUTION, and a "won't do" is
+> resolved; a changelog makes a SHIPPED statement, and a cancelled item is
+> sealed-not-shipped. One predicate, two different questions.
+>
+> **And the correction was already shipped, one surface over.** The public
+> ROADMAP's Done column has excluded exactly this key since 6.12.7, with exactly
+> this reasoning in its own comment. So the changelog does not get a second
+> answer: the literal moved to `lib/publicProjects/shippedStatus.ts`
+> (`PUBLIC_NOT_SHIPPED_DONE_KEY`) and both public surfaces read it. It is a
+> PROTECTED default key — it cannot be renamed or recategorised — so the literal
+> is stable, and a project's CUSTOM done statuses still count as shipped.
+>
+> **"Shipped" therefore means `category = 'done' AND key <> 'cancelled'`, on all
+> THREE status joins** — including the `from` side, or an item moving
+> `cancelled → done` (genuinely shipped, after a reversal) would be invisible
+> because its previous status was also `done`-category.
+>
+> The general shape: **before reusing an internal measure on a PUBLIC surface,
+> check the one status where "resolved" and "shipped" come apart** — and check
+> whether a neighbouring public surface has already come apart on it.
 
 **`shippedAt` is the item's MOST RECENT transition into a `done`-category
 status** — not its first.
@@ -399,23 +466,30 @@ oracle for _"does this person follow this project"_.
 invariant, and an invariant a service enforces is an invariant a second service
 will one day not enforce.
 
-**RLS.** `public_follow` mirrors `public_request_vote`'s two-policy set exactly:
+**RLS — ONE ordinary workspace policy, and deliberately no anonymous arm**
+(amended; see AMENDMENT 1 in §1 for the reasoning this replaces):
 
-- **`public_follow_owner_or_system`** — `FOR ALL`, `USING` / `WITH CHECK`
-  `current_setting('app.system_admin', true) = 'true' OR "user_id" = current_setting('app.user_id', true)`;
-- **`public_follow_public_project_write`** — the arm the email-only tier needs,
-  gated on there being **no bound workspace**
-  (`coalesce(current_setting('app.workspace_id', true), '') = ''`) AND an
-  `EXISTS` walking `project.accessLevel = 'public'`, so an unbound connection may
-  insert a follow **only** on a public project and only for a row with
-  `user_id IS NULL`.
+- **`public_follow_workspace_or_system`** — `FOR ALL`, `USING` / `WITH CHECK`
+  `current_setting('app.system_admin', true) = 'true' OR "workspace_id" = current_setting('app.workspace_id', true)`.
 
-Postgres combines permissive policies per command, so the second policy widens
-exactly the commands it names and nothing else; a tenant session keeps precisely
-the visible set it had. `tests/tenant-root-creation-rls.test.ts` holds a
-**totality guard** — every RLS-enabled table must admit all four verbs, and the
-set of tables WITHOUT RLS is compared as a SET — so this table ships its policies
-in the same migration or it fails a test in a shard nowhere near the diff.
+That is the whole policy set. Every write — account follow, email-only follow,
+confirmation, unsubscribe, and the digest job's `last_digest_at` stamp — runs
+inside `withWorkspaceServiceContext(project.workspaceId, …)`, which binds
+`app.workspace_id` and nothing else. The workspace id comes from the `project`
+row the public identifier resolves to, which is a trusted lookup rather than
+user input.
+
+**The absence of a public arm is the security property, not an oversight.** An
+unbound connection sees no `public_follow` row at all, so the follower list
+cannot be read or enumerated through the database layer even if an app-layer
+query is one day written carelessly. A table that stores email addresses for
+people who do not have accounts should have exactly that property.
+
+`tests/tenant-root-creation-rls.test.ts` holds a **totality guard** — every
+RLS-enabled table must admit all four verbs, and the set of tables WITHOUT RLS is
+compared as a SET — so this table ships its policy in the same migration or it
+fails a test in a shard nowhere near the diff. A single `FOR ALL` policy admits
+all four, so the guard is satisfied by construction.
 
 **Four whole-tree registries the new routes owe**, none of which any local run
 touches:
@@ -488,10 +562,15 @@ touches:
 - **Deriving entries from the roadmap's Done column.** The Done column is a board
   projection with no time axis; it answers a different question and would need a
   date invented for it.
-- **`workspace_id` + the standard workspace RLS policy on `public_follow`.**
+- ~~**`workspace_id` + the standard workspace RLS policy on `public_follow`.**
   Rejected because a public write arrives with no bound workspace, so the policy
-  would deny every write the table exists to accept — measured, not assumed
-  (`20260815200000_public_project_join_read_policies`).
+  would deny every write the table exists to accept.~~ **REINSTATED by
+  AMENDMENT 1 (§1) — this rejection was wrong.** A public write arrives unbound
+  only if nothing binds it, and the project's workspace is known server-side
+  before the write. What is rejected instead is the shape this ADR originally
+  chose: **an anonymous `public-project` RLS arm on a table with user-less rows**,
+  which widens SELECT along with the INSERT it was reached for and makes the
+  follower list enumerable.
 - **Serving both `/changelog.xml` and `/changelog.atom`.** Two URLs for one feed
   splits subscriber counts and doubles the surface that must keep working
   forever.

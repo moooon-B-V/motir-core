@@ -21,6 +21,7 @@ import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/error
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { toCommentDto } from '@/lib/mappers/commentMappers';
 import {
+  toPublicChangelogEntryDto,
   toPublicProjectOverviewDto,
   toPublicRequestDetailDto,
   toPublicRequestMatchDto,
@@ -47,10 +48,15 @@ import { publicSubmitBudget } from '@/lib/rateLimit/budgets';
 import { rateLimitKey } from '@/lib/rateLimit/keys';
 import { consumeSharedRateLimit } from '@/lib/rateLimit/limiter';
 import { retryAfterSeconds } from '@/lib/api/v1/rateLimit';
-import type { PublicRoadmapCursor, PublicRoadmapRow } from '@/lib/repositories/workItemRepository';
+import type {
+  PublicChangelogCursor,
+  PublicRoadmapCursor,
+  PublicRoadmapRow,
+} from '@/lib/repositories/workItemRepository';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   PublicBoardDto,
+  PublicChangelogPageDto,
   PublicDuplicateMatchesDto,
   PublicProjectOverviewDto,
   PublicProjectStatsDto,
@@ -66,6 +72,8 @@ import type {
   PublicWorkItemPageDto,
 } from '@/lib/dto/publicProjects';
 import { PUBLIC_ROADMAP_BUCKET_KEYS } from '@/lib/dto/publicProjects';
+import { decodeChangelogCursor, encodeChangelogCursor } from '@/lib/publicProjects/changelogCursor';
+import { PUBLIC_NOT_SHIPPED_DONE_KEY } from '@/lib/publicProjects/shippedStatus';
 import type { TriageSubmissionResultDto } from '@/lib/dto/triage';
 
 // publicProjectsService — the SINGLE service behind every PUBLIC project surface
@@ -105,6 +113,12 @@ const PUBLIC_BOARD_CAP = 200;
 
 /** The Work-items tab page size (cursor-paginated, lazy — the at-scale rule). */
 const PUBLIC_WORK_ITEMS_PAGE_SIZE = 30;
+/**
+ * The public CHANGELOG's page size (Story 8.9 · Subtask 8.9.3 · ADR §3). Smaller
+ * than the work-items list because a changelog entry is a read-and-move-on unit
+ * with a date heading, not a row in a scan.
+ */
+const PUBLIC_CHANGELOG_PAGE_SIZE = 20;
 
 /**
  * The public TREE level page size (Subtask 6.14.10) — how many siblings one lazy
@@ -205,15 +219,17 @@ async function computeStats(
 
 /**
  * The default terminal "cancelled" status key — EXCLUDED from the public
- * roadmap's Done bucket. `cancelled` is a category-`done` status (a resolved
- * "won't do / duplicate"), but the card's contract is that non-public statuses
- * (cancelled / triage) are not shown — a cancelled item is sealed-not-shipped,
- * so it never appears on the public roadmap. It is a PROTECTED default key
- * (can't be renamed/recategorised — `lib/workflows/defaultWorkflow.ts`), so the
- * literal exclusion is stable; a project's CUSTOM done statuses still map to
- * Done by category (no project-specific "cancel" detection is attempted).
+ * roadmap's Done bucket, for the reason `PUBLIC_NOT_SHIPPED_DONE_KEY` records
+ * in full: a cancelled item is a resolved "won't do", so it is sealed-not-
+ * shipped and never appears on a public surface.
+ *
+ * MOVED to `lib/publicProjects/shippedStatus.ts` (Story 8.9 · Subtask 8.9.3) so
+ * the roadmap's Done bucket and the public CHANGELOG share ONE literal rather
+ * than each carrying its own. The alias is kept because this file reads better
+ * with the roadmap's own name for it, and because every citation of
+ * `ROADMAP_EXCLUDED_DONE_KEY` still lands.
  */
-const ROADMAP_EXCLUDED_DONE_KEY = 'cancelled';
+const ROADMAP_EXCLUDED_DONE_KEY = PUBLIC_NOT_SHIPPED_DONE_KEY;
 
 /**
  * Map the project's real workflow statuses to the three PROMOTED roadmap
@@ -557,6 +573,90 @@ export const publicProjectsService = {
       columns: builtColumns,
       cap: PUBLIC_BOARD_CAP,
       truncated: boardTotal > PUBLIC_BOARD_CAP,
+    };
+  },
+
+  /**
+   * The public CHANGELOG tab (Story 8.9 · Subtask 8.9.3 ·
+   * `docs/decisions/public-follow-and-changelog.md`) — the project's shipped
+   * items, newest first, cursor-paged. The one PUSH surface's read; the Atom
+   * feed (8.9.6) and the follower digest (8.9.7) compose the SAME method, which
+   * is what makes their privacy behaviour identical by construction rather than
+   * by three parallel filters.
+   *
+   * PRIVACY. `resolveHiddenIds` supplies the 6.14 private-epic descendant set
+   * exactly as every other public read does, and the repository read adds the
+   * predicate that set does NOT cover: a private epic's OWN row. That row stays
+   * visible in the TREE as the "this epic is not public" placeholder, which is
+   * right for a tree and wrong for a stream — a changelog entry asserts that a
+   * specific thing shipped, and there is no placeholder entry. Without it, a
+   * private epic reaching `done` would publish its title into a feed.
+   *
+   * ⚠️ THE DIGEST MUST RE-READ THIS AT SEND TIME, not at follow time: an epic
+   * made private on Wednesday must not appear in Monday's mail because it was
+   * public when the item shipped.
+   *
+   * Over-fetches one row to derive `nextCursor` without a trailing COUNT — the
+   * convention `getWorkItems` sets directly below. `actorUserId` nullable: the
+   * page is anonymous, and a MEMBER simply gets an empty exclusion set.
+   */
+  async getChangelog(
+    identifier: string,
+    actorUserId: string | null,
+    cursor?: string,
+  ): Promise<PublicChangelogPageDto> {
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+    const hiddenIds = await resolveHiddenIds(project, isMember);
+
+    // A malformed cursor throws rather than restarting from the top — a pager
+    // that silently repeats its first page is far harder to notice than a 400.
+    const seek: PublicChangelogCursor | undefined = cursor
+      ? (() => {
+          const token = decodeChangelogCursor(cursor);
+          return { shippedAt: new Date(token.shippedAt), key: token.key };
+        })()
+      : undefined;
+
+    // ⚠️ BOUND, and this read is the reason. Every other public read runs
+    // UNBOUND — `project` and `work_item` each carry a `*_public_project_read`
+    // arm that fires only on a context-less connection, which is exactly the
+    // anonymous path. The changelog joins a THIRD table, `work_item_revision`,
+    // and its only policy (`work_item_revision_active_workspace`) requires a
+    // bound `app.workspace_id`. Unbound, the join contributes no rows and the
+    // read returns an EMPTY CHANGELOG — silently, with no error, on every
+    // anonymous request. That is the same second-hop failure
+    // `20260815200000_public_project_join_read_policies` traced for four other
+    // public reads.
+    //
+    // The repair is to BIND rather than to widen. An anonymous SELECT arm on
+    // `work_item_revision` would expose every field diff of every public
+    // project's whole trail — far more than a changelog needs — whereas the
+    // workspace is known here: `resolvePublicProject` just resolved it from the
+    // public identifier and confirmed the project is `public`, which is the
+    // trusted resolution `withWorkspaceServiceContext` documents as its
+    // precondition. It binds `app.workspace_id` and nothing else — no
+    // `app.user_id`, no `app.system_admin` — so the reach stays row-scoped to
+    // the one project's tenant. (The `/explore` square is the case where this
+    // is NOT available: it is cross-tenant by construction, so it needs the
+    // unbound arm. One known project is the opposite situation.)
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findPublicChangelogEntries(
+        project.id,
+        project.workspaceId,
+        { take: PUBLIC_CHANGELOG_PAGE_SIZE + 1, cursor: seek },
+        hiddenIds,
+        tx,
+      ),
+    );
+    const hasMore = rows.length > PUBLIC_CHANGELOG_PAGE_SIZE;
+    const page = hasMore ? rows.slice(0, PUBLIC_CHANGELOG_PAGE_SIZE) : rows;
+    const last = page[page.length - 1];
+    return {
+      entries: page.map(toPublicChangelogEntryDto),
+      nextCursor:
+        hasMore && last
+          ? encodeChangelogCursor({ shippedAt: last.shippedAt.toISOString(), key: last.key })
+          : null,
     };
   },
 

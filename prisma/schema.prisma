@@ -210,6 +210,13 @@ model User {
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
   // on both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   publicRequestVotes          PublicRequestVote[]
+  // Public projects this account FOLLOWS (Story 8.9 · Subtask 8.9.3) — the
+  // account tier of `docs/decisions/public-follow-and-changelog.md` §1. The
+  // email-only tier carries no user, which is why the FK is optional on the
+  // other side. Cascade: a follow is personal substrate, it dies with the user
+  // (the publicRequestVotes / apiTokens pattern). Modelled on both sides per
+  // the FK-`@relation` rule so `migrate dev` reports no drift.
+  publicFollows               PublicFollow[]
   // Cross-device appearance preference (Story 7.3 · Subtask 7.3.59) — the 1:1
   // row backing the 3-axis design system's per-user sync. Cascade: it's
   // personal appearance substrate, it dies with the user (the
@@ -941,6 +948,12 @@ model Workspace {
   /// MOTIR-3255 — what a multi-repo handle's seconds were spent on.
   ciContainerUsageSlices      CiContainerUsageSlice[]
   ciContainerPeriodCosts      CiContainerPeriodCost[]
+  /// Public-changelog followers (Story 8.9 · Subtask 8.9.3). The `workspace_id`
+  /// is denormalized from the project so RLS gates the table the ordinary way —
+  /// see `docs/decisions/public-follow-and-changelog.md` §1 AMENDMENT 1 for why
+  /// the `public_request_vote` shape (no workspace, an anonymous read arm) is
+  /// the wrong precedent for a table holding rows with no acting user.
+  publicFollows               PublicFollow[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -1262,6 +1275,11 @@ model Project {
   // Retired project keys (Story 6.8). Cascade: deleting a project FREES its
   // reserved keys (the verified Jira rule — only deletion un-reserves a key).
   keyAliases                  ProjectKeyAlias[]
+  // People following this public project's changelog (Story 8.9 · Subtask
+  // 8.9.3) — both stored tiers, account and email-only
+  // (`docs/decisions/public-follow-and-changelog.md` §1). Cascade: a follow is
+  // a relationship to THIS project and means nothing without it.
+  publicFollows               PublicFollow[]
   // Public-project topic tags (Story 6.13 · Subtask 6.13.5) — the assignments
   // linking this project to the shared topic vocabulary (`ProjectTag`). Cascade:
   // deleting a project sheds its tag assignments; the tag rows are a shared
@@ -2137,6 +2155,90 @@ model PublicRequestVote {
   // The count read (votes for a request) + the toggle lookup both ride this.
   @@index([workItemId])
   @@map("public_request_vote")
+}
+
+/// A person following a PUBLIC project's changelog (Story 8.9 · Subtask 8.9.3 ·
+/// `docs/decisions/public-follow-and-changelog.md` §1).
+///
+/// TWO of the three follower tiers are rows; the third is not. An ANONYMOUS
+/// follower subscribes to the Atom feed in their own reader and Motir stores
+/// nothing about them — there is deliberately no row for that tier. The two
+/// stored tiers are:
+///
+///   * ACCOUNT — `user_id` set, `email` null. The Follow button's state.
+///   * EMAIL-ONLY — `email` set, `user_id` null. A prospect who arrived from a
+///     link and has no Motir account; the tier that exists because a public
+///     project is a launch funnel and demanding a signup first inverts it.
+///
+/// EXACTLY ONE of the two is set, and that is a DATABASE invariant, not a
+/// service convention: `public_follow_identity_exactly_one`
+/// (`CHECK (("user_id" IS NULL) <> ("email" IS NULL))`) is in the migration.
+/// An invariant one service enforces is an invariant a second service will one
+/// day not enforce.
+///
+/// TENANCY. `workspace_id` is denormalized from the project — the same
+/// denormalization `WorkItemLink` makes, for the same reason: every read starts
+/// with a workspace gate and pulling it through the project at query time would
+/// cost a join. It is what lets this table take the ORDINARY workspace RLS
+/// policy, which matters more here than usual: a row in the email-only tier has
+/// NO acting user, so the `public_request_vote` owner policy
+/// (`user_id = app.user_id`) could never reach it, and the anonymous
+/// public-project arm that would have covered it widens SELECT as well as
+/// INSERT — making the whole follower list, addresses included, enumerable by
+/// any unbound connection. There is therefore NO anonymous arm. Every write
+/// runs inside `withWorkspaceServiceContext(project.workspaceId, …)`, which
+/// binds `app.workspace_id` and nothing else, from a trusted project lookup.
+/// (AMENDMENT 1 of the ADR records the correction and its reasoning.)
+///
+/// TOKENS are stored HASHED, never in the clear. `confirm_token_hash` gates the
+/// email-only tier's double opt-in and expires; `unsubscribe_token_hash` is
+/// permanent, because an unsubscribe link has to work in a mail somebody finds
+/// two years later.
+model PublicFollow {
+  id          String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  projectId   String @map("project_id")
+
+  /// Set on the ACCOUNT tier only; null on the email-only tier.
+  userId String? @map("user_id")
+  /// Set on the EMAIL-ONLY tier only; null on the account tier. Stored
+  /// LOWERCASED — the unique index is on the stored form, so the service
+  /// normalizes before it writes or looks up.
+  email String?
+
+  /// Following is not subscribing: the digest is opt-IN and off by default on
+  /// BOTH stored tiers (ADR §4).
+  digestOptIn Boolean   @default(false) @map("digest_opt_in")
+  /// Null until the email-only tier's confirmation link is followed. An account
+  /// follow is confirmed at creation — `User.emailVerified` already verified the
+  /// address, and re-verifying it is friction with no security content.
+  confirmedAt DateTime? @map("confirmed_at")
+
+  confirmTokenHash      String?   @map("confirm_token_hash")
+  confirmTokenExpiresAt DateTime? @map("confirm_token_expires_at")
+  unsubscribeTokenHash  String    @map("unsubscribe_token_hash")
+
+  /// The digest window's lower bound, per follower — so a follower who joins
+  /// mid-week gets the next full week rather than a backfill, and a failed send
+  /// does not silently skip a window.
+  lastDigestAt DateTime? @map("last_digest_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One follow per (project, account) and one per (project, address) — the
+  // server-enforced follow-once rule, per tier. Postgres treats NULLs as
+  // distinct in a unique index, so neither constrains the other tier's rows.
+  @@unique([projectId, userId])
+  @@unique([projectId, email])
+  // The digest job's per-project sweep: "who on this project opted in?".
+  @@index([projectId, digestOptIn])
+  @@index([workspaceId])
+  @@map("public_follow")
 }
 
 /// Many-to-many issue-to-issue relationships (Subtask 1.4.3). Models the four

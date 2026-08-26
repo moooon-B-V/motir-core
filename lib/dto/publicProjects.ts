@@ -252,6 +252,72 @@ export interface PublicRoadmapColumnPageDto {
   nextCursor: string | null;
 }
 
+// --- Public CHANGELOG + FOLLOW (Story 8.9) ---------------------------------
+
+/**
+ * One entry of the public CHANGELOG (Story 8.9 · Subtask 8.9.3 ·
+ * `docs/decisions/public-follow-and-changelog.md` §3) — a work item that
+ * entered a `done`-category status, dated by that transition.
+ *
+ * The field set is the same stripped public projection a list card carries,
+ * plus the derived `shippedAt` and the ancestor-epic chip. No assignee, no
+ * estimate, no story points, no reporter, no sprint — and no `type`, which is
+ * an internal planning vocabulary (`work-item-type-taxonomy.md`) rather than
+ * something a public reader needs.
+ */
+export interface PublicChangelogEntryDto {
+  /** The project key form (e.g. "PROD-42") — also the entry's link target. */
+  identifier: string;
+  key: number;
+  title: string;
+  kind: string;
+  status: string;
+  priority: string;
+  /**
+   * ISO 8601. The item's MOST RECENT transition into a `done`-category status —
+   * see the repository read for why "most recent" rather than "first".
+   */
+  shippedAt: string;
+  /** The ancestor epic's chip, or null when the entry has no epic ancestor. */
+  epic: { identifier: string; title: string } | null;
+}
+
+/**
+ * One page of the changelog. Cursor-paged on `(shippedAt, key)` — `changedAt`
+ * alone is not a total order, so a page boundary landing on a millisecond tie
+ * would skip or repeat an entry.
+ */
+export interface PublicChangelogPageDto {
+  entries: PublicChangelogEntryDto[];
+  /** Opaque cursor for the next page, or null at the end. */
+  nextCursor: string | null;
+}
+
+/**
+ * What the public chrome needs to render the Follow control (Story 8.9 ·
+ * Subtask 8.9.5 consumes it).
+ *
+ * `following` is about the ACCOUNT tier only, and is always `false` for a
+ * signed-out viewer — the anonymous tier has no row, so there is nothing to
+ * report, and the email-only tier is deliberately not reflected here: telling a
+ * visitor whether an address follows a project would make this an enumeration
+ * oracle (ADR §7).
+ */
+export interface PublicFollowStateDto {
+  following: boolean;
+  /** Whether THIS follow has opted into the digest; false when not following. */
+  digestOptIn: boolean;
+  /** Total followers, both stored tiers — the count beside the button. */
+  followerCount: number;
+  /**
+   * Whether the email digest can be offered at all in THIS deployment. False
+   * where no transactional-email backend is configured (the self-host path):
+   * the opt-in is then ABSENT rather than present and broken. RSS and the
+   * changelog page never depend on it.
+   */
+  digestAvailable: boolean;
+}
+
 /** The at-a-glance stat strip on the Overview hero + sidebar. */
 export interface PublicProjectStatsDto {
   /** Public requests submitted into triage (likely 0 until 6.12.5 ships). */
