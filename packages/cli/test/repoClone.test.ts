@@ -209,7 +209,24 @@ describe('planRepoClones — the override map', () => {
   });
 });
 
+describe('planDetail', () => {
+  it('names the destination of a planned clone', () => {
+    const [entry] = planRepoClones(ROOT, LINK, [repo()], { exists: none });
+
+    // The one arm the report prints BEFORE anything runs — `motir link` uses it
+    // for the "Cloning N…" preview and the dispatch path for its plan line.
+    expect(planDetail(entry as RepoClonePlanEntry)).toBe('clone → /home/yue/work/motir-core');
+  });
+});
+
 describe('runRepoClones', () => {
+  it('uses the real runner by default — and a plan with nothing to do runs none', () => {
+    // The `opts.run ?? execCommand` arm, exercised without letting a real git
+    // process anywhere near a test: an EMPTY plan cannot invoke the runner it
+    // just defaulted to.
+    expect(runRepoClones(ROOT, [])).toEqual([]);
+  });
+
   it('issues a FULL clone — no depth, no filter, no single-branch', () => {
     const { run, calls } = recorder();
     const plan = planRepoClones(ROOT, LINK, [repo()], { exists: none });
@@ -321,6 +338,31 @@ describe('runRepoClones', () => {
     // reader to a settings page that has nothing wrong with it.
     expect(outcome?.detail).not.toContain('collaborator invitation');
     expect(outcome?.gitMessage).toContain('Could not resolve host');
+  });
+
+  it('falls back to git’s STDOUT when it wrote nothing to stderr', () => {
+    const { run } = recorder(() => ({
+      exitCode: 1,
+      stdout: 'fatal: destination path already exists',
+      stderr: '',
+    }));
+    const plan = planRepoClones(ROOT, LINK, [repo()], { exists: none });
+
+    const [outcome] = runRepoClones(ROOT, plan, { run });
+
+    expect(outcome?.gitMessage).toBe('fatal: destination path already exists');
+  });
+
+  it('names the EXIT CODE when git said nothing at all', () => {
+    const { run } = recorder(() => ({ exitCode: 127, stdout: '', stderr: '' }));
+    const plan = planRepoClones(ROOT, LINK, [repo()], { exists: none });
+
+    const [outcome] = runRepoClones(ROOT, plan, { run });
+
+    // A silent failure still has to say something a reader can act on — an
+    // outcome with an empty message is indistinguishable from a success.
+    expect(outcome?.status).toBe('failed');
+    expect(outcome?.gitMessage).toBe('git exited 127');
   });
 
   it('says an archived repository was cloned AND that it is archived', () => {

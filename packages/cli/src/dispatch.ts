@@ -225,8 +225,18 @@ export function materializeDispatchCheckouts(
   opts: { run?: CommandRunner } = {},
 ): DispatchMaterialization {
   const clonable = targets.filter(
-    (t): t is DispatchTarget & { repoPath: string; cloneUrl: string; targetRepo: string } =>
-      t.reason === 'clonable_checkout' && t.repoPath !== null && t.cloneUrl !== null,
+    (
+      t,
+    ): t is DispatchTarget & {
+      repoPath: string;
+      repoSource: RepoResolutionSource;
+      cloneUrl: string;
+      targetRepo: string;
+    } =>
+      t.reason === 'clonable_checkout' &&
+      t.repoPath !== null &&
+      t.repoSource !== null &&
+      t.cloneUrl !== null,
   );
   if (clonable.length === 0) return { cloned: [], failures: [] };
 
@@ -236,13 +246,11 @@ export function materializeDispatchCheckouts(
     // it only ever names repositories a card actually ships in, which the server
     // resolved from ESTABLISHED rows already.
     state: 'connected',
-    kind: 'clone',
+    kind: 'clone' as const,
     path: target.repoPath,
     source: target.repoSource,
     cloneUrl: target.cloneUrl,
     archived: false,
-    skipReason: null,
-    presentIsRepository: null,
   }));
 
   const outcomes = runRepoClones(rootDir, plan, opts.run ? { run: opts.run } : {});

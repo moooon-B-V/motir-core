@@ -47,9 +47,9 @@ export type RepoCloneSkipReason =
    *  hand git a URL that fails. */
   | 'no_clone_url';
 
-/** One planned outcome. Every kind carries the same identity fields, so the
+/** What every planned outcome carries, whatever was decided for it — so the
  *  report is one shape however a row was disposed of. */
-export interface RepoClonePlanEntry {
+interface RepoClonePlanCommon {
   /** How the report NAMES this row. The checkout name when the row has one; the
    *  role (plus its label) when it does not, because an unestablished row has no
    *  checkout name and must still be legible. */
@@ -57,24 +57,52 @@ export interface RepoClonePlanEntry {
   /** The row's establish state, printed beside a skip so `proposed` reads as
    *  "not created yet" rather than as a failure. */
   state: string;
-  kind: RepoClonePlanKind;
-  /** Where the checkout resolves — null only when the row has no checkout name
-   *  to resolve, which is exactly the `not_established` case. */
-  path: string | null;
-  /** How `path` was resolved (§6), or null when there is none. */
-  source: RepoResolutionSource | null;
-  /** The URL a `clone` will use. Null on every other kind. */
-  cloneUrl: string | null;
   /** Whether the repository is archived on the host — cloned anyway, and said
    *  (§2); refusing to BRANCH on one belongs to dispatch. */
   archived: boolean;
-  /** Set on `skip` only. */
-  skipReason: RepoCloneSkipReason | null;
-  /** Set on `present` only: whether the existing path is a git repository at
-   *  all. Answered from the FILESYSTEM (`<path>/.git`), never by running git —
-   *  see §5's note on why the invariant is worth more than the refinement. */
-  presentIsRepository: boolean | null;
 }
+
+/**
+ * One planned outcome — a DISCRIMINATED UNION, so the fields that exist only on
+ * one kind are typed onto that kind.
+ *
+ * ⚠️ The alternative — one flat shape with `path: string | null` — makes every
+ * reader write `entry.path ?? ''` for a case that cannot occur, and an
+ * unreachable fallback is a branch no test can cover and no reader can classify.
+ * A `clone` and a `present` entry ALWAYS have a resolved path; only a row with
+ * no checkout NAME to resolve lacks one, and that row is a `skip` by
+ * construction.
+ */
+export type RepoClonePlanEntry =
+  /** Missing, materializable — the one kind the runner acts on. */
+  | (RepoClonePlanCommon & {
+      kind: 'clone';
+      path: string;
+      source: RepoResolutionSource;
+      cloneUrl: string;
+    })
+  /** The resolved path already exists. Untouched, whatever is in it (§5). */
+  | (RepoClonePlanCommon & {
+      kind: 'present';
+      path: string;
+      source: RepoResolutionSource;
+      cloneUrl: string | null;
+      /** Whether the existing path is a git repository at all. Answered from the
+       *  FILESYSTEM (`<path>/.git`), never by running git — see §5's note on why
+       *  the invariant is worth more than the refinement. */
+      presentIsRepository: boolean;
+    })
+  /** Not materializable, and nothing is wrong: the row names no repository yet,
+   *  or names one whose provider this build cannot address (§2). */
+  | (RepoClonePlanCommon & {
+      kind: 'skip';
+      /** Null only when the row had no checkout name to resolve — which is
+       *  exactly the `not_established` case. */
+      path: string | null;
+      source: RepoResolutionSource | null;
+      cloneUrl: null;
+      skipReason: RepoCloneSkipReason;
+    });
 
 export interface PlanRepoClonesOptions {
   /** Injectable path-existence predicate (the tests' seam), as `dispatch.ts`. */
@@ -105,12 +133,7 @@ export function planRepoClones(
   const exists = opts.exists ?? existsSync;
 
   return repos.map((repo): RepoClonePlanEntry => {
-    const base = {
-      state: repo.state,
-      archived: repo.archived,
-      skipReason: null,
-      presentIsRepository: null,
-    };
+    const base = { state: repo.state, archived: repo.archived };
 
     // ⚠️ `established`, not `realizedRepo !== null` — the server publishes the
     // two-part discriminator precisely so no client re-derives it (§2).
@@ -222,15 +245,15 @@ export function cloneRefusalDetail(cloneUrl: string): string {
 export function planDetail(entry: RepoClonePlanEntry): string {
   switch (entry.kind) {
     case 'present':
-      return entry.presentIsRepository === false
-        ? `already present (not a git repository) — ${entry.path ?? ''}`
-        : `already present — ${entry.path ?? ''}`;
+      return entry.presentIsRepository
+        ? `already present — ${entry.path}`
+        : `already present (not a git repository) — ${entry.path}`;
     case 'skip':
       return entry.skipReason === 'no_clone_url'
         ? `skipped (${entry.state}) — Motir cannot derive a clone URL for this provider`
         : `skipped (${entry.state}) — no repository behind this row yet`;
     case 'clone':
-      return `clone → ${entry.path ?? ''}`;
+      return `clone → ${entry.path}`;
   }
 }
 
@@ -265,7 +288,7 @@ export function runRepoClones(
   const run = opts.run ?? execCommand;
 
   return plan.map((entry): RepoCloneOutcome => {
-    if (entry.kind !== 'clone' || entry.cloneUrl === null || entry.path === null) {
+    if (entry.kind !== 'clone') {
       return {
         label: entry.label,
         status: entry.kind === 'present' ? 'present' : 'skipped',

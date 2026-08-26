@@ -221,6 +221,33 @@ describe('GET /api/v1/projects/{projectKey}/repositories', () => {
     expect(page.items[0]?.id).toBe(row.id);
   });
 
+  it('breaks a POSITION TIE with the row id, so a cursor can page it soundly', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    await establishRepo(caller.fixture, 'acme-web', { role: 'web' });
+    await establishRepo(caller.fixture, 'acme-api', { role: 'api' });
+
+    // ⚠️ `position` is a FRACTIONAL INDEX with NO unique constraint, and `moveRow`
+    // computes it from a read that guards a write — so two concurrent moves on
+    // one project can legitimately land the same key. Ties under a bare
+    // `ORDER BY position` come back in an order Postgres does not promise to
+    // repeat, and a cursor cannot page soundly over an order that can shuffle.
+    // Forced here through the admin client because no service API can produce it
+    // on demand, which is exactly why the arm is otherwise unexercised.
+    await adminDb.projectRepo.updateMany({
+      where: { projectId: caller.fixture.projectId },
+      data: { position: 'a0' },
+    });
+
+    const page = await fetchPage(caller.headers, caller.projectKey);
+    const ids = page.items.map((r) => r.id);
+
+    expect(ids).toHaveLength(2);
+    // The tie-break is the row id, ascending — a TOTAL order, so the same two
+    // rows come back in the same order on every request.
+    expect([...ids].sort()).toEqual(ids);
+    expect(await fetchPage(caller.headers, caller.projectKey)).toEqual(page);
+  });
+
   it('pages with a cursor the server issued, over the set’s own order', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
     await establishRepo(caller.fixture, 'acme-web', { role: 'web' });
