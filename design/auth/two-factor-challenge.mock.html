@@ -1,0 +1,2433 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Motir sign-in — the two-factor challenge (Story 8.11 · MOTIR-1216) — code entry
+      · fallbacks · remember this device
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the LOGIN 2FA CHALLENGE — Story 8.11
+      (MOTIR-1213), subtask MOTIR-1216. The account-settings half of the same
+      subtask is a separate asset, `../settings/two-factor.mock.html`; the tree
+      is organised by AREA, and this screen lives in the signed-out `(auth)`
+      frame while that one lives in the account-settings area.
+
+      ⚠️ THIS IS THE FIRST HTML MOCK IN `design/auth/`. The area's only existing
+      asset is `auth-screens.pen`, a legacy Pencil source drawn on 2026-05-24 and
+      explicitly preserved as A RECORD OF THAT MOMENT rather than a spec of today
+      (design-notes.md's divergence ledger). So this asset is built from the
+      SHIPPED code, not from those artboards, and it agrees with the ledger:
+
+        • The FRAME is `app/(auth)/layout.tsx` — a max-w-[28rem] card painted
+          --el-page-bg at --radius-card with --shadow-elevated, centred on an
+          --el-auth-wash page, with the BrandMark lockup top-left INSIDE the
+          card (ledger rows 2 + 3). Not the artboards' bare 500px column.
+        • The HEADLINE + subhead rhythm is `AuthShell` (serif, gap-8 / gap-3).
+        • The step it follows is `SignInCard`'s `step === 'password'` — a
+          read-only email row, a password field, Continue. This screen is the
+          THIRD step of that same card, reached when `signIn.email` answers
+          `{ twoFactorRedirect: true }` rather than a session.
+        • The METHODS come from `authClient.twoFactor.*` (MOTIR-1217): verifyTotp,
+          sendOtp/verifyOtp, verifyBackupCode. `trustDevice` is a flag on the
+          verify call — which is why the checkbox sits ON this screen and not in
+          settings.
+
+      Colour via --el-* only (never Tier-0 --color-*); shape via element-semantic
+      tokens. Token block copied 1:1 from ../settings/profile.mock.html plus the
+      six from packages/design-system/theme.css that block does not carry, and
+      re-emitted under [data-theme] so the nested dark panel actually flips.
+
+      Panels:
+        1 The ACCESS PATH — where this screen sits in the sign-in flow
+        2 The challenge at rest (authenticator) + remember this device
+        3 The fallbacks — the "try another way" list, and the emailed-code state
+        4 A recovery code, and the last-code warning
+        5 The failures — wrong code, expired code, attempts spent, no methods
+        6 Dark parity
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ════════════════════════════════════════════════════════════════════
+         Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from
+         account-settings.mock.html (app/globals.css, light).
+         ════════════════════════════════════════════════════════════════════ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans-source: 'Inter';
+        --font-serif-source: 'Source Serif 4';
+        --font-mono-source: 'JetBrains Mono';
+        --font-sans:
+          var(--font-sans-source), ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, sans-serif;
+        --font-serif: var(--font-serif-source), Georgia, serif;
+        --font-mono: var(--font-mono-source), ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+
+        --spacing-sm: 8px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        /* Tier 3 — element tokens (components consume ONLY these) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — the review page only) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 92ch;
+        line-height: 1.5;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        max-width: 1080px;
+        line-height: 1.5;
+      }
+      .panel-label b {
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ── account-settings AREA shell (copied from account-settings.mock.html) ── */
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .shell {
+        display: flex;
+        min-height: 640px;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .me .av {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .me .meta {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .me .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .me .em {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .nav-row.soon {
+        cursor: default;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon:hover {
+        background: transparent;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon .ni {
+        color: var(--el-text-faint);
+      }
+      .soon-chip {
+        margin-left: auto;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+      }
+
+      /* content + cards */
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        margin-bottom: 20px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+        max-width: 82ch;
+        line-height: 1.55;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: 680px;
+      }
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        max-width: 54ch;
+        line-height: 1.5;
+      }
+      .card-body {
+        padding: 4px var(--spacing-card-padding) 8px;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic-sm {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── Settings row grammar (label/desc left, control right) ───────────── */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow.tall {
+        align-items: center;
+      }
+      .srow .sl {
+        min-width: 0;
+      }
+      .srow .sl .name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .sl .desc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+        line-height: 1.45;
+        max-width: 46ch;
+      }
+      .srow .sc {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .srow .sc .val {
+        font-size: 14px;
+        color: var(--el-text);
+      }
+
+      /* value + inline edit field */
+      .editfield {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        min-width: 240px;
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .input.focused {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .input.err {
+        border-color: var(--el-danger);
+      }
+      .input input,
+      .input .ival {
+        flex: 1;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .input .eye {
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .input .eye svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+
+      /* avatar block (Avatar.tsx — circular; image OR initials) */
+      .avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text-inverted);
+        background: var(--el-text);
+        overflow: hidden;
+      }
+      .avatar.photo {
+        background: radial-gradient(120% 120% at 30% 25%, #ffd9a8 0%, #f48fb1 42%, #7b6ce5 100%);
+      }
+      .avatar.lg {
+        width: 64px;
+        height: 64px;
+      }
+
+      /* ── Buttons (Button.tsx) ────────────────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        font-size: 12.5px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .btn-danger-ghost {
+        background: transparent;
+        color: var(--el-danger);
+      }
+      .btn-danger-ghost:hover {
+        background: var(--el-tint-rose);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      .btn .spin {
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        border: 2px solid color-mix(in srgb, var(--el-accent-text) 45%, transparent);
+        border-top-color: var(--el-accent-text);
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Pill (Pill.tsx) — tinted bg + AA --el-text-strong (finding #35) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-warn {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-warn svg {
+        color: var(--el-warning);
+      }
+      .pill-mint {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-mint svg {
+        color: var(--el-success);
+      }
+
+      /* callout (inline notice — same as account-settings.mock.html) */
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .callout .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-info);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .callout.warn {
+        background: var(--el-tint-peach);
+      }
+      .callout.warn .ic {
+        color: var(--el-warning);
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+      }
+      .callout.danger .ic {
+        color: var(--el-danger);
+      }
+
+      /* field-level error text + box (FormField error variants) */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .field .helper {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .field .err-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--el-danger);
+      }
+      .field .err-text svg {
+        width: 13px;
+        height: 13px;
+      }
+      .err-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: var(--el-tint-rose);
+        border-radius: var(--radius-input);
+        padding: 9px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        line-height: 1.45;
+      }
+      .err-box svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+
+      /* ── Modal (Modal.tsx — Radix Dialog panel + overlay) ────────────────── */
+      .mstage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 40px 16px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .overlay-tint {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: var(--radius-card);
+      }
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal-desc {
+        margin: 4px 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .modal-head {
+        margin-bottom: var(--spacing-md);
+        padding-right: 28px;
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+      }
+      .modal-close svg {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .modal-foot {
+        margin-top: 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .modal .input {
+        min-width: 0;
+        width: 100%;
+      }
+
+      /* ── Toast (Toast.tsx — success variant) ─────────────────────────────── */
+      .toast {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 340px;
+        max-width: calc(100% - 32px);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .toast.info {
+        border-color: var(--el-info);
+      }
+      .toast .t-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast.info .t-ic {
+        color: var(--el-info);
+      }
+      .toast .t-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast .t-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .toast .t-desc {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.4;
+      }
+      .toast .t-close {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .toast .t-close svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── Skeleton (loading) ──────────────────────────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-badge);
+        height: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .sk.av {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+      }
+      .sk::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          color-mix(in srgb, var(--el-page-bg) 60%, transparent),
+          transparent
+        );
+        animation: shimmer 1.3s infinite;
+      }
+      @keyframes shimmer {
+        to {
+          transform: translateX(100%);
+        }
+      }
+
+      /* Five tokens the profile mock's block does not carry, copied 1:1 from
+         packages/design-system/theme.css (lines 231-233, 2835, 2842-2843) —
+         needed because this asset also draws the `(auth)` frame and a focus
+         ring. Same values, same Tier-0 sources; nothing invented. */
+      :root {
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         2FA-specific vocabulary (Story 8.11 · MOTIR-1216). Everything above is
+         copied 1:1 from profile.mock.html / account-settings.mock.html; only
+         the blocks below are new, and each names the shipped primitive it is a
+         mock of.
+         ════════════════════════════════════════════════════════════════════ */
+
+      /* Switch (components/ui/Switch.tsx) — copied from account-settings.mock.html */
+      .sw {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        cursor: pointer;
+      }
+      .sw .kn {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+      }
+      .sw.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .sw.on .kn {
+        transform: translateX(16px);
+        background: var(--el-accent-text);
+      }
+      .sw.dis {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      /* A METHOD row — a `.srow` carrying a leading status glyph. The glyph is
+         the row's state at a glance; the Pill beside the name carries it in
+         words, because a colour is not a label. */
+      .mrow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .mrow:last-child {
+        border-bottom: 0;
+      }
+      .mrow .mi {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .mrow .mi svg {
+        width: 18px;
+        height: 18px;
+      }
+      .mrow.is-on .mi {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .mrow .ml {
+        flex: 1;
+        min-width: 0;
+      }
+      .mrow .ml .name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .mrow .ml .desc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        line-height: 1.45;
+        max-width: 52ch;
+      }
+      .mrow .mc {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* The recovery-code counter — a big number the reader can read from the
+         other side of the room, because "2 of 10 left" is the sentence this
+         card exists to say. */
+      .counter {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+      }
+      .counter .n {
+        font-family: var(--font-mono);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .counter .of {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .counter.low .n {
+        color: var(--el-warning);
+      }
+      .counter.none .n {
+        color: var(--el-danger);
+      }
+
+      /* The shown-once code grid (RecoveryCodes) — mono, two columns, tabular. */
+      .codes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 16px 18px;
+      }
+      .codes code {
+        font-family: var(--font-mono);
+        font-size: 13.5px;
+        letter-spacing: 0.02em;
+        color: var(--el-text);
+      }
+      .codes code.used {
+        color: var(--el-text-faint);
+        text-decoration: line-through;
+      }
+
+      /* The TOTP enrol pairing block — QR beside the manual key, because a
+         desktop authenticator cannot scan a screen it is running on. */
+      .pair {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .qr {
+        flex: none;
+        width: 148px;
+        height: 148px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        padding: 10px;
+      }
+      .qr svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        shape-rendering: crispEdges;
+      }
+      .pair .pside {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .keyrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 9px 10px 9px 12px;
+      }
+      .keyrow code {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .icon-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* The 6-digit code field — one box per digit is the mirror-product shape
+         (GitHub / Google / Atlassian all use it) and it is what makes a paste of
+         "314159" land one character per box. */
+      .otp {
+        display: flex;
+        gap: 8px;
+      }
+      .otp .d {
+        width: 46px;
+        height: 54px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .otp .d.empty {
+        color: var(--el-text-faint);
+      }
+      .otp .d.caret {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .otp.err .d {
+        border-color: var(--el-danger);
+      }
+
+      /* A trusted-device row (the "don't ask again" grants, revocable). */
+      .drow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .drow:last-child {
+        border-bottom: 0;
+      }
+      .drow .di {
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .drow .di svg {
+        width: 17px;
+        height: 17px;
+      }
+      .drow .dl {
+        flex: 1;
+        min-width: 0;
+      }
+      .drow .dn {
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .drow .dm {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+
+      /* An empty-state block — the pane before anything is enrolled. */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+        padding: 26px 24px 30px;
+      }
+      .empty .eic {
+        width: 44px;
+        height: 44px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .empty .eic svg {
+        width: 21px;
+        height: 21px;
+      }
+      .empty h4 {
+        margin: 2px 0 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+      }
+
+      /* The step rail inside the enrol modal (1 → 2), so the reader knows how
+         much is left before they commit to scanning anything. */
+      .steps {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .steps .s {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .steps .s .num {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .steps .s.now .num {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .steps .s.now {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .steps .bar {
+        flex: 1;
+        height: 1px;
+        background: var(--el-border);
+      }
+
+      /* A checkbox row (components/ui/Checkbox.tsx) — the trust-this-device
+         opt-in. */
+      .cbrow {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .cbrow .cb {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+      }
+      .cbrow .cb svg {
+        width: 12px;
+        height: 12px;
+      }
+      .cbrow .cb.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbrow .cbl {
+        font-size: 13.5px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .cbrow .cbh {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── The (auth) route-group frame, for the challenge panels ──────────── */
+      .authwash {
+        background: var(--el-auth-wash);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 36px 24px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        position: relative;
+      }
+      .authcard {
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 36px 40px;
+      }
+      .ac-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 26px;
+        color: var(--el-text);
+      }
+      .ac-brand .wm {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .ac-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+      .ac-head h1 {
+        font-family: var(--font-serif);
+        font-size: 32px;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .ac-head p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .ac-body {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .ac-foot {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .altbtn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 11px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        background: transparent;
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .altbtn:hover {
+        background: var(--el-surface);
+      }
+      .altbtn svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .altbtn .sub {
+        display: block;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+      .as-user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        padding: 0 var(--spacing-input-x);
+      }
+      .as-user svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .as-user span {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Pill, lavender tone — the PRIMARY-method marker. A different tint slot
+         from the mint "On" and the peach "Lower security" so the three chips on
+         one card are distinguishable without reading them (CLAUDE.md: reach for
+         a different --el-tint-*, never a new hue). */
+      .pill-lav {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-sky {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill-danger svg {
+        color: var(--el-danger);
+      }
+
+      /* ── Flow strip (the ACCESS PATH panel) ──────────────────────────────── */
+      .flow {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .flow .fstep {
+        flex: 1;
+        min-width: 0;
+        padding: 16px 18px;
+        border-right: 1px solid var(--el-border-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .flow .fstep:last-child {
+        border-right: 0;
+      }
+      .flow .fstep.here {
+        background: var(--el-tint-lavender);
+      }
+      .flow .fnum {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .flow .fstep.here .fnum {
+        color: var(--el-text-strong);
+      }
+      .flow .ft {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .flow .fstep.here .ft {
+        color: var(--el-text-strong);
+      }
+      .flow .fd {
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .flow .fstep.here .fd {
+        color: var(--el-text-strong);
+      }
+      .flow .fr {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .flow .fstep.here .fr {
+        color: var(--el-text-strong);
+      }
+
+      /* ── Mock-only nested-theme re-emit ───────────────────────────────────
+         The Tier-3 --el-* tokens are declared on :root as var(--color-*), and a
+         custom property's var() is substituted where it is DECLARED — so a
+         nested [data-theme='dark'] flips the Tier-0 --color-* under it while
+         every --el-* keeps the light value it computed at :root. This board puts
+         data-theme on a nested .panel so one page can show both themes, so it
+         re-emits the Tier-3 block scoped to the attribute. Same right-hand
+         sides, no new token. In the real app data-theme sits on <html>, so none
+         of this is needed there. (Measured: profile.mock.html's "Dark parity"
+         panel does NOT render dark for exactly this reason.) ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>Sign-in — the two-factor challenge</h1>
+      <p>
+        Story 8.11 (MOTIR-1213) · MOTIR-1216. The step between the password and the session: a
+        six-digit code, two fallbacks, and the opt-in that stops Motir asking on this browser for 30
+        days. It is the THIRD step of the shipped <b>SignInCard</b>, in the shipped
+        <b>app/(auth)/layout.tsx</b> frame — not a new page and not a new route. Six panels: where
+        it sits · at rest · fallbacks · a recovery code · failures · dark parity. The account pane
+        that sets all this up is <b>design/settings/two-factor.mock.html</b>.
+      </p>
+    </div>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
+          />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-camera"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
+          />
+          <circle cx="12" cy="13" r="3" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-alert-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+        <g
+          id="i-google"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v8" />
+          <path d="M8 12h8" />
+        </g>
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <g
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-smartphone"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+          <path d="M12 18h.01" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-download"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M12 15V3" />
+        </g>
+        <g
+          id="i-refresh"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-alert-triangle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-monitor"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="3" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-wave"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 12c2.5-6 5-6 7.5 0s5 6 7.5 0" />
+          <path d="M2 17c2.5-6 5-6 7.5 0s5 6 7.5 0" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ═══ PANEL 1 — the access path ═══════════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 1 · <b>Where this screen comes from.</b> The access-path gate asks the design to draw
+      the door, and this screen's door is not a nav item — it is a RESPONSE. `signIn.email` either
+      returns a session (steps 1→2→4, exactly what ships today) or answers
+      <code>{ twoFactorRedirect: true }</code>, and step 3 appears in the same card. Two
+      consequences the build should not have to infer: there is no route to link to and no way to
+      reach this screen deliberately, and a reader with a trusted device SKIPS it — the flow is
+      1→2→4 again, which is the whole point of the checkbox on step 3.
+    </div>
+    <div class="panel">
+      <div class="flow">
+        <div class="fstep">
+          <span class="fnum">Step 1</span>
+          <span class="ft">Email</span>
+          <span class="fd">Google button, email field, Continue.</span>
+          <span class="fr">SignInCard · step 'email'</span>
+        </div>
+        <div class="fstep">
+          <span class="fnum">Step 2</span>
+          <span class="ft">Password</span>
+          <span class="fd">Email read-only, password, Continue.</span>
+          <span class="fr">SignInCard · step 'password'</span>
+        </div>
+        <div class="fstep here">
+          <span class="fnum">Step 3 · new</span>
+          <span class="ft">Second factor</span>
+          <span class="fd">
+            Only when the sign-in answers <code>twoFactorRedirect</code>. Skipped entirely on a
+            trusted device.
+          </span>
+          <span class="fr">SignInCard · step 'twoFactor'</span>
+        </div>
+        <div class="fstep">
+          <span class="fnum">Step 4</span>
+          <span class="ft">Landed</span>
+          <span class="fd">The post-auth destination — <code>?next=</code>, else /home.</span>
+          <span class="fr">resolvePostAuthDestination</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 2 — the challenge at rest ═════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 2 · <b>The authenticator challenge.</b> The primary method, asked for first, in the
+      shipped <code>(auth)</code> card. Three things are decided here. The headline names the
+      ACCOUNT, not the mechanism — a reader who has just typed a password wants to know they are
+      still signing in as themselves. The trust checkbox is UNCHECKED by default and states the
+      thirty days rather than implying them, because it is a security decision the reader is making
+      on their own behalf. And "Try another way" is a link at the foot, not three buttons in the
+      body: the fallbacks are the exception, and drawing all three up front makes the strongest
+      method look like one option among equals.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Two-step verification</h1>
+            <p>Enter the six-digit code from your authenticator app.</p>
+          </div>
+          <div class="ac-body">
+            <div class="as-user" aria-label="Signing in as zhuyue@motir.co">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mail" /></svg>
+              <span>zhuyue@motir.co</span>
+            </div>
+            <div class="otp" role="group" aria-label="Six-digit code">
+              <span class="d">4</span><span class="d">8</span><span class="d">2</span
+              ><span class="d caret">9</span><span class="d empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span>
+            </div>
+            <div class="cbrow">
+              <span class="cb" role="checkbox" aria-checked="false"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+              ></span>
+              <span class="cbl"
+                >Don’t ask again on this device
+                <span class="cbh">For 30 days. You can revoke it in account settings.</span></span
+              >
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">Verify</button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Try another way</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 3 — the fallbacks ═════════════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 3 · <b>Try another way, and the emailed code.</b> The list is ORDERED by strength and
+      each row says what it costs, so a reader choosing under pressure is not choosing blind. Email
+      keeps the same "lower security" language the settings pane uses — one caveat, worded once,
+      wherever the method appears. The sent state is the one that has to be honest: it names the
+      address, states the three-minute life, and offers a resend that is disabled until a countdown
+      elapses, because a resend button that always works is a resend button people press four times.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Try another way</h1>
+            <p>Pick how you’d rather confirm it’s you.</p>
+          </div>
+          <div class="ac-body">
+            <button class="altbtn">
+              <svg viewBox="0 0 24 24"><use href="#i-smartphone" /></svg>
+              <span
+                >Use your authenticator app<span class="sub"
+                  >Works offline. The strongest option.</span
+                ></span
+              >
+            </button>
+            <button class="altbtn">
+              <svg viewBox="0 0 24 24"><use href="#i-mail" /></svg>
+              <span
+                >Email a code to zhu•••@motir.co<span class="sub"
+                  >Lower security — an inbox is not a device.</span
+                ></span
+              >
+            </button>
+            <button class="altbtn">
+              <svg viewBox="0 0 24 24"><use href="#i-key" /></svg>
+              <span
+                >Use a recovery code<span class="sub"
+                  >One of the ten you saved. Each works once.</span
+                ></span
+              >
+            </button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Back to the code</span>
+          </div>
+        </div>
+
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Check your email</h1>
+            <p>We sent a six-digit code to zhu•••@motir.co.</p>
+          </div>
+          <div class="ac-body">
+            <div class="otp" role="group" aria-label="Six-digit code">
+              <span class="d caret empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span>
+            </div>
+            <div class="callout">
+              <span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+              ></span>
+              <p>The code expires in 3 minutes. Asking for a new one replaces it.</p>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">Verify</button>
+            <button class="btn btn-ghost is-disabled" disabled style="width: 100%">
+              Resend in 0:42
+            </button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Try another way</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 4 — a recovery code ═══════════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 4 · <b>A recovery code, and the last one.</b> A different field from the six-digit boxes
+      — a recovery code is <code>xxxxx-xxxxx</code>, so it gets one mono input, not six cells that
+      would refuse the hyphen. The second card is the state worth designing rather than discovering:
+      spending the LAST code leaves an account with 2FA on and no way back in if the authenticator
+      is also gone. Motir says so BEFORE the reader spends it, and lands them on the settings pane
+      afterwards rather than dropping them at /home with the problem still true.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Use a recovery code</h1>
+            <p>One of the ten you saved when you turned on two-step verification.</p>
+          </div>
+          <div class="ac-body">
+            <div class="field">
+              <label for="rc1">Recovery code</label>
+              <div class="input focused">
+                <input
+                  id="rc1"
+                  type="text"
+                  value="a4f2k-9xq1m"
+                  style="font-family: var(--font-mono); letter-spacing: 0.04em"
+                  aria-label="Recovery code"
+                />
+              </div>
+              <span class="helper">Each code works once, then it’s gone.</span>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">Verify</button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Try another way</span>
+          </div>
+        </div>
+
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Use a recovery code</h1>
+            <p>This is your last one.</p>
+          </div>
+          <div class="ac-body">
+            <div class="callout warn">
+              <span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert-triangle" /></svg
+              ></span>
+              <p>
+                You have <b>1</b> recovery code left. Once you use it, an emailed code is the only
+                way back in without your authenticator. We’ll take you to your security settings to
+                generate a new set.
+              </p>
+            </div>
+            <div class="field">
+              <label for="rc2">Recovery code</label>
+              <div class="input focused">
+                <input
+                  id="rc2"
+                  type="text"
+                  value="w2ba7-fk09n"
+                  style="font-family: var(--font-mono); letter-spacing: 0.04em"
+                  aria-label="Recovery code"
+                />
+              </div>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">
+              Use it and continue
+            </button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Try another way</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 5 — the failures ══════════════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 5 · <b>Wrong, expired, and spent.</b> Three refusals with three different remedies, so
+      three different messages — a single "that didn't work" would leave a reader with a
+      correctly-typed code and a phone whose clock has drifted with nothing to try. The attempts
+      message is the one that must not lie by omission: the plugin allows five, and the screen
+      counts down out loud rather than failing silently on the sixth. All three keep the reader on
+      the step they are on; none bounces back to the password.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Two-step verification</h1>
+            <p>Enter the six-digit code from your authenticator app.</p>
+          </div>
+          <div class="ac-body">
+            <div class="otp err" role="group" aria-label="Six-digit code">
+              <span class="d">1</span><span class="d">1</span><span class="d">2</span
+              ><span class="d">4</span><span class="d">8</span><span class="d caret">3</span>
+            </div>
+            <div class="err-box" role="alert">
+              <svg viewBox="0 0 24 24"><use href="#i-alert-circle" /></svg>
+              <span
+                >That code didn’t match. If it keeps failing, check your phone’s clock is set
+                automatically — a drifted clock generates codes Motir can’t accept.</span
+              >
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">Verify</button>
+          </div>
+          <div class="ac-foot"><span class="link">Try another way</span></div>
+        </div>
+
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Check your email</h1>
+            <p>We sent a six-digit code to zhu•••@motir.co.</p>
+          </div>
+          <div class="ac-body">
+            <div class="otp err" role="group" aria-label="Six-digit code">
+              <span class="d">7</span><span class="d">0</span><span class="d">3</span
+              ><span class="d">3</span><span class="d">1</span><span class="d caret">2</span>
+            </div>
+            <div class="err-box" role="alert">
+              <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+              <span>That code has expired. Send a new one — it’s good for 3 minutes.</span>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">
+              Send a new code
+            </button>
+          </div>
+          <div class="ac-foot"><span class="link">Try another way</span></div>
+        </div>
+
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Too many attempts</h1>
+            <p>We’ve stopped accepting codes for this sign-in.</p>
+          </div>
+          <div class="ac-body">
+            <div class="err-box" role="alert">
+              <svg viewBox="0 0 24 24"><use href="#i-alert-triangle" /></svg>
+              <span
+                >Five codes were rejected. Start the sign-in again, or use a recovery code — those
+                are counted separately.</span
+              >
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">Start again</button>
+            <button class="altbtn">
+              <svg viewBox="0 0 24 24"><use href="#i-key" /></svg>
+              <span>Use a recovery code<span class="sub">One of the ten you saved.</span></span>
+            </button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Lost your phone and your codes? Contact your workspace owner</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 6 — dark parity ═══════════════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 6 · <b>Dark parity.</b> The same challenge under <code>data-theme="dark"</code>,
+      unchanged markup. Worth a panel on THIS screen specifically: the wash behind the card is a
+      tint (<code>--el-auth-wash</code> → <code>--color-tint-sky</code>), and a tint that does not
+      flip leaves a bright band around a dark card. The dark values come from the same block the app
+      ships, so this is a check on the token wiring rather than a second drawing.
+    </div>
+    <div class="panel" data-theme="dark">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-wave" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Two-step verification</h1>
+            <p>Enter the six-digit code from your authenticator app.</p>
+          </div>
+          <div class="ac-body">
+            <div class="as-user" aria-label="Signing in as zhuyue@motir.co">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mail" /></svg>
+              <span>zhuyue@motir.co</span>
+            </div>
+            <div class="otp" role="group" aria-label="Six-digit code">
+              <span class="d">4</span><span class="d">8</span><span class="d">2</span
+              ><span class="d caret">9</span><span class="d empty" aria-hidden="true">–</span
+              ><span class="d empty" aria-hidden="true">–</span>
+            </div>
+            <div class="cbrow">
+              <span class="cb" role="checkbox" aria-checked="false"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+              ></span>
+              <span class="cbl"
+                >Don’t ask again on this device
+                <span class="cbh">For 30 days. You can revoke it in account settings.</span></span
+              >
+            </div>
+            <button class="btn btn-primary" style="width: 100%; height: 48px">Verify</button>
+          </div>
+          <div class="ac-foot">
+            <span class="link">Try another way</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

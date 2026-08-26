@@ -5,11 +5,12 @@ Design reference for the `auth` area: the signed-out surfaces served from
 (`/device`, `/unsubscribe/filter-subscription`) that joined the group after this
 asset was drawn.
 
-| Surface      | Asset                                  | Notes                                                                                                                                                                                              |
-| ------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth 2.0** | **`auth-screens.pen`** (Pencil source) | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth). |
-| CLI hand-off | `../cli-connect/cli-connect.mock.html` | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                             |
-| Brand lockup | `../brand/brand-mark.mock.html` §7b    | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                       |
+| Surface           | Asset                                            | Notes                                                                                                                                                                                                                                                                            |
+| ----------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth 2.0**      | **`auth-screens.pen`** (Pencil source)           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                               |
+| **2FA challenge** | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.** |
+| CLI hand-off      | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                           |
+| Brand lockup      | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                     |
 
 `auth-screens.pen` is a **legacy Pencil source** — one of the fourteen `.pen`
 files still in the tree, and this area holds no HTML mock beside it. New assets
@@ -420,3 +421,148 @@ a reason recorded above: the read-only email recap (a display row, not a
 control), the "Back to sign in" secondary (a `Link` that must keep link
 semantics), and the artboards' hand-drawn loading treatment (superseded by
 `Button loading`).
+
+---
+
+# The two-factor challenge — `two-factor-challenge.mock.html`
+
+**Story 8.11 (MOTIR-1213) · Subtask MOTIR-1216.** The step between the password
+and the session: a six-digit code, two fallbacks, and the opt-in that stops
+Motir asking on this browser for 30 days. **Gates MOTIR-1221.** The account pane
+that sets all of it up is `../settings/two-factor.mock.html`; the two assets
+cite each other and neither re-specifies the other.
+
+**⚠️ This is the FIRST HTML mock in this area, and it does not inherit the
+artboards.** `auth-screens.pen` is preserved as a record of 2026-05-24 (the
+READ THIS FIRST section above), so this asset is built from the SHIPPED code and
+agrees with the divergence ledger rather than with the exports: the frame is
+`app/(auth)/layout.tsx`'s 28rem card on the `--el-auth-wash` page with the
+`BrandMark` lockup top-left INSIDE the card (ledger rows 2 + 3), the headline
+rhythm is `AuthShell`'s, and the control heights are `--height-input` 44 /
+`--height-btn-lg` 48 rather than the artboards' 52 (ledger row 4).
+
+## THE ACCESS PATH — this screen has no door, it has a RESPONSE
+
+Panel 1 draws it, because it is the thing a build would otherwise have to
+infer. There is no route to link to and no way to reach this screen
+deliberately. It is the THIRD step of the shipped `SignInCard`, and it appears
+when `signIn.email` answers `{ twoFactorRedirect: true }` instead of a session:
+
+| step | surface                                          | when                                                         |
+| ---- | ------------------------------------------------ | ------------------------------------------------------------ |
+| 1    | `SignInCard` step `'email'`                      | always                                                       |
+| 2    | `SignInCard` step `'password'`                   | always                                                       |
+| 3    | **`SignInCard` step `'twoFactor'`** — this asset | ONLY on `twoFactorRedirect`; **skipped on a trusted device** |
+| 4    | `resolvePostAuthDestination`                     | `?next=` when safe, else `/home`                             |
+
+Two consequences worth stating: the card grows a THIRD step rather than gaining
+a route (so `app/(auth)/layout.tsx`, the shell and the brand lockup are
+untouched), and the reason the trust checkbox lives on step 3 rather than in
+settings is that `trustDevice` is a flag on the verify CALL — there is no
+"trust this browser" action to take anywhere else.
+
+## Panels
+
+| #   | what it draws                                                                      |
+| --- | ---------------------------------------------------------------------------------- |
+| 1   | **The access path** — the four-step strip above                                    |
+| 2   | **At rest** — the authenticator challenge + "don't ask again on this device"       |
+| 3   | **The fallbacks** — the ordered "try another way" list, and the emailed-code state |
+| 4   | **A recovery code** — the ordinary case, and the LAST-code warning                 |
+| 5   | **The failures** — wrong code, expired code, attempts spent                        |
+| 6   | **Dark parity**                                                                    |
+
+## Per-control map — primitive, endpoint, tokens
+
+| element                    | primitive                    | endpoint                                  | colour                                                            | shape                              |
+| -------------------------- | ---------------------------- | ----------------------------------------- | ----------------------------------------------------------------- | ---------------------------------- |
+| page + card                | `app/(auth)/layout.tsx`      | —                                         | `--el-auth-wash` page, `--el-page-bg` card, `--shadow-elevated`   | `--radius-card`                    |
+| brand lockup               | `BrandMark size={28}`        | —                                         | `--el-text`                                                       | —                                  |
+| headline + subhead         | `AuthShell`                  | —                                         | `--el-text` / `--el-text-muted` (on the white card — AA 4.54)     | —                                  |
+| "signing in as" row        | a display row, not a control | —                                         | `--el-surface` + `--el-text`; glyph `--el-text-secondary`         | `--radius-input`, `--height-input` |
+| six-digit field            | `.otp` (six `Input` cells)   | `twoFactor.verifyTotp` / `verifyOtp`      | `--el-border-strong`; focus `--el-accent`; error `--el-danger`    | `--radius-input`                   |
+| recovery-code field        | `Input`, mono                | `twoFactor.verifyBackupCode`              | as above                                                          | `--radius-input`, `--height-input` |
+| trust checkbox             | `Checkbox`                   | the `trustDevice` flag on the verify call | on: `--el-accent` + `--el-accent-text`                            | `--radius-xs`                      |
+| Verify                     | `Button primary size="lg"`   | —                                         | `--el-accent` + `--el-accent-text`                                | `--radius-btn`, `--height-btn-lg`  |
+| "Try another way" rows     | `Button secondary`, stacked  | `twoFactor.sendOtp` for the email row     | `--el-border-strong`; sub-line `--el-text-secondary`              | `--radius-btn`                     |
+| the error line             | `FormAlert` (`role="alert"`) | the plugin's typed refusals               | `--el-tint-rose` + `--el-text-strong`, glyph `--el-danger`        | `--radius-input`                   |
+| the expiry / warning notes | `.callout`                   | `otpOptions.period` (3 min)               | info `--el-tint-sky` · warn `--el-tint-peach`, `--el-text-strong` | `--radius-card`                    |
+| the foot link              | `Link`                       | —                                         | `--el-link` / `--el-link-pressed`                                 | —                                  |
+
+## The three refusals, and why they are three
+
+A single "that didn't work" leaves a reader with a correctly-typed code and
+nothing to try. Each refusal names its own remedy:
+
+- **Wrong code** — "…check your phone's clock is set automatically — a drifted
+  clock generates codes Motir can't accept." The single commonest cause of a
+  TOTP failure that is not a typo, and it is invisible to the reader.
+- **Expired code** — the emailed one only. The action is a resend, so the
+  primary button BECOMES "Send a new code".
+- **Attempts spent** — the plugin allows five (`otpOptions.allowedAttempts`),
+  and the screen says the number rather than failing silently on the sixth. It
+  also says recovery codes are counted separately, because they are.
+
+All three keep the reader on the step they are on. None bounces back to the
+password, which would throw away a correct password over a mistyped code.
+
+## The last recovery code
+
+Spending the LAST code leaves an account with 2FA on and no way back in if the
+authenticator is also gone — the state the settings pane's zero-callout
+describes, arrived at from the other side. So the challenge says so BEFORE the
+code is spent, and lands the reader on `/settings/account/security` afterwards
+rather than at `/home` with the problem still true.
+
+## The copy
+
+**i18n keys** — one namespace, `auth.twoFactor.*`: `title` · `subtitle` ·
+`signingInAs` · `verify` · `trustDevice` · `trustDeviceHelp` · `tryAnother` ·
+`back` · `methods.{totp,email,backup}.{label,sub}` · `emailSent.{title,subtitle,expiry,resend,resendIn}` ·
+`backup.{title,subtitle,label,helper,lastTitle,lastSubtitle,lastWarning,lastCta}` ·
+`errors.{wrongCode,clockDrift,expired,attemptsSpent,attemptsHelp}` ·
+`lockedOut.{title,subtitle,startAgain,contactOwner}`. Every `en` key needs its
+`zh` twin (`tests/i18n-catalog.test.ts`).
+
+## The workflow spec this design is grounded in
+
+- **MOTIR-1217** — the methods, the digits, the periods, the attempt ceiling,
+  and the fact that "don't ask again" is a `trust-device-*` `verification` row
+  plus a signed cookie.
+- **MOTIR-1218** — the status the settings side renders and the typed refusals.
+- **MOTIR-1221** — the card that BUILDS this step.
+- **`../settings/two-factor.mock.html`** — the pane that turns all of it on, and
+  the only place a trusted device can be revoked.
+
+## Accessibility
+
+Everything the area's a11y section above already states holds here. Three
+additions specific to this screen:
+
+- **The six-digit field is ONE labelled group** (`role="group"`, "Six-digit
+  code"), not six unlabelled boxes. A paste of `314159` fills all six.
+- **The error line is `role="alert"`**, so a rejected code is announced rather
+  than only re-coloured.
+- **The trust checkbox's helper is part of its label**, not a `title` — the
+  thirty days is the decision, and a decision hidden in a tooltip is not one.
+
+## The nested-theme re-emit (a board artefact)
+
+Identical to `../settings/design-notes.md` § _The nested-theme re-emit_: this
+board puts `data-theme` on a nested `.panel`, so it re-emits the Tier-3 `--el-*`
+block scoped to the attribute. It matters more on THIS screen because the wash
+behind the card is itself a tint — a wash that does not flip leaves a bright
+band around a dark card. In the app `data-theme` sits on `<html>`.
+
+## Self-review
+
+- Every icon is a lucide path at `viewBox="0 0 24 24"`, sized by CSS.
+- No nested interactive elements; the fallback rows are buttons containing only
+  text.
+- Ink/surface pairs: `--el-text-muted` appears only on the white card
+  (4.54:1); everything on `--el-surface` uses `--el-text-secondary`
+  (6.18–6.80:1). The only `--el-text-faint` is an empty code cell's placeholder
+  dash, marked `aria-hidden` — the labelled group carries the meaning, so the
+  dash is decoration and the ink guard agrees.
+- No Tier-0 `--color-*` outside the token block; no raw `rounded-*` / `p-*` /
+  `h-9` on any control's own box.
