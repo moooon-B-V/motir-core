@@ -2002,3 +2002,45 @@ reason the emphasised ids are a prop rather than something the canvas derives.
 The node treatments and the three `op` languages; the drill / Back / search / zoom / full-screen
 mechanics; the List ↔ Canvas switcher and the list body (Part VIII's); the review rail; the establish
 band; the `/plans` list surface (Part VII's); and any new entrance to this surface.
+
+---
+
+## The streaming allocation at ARRIVAL — `/plans` and `/plans/[id]` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+### `/plans` — the list
+
+|                            |                                                                                                                                                                                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `searchParams` → `getSession` → `getTranslations('aiPlanning')` → `getActiveProject` → `getCapabilities` (`canBrowse`)                                                                                                                                          |
+| **with the frame**         | the `<h1>`, and the status tab strip — the tabs are static route links, not derived from any read                                                                                                                                                               |
+| **with the first content** | `Promise.all([listPlans, countPlansByStatus])`, then `buildPlanRowViews(firstPage.plans)`, which **depends on the first** and so is a genuine second wave; the rows and the per-status counts land together                                                     |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                       |
+| **settles**                | **once.** Both waves are behind one boundary; splitting them would settle the list twice for no reader benefit, because the counts sit ON the tabs above the rows                                                                                               |
+| **verdict**                | **NONE — reuse.** The region behind the boundary is a list of `PlanRow`s, and the pending state for a row list is already drawn: `app/(authed)/backlog/_components/BacklogSkeleton.tsx`. The code card composes it as the fallback; this asset draws no new one |
+
+### `/plans/[id]` — the detail
+
+|                            |                                                                                                                                                                                                                                                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `params` → `getTranslations('planReview')` → `getWorkspaceContext` (**`notFound()`**) → `planReviewService.getPlanReview` (**`notFound()` on `PlanNotFoundError` / `ProjectAccessDeniedError`**)                                                                                           |
+| **with the frame**         | the back-link and the `<h1>` — but the title is `review.title`, so **the header is only paintable once the gate's own read returns**, which it must anyway                                                                                                                                                |
+| **with the first content** | `assertProjectInWorkspace` → `projectKey`, and — only when `review.status === 'approved'` — `getEstablishView`                                                                                                                                                                                            |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                                                                 |
+| **settles**                | **once**                                                                                                                                                                                                                                                                                                  |
+| **verdict**                | **NONE, and it is CONSTRAINED rather than chosen.** `getPlanReview` decides the 404 **and** supplies the title, the canvas and the chat; once it has returned there is nothing behind it worth a boundary. The two follow-on reads feed the repository-establish strip, which is a strip and not the page |
+
+**The concurrency change here is real and small:** `assertProjectInWorkspace` and `getEstablishView`
+are sequenced only because the second is gated on `review.status`; the first can start with the plan
+read. **And note what it is not** — the canvas/chat body renders from the `review` the island already
+holds, which is why `PlanDetail`'s view switch is `shallowPush` and shows no pending state at all
+(`design/shell/design-notes.md` § _THE SWITCH RULE_, unchanged by this sweep).
+
+**`components/planning/PlanningWorkspaceSkeleton.tsx` is NOT reused here.** It is `/planning`'s, and
+`/planning` already has its boundary from [MOTIR-2069](motir:cmsehmzxf000m04l51c9b71u0); naming it
+so a code card does not reach for it by association.

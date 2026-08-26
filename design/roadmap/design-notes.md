@@ -1476,3 +1476,34 @@ All rendered with Playwright chromium — full-page, light theme,
 planning-origin-drill surface also carries a `.dark.png`, rendered from the real
 `[data-theme='dark']` token blocks, so the station cards' per-tier tints are
 checked in both.)
+
+---
+
+## The streaming allocation at ARRIVAL — `/roadmap` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+|                            |                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations('roadmap')` → `getActiveProject` → `projectAccessService.getCapabilities` (`canBrowse` — a refusal renders `NoAccessState`) → `workItemsService.getProjectRoadmap(projectId, null)`, whose **only** use is `roots.nodes.length === 0`: it selects the empty state |
+| **with the frame**         | the `<h1>` and the `subtitle` — `t('heading')` and `t('subtitle', { project })`, both resolved by the gate                                                                                                                                                                                        |
+| **with the first content** | — **nothing.** `RoadmapView` receives no level data at all; it is a client canvas that fetches its own                                                                                                                                                                                            |
+| **after the page**         | — nothing from the server                                                                                                                                                                                                                                                                         |
+| **settles**                | **once.** The canvas's own subsequent level fetches are its own pending state, not the page's                                                                                                                                                                                                     |
+| **verdict**                | **NONE.** Not a preference — there is no server-side region left to cover. Rule 2 asks what has nothing to show yet, and by the time the page function returns, everything it renders is either painted or client-owned                                                                           |
+
+**What this surface actually owes the story is a concurrency change, not a frame.**
+`getProjectRoadmap` and `sprintsService.getActiveSprint` are **independent and currently serial** —
+the sprint read is issued after the empty-state branch and feeds only `hasActiveSprint` /
+`sprintName` / `sprintGoal`. One `Promise.all` collapses two round trips into one. Nothing else on
+this page is serial.
+
+**The canvas's own pending state is REUSED, not redrawn.** `ProjectRoadmapCanvas` owns what it shows
+while a level is in flight; this asset adds nothing to it and the code card must not either.
+
+**A route boundary is declined, and here it is a preference rather than a prohibition** —
+`/roadmap` does not call `notFound()`. Rule 5 applies: one mechanism, not two.
