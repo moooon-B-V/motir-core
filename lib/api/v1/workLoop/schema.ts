@@ -740,8 +740,14 @@ export function planStatusUrl(planId: string): string {
  *  terminal plan state of its own, which is what `job` below is for in the
  *  moment, and a background reconciler settles an abandoned plan to `declined`
  *  (with a null decider — nobody decided it) rather than widening this
- *  vocabulary. See `docs/decisions/agent-authored-plans.md` AMENDMENT 2. */
-export const planStatusSchema = z.enum(['generating', 'planned', 'approved', 'declined']);
+ *  vocabulary. See `docs/decisions/agent-authored-plans.md` AMENDMENT 2.
+ *
+ *  `stale` (MOTIR-3574, AMENDMENT 9) is the one member that IS neither live-and-
+ *  approvable nor decided: the plan reached a reviewer and can no longer be
+ *  approved, because a `modify`/`remove` target reached a terminal status after
+ *  the plan closed. A client asking *is this decided?* must NOT read it as one —
+ *  the plan is live and awaiting action, and the drift can reverse. */
+export const planStatusSchema = z.enum(['generating', 'planned', 'stale', 'approved', 'declined']);
 
 /** WHY the plan was started — someone clicked, or the cadence watcher fired. */
 export const planOriginSchema = z.enum(['user', 'cadence']);

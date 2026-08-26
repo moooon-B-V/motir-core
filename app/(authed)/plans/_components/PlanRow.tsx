@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  OctagonAlert,
   RotateCw,
   Sparkles,
   XCircle,
@@ -29,6 +30,14 @@ import type { PlanRowView } from './types';
 const STATUS_ICON: Record<PlanStatusDto, typeof Clock> = {
   generating: Loader2,
   planned: Clock,
+  // ⚠️ An OCTAGON, and it was chosen against the four glyphs already on this
+  // surface rather than in the abstract (`design/ai-planning/design-notes.md`
+  // Part XI §2, drawn against a headless render of this very component). A stop
+  // sign reads *cannot proceed*; `CircleSlash` and `Ban` read *forbidden* and
+  // are indistinguishable from each other at 16px; `ShieldAlert` reads
+  // *security*. It also stays separable from the ADVISORY `AlertTriangle`
+  // below — triangle vs octagon — which matters because a row can carry both.
+  stale: OctagonAlert,
   approved: CheckCircle2,
   declined: XCircle,
 };
@@ -39,6 +48,10 @@ const STATUS_ICON: Record<PlanStatusDto, typeof Clock> = {
 const STATUS_TINT: Record<PlanStatusDto, string> = {
   generating: 'bg-(--el-tint-sky)',
   planned: 'bg-(--el-tint-lavender)',
+  // Rose is the one tint no status spends — sky, lavender and mint are taken and
+  // `declined` uses `--el-muted` — so the fifth square is distinguishable from
+  // all four without inventing a colour (Part XI §2).
+  stale: 'bg-(--el-tint-rose)',
   approved: 'bg-(--el-tint-mint)',
   declined: 'bg-(--el-muted)',
 };
@@ -171,13 +184,22 @@ function WhenEntry({ view }: { view: PlanRowView }) {
 }
 
 /** The status pill, mapped to the shipped `Pill` tones the design specifies:
- *  generating→info(sky), planned→lavender, approved→success(mint),
- *  declined→archived(quiet muted). */
+ *  generating→info(sky), planned→lavender, stale→danger(rose),
+ *  approved→success(mint), declined→archived(quiet muted).
+ *
+ *  ⚠️ EVERY STATUS IS NAMED, AND `declined` NOW HAS ITS OWN ARM (MOTIR-3578).
+ *  The final `return` used to be an UNGUARDED fallthrough carrying a
+ *  `// declined` comment — so a fifth status rendered as Declined's chip: the
+ *  quiet, nearly fill-less *ended* treatment, which is the one reading `stale`
+ *  must never have, since the plan is live and awaiting action. It compiled
+ *  clean and was invisible in a diff, which is why Part XI §7 lists it first
+ *  among the sites the compiler cannot find. */
 function StatusPill({ status, label }: { status: PlanStatusDto; label: string }) {
   if (status === 'generating') return <Pill severity="info">{label}</Pill>;
   if (status === 'planned') return <Pill status="planned">{label}</Pill>;
-  if (status === 'approved') return <Pill severity="success">{label}</Pill>;
-  return <Pill tone="archived">{label}</Pill>; // declined
+  if (status === 'stale') return <Pill severity="danger">{label}</Pill>;
+  if (status === 'declined') return <Pill tone="archived">{label}</Pill>;
+  return <Pill severity="success">{label}</Pill>; // approved
 }
 
 export function PlanRow({ view }: { view: PlanRowView }) {
@@ -186,6 +208,12 @@ export function PlanRow({ view }: { view: PlanRowView }) {
   const title = view.title || t('untitledPlan');
   // A `planned` plan is the one awaiting the user's review — the design gives it
   // an accent border so it stands out from decided/generating rows.
+  //
+  // ⚠️ DELIBERATELY NOT WIDENED TO `stale` (Part XI §2, and §7 lists it as the
+  // one of the four silent sites that must NOT change by symmetry). The accent
+  // means *awaiting your approval*; a `stale` plan cannot be approved, so the
+  // same border would invite a click that fails. The rose square and the danger
+  // pill carry *this one needs you* without promising the button works.
   const awaitingReview = view.status === 'planned';
 
   return (

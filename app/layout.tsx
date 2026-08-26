@@ -21,6 +21,7 @@ import { buildRootMetadata } from '@/lib/rootMetadata';
 import { getSession } from '@/lib/auth';
 import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
 import type { AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
+import { AnalyticsScript } from '@/components/analytics/AnalyticsScript';
 import { ImmersiveTilt } from '@/components/theme/ImmersiveTilt';
 import { HandDrawnFilter } from '@/components/theme/HandDrawnFilter';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -206,6 +207,15 @@ export default async function RootLayout({
           shadcn/ui, dooooWeb).
         */}
         <script dangerouslySetInnerHTML={{ __html: buildThemeInitScript(applied) }} />
+        {/*
+          Product analytics (MOTIR-1163 · production-service-stack.md §5).
+          Rendered SERVER-side from `PLAUSIBLE_SCRIPT_SRC`, through the single
+          `lib/analytics.ts` accessor — never inline here. Unset environment
+          renders nothing at all, which is the self-hoster's guarantee; the
+          vendor is cookieless, so there is no consent gate, and this seam is
+          where one would attach if that ever changes.
+        */}
+        <AnalyticsScript />
       </head>
       <body>
         {/*

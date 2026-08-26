@@ -132,14 +132,27 @@ export interface PlanStalenessService {
    * the plan does not resolve in the workspace, and ProjectAccessDeniedError
    * (→ 404) when the actor cannot browse the project.
    *
-   * ⚠️ ONLY A `planned` PLAN CAN BE STALE (MOTIR-3165). Staleness answers one
-   * question — *would approving this now still be correct?* — and `approvePlan`
-   * / `declinePlan` each refuse unless the plan is `planned`, so on a decided
-   * plan that question cannot be asked again. This rule OWNS itself here rather
-   * than in its callers: `planRowView`'s `staleCountFor` and
-   * `autoPlanCadenceService`'s both wrote it by hand and were right, while
-   * `getPlanReview` called the engine unconditionally — and that one caller is
-   * the surface a person actually reads.
+   * ⚠️ ONLY AN UNDECIDED PLAN CAN BE STALE — `planned` OR `stale` (MOTIR-3165,
+   * WIDENED by MOTIR-3578 per `docs/decisions/agent-authored-plans.md`
+   * AMENDMENT 9 D3). Staleness answers one question — *would approving this now
+   * still be correct?* — and on a DECIDED plan that question cannot be asked
+   * again, which is the whole of MOTIR-3165's reasoning and is preserved here
+   * exactly rather than overturned.
+   *
+   * What changed is that its predicate stopped matching its intent. `planned`
+   * was a proxy for *is this plan still awaiting a decision?*, and a fifth
+   * status is what makes the proxy and the intent come apart: a `stale` plan is
+   * NOT decided — it is live, it is awaiting action, and it is the plan for
+   * which that question matters MOST. Left at `planned` only, entering the new
+   * status would silently stop producing per-proposal reasons, so the reviewer
+   * would lose the one thing they need — *which proposal went stale* — at the
+   * exact moment they need it. That is MOTIR-3560's own complaint arriving
+   * through MOTIR-3560's own fix, which is why the amendment settles it.
+   *
+   * This rule OWNS itself here rather than in its callers: `planRowView`'s
+   * `staleCountFor` and `autoPlanCadenceService`'s both wrote it by hand and
+   * were right, while `getPlanReview` called the engine unconditionally — and
+   * that one caller is the surface a person actually reads.
    *
    * On an approved plan the warning was not merely useless but CAUSED by the
    * approval: `findChildrenCreatedAfter` has no exclusion for the items the plan
@@ -168,7 +181,7 @@ export const planStalenessService: PlanStalenessService = {
     // caller that maps over `items` needs no second code path; it just has
     // nothing to report. The access checks above still run, so this is not a
     // cheaper answer to a question the caller was not allowed to ask.
-    if (plan.status !== 'planned') {
+    if (plan.status !== 'planned' && plan.status !== 'stale') {
       return {
         planId,
         stale: false,

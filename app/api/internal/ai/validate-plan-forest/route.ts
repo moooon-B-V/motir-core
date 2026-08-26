@@ -10,11 +10,19 @@ import type { ValidityCondition } from '@/lib/dto/sprints';
 // (forest) analogue of the pre-commit finishability check. Body
 // `{ planId, condition? }` (NO targetKey — it validates the ENTIRE projected
 // forest, not one subtree) → `planValidityService.validateProjectedPlan` → the
-// `{ planId, valid, blockers }` validity DTO. This is the entry the `generate_tree`
+// `{ planId, valid, rejections, blockers }` validity DTO. This is the entry the `generate_tree`
 // /replan worker (MOTIR-1398) runs as its pre-commit post-condition over the
 // multi-root epic forest it proposes: a cross-root `blocked_by` edge (a story
 // under epic B gated by a story under epic A) is VALID here, whereas iterating
 // the single-target `validate-plan` per root would false-positive it.
+//
+// ⚠️ IT INHERITS THE APPROVABILITY HALF (MOTIR-3575) — deliberately, and because
+// this is a thin transport nothing here changed. `valid` now means BOTH *approve
+// would accept it* and *every item can be finished*, and `rejections` carries the
+// first reason approve would refuse. That is what the generator's pre-commit
+// post-condition wants: it runs this immediately before closing a plan, and a
+// plan closed on a `valid: true` that only meant finishable is exactly the dead
+// plan MOTIR-3560 reported.
 //
 // Read-only, server-to-server only (§4a service bearer + §4b job-scoped token,
 // via authenticateJobRequest) — never reachable from the browser and NEVER

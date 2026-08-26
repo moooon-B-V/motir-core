@@ -250,6 +250,22 @@ export function summarizePlan(plan: PlanWithItemsDto, placements?: PlacementByPl
       : 'These are PROPOSALS, not work items. Approving the plan in Motir is the only thing ' +
           "that creates one, and an `add`'s workItemId stays null until then.",
   );
+
+  // ⚠️ `stale` NEEDS SAYING, because the bare status word above does not carry
+  // it (MOTIR-3578). An agent reading `stale` off line 1 has no way to know the
+  // plan is unapprovable-but-live rather than a variant of `declined`, and the
+  // wrong reading costs it the same wasted repair MOTIR-3560 was filed about:
+  // authoring a whole replacement plan for one that may simply come back.
+  if (plan.status === 'stale') {
+    lines.push(
+      '',
+      'STALE: this plan reached a reviewer and can no longer be approved, because work it ' +
+        'proposes to change has since been finished. It is NOT decided and NOT declined — the ' +
+        'plan is live, and if the drift reverses (a target leaves its terminal status) it ' +
+        'returns to `planned` on its own. Do NOT author a replacement plan on seeing this; ' +
+        'the reviewer decides whether to wait or decline.',
+    );
+  }
   return lines.join('\n');
 }
 

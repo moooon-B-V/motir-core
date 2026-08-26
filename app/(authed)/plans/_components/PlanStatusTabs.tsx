@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
@@ -92,7 +93,39 @@ export function PlanStatusTabs({ value, counts }: PlanStatusTabsProps) {
 }
 
 /** The strip itself, split out so the URL wiring above stays readable and a test
- *  can drive the control without a router. */
+ *  can drive the control without a router.
+ *
+ * ⚠️ IT SCROLLS BELOW `sm`, AND THAT REVERSES PART VII §4 — on a measurement,
+ * not a preference (MOTIR-3578, `design/ai-planning/design-notes.md` Part XI,
+ * `plans-tabbed-list.mock.html` panel 4, RE-MEASURED for five tabs).
+ *
+ * Part VII §4 measured the FOUR-tab strip at 310.3px with labels and 358.8px
+ * with counts against the 343px content box a 375px viewport leaves after the
+ * shell's `px-4`, and concluded: labels at every width, counts from `sm` up. The
+ * second half stands — five tabs with counts are 422.6px, still inside the
+ * 592px `sm` box. The FIRST half does not: five labels are **361.9px**, so
+ * `310.3 < 343 < 361.9` and the rule's premise — that the strip fits — is what
+ * the fifth member falsified.
+ *
+ * §4 also REJECTED a scroller, arguing it would push `Declined` off-screen on
+ * the one surface whose job is to show which statuses exist. The re-measurement
+ * retires that premise rather than overruling the taste: the overflow is
+ * **18.9px**, so `Declined` is not off-screen, it is clipped by a fifth of its
+ * width — and a half-drawn word is a stronger *there is more here* cue than any
+ * chevron this surface would have to invent. The two alternatives were drawn and
+ * rejected in the mock: `flex-wrap` is 343x80px and strands `Declined` alone on
+ * a second row, breaking the one-of-N reading a segmented track exists to carry;
+ * shortening `Generating` fits at 337.8px and makes the tab and the row's own
+ * pill say different words for one status.
+ *
+ * ⚠️ AND IT REPAIRS A CASE THAT WAS ALREADY BROKEN. At 320px the box is 288px
+ * and the FOUR-tab strip is already 310.3px — so `/plans` has overflowed its
+ * gutter on the smallest phone since MOTIR-3241, silently. This is why the
+ * scroller is the right instrument rather than the cheapest one.
+ *
+ * The selected segment is scrolled into view on mount, so a deep link to
+ * `?status=declined` opens on its own tab rather than on the strip's left edge.
+ * `overflow-x-auto` alone would leave it out of frame. */
 function PlanStatusStrip({
   options,
   value,
@@ -104,7 +137,18 @@ function PlanStatusStrip({
   onChange: (next: PlanStatusDto) => void;
   label: string;
 }) {
+  const scroller = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = scroller.current?.querySelector('[aria-pressed="true"]');
+    // `nearest` on both axes: the strip must never scroll the PAGE to reach a
+    // tab, and a segment already in frame must not be nudged.
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [value]);
+
   return (
-    <Segmented<PlanStatusDto> options={options} value={value} onChange={onChange} label={label} />
+    <div ref={scroller} className="overflow-x-auto">
+      <Segmented<PlanStatusDto> options={options} value={value} onChange={onChange} label={label} />
+    </div>
   );
 }

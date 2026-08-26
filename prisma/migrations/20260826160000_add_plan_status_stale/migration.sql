@@ -1,0 +1,29 @@
+-- The FIFTH `PlanStatus` member, `stale` (Bug MOTIR-3560 · Subtask MOTIR-3578),
+-- decided by `docs/decisions/agent-authored-plans.md` AMENDMENT 9 (MOTIR-3574).
+--
+-- WHAT IT MEANS: the plan reached a reviewer and can no longer be approved,
+-- because a `modify`/`remove` target reached a terminal status AFTER the plan
+-- closed. It is NOT terminal and NOT decided — the plan is live and awaiting
+-- action, and its exits are the drift reversing (back to `planned`) or a
+-- reviewer declining it. It exists so `planned` can mean APPROVABLE, which is
+-- the invariant a plan carrying post-close drift used to break silently by
+-- staying `planned` and failing at the button.
+--
+-- ⚠️ PURELY ADDITIVE, AND NOTHING WRITES IT YET. No row changes status, no
+-- default changes, no backfill, and no service transitions into the value —
+-- that is MOTIR-3579's card, deliberately split so a value every surface can
+-- already render is what ships first. A vocabulary rendering correctly for a
+-- value nothing produces is inert; a transition into a value half the surfaces
+-- cannot draw is not.
+--
+-- POSITION IS DELIBERATE. A Postgres enum is ORDERED and that order is what
+-- `ORDER BY status` and any future range comparison read, so the member is
+-- inserted where it sits in the lifecycle — after `planned`, which is the only
+-- status it is reachable from, and before the two terminal ones. This mirrors
+-- `20260715000000_add_import_step_to_migrate_onboarding`, which added a middle
+-- member the same way and for the same reason.
+--
+-- `IF NOT EXISTS` keeps a replay idempotent, matching that migration.
+
+-- AlterEnum
+ALTER TYPE "plan_status" ADD VALUE IF NOT EXISTS 'stale' BEFORE 'approved';

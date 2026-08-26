@@ -166,12 +166,23 @@ describe('an unresolvable temp-ref is refused where it is written', () => {
 
 describe('the approve path is unchanged — the late check is still the backstop', () => {
   it('a plan appended BEFORE this shipped still fails at approve, not silently', async () => {
-    // Written the only way a pre-MOTIR-3539 plan can be reproduced now: insert
-    // the row underneath the service, which is exactly the state every plan
-    // appended before this check shipped is sitting in.
+    // ⚠️ THE PLAN IS CLOSED VALID AND BROKEN AFTERWARDS (MOTIR-3573). This case
+    // used to seed the dangling ref underneath the service and then call
+    // `markPlanned`, which was the only way to reproduce a pre-MOTIR-3539 plan
+    // while the close validated nothing. `markPlanned` now runs the
+    // confirmation gate, so that shape is refused AT THE CLOSE and never
+    // reaches approve — which is MOTIR-3573's whole point, asserted in
+    // `tests/integration/plans/authoringGates.test.ts`.
     //
-    // ⚠️ WHICH error, measured rather than assumed. `resolveRef` is NOT what a
-    // legacy plan meets first: `validatePlanProposals` — the confirmation gate
+    // The property THIS case owns is unchanged and still needs asserting: a
+    // plan sitting at `planned` with an unresolvable ref — every plan appended
+    // before MOTIR-3539 shipped is in exactly that state — is still REFUSED by
+    // approve rather than materialized silently. So the plan reaches `planned`
+    // legitimately and the ref is broken after, which reproduces the same
+    // stored state by the only route the close now leaves open.
+    //
+    // ⚠️ WHICH error, measured rather than assumed. `resolveRef` is NOT what
+    // such a plan meets first: `validatePlanProposals` — the confirmation gate
     // that re-validates independently BEFORE materialize writes anything — runs
     // its own dangling-ref check and refuses with `PlanRefGraphError`.
     // `resolveRef` sits behind it as the in-transaction backstop. The property
@@ -180,16 +191,17 @@ describe('the approve path is unchanged — the late check is still the backstop
     // ordering this card does not own.
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Legacy' }, fx.ctx);
-    await adminDb.planItem.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        planId: plan.id,
-        op: 'add',
-        proposedFields: { title: 'Orphaned edge', kind: 'task' },
-        blockedByRefs: [`${TEMP_REF_PREFIX}never-existed`],
-      },
-    });
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Orphaned edge', kind: 'task' } }],
+      fx.ctx,
+    );
     await plansService.markPlanned(plan.id, fx.ctx);
+    const [item] = await adminDb.planItem.findMany({ where: { planId: plan.id } });
+    await adminDb.planItem.update({
+      where: { id: item!.id },
+      data: { blockedByRefs: [`${TEMP_REF_PREFIX}never-existed`] },
+    });
 
     await expect(plansService.approvePlan(plan.id, fx.ctx)).rejects.toThrow(/never-existed/);
 

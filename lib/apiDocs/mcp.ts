@@ -512,9 +512,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '5e25f8f8a9fb',
   },
   validate_plan: {
+    // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
+    // *"Is the plan you are authoring finishable?"* — became FALSE rather than
+    // stale: the tool used to answer finishability alone, and a plan the approve
+    // button would refuse came back VALID. It now answers TWO questions, and
+    // VALID means both pass. A summary naming one of them is precisely the
+    // reading that made a malformed plan safe to close, so this is the drift the
+    // pin exists to catch rather than an explanatory edit it can ride out.
     summary:
-      'Is the plan you are authoring finishable? Run it before `final: true` — nobody else will.',
-    descriptionFingerprint: '5cbef9b17d5d',
+      'Would approve TAKE this plan, and is it finishable? Both, before `final: true` — nobody else will ask.',
+    descriptionFingerprint: 'e4886b97d214',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -522,9 +529,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // exists (a failed job no longer leaves its plan `generating` forever — a
     // reconciler declines an empty one within the hour), and this line was never
     // about that. What the tool answers is the same thing it answered before.
+    //
+    // Re-pinned AGAIN for MOTIR-3578, summary UNCHANGED for the same reason and
+    // it is worth saying why the sibling above went the other way. The edit here
+    // widened the description's ENUMERATION of the statuses a plan can be in,
+    // from four to five (`stale`). This line does not enumerate them — it says
+    // the tool reports the job's state and its proposal count, which is still
+    // exactly what it does. `validate_plan`'s summary changed because its old
+    // text named the WRONG QUESTION, not because its description moved.
     summary:
       'What became of a submitted planning job — its state, and how many proposals it produced.',
-    descriptionFingerprint: '7fe35804ba38',
+    descriptionFingerprint: 'ab983b5ea9ac',
   },
   get_plan: {
     summary:

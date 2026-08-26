@@ -48,26 +48,57 @@ interface ValidatePlanArgs {
   condition?: ValidityCondition;
 }
 
-/** Human-readable summary for the dual-content text block. */
+/**
+ * Human-readable summary for the dual-content text block.
+ *
+ * ⚠️ IT RENDERS THE TWO FAILURE FAMILIES SEPARATELY, and that is the point rather
+ * than presentation (MOTIR-3575). They need OPPOSITE repairs — an unfinishable
+ * plan has a dependency reaching outside it, an unapprovable one is malformed —
+ * and a caller that cannot tell them apart re-authors the wrong half. The VALID
+ * arm no longer claims more than was checked: it used to promise finishability
+ * only, in a sentence a reader takes as *this plan is sound*, which is what made
+ * a plan the approve button then refused safe to close.
+ */
 function summarize(result: PlanValidityDto): string {
   if (result.valid) {
     return (
-      `Plan ${result.planId} is VALID — every item in the projected forest can be finished ` +
-      'once this plan materializes. No work item was created: approving the plan in Motir is ' +
-      'still the only path from a proposal to a work item.'
+      `Plan ${result.planId} is VALID — it would be ACCEPTED by approve, and every item in ` +
+      'the projected forest can be finished once it materializes. No work item was created: ' +
+      'approving the plan in Motir is still the only path from a proposal to a work item.'
     );
   }
-  return [
-    `Plan ${result.planId} is INVALID — ${result.blockers.length} item(s) in the projected ` +
-      'forest are gated by work that is neither in the plan nor done:',
-    ...result.blockers.map(
-      (b) =>
-        `  ${b.item} is blocked by ${b.blockedBy} (${b.blockerStatus}, ` +
-        `${b.blockerSprintId ? `sprint ${b.blockerSprintId}` : 'backlog'})`,
-    ),
-    'Fix each edge before `final: true` — that is the only moment this check is cheap. An item ' +
-      'named `planItem:<id>` is a proposal in THIS plan, not a work item.',
-  ].join('\n');
+
+  const lines: string[] = [`Plan ${result.planId} is INVALID.`];
+
+  if (result.rejections.length > 0) {
+    lines.push(
+      '',
+      'APPROVE WOULD REFUSE IT — the plan is malformed, so no amount of re-sequencing helps:',
+      ...result.rejections.map(
+        (r) => `  ${r.item}: ${r.code}${r.reason ? ` / ${r.reason}` : ''} — ${r.message}`,
+      ),
+      'Fix this BEFORE `final: true`: once the plan is `planned` its proposals are frozen, and ' +
+        'the only repair left is to author a new plan and decline this one. Only ONE rejection ' +
+        'is reported at a time — the check stops at the first — so re-run this after fixing it.',
+    );
+  }
+
+  if (result.blockers.length > 0) {
+    lines.push(
+      '',
+      `${result.blockers.length} item(s) in the projected forest are gated by work that is ` +
+        'neither in the plan nor done:',
+      ...result.blockers.map(
+        (b) =>
+          `  ${b.item} is blocked by ${b.blockedBy} (${b.blockerStatus}, ` +
+          `${b.blockerSprintId ? `sprint ${b.blockerSprintId}` : 'backlog'})`,
+      ),
+      'Fix each edge before `final: true` — that is the only moment this check is cheap. An ' +
+        'item named `planItem:<id>` is a proposal in THIS plan, not a work item.',
+    );
+  }
+
+  return lines.join('\n');
 }
 
 export async function runValidatePlan(
@@ -98,13 +129,21 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
     {
       title: 'Validate a plan before anybody reviews it',
       description:
-        'Check whether a PLAN you are authoring is finishable once it materializes — the ' +
-        'pre-commit check to run BEFORE `add_plan_items` with `final: true`, which is the only ' +
-        'moment it is cheap. It answers over the project’s live tree ⊕ this plan’s proposals: ' +
-        'VALID ⟺ every not-done item in the projected forest has each blocked_by dependency ' +
-        'either inside the projection (it materializes with the plan) or already done. Returns ' +
-        '`{ planId, valid, blockers: [...] }`, each blocker naming the gated item and the work ' +
-        'gating it; an item named `planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
+        'Check whether a PLAN you are authoring is SOUND — the pre-commit check to run BEFORE ' +
+        '`add_plan_items` with `final: true`, which is the only moment it is cheap, because a ' +
+        '`planned` plan’s proposals are frozen and the only repair left is a new plan. It ' +
+        'answers TWO questions over the project’s live tree ⊕ this plan’s proposals, and ' +
+        'VALID means BOTH pass. (1) APPROVABLE — would the approve button take it? A dangling ' +
+        'ref, a duplicated blocker, a ref cycle, an illegal kind-parent placement, or a ' +
+        '`modify`/`remove` of already-completed work each make it refuse; these arrive in ' +
+        '`rejections`, at most one at a time because the check stops at the first, so re-run ' +
+        'after fixing one. (2) FINISHABLE — every not-done item in the projected forest has ' +
+        'each blocked_by dependency either inside the projection (it materializes with the ' +
+        'plan) or already done; these arrive in `blockers`, each naming the gated item and the ' +
+        'work gating it. The two need OPPOSITE repairs: a rejection means the plan is ' +
+        'malformed, a blocker means it reaches outside itself. Returns ' +
+        '`{ planId, valid, rejections: [...], blockers: [...] }`; an item named ' +
+        '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +
         'WHOLE-plan verdict and takes no target — use `validate_work_item` with a `planId` for ' +

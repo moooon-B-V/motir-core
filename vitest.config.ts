@@ -1224,6 +1224,14 @@ export default defineConfig({
         // call sites; now that they all route through it, it is worth gating.
         'lib/baseUrl.ts',
 
+        // Subtask MOTIR-1163 — the product-analytics seam. Two accessors and a
+        // three-line component, and the whole point of both is a decision that
+        // is invisible when it goes wrong: unset environment must render NO tag
+        // (the self-hoster's guarantee), and a blank secret must not render
+        // `<script src="">`. Neither failure throws. Gated below.
+        'lib/analytics.ts',
+        'components/analytics/AnalyticsScript.tsx',
+
         // Story MOTIR-2384 · Subtask MOTIR-2394 (the story gate) — the OBJECT
         // STORE half of the hosting move. `lib/baseUrl.ts` above was the app-URL
         // half and joined the gate with its own card; these three are the seam
@@ -1560,6 +1568,12 @@ export default defineConfig({
         'lib/api/v1/contractVersion.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-2388 — the ONE definition of the app's own origin.
         'lib/baseUrl.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-1163 — the ONE definition of whether analytics is on, and the
+        // only surface that renders it. MEASURED on this branch over
+        // `tests/analytics.test.tsx`: both files 100 / 100 / 100. Pinned at the
+        // project's 90 rather than at the measurement.
+        'lib/analytics.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/analytics/AnalyticsScript.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2384 · Subtask MOTIR-2394 — the object-store seam.
         //
         // MEASURED FIRST, then pinned, on this branch over `tests/attachments`,

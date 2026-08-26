@@ -25,6 +25,7 @@ import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthServic
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
+import { planDriftService } from '@/lib/services/planDriftService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
@@ -69,6 +70,7 @@ export const jobServices = {
   fleetPreflight: fleetPreflightService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
+  planDrift: planDriftService,
   migrateOnboarding: migrateOnboardingService,
   workItemEmbeddings: workItemEmbeddingsService,
   planTargetLock: planTargetLockService,

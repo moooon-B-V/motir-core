@@ -95,12 +95,15 @@ describe('the job manifest is complete on the emit path', () => {
     expect(emitPath).toEqual(worker);
   });
 
-  it('resolves the FOUR fast-lane consumers of work-item/transitioned', async () => {
-    // The concrete case the whole epic turns on: four consumers against a
-    // five-slot account is the arithmetic behind MOTIR-3413.
+  it('resolves the FIVE fast-lane consumers of work-item/transitioned', async () => {
+    // The concrete case the whole epic turns on: the consumer count against a
+    // five-slot account is the arithmetic behind MOTIR-3413 — and MOTIR-3579's
+    // `plan-drift/transitioned` is the fifth, which makes that arithmetic exact
+    // rather than merely close.
     expect(await fanOutVisibleToTheEmitPath('work-item/transitioned')).toEqual([
       'automation-engine/transitioned',
       'notification-fan-in/transitioned',
+      'plan-drift/transitioned',
       'status-derivation/transitioned',
       'watcher-notify/transitioned',
     ]);
@@ -120,8 +123,8 @@ describe('the job manifest is complete on the emit path', () => {
     await dispatchEventToEngine('work-item/transitioned', { workspaceId: null });
 
     const { manifestSubscribers } = await import('@/lib/jobs/engine/manifest');
-    expect(manifestSubscribers('work-item/transitioned')).toHaveLength(4);
-    // Still true — but now because four real subscribers are unrouted, not
+    expect(manifestSubscribers('work-item/transitioned')).toHaveLength(5);
+    // Still true — but now because five real subscribers are unrouted, not
     // because nothing was known.
     expect(hasInngestSubscribers('work-item/transitioned')).toBe(true);
   });

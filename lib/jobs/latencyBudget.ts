@@ -100,6 +100,18 @@ export const FAST_LANE_LATENCY_BUDGET = {
 export const FAST_LANE_CONSUMER_IDS = [
   'automation-engine/transitioned',
   'notification-fan-in/transitioned',
+  // ⚠️ ADMITTED DELIBERATELY (MOTIR-3579), which is what the guard above asks
+  // for. `plan-drift/transitioned` keeps `Plan.status` honest — it is what moves
+  // a plan to `stale` the moment a target it proposes to change is finished —
+  // and the value of doing that EAGERLY is precisely that a reviewer opening the
+  // queue sees the truth rather than discovering it at the Approve button. A
+  // consumer whose whole point is that it has already run by the time somebody
+  // looks belongs inside the latency contract, not beside it.
+  //
+  // Its shape fits the lane: one indexed read by `workItemId`
+  // (`plan_item_work_item_id_workspace_id_idx`, added with the same card),
+  // usually zero rows, and a short locked write only when a plan actually moves.
+  'plan-drift/transitioned',
   'status-derivation/transitioned',
   'watcher-notify/transitioned',
 ] as const;

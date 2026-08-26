@@ -1,6 +1,6 @@
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { TEMP_REF_PREFIX } from '@/lib/services/plansService';
+import { TEMP_REF_PREFIX, plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
@@ -367,7 +367,29 @@ export const planValidityService = {
       }
     }
     sortBlockers(blockers);
-    return { planId, valid: blockers.length === 0, blockers };
+
+    // ⚠️ THE SECOND QUESTION (MOTIR-3575). Everything above answers
+    // FINISHABILITY — can every item in the projected forest be finished once
+    // this plan materializes? That is a real question and it is correctly
+    // answered, but it is not the question a caller asks by the word `valid`.
+    // APPROVABILITY is the other half: would the approve button take this plan
+    // at all? Before this, `validate_plan` answered `VALID` for plans approve
+    // then refused, and that yes was load-bearing — it is what made a plan
+    // carrying a dangling ref safe to close (MOTIR-3560).
+    //
+    // Delegated rather than re-implemented, so the validator and the button can
+    // never disagree about what approvable means: `checkApprovability` runs the
+    // SAME `runPersistGate` `approvePlan` runs, as a read.
+    const rejections = await plansService.checkApprovability(planId, ctx);
+
+    return {
+      planId,
+      // Both halves, so a caller reading only `valid` cannot get a false green —
+      // which is exactly the reading that failed here.
+      valid: blockers.length === 0 && rejections.length === 0,
+      blockers,
+      rejections,
+    };
   },
 
   /**
