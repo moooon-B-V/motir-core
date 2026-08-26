@@ -1,0 +1,1319 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The plan timeline carrying CONTENT events (MOTIR-3534)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for MOTIR-3534, story MOTIR-3532 ("A plan's
+      timeline records what CHANGED, not only that its status moved").
+
+      It EXTENDS the shipped review rail and redraws nothing else: not the plan
+      review canvas, not the proposal peek, not the approve / decline controls,
+      not the rail's staleness summary or its decided outcome. The only new
+      pixels are ROWS on the timeline that already renders.
+
+      Built FROM the shipped app, not from a reading of it. Panel 1 reproduces a
+      headless render of the real `components/planning/PlanReviewRail.tsx`,
+      bundled with the real `messages/en.json` through a real
+      `NextIntlClientProvider` and painted with the real Tailwind build over
+      `@motir/design-system/theme.css`. Every measurement quoted on this board
+      came off that render or off a probe against it; the notes name the numbers
+      and what they settled.
+
+      Tokens: every fill, ink, border and radius below is an `--el-*` element
+      token or an element-semantic shape token, resolved to the LIGHT /
+      warm-editorial / motir values the app itself computes. No hue is invented
+      and no generic radius scale is used.
+    -->
+    <style>
+      /* --------------------------------------------------------------------
+         The element-token layer, mirroring what the running app resolves for
+         `data-theme="light" data-style="warm-editorial" data-palette="motir"`.
+         Stated here so a plain browser paints the real palette without the
+         Tailwind build, exactly as the sibling assets in this area do. Nothing
+         is redefined semantically — these are the same tokens, same values.
+      -------------------------------------------------------------------- */
+      :root {
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
+
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-pressed: #4534b3;
+        --el-accent-on-surface: #5645d4;
+        --el-highlight: #ff64c8;
+        --el-link: #0070d2;
+
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-danger: #e03131;
+        --el-info: #0075de;
+
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-tint-yellow: #fef7d6;
+
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-input: 8px;
+
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 36px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+
+        --font-serif: Georgia, serif;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        max-width: 1140px;
+        margin: 0 auto;
+        padding: 36px 28px 64px;
+      }
+
+      /* ---- board chrome. Annotations owe AA too, so every caption on this
+              board is `--el-text-secondary` (6.24:1 on `--el-surface`), never
+              `--el-text-muted` (4.17:1) and never `--el-text-faint`. ---- */
+      .doc-head h1 {
+        font-size: 26px;
+        margin: 0 0 8px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0 0 4px;
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 78ch;
+      }
+      .refs {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 3px 9px;
+      }
+      .ref.plain {
+        color: var(--el-text-secondary);
+      }
+
+      .panel {
+        margin-top: 38px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--font-mono);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-control);
+        padding: 2px 8px;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.55;
+        max-width: 92ch;
+      }
+      .panel-note b {
+        color: var(--el-text-strong);
+      }
+      .row-of-rails {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .stack > .cap {
+        font: 600 12px/1.4 var(--font-sans);
+        color: var(--el-text-secondary);
+      }
+
+      /* ---- THE RAIL. Mirrors `PlanReviewRail`'s own box: 22rem track, p-5,
+              gap-4, a left border and `--el-surface`, one scroller. ---- */
+      .rail {
+        width: 352px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        min-height: 0;
+      }
+      .rail.tall {
+        height: 620px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .pill {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill.approved {
+        background: var(--el-tint-mint);
+      }
+      .rail-head h3 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+        min-width: 0;
+      }
+      .rail-head .summary {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.43;
+        color: var(--el-text-secondary);
+      }
+      .meta {
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 12px;
+        font-size: 12px;
+        line-height: 1.33;
+        color: var(--el-text-secondary);
+      }
+      .who {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+      .disc {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 9px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .glyph {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .sep {
+        color: var(--el-text-secondary);
+      }
+
+      .sec-label {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      ol.tl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      ol.tl > li {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 14px;
+        line-height: 1.43;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        flex: none;
+        margin-top: 6px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .dot.pending {
+        background: var(--el-border-strong);
+      }
+      .tl-body {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .tl-label {
+        color: var(--el-text);
+      }
+      .tl-actor {
+        color: var(--el-text-secondary);
+      }
+      .tl-at {
+        font-size: 12px;
+        line-height: 1.33;
+        color: var(--el-text-secondary);
+      }
+      li.pending-row {
+        align-items: center;
+        color: var(--el-text-secondary);
+      }
+      .gate {
+        margin-top: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-control);
+        border-radius: var(--radius-btn);
+        font-size: 14px;
+        font-weight: 600;
+        border: 0;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .hint {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        line-height: 1.33;
+        color: var(--el-text-secondary);
+      }
+      .outcome {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px;
+      }
+      .outcome .head {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .outcome a {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+
+      /* ---- annotation callouts beside a rail ---- */
+      .callouts {
+        width: 330px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .callout {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+      }
+      .callout h4 {
+        margin: 0 0 5px;
+        font-size: 12.5px;
+        letter-spacing: 0.01em;
+        color: var(--el-text-strong);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .callout code,
+      .panel-note code,
+      td code {
+        font: 500 11.5px var(--font-mono);
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .measure {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-strong);
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-badge);
+        padding: 2px 8px;
+      }
+
+      table.spec {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+        margin-top: 4px;
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        vertical-align: top;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      table.spec th {
+        color: var(--el-text-strong);
+        font-weight: 700;
+        border-bottom-color: var(--el-border-strong);
+      }
+      table.spec td:first-child {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      /* ---- the anatomy diagram ---- */
+      .anatomy {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .anatomy .specimen {
+        width: 352px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 20px;
+      }
+      .lead {
+        border-left: 3px solid var(--el-accent);
+        padding-left: 12px;
+        margin: 0 0 12px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .lead b {
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>The plan timeline carrying CONTENT events</h1>
+        <p>
+          The review rail's timeline can say four things today, all of them status transitions, and
+          it can name only one of a plan's three parties — the decider. This asset draws what it
+          looks like once it also carries the acts that changed the plan's CONTENT: an append, a
+          deepen, an edit, each named to the party that made it.
+        </p>
+        <p>
+          It draws rows on the timeline that already renders. It does not redraw the plan review
+          canvas, the proposal peek, the approve / decline controls, the staleness summary or the
+          decided outcome, and it introduces no colour that is not already in the palette.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-3534</span>
+          <span class="ref plain">story MOTIR-3532</span>
+          <span class="ref plain">components/planning/PlanReviewRail.tsx</span>
+          <span class="ref plain">lib/dto/planReview.ts</span>
+          <span class="ref plain">lib/services/planReviewService.ts</span>
+        </div>
+      </div>
+
+      <!-- ================= PANEL 1 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>The rail as it ships today — reproduced from a render, not from the source</h2>
+        </div>
+        <p class="panel-note">
+          The real <code>PlanReviewRail</code> was bundled with the real
+          <code>messages/en.json</code> and the real theme and screenshotted headlessly before a
+          line of this board was drawn. Four things that render settled, none of them legible in the
+          <code>.tsx</code>: <b>the rail is 352px wide with 20px padding</b>, so a timeline row's
+          text column is <b>298px</b>; <b>a two-line row is exactly 36px</b> and rows are 8px apart,
+          so each row costs <b>44px</b>;
+          <b>the header already renders an agent as a glyph plus a harness plus a model</b>, and
+          that triple takes <b>three lines and 60px</b> at this width; and with four lifecycle
+          events the rail's fixed chrome is <b>528.5px</b>, leaving everything above the decision
+          gate free for rows.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">planned — today</span>
+            <aside class="rail tall">
+              <div class="rail-head">
+                <span class="pill">Ready to review</span>
+                <h3>A plan's timeline records what CHANGED, not only that its status moved</h3>
+                <p class="summary">Five proposals across one story, deepened over three passes.</p>
+                <p class="meta">
+                  <span>5 proposed items</span>
+                  <span class="who">
+                    <span class="disc" aria-hidden="true">Z</span>
+                    <span>Requested by Zhu Yue</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="8" width="18" height="12" rx="2" />
+                      <path d="M12 8V4M8 14h.01M16 14h.01" />
+                    </svg>
+                    <span>written by Claude Code</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <span>claude-opus-5</span>
+                  </span>
+                </p>
+              </div>
+              <section>
+                <p class="sec-label">History</p>
+                <ol class="tl">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Generation started</span>
+                      <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Plan ready</span>
+                      <span class="tl-at">Aug 26, 2026, 8:26 AM</span>
+                    </span>
+                  </li>
+                  <li class="pending-row">
+                    <span class="dot pending" aria-hidden="true"></span>
+                    <span>Awaiting your review</span>
+                  </li>
+                </ol>
+              </section>
+              <div class="gate">
+                <button class="btn primary" type="button">
+                  Approve — add 5 items to your backlog
+                </button>
+                <button class="btn ghost" type="button">Decline</button>
+                <p class="hint">Approve materializes the proposals into your backlog.</p>
+              </div>
+            </aside>
+          </div>
+
+          <div class="callouts">
+            <div class="callout">
+              <h4>The list already carries two kinds of row</h4>
+              <p>
+                An event that HAPPENED takes an <code>--el-accent</code> dot and two lines; the one
+                PENDING row takes an <code>--el-border-strong</code> dot, one line and no timestamp.
+                That vocabulary is shipped, and Panel 2 joins it rather than inventing a third.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>The agent vocabulary is already on this surface</h4>
+              <p>
+                Four rows above the timeline, an agent-written plan renders as a bot glyph, a
+                harness and a model. The timeline does not need a second way of naming an agent — it
+                needs this one, compressed to a row.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>The band the new rows land in</h4>
+              <p>
+                <span class="measure">528.5px</span> of fixed chrome,
+                <span class="measure">44px</span>
+                per row. So the rail begins to scroll when its height falls below
+                <code>528.5 + 44N</code> — which is why Panel 4's collapse rule is load-bearing
+                rather than tidy.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 2 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>The same plan, with its content events — ONE sequence, ONE row grammar</h2>
+        </div>
+        <p class="lead">
+          <b>The decision: content events are not a second kind of row.</b> They join the same
+          ordered list, in the same two-line box, with the same dot, and the ROW'S OWN WORDING is
+          what tells a reader which kind it is — a lifecycle row names a state the plan reached (<i
+            >Plan ready</i
+          >, <i>Approved</i>), a content row names an act somebody performed on it (<i
+            >5 proposals appended</i
+          >). A second treatment would ask a reader to learn a distinction that pays nothing: nobody
+          filters this list and nothing acts differently on the two halves. What genuinely differs
+          is VOLUME, and volume is answered by Panel 4's collapse, not by a second dot.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">planned — with content events</span>
+            <aside class="rail tall">
+              <div class="rail-head">
+                <span class="pill">Ready to review</span>
+                <h3>A plan's timeline records what CHANGED, not only that its status moved</h3>
+                <p class="summary">Five proposals across one story, deepened over three passes.</p>
+                <p class="meta">
+                  <span>5 proposed items</span>
+                  <span class="who">
+                    <span class="disc" aria-hidden="true">Z</span>
+                    <span>Requested by Zhu Yue</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="8" width="18" height="12" rx="2" />
+                      <path d="M12 8V4M8 14h.01M16 14h.01" />
+                    </svg>
+                    <span>written by Claude Code</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <span>claude-opus-5</span>
+                  </span>
+                </p>
+              </div>
+              <section>
+                <p class="sec-label">History</p>
+                <ol class="tl">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Generation started</span>
+                      <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label"
+                        >6 proposals appended<span class="tl-actor"> · Claude Code</span></span
+                      >
+                      <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label"
+                        >6 proposals edited<span class="tl-actor"> · Claude Code</span></span
+                      >
+                      <span class="tl-at">Aug 26, 2026, 8:24 – 8:26 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Plan ready</span>
+                      <span class="tl-at">Aug 26, 2026, 8:26 AM</span>
+                    </span>
+                  </li>
+                  <li class="pending-row">
+                    <span class="dot pending" aria-hidden="true"></span>
+                    <span>Awaiting your review</span>
+                  </li>
+                </ol>
+              </section>
+              <div class="gate">
+                <button class="btn primary" type="button">
+                  Approve — add 5 items to your backlog
+                </button>
+                <button class="btn ghost" type="button">Decline</button>
+                <p class="hint">Approve materializes the proposals into your backlog.</p>
+              </div>
+            </aside>
+          </div>
+
+          <div class="stack">
+            <span class="cap">approved — the decision joins the same sequence</span>
+            <aside class="rail tall">
+              <div class="rail-head">
+                <span class="pill approved">Approved</span>
+                <h3>A plan's timeline records what CHANGED, not only that its status moved</h3>
+                <p class="summary">Five proposals across one story, deepened over three passes.</p>
+                <p class="meta">
+                  <span>5 proposed items</span>
+                  <span class="who">
+                    <span class="disc" aria-hidden="true">Z</span>
+                    <span>Requested by Zhu Yue</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="8" width="18" height="12" rx="2" />
+                      <path d="M12 8V4M8 14h.01M16 14h.01" />
+                    </svg>
+                    <span>written by Claude Code</span>
+                    <span class="sep" aria-hidden="true">·</span>
+                    <span>claude-opus-5</span>
+                  </span>
+                </p>
+              </div>
+              <section>
+                <p class="sec-label">History</p>
+                <ol class="tl">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Generation started</span>
+                      <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label"
+                        >6 proposals appended<span class="tl-actor"> · Claude Code</span></span
+                      >
+                      <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label"
+                        >6 proposals edited<span class="tl-actor"> · Claude Code</span></span
+                      >
+                      <span class="tl-at">Aug 26, 2026, 8:24 – 8:26 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Plan ready</span>
+                      <span class="tl-at">Aug 26, 2026, 8:26 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label"
+                        >2 proposals edited<span class="tl-actor"> · Zhu Yue</span></span
+                      >
+                      <span class="tl-at">Aug 26, 2026, 8:58 AM</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body">
+                      <span class="tl-label">Approved<span class="tl-actor"> · Zhu Yue</span></span>
+                      <span class="tl-at">Aug 26, 2026, 9:02 AM</span>
+                    </span>
+                  </li>
+                </ol>
+              </section>
+              <div class="gate">
+                <div class="outcome">
+                  <p class="head">
+                    <svg
+                      class="glyph"
+                      style="width: 16px; height: 16px; color: var(--el-success)"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 3v4M3 5h4M6 17v4m-2-2h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z"
+                      />
+                    </svg>
+                    Added 5 items to your backlog
+                  </p>
+                  <a href="/items">View in backlog</a>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="callouts">
+            <div class="callout">
+              <h4>Two parties, on one list, without a legend</h4>
+              <p>
+                The approved rail names <b>Claude Code</b> on the rows it wrote and
+                <b>Zhu Yue</b> on the rows he edited and on the decision. Nothing says which is a
+                person: the disc is reserved for a human and never appears on a row, so an unadorned
+                name is a person and a name that is a harness is not.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>The edit AFTER the plan was ready is the row that justifies the story</h4>
+              <p>
+                <i>2 proposals edited · Zhu Yue · 8:58 AM</i> sits between <i>Plan ready</i> and
+                <i>Approved</i>. Today that row does not exist, and a reader cannot tell an approval
+                of what they read from an approval of something else with the same id.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>The timestamp line carries a SPAN when a row is a collapsed run</h4>
+              <p>
+                <i>8:24 – 8:26 AM</i>, in the same 12px <code>--el-text-secondary</code> slot a
+                single event's timestamp uses. No second line, no badge, no count chip.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 3 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>The row, per element — and how each of the three parties renders</h2>
+        </div>
+        <p class="panel-note">
+          Every row on this timeline is <code>&lt;label&gt;</code> · <code>&lt;actor&gt;</code> on
+          line one and a timestamp on line two. That is the shipped grammar — the decision event
+          already renders <i>Approved · Zhu Yue</i> — and a content event borrows it whole.
+        </p>
+        <div class="anatomy">
+          <div class="specimen">
+            <p class="sec-label">History</p>
+            <ol class="tl">
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <span class="tl-body">
+                  <span class="tl-label">Plan ready</span>
+                  <span class="tl-at">Aug 26, 2026, 8:26 AM</span>
+                </span>
+              </li>
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <span class="tl-body">
+                  <span class="tl-label"
+                    >5 proposals appended<span class="tl-actor"> · Claude Code</span></span
+                  >
+                  <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                </span>
+              </li>
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <span class="tl-body">
+                  <span class="tl-label"
+                    >3 proposals edited<span class="tl-actor"> · Zhu Yue</span></span
+                  >
+                  <span class="tl-at">Aug 26, 2026, 8:58 AM</span>
+                </span>
+              </li>
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <span class="tl-body">
+                  <span class="tl-label"
+                    >4 proposals appended<span class="tl-actor"> · Motir</span></span
+                  >
+                  <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                </span>
+              </li>
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <span class="tl-body">
+                  <span class="tl-label">1 proposal appended</span>
+                  <span class="tl-at">Aug 26, 2026, 8:23 AM</span>
+                </span>
+              </li>
+              <li class="pending-row">
+                <span class="dot pending" aria-hidden="true"></span>
+                <span>Awaiting your review</span>
+              </li>
+            </ol>
+          </div>
+          <div style="flex: 1 1 480px; min-width: 420px">
+            <table class="spec">
+              <tr>
+                <th>Element</th>
+                <th>Primitive / token</th>
+                <th>What it says</th>
+              </tr>
+              <tr>
+                <td>dot</td>
+                <td>
+                  6px circle · <code>--el-accent</code>, or <code>--el-border-strong</code> for the
+                  one pending row · <code>aria-hidden</code>
+                </td>
+                <td>
+                  Unchanged from today, and the ONLY two-tone signal on the list: it happened, or it
+                  has not happened yet. It does not encode lifecycle-vs-content.
+                </td>
+              </tr>
+              <tr>
+                <td>label</td>
+                <td>14px · <code>--el-text</code></td>
+                <td>
+                  A past-tense state for a lifecycle event; a count, a noun and a past-tense verb
+                  for a content one. The wording is the discriminator.
+                </td>
+              </tr>
+              <tr>
+                <td>actor</td>
+                <td>14px · <code>--el-text-secondary</code>, after a middot separator</td>
+                <td>
+                  The party who performed THIS act — not the plan's author column. Omitted entirely
+                  when nobody asked (a cadence-originated mutation).
+                </td>
+              </tr>
+              <tr>
+                <td>timestamp</td>
+                <td>12px · <code>--el-text-secondary</code></td>
+                <td>
+                  One instant, or a span when the row is a collapsed run (Panel 4). Fixed-UTC
+                  formatting, as shipped.
+                </td>
+              </tr>
+              <tr>
+                <td>row box</td>
+                <td>
+                  <code>flex</code> · <code>items-start</code> · <code>gap-2</code> · 8px between
+                  rows
+                </td>
+                <td>
+                  36px tall, 298px of text column. Measured on the shipped render; every label below
+                  is chosen to hold that.
+                </td>
+              </tr>
+            </table>
+
+            <table class="spec" style="margin-top: 18px">
+              <tr>
+                <th>The party</th>
+                <th>How it renders on a row</th>
+                <th>Why</th>
+              </tr>
+              <tr>
+                <td>a person</td>
+                <td>the bare display name — <i>· Zhu Yue</i></td>
+                <td>
+                  Exactly what the shipped decision row does. No avatar and no initial disc: the
+                  disc lives in the header, where one line names one person.
+                </td>
+              </tr>
+              <tr>
+                <td>an agent<br /><code>source=mcp</code></td>
+                <td>the bare HARNESS name — <i>· Claude Code</i></td>
+                <td>
+                  A harness name is not a person's name and must not be dressed as one, so it takes
+                  no disc, no avatar and no colour of its own.
+                </td>
+              </tr>
+              <tr>
+                <td>Motir<br /><code>source=native</code></td>
+                <td>the product name — <i>· Motir</i></td>
+                <td>
+                  The header's own second arm, which already reads <i>written by Motir</i> for a
+                  natively generated plan.
+                </td>
+              </tr>
+              <tr>
+                <td>the MODEL</td>
+                <td>
+                  <b>not on the row.</b> It stays on the header's attribution line and rides the
+                  row's <code>title</code>
+                </td>
+                <td>
+                  Measured: <i>5 proposals appended · Claude Code</i> is 36px;
+                  <i>… · claude-opus-5</i> is <span class="measure">56px</span>. The model costs a
+                  second line on every row, and the header already carries it once.
+                </td>
+              </tr>
+              <tr>
+                <td>nobody</td>
+                <td>no actor clause at all — <i>1 proposal appended</i></td>
+                <td>
+                  A cadence-originated mutation has no requester, and the header already says
+                  <i>auto-planned, nobody asked</i>. A row must not attribute it to the project
+                  owner.
+                </td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 4 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>The collapse rule, and what a row does NOT show</h2>
+        </div>
+        <p class="lead">
+          <b
+            >Consecutive rows of the same kind, by the same actor, with nothing between them, are
+            ONE row.</b
+          >
+          The count is over the acts; the timestamp becomes a span. Collapse is on
+          <i>kind + actor + adjacency</i> and never on a time window — a window merges two agents'
+          work, adjacency cannot. And a collapsed run never swallows a different kind: a
+          <i>Plan ready</i>, an approve or a decline always breaks a run, so no decision is ever
+          hidden inside a count.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">without collapse — the generator's real shape</span>
+            <aside class="rail">
+              <p class="sec-label">History</p>
+              <ol class="tl">
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label">Generation started</span
+                    ><span class="tl-at">8:23 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal appended<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:23 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >5 proposals appended<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:23 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:24 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:24 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:25 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:25 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:26 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >1 proposal edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:26 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label">Plan ready</span
+                    ><span class="tl-at">8:26 AM</span></span
+                  >
+                </li>
+              </ol>
+            </aside>
+          </div>
+
+          <div class="stack">
+            <span class="cap">collapsed — kind + actor + adjacency</span>
+            <aside class="rail">
+              <p class="sec-label">History</p>
+              <ol class="tl">
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label">Generation started</span
+                    ><span class="tl-at">8:23 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >6 proposals appended<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:23 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label"
+                      >6 proposals edited<span class="tl-actor"> · Claude Code</span></span
+                    ><span class="tl-at">8:24 – 8:26 AM</span></span
+                  >
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="tl-body"
+                    ><span class="tl-label">Plan ready</span
+                    ><span class="tl-at">8:26 AM</span></span
+                  >
+                </li>
+              </ol>
+            </aside>
+          </div>
+
+          <div class="callouts">
+            <div class="callout">
+              <h4>Why it is not cosmetic</h4>
+              <p>
+                A titles-first pass is one skeleton append plus one edit PER proposal, so ten
+                proposals is eleven rows before anything a reader cares about. At
+                <span class="measure">44px</span> a row, the uncollapsed list on the left is 440px
+                of timeline — enough, on a short window, to push the Approve button out of view on a
+                plan nobody has looked at yet.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>The diff a row shows AT REST: a count, and nothing else</h4>
+              <p>
+                Not the fields, and not the values. Measured:
+                <i>Estimate and story points changed · Claude Code</i> is
+                <span class="measure">56px</span> — two fields already spill to a second line, and a
+                deepen touches up to nine. A row that names its fields is a row that cannot hold
+                them.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>And nothing expands</h4>
+              <p>
+                No disclosure triangle, no drawer, no hover card in this revision. What a proposal
+                currently SAYS is already two surfaces away and better rendered there — the list
+                view and the proposal read view. The timeline's job is what MOVED and who moved it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 5 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <h2>The legacy plan — nothing is drawn, and that is the drawing</h2>
+        </div>
+        <p class="lead">
+          <b>A plan created before this ships renders exactly today's timeline.</b> No
+          <i>no changes recorded</i> line, no dimmed placeholder, no explanatory caption. Every plan
+          in the product today is this plan, so an empty state here would put a permanent apology on
+          the whole back catalogue — and the absence is not a gap: nothing was recorded because
+          nothing recorded it. The rail already has one row for the thing that IS outstanding, and
+          it is the pending row.
+        </p>
+        <div class="row-of-rails">
+          <div class="stack">
+            <span class="cap">a plan from before the trail existed</span>
+            <aside class="rail">
+              <div class="rail-head">
+                <span class="pill approved">Approved</span>
+                <h3>Onboarding: the convention step and its read-only refinement</h3>
+                <p class="meta"><span>7 proposed items</span></p>
+              </div>
+              <section>
+                <p class="sec-label">History</p>
+                <ol class="tl">
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body"
+                      ><span class="tl-label">Generation started</span
+                      ><span class="tl-at">Jun 14, 2026, 10:02 AM</span></span
+                    >
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body"
+                      ><span class="tl-label">Plan ready</span
+                      ><span class="tl-at">Jun 14, 2026, 10:09 AM</span></span
+                    >
+                  </li>
+                  <li>
+                    <span class="dot" aria-hidden="true"></span>
+                    <span class="tl-body"
+                      ><span class="tl-label">Approved<span class="tl-actor"> · Zhu Yue</span></span
+                      ><span class="tl-at">Jun 14, 2026, 11:31 AM</span></span
+                    >
+                  </li>
+                </ol>
+              </section>
+            </aside>
+          </div>
+          <div class="callouts">
+            <div class="callout">
+              <h4>The assertion this earns</h4>
+              <p>
+                A plan whose revision set is empty produces byte-for-byte today's event list. That
+                is a test the read card can write against an empty table, and it is the state every
+                existing plan is in.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>One shipped detail the read card must change</h4>
+              <p>
+                Today each row is keyed <code>key={ev.kind}</code>, which is unique only because
+                each lifecycle kind occurs at most once. Feeding the shipped rail eight events with
+                a repeated kind renders all eight and logs
+                <i>"Encountered two children with the same key"</i> — measured, not inferred.
+                Content rows repeat, so the key becomes the event's own identity.
+              </p>
+            </div>
+            <div class="callout">
+              <h4>And one ink correction it inherits</h4>
+              <p>
+                The shipped actor clause is <code>--el-text-muted</code> on
+                <code>--el-surface</code> — 4.17:1, below AA. Every actor on this board is
+                <code>--el-text-secondary</code> (6.24:1), which is what the row that gains an actor
+                on most of its lines should carry.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANEL 6 ================= -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">6</span>
+          <h2>The access path — no new door</h2>
+        </div>
+        <p class="panel-note">
+          The timeline is reached exactly as it is today: the left nav's <b>Plans</b> entry → a plan
+          row in the list → the plan detail at <code>/plans/{id}</code>, where the rail is the
+          right-hand pane and <b>History</b> is its second section, under the header and above the
+          approve gate. This asset adds no route, no tab, no control and no entry affordance — it
+          adds rows to a section a reader already lands on. That is the whole of the access path,
+          and it is stated here rather than drawn because there is no new door to draw.
+        </p>
+      </section>
+    </div>
+  </body>
+</html>
