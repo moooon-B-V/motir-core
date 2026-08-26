@@ -203,7 +203,7 @@ test.describe('automation rules — author → fire → audit', () => {
     await expect(
       page.getByRole('button', { name: 'Actions for Prioritise resolved bugs' }),
     ).toBeVisible();
-    await expect(page.getByText('When transitioned')).toBeVisible();
+    await expect(body(page).getByText('When transitioned')).toBeVisible();
 
     const ruleId = await ruleIdByName(tenant.projectId, 'Prioritise resolved bugs');
 
@@ -253,7 +253,7 @@ test.describe('automation rules — author → fire → audit', () => {
     await expect(page.getByText('Failure').first()).toBeVisible();
     // Expand the failure detail → the typed engine error surfaces.
     await page.getByRole('button', { name: 'Toggle error detail' }).first().click();
-    await expect(page.getByText('This run failed')).toBeVisible();
+    await expect(body(page).getByText('This run failed')).toBeVisible();
   });
 
   test('an auto-disabled rule shows the banner; re-enabling clears it', async ({ page }) => {
@@ -283,7 +283,7 @@ test.describe('automation rules — author → fire → audit', () => {
 
     // The auto-disabled banner + the Re-enable affordance.
     await expect(
-      page.getByText(/disabled automatically after 10 consecutive failures/),
+      body(page).getByText(/disabled automatically after 10 consecutive failures/),
     ).toBeVisible();
     const reEnable = page.getByRole('button', { name: 'Re-enable' });
     await expect(reEnable).toBeVisible();
@@ -292,7 +292,7 @@ test.describe('automation rules — author → fire → audit', () => {
 
     // The banner clears (the rule re-enables and its failure tally resets).
     await expect(
-      page.getByText(/disabled automatically after 10 consecutive failures/),
+      body(page).getByText(/disabled automatically after 10 consecutive failures/),
     ).toBeHidden();
     await expect
       .poll(async () => {
@@ -402,8 +402,8 @@ test.describe('automation rules — author → fire → audit', () => {
     // accessibility tree excludes the hidden copy, so the row's own switch —
     // whose accessible name carries the rule name — is a stable handle.
     await expect(page.getByRole('switch', { name: /Audited rule/ })).toBeVisible();
-    await expect(page.getByText('Never run')).toBeVisible();
-    await expect(page.getByText('No actions', { exact: false })).toBeVisible();
+    await expect(body(page).getByText('Never run')).toBeVisible();
+    await expect(body(page).getByText('No actions', { exact: false })).toBeVisible();
     await expectAxeClean(page, 'list');
 
     // The editor (every offered trigger/action config kind reachable; open it).
@@ -419,6 +419,22 @@ test.describe('automation rules — author → fire → audit', () => {
     await expectAxeClean(page, 'audit-log');
   });
 });
+
+/**
+ * The LIVE page body.
+ *
+ * ⚠️ SCOPE PAGE-BODY TEXT TO THIS, never to the bare page. MOTIR-3443 put the
+ * automation pane's body behind an in-page `<Suspense>`, and React keeps the
+ * PREVIOUS subtree mounted while the new one streams — so both copies are in the
+ * DOM at once and an unscoped `getByText` matches BOTH, failing strict mode.
+ * `motir-core/CLAUDE.md` § the second cost of a boundary describes exactly this
+ * and gives two remedies: `getByRole`, whose accessibility tree excludes the
+ * hidden copy, or scoping to the live subtree — which is what this is. `#main`
+ * is `AppLayout`'s skip target and holds exactly the arrived page.
+ */
+function body(page: Page) {
+  return page.locator('#main');
+}
 
 async function expectAxeClean(page: Page, label: string): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
