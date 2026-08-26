@@ -241,6 +241,27 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * So a long declared wait is not a reason to record a large cost here — it is a
  * reason to check whether the spec is asserting the wait or merely serving it.
  * Re-measure both from the first green CI run that includes them.
+ *
+ * ⚠️ `passkeys.spec.ts` (MOTIR-3615) carries the LOCAL provenance too, and the
+ * guard would have caught it with no entry before it reached CI — the spec
+ * passed locally and would have been assigned to no leg and never run.
+ *
+ * Measured on 2026-08-26 against a production build, on its own port (3177) and
+ * its own database, THREE times: **3.8 s**, **4.2 s** and **4.7 s** of TEST time
+ * (2.2/2.4/2.9 s for the journey, then ~0.9 s apiece for the two refusals). The
+ * HIGHEST is recorded, following the entries above — under-estimating is the
+ * direction that unbalances a bin-packer.
+ *
+ * ⚠️ AND THE WALL CLOCK IS NOT THE COST. Each of those runs took ~2 minutes end
+ * to end, essentially all of it the `webServer`'s own `next build` — a fixed
+ * cost every lane pays once, not this spec's. Reading the wall clock would have
+ * recorded ~115 s here, roughly nine times the heaviest real entry, and the
+ * bin-packer would have built a leg around a number that does not exist. Take
+ * the per-test durations the `list` reporter prints, never the summary line.
+ *
+ * It is cheap for what it does because the ceremonies are virtual: a CDP
+ * authenticator answers instantly, where the 2FA spec pays for six real sign-in
+ * journeys.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
@@ -378,6 +399,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'token-permissions.spec.ts': 2.2,
   'top-bar-budget.spec.ts': 6.8,
   'triage-flow.spec.ts': 11.6,
+  'passkeys.spec.ts': 4.7,
   'two-factor.spec.ts': 13.3,
   'work-item-delete.spec.ts': 5.7,
   'work-item-mentions.spec.ts': 5.6,

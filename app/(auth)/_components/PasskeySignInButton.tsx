@@ -70,12 +70,26 @@ export function PasskeySignInButton({
         // an unfamiliar prompt, which is a decision rather than a failure — and a
         // sign-in screen that turns red at it teaches people not to try again.
         // There is deliberately no i18n key for this case.
-        if (code === 'AUTH_CANCELLED' || code === 'ERROR_CEREMONY_ABORTED') return;
-        onError(
-          code === 'CHALLENGE_NOT_FOUND' ? t('passkey.challengeExpired') : t('passkey.noMatch'),
-        );
+        //
+        // ⚠️ AND THE PENDING FLAG IS RELEASED ON *EVERY* REFUSAL. An early
+        // `return` here left the button reading "Waiting for your browser…" for
+        // ever, so a reader who dismissed the sheet once could never try again —
+        // and the component test that asserted it "cannot be double-fired" was
+        // happy, because a permanently-pending button cannot be fired at all.
+        // The E2E is what caught it.
+        if (code !== 'AUTH_CANCELLED' && code !== 'ERROR_CEREMONY_ABORTED') {
+          onError(
+            code === 'CHALLENGE_NOT_FOUND' ? t('passkey.challengeExpired') : t('passkey.noMatch'),
+          );
+        }
+        setPending(false);
         return;
       }
+      // SUCCESS — and `pending` deliberately stays TRUE from here. The document
+      // load below is already under way and this component is on its way out;
+      // clearing the flag would re-enable a control whose only remaining job is
+      // to be replaced.
+      //
       // A FULL document load, not `router.push`. The password path never
       // navigates from here — Better-Auth's redirect plugin has already started
       // one — but the passkey ceremony returns a session and no redirect, so the

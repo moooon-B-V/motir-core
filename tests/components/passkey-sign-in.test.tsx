@@ -215,6 +215,37 @@ describe('the two refusals take opposite shapes', () => {
     expect(alert.textContent).toMatch(/email and password/i);
   });
 
+  it('RECOVERS after every refusal — the button must not stay pending', async () => {
+    // ⚠️ THE REGRESSION THIS PINS SHIPPED ONCE. An early `return` on the refusal
+    // path left the control reading "Waiting for your browser…" for ever, so a
+    // reader who dismissed the sheet could never try again. The
+    // cannot-be-double-fired test above was GREEN throughout, because a
+    // permanently-pending button cannot be fired at all — it took the E2E to
+    // catch it. Both refusal shapes are driven here so neither can regress
+    // alone.
+    for (const error of [
+      { code: 'AUTH_CANCELLED', message: 'x', status: 400, statusText: 'x' },
+      { code: 'PASSKEY_NOT_FOUND', message: 'x', status: 404, statusText: 'x' },
+    ]) {
+      signInPasskey.mockResolvedValue({ data: null, error });
+      const view = renderWithIntl(<SignInCard />);
+
+      fireEvent.click(control());
+
+      await waitFor(() => expect(signInPasskey).toHaveBeenCalled());
+      // Back to its idle LABEL, which is what a reader sees, and clickable again.
+      await waitFor(() => expect(screen.getByText(/sign in with a passkey/i)).toBeTruthy());
+      expect(screen.queryByText(/waiting for your browser/i)).toBeNull();
+
+      signInPasskey.mockClear();
+      fireEvent.click(control());
+      await waitFor(() => expect(signInPasskey).toHaveBeenCalledTimes(1));
+
+      view.unmount();
+      vi.clearAllMocks();
+    }
+  });
+
   it('survives a thrown ceremony and stays clickable', async () => {
     signInPasskey.mockRejectedValue(new Error('boom'));
     renderWithIntl(<SignInCard />);
