@@ -214,6 +214,43 @@ export async function stopJobWorker(): Promise<void> {
 }
 
 /**
+ * KILL the worker outright — SIGKILL, no drain (Story MOTIR-3417 · MOTIR-3487).
+ *
+ * ⚠️ THE DIFFERENCE FROM `stopJobWorker` IS THE WHOLE POINT, and a spec that
+ * reached for the graceful one would prove the opposite of what it meant to.
+ * `stopJobWorker` sends SIGTERM, which makes the worker DRAIN: it stops claiming,
+ * WAITS for its in-flight runs (up to `DRAIN_TIMEOUT_MS`) and then releases them.
+ * A supervisor mid-index would simply finish, and the spec would assert nothing
+ * about resuming.
+ *
+ * SIGKILL is the crash: the process dies holding the claim, the row stays
+ * `running` with a lease nobody renews, and it becomes reclaimable only when that
+ * lease expires (`LEASE_MS`, 60 s). That is the path the story's criterion is
+ * about — *"a supervisor survives a worker restart mid-run and resumes
+ * supervising its container — asserted by a test that actually restarts, not by
+ * reading the code"* — and it exercises the reclaim's attempt REFUND rather than
+ * the drain's.
+ *
+ * `startJobWorker()` brings a fresh one up; the module-level handle is cleared
+ * here so it will.
+ */
+export async function killJobWorker(): Promise<void> {
+  const child = worker;
+  if (!child) return;
+  worker = undefined;
+  await new Promise<void>((resolve) => {
+    // Resolve on the real exit rather than after a sleep — the same
+    // authoritative-signal discipline every assertion in this lane owes.
+    const done = setTimeout(resolve, 10_000);
+    child.on('exit', () => {
+      clearTimeout(done);
+      resolve();
+    });
+    child.kill('SIGKILL');
+  });
+}
+
+/**
  * Start an ADDITIONAL worker owned by the calling spec, with a PRIVATE routing
  * file. See the `specWorker` note above for why a spec ever needs one.
  *
