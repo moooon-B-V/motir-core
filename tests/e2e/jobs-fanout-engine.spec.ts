@@ -326,7 +326,20 @@ test('@smoke an invite still emails exactly once with the fast lane on the engin
   await signIn(page, t.ownerEmail, PWD);
 
   const invitee = 'fanout-invitee@example.com';
-  await page.goto('/settings/workspace');
+  // ⚠️ RE-POINTED (MOTIR-3563). This read `/settings/workspace`, which
+  // MOTIR-3500 (`ae6c791e`) made `notFound()` below the workspace-tier reveal
+  // threshold — `WORKSPACE_TIER_REVEAL_MIN = 2`, and `seedTenant` above creates
+  // exactly ONE workspace. So the page 404'd, the Invite button never mounted,
+  // and `locator.click` waited out the full 120s budget on both attempts. The
+  // affordance did not disappear: below the threshold the workspace sections
+  // FOLD IN to `/settings/organization` (`WorkspaceFoldInSection` mounts the
+  // very same `MembersCard`), which is where a one-workspace user actually
+  // invites from. `workspace-flows.spec.ts` was re-pointed for this at the
+  // time and this spec was missed — it is the only other one that reaches the
+  // standalone area. Keep the tenant at one workspace: driving the invite from
+  // the surface the user really has is the point, and seeding a second
+  // workspace purely to reveal a settings area would test the wrong thing.
+  await page.goto('/settings/organization');
   await page.getByRole('button', { name: 'Invite' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Email address').fill(invitee);
