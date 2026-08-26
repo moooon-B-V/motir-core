@@ -91,6 +91,23 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * saves proportionally more. Re-measure from the first green CI run that
  * includes it; expect something between the two.
  *
+ * ⚠️ `two-factor.spec.ts` (MOTIR-1223) carries the LOCAL provenance too, and the
+ * guard caught it with no entry before it ever reached CI — which is this file
+ * working as designed: the spec passed locally and would have been assigned to no
+ * leg and never run.
+ *
+ * Measured on 2026-08-26 against a production build, on its own port (3217) and
+ * its own database, THREE times: **13.3 s** on a cold server, then **12.6 s** and
+ * **10.4 s** warm. The COLD reading is recorded, following the two entries above
+ * — under-estimating is the direction that unbalances a bin-packer. The spread is
+ * narrow because the spec's cost is dominated by six full sign-in journeys rather
+ * than by first-hit route compilation; what a warm run saves is the enrol page's
+ * initial compile, paid once.
+ *
+ * It is the heaviest new entry since `onboarding-migrate.spec.ts` and worth
+ * watching when the bin-packer redistributes: six tests, each of which signs up,
+ * enrols with a real RFC-6238 code, and signs in again.
+ *
  * ⚠️ `jobs-fanout-engine.spec.ts` (MOTIR-3462) carries the LOCAL provenance too,
  * and for the reason the guard exists: a brand-new spec with no entry here is
  * assigned to no leg and never runs — which is exactly what the guard caught on
@@ -343,6 +360,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'token-permissions.spec.ts': 2.2,
   'top-bar-budget.spec.ts': 6.8,
   'triage-flow.spec.ts': 11.6,
+  'two-factor.spec.ts': 13.3,
   'work-item-delete.spec.ts': 5.7,
   'work-item-mentions.spec.ts': 5.6,
   'work-item-type-vocabulary.spec.ts': 7.4,

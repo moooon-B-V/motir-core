@@ -15,6 +15,7 @@ import {
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { warmPool } from '../helpers/warmPool';
+import { totpFromSetupKey } from '../e2e/_helpers/totp';
 
 // Story 8.11 · Subtask MOTIR-1222 — the STORY-LEVEL seam.
 //
@@ -139,6 +140,26 @@ describe('the plugin writes and Motir reads the SAME row', () => {
     expect(uri.searchParams.get('issuer')).toBe(TWO_FACTOR_ISSUER);
     expect(uri.searchParams.get('period')).toBe(String(TWO_FACTOR_TOTP_PERIOD_SECONDS));
     expect(uri.searchParams.get('digits')).toBe('6');
+  });
+
+  it('the E2E’s authenticator helper computes the SAME code as the server’s secret', async () => {
+    // The E2E (MOTIR-1223) reads the base32 setup key off the enrol screen and
+    // HMACs its DECODED BYTES, exactly as 1Password would. The server HMACs the
+    // RAW secret string. Those are the same bytes only because the URI is
+    // `base32.encode(rawSecret)` — and getting that wrong produces codes that
+    // never match, a failure that looks like a broken feature rather than a
+    // broken helper. Tying the two together HERE, against a real enrolment,
+    // means the E2E cannot fail for that reason without this failing first and
+    // far more cheaply.
+    const { user, headers } = await signedInUser();
+    const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+
+    const setupKey = new URL(enabled.totpURI.replace('otpauth://', 'https://')).searchParams.get(
+      'secret',
+    )!;
+    const at = Date.now();
+
+    expect(totpFromSetupKey(setupKey, { at })).toBe(totpFor(await storedSecret(user.id), at));
   });
 
   it('confirm with a REAL code → the pane flips on, with both methods and ten codes', async () => {
