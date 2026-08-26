@@ -188,14 +188,35 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
     expect(orgm!.role).toBe('member');
   });
 
-  it('adding a user to the ORG creates NO workspace membership (org-only members are valid)', async () => {
+  it('adding a user to the ORG creates NO workspace membership at TWO workspaces (org-only members are valid)', async () => {
+    // RE-POINTED at a TWO-workspace org by MOTIR-3501. §5's asymmetry is
+    // unchanged at ≥ 2 and that is what this case has always defended; at ONE
+    // workspace the count-1 arm now fires, which the case below asserts.
+    //
+    // ⚠️ THE ACTING ADMIN BELONGS TO EXACTLY ONE OF THE TWO, deliberately. A
+    // fixture whose workspaces share an owner puts the actor in both, so an
+    // ACTOR-scoped workspace count would read 2 and this case would pass for the
+    // wrong reason — against an implementation that fires the arm in every
+    // two-workspace org whose admin is in one of them. This is the only shape
+    // that tells an org-scoped count from an actor-scoped one.
     const owner = await createTestUser();
+    const other = await createTestUser();
     const orgOnly = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
       name: 'Acme',
       ownerUserId: owner.id,
     });
     const orgId = await orgIdOfWorkspace(workspace.id);
+
+    const second = await adminDb.workspace.create({
+      data: { name: 'Acme Beta', slug: 'acme-beta-org-only', organizationId: orgId },
+    });
+    await adminDb.workspaceMembership.create({
+      data: { userId: other.id, workspaceId: second.id, role: 'owner' },
+    });
+    await adminDb.organizationMembership.create({
+      data: { organizationId: orgId, userId: other.id, role: 'member' },
+    });
 
     await organizationsService.addMember({
       organizationId: orgId,
@@ -205,13 +226,122 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
     });
 
     // No workspace membership anywhere.
-    const wsm = await adminDb.workspaceMembership.findUnique({
-      where: { userId_workspaceId: { userId: orgOnly.id, workspaceId: workspace.id } },
+    expect(await adminDb.workspaceMembership.count({ where: { userId: orgOnly.id } })).toBe(0);
+    // ...and they can't reach either workspace (org member, no workspace membership).
+    expect(await organizationsService.resolveWorkspaceAccess(orgOnly.id, workspace.id)).toBeNull();
+    expect(await organizationsService.resolveWorkspaceAccess(orgOnly.id, second.id)).toBeNull();
+  });
+
+  it('adding a user to the ORG at ONE workspace ALSO joins that workspace (§5 count-1 arm)', async () => {
+    // MOTIR-3501. The dead end this closes: below two workspaces §6 hides the
+    // workspace tier entirely, so an org-only member had no UI, no switcher and
+    // no add-to-workspace action to repair it.
+    //
+    // This runs under the non-bypass runtime role like every other test here, so
+    // the `bindWorkspaceContext` call inside `addMember` is LOAD-BEARING: without
+    // it `membership_insert_active_or_bootstrap` refuses the insert outright and
+    // this case fails rather than silently passing under an owner connection
+    // (AC 7).
+    const owner = await createTestUser();
+    const invitee = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: owner.id,
     });
-    expect(wsm).toBeNull();
-    // ...and they can't reach the workspace (org member without a workspace membership).
-    const access = await organizationsService.resolveWorkspaceAccess(orgOnly.id, workspace.id);
-    expect(access).toBeNull();
+    const orgId = await orgIdOfWorkspace(workspace.id);
+
+    await organizationsService.addMember({
+      organizationId: orgId,
+      userId: invitee.id,
+      role: 'member',
+      actorUserId: owner.id,
+    });
+
+    const wsm = await adminDb.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId: invitee.id, workspaceId: workspace.id } },
+    });
+    expect(wsm).not.toBeNull();
+    expect(wsm!.role).toBe('member');
+
+    // The point of the arm: they can actually reach the workspace now.
+    const access = await organizationsService.resolveWorkspaceAccess(invitee.id, workspace.id);
+    expect(access).not.toBeNull();
+  });
+
+  it('the count-1 arm writes BOTH rows in ONE transaction', async () => {
+    // AC 2, and the case that FOUND A REAL DEFECT rather than confirming one.
+    //
+    // The arm first swallowed a unique violation on the workspace membership, on
+    // the reasoning that the invariant already held. It does not survive contact
+    // with Postgres: a failed statement ABORTS the transaction, so catching the
+    // error in JS leaves a dead transaction and the org-membership INSERT before
+    // it is rolled back at commit. This assertion returned 0 org memberships, and
+    // the arm now CHECKS FIRST instead.
+    //
+    // The shape it covers is a common path, not a race: the user was added to the
+    // workspace directly (upward-joining them to the org) and is now being given
+    // an explicit org role. Both rows must exist afterwards, exactly once.
+    const owner = await createTestUser();
+    const invitee = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: owner.id,
+    });
+    const orgId = await orgIdOfWorkspace(workspace.id);
+
+    // Already a workspace member (added directly, which upward-joined them to the
+    // org). Remove the org row so `addMember` runs its create path again.
+    await workspacesService.addMember({ userId: invitee.id, workspaceId: workspace.id });
+    await adminDb.organizationMembership.deleteMany({
+      where: { organizationId: orgId, userId: invitee.id },
+    });
+
+    await organizationsService.addMember({
+      organizationId: orgId,
+      userId: invitee.id,
+      role: 'member',
+      actorUserId: owner.id,
+    });
+
+    // Exactly one workspace membership, and the org row committed.
+    expect(
+      await adminDb.workspaceMembership.count({
+        where: { userId: invitee.id, workspaceId: workspace.id },
+      }),
+    ).toBe(1);
+    expect(
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: invitee.id },
+      }),
+    ).toBe(1);
+  });
+
+  it('is still idempotent-safe on a second add, leaving exactly one workspace membership', async () => {
+    // AC 4.
+    const owner = await createTestUser();
+    const invitee = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: owner.id,
+    });
+    const orgId = await orgIdOfWorkspace(workspace.id);
+
+    const add = () =>
+      organizationsService.addMember({
+        organizationId: orgId,
+        userId: invitee.id,
+        role: 'member',
+        actorUserId: owner.id,
+      });
+
+    await add();
+    await expect(add()).rejects.toBeInstanceOf(AlreadyOrgMemberError);
+
+    expect(
+      await adminDb.workspaceMembership.count({
+        where: { userId: invitee.id, workspaceId: workspace.id },
+      }),
+    ).toBe(1);
   });
 
   it('rejects a duplicate org add with AlreadyOrgMemberError', async () => {

@@ -28,9 +28,34 @@ export interface UserMenuProps {
    * flipped it would see a menu row leading to a route that 404s them.
    */
   platformStaff?: boolean;
+  /**
+   * The active org reveals the WORKSPACE tier (≥2 workspaces the viewer belongs
+   * to — `lib/workspaces/tierDisclosure.ts`). Gates the "Workspace settings"
+   * row, which is the one entry point in this menu that NAMES the tier.
+   *
+   * ⚠️ ABSENT below the threshold, not disabled — the same posture as
+   * `platformStaff` above, for the same reason: no markup anywhere may name
+   * `/settings/workspace` while the product is telling the user that tier does
+   * not exist yet (`docs/decisions/organization-tier.md` §6d). A row that is
+   * present-but-dimmed still teaches the concept, which is exactly what the
+   * collapsed state is for.
+   *
+   * Settings stay reachable at every count: this menu keeps its Account row, the
+   * org control's first row is `/settings/organization`, and at one workspace
+   * that page HOSTS the folded-in workspace sections.
+   *
+   * Defaults FALSE — an omitted prop hides the row rather than leaking it, so a
+   * caller that forgets to thread the count fails closed.
+   */
+  workspaceTierRevealed?: boolean;
 }
 
-export function UserMenu({ name, email, platformStaff = false }: UserMenuProps) {
+export function UserMenu({
+  name,
+  email,
+  platformStaff = false,
+  workspaceTierRevealed = false,
+}: UserMenuProps) {
   const t = useTranslations('shell');
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -79,14 +104,16 @@ export function UserMenu({ name, email, platformStaff = false }: UserMenuProps) 
             <UserCog className="text-(--el-text-muted) h-4 w-4" aria-hidden />
             {t('userMenu.accountSettings')}
           </a>
-          <a
-            href="/settings/workspace"
-            onClick={() => setOpen(false)}
-            className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-          >
-            <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-            {t('userMenu.workspaceSettings')}
-          </a>
+          {workspaceTierRevealed ? (
+            <a
+              href="/settings/workspace"
+              onClick={() => setOpen(false)}
+              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+            >
+              <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+              {t('userMenu.workspaceSettings')}
+            </a>
+          ) : null}
           {platformStaff ? (
             <>
               <div role="separator" className="my-1 border-t border-(--el-border)" />

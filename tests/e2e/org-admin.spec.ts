@@ -96,12 +96,19 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   const orgMenu = page.getByRole('button', { name: 'Organization menu' });
   await expect(orgMenu).toBeVisible();
   await orgMenu.click();
-  // Scope to href: the shell sidebar also has a "Settings" link (to
-  // /settings/workspace) — the org menu's entries are the /settings/organization
-  // ones.
-  const orgSettingsLink = page.locator('a[href="/settings/organization"]');
+  // ⚠️ SCOPE TO THE MENU, not to the href (MOTIR-3502). This used to scope by
+  // href alone, on the reasoning that "the shell sidebar also has a Settings
+  // link (to /settings/workspace)" — so the href was a unique disambiguator.
+  // §6d's collapse re-points that sidebar door at `/settings/organization` below
+  // the workspace-tier reveal threshold, which this fixture is in, so the href
+  // now matches TWO elements and strict mode refuses. The menu's own list is the
+  // stable scope, and it is what the assertion always meant.
+  const orgMenuList = page.getByRole('list').filter({
+    has: page.locator('a[href="/settings/organization/members"]'),
+  });
+  const orgSettingsLink = orgMenuList.locator('a[href="/settings/organization"]');
   await expect(orgSettingsLink).toBeVisible();
-  await expect(page.locator('a[href="/settings/organization/members"]')).toBeVisible();
+  await expect(orgMenuList.locator('a[href="/settings/organization/members"]')).toBeVisible();
   await expect(page.getByRole('button', { name: /New workspace/ })).toBeVisible();
   // Billing is CLOUD-ONLY now (Story 8.1.7, ADR §6): the "Billing & plans" menu
   // row renders only on a Motir cloud build (MOTIR_CLOUD). The E2E webServer runs
@@ -161,15 +168,43 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
     page.getByText(`${T1_DEE} added to the organization`, { exact: true }).first(),
   ).toBeVisible();
 
-  // The roster now renders (2 people); Dee appears with org role Member and "No
-  // workspaces" (org-only member — the asymmetric membership direction). Anchor
+  // The roster now renders (2 people); Dee appears with org role Member. Anchor
   // on Dee's unique role combobox: the success toast renders as an <li> naming
   // the same email, so an `li`/text match would collide in strict mode.
   await expect(page.getByText('2 people')).toBeVisible();
   const roleCombo = page.getByRole('combobox', { name: 'Organization role for Dee Member' });
   await expect(roleCombo).toBeVisible();
   const deeRow = page.locator('li').filter({ has: roleCombo });
-  await expect(deeRow.getByText('No workspaces')).toBeVisible();
+
+  // ⚠️ THIS ASSERTION INVERTED IN MOTIR-3501, and the inversion is the fix.
+  //
+  // It used to read `await expect(deeRow.getByText('No workspaces')).toBeVisible()`,
+  // citing "org-only member — the asymmetric membership direction". That was a
+  // faithful description of §5 and it was also the DEAD END MOTIR-3500 was filed
+  // about: this org has ONE workspace (only `signUp` above), so the tier Dee
+  // needs to be in is the tier §6 hides — no switcher, no add-to-workspace
+  // action on this roster, and their only exit creates a second workspace and
+  // splits the team. "No workspaces" was the admin's view of a teammate who
+  // could not work.
+  //
+  // §5 now carries a count-1 arm: at exactly one workspace an org add ALSO
+  // creates that workspace's membership, so Dee lands somewhere they can work
+  // and the roster shows the workspace rather than the gap.
+  //
+  // The asymmetry itself is UNCHANGED at ≥ 2 and is still asserted — at the
+  // service layer, where the fixture can put the acting admin in exactly one of
+  // two workspaces (`tests/organizations-service.test.ts` → "adding a user to
+  // the ORG creates NO workspace membership at TWO workspaces"). That shape is
+  // the only one that distinguishes an org-scoped count from an actor-scoped
+  // one, which is why it belongs there and not here.
+  //
+  // The chip is matched by its SHAPE rather than the literal name: the
+  // auto-provisioned workspace is `${user.name}'s Workspace` and that name is
+  // derived from the email local part by the sign-up path, so pinning the whole
+  // string couples this assertion to a derivation two layers away. Both halves
+  // are asserted — the gap is gone, and a real workspace chip is there.
+  await expect(deeRow.getByText('No workspaces')).toHaveCount(0);
+  await expect(deeRow.getByText(/'s Workspace$/)).toBeVisible();
 
   // Change Dee's org role → Admin (inline edit; success IS the confirmation).
   await roleCombo.click();
@@ -266,7 +301,11 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // ── Owner invites C to workspace WA; C accepts → C joins WA AND org A
   // (the UPWARD auto-join invariant: you can't be in a workspace without its
   // org). This is how a brand-new person enters an org. ──
-  await gotoAuthed(page, '/settings/workspace');
+  // ⚠️ `/settings/organization`, not `/settings/workspace` (MOTIR-3502 ·
+  // organization-tier.md §6d). Org A holds ONE workspace here, which is the
+  // COLLAPSED state: the workspace area 404s and its Name / Members / Danger
+  // sections are hosted by the single Settings home instead.
+  await gotoAuthed(page, '/settings/organization');
   await page.getByRole('button', { name: 'Invite' }).click();
   const wsInviteDialog = page.getByRole('dialog');
   await wsInviteDialog.getByLabel('Email address').fill(T2_C);
@@ -301,7 +340,10 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // the cookie to WA and read it back through the real workspace-settings surface
   // (getWorkspaceContext → resolveActiveWorkspace, the org-gated path). ──
   await pageC.context().addCookies([{ name: 'workspace_id', value: wa.id, url: pageC.url() }]);
-  await gotoAuthed(pageC, '/settings/workspace');
+  // Re-pointed for the same reason. C is a PLAIN org member here (the upward
+  // auto-join gave them `member`), so this also exercises §6d's per-section
+  // gate: the org-scoped cards are refused and C's workspace sections render.
+  await gotoAuthed(pageC, '/settings/organization');
   await expect(pageC.getByLabel('Workspace name')).toHaveValue(wa.name);
 
   // ── Org admin SPANS all workspaces. Build a SECOND workspace WB under org A
@@ -375,7 +417,9 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // workspace. Re-pin the cookie to WA and confirm the surface shows C's own
   // workspace, NOT WA (the gate, never a leak). ──
   await pageC.context().addCookies([{ name: 'workspace_id', value: wa.id, url: pageC.url() }]);
-  await gotoAuthed(pageC, '/settings/workspace');
+  // Re-pointed (§6d). C has fallen back to their OWN org, where they own one
+  // workspace — still the collapsed state, so the name is read off the fold-in.
+  await gotoAuthed(pageC, '/settings/organization');
   await expect(pageC.getByLabel('Workspace name')).toHaveValue(cOwnWorkspace.name);
   await expect(pageC.getByLabel('Workspace name')).not.toHaveValue(wa.name);
 

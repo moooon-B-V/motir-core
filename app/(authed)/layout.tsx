@@ -34,6 +34,10 @@ import { ThemeToggle } from './_components/ThemeToggle';
 import { BuildInPublicButton } from './_components/build-in-public/BuildInPublicButton';
 import { BuildingInPublicHeaderLink } from './_components/build-in-public/BuildingInPublicHeaderLink';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+import {
+  isWorkspaceTierRevealed,
+  scopeWorkspacesToActiveOrg,
+} from '@/lib/workspaces/tierDisclosure';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
 // top-nav + centered <main> into the full AppLayout shell: a full-width top
@@ -144,10 +148,17 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // Whether this is a Motir cloud build — gates the org menu's "Billing & plans"
   // row (Story 8.1.7); off-cloud the commercial surface does not exist (ADR §6).
   const cloudBilling = isCloudBilling();
-  const scopedWorkspaceModels = activeOrg
-    ? workspaceModels.filter((w) => w.organizationId === activeOrg.id)
-    : workspaceModels;
+  const scopedWorkspaceModels = scopeWorkspacesToActiveOrg(workspaceModels, activeOrg?.id ?? null);
   const workspaces = scopedWorkspaceModels.map(toWorkspaceSummaryDTO);
+  // PROGRESSIVE DISCLOSURE of the workspace tier (MOTIR-3502 · organization-tier
+  // §6). One number, computed here from the org-scoped list, threaded to every
+  // entry point that names the tier — the switcher (via ShellTierNav), the user
+  // menu's "Workspace settings" row, the rail's no-project settings door — so
+  // the shell cannot disagree with itself. `/settings/workspace` re-derives the
+  // SAME verdict server-side via `resolveWorkspaceTierDisclosure`, which shares
+  // these two helpers; a shell that hides a door to a page that still renders is
+  // the failure a second predicate would produce.
+  const workspaceTierRevealed = isWorkspaceTierRevealed(scopedWorkspaceModels.length);
 
   // Project data — only meaningful when there's an active workspace. Without
   // one the sidebar hides the project header + project-scoped nav, so skip
@@ -303,6 +314,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       buildingInPublic={buildingInPublic}
                       cloudBilling={cloudBilling}
                       showPlanWithAi={showPlanWithAi}
+                      workspaceTierRevealed={workspaceTierRevealed}
                     />
                   }
                   sidebar={
@@ -311,6 +323,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       variant="rail"
                       settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
+                      workspaceTierRevealed={workspaceTierRevealed}
                     />
                   }
                 >
@@ -395,6 +408,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     variant="drawer"
                     settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
+                    workspaceTierRevealed={workspaceTierRevealed}
                   />
                 </SidebarDrawer>
 

@@ -4,6 +4,7 @@ import { ProjectTier } from './ProjectTier';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { isWorkspaceTierRevealed } from '@/lib/workspaces/tierDisclosure';
 
 // The shell's CONTEXT PATH — `org › workspace › project`, the one row that says
 // where you are (Story 6.10.5, then MOTIR-2556 · `design/shell/design-notes.md`
@@ -100,7 +101,11 @@ export function ShellTierNav({
   projects = [],
   aiConfigured = false,
 }: ShellTierNavProps) {
-  const showWorkspaceSwitcher = workspaces.length >= 2;
+  // The reveal test, shared with the settings entry points and the standalone
+  // route's own 404 gate (MOTIR-3502 · `lib/workspaces/tierDisclosure.ts`). The
+  // literal `>= 2` used to live here and was the only statement of the rule;
+  // it now has three other readers that must agree with it.
+  const showWorkspaceSwitcher = isWorkspaceTierRevealed(workspaces.length);
 
   // The drawer carries the ancestors, unconditionally and unchanged — this is
   // exactly the cluster that shipped before the project tier existed.
