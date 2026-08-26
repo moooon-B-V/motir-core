@@ -44,7 +44,10 @@ import { chromium } from '@playwright/test';
 import {
   BRAND_ACCENT_HEX,
   BRAND_ACCENT_INK_HEX,
+  EMAIL_MARK_CANVAS_PX,
+  EMAIL_MARK_FILE,
   WAVE_BAND_PATH,
+  waveBandSvg,
 } from '../../components/brand/waveBand.js';
 
 /** Glyph box as a fraction of the canvas, by whether the OS will crop it. */
@@ -73,6 +76,33 @@ export const PNG_ICONS: IconSpec[] = [
   { out: 'public/icon-192.png', canvas: 192, scale: MASKABLE_SCALE, radius: 0 },
   { out: 'public/icon-512.png', canvas: 512, scale: MASKABLE_SCALE, radius: 0 },
 ];
+
+/**
+ * The EMAIL mark — the one raster here that is NOT a tile (MOTIR-3505,
+ * design-notes.md §7e).
+ *
+ * `EmailLayout` sets the mark beside a grey "Motir" wordmark on the white body
+ * the layout hardcodes, so it is the bare glyph in the accent colour on
+ * transparency — the artwork the header has always drawn. It is only in this
+ * script because email cannot take the glyph any other way: `data:` URIs are
+ * dropped by Gmail's image proxy and SVG renders in no major client, so the one
+ * form that reaches a recipient is a PNG at an absolute https:// URL.
+ *
+ * ⚠️ It is NOT in `PNG_ICONS`. Those are the favicon / app-icon set: opaque
+ * accent tiles with the glyph knocked out in its ink, sized against the maskable
+ * safe circle. Neither the tile nor either scale means anything here, and folding
+ * this spec in beside them would make the safe-zone assertions read as though
+ * they governed it.
+ */
+export const EMAIL_MARK_PNG = {
+  out: `public/${EMAIL_MARK_FILE}`,
+  canvas: EMAIL_MARK_CANVAS_PX,
+} as const;
+
+/** The email mark's source: the bare glyph, accent-filled, on transparency. */
+export function emailMarkSvg(): string {
+  return waveBandSvg({ size: EMAIL_MARK_CANVAS_PX, fill: BRAND_ACCENT_HEX });
+}
 
 /** The two sizes packed into the legacy `app/favicon.ico`. */
 export const ICO_SIZES = [16, 32];
@@ -155,16 +185,21 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
 
-  async function rasterise(spec: Omit<IconSpec, 'out'>): Promise<Buffer> {
-    const svg = tiledIconSvg(spec);
-    await page.setViewportSize({ width: spec.canvas, height: spec.canvas });
+  async function rasteriseSvg(svg: string, canvas: number): Promise<Buffer> {
+    await page.setViewportSize({ width: canvas, height: canvas });
     await page.setContent(
       `<!doctype html><html><body style="margin:0;background:transparent">${svg}</body></html>`,
     );
     // The tile is opaque, so nothing rides on transparency — but omitting the
     // background keeps any sub-pixel edge outside the rounded corners clear
-    // rather than white, which is what a rounded favicon needs.
+    // rather than white, which is what a rounded favicon needs. The email mark
+    // is the case that DEPENDS on it: it is a bare glyph, and it sits on the
+    // layout's white body rather than on a field of its own.
     return page.screenshot({ omitBackground: true, type: 'png' });
+  }
+
+  async function rasterise(spec: Omit<IconSpec, 'out'>): Promise<Buffer> {
+    return rasteriseSvg(tiledIconSvg(spec), spec.canvas);
   }
 
   await writeFile(path.join(root, 'app/icon.svg'), iconSvgFile(), 'utf8');
@@ -177,6 +212,10 @@ async function main() {
     await writeFile(dest, png);
     console.warn(`wrote ${spec.out} (${spec.canvas}px, glyph ${spec.scale} x canvas)`);
   }
+
+  const emailMark = await rasteriseSvg(emailMarkSvg(), EMAIL_MARK_PNG.canvas);
+  await writeFile(path.join(root, EMAIL_MARK_PNG.out), emailMark);
+  console.warn(`wrote ${EMAIL_MARK_PNG.out} (${EMAIL_MARK_PNG.canvas}px, bare glyph)`);
 
   // The legacy fallback, re-cut from the same glyph so the two can never
   // disagree. Kept for old clients and for anything requesting /favicon.ico by
