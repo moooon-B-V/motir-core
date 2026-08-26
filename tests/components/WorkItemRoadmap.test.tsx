@@ -737,6 +737,60 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     // chip — the row was in hand, so its stub is built from it.
     expect(screen.getByText('MOTIR-9')).toBeTruthy();
   });
+
+  // ── MOTIR-3557 · the two faces of the un-scoped edge list ──────────────────
+  // The test directly above is the case that MUST keep working: the blocked end
+  // (an on-road epic) is still on the level, so the anchor is right. These two
+  // are the cases where it is NOT, and both shipped.
+
+  it('draws no anchor at the root when BOTH ends of an edge were grouped', async () => {
+    stubRoot({
+      ...mixedRoot,
+      // The shipped instance: MOTIR-3490 `blocked_by` MOTIR-3493, both parentless,
+      // both grouped. The blocker minted a red "blocked elsewhere" card beside the
+      // epics for a row sitting one hop inside the group — and its arrow pointed
+      // at a node the canvas does not draw, so nothing was attached to it.
+      edges: [{ blockedId: 'T7', blockerId: 'B9' }],
+    });
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+
+    expect(screen.queryByText('MOTIR-9')).toBeNull();
+    expect(screen.queryByTestId('cross-flag')).toBeNull();
+    // The road is the two epics and the door — nothing else.
+    expect(screen.queryByText('A parentless defect')).toBeNull();
+    expect(screen.getByTestId('level-group-node')).toBeTruthy();
+  });
+
+  it('the grouped level draws none of the ROOT EPICS as "blocked elsewhere" ghosts', async () => {
+    // The reported defect. The root's edge list is the edges of the whole root
+    // level, so handing it to the synthetic grouped level made every root epic an
+    // off-level blocker of a level it has nothing to do with — 12 of them on
+    // Motir's own tree — each drawn as an ANONYMOUS anchor, because an epic is ON
+    // the root level and so is never in `offLevelBlockers` to be named from.
+    stubRoot({
+      ...mixedRoot,
+      edges: [
+        { blockedId: 'E2', blockerId: 'E1' }, // the epic roadmap's own chain
+        { blockedId: 'T7', blockerId: 'B9' }, // the one edge the group owns
+      ],
+    });
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('A parentless defect');
+
+    // No anchor at all — and in particular not the anonymous one, whose identifier
+    // is an em dash over the "Blocked across stories" fallback.
+    expect(screen.queryByText('Blocked across stories')).toBeNull();
+    expect(screen.queryByText('MOTIR-1')).toBeNull();
+    expect(screen.queryByText('MOTIR-2')).toBeNull();
+    expect(screen.queryByTestId('cross-flag')).toBeNull();
+    // The edge the level DOES own is drawn, between its own two rows.
+    expect(screen.getByText('A parentless task')).toBeTruthy();
+  });
 });
 
 describe('a truncated level says so (MOTIR-3490 · AC 3)', () => {
