@@ -18,8 +18,6 @@ export interface ApiTokenDto {
   expiresAt: string | null;
   /** Null = never used since mint. */
   lastUsedAt: string | null;
-  /** Non-null = soft-revoked (the muted "Revoked" row). */
-  revokedAt: string | null;
   /** The PROJECT this token is bound to, or NULL (MOTIR-2606).
    *
    * NULL is the DEVICE-CREDENTIAL SHAPE — what `motir login` mints — not a

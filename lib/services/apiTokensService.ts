@@ -289,21 +289,25 @@ export const apiTokensService = {
   },
 
   /**
-   * Soft-revoke one of the user's own tokens — stamps `revokedAt`, leaving the
-   * row for the audit trail. Revoking a token id that is missing OR owned by
-   * another user is an ApiTokenNotFoundError (404-not-403). Returns the updated
-   * DTO so the caller flips the row to the muted "Revoked" state from the
-   * response (the inline-edit-no-tree-refresh contract).
+   * Revoke one of the user's own tokens — DELETES the row (MOTIR-3546).
+   *
+   * Revoking a token id that is missing OR owned by another user is an
+   * ApiTokenNotFoundError (404-not-403): the ownership probe runs first and a
+   * cross-user id reads as null under RLS, so the no-existence-leak contract is
+   * exactly what it was. Re-revoking an already-deleted id is now that same 404
+   * rather than the old idempotent no-op — there is no row left to return, and
+   * "this token is gone" is the true answer to both.
+   *
+   * Returns nothing: the row no longer exists, so there is no DTO to map. The
+   * caller REMOVES the row from its own state (the page-state-after-mutation
+   * contract — the list is a client island that owns its state).
    */
-  async revoke(userId: string, tokenId: string): Promise<ApiTokenDto> {
-    const updated = await withUserContext(userId, async (tx) => {
+  async deleteToken(userId: string, tokenId: string): Promise<void> {
+    await withUserContext(userId, async (tx) => {
       const existing = await apiTokenRepository.findByIdForUser(tokenId, userId, tx);
       if (!existing) throw new ApiTokenNotFoundError(tokenId);
-      // Idempotent: re-revoking keeps the original timestamp.
-      if (existing.revokedAt) return existing;
-      return apiTokenRepository.revoke(tokenId, new Date(), tx);
+      await apiTokenRepository.remove(tokenId, tx);
     });
-    return toApiTokenDto(updated);
   },
 
   /**
@@ -311,7 +315,8 @@ export const apiTokensService = {
    * gate's only auth job. Re-hashes the input and probes the unique hash index
    * (constant work regardless of validity), then rejects each failure mode
    * with a DISTINCT typed error: unknown/malformed → InvalidApiTokenError,
-   * soft-revoked → ApiTokenRevokedError, past-expiry → ApiTokenExpiredError.
+   * past-expiry → ApiTokenExpiredError. `ApiTokenRevokedError` survives as a
+   * TRANSITION GUARD only — see the `revokedAt` check in the body.
    * On success, touches `lastUsedAt` (throttled to once per 5-minute window)
    * and returns the owning User PLUS the workspace the token is BOUND to
    * (bug 7.21) — the MCP bearer gate resolves the request workspace from this
@@ -349,6 +354,16 @@ export const apiTokensService = {
     return withSystemContext(async (tx) => {
       const row = await apiTokenRepository.findByTokenHash(tokenHash, tx);
       if (!row) throw new InvalidApiTokenError();
+      // ⚠️ TRANSITION GUARD, and it is not dead code yet (MOTIR-3546).
+      // Revocation now DELETES the row, so no code path writes `revoked_at` any
+      // more and the migration cleared every row that carried one. What keeps
+      // this line here is the DEPLOY WINDOW: `fly.toml`'s `release_command`
+      // runs the migration BEFORE any new machine takes traffic, so for the
+      // length of a rolling release the OLD image is still serving — and the
+      // old image still stamps `revoked_at` on a revoke. A token revoked in
+      // that window would otherwise come back VALID once the new image is
+      // everywhere. This line costs one null check and closes that window.
+      // It goes when the column does — see `prisma/schema.prisma`.
       if (row.revokedAt) throw new ApiTokenRevokedError();
       const now = new Date();
       if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) {

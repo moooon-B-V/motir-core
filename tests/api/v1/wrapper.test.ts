@@ -68,7 +68,7 @@ describe('withV1Route — authentication', () => {
 
     // revoked — a real token, then revoked through the shipped service
     const revoked = await createV1Caller();
-    await apiTokensService.revoke(revoked.user.id, revoked.tokenId);
+    await apiTokensService.deleteToken(revoked.user.id, revoked.tokenId);
 
     // expired — minted with an expiry already in the past
     const expiring = await apiTokensService.create(caller.user.id, caller.workspace.id, {

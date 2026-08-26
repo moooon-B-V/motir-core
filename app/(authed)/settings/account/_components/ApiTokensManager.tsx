@@ -98,15 +98,18 @@ export function ApiTokensManager({
   function handleCreated(token: ApiTokenDto) {
     setTokens((prev) => [token, ...prev]);
   }
-  function handleRevoked(revoked: ApiTokenDto) {
-    setTokens((prev) => prev.map((tk) => (tk.id === revoked.id ? revoked : tk)));
+  // Revoking DELETES the row (MOTIR-3546), so the island SPLICES it out rather
+  // than flipping it to a muted state. Still no `router.refresh()`: this list is
+  // a client island seeded once from `initialTokens`, which a refresh cannot
+  // reach (the page-state-after-mutation contract).
+  function handleRevoked(revokedId: string) {
+    setTokens((prev) => prev.filter((tk) => tk.id !== revokedId));
     setRevokeTarget(null);
   }
 
-  // Live tokens first, soft-revoked rows after (the design's sort — the revoked
-  // row stays for audit). Stable within each group (the service returns newest
-  // first; a just-revoked row drops to the bottom).
-  const ordered = [...tokens].sort((a, b) => (a.revokedAt ? 1 : 0) - (b.revokedAt ? 1 : 0));
+  // Newest first — the order the service returns. There is no second group to
+  // sort below the live ones any more: every listed token is a live credential.
+  const ordered = tokens;
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,12 +178,9 @@ export function ApiTokensManager({
               </thead>
               <tbody>
                 {ordered.map((token) => {
-                  const revoked = token.revokedAt !== null;
-                  // A revoked row's dates are still text somebody reads, and a
-                  // revoked TOKEN is not a disabled CONTROL, so the quieter arm
-                  // no longer takes `--el-text-faint` (2.61:1) — both take
-                  // `--el-text-secondary`. The row's revoked state reads from
-                  // its label and its Revoked pill (MOTIR-2475).
+                  // Dates are supporting text, not disabled controls, so they
+                  // take `--el-text-secondary` rather than `--el-text-faint`
+                  // (2.61:1) (MOTIR-2475).
                   const dateClass = 'text-(--el-text-secondary)';
                   const summary = summarizeGrant(token.permissions);
                   const hasDelete = grantsDelete(token.permissions);
@@ -191,9 +191,7 @@ export function ApiTokensManager({
                         className={`border-(--el-border-soft) ${expanded ? '' : 'border-b last:border-0'}`}
                       >
                         <td className="py-(--spacing-control-y) pr-4 align-middle">
-                          <span
-                            className={`font-sans text-sm font-medium ${revoked ? 'text-(--el-text-secondary)' : 'text-(--el-text)'}`}
-                          >
+                          <span className="font-sans text-sm font-medium text-(--el-text)">
                             {token.label}
                           </span>
                         </td>
@@ -206,46 +204,38 @@ export function ApiTokensManager({
                             neutral Standard·Read only·Custom), a persistent rose
                             "Can delete" pill whenever delete is granted (never
                             hidden behind the summary), and a chevron disclosing
-                            the per-scope detail. Revoked rows show the muted
-                            summary only (7.7.18 Panel 4). */}
+                            the per-scope detail (7.7.18 Panel 4). */}
                         <td className="py-(--spacing-control-y) pr-4 align-middle">
                           <span className="inline-flex items-center gap-1.5">
-                            {summary === 'full' && !revoked ? (
+                            {summary === 'full' ? (
                               <Pill severity="success">{t('scopes.summary.full')}</Pill>
                             ) : (
                               <Pill tone="neutral">{t(`scopes.summary.${summary}`)}</Pill>
                             )}
-                            {hasDelete && !revoked ? (
+                            {hasDelete ? (
                               <Pill severity="danger">
                                 <Trash2 className="size-3" aria-hidden />
                                 {t('scopes.canDelete')}
                               </Pill>
                             ) : null}
-                            {revoked ? null : (
-                              <button
-                                type="button"
-                                aria-label={t(
-                                  expanded ? 'scopes.hideScopes' : 'scopes.showScopes',
-                                  {
-                                    label: token.label,
-                                  },
-                                )}
-                                aria-expanded={expanded}
-                                onClick={() => toggleExpanded(token.id)}
-                                className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                              >
-                                <ChevronDown
-                                  className={`size-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                                  aria-hidden
-                                />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              aria-label={t(expanded ? 'scopes.hideScopes' : 'scopes.showScopes', {
+                                label: token.label,
+                              })}
+                              aria-expanded={expanded}
+                              onClick={() => toggleExpanded(token.id)}
+                              className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                            >
+                              <ChevronDown
+                                className={`size-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                                aria-hidden
+                              />
+                            </button>
                           </span>
                         </td>
                         <td className="py-(--spacing-control-y) pr-4 align-middle">
-                          <span
-                            className={`font-sans text-sm ${revoked ? 'text-(--el-text-secondary)' : 'text-(--el-text-secondary)'}`}
-                          >
+                          <span className="font-sans text-sm text-(--el-text-secondary)">
                             {multiOrg
                               ? `${token.organization.name} · ${token.workspace.name}`
                               : token.workspace.name}
@@ -267,21 +257,23 @@ export function ApiTokensManager({
                           </span>
                         </td>
                         <td className="py-(--spacing-control-y) text-right align-middle">
-                          {revoked ? (
-                            <Pill tone="neutral">{t('revoked')}</Pill>
-                          ) : (
-                            <button
-                              type="button"
-                              aria-label={t('revokeAria', { label: token.label })}
-                              onClick={() => setRevokeTarget(token)}
-                              className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-danger) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                            >
-                              <Trash2 className="size-4" aria-hidden />
-                            </button>
-                          )}
+                          {/* Every listed token is live, so every row keeps its
+                              revoke control. The "Revoked" pill that used to
+                              take this cell INSTEAD of the button is gone with
+                              the state it described (MOTIR-3546) — spending the
+                              Actions cell on a badge is what left a dead row
+                              with no way to remove it. */}
+                          <button
+                            type="button"
+                            aria-label={t('revokeAria', { label: token.label })}
+                            onClick={() => setRevokeTarget(token)}
+                            className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-danger) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                          >
+                            <Trash2 className="size-4" aria-hidden />
+                          </button>
                         </td>
                       </tr>
-                      {expanded && !revoked ? (
+                      {expanded ? (
                         <tr className="border-b border-(--el-border-soft) last:border-0">
                           <td colSpan={8} className="pr-4 pb-3.5 align-top">
                             <div className="flex flex-wrap items-center gap-1.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
@@ -351,18 +343,15 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
   );
 }
 
-/** The Expires cell: "Never" when null, a muted "—" for a revoked row, the
- * relative "in N days" (warning chip within ~7 days) once `now` is known, and
- * the absolute date as the hydration-safe fallback before mount. */
+/** The Expires cell: "Never" when null, the relative "in N days" (warning chip
+ * within ~7 days) once `now` is known, and the absolute date as the
+ * hydration-safe fallback before mount. */
 function renderExpires(
   token: ApiTokenDto,
   now: number | null,
   locale: Locale,
   t: ReturnType<typeof useTranslations>,
 ) {
-  if (token.revokedAt) {
-    return <span className="font-sans text-sm text-(--el-text-secondary)">—</span>;
-  }
   if (!token.expiresAt) {
     return (
       <span className="font-sans text-sm text-(--el-text-secondary)">{t('expiresNever')}</span>
@@ -377,7 +366,9 @@ function renderExpires(
   }
   const days = Math.ceil((new Date(token.expiresAt).getTime() - now) / DAY_MS);
   if (days < 0) {
-    // Past expiry but not revoked — show the (muted) date; verify already rejects it.
+    // Past expiry — show the (muted) date; verify already rejects it. An
+    // expired token is still a listed, deletable row (it keeps its revoke
+    // button); only the REVOKED state was removed (MOTIR-3546).
     return (
       <span className="font-sans text-sm text-(--el-text-secondary)">
         {formatDate(token.expiresAt, locale)}

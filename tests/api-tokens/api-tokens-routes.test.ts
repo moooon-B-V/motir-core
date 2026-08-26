@@ -295,7 +295,7 @@ describe('DELETE /api/me/api-tokens/[tokenId]', () => {
     expect((await DELETE(req, ctx)).status).toBe(401);
   });
 
-  it("soft-revokes the user's own token and returns the revoked DTO", async () => {
+  it("DELETES the user's own token and answers 204 with no body", async () => {
     const { owner: alice, workspace } = await makeUserWs();
     signInAs(alice);
     const { dto } = await apiTokensService.create(alice.id, workspace.id, {
@@ -305,14 +305,13 @@ describe('DELETE /api/me/api-tokens/[tokenId]', () => {
 
     const { req, ctx } = deleteReq(dto.id);
     const res = await DELETE(req, ctx);
-    expect(res.status).toBe(200);
-    expect(
-      ((await res.json()) as { token: { revokedAt: string | null } }).token.revokedAt,
-    ).not.toBeNull();
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
 
-    // Soft revoke — the row stays for the audit trail.
-    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect(row.revokedAt).not.toBeNull();
+    // The row is GONE (MOTIR-3546). It used to survive with `revokedAt` set,
+    // which is what put a permanent dead row in the owner's token list.
+    const row = await adminDb.apiToken.findUnique({ where: { id: dto.id } });
+    expect(row).toBeNull();
   });
 
   it("404 (not 403) revoking another user's token — no existence leak", async () => {
@@ -329,8 +328,9 @@ describe('DELETE /api/me/api-tokens/[tokenId]', () => {
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe('API_TOKEN_NOT_FOUND');
 
-    // Bob's token is untouched.
-    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect(row.revokedAt).toBeNull();
+    // Bob's token is untouched — the probe must still refuse before the delete.
+    await expect(
+      adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } }),
+    ).resolves.toBeTruthy();
   });
 });

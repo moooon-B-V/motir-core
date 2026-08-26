@@ -95,19 +95,18 @@ export const apiTokenRepository = {
     return tx.apiToken.create({ data: input, include: SCOPE_INCLUDE });
   },
 
-  /** Soft-revoke: stamp `revokedAt`, leaving the row for the audit trail.
-   * Returns the row with its bound workspace + org so the service maps the
-   * scoped DTO. Required `tx`. */
-  async revoke(
-    tokenId: string,
-    revokedAt: Date,
-    tx: Prisma.TransactionClient,
-  ): Promise<ApiTokenWithScope> {
-    return tx.apiToken.update({
-      where: { id: tokenId },
-      data: { revokedAt },
-      include: SCOPE_INCLUDE,
-    });
+  /** Revoke: DELETE the row (MOTIR-3546). Revocation used to stamp `revokedAt`
+   * and leave the row "for the audit trail" — a trail nothing ever read, on the
+   * one surface whose job is to answer *which of my credentials are live*. The
+   * credential list now holds only live credentials, which is what this
+   * surface's own mirror does (`design/settings/design-notes.md`).
+   *
+   * Deleting is safe here and was checked before it was chosen: `api_token` is
+   * a leaf (no migration carries a `REFERENCES "api_token"`), and the RLS
+   * policy `api_token_owner_or_system` is `FOR ALL`, so an owner DELETE is
+   * already permitted without a policy change. Required `tx`. */
+  async remove(tokenId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.apiToken.delete({ where: { id: tokenId } });
   },
 
   /** Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. */

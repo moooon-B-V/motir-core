@@ -79,7 +79,6 @@ describe('create', () => {
     expect(dto.tokenPrefix).toBe(token.slice(0, DISPLAY_PREFIX_LENGTH));
     expect(dto.expiresAt).toBeNull();
     expect(dto.lastUsedAt).toBeNull();
-    expect(dto.revokedAt).toBeNull();
     expect(dto.workspace.id).toBe(workspace.id);
     expect(dto.organization.id).toBe(workspace.organizationId);
     expect(JSON.stringify(dto)).not.toContain(token);
@@ -231,32 +230,53 @@ describe('listScopeOptions', () => {
   });
 });
 
-describe('revoke', () => {
-  it('soft-revokes a token (row stays, revokedAt set), returning the scoped DTO', async () => {
+describe('deleteToken', () => {
+  // The assertion that fails against the pre-fix build: revoking used to stamp
+  // `revokedAt` and LEAVE the row, which is the whole defect (MOTIR-3546). The
+  // row must be gone from the database, not merely absent from a DTO.
+  it('DELETES the row — nothing survives the revoke', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'claude-code',
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
 
-    const revoked = await apiTokensService.revoke(owner.id, dto.id);
-    expect(revoked.revokedAt).not.toBeNull();
-    expect(revoked.workspace.id).toBe(workspace.id);
+    await apiTokensService.deleteToken(owner.id, dto.id);
 
     const row = await adminDb.apiToken.findUnique({ where: { id: dto.id } });
-    expect(row).not.toBeNull();
-    expect(row!.revokedAt).not.toBeNull();
+    expect(row).toBeNull();
   });
 
-  it('is idempotent — re-revoking keeps the original timestamp', async () => {
+  it("leaves the owner's OTHER tokens alone", async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto: doomed } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'doomed',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
+    const { dto: keeper } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'keeper',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
+
+    await apiTokensService.deleteToken(owner.id, doomed.id);
+
+    const listed = await apiTokensService.listForUser(owner.id);
+    expect(listed.map((t) => t.id)).toEqual([keeper.id]);
+  });
+
+  // The old behaviour was idempotent because the row was still there to return.
+  // With a delete there is nothing left, and "this token is gone" is the true
+  // answer to a second revoke — the same 404 a stranger's id gets.
+  it('re-revoking an already-deleted id is a not-found', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'claude-code',
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
-    const first = await apiTokensService.revoke(owner.id, dto.id);
-    const second = await apiTokensService.revoke(owner.id, dto.id);
-    expect(second.revokedAt).toBe(first.revokedAt);
+    await apiTokensService.deleteToken(owner.id, dto.id);
+    await expect(apiTokensService.deleteToken(owner.id, dto.id)).rejects.toBeInstanceOf(
+      ApiTokenNotFoundError,
+    );
   });
 
   it('treats another user token as not-found (404-not-403, no leak)', async () => {
@@ -266,17 +286,20 @@ describe('revoke', () => {
       label: 'bob-token',
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
-    await expect(apiTokensService.revoke(alice.id, dto.id)).rejects.toBeInstanceOf(
+    await expect(apiTokensService.deleteToken(alice.id, dto.id)).rejects.toBeInstanceOf(
       ApiTokenNotFoundError,
     );
-    // Bob's token is untouched.
-    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect(row.revokedAt).toBeNull();
+    // Bob's token is untouched — and with a DELETE the stakes of getting the
+    // ownership probe wrong are one tier higher than they were: a leak used to
+    // disable a stranger's credential, and would now destroy it.
+    await expect(
+      adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } }),
+    ).resolves.toBeTruthy();
   });
 
   it('throws not-found for a missing id', async () => {
     const { owner } = await makeUserWs();
-    await expect(apiTokensService.revoke(owner.id, 'nope')).rejects.toBeInstanceOf(
+    await expect(apiTokensService.deleteToken(owner.id, 'nope')).rejects.toBeInstanceOf(
       ApiTokenNotFoundError,
     );
   });
@@ -318,13 +341,31 @@ describe('verify', () => {
     );
   });
 
-  it('rejects a revoked token', async () => {
+  it('rejects a revoked token — as INVALID, because the row is gone', async () => {
     const { owner, workspace } = await makeUserWs();
     const { token, dto } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'claude-code',
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
-    await apiTokensService.revoke(owner.id, dto.id);
+    await apiTokensService.deleteToken(owner.id, dto.id);
+    // Not `ApiTokenRevokedError` any more: there is no row left to carry a
+    // `revokedAt`. Nothing observable changes at the boundary — `/api/v1` and
+    // the MCP gate collapse all five 401 causes into one undifferentiated
+    // `unauthenticated` on purpose (`docs/decisions/public-api-conventions.md`).
+    await expect(apiTokensService.verify(token)).rejects.toBeInstanceOf(InvalidApiTokenError);
+  });
+
+  // The transition guard, asserted so it cannot be deleted by accident before
+  // the column is (MOTIR-3546). No product path writes `revoked_at` any more —
+  // but the OLD image still does for the length of a rolling deploy, and such a
+  // token must not come back valid once the new image is everywhere.
+  it('still rejects a row that carries `revokedAt` — the deploy-window guard', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { token, dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'stamped-by-the-old-image',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
+    await adminDb.apiToken.update({ where: { id: dto.id }, data: { revokedAt: new Date() } });
     await expect(apiTokensService.verify(token)).rejects.toBeInstanceOf(ApiTokenRevokedError);
   });
 

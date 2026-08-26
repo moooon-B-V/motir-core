@@ -2740,7 +2740,6 @@
       "expiresIn": "in {days, plural, one {# day} other {# days}}",
       "expiresNever": "Never",
       "lastUsedNever": "Never",
-      "revoked": "Revoked",
       "revokeAria": "Revoke token {label}",
       "expiry": {
         "d30": "30 days",

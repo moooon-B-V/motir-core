@@ -2740,7 +2740,6 @@
       "expiresIn": "{days} 天后",
       "expiresNever": "永不",
       "lastUsedNever": "从未",
-      "revoked": "已吊销",
       "revokeAria": "吊销令牌 {label}",
       "expiry": {
         "d30": "30 天",

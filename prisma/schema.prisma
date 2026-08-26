@@ -4357,9 +4357,10 @@ model DashboardWidget {
 ///
 /// The plaintext secret is NEVER persisted — only `tokenHash` (the lookup
 /// key) and `tokenPrefix` (the display-only first chars, so the list can show
-/// `motir_pat_AbC1…` without holding anything sensitive). `revokedAt` is a
-/// SOFT revoke: the row stays for the audit trail and a revoked token simply
-/// fails `verify`. RLS: a token row is visible/mutable to its owning user
+/// `motir_pat_AbC1…` without holding anything sensitive). Revoking DELETES the
+/// row (MOTIR-3546): the list holds live credentials only, and `revokedAt`
+/// survives as an unused transition guard (see the field).
+/// RLS: a token row is visible/mutable to its owning user
 /// (`app.user_id`) for the settings surface, OR under the trusted system
 /// context (`app.system_admin`) — the MCP bearer gate resolves tokens BEFORE
 /// any user context exists (the pre-auth lookup), so it reads under the
@@ -4389,7 +4390,21 @@ model ApiToken {
   /// Throttled in `verify` (skip the write if touched < 5 min ago) so a
   /// chatty agent session does not write-amplify.
   lastUsedAt  DateTime? @map("last_used_at")
-  /// Soft revoke — set, never deleted. A revoked token fails `verify`.
+  /// ⚠️ RETAINED, UNUSED, AND SCHEDULED FOR REMOVAL (MOTIR-3546).
+  ///
+  /// This was the soft-revoke stamp: revoking set it and left the row "for the
+  /// audit trail". Nothing ever read that trail, so a revoked credential sat in
+  /// the owner's token list for ever with no way to remove it. **Revoking now
+  /// DELETES the row**, the `delete_revoked_api_tokens` migration cleared every
+  /// row that carried a value here, and no code path writes it any more.
+  ///
+  /// It survives this change for one reason: `fly.toml` runs migrations BEFORE
+  /// the new image takes traffic, so during a rolling release the OLD image is
+  /// still stamping this column. Dropping it here would break that image's
+  /// reads mid-deploy, and removing only the guard would let a token revoked in
+  /// that window come back valid. `verify` therefore still rejects a non-null
+  /// value. Both the column and that guard go together, in a follow-up, once
+  /// the new image is everywhere.
   revokedAt   DateTime? @map("revoked_at")
   /// The token's GRANT — the access boundary that NARROWS the owner's project
   /// role. Stores `PermissionKey`s from `lib/permissions/catalog.ts`

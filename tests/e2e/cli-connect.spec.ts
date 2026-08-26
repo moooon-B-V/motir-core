@@ -277,8 +277,12 @@ test('connect the CLI — the panel, the code, the approval, and a terminal that
       (r) => /\/api\/me\/api-tokens\/[^/]+$/.test(r.url()) && r.request().method() === 'DELETE',
     );
     await dialog.getByRole('button', { name: 'Revoke token', exact: true }).click();
-    expect((await revoked).status()).toBe(200);
-    await expect(tokenRow(page, CLI_TOKEN_LABEL).getByText('Revoked')).toBeVisible();
+    expect((await revoked).status()).toBe(204);
+    // The row LEAVES the table (MOTIR-3546). It used to stay, muted, carrying a
+    // "Revoked" pill where its delete button had been — so the disconnected
+    // terminal remained in the list for ever with no way to clear it, which is
+    // the opposite of what "disconnect that machine" promises.
+    await expect(tokenRow(page, CLI_TOKEN_LABEL)).toHaveCount(0);
     await beat();
 
     // THE SAME bearer that just worked now does not. This is the assertion the

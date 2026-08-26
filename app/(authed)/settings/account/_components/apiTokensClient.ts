@@ -3,10 +3,11 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Thin fetch layer over the 7.8.3 routes (`/api/me/api-tokens`) for the API
 // tokens pane's client island. The island owns its own list state and does
-// OPTIMISTIC insert / mark-revoked from these responses (the
+// OPTIMISTIC insert / REMOVE from these responses (the
 // page-state-after-mutation contract — no `router.refresh()` it can't see), so
-// there is no list-refetch helper here: the create/revoke responses carry the
-// authoritative row.
+// there is no list-refetch helper here: create carries the authoritative row,
+// and a revoke DELETES its row (MOTIR-3546) so there is no row to carry back —
+// a `204` is the whole answer and the island splices the row out.
 
 export type { ApiTokenDto, CreateApiTokenResult };
 
@@ -52,10 +53,12 @@ export async function createToken(input: {
   return (await res.json()) as CreateApiTokenResult;
 }
 
-/** Soft-revoke one of the user's own tokens; returns the updated (revoked) row. */
-export async function revokeToken(tokenId: string): Promise<ApiTokenDto> {
+/**
+ * Revoke one of the user's own tokens — the row is DELETED (MOTIR-3546), so the
+ * route answers `204` with no body and there is nothing to return. The caller
+ * removes the row from its own state.
+ */
+export async function revokeToken(tokenId: string): Promise<void> {
   const res = await fetch(`${BASE}/${encodeURIComponent(tokenId)}`, { method: 'DELETE' });
   if (!res.ok) throw new ApiError(await readErrorCode(res));
-  const data = (await res.json()) as { token: ApiTokenDto };
-  return data.token;
 }
