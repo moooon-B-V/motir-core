@@ -18,6 +18,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | The plan canvas **at arrival**               | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
 | **Show changes** on the plan canvas          | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
 | The timeline's **CONTENT events**            | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
+| The **FIFTH plan status** on every surface   | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -121,7 +122,9 @@ A **`Plan`** is a reviewable bundle of proposed **`PlanItem`** operations. Nothi
 **approve**; on approve the PlanItems **materialize**. There is **NO `proposed` WorkItem status**
 and **NO "Discard"** — proposals never enter the tree, ready-set, board, or dispatch.
 
-- **`Plan.status`**: `generating → planned → approved | declined`.
+- **`Plan.status`**: `generating → planned → approved | declined`, **plus `stale`** — see
+  **Part XI**, which SUPERSEDES this line (2026-08-26). `planned → stale` when a `modify`/`remove`
+  target reaches a terminal status; `stale → planned` when that drift reverses; `stale → declined`.
 - **History surface** = the lifecycle timestamps + actor: `createdAt`, `plannedAt` (generation
   done), `decidedAt` + `decidedById` (approve/decline). These ARE the history timeline (no
   separate event log needed).
@@ -142,7 +145,8 @@ Everything below is layered ON the composed shell + canvas; nothing here re-draw
 
 The index. A left-nav **"Plans"** entry (the access path — drawn beside the other project nav
 surfaces, routing to `/…/plans`). Each row: the summary/idea the plan came from, a **status pill**
-(`generating` / `planned` / `approved` / `declined`), the item count, when-planned, when-decided,
+(`generating` / `planned` / `approved` / **`stale`** / `declined` — the fifth SUPERSEDES this list
+as of 2026-08-26, **Part XI**), the item count, when-planned, when-decided,
 and a **"N may be out of date" stale flag** for a `planned` plan with drifted items. The empty
 state — "Generate your first plan" CTA into the 7.3 discovery hand-off. Reuses the shipped
 list/`useRowWindow` primitives — not a hand-rolled list. (Built by MOTIR-1338.)
@@ -2323,3 +2327,158 @@ The plan review canvas and its node treatments; the proposal peek / read view; t
 switcher and the list body; the approve / decline controls and the decided outcome block; the
 staleness summary; the establish band; the `/plans` list surface; and any expansion, filter or
 export of the timeline.
+
+---
+
+## Part XI — the FIFTH plan status (MOTIR-3577, 2026-08-26)
+
+**This part SUPERSEDES the four-value lifecycle at the top of this file** (the `Plan.status` line
+under _The model_, and Panel A's status-pill list). Both now carry a pointer here.
+
+**The spec it draws is `docs/decisions/agent-authored-plans.md` AMENDMENT 8** (MOTIR-3574), which
+settles the name, the transitions and what happens to the incumbent staleness engine. This part
+draws what that decided; it invents nothing.
+
+> **The transitions, quoted from AMENDMENT 8:**
+>
+> | from → to          | trigger                                                       |
+> | ------------------ | ------------------------------------------------------------- |
+> | `planned → stale`  | a `modify`/`remove` target enters a terminal status           |
+> | `stale → planned`  | the drift REVERSES — every fatal target is non-terminal again |
+> | `stale → declined` | the reviewer gives up (`decisionReason: 'reviewed'`)          |
+>
+> **`stale → generating` is deliberately absent** — a proposal cannot be withdrawn or re-targeted,
+> so a `stale` plan's exits are _wait for the reversal_ or _decline_. The outcome copy below says so
+> rather than offering a repair that does not exist.
+
+### §1 — What was rendered before anything was drawn
+
+`/plans` is a shipped surface, so this part was drawn **against a render of it**, not against the
+existing mock. `PlanRow`, `PlanStatusTabs` and `Pill` were bundled from their own source with the
+real `packages/design-system/theme.css` and `app/globals.css`, and screenshotted at
+`deviceScaleFactor: 2`. **Two things that render settled, which reading the mock would not have:**
+
+1. **The advisory drift pill and the status pill sit on the SAME row**, side by side — the peach
+   `severity="warning"` chip (_"3 may be out of date"_) immediately left of the status pill. So the
+   fifth status is not choosing a colour against four; it is choosing one against five, one of which
+   is already a warning tint. Both were rendered together (the _"Both at once"_ case) before the
+   tone was fixed.
+2. **`declined` has no tint square at all** — a `--el-muted` grey square with `XCircle`, and
+   `Pill tone="archived"`, which renders nearly fill-less. That is the _ended_ treatment, and it is
+   what the fifth status must NOT inherit.
+
+### §2 — The row: tone, icon, and the border it does NOT get
+
+| element     | value                                              | why                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| icon square | `bg-(--el-tint-rose)`                              | the one tint no status uses (`sky` / `lavender` / `mint` are taken, `--el-muted` is `declined`'s), and it is the danger-adjacent member of the pastel set                                                                                                                                                                                                                |
+| icon        | **`OctagonAlert`** (lucide)                        | a stop sign reads _cannot proceed_. Rendered against `CircleSlash`, `Ban` and `ShieldAlert`: the two slash glyphs read _forbidden_ rather than _stuck_ and are quiet at 16 px, and `ShieldAlert` reads _security_. It is also distinguishable from the advisory `AlertTriangle` at 16 px — octagon vs triangle — which the two slash candidates were not from each other |
+| status pill | `<Pill severity="danger">Stale</Pill>`             | the shipped `danger` tone, already in the `Pill` vocabulary — `bg-(--el-tint-rose) text-(--el-text-strong)`, no new recipe. Rendered beside the peach `warning` chip: the two are legibly different, which is the property that matters, because a row can carry both                                                                                                    |
+| row border  | `border-(--el-border)` — **NOT the accent border** | `planned` gets `border-(--el-accent)` because it is _awaiting your approval_. A `stale` plan cannot be approved, so the accent would invite a click that fails. It is still in the queue; the rose square and the danger pill are what say _this one needs you_, and they say it without promising the button works                                                      |
+
+**a11y** — the pill carries the word **Stale**; the hue is never the only carrier, and the icon
+square stays `aria-hidden` exactly as the other four do (the row's meaning is in its text).
+
+**Contrast** — every `Pill` tone puts its hue in the TINT and its ink in `--el-text-strong`
+(charcoal, ~10:1 in both themes — finding #35), and `severity="danger"` is exactly that recipe over
+`--el-tint-rose`. So this adds **no ink and no new pairing**. ⚠️ The four incumbent status pills in
+`plans-tabbed-list.mock.html` carry hue-saturated inks (`#0a4fa0`, `#3a2d8a`, `#0f5e29`) that predate
+finding #35 and that the shipped `Pill` no longer paints; the fifth pill is drawn as the component
+actually renders it, which is why its ink reads darker-neutral beside them. Do not "match" the
+mock's legacy inks in code.
+
+### §3 — The WHEN label: no new column for the ROW, one needed for the RAIL
+
+`planRowView`'s `whenFor` picks a timestamp and a verb per status. **`stale` reads `plannedAt` and
+keeps the `plannedAt` verb** — _"planned 2 hours ago"_ — because that is still the true and useful
+fact in a scanned list: it is the plan's own moment, and the status pill already says what happened
+since. **No new column is needed for the list.**
+
+⚠️ **It needs an EXPLICIT `case 'stale'` — falling through is wrong here.** `whenFor`'s `default:`
+arm returns `createdAt` (it was written for `generating`), so a fifth enum value that is not spelled
+out regresses the row's timestamp silently, with no type error to catch it.
+
+**⚠️ The RAIL is the other answer.** For the rail to say _when_ the plan went stale, the `Plan` model
+needs a **`staleAt` timestamp** — nothing existing carries it (`plannedAt` is the close, `decidedAt`
+is the decision, and a `stale` plan has not been decided). **MOTIR-3578 is closed against this
+sentence:** either it adds `staleAt` and the rail renders it, or the rail's line omits the _when_ and
+says so. Recommended: add it — the transitions card is already writing the status, and a timestamp
+beside a status is one column.
+
+### §4 — The tab: always shown, at zero
+
+The fifth tab renders **always**, including `Stale 0`, for the reason §4 of Part VII already gives
+for `Declined`: _"the tab strip's job is to show you which statuses exist"_, and a tab that appears
+only when populated teaches a reader that the vocabulary changes under them. It sits **between
+`Planned` and `Approved`** — the strip reads in lifecycle order, and `stale` is a detour off
+`planned`, not an ending.
+
+**Empty state:** **"Nothing stale"** — _"A plan goes stale when work it proposes to change has since
+been finished. None have."_ (The register Part VII §4 sets: name the state, then say in one sentence
+what would put a plan there.)
+
+### §5 — The review rail's outcome line, and the thing four statuses never needed
+
+`declined` reads _"Plan declined — your tree was left untouched"_ — an ENDING. `stale` is not an
+ending, so its line must say what happened **and** what the reader can do, and it must not offer the
+repair AMENDMENT 8 established does not exist:
+
+> **"Plan out of date — work it changes has since been finished. Approve is unavailable; decline it,
+> or wait in case the work reopens."**
+
+**⚠️ AND THE ELEMENT THE STATUS CANNOT CARRY: WHICH PROPOSAL.** The whole complaint behind
+MOTIR-3560 is that a reviewer _"can see precisely which proposal went stale and has no way to say
+so"_. A pill in a list does not answer that, so the rail places it:
+
+- **In the rail, directly under the outcome line**, a `Pill severity="danger"` per offending
+  proposal carrying **the proposal's title and the target's key** — _"Rewrite the settings pane →
+  MOTIR-3443 is done"_. One line per fatal proposal, capped at three with a _"+N more"_ tail, since
+  the rail is a column.
+- **On the item node**, the same `danger` chip on the offending proposal's own card, so the canvas
+  and the rail agree without the reader cross-referencing.
+
+Under AMENDMENT 8's UNIFY disposition the engine reports these as a **fatal** `target_terminal`
+reason beside its existing advisory ones, so the rail is rendering a list it is already handed — it
+is not a second computation.
+
+### §6 — The two "stale"s on one row, said once
+
+After AMENDMENT 8 a row can carry both the advisory count (_"3 may be out of date"_, peach) and the
+`Stale` status (rose). They are **the same engine at two severities**, and the row keeps both: the
+count is _some proposals drifted_, the pill is _this plan cannot be approved_. Rendered together
+before this was fixed; they read as two different facts, which is the requirement. The rail is where
+the relationship is spelled out — the fatal reasons appear first, under the outcome line, and the
+advisory ones stay in their existing place.
+
+### §7 — What the compiler catches, and the THREE places it does not
+
+Read while drawing this, against the shipped `app/(authed)/plans/`. Adding a fifth `PlanStatusDto`
+value splits the code that renders it into two piles, and **only the first pile fails the build**.
+MOTIR-3578 is closed against all six lines, not against the two the compiler names.
+
+**The type system FORCES these two** — both are `Record<PlanStatusDto, …>`, so a fifth key is a
+compile error until it is filled:
+
+| `PlanRow.tsx` | what to add                    |
+| ------------- | ------------------------------ |
+| `STATUS_ICON` | `stale: OctagonAlert`          |
+| `STATUS_TINT` | `stale: 'bg-(--el-tint-rose)'` |
+
+**⚠️ These four fall through SILENTLY — no type error, wrong output:**
+
+1. **`StatusPill`** ends `return <Pill tone="archived">{label}</Pill>; // declined` — an unguarded
+   fallthrough, not a `declined` branch. A fifth status renders as **Declined's chip**: the exact
+   _ended_ treatment §2 exists to avoid, and the failure is invisible in a diff. Give `declined` its
+   own `if` and make `stale` the explicit `severity="danger"` arm.
+2. **`whenFor`** — §3 above: `default:` is `createdAt`.
+3. **`staleCountFor`** short-circuits on `plan.status !== 'planned'`, so a **`stale` row would show
+   no advisory count at all** — precisely backwards, since it is the row most likely to have one.
+   Widen it to `planned | stale`, which is the same widening AMENDMENT 8 D3 already puts on
+   `computePlanStaleness`'s own guard.
+4. **`awaitingReview`** is `view.status === 'planned'`, and §2 wants it to stay that way — recorded
+   here so the widening in (3) is not copied into it by symmetry. The accent border is deliberately
+   NOT extended.
+
+**And the copy:** `aiPlanning.status.stale`, the tab label, the tab's empty state (§4), and the
+rail's outcome line (§5) are new message keys — **each needs its `zh` twin**, or the catalog parity
+gate fails.

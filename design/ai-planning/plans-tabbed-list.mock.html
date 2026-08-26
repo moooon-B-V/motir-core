@@ -316,6 +316,17 @@
         background: var(--warning-surface);
         color: #8a3d00;
       }
+      /* --- MOTIR-3577: the FIFTH plan STATUS (Part XI §2) -----------------
+         `.pill.stale` above is the ADVISORY drift count and stays peach; this
+         is the STATUS, and after AMENDMENT 8 the two are one engine at two
+         severities, so a row can carry both. Drawn as the shipped `Pill`
+         actually paints `severity="danger"` — `--el-tint-rose` under
+         `--el-text-strong`, hue in the tint, charcoal ink (finding #35) — NOT
+         with a saturated hue-ink like the four legacy status pills above it. */
+      .pill.stale-fatal {
+        background: var(--rose);
+        color: var(--strong);
+      }
       /* --- MOTIR-2985: the authorship attribution (amends A + B) ---------
          An entry in the row's EXISTING meta line, not new chrome: same
          `--el-text-secondary` ink, same 11.5px, same 12px gap. The GLYPH is what
@@ -567,6 +578,13 @@
       .narrow.over {
         border-color: var(--danger);
       }
+      /* MOTIR-3577 — the DISPOSITION rig. The strip is 361.9px in a 343px box, so
+         this clips it exactly as the page would: `Declined` loses its last
+         18.9px and that partial glyph is the "there is more to the right" cue
+         the four-tab strip never needed. */
+      .scrollrig {
+        overflow-x: auto;
+      }
       .measure {
         font: 600 11px var(--mono);
         color: var(--secondary);
@@ -675,10 +693,19 @@
         <h1>The Plans list, tabbed by status</h1>
         <p>
           The <code>/plans</code> index, answering <i>which</i> plan you want before it answers
-          <i>what is in it</i>: one tab per member of the shipped four-member
-          <code>PlanStatus</code> enum with <b>Planned</b> selected by default, the two different
-          emptinesses tabs create, a decided row that names the requester AND the decider, and a
-          page header carrying one Plan-with-AI entrance instead of two.
+          <i>what is in it</i>: one tab per member of the <code>PlanStatus</code> enum with
+          <b>Planned</b> selected by default, the two different emptinesses tabs create, a decided
+          row that names the requester AND the decider, and a page header carrying one Plan-with-AI
+          entrance instead of two.
+        </p>
+        <p>
+          <b>AMENDED BY MOTIR-3577 for the FIFTH status, <code>stale</code></b> (ADR
+          <code>agent-authored-plans.md</code> AMENDMENT 8, design-notes <b>Part XI</b>). The enum
+          this asset drew as four-member is five-member: every strip below carries
+          <code>Stale</code> between Planned and Approved, panel 4's measurement is RE-TAKEN and its
+          disposition REVERSED because five labels no longer fit a phone, and panels 5 and 6 draw
+          the row, the tab's empty state, and the one thing a status pill cannot say — WHICH
+          proposal went stale.
         </p>
         <p>
           <b>This is its own asset, and it draws the target — not a migration.</b> It does not amend
@@ -688,7 +715,10 @@
         </p>
         <div class="refs">
           <span class="ref">MOTIR-3233</span>
+          <span class="ref">MOTIR-3577</span>
           <span class="ref">Part VII</span>
+          <span class="ref">Part XI</span>
+          <span class="ref muted">ADR AMENDMENT 8</span>
           <span class="ref muted">story MOTIR-3232</span>
           <span class="ref muted">composes plans-surface.mock.html panels A + A2</span>
           <span class="ref muted">Segmented</span>
@@ -724,6 +754,9 @@
                   </button>
                   <button type="button" class="tab on" aria-pressed="true">
                     Planned<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Stale<span class="n">3</span>
                   </button>
                   <button type="button" class="tab" aria-pressed="false">
                     Approved<span class="n">9</span>
@@ -999,6 +1032,9 @@
                   </button>
                   <button type="button" class="tab" aria-pressed="false">
                     Planned<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Stale<span class="n">3</span>
                   </button>
                   <button type="button" class="tab on" aria-pressed="true">
                     Approved<span class="n">9</span>
@@ -1277,6 +1313,9 @@
                       Planned<span class="n">2</span>
                     </button>
                     <button type="button" class="tab" aria-pressed="false">
+                      Stale<span class="n">3</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
                       Approved<span class="n">9</span>
                     </button>
                     <button type="button" class="tab" aria-pressed="false">
@@ -1322,7 +1361,8 @@
           <span class="n">4</span>
           <h2>The strip below `sm` — MEASURED</h2>
           <span class="note"
-            >· 310.3px with labels · 358.8px with counts · a 343px content box at 375px</span
+            >· RE-MEASURED for FIVE tabs (MOTIR-3577) · 361.9px with labels · 422.6px with counts ·
+            a 343px content box at 375px</span
           >
         </div>
 
@@ -1334,17 +1374,21 @@
                 <span class="sub">· measured from this mock, not eyeballed</span>
               </div>
               <div class="list" style="display: grid; gap: 14px; justify-items: start">
-                <div class="narrow">
+                <div class="narrow over">
                   <div class="cap">
-                    inner box 343px = a 375px viewport − px-4 gutters · labels only
+                    inner box 343px = a 375px viewport − px-4 gutters · labels only · FIVE tabs
                   </div>
                   <div class="tabs" role="group" aria-label="Filter plans by status">
                     <button type="button" class="tab" aria-pressed="false">Generating</button>
                     <button type="button" class="tab on" aria-pressed="true">Planned</button>
+                    <button type="button" class="tab" aria-pressed="false">Stale</button>
                     <button type="button" class="tab" aria-pressed="false">Approved</button>
                     <button type="button" class="tab" aria-pressed="false">Declined</button>
                   </div>
-                  <div class="measure">strip 310.3px · fits, 32.7px to spare</div>
+                  <div class="measure">
+                    strip 361.9px · <em>overflows by 18.9px</em> — four tabs fit at 310.3px; the
+                    fifth adds 51.6px
+                  </div>
                 </div>
                 <div class="narrow over">
                   <div class="cap">the same box · labels + counts</div>
@@ -1356,13 +1400,36 @@
                       Planned<span class="n">2</span>
                     </button>
                     <button type="button" class="tab" aria-pressed="false">
+                      Stale<span class="n">3</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
                       Approved<span class="n">9</span>
                     </button>
                     <button type="button" class="tab" aria-pressed="false">
                       Declined<span class="n">8</span>
                     </button>
                   </div>
-                  <div class="measure">strip 358.8px · <em>overflows by 15.8px</em></div>
+                  <div class="measure">
+                    strip 422.6px · <em>overflows by 79.6px</em> (four tabs: 358.8px)
+                  </div>
+                </div>
+                <div class="narrow">
+                  <div class="cap">
+                    the disposition · below sm the strip SCROLLS · labels only, Planned selected
+                  </div>
+                  <div class="scrollrig">
+                    <div class="tabs" role="group" aria-label="Filter plans by status">
+                      <button type="button" class="tab" aria-pressed="false">Generating</button>
+                      <button type="button" class="tab on" aria-pressed="true">Planned</button>
+                      <button type="button" class="tab" aria-pressed="false">Stale</button>
+                      <button type="button" class="tab" aria-pressed="false">Approved</button>
+                      <button type="button" class="tab" aria-pressed="false">Declined</button>
+                    </div>
+                  </div>
+                  <div class="measure">
+                    343px of 361.9px shown · Declined is clipped by 18.9px, and the clip IS the
+                    affordance
+                  </div>
                 </div>
                 <div>
                   <div class="decided-strip" style="padding: 0 0 7px">
@@ -1376,39 +1443,427 @@
                       Planned<span class="n">2</span>
                     </button>
                     <button type="button" class="tab" aria-pressed="false">
+                      Stale<span class="n">3</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
                       Approved<span class="n">9</span>
                     </button>
                     <button type="button" class="tab" aria-pressed="false">
                       Declined<span class="n">8</span>
                     </button>
                   </div>
-                  <div class="measure">strip 358.8px · fits, 233px to spare</div>
+                  <div class="measure">strip 422.6px · fits, 169.4px to spare</div>
                 </div>
               </div>
               <div class="note-box">
-                <b>The measurement, and what it decides.</b> Rendered headlessly from the REAL
-                shipped <code>Segmented</code> with the four real labels, through the real
-                <code>app/globals.css</code> + <code>@motir/design-system</code> theme, at 375 / 700
-                / 1200px in both themes. The strip's width is intrinsic and identical at every
-                viewport: <b>310.3px</b> with labels alone (segments 84.3 / 67.7 / 75.7 / 70.6) and
-                <b>358.8px</b> once each carries a count. The authed shell is
-                <code>px-4</code> below <code>sm</code>, so a 375px viewport gives the page a
-                <b>343px</b> content box.<br /><br />
-                <b>So the LABELS fit at phone width and the COUNTS do not</b> — 310.3 &lt; 343 &lt;
-                358.8, which is a 15.8px overflow, not a near miss. The disposition follows from the
-                number rather than from taste:
-                <b
-                  >all four tabs keep their labels at every width, and the counts render from
-                  <code>sm</code> up</b
-                >. Not a scroller (the fourth tab would sit off-screen on the surface whose whole
-                job is to show you which statuses exist), not glyphs (four lifecycle states have no
-                icons a reader could tell apart), and not a <code>&lt;select&gt;</code> (a second
-                control grammar for one breakpoint). Counts are an ORNAMENT on a filter — dropping
-                them costs a number that the tab's own result set immediately supplies.<br /><br />
+                <b>RE-MEASURED FOR FIVE TABS (MOTIR-3577), and the disposition below CHANGES.</b>
+                Rendered headlessly from the REAL shipped <code>Segmented</code> with the real
+                labels, through the real <code>app/globals.css</code> +
+                <code>@motir/design-system</code> theme. The strip's width is intrinsic and
+                identical at every viewport. The four-tab numbers this panel recorded reproduce
+                exactly — <b>310.3px</b> with labels (segments 84.3 / 67.7 / 75.7 / 70.6) and
+                <b>358.8px</b> with counts — which is what makes the new pair trustworthy:
+                <b>361.9px</b> with labels and <b>422.6px</b> with counts, the
+                <code>Stale</code> segment costing 49.6px bare and 61.8px with its count.<br /><br />
+                <b>So the labels no longer fit.</b> The authed shell is <code>px-4</code> below
+                <code>sm</code>, so 375px leaves a <b>343px</b> content box: 310.3 &lt; 343 &lt;
+                361.9. The rule this panel set — <i>all tabs keep their labels at every width</i> —
+                held on the assumption that the strip fits, and the fifth member falsifies it. Its
+                other half stands untouched:
+                <b>counts still render from <code>sm</code> up</b> (422.6 &lt; 592), and never
+                below.<br /><br />
+                <b>The disposition is the SCROLLER, and this REVERSES the rejection above.</b> That
+                rejection was argued, not measured — <i>a scroller would push</i>
+                <code>Declined</code>
+                <i>off-screen on the surface whose job is to show which statuses exist</i>. The
+                measurement retires the premise: the overflow is <b>18.9px</b>, so
+                <code>Declined</code> is not off-screen, it is clipped by a fifth of its width, and
+                a half-drawn word is a stronger "there is more here" cue than any chevron this
+                surface would have to invent. The strip scrolls the SELECTED segment into view on
+                mount, so a deep link to <code>?status=declined</code> opens on its own tab.<br /><br />
+                <b>The three alternatives, drawn and rejected.</b> A <code>flex-wrap</code> on the
+                track is 343px wide and <b>80px tall</b> — it strands <code>Declined</code> alone on
+                a second row and breaks the one-of-N reading a segmented track exists to carry,
+                while eating twice the vertical space above the list on the smallest screen.
+                Shortening <code>Generating</code> to <i>Writing</i> fits (337.8px) and is a lie:
+                the tab and the row's own pill would then say different words for one status. And
+                glyphs are still out, for the reason this panel already gave — five lifecycle states
+                have no icons a reader could tell apart.<br /><br />
+                <b>⚠️ A finding this re-measurement surfaced, which is NOT about the fifth tab.</b>
+                The 343px box is a 375px viewport. At <b>320px</b> the box is 288px, and the
+                FOUR-tab strip is already 310.3px — so <code>/plans</code> overflows its gutter on
+                the smallest phone today, silently, and has since MOTIR-3241. The scroller fixes
+                that case too, which is why it is the right instrument rather than the cheapest
+                one.<br /><br />
                 <b>The header measurement, for the record.</b> At 375px the shipped header WRAPS —
                 <code>flex-wrap</code> drops the Plan-with-AI pill onto its own line under a
                 subtitle that has already wrapped to two. Removing the pill (panel 1) removes that
                 wrap, which is a second reason for the removal beyond the duplication.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 5 — The STALE tab (MOTIR-3577) -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <h2>The STALE tab — the fifth status, drawn as the shipped Pill paints it</h2>
+          <span class="note"
+            >· OctagonAlert + rose · no accent border · the both-at-once row · the tab at zero</span
+          >
+        </div>
+
+        <div class="frame">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="pghead">
+                <div>
+                  <h2>Plans</h2>
+                  <p>every plan Motir AI proposed for Motir</p>
+                </div>
+              </div>
+              <div class="list" style="padding-bottom: 4px">
+                <div class="tabs" role="group" aria-label="Filter plans by status">
+                  <button type="button" class="tab" aria-pressed="false">
+                    Generating<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Planned<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab on" aria-pressed="true">
+                    Stale<span class="n">3</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Approved<span class="n">9</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Declined<span class="n">8</span>
+                  </button>
+                </div>
+              </div>
+              <div class="list" style="padding-top: 6px">
+                <div class="row">
+                  <span class="ic" style="background: var(--rose)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#37352f"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 8v4M12 16h.01" />
+                      <path d="M15.3 2H8.7L2 8.7v6.6L8.7 22h6.6L22 15.3V8.7Z" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Rework the seller settings pane</div>
+                    <div class="m">
+                      <span><b>11</b> items</span><span>+8 add · 3 modify</span
+                      ><span>planned <b>3d ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">M</span><b class="person">Mara</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill stale-fatal"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 8v4M12 16h.01" />
+                        <path d="M15.3 2H8.7L2 8.7v6.6L8.7 22h6.6L22 15.3V8.7Z" /></svg
+                      >Stale</span
+                    >
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="ic" style="background: var(--rose)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#37352f"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 8v4M12 16h.01" />
+                      <path d="M15.3 2H8.7L2 8.7v6.6L8.7 22h6.6L22 15.3V8.7Z" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Payout schedule controls for connected accounts</div>
+                    <div class="m">
+                      <span><b>14</b> items</span><span>+9 add · 4 modify · 1 remove</span
+                      ><span>planned <b>6d ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">P</span><b class="person">Priya</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill stale"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                        /></svg
+                      >2 may be out of date</span
+                    >
+                    <span class="pill stale-fatal"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 8v4M12 16h.01" />
+                        <path d="M15.3 2H8.7L2 8.7v6.6L8.7 22h6.6L22 15.3V8.7Z" /></svg
+                      >Stale</span
+                    >
+                  </div>
+                </div>
+                <div class="decided-strip" style="padding: 10px 0 6px">
+                  for contrast — the DECLINED row, which this must not be mistaken for
+                </div>
+                <div class="row">
+                  <span class="ic" style="background: var(--mutedfill)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#787671"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="m15 9-6 6M9 9l6 6" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Split payouts by line item</div>
+                    <div class="m">
+                      <span><b>7</b> items</span><span>+7 add</span
+                      ><span>declined <b>2d ago</b></span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill declined"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="m15 9-6 6M9 9l6 6" /></svg
+                      >Declined</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="decided-strip">the tab at ZERO — it is still drawn</div>
+              <div class="list" style="padding-top: 0">
+                <div class="tabs" role="group" aria-label="Filter plans by status">
+                  <button type="button" class="tab" aria-pressed="false">
+                    Generating<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Planned<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab on" aria-pressed="true">
+                    Stale<span class="n">0</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Approved<span class="n">9</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Declined<span class="n">8</span>
+                  </button>
+                </div>
+                <div class="tabempty" style="margin-top: 10px">
+                  <h4>Nothing stale</h4>
+                  <p>
+                    A plan goes stale when work it proposes to change has since been finished. None
+                    have.
+                  </p>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>Rose, an octagon, and NO accent border.</b> The pill is the shipped
+                <code>Pill severity="danger"</code> exactly as the component paints it —
+                <code>--el-tint-rose</code> under <code>--el-text-strong</code>, hue in the tint,
+                charcoal ink (finding #35). It is deliberately NOT the four legacy status pills'
+                saturated hue-ink, which predates that finding; an implementer follows the
+                component, not this asset's older rows. The icon square takes
+                <code>--el-tint-rose</code>, the one tint no status spends (sky / lavender / mint
+                are taken and <code>declined</code> uses <code>--el-muted</code>).
+                <b>OctagonAlert</b> was chosen over CircleSlash, Ban and ShieldAlert: the two slash
+                glyphs read <i>forbidden</i> rather than <i>stuck</i> and are indistinguishable from
+                each other at 16px, and ShieldAlert reads <i>security</i>. An octagon is also still
+                separable from the advisory <b>AlertTriangle</b> at that size, which is the pairing
+                the second row above has to survive.<br /><br />
+                <b>The accent border stays OFF.</b> <code>planned</code> earns it because it means
+                <i>awaiting your approval</i>. A stale plan cannot be approved, so the same border
+                would invite a click that fails. The rose square and the danger pill carry
+                <i>this one needs you</i> without promising the button works.<br /><br />
+                <b>The DECLINED row is reproduced here on purpose.</b> It is the treatment this
+                status must not be confused with — a quiet <code>--el-muted</code> square and a
+                nearly fill-less <code>tone="archived"</code> chip, which says ENDED. Stale is not
+                an ending: it is a plan still in the queue whose exits are <i>wait</i> or
+                <i>decline</i>.<br /><br />
+                <b>Both at once is a real row, not an edge case.</b> After AMENDMENT 8 the advisory
+                count and the status are one engine at two severities, so the peach
+                <i>2 may be out of date</i> chip and the rose <i>Stale</i> pill share a row and say
+                two different things: <i>some proposals drifted</i> and
+                <i>this cannot be approved</i>. ⚠️ The shipped
+                <code>staleCountFor</code> short-circuits on <code>status !== 'planned'</code>, so
+                as written it would render this row with NO advisory count — the row most likely to
+                have one. Part XI §7 lists that with the three other silent fallthroughs.<br /><br />
+                <b>The zero tab is drawn for the reason panel 3 already gives</b> — the strip's job
+                is to show which statuses exist, and a tab that appears only when populated teaches
+                a reader that the vocabulary changes under them. Its empty state names the state and
+                then says in one sentence what would put a plan there, the same register
+                <i>Nothing generating</i> uses; it carries no CTA, because there is no action that
+                makes a plan stale.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 6 — WHICH proposal (MOTIR-3577) -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">6</span>
+          <h2>WHICH proposal went stale — the thing a status pill cannot say</h2>
+          <span class="note"
+            >· the review rail's outcome block · one chip per fatal proposal · capped at three</span
+          >
+        </div>
+
+        <div class="frame">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>Rework the seller settings pane</h3>
+                <span class="sub">· the review rail, outcome block</span>
+              </div>
+              <div class="list">
+                <div
+                  class="row"
+                  style="display: block; padding: 15px 16px; width: 372px; margin-bottom: 0"
+                >
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <span class="pill stale-fatal"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 8v4M12 16h.01" />
+                        <path d="M15.3 2H8.7L2 8.7v6.6L8.7 22h6.6L22 15.3V8.7Z" /></svg
+                      >Stale</span
+                    >
+                  </div>
+                  <div
+                    style="
+                      font-size: 13px;
+                      line-height: 1.55;
+                      color: var(--secondary);
+                      margin-top: 9px;
+                    "
+                  >
+                    <b style="color: var(--strong)">Plan out of date</b> — work it changes has since
+                    been finished. Approve is unavailable; decline it, or wait in case the work
+                    reopens.
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      flex-direction: column;
+                      align-items: flex-start;
+                      gap: 6px;
+                      margin-top: 11px;
+                    "
+                  >
+                    <span class="pill stale-fatal"
+                      >Rework the settings pane → MOTIR-3443 is done</span
+                    >
+                    <span class="pill stale-fatal"
+                      >Remove the legacy payout toggle → MOTIR-3450 is done</span
+                    >
+                    <span class="pill stale-fatal"
+                      >Retitle “Bank details” → MOTIR-3461 is cancelled</span
+                    >
+                    <span
+                      style="
+                        font: 600 11.5px var(--mono);
+                        color: var(--secondary);
+                        padding-left: 2px;
+                      "
+                      >+2 more</span
+                    >
+                  </div>
+                  <div class="decide" style="display: flex; gap: 8px; margin-top: 13px">
+                    <button class="btn" type="button" disabled style="opacity: 0.5">
+                      Approve plan
+                    </button>
+                    <button class="btn" type="button">Decline plan</button>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>The whole complaint behind MOTIR-3560 is answered HERE, not by the pill.</b> A
+                reviewer who
+                <i>can see precisely which proposal went stale and has no way to say so</i> is not
+                helped by a chip in a list — so the rail PLACES the answer: one
+                <code>Pill severity="danger"</code> per fatal proposal, directly under the outcome
+                line, each carrying the proposal's own title and the target that closed under it.
+                Capped at three with a <b>+2 more</b> tail, because the rail is a column and the
+                first three are enough to tell a reviewer whether this is one stale edge or a plan
+                that has been overtaken.<br /><br />
+                <b>The same chip goes on the item node</b> in the canvas, on the offending
+                proposal's own card, so the canvas and the rail agree without the reader
+                cross-referencing two lists.<br /><br />
+                <b>The outcome line is not <code>declined</code>'s.</b> That one reads
+                <i>Plan declined — your tree was left untouched</i>, an ENDING. This one has to say
+                what happened AND what is left to do, and it must not offer a repair that does not
+                exist: AMENDMENT 8 establishes there is no <code>stale → generating</code> edge,
+                because a proposal cannot be withdrawn or re-targeted. So the copy names the two
+                real exits — <i>decline it</i>, or <i>wait in case the work reopens</i> — and
+                Approve is drawn DISABLED rather than hidden, so the reader can see that the button
+                they came for is the one that is unavailable.<br /><br />
+                <b>The rail is rendering a list it is already handed.</b> Under AMENDMENT 8's UNIFY
+                disposition the staleness engine reports these as a FATAL
+                <code>target_terminal</code> reason beside its existing advisory ones — this is a
+                second RENDERING of one verdict, never a second computation.<br /><br />
+                <b>⚠️ The WHEN is missing on purpose, and it is a schema question.</b> The rail
+                cannot say <i>when</i> the plan went stale: <code>plannedAt</code> is the close and
+                <code>decidedAt</code> is a decision a stale plan has not had. Part XI §3 hands
+                MOTIR-3578 the choice — add a <code>Plan.staleAt</code> column and render it, or
+                state that the rail omits the moment. Nothing here assumes the column exists.
               </div>
             </div>
           </div>
