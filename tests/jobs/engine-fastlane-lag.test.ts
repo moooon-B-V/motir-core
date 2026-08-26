@@ -174,6 +174,104 @@ describe('the script itself', () => {
     expect(header).toContain('ledgerIdentity');
   });
 
+  // ── MOTIR-3593 ──────────────────────────────────────────────────────────────
+  // The probe followed its own HOW TO RUN block onto the POOLED url, saw nothing
+  // through FORCE ROW LEVEL SECURITY, and printed `samples: 0 — no fast-lane
+  // engine runs in this window`. That is a false statement about the world
+  // reached through a correct guard, and the guard it needed is on ABSENCE: what
+  // the CONNECTION can see, asserted before the measuring query is issued.
+
+  it('prefers the UNPOOLED url and treats an EMPTY variable as absent', () => {
+    // `??` would hand `new pg.Client` the empty string; the empty variable is how
+    // the pooled fallback (and so the refusal) is forced inside the machine, where
+    // both variables are set.
+    expect(probe.resolveConnection({ DATABASE_URL_UNPOOLED: 'u', DATABASE_URL: 'p' })).toEqual({
+      name: 'DATABASE_URL_UNPOOLED',
+      connectionString: 'u',
+    });
+    expect(probe.resolveConnection({ DATABASE_URL_UNPOOLED: '', DATABASE_URL: 'p' })).toEqual({
+      name: 'DATABASE_URL',
+      connectionString: 'p',
+    });
+    expect(probe.resolveConnection({ DATABASE_URL: 'p' })).toEqual({
+      name: 'DATABASE_URL',
+      connectionString: 'p',
+    });
+    expect(probe.resolveConnection({})).toBeNull();
+  });
+
+  const POOLED = {
+    role: 'motir_app',
+    bypasses_rls: false,
+    system_admin: false,
+    workspace_id: '',
+    job_run_forced: true,
+    job_event_forced: true,
+    urlEnv: 'DATABASE_URL',
+  };
+
+  it('REFUSES a connection that cannot see the ledger, and admits the three that can', () => {
+    // The observed production shape: motir_app, no bypass, no GUC, both tables
+    // FORCE RLS. This is the case that produced `samples: 0` against 226 rows.
+    expect(probe.canSeeLedger(POOLED)).toBe(false);
+
+    // rolbypassrls (DATABASE_URL_UNPOOLED / neondb_owner).
+    expect(probe.canSeeLedger({ ...POOLED, bypasses_rls: true })).toBe(true);
+    // The policies' own first branch: current_setting('app.system_admin') = 'true'.
+    expect(probe.canSeeLedger({ ...POOLED, system_admin: true })).toBe(true);
+    // A database built without the RLS migrations — nothing to be blind to, so the
+    // guard must not refuse an otherwise-legitimate local run.
+    expect(probe.canSeeLedger({ ...POOLED, job_run_forced: false, job_event_forced: false })).toBe(
+      true,
+    );
+    // ⚠️ One table still forced is still blind — the query JOINS them.
+    expect(probe.canSeeLedger({ ...POOLED, job_event_forced: false })).toBe(false);
+  });
+
+  it('does NOT accept a workspace GUC as visibility — that is a different statistic', () => {
+    // A tenant-scoped p95 is not the lane-wide p95 this script reports, and the
+    // whole epic is judged on comparing two p95s. Narrowing silently is the shape
+    // the refusal exists to prevent.
+    const scoped = { ...POOLED, workspace_id: 'ws_123' };
+    expect(probe.canSeeLedger(scoped)).toBe(false);
+    expect(probe.formatBlindRead(scoped)).toContain('could see ONE tenant');
+  });
+
+  it('names the reason in the refusal — never a number, never a verdict about the world', () => {
+    const text = probe.formatBlindRead(POOLED);
+    expect(text).toContain('BLIND READ');
+    expect(text).toContain('motir_app');
+    expect(text).toContain('DATABASE_URL_UNPOOLED');
+    // The two sentences the card is about: the refusal must deny both readings the
+    // old output invited.
+    expect(text).toContain('NOT a latency of zero');
+    expect(text).toContain('no fast-lane engine runs');
+    // …and it must not itself report a figure.
+    expect(text).not.toContain('samples:');
+    expect(probe.EXIT_BLIND_READ).toBe(3);
+    expect(probe.EXIT_USAGE).toBe(2);
+  });
+
+  it('asks the visibility question with a READ, and about the tables it joins', () => {
+    expect(probe.CONNECTION_SQL).toContain('rolbypassrls');
+    expect(probe.CONNECTION_SQL).toContain('app.system_admin');
+    expect(probe.CONNECTION_SQL).toContain('relforcerowsecurity');
+    expect(probe.CONNECTION_SQL).toContain("to_regclass('job_run')");
+    expect(probe.CONNECTION_SQL).toContain("to_regclass('job_event')");
+    expect(probe.CONNECTION_SQL.trim().toUpperCase().startsWith('SELECT')).toBe(true);
+  });
+
+  it('documents a HOW TO RUN block that the deployed image can actually execute', () => {
+    // Both halves of MOTIR-3593's second defect: `scripts/` is not in the standalone
+    // image, and the direct-invocation guard means the upload must keep the basename.
+    const source = readFileSync(SCRIPT, 'utf8');
+    expect(source).toContain('base64 -d > /app/engine-fastlane-lag.mjs');
+    expect(source).toContain('KEEP THIS BASENAME');
+    expect(source).toContain("endsWith('engine-fastlane-lag.mjs')");
+    // The header must no longer prescribe the path that does not exist in the image.
+    expect(source).not.toContain("'node scripts/experiments/engine-fastlane-lag.mjs --hours 72'");
+  });
+
   it('does not EDIT the budget constant — that is the re-measurement card', () => {
     // The header legitimately NAMES `lib/jobs/latencyBudget.ts` (it says the
     // result drops into `baseline`), so the assertion is about writing, not
