@@ -1468,6 +1468,19 @@ export default defineConfig({
         // route. `SignInCard.tsx` itself is NOT added: this card put one control
         // in it and did not write the 400-line two-step state machine around it.
         'app/**/_components/PasskeySignInButton.tsx',
+        // Story 8.12 · Subtask MOTIR-3614 — the story's server-side ADDITIONS.
+        //
+        // ⚠️ THE FILES THIS STORY WIDENED ARE NOT HERE, and that is the same
+        // call the `changeRequestCiFeedback.ts` note above makes:
+        // `lib/auth/index.ts`, `lib/auth/client.ts`, `lib/dto/twoFactor.ts`,
+        // `lib/mappers/twoFactorMappers.ts` and `lib/services/twoFactorService.ts`
+        // are pre-existing files this story added to, and gating them here would
+        // gate the addition on code no card in this story wrote.
+        // `lib/dto/passkey.ts` is types only — it emits nothing to instrument.
+        'lib/auth/passkeyConfig.ts',
+        'lib/repositories/passkeyRepository.ts',
+        'lib/mappers/passkeyMappers.ts',
+        'lib/services/passkeyService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1882,6 +1895,32 @@ export default defineConfig({
         },
         // Story 8.12 · Subtask MOTIR-3613 — MEASURED at
         // 95.83 / 90.47 / 100 / 100 (statements / branches / functions / lines).
+        // Story 8.12 · Subtask MOTIR-3614 — MEASURED at 100 / 100 / 100 / 100
+        // (statements / branches / functions / lines) for all four.
+        'lib/auth/passkeyConfig.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/passkeyRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/passkeyMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/passkeyService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'app/**/_components/PasskeySignInButton.tsx': {
           lines: 90,
           functions: 90,
