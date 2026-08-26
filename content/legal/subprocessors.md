@@ -16,7 +16,7 @@ receives your data unless you configure it to.
 > MOTIR-3621. The transfer-basis column is incomplete by design: see
 > _Transfer bases_ below.
 
-moooon B.V. («REGISTERED ADDRESS», KvK «KVK NUMBER») uses the companies below to
+moooon B.V. (Menkemaborg 65, 8226 TB Lelystad, Netherlands, KvK 97763144) uses the companies below to
 provide the hosted service. We publish this list so that a customer acting as a
 controller can assess it, and we keep it current: the list is derived from what the
 running application actually integrates with, not from a plan.
