@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **50 tools**.
+`initialize` handshake and registers **52 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1812,7 +1812,7 @@ it fill.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -2020,14 +2020,20 @@ unassigned — so the deepen turn is where a leaf gets both.
 skeleton pass: re-parent a proposal (`parentRef`), change its dependency edges
 (`blockedByRefs`), or re-pin its repo (`targetRepo` / `targetRepoRole`). Nor can
 it WITHDRAW a proposal — `op: "remove"` targets an existing work item, not a
-proposal. Before you close the plan, the repair for any of these is a fresh plan;
-they cost nothing and start no job.
+proposal.
+
+**That is a rule about the DEEPEN, and it is no longer a dead end.** Those four
+things are exactly what `update_plan_proposal` and `withdraw_plan_proposal`
+below are for. The split is deliberate: a deepen is the second phase of writing
+a tree and should not be able to reshape it, while a CORRECTION is an author
+fixing its own mistake and has to be able to.
 
 **Legal only while the plan is `generating`.** Once `final: true` has closed it,
 the plan is in front of a person and stops moving: a deepen is refused with
 `PLAN_NOT_IN_EXPECTED_STATUS`, naming the status it actually found, so the refusal
-reads as terminal rather than as something to retry. Editing a `planned`
-proposal is the reviewer's own act, on the review surface.
+reads as terminal rather than as something to retry. To change a `planned`
+proposal, use `update_plan_proposal` — which is legal there precisely because it
+records the change on the plan's timeline, so the reviewer can see it.
 
 Requires **`ai:view_plan`** — the permission `plansService.deepenProposal`
 asserts, the same key `add_plan_items` names.
@@ -2040,6 +2046,88 @@ Fibonacci range.
 
 > **⚠️ This creates no work item either.** It edits a proposal in place, and
 > nothing in the tree changes until a person approves the plan.
+
+##### `update_plan_proposal` — CORRECT a proposal, structure included
+
+The repair for a mistake you can see and previously could not fix. `add_plan_items`
+returns a proposal's id only when its own call returns, so an intra-plan ref written
+in the same batch as its target names nothing — and until this tool existed the only
+remedy was to author a whole second plan and ask a person to decline the first.
+
+| Input                                | Type           | Required | Notes                                                             |
+| ------------------------------------ | -------------- | -------- | ----------------------------------------------------------------- |
+| `planId`                             | string         | yes      | The id `create_plan` returned.                                    |
+| `planItemId`                         | string         | yes      | The proposal to correct.                                          |
+| every field `update_plan_item` takes | —              | no       | Same sparse semantics.                                            |
+| `parentRef`                          | string \| null | no       | `add` only. Re-parent it; `null` makes it top-level.              |
+| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it. |
+| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                       |
+| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                |
+
+**It reaches the four things the deepen cannot, and that is the whole point.** The
+field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no
+door could touch at all — because that is where an intra-plan dependency edit rides.
+
+**Legal on `generating` AND `planned`.** Correcting a plan a reviewer is already
+holding is the case this exists for, and it is safe because the correction lands on
+the plan's TIMELINE with the harness and model that made it: a reviewer can see that
+what they are approving is not what they started reading.
+
+**`approved` and `declined` are FROZEN.** At approve the proposals have materialized
+into work items, which are then the source of truth — so the refusal names the status
+and points at `update_work_item`. A decline is a closed decision. Either way the
+answer is `PLAN_NOT_EDITABLE`, which says which of the two it is.
+
+**Every structural correction re-runs the append's own ref check**, so you cannot
+correct your way into a `planItem:` ref that names nothing — and a ref naming the
+proposal ITSELF is refused rather than stored as a one-node cycle.
+
+```jsonc
+// The batch that produced the mistake: two proposals in ONE call, the second
+// referencing the first — whose id does not exist until this call returns.
+add_plan_items({ planId, proposals: [
+  { op: "add", proposedFields: { title: "The prerequisite", kind: "task" } },
+  { op: "modify", workItemId: "cmq…", patch: { blockedByAdd: ["planItem:PLACEHOLDER"] } },
+]})
+// → REFUSED: UNRESOLVED_PLAN_REF, naming the ref and the proposal.
+
+// Appended properly, in two calls, then corrected after the close:
+update_plan_proposal({ planId, planItemId: "ck_modify",
+  patch: { blockedByAdd: ["planItem:ck_prereq"] } })
+```
+
+Requires **`ai:view_plan`** — the key `plansService.correctProposal` asserts, the
+same one `add_plan_items` and `update_plan_item` name.
+
+Errors: `PLAN_NOT_FOUND` / `PLAN_ITEM_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an
+`approved` or `declined` plan; `UNRESOLVED_PLAN_REF` for a ref naming no proposal;
+`INVALID_PROPOSAL` for a `patch` on an `add`, a body field on a `modify`, or a
+correction that changes nothing.
+
+##### `withdraw_plan_proposal` — take ONE proposal off a plan
+
+So that a proposal you should not have appended does not have to be declined by a
+person along with everything around it.
+
+| Input        | Type   | Required | Notes                              |
+| ------------ | ------ | -------- | ---------------------------------- |
+| `planId`     | string | yes      | The id `create_plan` returned.     |
+| `planItemId` | string | yes      | The proposal to take off the plan. |
+
+**This is NOT the `remove` op.** `op: "remove"` PROPOSES deleting an existing work
+item from the tree at approve and requires a `workItemId`. This takes a proposal off
+the PLAN, and nothing in the tree is touched either way.
+
+**A referenced proposal is REFUSED, not cascaded.** If a sibling still points at it
+through a `planItem:` ref, the call comes back as `PLAN_PROPOSAL_REFERENCED` naming
+every referrer — correct or withdraw those first. Cascading would take cards off the
+plan you never asked to withdraw; blanking their refs would change what they mean.
+
+**Withdrawing a `modify` RELEASES its target**, so you can append a corrected
+`modify` for that work item where a second one was previously refused as a duplicate
+target. That was a dead end for the life of the plan.
+
+Same statuses, same key, same freeze as `update_plan_proposal` above.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 

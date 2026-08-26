@@ -274,6 +274,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // PLAN before anything looks at whether that proposal exists, so the
         // refusal cannot depend on tenant A having a real proposal to name.
         update_plan_item: { planId: plan.id, planItemId: 'pi_leak', title: 'leak?' },
+        update_plan_proposal: { planId: plan.id, planItemId: 'pi_leak', title: 'leak?' },
+        withdraw_plan_proposal: { planId: plan.id, planItemId: 'pi_leak' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -701,6 +703,12 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           proposals: [{ op: 'add', proposedFields: { title: 'scoped proposal' } }],
         },
         update_plan_item: { planId: plan.id, planItemId: 'pi_scoped', title: 'scoped deepen' },
+        update_plan_proposal: {
+          planId: plan.id,
+          planItemId: 'pi_scoped',
+          title: 'scoped correction',
+        },
+        withdraw_plan_proposal: { planId: plan.id, planItemId: 'pi_scoped' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },

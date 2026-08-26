@@ -210,6 +210,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   create_plan: 'work_items:write',
   add_plan_items: 'work_items:write',
   update_plan_item: 'work_items:write',
+  // The correction door (MOTIR-3541) — the same scope as the deepen it sits
+  // beside: both write to a plan's proposals and neither reaches a work item.
+  update_plan_proposal: 'work_items:write',
+  withdraw_plan_proposal: 'work_items:write',
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
   transition_status: 'work_items:write',
