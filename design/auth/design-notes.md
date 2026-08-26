@@ -5,12 +5,13 @@ Design reference for the `auth` area: the signed-out surfaces served from
 (`/device`, `/unsubscribe/filter-subscription`) that joined the group after this
 asset was drawn.
 
-| Surface           | Asset                                            | Notes                                                                                                                                                                                                                                                                            |
-| ----------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth 2.0**      | **`auth-screens.pen`** (Pencil source)           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                               |
-| **2FA challenge** | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.** |
-| CLI hand-off      | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                           |
-| Brand lockup      | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                     |
+| Surface             | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth 2.0**        | **`auth-screens.pen`** (Pencil source)           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                                                                                                                                            |
+| **2FA challenge**   | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.**                                                                                                              |
+| **Passkey sign-in** | **`passkey-sign-in.mock.html`** (HTML mock)      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`. |
+| CLI hand-off        | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                        |
+| Brand lockup        | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                  |
 
 `auth-screens.pen` is a **legacy Pencil source** — one of the fourteen `.pen`
 files still in the tree, and this area holds no HTML mock beside it. New assets
@@ -576,3 +577,150 @@ band around a dark card. In the app `data-theme` sits on `<html>`.
   dash is decoration and the ink guard agrees.
 - No Tier-0 `--color-*` outside the token block; no raw `rounded-*` / `p-*` /
   `h-9` on any control's own box.
+
+---
+
+# Sign in with a passkey — `passkey-sign-in.mock.html`
+
+**Story 8.12 (MOTIR-1214) · Subtask MOTIR-3609, Surface B.** The ONE control this
+story adds to the signed-out sign-in card, and what the card does while it is
+pressed. **Gates MOTIR-3613.** The account-side half — register, rename, remove —
+is `../settings/passkeys.mock.html`, and neither asset re-specifies the other.
+
+The card's two-step Clay layout is Story 1.1's and nothing here changes it: one
+button is added, in one place, and the stack around it is reproduced so the
+placement is measurable rather than described.
+
+## ⚠️ THE AFFORDANCE IS ON THE EMAIL STEP — and that is a code fact
+
+`verifyPasskeyAuthentication` **mints a session directly** (its error set carries
+`UNABLE_TO_CREATE_SESSION`), so a passkey sign-in never answers
+`{ twoFactorRedirect: true }` and **`TwoFactorChallenge` is never reached**.
+`two-factor-challenge.mock.html` was read to confirm the passkey does not belong
+in it, and it is **not amended**.
+
+Two consequences the build should not have to infer, and panel 1 draws both:
+
+- **The password step is SKIPPED**, not merely optional. A passkey is not a
+  second factor asked for after a password; it replaces the password.
+- **The challenge step is UNREACHABLE** from this path. Wiring the passkey into
+  `TwoFactorChallenge`'s method list — which the shipped component's `methods`
+  prop makes trivially easy — would wire it into a step it can never arrive at.
+
+It is also the correct product shape rather than only the correct wiring: a
+UV-required credential is already two factors, so demanding a second one after it
+would be theatre.
+
+## The POSITION, and the argument for it
+
+Directly under **Continue with Google**, above the **OR** rule.
+
+Everything above that rule signs you in without typing anything; everything below
+it is the email path. Putting the passkey button below the rule would file it as
+an alternative to the email FIELD, which it is not — it is a peer of the Google
+button, and the rule is what says so. Same primitive as its neighbour —
+`Button variant="secondary" size="lg"`, full width — because a primary here would
+demote a **Continue** that most readers still need today.
+
+**Tab order follows the DOM: Google → passkey → email → Continue.** The
+`autoFocus` on the email field is unchanged, so a reader who types straight away
+is unaffected by a button they did not ask for.
+
+## The ACCESS PATH — the door is a button, not a route
+
+The gate asks the design to draw the door. This door **is** the affordance: there
+is no route to link to, nothing to deep-link, and no nav entry. Panel 2 draws it
+in its host at full width; panel 3 draws the same card at 390px, because
+`09-signin-mobile.png` exists and a new control on that card owes the same check
+— nothing wraps, nothing truncates, and the label fits one line at the narrowest
+supported width.
+
+## Panels
+
+1. **The flow** — where the button sits, and the two steps a passkey sign-in
+   skips.
+2. **Desktop** — the shipped card with one control added.
+3. **Mobile (390px)** — a width, not a second design.
+4. **Pending** — the shipped `Button loading` state, plus a labelled stand-in for
+   the browser's own sheet.
+5. **The two refusals** — which take opposite shapes.
+6. **Dark parity.**
+
+## Per-control map
+
+| Control                    | Primitive                                              | Call                                        |
+| -------------------------- | ------------------------------------------------------ | ------------------------------------------- |
+| **Sign in with a passkey** | `Button variant="secondary" size="lg"` full width      | `authClient.signIn.passkey()` (MOTIR-3610)  |
+| **its pending state**      | the same `Button`, `loading` — spinner + changed label | —                                           |
+| **no-match refusal**       | `FormAlert`, the card's existing danger callout        | `PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED` |
+| **cancelled**              | nothing                                                | `AUTH_CANCELLED`                            |
+
+## The two refusals take OPPOSITE shapes
+
+- **The reader dismissed the sheet** → **nothing is drawn.** They changed their
+  mind, and a banner would tell them they did something wrong.
+- **No passkey on this device matches a Motir account** → a real dead end, and it
+  says so in the danger callout the card already uses for a wrong password. Its
+  copy carries **the way out** — sign in with email and password, then add a
+  passkey from account settings — because a reader stuck on this screen needs the
+  next step more than the diagnosis.
+
+## Grounded in shipped reality (rung 2)
+
+**The card was RENDERED before anything was drawn**: a production build served at
+localhost, `/sign-in` screenshotted at 1440×1000 and 390×844, both @2x. What the
+render settled, and what this board therefore reproduces rather than invents:
+
+- The `(auth)` frame — `--el-auth-wash` page, a 448px card at `--radius-card`
+  with `--shadow-elevated`, the `BrandMark` + wordmark **inside** the card,
+  top-left.
+- The email step's stack, in shipped order: Continue with Google → OR → the email
+  field → Continue → the sign-up prompt → a hairline → "Have a project idea?" +
+  Plan with AI.
+- **The real BrandMark and the real Google mark.** This area's older sprite
+  carries an `#i-google` that is a placeholder (a plus in a circle, unused) and
+  an `#i-wave` that predates the wave-band glyph. Both are replaced here with the
+  shipped path data — `components/brand/waveBand.ts`'s `WAVE_BAND_PATH` and
+  `GoogleButton.tsx`'s four-colour `GoogleGlyph`. Google's hues are the one raw
+  hex on this board and they are correct: their branding guidelines require their
+  asset.
+- ⚠️ **Three tokens the copied block does NOT carry**, and their absence is not
+  cosmetic: `--height-btn-lg`, `--el-input-border` and `--el-button-border`. The
+  challenge mock draws no large button and no input, so it never needed them —
+  and an undefined `var()` inside a `height` declaration does not fall back to
+  the base rule, it computes to `auto`. A 48px button silently rendered at
+  **17px** until this was found by measuring it. The three are appended with
+  their `theme.css` values, and both `--el-*` are re-emitted under
+  `[data-theme='dark']` for the nested-theme reason this area's other asset
+  already records.
+
+## The copy, and the `en` keys it needs
+
+Under `auth.passkey.*`, beside the existing `auth.*` catalog. Every `en` key
+needs its `zh` twin (`tests/i18n-catalog.test.ts`).
+
+`signIn` ("Sign in with a passkey") · `waiting` ("Waiting for your browser…") ·
+`noMatch` (the dead-end copy, including the way out).
+
+**There is no `cancelled` key** — nothing is shown, so there is nothing to
+translate.
+
+## How the render was produced
+
+1. `/sign-in` was screenshotted from a production build at both viewports before
+   the board was composed.
+2. The token block, the `[data-theme='dark']` block and the `(auth)` frame CSS
+   are copied 1:1 from `two-factor-challenge.mock.html`; the new rules are
+   APPENDED at the end of the style block.
+3. The `.png` is exported with `node scripts/render-design-mock.mjs --width 1200`.
+
+## Self-review
+
+- The new button is a peer of the Google button in primitive, size, width and
+  border token, so the two cannot diverge under a re-skin.
+- Its pending state changes the LABEL as well as showing a spinner — a disabled
+  button with the same words is the state a reader clicks twice.
+- The refusal that draws nothing has no string and no key, so it cannot be
+  "translated" into existence later.
+- No Tier-0 `--color-*` outside the token block and the Google mark's own fills;
+  no raw `rounded-*` / `p-*` / `h-*` on any control's own box.
