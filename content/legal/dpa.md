@@ -24,10 +24,10 @@ without waiting for one to be drafted.
 
 ## 1. Parties and role
 
-|                |                                                                                                         |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| **Processor**  | moooon B.V., «REGISTERED ADDRESS», registered with the Dutch Chamber of Commerce under KvK «KVK NUMBER» |
-| **Controller** | The customer identified in the order or account (**"you"**)                                             |
+|                |                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Processor**  | moooon B.V., Menkemaborg 65, Lelystad, Netherlands, registered with the Dutch Chamber of Commerce under KvK 97763144 |
+| **Controller** | The customer identified in the order or account (**"you"**)                                                          |
 
 For personal data you place into the service — your workspace content, the people you
 invite, and anything your work items happen to contain — **you are the controller and
