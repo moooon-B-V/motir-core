@@ -266,7 +266,11 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // ── Owner invites C to workspace WA; C accepts → C joins WA AND org A
   // (the UPWARD auto-join invariant: you can't be in a workspace without its
   // org). This is how a brand-new person enters an org. ──
-  await gotoAuthed(page, '/settings/workspace');
+  // ⚠️ `/settings/organization`, not `/settings/workspace` (MOTIR-3502 ·
+  // organization-tier.md §6d). Org A holds ONE workspace here, which is the
+  // COLLAPSED state: the workspace area 404s and its Name / Members / Danger
+  // sections are hosted by the single Settings home instead.
+  await gotoAuthed(page, '/settings/organization');
   await page.getByRole('button', { name: 'Invite' }).click();
   const wsInviteDialog = page.getByRole('dialog');
   await wsInviteDialog.getByLabel('Email address').fill(T2_C);
@@ -301,7 +305,10 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // the cookie to WA and read it back through the real workspace-settings surface
   // (getWorkspaceContext → resolveActiveWorkspace, the org-gated path). ──
   await pageC.context().addCookies([{ name: 'workspace_id', value: wa.id, url: pageC.url() }]);
-  await gotoAuthed(pageC, '/settings/workspace');
+  // Re-pointed for the same reason. C is a PLAIN org member here (the upward
+  // auto-join gave them `member`), so this also exercises §6d's per-section
+  // gate: the org-scoped cards are refused and C's workspace sections render.
+  await gotoAuthed(pageC, '/settings/organization');
   await expect(pageC.getByLabel('Workspace name')).toHaveValue(wa.name);
 
   // ── Org admin SPANS all workspaces. Build a SECOND workspace WB under org A
@@ -375,7 +382,9 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // workspace. Re-pin the cookie to WA and confirm the surface shows C's own
   // workspace, NOT WA (the gate, never a leak). ──
   await pageC.context().addCookies([{ name: 'workspace_id', value: wa.id, url: pageC.url() }]);
-  await gotoAuthed(pageC, '/settings/workspace');
+  // Re-pointed (§6d). C has fallen back to their OWN org, where they own one
+  // workspace — still the collapsed state, so the name is read off the fold-in.
+  await gotoAuthed(pageC, '/settings/organization');
   await expect(pageC.getByLabel('Workspace name')).toHaveValue(cOwnWorkspace.name);
   await expect(pageC.getByLabel('Workspace name')).not.toHaveValue(wa.name);
 

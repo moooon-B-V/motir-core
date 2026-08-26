@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
@@ -15,7 +14,6 @@ import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { hasAiEntitlement } from '@/lib/billing/aiEntitlement';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { buttonVariants } from '@/components/ui/Button';
 import { billingService } from '@/lib/services/billingService';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
@@ -53,25 +51,26 @@ export default async function OrganizationSettingsPage() {
   const isAdmin =
     current.role === ORGANIZATION_ROLE.owner || current.role === ORGANIZATION_ROLE.admin;
 
-  if (!isAdmin) {
-    return (
-      <div className="mx-auto max-w-[45rem]">
-        <EmptyState
-          icon={<Lock className="h-12 w-12" aria-hidden />}
-          title={t('states.forbiddenTitle')}
-          description={t('states.forbiddenDescription', { org: org.name })}
-          action={
-            <Link
-              href="/dashboard"
-              className={buttonVariants({ variant: 'secondary', size: 'md' })}
-            >
-              {t('states.backToWorkspace')}
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
+  // ⚠️ GATED PER SECTION, NOT PER PAGE (MOTIR-3519 · organization-tier.md §6d).
+  //
+  // This used to `return` panel 5d's forbidden EmptyState for the whole page.
+  // That was right while the page carried ORG-scoped cards only — per-page and
+  // per-section were then the same rule. §6d's fold-in is what makes them
+  // differ: below the workspace-tier reveal threshold this page HOSTS the
+  // workspace's Name / Members / Danger-zone sections, and those are gated on
+  // WORKSPACE MEMBERSHIP, not on the org role. Keeping the whole-page refusal
+  // would have closed the only remaining route to them — including the only
+  // route in the product to **Leave workspace** — for a plain org member, who is
+  // exactly what a workspace invitee is (§5's upward invariant joins them as
+  // `member`).
+  //
+  // So the refusal moves DOWN to the org-scoped cards, and the rule it applies
+  // is the general one §6d states: relocating a surface preserves its GATE. A
+  // hidden tier changes what the product NAMES, never what a user may DO.
+  //
+  // A non-member of the org never reaches here at all — `resolveActiveOrganization`
+  // returns null for them and the no-active-org state above answers, which keeps
+  // the 404-not-403 posture intact.
 
   // Counts for the general-card footer + the fold-in (membership-scoped to the
   // active org — the same population the shell's reveal test counts, via the
@@ -120,25 +119,38 @@ export default async function OrganizationSettingsPage() {
         </p>
       </header>
 
-      <OrgGeneralCard
-        orgId={org.id}
-        initialName={org.name}
-        role={current.role}
-        workspaceCount={orgWorkspaces.length}
-        memberCount={memberCount}
-      />
+      {isAdmin ? (
+        <>
+          <OrgGeneralCard
+            orgId={org.id}
+            initialName={org.name}
+            role={current.role}
+            workspaceCount={orgWorkspaces.length}
+            memberCount={memberCount}
+          />
 
-      {/* The live billing "door" (8.1.7, design/billing panel 1) replaces the
-          passive placeholder — cloud-only (ADR §6): off-cloud there is no
-          billing surface at all, so the card simply doesn't render. */}
-      {isCloudBilling() ? <BillingCard /> : null}
+          {/* The live billing "door" (8.1.7, design/billing panel 1) replaces the
+              passive placeholder — cloud-only (ADR §6): off-cloud there is no
+              billing surface at all, so the card simply doesn't render. */}
+          {isCloudBilling() ? <BillingCard /> : null}
 
-      <AcceptanceVideoCard
-        orgId={org.id}
-        initialEnabled={org.acceptanceVideoEnabled}
-        hasPlan={hasAcceptancePlan}
-        canManage={isAdmin}
-      />
+          <AcceptanceVideoCard
+            orgId={org.id}
+            initialEnabled={org.acceptanceVideoEnabled}
+            hasPlan={hasAcceptancePlan}
+            canManage={isAdmin}
+          />
+        </>
+      ) : (
+        // Panel 5d's forbidden treatment, applied to the ORG-SCOPED sections
+        // rather than to the page. The member keeps whatever this page hosts for
+        // them below.
+        <EmptyState
+          icon={<Lock className="h-12 w-12" aria-hidden />}
+          title={t('states.forbiddenTitle')}
+          description={t('states.forbiddenDescription', { org: org.name })}
+        />
+      )}
 
       {foldInWorkspace ? (
         <WorkspaceFoldInSection
@@ -148,7 +160,7 @@ export default async function OrganizationSettingsPage() {
         />
       ) : null}
 
-      <DangerZoneCard />
+      {isAdmin ? <DangerZoneCard /> : null}
     </div>
   );
 }
