@@ -96,12 +96,19 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   const orgMenu = page.getByRole('button', { name: 'Organization menu' });
   await expect(orgMenu).toBeVisible();
   await orgMenu.click();
-  // Scope to href: the shell sidebar also has a "Settings" link (to
-  // /settings/workspace) — the org menu's entries are the /settings/organization
-  // ones.
-  const orgSettingsLink = page.locator('a[href="/settings/organization"]');
+  // ⚠️ SCOPE TO THE MENU, not to the href (MOTIR-3502). This used to scope by
+  // href alone, on the reasoning that "the shell sidebar also has a Settings
+  // link (to /settings/workspace)" — so the href was a unique disambiguator.
+  // §6d's collapse re-points that sidebar door at `/settings/organization` below
+  // the workspace-tier reveal threshold, which this fixture is in, so the href
+  // now matches TWO elements and strict mode refuses. The menu's own list is the
+  // stable scope, and it is what the assertion always meant.
+  const orgMenuList = page.getByRole('list').filter({
+    has: page.locator('a[href="/settings/organization/members"]'),
+  });
+  const orgSettingsLink = orgMenuList.locator('a[href="/settings/organization"]');
   await expect(orgSettingsLink).toBeVisible();
-  await expect(page.locator('a[href="/settings/organization/members"]')).toBeVisible();
+  await expect(orgMenuList.locator('a[href="/settings/organization/members"]')).toBeVisible();
   await expect(page.getByRole('button', { name: /New workspace/ })).toBeVisible();
   // Billing is CLOUD-ONLY now (Story 8.1.7, ADR §6): the "Billing & plans" menu
   // row renders only on a Motir cloud build (MOTIR_CLOUD). The E2E webServer runs

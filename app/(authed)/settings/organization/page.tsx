@@ -7,8 +7,10 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import {
   isWorkspaceTierRevealed,
+  preferredOrganizationId,
   scopeWorkspacesToActiveOrg,
 } from '@/lib/workspaces/tierDisclosure';
+import { getWorkspaceContext } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
@@ -33,8 +35,33 @@ export default async function OrganizationSettingsPage() {
 
   const t = await getTranslations('orgAdmin');
 
-  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const current = await organizationsService.resolveActiveOrganization(session.user.id, orgCookie);
+  // ⚠️ RESOLVE THE ACTIVE ORG THE WAY THE SHELL DOES — the ACTIVE WORKSPACE's org
+  // wins, and the cookie is only the fallback for a user with no active workspace
+  // (an org-only member). This page used to read the cookie ALONE, so it could
+  // disagree with the header about which org is active: a user whose org cookie
+  // still pointed at their own org, while their active workspace lived in
+  // another, saw the header say `Acme` and this page render a different org's
+  // settings.
+  //
+  // That was survivable while the page was whole-page admin-gated — the users it
+  // could happen to were refused anyway. §6d's fold-in is what makes it bite: the
+  // page now hosts the ACTIVE workspace's sections, so resolving a different org
+  // means hosting the wrong workspace's Name / Members / Danger zone. Both
+  // MOTIR-3502 E2E failures were this, not the gate.
+  //
+  // `preferredOrganizationId` is the same helper the (authed) layout composes, so
+  // the two cannot drift again.
+  const [ctx, myWorkspaces, cookieStore] = await Promise.all([
+    getWorkspaceContext(),
+    workspacesService.listUserWorkspaces(session.user.id),
+    cookies(),
+  ]);
+  const activeWorkspace = ctx ? (myWorkspaces.find((w) => w.id === ctx.workspaceId) ?? null) : null;
+  const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
+  const current = await organizationsService.resolveActiveOrganization(
+    session.user.id,
+    preferredOrganizationId(activeWorkspace, orgCookie),
+  );
 
   if (!current) {
     return (
@@ -75,10 +102,7 @@ export default async function OrganizationSettingsPage() {
   // Counts for the general-card footer + the fold-in (membership-scoped to the
   // active org — the same population the shell's reveal test counts, via the
   // same helper, so this page and the nav can never disagree about the tier).
-  const orgWorkspaces = scopeWorkspacesToActiveOrg(
-    await workspacesService.listUserWorkspaces(session.user.id),
-    org.id,
-  );
+  const orgWorkspaces = scopeWorkspacesToActiveOrg(myWorkspaces, org.id);
   // §6d: below the reveal threshold `/settings/workspace` does not exist (it
   // 404s), so this page hosts its sections instead. An org-only member with no
   // workspace at all has nothing to fold in.
