@@ -2427,6 +2427,57 @@
           "wrongPassword": "That password didn’t match.",
           "generic": "Something went wrong. Try again."
         }
+      },
+      "passkeys": {
+        "title": "Passkeys",
+        "subtitle": "Sign in with your fingerprint, your face or your device PIN — nothing to type and nothing to phish.",
+        "add": "Add a passkey",
+        "empty": {
+          "title": "No passkeys yet",
+          "body": "A passkey is a key your device keeps and unlocks with your fingerprint, your face or your PIN. Nothing is typed, so there is nothing to phish, reuse or leak — and because unlocking it proves it is you, one touch is already two factors.",
+          "promise": "Your laptop, phone or a security key can hold one. Motir never sees it."
+        },
+        "registering": {
+          "title": "Waiting for your browser…",
+          "body": "Your browser is asking you to confirm with your fingerprint, your face or your device PIN. Motir never sees any of them — only that your device said yes."
+        },
+        "row": {
+          "unnamed": "Unnamed passkey",
+          "synced": "Synced",
+          "singleDevice": "This device only",
+          "added": "Added {date}",
+          "rename": "Rename",
+          "remove": "Remove"
+        },
+        "rename": {
+          "title": "Rename this passkey",
+          "desc": "The name is only for you — it is how you tell two passkeys apart in the list.",
+          "label": "Name",
+          "helper": "Up to {max} characters.",
+          "cancel": "Cancel",
+          "save": "Save"
+        },
+        "remove": {
+          "title": "Remove “{name}”?",
+          "desc": "This passkey stops working for Motir straight away. The key itself is not changed — you can register it again later.",
+          "lastWarning": "This is your last passkey. Remove it and you will be back to signing in with your password.",
+          "keep": "Keep it",
+          "confirm": "Remove passkey"
+        },
+        "errors": {
+          "previouslyRegistered": "This device already has a passkey for Motir. Use it to sign in, or add one from a different device.",
+          "challengeExpired": "That took more than {minutes, plural, one {# minute} other {# minutes}}, so we started over. Try adding it again — it only takes a moment.",
+          "generic": "That didn't work. Try again, or add a passkey from a different device."
+        },
+        "method": {
+          "name": "Passkey",
+          "badge": "Counts as two factors",
+          "desc": "Unlocking a passkey needs your fingerprint, face or device PIN, so it is two factors in one step. It signs you in instead of following your password.",
+          "managedAbove": "Managed above"
+        },
+        "hero": {
+          "passkeyCounts": "Your passkey already counts as a second factor. An authenticator app adds a fallback for the days your device is not with you."
+        }
       }
     },
     "language": {

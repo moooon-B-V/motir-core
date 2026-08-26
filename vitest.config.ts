@@ -1450,6 +1450,20 @@ export default defineConfig({
         // files this fix widened, and gating them here would gate the fix on code
         // no card wrote — the trap the `aiBoundaryService.ts` note above names.
         'lib/github/checkSuites.ts',
+        // Story 8.12 · Subtask MOTIR-3612 — the passkeys card, its state owner,
+        // and the one rule about `'passkey'` in a status DTO. MEASURED before
+        // being pinned, per the note at the top of this list.
+        //
+        // ⚠️ `TwoFactorManager.tsx` is deliberately NOT here. This card widened
+        // it (a controlled status, a slot, a read-only method row) but did not
+        // write it, and gating 800 lines of pre-existing enrolment flow on a
+        // change to three of them is the trap the `changeRequestCiFeedback.ts`
+        // note above names. `security/page.tsx` is out for the standing reason
+        // no `app/**/page.tsx` is in this report: it is an async Server
+        // Component and this repo has no RSC render harness.
+        'app/**/settings/account/_components/PasskeyManager.tsx',
+        'app/**/settings/account/_components/AccountSecurityPanes.tsx',
+        'app/**/settings/account/_components/twoFactorMethods.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1837,6 +1851,30 @@ export default defineConfig({
           branches: 90,
           functions: 90,
           lines: 90,
+        },
+        // Story 8.12 · Subtask MOTIR-3612 — MEASURED on this branch, in these
+        // numbers, before being pinned:
+        //   PasskeyManager.tsx        97.56 / 92.10 / 100 / 100
+        //   AccountSecurityPanes.tsx    100 /    100 / 100 / 100
+        //   twoFactorMethods.ts         100 /    100 / 100 / 100
+        // (statements / branches / functions / lines).
+        'app/**/settings/account/_components/PasskeyManager.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/settings/account/_components/AccountSecurityPanes.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/settings/account/_components/twoFactorMethods.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
         },
         'app/**/settings/account/_components/ApiDocsLinkPanel.tsx': {
           branches: 90,
