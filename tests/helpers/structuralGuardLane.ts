@@ -51,6 +51,38 @@ export const STRUCTURAL_GUARD_SPECS = [
   // repository's answer (the vacuous-pass trap MOTIR-2815 hit).
   'tests/theme/inkContrastLint.test.ts',
   'tests/theme/inkContrastScan.test.ts',
+  // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
+  // The instance the IMPORT-shaped membership predicate could not see. It pays
+  // one memoised `tinyglobby` resolution of the whole `coverage.include` set —
+  // 483 files, ~0.8 s on a quiet box — and it globs rather than parsing, so a
+  // predicate keyed on the TypeScript compiler API found nothing to match. It
+  // then timed out on `Vitest (1/3)` three times in four days (2026-08-23
+  // #2259, 2026-08-25 #2282, 2026-08-26 #2297), each time at the 15 s
+  // `testTimeout` with zero assertion failures, on diffs that touched no path
+  // `coverage.include` reaches. Its cost profile is the lane's: no database, no
+  // `--coverage`, one whole-tree filesystem answer.
+  'tests/coverage-gate-globs.test.ts',
+  // ── tests/ — the lane's OWN membership guard (MOTIR-3497's sweep) ─────────
+  // The fourth instance, and the one that reads worst in hindsight: the guard
+  // written to keep whole-tree guards out of the sharded run was itself a
+  // whole-tree guard in the sharded run. It walks all 1 572 files under `tests/`
+  // and reads every one of them — 20.3 MB, ~0.4 s on a quiet box. It has not
+  // flaked yet; at the contention multiplier its own header quotes it does not
+  // need to have.
+  'tests/ci-structural-guards-lane.test.ts',
+  // ── tests/hosting/ — the abandoned-platform guard (MOTIR-3497's sweep) ─────
+  // Found by the WIDENED predicate, and it had been sitting one character away
+  // from being derived the whole time: `abandonedPathGuard.ts` exports
+  // `SCANNED_ROOTS`, not `SCAN_ROOTS`, so the old regex missed it. It walks
+  // `app/` + `lib/` and comment-strips every file — the same shape and the same
+  // roots as `bareTransactionScan`, which has been in the lane since MOTIR-3144.
+  'tests/hosting/abandonedPath.test.ts',
+  // ── tests/helpers/ — the import-graph reader's own guard (same sweep) ──────
+  // A SELF-walking member: it does its own `readdirSync` over `['app', 'lib',
+  // 'components']` rather than importing a scanner, so nothing derives it (the
+  // same half `SELF_WALKING_MEMBERS` in the membership test covers). Listed here
+  // and asserted there.
+  'tests/helpers/importGraph.test.ts',
   // ── tests/theme/ — the shell viewport-unit guard (MOTIR-3208) ─────────────
   // Same shape again: a text walk of `app/` + `components/` + the design
   // system's `src/`, plus two stylesheets, asserting that every viewport-sized
@@ -80,4 +112,109 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
   'tests/permissions/roleAssignment.test.ts':
     'imports @/lib/db and ../helpers/adminDb — it checks the role-assignment ' +
     'matrix against real rows, not only against source.',
+};
+
+/**
+ * ── THE PROPERTY, NOT THE HELPER ────────────────────────────────────────────
+ *
+ * The filesystem ENTRY POINTS a guard can reach the tree through. MOTIR-3144's
+ * membership test asked a narrower question — *does this module parse the tree
+ * with the TypeScript compiler API?* — and that question is about the
+ * IMPLEMENTATION a guard happens to use, not about the property that makes one
+ * flake: doing whole-tree filesystem work under a budget sized for a database
+ * query, on a contended, coverage-instrumented shard.
+ *
+ * `tests/coverage-gate-globs.test.ts` is what the difference cost. It globs with
+ * `tinyglobby` (the matcher Vitest's own coverage provider uses) and parses
+ * nothing, so the compiler-API predicate returned false and the guard stayed in
+ * the sharded run — where it timed out three times in four days (MOTIR-3497).
+ *
+ * So the predicate enumerates the entry points, and each says WHY it is a
+ * carrier. Adding one is the reviewed act; matching one is not a verdict, it is
+ * a question the file has to answer — by joining the lane, by declaring itself
+ * database-bound, or by declaring its scan BOUNDED below.
+ */
+export const FILESYSTEM_ENTRY_POINTS = [
+  {
+    id: 'fs.readdirSync',
+    pattern: /\breaddirSync\s*\(/,
+    why: "node:fs's synchronous directory read — the primitive every hand-rolled tree walk in this repository is built on, and what all seven `tests/rls/*Scan.ts` modules use.",
+  },
+  {
+    id: 'fs.promises.readdir',
+    pattern: /\breaddir\s*\(/,
+    why: 'the same enumeration awaited rather than blocking. A guard that walks the tree asynchronously costs exactly as much wall-clock, and `tests/jobs/engine-story-gate.test.ts` already uses this form.',
+  },
+  {
+    id: 'fs.opendirSync',
+    pattern: /\bopendirSync\s*\(/,
+    why: 'the streaming form of the same read. Named now rather than after the first guard that reaches for it — the point of an entry-point list is that it does not wait for an instance.',
+  },
+  {
+    id: 'fs.globSync',
+    pattern: /\bglobSync\s*\(/,
+    why: "node:fs's own glob (Node 22+). A whole-tree glob with no dependency to grep for, which is the shape a package-name predicate is blindest to.",
+  },
+  {
+    id: 'tinyglobby',
+    pattern: /['"]tinyglobby['"]/,
+    why: "the matcher Vitest's coverage provider globs with, and therefore the one `tests/helpers/coverageGate.ts` has to use to ask the provider's own question. THIS is the entry point MOTIR-3497 escaped through.",
+  },
+  {
+    id: 'fast-glob',
+    pattern: /['"]fast-glob['"]/,
+    why: 'the most common glob library in a Node test suite. Not a dependency of this repository today — which is exactly why it is named here rather than after somebody adds it.',
+  },
+  {
+    id: 'globby',
+    pattern: /['"]globby['"]/,
+    why: 'the other one. Same reasoning: an entry-point list that only names the libraries already in use is an enumeration of instances, which is the shape this widening exists to leave.',
+  },
+  {
+    id: 'git ls-files',
+    pattern: /['"]ls-files['"]/,
+    why: 'git as the enumerator, via `execFileSync` / `spawnSync`. `tests/theme/inkContrastLint.test.ts` lists the tree this way and touches no `readdirSync` at all, so no node:fs predicate can see it — it had to be listed by hand until this entry existed.',
+  },
+  {
+    id: 'ts.createSourceFile',
+    pattern: /\bcreateSourceFile\s*\(/,
+    why: 'the PARSE half rather than the enumeration — the compiler API is what makes a walk expensive once it has one. It is a carrier only in combination with an enumeration, which is why `tests/theme/inkContrastScan.ts` (parsing text handed to it, touching no filesystem) reaches the tree only through its callers.',
+  },
+] as const;
+
+/** Which entry points `source` reaches the filesystem through. */
+export function entryPointsIn(source: string): string[] {
+  return FILESYSTEM_ENTRY_POINTS.filter((e) => e.pattern.test(source)).map((e) => e.id);
+}
+
+/**
+ * Modules under `tests/` that hold an entry point but whose answer is NOT
+ * whole-tree — a bounded subdirectory, a build stamp, a temp directory, `/proc`.
+ *
+ * ⚠️ This register exists because the entry-point predicate is deliberately
+ * total and therefore deliberately over-inclusive: it asks *does this touch the
+ * filesystem*, and the property the lane is for is *does this touch the WHOLE
+ * TREE*. The second half cannot be read off a call site — `join(repoRoot, 'app')`
+ * and `join(repoRoot, 'app', 'api', 'v1')` are one path segment apart and three
+ * orders of magnitude apart in cost — so it is DECLARED, with the bound named,
+ * and the declaration is checked below for being about a real file that really
+ * does hold an entry point.
+ *
+ * A module here takes its importers out of the candidate set, so an entry is a
+ * reviewed act with a blast radius: `v1RouteAudit` alone accounts for twelve
+ * test files.
+ */
+export const BOUNDED_SCAN_MODULES: Readonly<Record<string, string>> = {
+  'tests/helpers/v1RouteAudit.ts':
+    'walks `app/api/v1` only — the route tree it audits, roughly a hundred files, ' +
+    'not a source root. Its twelve importers are ordinary API suites, most of them ' +
+    'database-backed, and moving them would be a different change entirely.',
+  'tests/helpers/cliHarness.ts':
+    'walks `packages/cli/src` to decide whether the CLI bundle needs rebuilding — a ' +
+    'build STAMP over one package, not an answer about the repository. What makes ' +
+    'its five importers slow is spawning the built CLI, which the lane cannot help.',
+  'tests/e2e/_helpers/harness-watchdog.ts':
+    'reads `/proc` for the Playwright harness’s own child processes. Not the source ' +
+    'tree at all, and its one vitest importer asserts on the watchdog’s parsing ' +
+    'rather than running it against a repository.',
 };
