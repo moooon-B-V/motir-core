@@ -1,7 +1,10 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, GraduationCap } from 'lucide-react';
 import { getFormatter, getTranslations } from 'next-intl/server';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
@@ -45,17 +48,13 @@ export default async function ProjectLessonsPage() {
   const noLessons = await guardLessonLibrary(ctx);
   if (noLessons) return noLessons;
 
-  const [page, format, mayManage] = await Promise.all([
-    projectLessonsService.listLessons(ctx.projectId, wsCtx),
-    getFormatter(),
-    // ⚠️ The SECOND key (MOTIR-3336): reading the library and changing what the
-    // planner is told are different permissions. Resolved here and passed down
-    // — the control does no permission reasoning of its own, and the route
-    // refuses independently whatever this says.
-    canManageLessonLibrary(ctx),
-  ]);
-  const copy = lessonRowCopy(t, (iso) => format.relativeTime(new Date(iso)));
-
+  // MOTIR-3559 — allocation row 7: THE FRAME ONLY. The three reads below were
+  // already one wave; what changes is that the back-link and the header no
+  // longer wait for them.
+  //
+  // ⚠️ TWO gates run above this line, not one: the area's own `guardSettingsPage`
+  // and `guardLessonLibrary`, which refuses an actor without `lesson:view`. Both
+  // decide what this route answers, so the boundary goes below BOTH.
   return (
     <div className="mx-auto flex max-w-[52rem] flex-col gap-6">
       <div>
@@ -77,6 +76,44 @@ export default async function ProjectLessonsPage() {
         </header>
       </div>
 
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <LessonsPaneBody
+          projectId={ctx.projectId}
+          projectKey={ctx.project.identifier}
+          ctx={ctx}
+          wsCtx={wsCtx}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+/** The pane's three reads, below the boundary. Already one wave; kept one wave. */
+async function LessonsPaneBody({
+  projectId,
+  projectKey,
+  ctx,
+  wsCtx,
+}: {
+  projectId: string;
+  projectKey: string;
+  ctx: Parameters<typeof canManageLessonLibrary>[0];
+  wsCtx: { userId: string; workspaceId: string };
+}) {
+  const t = await getTranslations('settings');
+  const [page, format, mayManage] = await allSettledOrThrow([
+    projectLessonsService.listLessons(projectId, wsCtx),
+    getFormatter(),
+    // ⚠️ The SECOND key (MOTIR-3336): reading the library and changing what the
+    // planner is told are different permissions. Resolved here and passed down
+    // — the control does no permission reasoning of its own, and the route
+    // refuses independently whatever this says.
+    canManageLessonLibrary(ctx),
+  ]);
+  const copy = lessonRowCopy(t, (iso) => format.relativeTime(new Date(iso)));
+
+  return (
+    <>
       {page.available && page.total > 0 && (
         <p className="text-(--el-text-secondary) text-sm" data-testid="lessons-count">
           {t('aiPlanning.lessons.count', { total: page.total, applied: page.applied })}
@@ -118,7 +155,7 @@ export default async function ProjectLessonsPage() {
                 mayManage ? (
                   <LessonApplyControl
                     lesson={lesson}
-                    projectKey={ctx.project.identifier}
+                    projectKey={projectKey}
                     // Resolved PER LESSON — the accessible name carries the
                     // takeaway and the badge carries that row's own window, and
                     // neither may cross the client boundary as a function.
@@ -131,6 +168,6 @@ export default async function ProjectLessonsPage() {
           ))
         )}
       </div>
-    </div>
+    </>
   );
 }
