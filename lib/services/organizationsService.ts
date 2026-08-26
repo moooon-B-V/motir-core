@@ -616,8 +616,15 @@ export const organizationsService = {
     userId: string;
     organizationId: string;
   }): Promise<OrgFootprintDTO> {
-    // Org-wide team size + the actor's workspaces in the org, in one bound
-    // transaction. assertOrgMember gates access (404-not-403) before counting.
+    // Org-wide team size + the ORG's workspaces, in one bound transaction.
+    // assertOrgMember gates access (404-not-403) before counting.
+    //
+    // This comment used to read "the actor's workspaces in the org", which was
+    // an accurate description of a wrong answer: `workspace`'s RLS admitted a
+    // row only via the caller's own memberships, so this read returned the
+    // ACTOR's slice while the surface it feeds is an ORG footprint. MOTIR-3512
+    // added `workspace_org_member_read`, so the query now returns what it always
+    // meant to.
     const { organization, memberCount, workspaces } = await withOrgContext(
       { userId: input.userId, organizationId: input.organizationId },
       async (tx) => {
