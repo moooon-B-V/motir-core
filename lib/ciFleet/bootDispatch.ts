@@ -1,4 +1,4 @@
-import { inngest } from '@/lib/jobs/client';
+import { dispatchSystemEvent } from '@/lib/jobs/sendEvent';
 import { isOrchestratorConfigured } from '@/lib/orchestrator';
 import type { CiRunnerBootData } from '@/lib/jobs/types';
 
@@ -96,7 +96,12 @@ export async function dispatchCiRunnerBoot(
 ): Promise<CiRunnerBootDispatchOutcome> {
   if (!isOrchestratorConfigured()) return 'not_configured';
   try {
-    await inngest.send(ciRunnerBootEvent(intentId));
+    // `dispatchSystemEvent`, the STRICT door (MOTIR-3456): this function REPORTS
+    // its outcome rather than only logging it, so it has to see the failure. The
+    // best-effort door would swallow it and every dispatch would read
+    // 'dispatched'.
+    const event = ciRunnerBootEvent(intentId);
+    await dispatchSystemEvent(event.name, event.data);
     return 'dispatched';
   } catch (err) {
     console.error(

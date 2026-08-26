@@ -76,6 +76,15 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * **9.3 s**. So a local reading is in the same units and runs at or below the CI
  * cost — never above it. Re-measure from the first green run that includes it.
  *
+ * ⚠️ `jobs-fanout-engine.spec.ts` (MOTIR-3462) carries the LOCAL provenance too,
+ * and for the reason the guard exists: a brand-new spec with no entry here is
+ * assigned to no leg and never runs — which is exactly what the guard caught on
+ * its first CI run. Measured on 2026-08-26 against a production build, on its
+ * own lane with its own port and database: **4.7 s + 1.8 s + 1.8 s = 8.3 s** of
+ * test time (the ~4.7 min wall is the build, which the legs pay once). Like the
+ * others here, it is an honest number for one machine and one run — re-measure
+ * it from the first green CI run that includes it.
+ *
  * ⚠️ `jobs-postgres-engine.spec.ts` (MOTIR-3427) carries the LOCAL provenance
  * too, and it is a brand-new spec — the guard caught it with no entry on its
  * first CI run, which is exactly the failure this file exists to make loud: a
@@ -211,6 +220,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'issue-detail-flow.spec.ts': 46.7,
   'issue-list-flow.spec.ts': 44.7,
   'jobs-dashboard.spec.ts': 7.4,
+  'jobs-fanout-engine.spec.ts': 8.3,
   'jobs-flow.spec.ts': 89.7,
   'jobs-postgres-engine.spec.ts': 22.0,
   'jobs-scheduled-engine.spec.ts': 85.0,

@@ -484,3 +484,22 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * `email.send` + the `work-item/*` events.
  */
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
+
+/**
+ * The names of SYSTEM events — the `system.*` namespace, the exact complement of
+ * {@link WorkspaceScopedEventName}.
+ *
+ * ⚠️ THE SPLIT IS KEPT, NOT WIDENED (Story MOTIR-3415 · MOTIR-3456). `sendEvent`
+ * still accepts only workspace-scoped names, because the invariant it enforces —
+ * every business event carries an EXPLICIT tenant — is real and a system
+ * payload's `workspaceId` is optional. Widening one function to cover both would
+ * have to drop that assertion for everybody.
+ *
+ * So the system namespace gets its own doors in `sendEvent.ts`
+ * (`sendSystemEvent` / `dispatchSystemEvent`) rather than a looser `sendEvent`.
+ * What changes is only that system events now travel through the module where
+ * the per-job cutover switch is read, instead of calling the Inngest client
+ * directly: an emitter that bypasses that module is an emitter the switch cannot
+ * route, which is the defect MOTIR-3456 closes.
+ */
+export type SystemEventName = Extract<JobEventName, `system.${string}`>;

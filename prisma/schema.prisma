@@ -2834,6 +2834,11 @@ model JobQueueRun {
   claimedBy      String?     @map("claimed_by")
   leaseExpiresAt DateTime?   @map("lease_expires_at")
   lastError      Json?       @map("last_error")
+  /// EVENT-LEVEL DEDUP KEY (MOTIR-3459), resolved from `defineJob`'s
+  /// `idempotency` template at ENQUEUE and denormalised here — the only moment
+  /// the event payload is in hand. NULL for every job that declares no template,
+  /// and for an event that carries no value for it.
+  idempotencyKey String?     @map("idempotency_key")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
@@ -2876,6 +2881,24 @@ model JobQueueRun {
   @@index([state, leaseExpiresAt])
   /// Operator surfaces and the ledger correlation, per tenant.
   @@index([workspaceId, createdAt(sort: Desc)])
+  /// ⚠️ THE DEDUP CONSTRAINT IS A HAND-WRITTEN PARTIAL UNIQUE INDEX and is
+  /// DELIBERATELY NOT DECLARED HERE — `job_queue_job_idempotency_key`, on
+  /// `(job_id, idempotency_key) WHERE idempotency_key IS NOT NULL`, created in
+  /// `20260825220000_job_queue_idempotency_key`.
+  ///
+  /// Prisma's `@@unique` takes no `WHERE`, and a non-partial unique on those
+  /// columns would be WRONG rather than merely stricter: NULLs would still be
+  /// permitted, but every job declaring no template would be constrained on a
+  /// column it never fills — and more importantly the whole point is that only
+  /// non-NULL keys collide.
+  ///
+  /// It is SAFE from the drift trap the claim index above describes, and for the
+  /// stated reason rather than by luck: the differ pairs a database index to a
+  /// datamodel index BY COLUMN LIST, and NO `@@index` / `@@unique` on this model
+  /// claims `(job_id, idempotency_key)`. With nothing to pair against, an index
+  /// carrying a `WHERE` the differ cannot express is ignored instead of being
+  /// reported as a spurious rename. **Do not add an `@@index` on those two
+  /// columns** — that is precisely what would arm the trap.
   @@map("job_queue")
 }
 
