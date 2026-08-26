@@ -10,11 +10,12 @@ import { Pill } from '@/components/ui/Pill';
 import { Modal } from '@/components/ui/Modal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SectionLabel } from '@/components/ui/SectionLabel';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import { formatDateTime } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
-import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
+import type { EmailDeliveryState, JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
 import { replayDlqAction } from '../actions';
 
 // Client orchestrator for the operator dashboard (Subtask 1.6.5). Receives the
@@ -71,6 +72,29 @@ function statusSeverity(status: JobRunStatus): 'success' | 'danger' | 'info' {
   if (status === 'succeeded') return 'success';
   if (status === 'failed') return 'danger';
   return 'info';
+}
+
+/**
+ * The DELIVERY tone map (Bug MOTIR-3507 · Subtask MOTIR-3517) — exactly as
+ * `design/jobs/design-notes.md` specifies, and no new component: every value is
+ * the `Pill` primitive.
+ *
+ * `accepted` is the one that is NOT a severity, and deliberately: it means the
+ * provider took the message and has said nothing since. That is the absence of
+ * news, not good news, and colouring it as success would restate the exact
+ * conflation this column exists to end.
+ */
+export function deliveryPill(state: EmailDeliveryState, label: string) {
+  if (state === 'accepted') return <Pill tone="neutral">{label}</Pill>;
+  const severity =
+    state === 'delivered'
+      ? 'success'
+      : state === 'bounced'
+        ? 'danger'
+        : state === 'complained'
+          ? 'warning'
+          : 'info';
+  return <Pill severity={severity}>{label}</Pill>;
 }
 
 function firstLine(message: string): string {
@@ -209,6 +233,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
         <thead className="border-b border-(--el-border) bg-(--el-surface)">
           <tr>
             <Th>{t('jobs.col.status')}</Th>
+            <Th>{t('jobs.col.delivery')}</Th>
             <Th>{t('jobs.col.function')}</Th>
             <Th>{t('jobs.col.event')}</Th>
             <Th className="text-right">{t('jobs.col.attempts')}</Th>
@@ -226,6 +251,15 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
             >
               <Td>
                 <Pill severity={statusSeverity(run.status)}>{run.status}</Pill>
+              </Td>
+              <Td className="text-(--el-text-secondary)">
+                {/* The em-dash this table already uses in Failure and Duration,
+                    so a row this column does not apply to costs a reader
+                    nothing. `--el-text-secondary`, not `-muted`: the row can sit
+                    on the hover surface, where muted fails AA. */}
+                {run.delivery
+                  ? deliveryPill(run.delivery.state, t(`jobs.delivery.${run.delivery.state}`))
+                  : '—'}
               </Td>
               <Td className="font-mono text-xs">{run.functionId}</Td>
               <Td className="font-mono text-xs">{run.eventName}</Td>
@@ -251,9 +285,56 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
         title={t('jobs.runDetailTitle')}
         size="lg"
       >
-        {detail ? <JsonBlock value={detail} /> : null}
+        {detail ? (
+          <div className="flex flex-col gap-4">
+            <DeliveryDetail delivery={detail.delivery} />
+            <JsonBlock value={detail} />
+          </div>
+        ) : null}
       </Modal>
     </>
+  );
+}
+
+/**
+ * The named delivery block the run detail gains (MOTIR-3517).
+ *
+ * It sits ABOVE the JSON dump rather than inside it because the one thing an
+ * operator needs from this modal is something they can paste into the
+ * provider's own dashboard: the message id. Telling them a message bounced and
+ * leaving them to find its handle in a JSON blob is most of the way to telling
+ * them nothing.
+ */
+export function DeliveryDetail({ delivery }: { delivery: JobRunDTO['delivery'] }) {
+  const t = useTranslations('settings');
+  const locale = useLocale() as Locale;
+  if (delivery === null) {
+    return <p className="font-sans text-sm text-(--el-text-secondary)">{t('jobs.deliveryNone')}</p>;
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel>{t('jobs.deliveryDetail.heading')}</SectionLabel>
+      <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-2 font-sans text-sm">
+        <dt className="text-(--el-text-secondary)">{t('jobs.deliveryDetail.state')}</dt>
+        <dd>{deliveryPill(delivery.state, t(`jobs.delivery.${delivery.state}`))}</dd>
+
+        <dt className="text-(--el-text-secondary)">{t('jobs.deliveryDetail.messageId')}</dt>
+        <dd className="font-mono text-xs break-all">{delivery.providerMessageId ?? '—'}</dd>
+
+        <dt className="text-(--el-text-secondary)">{t('jobs.deliveryDetail.recipient')}</dt>
+        <dd className="font-mono text-xs break-all">{delivery.recipient}</dd>
+
+        <dt className="text-(--el-text-secondary)">{t('jobs.deliveryDetail.template')}</dt>
+        <dd className="font-mono text-xs">{delivery.template}</dd>
+
+        <dt className="text-(--el-text-secondary)">{t('jobs.deliveryDetail.lastEvent')}</dt>
+        <dd>
+          {delivery.lastEventAt
+            ? formatDateTime(delivery.lastEventAt, locale)
+            : t('jobs.deliveryDetail.never')}
+        </dd>
+      </dl>
+    </section>
   );
 }
 

@@ -1,11 +1,38 @@
-import type { JobRun, JobRunDlq } from '@/generated/prisma/client';
-import type { JobRunDTO, JobRunDlqDTO, JobRunFailure, JobRunStatus } from '@/lib/dto/jobs';
+import type { EmailDelivery, JobRun, JobRunDlq } from '@/generated/prisma/client';
+import type {
+  EmailDeliveryState,
+  JobDeliveryDTO,
+  JobRunDTO,
+  JobRunDlqDTO,
+  JobRunFailure,
+  JobRunStatus,
+} from '@/lib/dto/jobs';
 
 // Prisma JobRun → JobRunDTO. Dates → ISO strings; the JSON `failure` column is
 // narrowed to the JobRunFailure wire shape (the service is the only writer and
 // only ever stores that shape, so the cast is safe at the read edge — same
 // pattern as workItemRevision's diff cast).
-export function toJobRunDTO(run: JobRun): JobRunDTO {
+/**
+ * Prisma EmailDelivery → JobDeliveryDTO (MOTIR-3517). Only the fields the
+ * operator surface renders; the row's own ids and correlation stay behind the
+ * boundary.
+ */
+export function toJobDeliveryDTO(delivery: EmailDelivery): JobDeliveryDTO {
+  return {
+    state: delivery.state as EmailDeliveryState,
+    providerMessageId: delivery.providerMessageId,
+    recipient: delivery.recipient,
+    template: delivery.template,
+    lastEventAt: delivery.lastEventAt ? delivery.lastEventAt.toISOString() : null,
+  };
+}
+
+/**
+ * `delivery` defaults to null so every existing caller keeps compiling and
+ * keeps meaning what it meant: a run with no delivery record. The dashboard
+ * service is the one caller that passes it.
+ */
+export function toJobRunDTO(run: JobRun, delivery: EmailDelivery | null = null): JobRunDTO {
   return {
     id: run.id,
     workspaceId: run.workspaceId,
@@ -20,6 +47,7 @@ export function toJobRunDTO(run: JobRun): JobRunDTO {
     failure: (run.failure as JobRunFailure | null) ?? null,
     output: run.output ?? null,
     idempotencyKey: run.idempotencyKey,
+    delivery: delivery === null ? null : toJobDeliveryDTO(delivery),
   };
 }
 

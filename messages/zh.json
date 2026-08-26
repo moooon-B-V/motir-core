@@ -2146,6 +2146,7 @@
       "runsTableCaption": "后台任务运行",
       "col": {
         "status": "状态",
+        "delivery": "送达",
         "function": "函数",
         "event": "事件",
         "attempts": "尝试次数",
@@ -2177,7 +2178,24 @@
       "dlqEmptyTitle": "死信队列为空",
       "dlqEmptyDesc": "每个任务都已成功或仍在重试。",
       "runsEmptyTitle": "还没有任务运行",
-      "runsEmptyDesc": "当后台任务运行时，会显示在这里。"
+      "runsEmptyDesc": "当后台任务运行时，会显示在这里。",
+      "delivery": {
+        "accepted": "已受理",
+        "delivered": "已送达",
+        "bounced": "已退信",
+        "complained": "被举报为垃圾邮件",
+        "delayed": "投递延迟"
+      },
+      "deliveryNone": "无送达记录",
+      "deliveryDetail": {
+        "heading": "送达情况",
+        "state": "状态",
+        "messageId": "消息 ID",
+        "recipient": "收件人",
+        "template": "模板",
+        "lastEvent": "最近事件",
+        "never": "尚未收到服务商事件"
+      }
     },
     "account": {
       "eyebrow": "账户设置",
@@ -4029,10 +4047,8 @@
       "billingSub": "套餐、点数和用量都归集到组织。",
       "billingNote": "该组织的账单、点数和用量将在此处显示——会在后续版本中推出。目前尚无可用的账单控件；此占位用于固定布局位置。",
       "workspaceConfig": "工作区配置",
-      "workspaceConfigSub": "在你只有一个工作区时折叠于此——添加第二个工作区后会拆分为独立区域。",
+      "workspaceConfigSub": "{count, plural, one {在你只有一个工作区时在此管理——添加第二个工作区后会拆分为独立区域。} other {在此管理——再添加一个工作区后会拆分为独立区域。}}",
       "workspaceConfigBadge": "{count} 个工作区",
-      "workspaceConfigNote": "工作流与状态、自定义字段、标签、组件、自动化和仪表盘都是工作区级配置——它们存放在下层的工作区上（组织与工作区之间没有配置继承）。只有一个工作区时在工作区设置中管理；添加第二个后会拆分为按工作区的区域，新工作区会复制此工作区的配置作为初始设置，因此看起来像是继承而来。",
-      "openWorkspaceSettings": "打开工作区设置",
       "dangerZone": "危险区域",
       "deleteOrg": "删除组织",
       "deleteOrgNote": "删除组织会移除其所有工作区和数据。此操作无法撤销。",

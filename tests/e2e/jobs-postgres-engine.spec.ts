@@ -103,7 +103,11 @@ async function workspaceIdFor(email: string): Promise<string> {
 
 /** Trigger the pilot job the way a user does: send an invite, which emits `email.send`. */
 async function sendInvite(page: Page, inviteeEmail: string): Promise<void> {
-  await page.goto('/settings/workspace');
+  // ⚠️ `/settings/organization` (MOTIR-3502 · organization-tier.md §6d). These
+  // fixtures use an auto-created single workspace — the COLLAPSED state, where
+  // the workspace area 404s and its Members card (with this Invite button) is
+  // hosted by the single Settings home instead.
+  await page.goto('/settings/organization');
   await page.getByRole('button', { name: 'Invite' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Email address').fill(inviteeEmail);

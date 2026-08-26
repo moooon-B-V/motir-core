@@ -350,9 +350,30 @@ describe('assembleDispatchPrompt — the GIT WORKFLOW variants', () => {
     expect(prompt).toContain(
       'git worktree add ../motir-core-prod-7 -b subtask/PROD-7-add-the-ready-set-filter-bar origin/main',
     );
-    expect(prompt).toContain('TITLE carries');
+    // MOTIR-3529 — UPDATED, not removed. This used to assert `TITLE carries`,
+    // and the stakes it stood for are unchanged; what changed is the mechanism.
+    // The title survives as a LABEL and the LINK is what carries the merge back.
+    expect(prompt).toContain(`${'PROD-7'} in the TITLE as well`);
+    expect(prompt).toContain('the title is a LABEL, not what links the pull');
+    expect(prompt).toContain('LINK it: call the link_pull_request tool');
     expect(prompt).toContain('STOP at the open pull request');
     expect(prompt).not.toContain('mark_integrated');
+  });
+
+  it('the per-item-PR variant names everything the link call needs, so no step is a lookup', () => {
+    // MOTIR-3529 criterion 2. An agent that has to go and FIND an argument is an
+    // agent that skips the step, which is the failure the whole story is about.
+    const { prompt } = assembleDispatchPrompt(source());
+    const step = prompt.split('\n').find((l) => l.includes('link_pull_request'));
+    expect(step, 'the link step is missing from the per-item-PR grammar').toBeDefined();
+    expect(step).toContain('PROD-7');
+    expect(prompt).toContain('pull-request URL the previous step printed');
+    expect(prompt).toContain('headRef subtask/PROD-7-add-the-ready-set-filter-bar');
+    expect(prompt).toContain('baseRef main');
+    // And it is IMMEDIATELY after the pull request, not left to the end.
+    expect(prompt.indexOf('open a pull request against main')).toBeLessThan(
+      prompt.indexOf('LINK it: call the link_pull_request tool'),
+    );
   });
 
   it('an inherited session branch → the session-lineage variant', () => {
@@ -787,7 +808,7 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
     const prompt = built();
     expect(prompt).toContain('-b subtask/PROD-7-add-the-ready-set-filter-bar origin/main');
     expect(prompt).toContain('-b subtask/PROD-7-add-the-ready-set-filter-bar origin/trunk');
-    expect(prompt).toContain('open a pull request against trunk whose');
+    expect(prompt).toContain('open a pull request against trunk.');
   });
 
   it('falls back to `origin/main` for a repository whose default branch Motir does not know', () => {
@@ -804,7 +825,7 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
       }),
     ).prompt;
     expect(prompt.match(/origin\/main/g)).toHaveLength(2);
-    expect(prompt).toContain('open a pull request against main whose');
+    expect(prompt).toContain('open a pull request against main.');
   });
 
   it('uses the SAME branch name in every repository', () => {
@@ -813,15 +834,50 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
     expect(names).toEqual([branch, branch]);
   });
 
-  it('puts the KEY in every pull-request TITLE — the reference the completion gate reads', () => {
-    // The one instruction whose omission fails silently: the gate counts merges
-    // against the item's LINKED pull requests, so a title without the key is
-    // invisible to it and the card is held by work that has actually shipped.
-    const prTitleSteps = built()
+  it('LINKS every pull request — once per repository, the reference the completion gate reads', () => {
+    // MOTIR-3529 — UPDATED, not removed. This used to count `TITLE carries`
+    // lines. The stakes are unchanged and still the reason it exists: the gate
+    // counts merges against the item's LINKED pull requests, so a pull request
+    // the gate cannot see holds the card open on work that has shipped. What
+    // changed is that the link is now DECLARED rather than parsed out of a
+    // string — and it is per REPOSITORY, because each has its own pull request.
+    //
+    // Counted on the GIT-WORKFLOW step specifically. The outcome protocol names
+    // the tool a third time, in its finish order — deliberately, and asserted
+    // separately below rather than folded into this count, since one is
+    // per-repository and the other is per-item.
+    const linkSteps = built()
       .split('\n')
-      .filter((l) => l.includes('TITLE carries'));
-    expect(prTitleSteps).toHaveLength(2);
-    for (const step of prTitleSteps) expect(step).toContain('PROD-7');
+      .filter((l) => l.includes('LINK it: call the link_pull_request tool'));
+    expect(linkSteps).toHaveLength(2);
+    for (const step of linkSteps) expect(step).toContain('PROD-7');
+    expect(built()).toContain('ONCE PER REPOSITORY');
+  });
+
+  it('the outcome protocol’s finish ORDER carries the link too — between the PR and Implemented', () => {
+    // The third carrier, and the one that would otherwise contradict the two
+    // above: an agent following this list literally would go commit → push →
+    // open → transition and never link.
+    const prompt = built();
+    const order = prompt.slice(prompt.indexOf('IN THIS ORDER'));
+    expect(order.indexOf('3. open the pull request')).toBeLessThan(
+      order.indexOf('4. link it with the link_pull_request tool'),
+    );
+    expect(order.indexOf('4. link it with the link_pull_request tool')).toBeLessThan(
+      order.indexOf('5. move PROD-7 to Implemented'),
+    );
+    expect(order).toContain('once per repository if this item');
+  });
+
+  it('keeps the key in every TITLE, re-framed as a LABEL rather than the mechanism', () => {
+    // The label half of the same change: dropping it would cost a human reading
+    // a pull-request list, which is a real reader with no other affordance.
+    const titleSteps = built()
+      .split('\n')
+      .filter((l) => l.includes('in the TITLE as well'));
+    expect(titleSteps).toHaveLength(2);
+    for (const step of titleSteps) expect(step).toContain('PROD-7');
+    expect(built()).toContain('it is not what links the pull request');
   });
 
   it('says the item completes only when EVERY pull request has merged, and never instructs a merge', () => {

@@ -2146,6 +2146,7 @@
       "runsTableCaption": "Background job runs",
       "col": {
         "status": "Status",
+        "delivery": "Delivery",
         "function": "Function",
         "event": "Event",
         "attempts": "Attempts",
@@ -2177,7 +2178,24 @@
       "dlqEmptyTitle": "Nothing in the dead-letter queue",
       "dlqEmptyDesc": "Every job has succeeded or is still retrying.",
       "runsEmptyTitle": "No job runs yet",
-      "runsEmptyDesc": "When a background job runs, it'll appear here."
+      "runsEmptyDesc": "When a background job runs, it'll appear here.",
+      "delivery": {
+        "accepted": "accepted",
+        "delivered": "delivered",
+        "bounced": "bounced",
+        "complained": "complained",
+        "delayed": "delayed"
+      },
+      "deliveryNone": "No delivery record",
+      "deliveryDetail": {
+        "heading": "Delivery",
+        "state": "State",
+        "messageId": "Message id",
+        "recipient": "Recipient",
+        "template": "Template",
+        "lastEvent": "Last event",
+        "never": "No provider event yet"
+      }
     },
     "account": {
       "eyebrow": "Account settings",
@@ -4029,10 +4047,8 @@
       "billingSub": "Plan, credits and usage roll up to the organization.",
       "billingNote": "Billing, credits and usage for this organization live here — added in a later release. No billing controls are active yet; this placeholder marks where they’ll sit so the layout stays stable.",
       "workspaceConfig": "Workspace configuration",
-      "workspaceConfigSub": "Folded in here while you have one workspace — splits into its own area when you add a second.",
+      "workspaceConfigSub": "{count, plural, one {Managed here while you have one workspace — splits into its own area when you add a second.} other {Managed here — splits into its own area when you add another workspace.}}",
       "workspaceConfigBadge": "{count, plural, one {# workspace} other {# workspaces}}",
-      "workspaceConfigNote": "Workflows & statuses, custom fields, labels, components, automation and dashboards are workspace-scoped — they live on the workspace underneath (there is no org→workspace config inheritance). With one workspace they’re managed in workspace settings; add a second and they split into a per-workspace area, with the new workspace seeded by copying this one’s config so it looks inherited.",
-      "openWorkspaceSettings": "Open workspace settings",
       "dangerZone": "Danger zone",
       "deleteOrg": "Delete organization",
       "deleteOrgNote": "Deleting the organization removes all its workspaces and data. This cannot be undone.",

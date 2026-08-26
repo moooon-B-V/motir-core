@@ -56,7 +56,15 @@ describe('email.send job — handler', () => {
   it('renders + sends the password-reset template and records an untenanted run', async () => {
     const { result } = await runEmailSendJob(passwordResetEvent());
 
-    expect(result).toEqual({ to: 'reset@example.com', template: 'password-reset' });
+    // `providerMessageId` joined this shape in MOTIR-3513: the step's output is
+    // surfaced on `job_run.output`, so an operator can look a message up with
+    // the provider before the delivery column exists to show it to them. The
+    // dev provider issues no id, hence null.
+    expect(result).toEqual({
+      to: 'reset@example.com',
+      template: 'password-reset',
+      providerMessageId: null,
+    });
 
     // The console provider emitted exactly one email with the rendered
     // subject, the recipient, and the (unredacted) reset link.
@@ -98,7 +106,11 @@ describe('email.send job — handler', () => {
     };
 
     const { result } = await runEmailSendJob(event);
-    expect(result).toEqual({ to: 'newbie@example.com', template: 'workspace-invite' });
+    expect(result).toEqual({
+      to: 'newbie@example.com',
+      template: 'workspace-invite',
+      providerMessageId: null,
+    });
 
     expect(emails.lines).toHaveLength(1);
     expect(emails.lines[0]).toContain('To: newbie@example.com');

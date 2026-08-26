@@ -28,6 +28,24 @@ async function requireContext() {
   return { userId: session.user.id, workspaceId: ctx.workspaceId };
 }
 
+/**
+ * These cards render on TWO routes, not one (MOTIR-3502). `/settings/workspace`
+ * is the standalone area, shown once the workspace tier is revealed; below the
+ * threshold that route 404s and `/settings/organization` HOSTS the very same
+ * `NameCard` / `MembersCard` / `DangerZoneCard` via `WorkspaceFoldInSection`
+ * (`docs/decisions/organization-tier.md` §6d).
+ *
+ * So revalidating only the workspace path leaves the folded-in copy stale after
+ * a save — on the exact surface the collapsed state makes the ONLY one the user
+ * can reach, which is where the bug would be invisible to anyone testing at two
+ * workspaces. Revalidating a path that is currently 404 is a no-op, so both are
+ * always safe to send.
+ */
+function revalidateWorkspaceSettingsSurfaces(): void {
+  revalidatePath('/settings/workspace');
+  revalidatePath('/settings/organization');
+}
+
 export async function renameWorkspaceAction(
   _prev: ActionResult,
   formData: FormData,
@@ -40,7 +58,7 @@ export async function renameWorkspaceAction(
   await workspacesService.renameWorkspace({ workspaceId, actorUserId: userId, name });
   // Re-render the settings page + the top-nav switcher (in the shared
   // layout) so the new name shows everywhere without a hard reload.
-  revalidatePath('/settings/workspace');
+  revalidateWorkspaceSettingsSurfaces();
   revalidatePath('/', 'layout');
   return { ok: true };
 }
@@ -87,7 +105,7 @@ export async function removeMemberAction(targetUserId: string): Promise<ActionRe
     }
     throw err;
   }
-  revalidatePath('/settings/workspace');
+  revalidateWorkspaceSettingsSurfaces();
   return { ok: true };
 }
 

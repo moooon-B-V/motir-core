@@ -82,15 +82,15 @@ export const sendInvoice = defineJob(
 
 **Options**
 
-| Field         | Default                  | Meaning                                                                                                                                                                         |
-| ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | —                        | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.                                                     |
-| `retryPolicy` | `'transient'`            | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`.                                                |
-| `retries`     | —                        | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                                                                              |
-| `concurrency` | —                        | Concurrency constraint(s): a bare limit, or Inngest's `{ limit, key?, scope? }`, or an array of them. See **Concurrency** below.                                                |
-| `idempotency` | —                        | Event-payload-keyed dedup template (Inngest event-level dedup).                                                                                                                 |
-| `cron`        | —                        | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                                                                  |
-| `catchUp`     | — (REQUIRED with `cron`) | What a missed tick does: `all` / `latest` / `skip`. A `cron` job that omits it does not type-check, and a job without a `cron` may not supply it. See **Scheduled jobs** below. |
+| Field         | Default                  | Meaning                                                                                                                                                                                                                                                      |
+| ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`          | —                        | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.                                                                                                                                  |
+| `retryPolicy` | `'transient'`            | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`.                                                                                                                             |
+| `retries`     | —                        | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                                                                                                                                                           |
+| `concurrency` | —                        | Concurrency constraint(s): a bare limit, or Inngest's `{ limit, key?, scope? }`, or an array of them. See **Concurrency** below.                                                                                                                             |
+| `idempotency` | —                        | Event-payload-keyed dedup template, honoured by **both** runtimes — Inngest's windowed event dedup on the Inngest lane, a partial UNIQUE index on the Postgres engine. See **Event-level idempotency on the Postgres engine** and the `email.send` exemplar. |
+| `cron`        | —                        | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                                                                                                                                               |
+| `catchUp`     | — (REQUIRED with `cron`) | What a missed tick does: `all` / `latest` / `skip`. A `cron` job that omits it does not type-check, and a job without a `cron` may not supply it. See **Scheduled jobs** below.                                                                              |
 
 **Handler signature** — `(ctx, services) => result`:
 
@@ -247,15 +247,48 @@ await sendEvent('email.send', {
   Templates stay pure render functions in `lib/emailTemplates/`.
 - **Durability.** The single `step.run('send', …)` persists the send result, so
   a retry of a different step never re-delivers.
-- **Idempotency.** The job is configured with
-  `idempotency: 'event.data.idempotencyKey'`. Inngest dedups same-key events
-  inside its window, so a retried Server Action that re-fires the same token
-  collapses to one delivery. This is **event-level dedup enforced by the Inngest
-  runtime** (validated on the dev-server / cloud surfaces in 1.6.1). The
-  in-process unit harness runs the handler directly and does **not** simulate
-  the dedup layer — so the unit tests assert the _wiring_ (the config carries
-  the expression) and the _caller contract_ (the key is supplied), not the
-  runtime drop. The key is also recorded on the `job_run` row.
+- **Idempotency — THREE layers, and `idempotency` does not mean "Inngest".** The
+  job is configured with `idempotency: 'event.data.idempotencyKey'`, so a
+  retried Server Action that re-fires the same token collapses to one delivery.
+  That one declaration is read by two different runtimes, and a third mechanism
+  sits underneath both of them:
+
+  | layer                                        | lives in                                                          | applies when                                                                   | window                                                         |
+  | -------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+  | Inngest's event-level dedup                  | the Inngest runtime, server-side                                  | `email.send` is on the **Inngest lane** — absent from `MOTIR_POSTGRES_JOB_IDS` | Inngest's own dedup **window**                                 |
+  | `job_queue_job_idempotency_key` (MOTIR-3459) | the **Postgres engine** — `lib/jobs/engine/idempotency.ts`        | `email.send` is on the **engine lane** — named in `MOTIR_POSTGRES_JOB_IDS`     | **unbounded**: a partial UNIQUE on `(job_id, idempotency_key)` |
+  | Resend's `Idempotency-Key` header            | the **provider adapter** — `resendIdempotencyKey`, `lib/email.ts` | `EMAIL_PROVIDER=resend` — i.e. production                                      | Resend's own, per request                                      |
+
+  **The first two never compose — the cutover switch routes a job to exactly one
+  lane.** `sendEvent` picks the lane and `defineJob`'s Inngest handler returns
+  `{ skipped: 'routed-to-postgres-engine' }` for a job that has moved
+  (`lib/jobs/engine/cutover.ts`; **Cutting a job over to the Postgres engine**
+  below). So "the dedup window" for a given deployment is whichever lane that job
+  is on, and the two windows are not the same window: Inngest's expires, the
+  index does not — a deliberate divergence argued in
+  **Event-level idempotency on the Postgres engine**.
+
+  **The third one DOES stack on top of whichever lane is live**, and it is the
+  only layer that is a property of the DESTINATION rather than of the queue: it
+  collapses two accepted sends of the same key at Resend even when both reached
+  the provider.
+
+  **⚠️ And the provider layer is absent locally and in E2E.**
+  `resendIdempotencyKey` is called only from `resendProvider()`; `consoleProvider`
+  and `fileProvider` never read `msg.idempotencyKey` at all. Whatever the lane
+  does not catch is therefore written twice to the console log or the file
+  outbox — dev and E2E differ from production in exactly this dimension, so a
+  duplicate that production would swallow is visible here, and a behaviour that
+  looks deduped here is not evidence that the queue deduped it.
+
+  **What is tested where.** The in-process unit harness runs the handler directly
+  and does **not** simulate Inngest's dedup, so the unit tests on that lane assert
+  the _wiring_ (the config carries the expression) and the _caller contract_ (the
+  key is supplied), not the runtime drop. The ENGINE lane's drop **is** tested —
+  including a concurrent duplicate against real Postgres — in
+  `tests/jobs/engine-idempotency.test.ts`. The key is also recorded on the
+  `job_run` row.
+
 - **Retry policy.** `email.send` uses `retryPolicy: 'transient'` — a send fails
   on transient provider/network blips, so a few attempts with backoff is the
   right intent (see **Retry policies**). A terminal failure dead-letters.

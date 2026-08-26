@@ -576,6 +576,14 @@ export default defineConfig({
         'lib/mcp/tools/markIntegrated.ts',
         'lib/mcp/tools/completeSession.ts',
         'lib/mcp/tools/linkWorkItems.ts',
+        // Story MOTIR-3525 · Subtask MOTIR-3526 — the pull-request LINK door. In
+        // the gate from the start: an ungated new tool module is exactly the
+        // invisible member the 7.7.12 sweep put every other one here to prevent.
+        // `tests/mcp/linkPullRequest` walks the adapter's arms (both address
+        // forms, the disagreement refusal, the two write paths, the tenancy
+        // refusals) and `tests/mcp/linkPullRequestTransport` drives it over the
+        // real `/api/mcp` transport, which is what covers `registerLinkPullRequest`.
+        'lib/mcp/tools/linkPullRequest.ts',
         'lib/mcp/tools/updateWorkItem.ts',
         'lib/mcp/tools/archiveWorkItem.ts',
         'lib/mcp/tools/deleteWorkItem.ts',
@@ -2129,6 +2137,11 @@ export default defineConfig({
         'lib/mcp/tools/completeSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/markIntegrated.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/linkWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3526 — MEASURED before being pinned (100 statements / 100
+        // branches / 100 functions / 100 lines over the two new suites), then
+        // pinned at the project's 90 rather than at the measurement, so ordinary
+        // churn does not fail the build while a real regression does.
+        'lib/mcp/tools/linkPullRequest.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/updateWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/archiveWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/deleteWorkItem.ts': { branches: 90, functions: 90, lines: 90 },

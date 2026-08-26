@@ -53,7 +53,27 @@ export interface EmailMessage {
   idempotencyKey?: string;
 }
 
-export type SendEmail = (msg: EmailMessage) => Promise<void>;
+/**
+ * What a provider reports back about an ACCEPTED send.
+ *
+ * `providerMessageId` is the handle the provider gave the message — Resend's
+ * `{ id }`. It is the ONLY key a later delivery event (`email.delivered`,
+ * `email.bounced`) can be joined back to the send that produced it, which is
+ * why it is kept rather than discarded (MOTIR-3513). It is NULLABLE on
+ * purpose, and null is never an error:
+ *   - the dev providers ('console', 'file') issue no id at all;
+ *   - a real 2xx whose body does not parse, or carries no `id`, is still a
+ *     message the provider has ACCEPTED. Turning that into a throw would
+ *     re-deliver an already-accepted email on the job's next attempt.
+ */
+export interface EmailSendResult {
+  providerMessageId: string | null;
+}
+
+/** The result a provider with no message-id concept returns. */
+const NO_PROVIDER_MESSAGE_ID: EmailSendResult = { providerMessageId: null };
+
+export type SendEmail = (msg: EmailMessage) => Promise<EmailSendResult>;
 
 /**
  * How a failed send should be treated by the caller's retry machinery.
@@ -143,6 +163,7 @@ const consoleProvider: SendEmail = async (msg) => {
   // the email; tests in tests/password-reset.test.ts capture this stdout.)
   // eslint-disable-next-line no-console -- console is the entire point of this provider
   console.log(`[EMAIL] To: ${msg.to} Subject: ${msg.subject}\n${body}`);
+  return NO_PROVIDER_MESSAGE_ID;
 };
 
 function unimplementedProvider(name: string): SendEmail {
@@ -262,6 +283,27 @@ async function readResendError(res: Response): Promise<ResendErrorBody> {
   }
 }
 
+// Read Resend's message id out of an ACCEPTED response.
+//
+// Guarded exactly the way `readResendError` guards the failure body, and for a
+// sharper reason: by the time we are here the provider has already taken the
+// message. A body that is empty, unparseable, or carries no string `id` is a
+// SUCCESSFUL send we simply have no handle for — so it yields null and the
+// delivery row records the send with a null id. It must never throw: the send
+// path is shared by nine transactional flows, and a parse error escaping here
+// would fail a job whose email is already on its way and re-deliver it on the
+// retry.
+async function readResendMessageId(res: Response): Promise<string | null> {
+  try {
+    const raw = await res.text();
+    if (raw.trim() === '') return null;
+    const body = JSON.parse(raw) as { id?: unknown };
+    return typeof body.id === 'string' && body.id !== '' ? body.id : null;
+  } catch {
+    return null;
+  }
+}
+
 function resendProvider(): SendEmail {
   // Eager: both reads happen at resolution, so the boot fails, not the send.
   const apiKey = requireEmailEnv('RESEND_API_KEY');
@@ -303,7 +345,7 @@ function resendProvider(): SendEmail {
       );
     }
 
-    if (res.ok) return;
+    if (res.ok) return { providerMessageId: await readResendMessageId(res) };
 
     const body = await readResendError(res);
     const providerErrorName = typeof body.name === 'string' ? body.name : undefined;
@@ -365,6 +407,7 @@ function fileProvider(): SendEmail {
         sentAt: new Date().toISOString(),
       }) + '\n';
     await appendFile(path, line, { encoding: 'utf8' });
+    return NO_PROVIDER_MESSAGE_ID;
   };
 }
 
@@ -425,8 +468,18 @@ function withFaultInjection(provider: SendEmail): SendEmail {
   };
 }
 
+/**
+ * WHICH provider is configured, by name. Recorded on the delivery row
+ * (MOTIR-3513), because a null `providerMessageId` means something different
+ * per provider: for 'console' / 'file' it is simply how those providers work,
+ * while for 'resend' it means the accepted response carried no parseable id.
+ */
+export function emailProviderName(): string {
+  return process.env['EMAIL_PROVIDER'] ?? 'console';
+}
+
 export function getEmailProvider(): SendEmail {
-  const provider = process.env['EMAIL_PROVIDER'] ?? 'console';
+  const provider = emailProviderName();
   switch (provider) {
     case 'console':
       return consoleProvider;

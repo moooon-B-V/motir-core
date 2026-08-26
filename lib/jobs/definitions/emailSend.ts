@@ -44,8 +44,25 @@ export const emailSend = defineJob(
     // just ignored by the service) — no per-field rebuild, no cast needed.
     const payload = ctx.event.data as EmailSendData;
     return ctx.step.run('send', async () => {
-      await services.email.send(payload);
-      return { to: payload.to, template: payload.template };
+      // The run/event ids come from the ACTIVE lane's context and are recorded
+      // on the delivery row as given (MOTIR-3513): a `job_queue.id` cuid on the
+      // Postgres engine, Inngest's own ids on the Inngest lane. `payload`
+      // already carries the other two correlation fields (`workspaceId`,
+      // `idempotencyKey`), so the handler adds only what lives in ctx and
+      // still owns no email logic.
+      const result = await services.email.send({
+        ...payload,
+        runId: ctx.runId,
+        eventId: ctx.event.id,
+      });
+      return {
+        to: payload.to,
+        template: payload.template,
+        // Surfaced on `job_run.output` so an operator reading the jobs
+        // dashboard can look the message up with the provider before the
+        // delivery surface (MOTIR-3517) exists to show it to them.
+        providerMessageId: result.providerMessageId,
+      };
     });
   },
 );

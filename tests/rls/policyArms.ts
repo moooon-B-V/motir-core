@@ -32,6 +32,23 @@ import { adminDb } from '../helpers/adminDb';
 // here rather than left for a reader to discover, because an instrument that
 // does not state its blind spot hands it to every partition cut from its output
 // (`notes.html` #268 / #273).
+//
+// ⚠️ AND THE BLIND SPOT HAS BOTH POLARITIES, which this paragraph named only one
+// of until MOTIR-3512. `workspace_org_member_read` is the mirror of the arm
+// above: it requires `app.user_id` to be NON-empty (it EXISTS-checks an
+// organization membership), so it cannot arm a USERLESS caller, exactly as
+// `attachment_org_service_read` cannot arm a user-bound one. So the over-clear
+// runs in both directions — a table can read ARMED to a caller whose GUC set no
+// arm on it actually admits, whichever half of the pair is missing.
+//
+// `workspace` now carries BOTH, which is why it is genuinely armed for both
+// contexts rather than accidentally: MOTIR-2956 added the userless arm for the
+// storage-cap sum, MOTIR-3512 the user-bound one for the org's workspace count.
+// A table with only ONE of them is the shape to look at twice. Closing the gap
+// would mean evaluating each policy's whole `qual` against a caller's actual GUC
+// set; this file deliberately states the limit instead, and that trade is
+// unchanged — a second polarity is a new instance of the known gap, not a new
+// gap.
 
 /** Every table in `public` with row-level security ENABLED. */
 export async function rlsEnabledTables(): Promise<Set<string>> {

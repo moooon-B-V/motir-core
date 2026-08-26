@@ -46,6 +46,7 @@ import { setActiveProjectAction } from '../_project-actions';
 import { useCommandPalette } from './CommandPaletteProvider';
 import { useCreateIssue } from './CreateIssueProvider';
 import { useOnboardingResume } from './OnboardingResumeProvider';
+import { isWorkspaceTierRevealed } from '@/lib/workspaces/tierDisclosure';
 
 /**
  * AppCommandPalette — the application composition over the generic
@@ -295,14 +296,28 @@ export function AppCommandPalette({
     );
   }
   // Settings: without a project there's nothing project-scoped to configure, so a
-  // single "Go to settings" deep-links to the WORKSPACE settings. WITH a project,
+  // single "Go to settings" deep-links to the settings home. WITH a project,
   // the per-section project-settings entries below replace it (the 6.5.2 registry).
+  //
+  // WHICH home depends on progressive disclosure (MOTIR-3502 · organization-tier
+  // §6d). Above the reveal threshold that home is the workspace area; at or below
+  // it the workspace tier is hidden, its sections are FOLDED IN to
+  // `/settings/organization`, and this action targets that instead. It is
+  // re-pointed rather than dropped: the action is "go to settings", a settings
+  // home exists at every count, and removing the only ⌘K route to it would be a
+  // regression this rule does not ask for. `workspaces` is already the org-scoped
+  // list the layout hands `ShellTierNav`, so no new prop and no second predicate.
   if (!hasProject) {
     navActions.push({
       id: 'nav-settings',
       label: t('commandPalette.goToSettings'),
       icon: <Settings />,
-      onSelect: () => go('/settings/workspace'),
+      onSelect: () =>
+        go(
+          isWorkspaceTierRevealed(workspaces.length)
+            ? '/settings/workspace'
+            : '/settings/organization',
+        ),
     });
   }
   groups.push({ heading: t('commandPalette.navigationHeading'), actions: navActions });

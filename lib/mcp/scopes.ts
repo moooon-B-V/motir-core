@@ -230,6 +230,12 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   search_lessons: 'read',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',
+  // `link_pull_request` (MOTIR-3526). A WRITE — it sets the change-request row's
+  // `work_item_id`, and may create the row itself. This legacy table has no
+  // integration-link axis finer than `integration`, which is the MERGE report's
+  // scope, not an item edit; `work_items:write` is the nearest bucket and the
+  // real gate is the PERMISSION (`work_item:edit`, in `toolPermissions.ts`).
+  link_pull_request: 'work_items:write',
   expand_item: 'work_items:write',
   append_plan_turn: 'work_items:write',
   submit_plan_session: 'work_items:write',

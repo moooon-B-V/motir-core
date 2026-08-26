@@ -329,8 +329,22 @@ describe('attachment RLS — the 5.2.1 policy swap', () => {
 // The two cases that matter are below, and NEITHER is expressible through the
 // existing describe: the sum spans an org's WORKSPACES (which is why binding a
 // workspace could not have answered it), and it must NOT widen when an acting
-// user is present (`withOrgContext`'s member-scoped reach is a documented
-// posture of `summarizeOrgFootprint` / `listMembers`).
+// user is present.
+//
+// ⚠️ THAT SECOND CLAUSE NARROWED IN MOTIR-3512, and the narrowing is the point.
+// It used to be stated as "`withOrgContext`'s member-scoped reach is unchanged",
+// which conflated two different things: the ATTACHMENT arm withdrawing when a
+// user is bound (still true, and what this section exists to pin) with the
+// WORKSPACE list staying membership-scoped (a corollary of there being no
+// user-bound workspace arm at all). MOTIR-3512 adds one —
+// `workspace_org_member_read`, which requires `app.user_id` to be NON-empty and
+// admits the bound org's workspaces to a member of that org — because
+// `summarizeOrgFootprint` and the cross-workspace roster were both answering
+// with the ACTOR's slice while intending the ORG's.
+//
+// So the property pinned below is now stated precisely: binding a user withdraws
+// the SERVICE arms, which is proved by an acting user who is NOT an org member
+// seeing nothing at all.
 //
 // ⚠️ These run under `SET LOCAL ROLE motir_app` rather than relying on the
 // suite's default connection, deliberately: until MOTIR-2734 flips the default,
@@ -383,25 +397,57 @@ describe('attachment + workspace ORG-SERVICE read arms (MOTIR-2956)', () => {
     );
   });
 
-  it('an ACTING USER withdraws the arm — `withOrgContext`’s member-scoped reach is unchanged', async () => {
-    // The narrowing, pinned. Both arms require `app.user_id` to be EMPTY, so a
-    // user-bearing org context (organizationsService's surfaces) sees exactly
-    // what it saw before: its member workspaces, and no attachments at all.
+  it('an ACTING USER withdraws the SERVICE arm — the attachment sum still reads nothing', async () => {
+    // The narrowing, pinned. The ATTACHMENT arm requires `app.user_id` to be
+    // EMPTY, so a user-bearing org context (organizationsService's surfaces)
+    // still sums no attachments at all — which is the clause this section is
+    // about, and it is unaffected by MOTIR-3512.
     const fx = await makeWorkItemFixture();
     const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
       .organizationId;
-    const sibling = await makeSiblingWorkspace(orgId, 'b');
+    await makeSiblingWorkspace(orgId, 'b');
     await makeAttachment(fx);
 
     const bound = { organizationId: orgId, userId: fx.ownerId };
     expect(
       await asAppRole(bound, (tx) => attachmentRepository.sumSizeByOrganization(orgId, tx)),
     ).toBe(0);
-    // …and the workspace list stays membership-scoped: the owner's own workspace
-    // only, never the sibling they were never added to.
-    const visible = await asAppRole(bound, (tx) => tx.workspace.findMany({ select: { id: true } }));
-    expect(visible.map((w) => w.id)).toEqual([fx.workspaceId]);
-    expect(visible.map((w) => w.id)).not.toContain(sibling.id);
+  });
+
+  it('a bound user who is NOT an org member sees nothing — the service arm really did withdraw', async () => {
+    // This is what the case above USED to prove with its workspace-list
+    // assertion, restated so MOTIR-3512's user-bound workspace arm cannot
+    // satisfy it by accident. The stranger binds the org GUC and carries a user,
+    // so BOTH arms are out: `workspace_org_service_read` needs an empty user and
+    // `workspace_org_member_read` needs an org membership they do not have.
+    // Nothing admits them, which is the withdrawal, proved positively.
+    const fx = await makeWorkItemFixture();
+    const stranger = await makeWorkItemFixture({ name: 'Stranger', identifier: 'STR' });
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
+      .organizationId;
+    await makeSiblingWorkspace(orgId, 'b2');
+
+    const visible = await asAppRole({ organizationId: orgId, userId: stranger.ownerId }, (tx) =>
+      tx.workspace.findMany({ where: { organizationId: orgId }, select: { id: true } }),
+    );
+    expect(visible).toEqual([]);
+  });
+
+  it('an ORG MEMBER bound to the org DOES see its workspaces — MOTIR-3512’s arm', async () => {
+    // The behaviour that replaced the old membership-scoped assertion, asserted
+    // here too so this section records what changed rather than losing it. The
+    // owner belongs to ONE of the org's two workspaces and now sees both, which
+    // is what `summarizeOrgFootprint` and the roster always meant to return.
+    // `tests/workspace-org-member-read-rls.test.ts` is the arm's own suite.
+    const fx = await makeWorkItemFixture();
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
+      .organizationId;
+    const sibling = await makeSiblingWorkspace(orgId, 'b3');
+
+    const visible = await asAppRole({ organizationId: orgId, userId: fx.ownerId }, (tx) =>
+      tx.workspace.findMany({ where: { organizationId: orgId }, select: { id: true } }),
+    );
+    expect(visible.map((w) => w.id).sort()).toEqual([fx.workspaceId, sibling.id].sort());
   });
 
   it('the workspace arm is org-scoped, not global — the userless context sees its org’s workspaces only', async () => {
