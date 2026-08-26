@@ -274,10 +274,23 @@ export function WorkItemRoadmap({
         if (parentId === NOT_IN_EPIC_ID) {
           const root = cacheRef.current.get(rootCacheKey());
           const rows = (root?.items ?? []).filter(isNotInEpicRow);
+          // ⚠️ THE EDGES ARE SCOPED TO THE ROWS (bug MOTIR-3557). The root's
+          // edge list is the edges of the WHOLE root level — the 18 root epics
+          // included, wired to each other by the epic roadmap's own dependency
+          // chain. Handing it over whole made every one of those epics an
+          // off-level blocker of a level it has nothing to do with, and each
+          // drew as an anonymous red ghost anchor, because an epic is ON the
+          // root level and so is never in `offLevelBlockers` to be named from.
+          // A level's edges are the ones whose BLOCKED end is one of its rows —
+          // the same predicate `findBlockedByEdges` applies when the server
+          // reads a real level, applied here because this level is synthetic.
+          // `buildWorkItemLevel` now enforces this too; scoping at the source
+          // means the builder is not asked to discard most of what it is given.
+          const rowIds = new Set(rows.map((r) => r.id));
           return buildWorkItemLevel(
             {
               items: rows,
-              edges: root?.edges ?? [],
+              edges: (root?.edges ?? []).filter((e) => rowIds.has(e.blockedId)),
               offLevelBlockers: root?.offLevelBlockers ?? [],
             },
             { markActive: true, scope },

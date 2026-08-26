@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
+import { buildWorkItemLevel, NOT_IN_EPIC_ID } from '@/components/planning/workItemLevel';
 import type { RoadmapLevelData, RoadmapLevelItem } from '@/lib/planning/roadmapClient';
 
 // The roadmap LEVEL → canvas-node adapter, focused on the Subtask 7.20.6 /
@@ -386,5 +386,93 @@ describe('buildWorkItemLevel — ready highlight (MOTIR-1417 / MOTIR-1422)', () 
     expect(screen.getByTestId('done-pill')).toBeTruthy();
     expect(document.querySelector('[data-node-state="done"]')).toBeTruthy();
     expect(document.querySelector('[data-node-state="ready"]')).toBeNull();
+  });
+});
+
+// ── MOTIR-3557 · a level's EDGES are the ones whose BLOCKED end is on it ──────
+// The edge loop asks only "is the BLOCKER on this level?". That was sufficient
+// BY CONSTRUCTION until MOTIR-3490's grouping existed: `findBlockedByEdges`
+// selects `fromId IN (level rows)`, so every edge in a level payload already had
+// its blocked end on that level. Grouping is the first thing that moves a row OFF
+// a level after the read, and it broke the guarantee at BOTH ends — the root
+// (whose grouped rows leave) and the synthetic grouped level (whose consumer is
+// handed the root's whole edge list).
+describe('buildWorkItemLevel — an edge belongs to the level its BLOCKED end is on (MOTIR-3557)', () => {
+  const loose = (id: string) => item({ id, kind: 'bug', parentId: null });
+
+  it('ROOT: an edge between two GROUPED rows draws nothing on the road — no dep, no anchor', () => {
+    // The shipped instance: MOTIR-3490 `blocked_by` MOTIR-3493, both parentless,
+    // both grouped. The blocker was off-level so it minted a ghost anchor beside
+    // the epics, while its target had ALSO been grouped — so the canvas drew a
+    // red "blocked elsewhere" card for a row that is one hop inside the group,
+    // with an arrow pointing at a node nobody draws.
+    const { nodes, deps } = buildWorkItemLevel(
+      {
+        items: [item({ id: 'E1' }), item({ id: 'E2' }), loose('G1'), loose('G2')],
+        edges: [{ blockedId: 'G2', blockerId: 'G1' }],
+        offLevelBlockers: [],
+      },
+      { groupNonEpicRoots: true, groupCrumbLabel: 'Not in an epic' },
+    );
+    expect(deps).toEqual([]);
+    expect(nodes.some((n) => n.id === 'G1')).toBe(false);
+    expect(nodes.map((n) => n.id).sort()).toEqual(['E1', 'E2', NOT_IN_EPIC_ID].sort());
+  });
+
+  it('GROUPED level: the root’s epic→epic edges draw NO anchors on it', () => {
+    // The consumer's synthetic level: `items` are the grouped rows, `edges` is
+    // the whole root list. Every root epic is then an off-level BLOCKER of a
+    // level it has nothing to do with — and none of them is in `offLevelBlockers`
+    // (an epic is ON the root level), so each drew as an ANONYMOUS anchor.
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [loose('G1'), loose('G2')],
+      edges: [
+        { blockedId: 'E2', blockerId: 'E1' }, // the epic roadmap's own chain…
+        { blockedId: 'E3', blockerId: 'E2' },
+        { blockedId: 'G2', blockerId: 'G1' }, // …and the one edge this level owns
+      ],
+      offLevelBlockers: [],
+    });
+    expect(nodes.map((n) => n.id).sort()).toEqual(['G1', 'G2']);
+    expect(deps).toEqual([{ from: 'G1', to: 'G2', variant: 'pending' }]);
+  });
+
+  it('emits no anchor for an id the level READ itself carries', () => {
+    // The anonymity was the tell: an anchor with no stub renders `—` over the
+    // "Blocked across stories" fallback, because a row that is ON the level read
+    // is never in `offLevelBlockers` to be named from. The fix is not to name
+    // those anchors — it is not to emit them.
+    const read = {
+      items: [item({ id: 'E1' }), item({ id: 'E2' }), loose('G1')],
+      edges: [{ blockedId: 'E2', blockerId: 'E1' }],
+      offLevelBlockers: [],
+    };
+    // The grouped level: only its own rows. The root: the epics + the door.
+    // Both sets are stated WHOLE — an extra id is an anchor, and naming the
+    // expected set is what makes that unmissable.
+    expect(buildWorkItemLevel({ ...read, items: [loose('G1')] }).nodes.map((n) => n.id)).toEqual([
+      'G1',
+    ]);
+    expect(
+      buildWorkItemLevel(read, { groupNonEpicRoots: true })
+        .nodes.map((n) => n.id)
+        .sort(),
+    ).toEqual(['E1', 'E2', NOT_IN_EPIC_ID].sort());
+  });
+
+  it('leaves the shipped off-level signal intact (MOTIR-1331 regression)', () => {
+    // A GENUINE off-level blocker — one the level read named in `offLevelBlockers`
+    // because it lives somewhere else entirely — still anchors, still draws the
+    // red edge, and still flags the blocked node. The fix narrows which edges the
+    // level owns; it does not weaken what it says about the ones it does.
+    const { nodes, deps } = buildWorkItemLevel(levelWithOffBlocker({ isDone: false }));
+    expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
+    const anchor = nodes.find((n) => n.id === 'X');
+    expect(anchor).toBeTruthy();
+    render(<>{anchor!.content}</>);
+    expect(screen.getByText('PROD-9')).toBeTruthy();
+    cleanup();
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
   });
 });

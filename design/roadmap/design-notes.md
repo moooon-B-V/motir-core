@@ -1386,6 +1386,29 @@ for its children would ask for the children of an id it has never heard of.
   partition is non-empty, so the level it opens can never be empty. Recorded
   because the absence of an empty state is otherwise indistinguishable from a
   forgotten one.
+- **⚠️ THE LEVEL'S EDGES ARE SCOPED TO ITS MEMBERS, and "served from the cached
+  level" does NOT mean "handed the cached level" (bug MOTIR-3557, added after the
+  fact).** The bullets above settle what a MEMBER renders and were read as
+  settling the level; they are silent on the level's own EDGE set, and the code
+  card resolved that silence by passing the root read's edges through whole.
+  **A level draws the edges whose BLOCKED end is one of ITS rows** — the same
+  predicate `findBlockedByEdges` applies (`fromId IN (level rows)`) when the
+  server reads a real level, applied here because this one is synthetic. Sheet 3
+  is already drawn this way: the members, no anchors, no red edges.
+  - **An edge that LEAVES the group** — a grouped row blocking an epic still on
+    the road — belongs to the ROOT level, which is where its blocked end is, and
+    it keeps its ghost anchor there (named from the grouped row, which is in
+    hand). It draws nothing on the grouped level.
+  - **An edge WHOLLY INSIDE the group** draws as an ordinary within-level arrow
+    on the grouped level, and nothing at the root.
+  - **An edge between two rows that are BOTH off the level draws nothing at all.**
+    Un-scoped, the root's epic→epic chain — nineteen edges over twelve distinct
+    blockers on Motir's own tree — reappeared behind this door as twelve
+    ANONYMOUS ghost anchors (`—` over the "Blocked across stories" fallback,
+    because a root epic is ON the root level and so is never in
+    `offLevelBlockers` to be named from), chained to one another. Twelve red
+    warnings, in the canvas's loudest vocabulary, about the healthiest part of
+    the tree.
 
 ### DECISION 5 — it is NOT `decorative`
 
