@@ -395,7 +395,13 @@ test.describe('automation rules — author → fire → audit', () => {
 
     // The list — including the never-run / no-actions last-run labels (6.17).
     await page.goto('/settings/project/automation');
-    await expect(page.getByText('Audited rule')).toBeVisible();
+    // ⚠️ BY ROLE, not by text. MOTIR-3443 put this pane's body behind an in-page
+    // <Suspense>, and React keeps the PREVIOUS subtree mounted while the new one
+    // streams — so an unscoped `getByText` matches BOTH copies and fails strict
+    // mode (`motir-core/CLAUDE.md` § the second cost of a boundary). The
+    // accessibility tree excludes the hidden copy, so the row's own switch —
+    // whose accessible name carries the rule name — is a stable handle.
+    await expect(page.getByRole('switch', { name: /Audited rule/ })).toBeVisible();
     await expect(page.getByText('Never run')).toBeVisible();
     await expect(page.getByText('No actions', { exact: false })).toBeVisible();
     await expectAxeClean(page, 'list');

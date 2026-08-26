@@ -11,6 +11,7 @@ import {
   workspaceInvitesService,
   INVITE_IDENTIFIER_PREFIX,
 } from '@/lib/services/workspaceInvitesService';
+import enMessages from '@/messages/en.json';
 
 // ACCEPTANCE — every remaining page streams (Story MOTIR-3440 · Subtask MOTIR-3450).
 //
@@ -71,28 +72,54 @@ import {
 
 test.describe.configure({ timeout: 300_000 });
 
+/**
+ * The three terminal bodies that are NOT the accept card, taken from the catalog
+ * the page renders from rather than retyped.
+ *
+ * ⚠️ THIS IS THE FIX FOR A VACUOUS NEGATIVE. The first draft hand-wrote
+ * `/expired|already been used|different account/i` and asserted a count of zero.
+ * The wrong-EMAIL state's headline is "Sign in with the invited email" — the
+ * pattern could not match it, so the assertion passed while that exact state was
+ * on screen, and the step failed two assertions later on the missing button. A
+ * negative assertion whose locator matches nothing is not a guard; it is a
+ * guarantee of green. Reading the strings from `en.json` means a copy change
+ * moves the locator with it instead of silently emptying it.
+ */
+const NOT_THE_ACCEPT_CARD = [
+  enMessages.auth.inviteExpired,
+  enMessages.auth.inviteUsed,
+  enMessages.auth.signInWithInvitedEmail,
+] as const;
+
 const ITEM_EMAIL = 'pages-stream-item@example.com';
 const PLAN_EMAIL = 'pages-stream-plan@example.com';
-const INVITEE_EMAIL = 'pages-stream-invitee@example.com';
 
 /**
- * Create a workspace invite and recover its token the way the unit suite does —
- * from the `verification` row, since the runner has no mailbox.
+ * Invite `targetEmail` into `workspaceId`, and recover the token the way the unit
+ * suite does — from the `verification` row, since the runner has no mailbox.
  *
- * The inviter is resolved from the seed's own email rather than threaded in:
- * `ChildPanelGraphSeed` exposes neither the workspace nor the owner, and this
- * spec has no business widening a fixture four other specs depend on.
+ * ⚠️ THE INVITE MUST BE ADDRESSED TO THE SIGNED-IN READER, and from a workspace
+ * they are NOT already in. `InviteOutcome` compares `sessionEmail` against the
+ * invited email and renders `WrongEmailState` when they differ — so an invite
+ * sent to some third address reaches a terminal state that is CORRECT and is not
+ * the one this step is about. That is what the first draft did, and it is why
+ * this helper takes both sides explicitly instead of inferring either.
+ *
+ * The inviter is resolved from its own email rather than threaded in: neither
+ * seed exposes an owner id, and this spec has no business widening a fixture
+ * other specs depend on.
  */
-async function seedInviteToken(inviterEmail: string): Promise<string> {
-  const owner = await adminDb.user.findFirstOrThrow({ where: { email: inviterEmail } });
-  const membership = await adminDb.workspaceMembership.findFirstOrThrow({
-    where: { userId: owner.id },
-  });
+async function seedInviteToken(args: {
+  inviterEmail: string;
+  workspaceId: string;
+  targetEmail: string;
+}): Promise<string> {
+  const inviter = await adminDb.user.findFirstOrThrow({ where: { email: args.inviterEmail } });
   await workspaceInvitesService.sendInvite({
-    inviterUserId: owner.id,
+    inviterUserId: inviter.id,
     inviterName: 'Inviter',
-    workspaceId: membership.workspaceId,
-    targetEmail: INVITEE_EMAIL,
+    workspaceId: args.workspaceId,
+    targetEmail: args.targetEmail,
   });
   const row = await adminDb.verification.findFirstOrThrow({
     where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
@@ -143,8 +170,9 @@ test('every remaining page opens on its own chrome, and /items keeps the toolbar
   });
 
   // ── 2 — THE CANVAS FAMILY's one real diff ────────────────────────────────
+  const plans = await seedPlanShapes(PLAN_EMAIL);
+
   await chapter('A plan opens on its chrome while the canvas fills in', async () => {
-    const plans = await seedPlanShapes(PLAN_EMAIL);
     await signIn(page, plans.email, PLANS_SHAPES_PASSWORD);
     await page.goto(`/plans/${plans.one.planId}`);
 
@@ -167,21 +195,31 @@ test('every remaining page opens on its own chrome, and /items keeps the toolbar
 
   // ── 4 — THE ONE SURFACE THAT EARNED A FRAME OF ITS OWN ────────────────────
   await chapter('An emailed invite link resolves once, never twice', async () => {
-    const token = await seedInviteToken(seed.email);
+    // Invited to the OTHER tenant's workspace, addressed to the reader who is
+    // signed in — the only combination that reaches the accept card. Any other
+    // pairing lands on a terminal state that is correct and is not this step's.
+    const token = await seedInviteToken({
+      inviterEmail: plans.email,
+      workspaceId: plans.workspaceId,
+      targetEmail: seed.email,
+    });
 
     // ⚠️ THE NEGATIVE ASSERTION, and it is this step's whole point. The invite
     // landing has FOUR terminal bodies — valid, expired, used, wrong-account —
     // and all four answer 200, so `inspectInvite` is not a gate and moved BELOW
     // the boundary (MOTIR-3447). The risk that created is a FLASH: one terminal
-    // state rendered before the real one. So the page is watched from the first
-    // paint and the wrong answers are asserted absent, not merely
-    // eventually-replaced.
-    const wrongAnswers = page.getByText(/expired|already been used|different account/i);
+    // state rendered before the real one. So the wrong three are asserted absent
+    // from the first paint, not merely eventually-replaced.
+    const wrongAnswers = page.getByText(
+      new RegExp(
+        NOT_THE_ACCEPT_CARD.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+      ),
+    );
     await page.goto(`/invite/accept?token=${token}`);
     await expect(wrongAnswers).toHaveCount(0);
 
     // …and the real outcome arrives.
-    await expect(page.getByRole('button', { name: /accept/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: enMessages.auth.acceptInvite })).toBeVisible();
     await expect(wrongAnswers).toHaveCount(0);
     await beat();
   });
