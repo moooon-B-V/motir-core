@@ -92,7 +92,50 @@ ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
     GOOGLE_CLIENT_SECRET="build-time-placeholder-client-secret" \
     BETTER_AUTH_SECRET="build-time-placeholder-secret-32-bytes-minimum"
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm exec next build
+
+# ── the BUILD-TIME configuration seam (MOTIR-1162) ──────────────────────────
+# ⚠️ THIS BLOCK EXISTS BECAUSE A `NEXT_PUBLIC_*` VALUE IS NOT A RUNTIME VALUE.
+# `next build` SUBSTITUTES it into the JavaScript sent to the browser, so a Fly
+# runtime secret set afterwards is invisible to it. Wiring the browser half of
+# error monitoring to a Fly secret would produce something that reviews cleanly,
+# tests green, and never reports a single client-side error — which is exactly
+# why MOTIR-1161 handed each value over labelled with which of the two homes it
+# belongs in, and why this file had ZERO `ARG`s until this card.
+#
+# The GENERAL shape, not a Sentry special case: any future build-time value —
+# MOTIR-1163 was the next candidate before it settled on a runtime one — adds an
+# `ARG`/`ENV` pair here and a `--build-arg` in `ci.yml`'s deploy step. Nothing
+# else needs to change.
+#
+# EVERY ONE OF THESE IS OPTIONAL AND DEFAULTS TO EMPTY. A `docker build` with no
+# `--build-arg` — a self-hoster's, or anyone's local one — produces an image
+# with monitoring disabled, which is the self-host contract from the card. The
+# empty defaults are what make that true without a second code path.
+#
+# ⚠️ THE AUTH TOKEN IS A SECRET AND IS DELIBERATELY *NOT* HERE. A `--build-arg`
+# value is recorded in the build's own metadata; a credential goes in through
+# `--mount=type=secret` on the RUN below, where it exists for one command and is
+# never written to a layer. `flyctl deploy --build-secret` is the other half.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=""
+ARG MOTIR_RELEASE=""
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT=$NEXT_PUBLIC_SENTRY_ENVIRONMENT \
+    MOTIR_RELEASE=$MOTIR_RELEASE \
+    SENTRY_ORG=$SENTRY_ORG \
+    SENTRY_PROJECT=$SENTRY_PROJECT
+
+# The token is mounted for THIS command only. `|| true` on the read is
+# deliberate: with no secret mounted the file does not exist, the variable stays
+# empty, `next.config.ts` disables source-map upload, and the build proceeds —
+# the self-host path again. Read `set -eu` as covering everything after it.
+RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
+    set -eu; \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/SENTRY_AUTH_TOKEN 2>/dev/null || true)"; \
+    export SENTRY_AUTH_TOKEN; \
+    pnpm exec next build
 
 # ── the worker bundle (MOTIR-3421) ──────────────────────────────────────────
 # The `worker` process group in fly.toml runs the Postgres job engine's claim

@@ -76,6 +76,8 @@
 // outside the Playwright run — `register()` returns immediately when neither
 // flag is set.
 
+import * as Sentry from '@sentry/nextjs';
+
 /**
  * One E2E boundary seam: the env flag that turns it on, the clause its boot
  * line completes, and the installer to run. `install` receives the shared
@@ -96,6 +98,24 @@ interface MockSeam {
 type SharedMockAgent = ReturnType<typeof import('@/lib/test-mock-agent').installSharedMockAgent>;
 
 export async function register() {
+  // ── Error monitoring (Subtask 8.5.6 / MOTIR-1162) ────────────────────────
+  // FIRST, and above the early return, because it is the one thing here that is
+  // not a test seam. Two runtimes, two SDK builds, two configs — the Edge
+  // runtime resolves `@sentry/nextjs` through its `edge-light` export condition
+  // to a different bundle, so it cannot share the Node init. Both are no-ops
+  // when no DSN is set (the self-host path); see those files.
+  //
+  // The imports are dynamic and their paths are string literals — Turbopack
+  // resolves them statically, so neither runtime's bundle drags in the other's,
+  // and neither trips the unresolvable-read tracing fallback the Dockerfile's
+  // standalone assertion exists to catch (MOTIR-3219).
+  if (process.env['NEXT_RUNTIME'] === 'nodejs') {
+    await import('./sentry.server.config');
+  }
+  if (process.env['NEXT_RUNTIME'] === 'edge') {
+    await import('./sentry.edge.config');
+  }
+
   if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
 
   const MOCKS: readonly MockSeam[] = [
@@ -200,3 +220,22 @@ export async function register() {
     console.log(`[INSTRUMENT] ${seam.flag} active — ${seam.message}`);
   }
 }
+
+/**
+ * Next hands every unhandled server-side request error to this hook — an App
+ * Router page, a route handler, a Server Action — and `captureRequestError`
+ * turns it into a Sentry event with the request's route and method attached
+ * (Subtask 8.5.6 / MOTIR-1162).
+ *
+ * Exported UNCONDITIONALLY, even on a build with no DSN: the SDK's capture is a
+ * no-op when `Sentry.init` was never called, and Next reads this module's
+ * EXPORTS rather than calling anything to discover the hook — so gating the
+ * export on an env var would make a self-hosted build differ from a monitored
+ * one in shape, not just in behaviour.
+ *
+ * The static import is safe for the Edge bundle: `@sentry/nextjs` resolves
+ * through its `edge-light` export condition there, so no Node built-in reaches
+ * the Edge compilation. That is why THIS import may be static while every mock
+ * import above must be dynamic.
+ */
+export const onRequestError = Sentry.captureRequestError;

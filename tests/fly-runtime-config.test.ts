@@ -50,6 +50,32 @@ const builderStage = dockerfile.slice(
 );
 
 /**
+ * Where the app is compiled.
+ *
+ * ⚠️ IT IS NO LONGER A BARE `RUN pnpm exec next build`, and that is why this is
+ * a constant rather than a string literal repeated at three call sites.
+ * MOTIR-1162 mounts the Sentry source-map auth token as a BuildKit secret, and
+ * a `--mount=type=secret` must be declared on the very RUN that consumes it —
+ * so the command moved onto a continuation line of a longer instruction.
+ *
+ * Every property the assertions below are about is unchanged: it is `next
+ * build` and not the migrating `build` script, and it still runs after the
+ * placeholder ENV block and before the standalone check. What moved is the
+ * ANCHOR. Matching on the command itself rather than on the whole instruction
+ * is also what keeps them from going vacuously green next time it grows a flag
+ * — an `indexOf` that stops finding its needle returns `-1`, which is less than
+ * everything.
+ */
+const NEXT_BUILD_COMMAND = /^\s*pnpm exec next build\s*$/m;
+
+/** The offset of {@link NEXT_BUILD_COMMAND} in `text`, asserted to be present. */
+function nextBuildIndex(text: string): number {
+  const at = text.search(NEXT_BUILD_COMMAND);
+  expect(at, 'the Dockerfile no longer runs `pnpm exec next build`').toBeGreaterThan(-1);
+  return at;
+}
+
+/**
  * The prune step's shell body, lifted verbatim out of the Dockerfile so the
  * tests below can RUN it rather than pattern-match it. Takes the `RUN set -eu;`
  * line and every continued line after it, and strips the `RUN ` prefix and the
@@ -144,9 +170,7 @@ describe('Dockerfile — the runner image', () => {
       expect(runnerStage, d).not.toMatch(new RegExp(String.raw`rm -rf[^\n]*\b${d}\b`));
     }
     // …and after `next build`, which is what produces the directory it reads.
-    expect(builderStage.indexOf('RUN pnpm exec next build')).toBeLessThan(
-      builderStage.indexOf('RUN set -eu;'),
-    );
+    expect(nextBuildIndex(builderStage)).toBeLessThan(builderStage.indexOf('RUN set -eu;'));
   });
 
   it('builds with `next build`, never the `build` script that migrates', () => {
@@ -156,8 +180,13 @@ describe('Dockerfile — the runner image', () => {
     // reach — and the builder's DATABASE_URL is a placeholder pointing at
     // localhost (see the placeholder describe below), so `migrate deploy` here
     // would fail the build outright rather than do anything useful.
-    expect(dockerfile).toMatch(/RUN pnpm exec next build/);
+    expect(dockerfile).toMatch(NEXT_BUILD_COMMAND);
     expect(dockerfile).not.toMatch(/^RUN pnpm build$/m);
+    // The token reaches that command as a MOUNTED SECRET, never as an ARG or an
+    // ENV: a build argument is recorded in the build's own metadata, and this is
+    // a credential (MOTIR-1162). The mount must sit on the same instruction.
+    expect(builderStage).toContain('--mount=type=secret,id=SENTRY_AUTH_TOKEN');
+    expect(builderStage).not.toMatch(/^ARG SENTRY_AUTH_TOKEN/m);
   });
 });
 
@@ -199,7 +228,7 @@ describe('Dockerfile — the build-time placeholders (MOTIR-2490)', () => {
 
   it('sets them BEFORE `next build`, or they do not apply', () => {
     const firstPlaceholder = builderStage.indexOf('DATABASE_URL=');
-    const build = builderStage.indexOf('RUN pnpm exec next build');
+    const build = nextBuildIndex(builderStage);
     expect(firstPlaceholder).toBeGreaterThan(-1);
     expect(build).toBeGreaterThan(firstPlaceholder);
   });
