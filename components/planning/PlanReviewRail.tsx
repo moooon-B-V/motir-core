@@ -242,7 +242,18 @@ export function PlanReviewRail({
               <Button
                 variant="ghost"
                 onClick={onDecline}
-                disabled={!planned || busy}
+                // ⚠️ A `stale` PLAN CAN BE DECLINED, and the button must say so
+                // (MOTIR-3579, AMENDMENT 9 D4). Declining is one of a stale
+                // plan's only two exits — the other is waiting for the drift to
+                // reverse — so a disabled control here would make the status a
+                // dead end wearing a live face, which is the shape MOTIR-3240
+                // found on `generating`: the service accepted the act and the
+                // rail was the only thing saying otherwise.
+                //
+                // It is enabled TOGETHER WITH `declinePlan`'s guard widening, in
+                // one commit, so the rail never offers a button the service
+                // rejects.
+                disabled={(!planned && !stalePlan) || busy}
                 leftIcon={<X className="size-4" aria-hidden="true" />}
               >
                 {t('declineCta')}

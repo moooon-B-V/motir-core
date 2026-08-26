@@ -147,10 +147,22 @@ async function treeSnapshot(fx: WorkItemFixture): Promise<unknown> {
  * untouched: the tree byte-identical, the plan still `planned` (so the user can
  * fix the proposal and approve again), and no PlanItem written back an id.
  */
+/**
+ * ⚠️ `expectedStatusAfter` EXISTS BECAUSE ONE REJECTION CLASS NOW MOVES THE PLAN
+ * (MOTIR-3579). Every rejection here still writes NOTHING to the tree — that is
+ * the property this helper is for, and it is unchanged. What changed is the
+ * PLAN row: `PlanTargetImmutableError` means a target finished while the plan
+ * waited, which is the one Class B rejection no close-time gate can foresee, so
+ * `approvePlan` now leaves the plan `stale` rather than `planned`. A plan that
+ * cannot be approved must stop claiming it can — `agent-authored-plans.md`
+ * AMENDMENT 9 D1. The default stays `planned`, so every other class asserts
+ * exactly what it did before.
+ */
 async function expectRejectedWithNoWrite(
   fx: WorkItemFixture,
   planId: string,
   expected: new (...args: never[]) => Error,
+  expectedStatusAfter: 'planned' | 'stale' = 'planned',
 ): Promise<Error> {
   const before = await treeSnapshot(fx);
 
@@ -165,7 +177,7 @@ async function expectRejectedWithNoWrite(
   expect(await treeSnapshot(fx)).toEqual(before);
 
   const plan = await plansService.getPlan(planId, fx.ctx);
-  expect(plan.status).toBe('planned');
+  expect(plan.status).toBe(expectedStatusAfter);
   expect(plan.items.filter((i) => i.op === 'add').every((i) => i.workItemId === null)).toBe(true);
   return thrown!;
 }
@@ -420,7 +432,7 @@ describe('the confirmation gate — done-work immutability', () => {
     // terminal (MOTIR-3573). This is the drift the approve gate is FOR.
     await markDone(fx, targetId);
 
-    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError);
+    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError, 'stale');
     expect((err as PlanTargetImmutableError).workItemId).toBe(targetId);
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Shipped work');
@@ -433,7 +445,7 @@ describe('the confirmation gate — done-work immutability', () => {
     const planId = await plannedPlan(fx, [{ op: 'remove', workItemId: targetId }]);
     await workItemsService.updateStatus(targetId, 'cancelled', fx.ctx);
 
-    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError);
+    const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError, 'stale');
     expect((err as PlanTargetImmutableError).status).toBe('cancelled');
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.archivedAt).toBeNull();
@@ -500,8 +512,14 @@ describe('the confirmation gate — done-work immutability', () => {
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Racing target');
     expect(target.status).toBe('done');
+    // ⚠️ `stale`, NOT `planned` (MOTIR-3579). This case is the sharpest one for
+    // the backstop: the transition commits AFTER the pre-transaction gate has
+    // already passed, so the refusal comes from the in-transaction pass under the
+    // row lock — precisely the race the eager listener can lose. The approve is
+    // still refused and the tree is still untouched; what the backstop adds is
+    // that the plan stops claiming to be approvable on its way out.
     const plan = await plansService.getPlan(planId, fx.ctx);
-    expect(plan.status).toBe('planned');
+    expect(plan.status).toBe('stale');
   });
 });
 

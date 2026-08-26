@@ -1,0 +1,29 @@
+-- The REVERSE INDEX on `plan_item` (Bug MOTIR-3560 · Subtask MOTIR-3579),
+-- owed by `docs/decisions/agent-authored-plans.md` AMENDMENT 9 D5.
+--
+-- WHY: the plan-drift listener consumes `work-item/transitioned`, which fires on
+-- EVERY status change in the tenant — a board drag, `transition_status`, the
+-- CLI, the change-request webhook. Its first question is *which plans propose to
+-- change THIS work item?*, a lookup by `work_item_id` alone.
+--
+-- ⚠️ THE EXISTING UNIQUE CANNOT SERVE IT. `plan_item_plan_id_work_item_id_key`
+-- leads with `plan_id`, so a predicate naming only the work item cannot use it
+-- and Postgres falls back to a sequential scan of every proposal in the
+-- workspace — on every status change in the product. MOTIR-3560 asserted the
+-- reverse index "is already" there; it is not, and this is the correction.
+--
+-- `work_item_id` leads because it is the selective column; `workspace_id` rides
+-- second because every read of this table is tenant-scoped (the RLS policy and
+-- the service's explicit filter both name it), so the composite answers the
+-- whole predicate rather than half of it.
+--
+-- ⚠️ ITS COLUMN LIST IS DELIBERATELY DISTINCT from every other index on this
+-- model — `(plan_id, work_item_id)`, `(plan_id)`, `(workspace_id)`. Prisma's
+-- differ pairs a database index to a datamodel index BY COLUMN LIST, so a
+-- reused list surfaces as a permanent spurious RENAME on the next `migrate dev`
+-- (the partial-index rule in CLAUDE.md, MOTIR-1960).
+--
+-- Purely additive: no column, no constraint, no data change.
+
+-- CreateIndex
+CREATE INDEX "plan_item_work_item_id_workspace_id_idx" ON "plan_item"("work_item_id", "workspace_id");

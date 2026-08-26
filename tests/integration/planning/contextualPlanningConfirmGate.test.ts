@@ -776,9 +776,17 @@ describe('every rejection class leaves the database untouched — through the an
     expect(failure.code).toBe(expected.code);
 
     expect(await treeSnapshot()).toEqual(before);
-    // Still `planned`, and still offered by the rail — a refusal is recoverable
+    // Still UNDECIDED, and still offered by the rail — a refusal is recoverable
     // in place, not a run the user has to start over.
-    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    //
+    // ⚠️ NOT NECESSARILY `planned` SINCE MOTIR-3579. A refusal for
+    // `PLAN_TARGET_IMMUTABLE` means a target finished while the plan waited, and
+    // `approvePlan` now leaves such a plan `stale` rather than letting it go on
+    // claiming to be approvable (AMENDMENT 9 D1). The property this case owns is
+    // that nothing was WRITTEN and the plan is still in front of the reviewer —
+    // so it asserts the undecided SET, and each case pins its own status below.
+    const after = (await adminDb.plan.findUnique({ where: { id: planId } }))?.status;
+    expect(['planned', 'stale']).toContain(after);
     expect(await readPendingProposal(planId)).not.toBeNull();
   }
 

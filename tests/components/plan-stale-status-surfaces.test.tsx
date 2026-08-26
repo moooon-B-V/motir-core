@@ -89,6 +89,15 @@ describe('the review rail — `stale` is LIVE, not decided', () => {
     expect(screen.getByRole('button', { name: /Approve/ }).hasAttribute('disabled')).toBe(true);
   });
 
+  it('ENABLES decline — one of the status’s only two exits', () => {
+    renderRail();
+    // `declinePlan` accepts `stale` as a legal origin (MOTIR-3579), and the two
+    // ship together so the rail never offers a button the service rejects. A
+    // disabled control here would make the status a dead end wearing a live
+    // face — the shape MOTIR-3240 found on `generating`.
+    expect(screen.getByRole('button', { name: /Decline/ }).hasAttribute('disabled')).toBe(false);
+  });
+
   it('does not render the `generating` discard control', () => {
     renderRail();
     expect(screen.queryByTestId('plan-discard')).toBeNull();

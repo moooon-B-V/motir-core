@@ -900,11 +900,17 @@ describe('plansService.declinePlan', () => {
     // The idempotency / lost-race landing, unchanged: the second caller re-reads
     // under the lock, observes `declined`, and gets the typed 409 carrying the
     // ACTUAL status as data (MOTIR-3025) so it need not parse the sentence.
+    //
+    // The SENTENCE names three origins since MOTIR-3579 — `stale` joined
+    // `planned` as a review decision (AMENDMENT 9 D4) — and the assertion below
+    // is on `actual`, which is the field a caller is meant to branch on. The
+    // message check is deliberately kept but loosened to the part that carries
+    // the meaning: this test is about the refusal, not about the prose.
     await expect(plansService.declinePlan(planId, fx.ctx)).rejects.toSatisfy(
       (err: unknown) =>
         err instanceof PlanNotInExpectedStatusError &&
         err.actual === 'declined' &&
-        err.message.includes('planned or generating'),
+        err.message.includes('requires it to be planned'),
     );
   });
 });

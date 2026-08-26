@@ -4744,6 +4744,18 @@ model PlanItem {
   @@unique([planId, workItemId])
   @@index([planId])
   @@index([workspaceId])
+  /// THE REVERSE INDEX (MOTIR-3579). `work-item/transitioned` fires on EVERY
+  /// status change in the tenant, and the drift listener's first question is
+  /// *which plans propose to change THIS work item?* — a lookup by
+  /// `workItemId`. The `@@unique` above cannot serve it: its leftmost column is
+  /// `planId`, so a query naming only the work item cannot use it and falls to a
+  /// sequential scan of every proposal in the workspace, on every board drag.
+  /// (MOTIR-3560 asserted `PlanItem.workItemId` "is already the reverse index";
+  /// it is not, and `agent-authored-plans.md` AMENDMENT 9 D5 records the
+  /// correction.) `workspaceId` rides second because every read is tenant-scoped
+  /// — the RLS policy and the explicit filter both name it — so the composite
+  /// answers the whole predicate rather than half of it.
+  @@index([workItemId, workspaceId])
   @@map("plan_item")
 }
 

@@ -78,6 +78,9 @@ import pg from 'pg';
 export const FAST_LANE_CONSUMER_IDS = [
   'automation-engine/transitioned',
   'notification-fan-in/transitioned',
+  // MOTIR-3579 — the plan-drift consumer joined the lane; see the reasoning
+  // beside its entry in `lib/jobs/latencyBudget.ts`, which this list mirrors.
+  'plan-drift/transitioned',
   'status-derivation/transitioned',
   'watcher-notify/transitioned',
 ];

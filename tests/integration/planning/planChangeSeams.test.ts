@@ -635,12 +635,16 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     expect(((await res.json()) as { code: string }).code).toBe('PLAN_TARGET_IMMUTABLE');
 
     // The DONE item is untouched — the guarantee that actually matters — and the
-    // refused plan is still `planned`, so it stays decidable.
+    // refused plan is still DECIDABLE, which is what "stays in the queue" means.
     const titles = (await adminDb.workItem.findMany({ where: { projectId: fx.projectId } })).map(
       (r) => r.title,
     );
     expect(titles).toEqual(['Shipped']);
-    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    // ⚠️ `stale`, NOT `planned` (MOTIR-3579). The plan's target finished while it
+    // waited, so it can no longer be approved and stops claiming it can —
+    // `agent-authored-plans.md` AMENDMENT 9 D1/D5. It is still live and still
+    // declinable; what it is not is a plan wearing a button that cannot work.
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('stale');
   });
 
   it('does not approve a conversation’s plan without a caller the workspace knows', async () => {
