@@ -214,11 +214,25 @@ The ePrivacy consent requirement (Art. 5(3), and the Dutch Telecommunicatiewet
 implementation) exempts storage that is **strictly necessary** to provide the
 service the user explicitly requested. Every cookie below qualifies.
 
-### ⚠️ The cookie inventory, re-measured — the card named FOUR, the product sets FIFTEEN
+### ⚠️ The cookie inventory, re-measured — the card named FOUR, and the product sets far more
 
 MOTIR-1133's own context refs enumerate four cookies (`NEXT_LOCALE`, `motir.org`,
 the workspace cookie, the Better-Auth session). **That count was short.** Measured
 on `origin/main` at `4f70366d6` — not on a working tree — the shipped set is:
+
+**⚠️ CORRECTED 2026-08-26, while MOTIR-1159 drafted the Cookie Policy from this table.**
+This section first said the product sets **fifteen** cookies. The precise figures are
+**THIRTEEN set by application code** — twelve named `*_COOKIE` constants plus the inline
+`NEXT_LOCALE` — **plus the Better-Auth framework's own set** (the session cookie, the
+two-factor challenge cookie, and `trust_device`). The table below is complete; the
+single total was not, because it silently mixed the two sources.
+
+**The correction matters more than the arithmetic does.** A count is exactly the kind of
+claim this section exists to warn about, and writing one into a decision record — where a
+later card's acceptance criterion then cites it as a target — reproduced the defect one
+level up. **The published Cookie Policy therefore states no total at all**: it enumerates,
+and an enumeration is checkable against the code while a total is checkable only against
+whoever last counted.
 
 | cookie                                                                           | purpose                                                                                    | class                         |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------- |
@@ -323,14 +337,14 @@ consequence — submitted as a plan for approval, per §9.
 
 **Cards this record unblocks (they may start on its merge):**
 
-| card                               | what it takes from here                                                                                                                                                                                  |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MOTIR-1158 (ToS + AUP)             | §2's governing law **and its consumer carve-out**; §3's scope line; §4's `security@` / `legal@`; §8's template-then-review path                                                                          |
-| MOTIR-1159 (Privacy + Cookie)      | §3's controller block and its two placeholders; §4's `privacy@`; §5's no-DPO statement; **§6's fifteen-row inventory, which replaces the four its own body carries**, and the `motir_pending_idea` prose |
-| MOTIR-1160 (DPA + subprocessors)   | §7's ready-on-request status; §3's cloud-only scope. Its per-vendor transfer basis is **`production-service-stack.md` Q8's**, unchanged by this record                                                   |
-| MOTIR-1134 (`/legal/*` routes)     | §7's five launch-blocking documents = the five routes that must exist at launch                                                                                                                          |
-| MOTIR-1135 (signup acceptance)     | the ToS + Privacy Policy are the two documents acceptance is recorded against                                                                                                                            |
-| MOTIR-1136 (data-subject requests) | §4's `privacy@motir.co` is the manual fallback the surface names                                                                                                                                         |
+| card                               | what it takes from here                                                                                                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-1158 (ToS + AUP)             | §2's governing law **and its consumer carve-out**; §3's scope line; §4's `security@` / `legal@`; §8's template-then-review path                                                              |
+| MOTIR-1159 (Privacy + Cookie)      | §3's controller block and its two placeholders; §4's `privacy@`; §5's no-DPO statement; **§6's inventory, which replaces the four its own body carries**, and the `motir_pending_idea` prose |
+| MOTIR-1160 (DPA + subprocessors)   | §7's ready-on-request status; §3's cloud-only scope. Its per-vendor transfer basis is **`production-service-stack.md` Q8's**, unchanged by this record                                       |
+| MOTIR-1134 (`/legal/*` routes)     | §7's five launch-blocking documents = the five routes that must exist at launch                                                                                                              |
+| MOTIR-1135 (signup acceptance)     | the ToS + Privacy Policy are the two documents acceptance is recorded against                                                                                                                |
+| MOTIR-1136 (data-subject requests) | §4's `privacy@motir.co` is the manual fallback the surface names                                                                                                                             |
 
 **Open items this record NAMES and does not close:**
 
