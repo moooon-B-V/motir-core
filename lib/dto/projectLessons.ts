@@ -14,6 +14,37 @@ export type LessonInjectionBlock = 'disabled' | 'not_recurred';
  */
 export type LessonHumanOverride = 'retired' | 'exempt';
 
+/**
+ * What recording an occurrence against a lesson answers with (Subtask
+ * MOTIR-3553 · Bug MOTIR-3547).
+ *
+ * Deliberately NOT `ProjectLessonDTO`. That one is the LIBRARY row an admin
+ * reads, carrying the whole lifecycle a settings screen renders; this answers a
+ * WRITE made by an agent, and the only questions it has are "which lesson did I
+ * just reinforce" and "did this call count". Returning the library row here
+ * would ship a lifecycle nobody asked about to a caller that cannot act on it.
+ */
+export interface ReinforcedLessonDTO {
+  id: string;
+  /** The takeaway, so a caller can name what it reinforced without a re-read. */
+  title: string;
+  /** `global` (the shared corpus) or `tenant` (this project's own). */
+  scope: string;
+  /** The clock, as it now stands. */
+  lastOccurredAt: string;
+  /** How many occurrences this lesson has, including this one if it counted. */
+  recurrenceCount: number;
+  /**
+   * Whether THIS call is the one that counted.
+   *
+   * ⚠️ `false` is a NORMAL answer and must stay readable as one: the occurrence
+   * was already on the lesson's ledger, so nothing was written and both counters
+   * are unchanged. A caller that cannot tell "recorded" from "already recorded"
+   * will either re-try forever or report a recurrence that did not happen.
+   */
+  counted: boolean;
+}
+
 export interface ProjectLessonDTO {
   id: string;
   /** The takeaway — the one line a row shows. */

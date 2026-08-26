@@ -55,6 +55,37 @@ import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 // the worker restarts, leaving a container running with nothing watching it.
 // Durability here is the requirement, not an optimisation.
 //
+// ⚠️ QUALIFIED (MOTIR-3482) — THE PARAGRAPH ABOVE IS RIGHT ABOUT THE
+// REQUIREMENT AND WRONG ABOUT WHERE IT BINDS, so read the two together rather
+// than the first alone. What must survive a restart is the SIDE EFFECT, not the
+// WAIT. A supervisor that forgets it was sleeping and re-enters from the top is
+// harmless — it re-attaches to the same container out of the memoized boot and
+// carries on watching. A supervisor that forgets it BOOTED provisions a second
+// billed container. So:
+//
+//   • `step.run` wraps every operation that PROVISIONS, CLAIMS or TEARS DOWN
+//     something outside this process, plus any result later step ids are KEYED
+//     by. The test is: IF THIS RAN A SECOND TIME, WHAT WOULD EXIST TWICE? A
+//     container, a runner registration, a capacity slot, a usage row ⇒ keep the
+//     step. A wait, a read, a counter, a verdict ⇒ plain `await`. If the answer
+//     is not obvious, KEEP it: one `job_step` row is a bounded cost and a
+//     duplicated external effect is not.
+//   • A step id names the UNIT OF WORK, never a loop position — unchanged, and
+//     more load-bearing afterwards, since far fewer ids carry far more.
+//   • AND A RESTART FORGETS EVERYTHING YOU DROPPED, so no verdict may depend on
+//     the ABSENCE of an in-memory observation. Re-derive it from the source, or
+//     gate the verdict on positive evidence: after the collapse, "we have not
+//     seen it start" is indistinguishable from "we have forgotten that we saw
+//     it start".
+//
+// What makes the in-memory wait safe is the WORKER, not this file:
+// `lib/jobs/engine/worker.ts` renews a 60 s lease every 20 s and states that a
+// run longer than the lease is the normal case, and both
+// `reclaimExpiredLeases` and `releaseClaims` REFUND the attempt — so a deploy
+// mid-supervision costs a resume, never a retry budget. `docs/decisions/job-queue-foundation.md`
+// §13 carries the rule, the rejected alternatives, and the per-call-site
+// disposition for both supervision loops.
+//
 // On RESUME the sleep step's row already exists, so the shim compares its
 // deadline against now: elapsed ⇒ return and let the handler continue past it;
 // not yet ⇒ yield again. That second arm is what makes an early wake (a

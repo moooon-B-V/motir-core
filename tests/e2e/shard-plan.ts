@@ -161,6 +161,37 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * Recorded as **4.5**: the higher reading, rounded UP, because under-estimating
  * is the direction that unbalances the bin-packer and a local number runs at or
  * below the CI cost. Re-measure from the first green run that includes it.
+ *
+ * ⚠️ `code-graph-refresh-engine.spec.ts` and `code-graph-writer-seam.spec.ts`
+ * (MOTIR-3417) carry the LOCAL provenance too, and they are the guard's fourth
+ * catch: both are brand new, so on their first CI run they had no entry here,
+ * were assigned to no leg, and would have gone green by never executing.
+ *
+ * Measured on 2026-08-26 against a production build, on a private lane with its
+ * own port, its own database and its own job worker, TWICE. Bodies:
+ * **5.2 / 5.1 / 4.9 / 4.9 s** and **5.3 / 4.5 / 5.2 / 4.8 s** for the four
+ * refresh-engine tests, and **4.7 s** then **4.4 s** for the writer seam. The
+ * sums of per-test MAXIMA are 20.5 s and 4.7 s; wall-clock over the pair was
+ * 28.3 s and 26.7 s, so the hooks the reporter attributes separately cost
+ * ≈0.7 s per test here. Recorded as **26.0** and **6.5** — maxima plus hooks,
+ * rounded UP, for this file's standing reason: under-estimating is the direction
+ * that unbalances a bin-packer.
+ *
+ * ⚠️ AND THESE TWO NUMBERS ARE ONLY HONEST BECAUSE THE SPECS STOPPED SLEEPING.
+ * `system.code-graph-refresh` declares `debounce: { period: '2m' }`, and a
+ * SIGKILLed worker holds its claim for `LEASE_MS` (60 s). Written the obvious
+ * way — waiting both out — the same five tests measured **522 s** and **132 s**,
+ * i.e. one spec alone would have exceeded the whole 160–280 s budget of the leg
+ * it landed on and recreated the `bulk-4` imbalance this plan exists to remove.
+ * Nothing was weakened to get here: each spec ASSERTS the window where it is a
+ * claim (`run_at` really is `period` past the last arrival, and nothing has run
+ * while it is open) and then expresses it as STATE where it is only a delay, by
+ * moving `run_at` into the past. The two durations are asserted BY VALUE, in
+ * `tests/jobs/supervisor-cutover-story-gate.test.ts`.
+ *
+ * So a long declared wait is not a reason to record a large cost here — it is a
+ * reason to check whether the spec is asserting the wait or merely serving it.
+ * Re-measure both from the first green CI run that includes them.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
@@ -198,6 +229,8 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'charts.spec.ts': 8.9,
   'child-panel-graph.spec.ts': 4.4,
   'cli-connect.spec.ts': 20.2,
+  'code-graph-refresh-engine.spec.ts': 26.0,
+  'code-graph-writer-seam.spec.ts': 6.5,
   'collab-at-scale.spec.ts': 0,
   'collab-journey.spec.ts': 10.4,
   'comments.spec.ts': 11.6,

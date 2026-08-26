@@ -186,6 +186,34 @@ callout** (`--el-tint-peach`, `--el-text-strong`, AA; `triangle-alert` in
 `--el-warning`) — "This is the only time you'll see this token…"; footer a single
 primary **Done**.
 
+### ⚠️ The secret field is specified by LEGIBILITY, not by fit (MOTIR-3545)
+
+**A PAT is always 53 characters** — `motir_pat_` plus `base64url(32 bytes)` = 43
+(`lib/apiTokens/token.ts`). It is shown here and nowhere else, ever, so **this
+field may not truncate, clip or scroll**: an ellipsis or an off-screen remainder
+is a secret the reader cannot copy by eye and has no way to know is incomplete.
+Two things carry that, and neither substitutes for the other:
+
+- **The panel is `modal-wide` (42rem), not the 28rem default** — the same width
+  the create phase already uses, so the modal does not resize under the reader
+  between Create and the reveal. At 42rem the field gets ~471px against the
+  ~360px 53 monospace characters need, and the secret lands on one line.
+- **The field WRAPS at any character** (`word-break: break-all`, no fixed
+  height). The panel is `w-[90vw]` UNDER its `max-w`, so a narrow viewport
+  shrinks the field whatever the cap says — width alone cannot carry this. And
+  base64url's only natural break opportunity is a `-`, which occurs in roughly
+  half of all secrets: without a break rule such a token wraps AFTER the hyphen
+  and clips the over-long run before it, rendering as a neatly wrapped complete
+  token that is missing characters. That shape is the defect, not a milder
+  version of it.
+
+**The token drawn in the panel is real-shape** — 53 characters, carrying a `-`.
+The earlier revision drew a 42-character placeholder inside a `nowrap` +
+`text-overflow: ellipsis` field, which is precisely why 28rem read as
+sufficient: **a placeholder shorter than the real value cannot specify a field
+whose whole job is to hold the real value.** Any future revision of this panel
+keeps a real-shape secret in it.
+
 ## Panel 6 — Revoke confirm
 
 A destructive `Modal` (`size="sm"`, `title='Revoke "{label}"?'`): a **rose-tint
@@ -1099,8 +1127,9 @@ yet** (`design/shell/design-notes.md` § _What this asset SPECIFIES that no card
 drawing one. The settings frame composes its **wrapper and its reveal**; it does not take its header
 block.
 
-**The card stand-in is not a new drawing.** It is `app/(authed)/settings/project/fields/loading.tsx`'s
-composition — a `rounded-(--radius-card)` bordered box at `p-(--spacing-card-padding)`, a
+**The card stand-in is not a new drawing.** It is the composition that shipped as the Fields pane's
+own route-level skeleton until MOTIR-3558 deleted it, and it now lives in
+`components/settings/SettingsPaneFrame.tsx` — a `rounded-(--radius-card)` bordered box at `p-(--spacing-card-padding)`, a
 `mb-4 flex items-center justify-between` row carrying an `h-4` label bar and an `h-7` action bar, then
 three `flex items-center gap-3` rows of an `size-8` square and an `h-3.5` bar at 40 / 48 / 56% —
 **with its two header placeholders removed**. Three rows is a screenful for a 42–46rem pane and is not
@@ -1177,11 +1206,16 @@ is the expected shape for a pane that is one card of fields over two reads.
 
 ## The two shipped settings skeletons — SUPERSEDED
 
-`app/(authed)/settings/project/fields/loading.tsx` and
-`app/(authed)/settings/project/components/loading.tsx` are the only two route-level pending states in
-the family. They are drawn in Panel D as they actually render.
+The Fields and Components panes each carried a route-level `loading.tsx` — the only two in the family.
+They are drawn in Panel D as they rendered.
 
 **Verdict: both are deleted, in the same commit that lands the shared component in those two routes.**
+
+> ✅ **DONE — MOTIR-3558 (`2a27a1a2`).** Both files are gone and both panes mount
+> `components/settings/SettingsPaneFrame.tsx` in-page instead, in that one commit. Their paths are
+> deliberately no longer written out above: a design asset names the file an agent should MIRROR, and
+> a path that resolves to nothing sends them looking for it — which is what
+> `tests/design-asset-addresses.test.ts` caught on the story's own pull request.
 
 - **Not because a boundary is illegal there.** Neither page calls `notFound()`, so both are legal
   under `motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_.

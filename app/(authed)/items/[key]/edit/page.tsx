@@ -64,16 +64,37 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   // "Edit" link, and a direct nav here bounces back to the read-only detail view
   // (the server would reject every save anyway). Browse already passed above, so
   // the detail page is a valid, viewable destination.
-  const { canEdit } = await projectAccessService.getCapabilities(ctx.projectId, serviceCtx);
+  // MOTIR-3444 — the two reads BELOW the gate run concurrently.
+  //
+  // `getIssueDetail` above is the GATE: it decides the 404 and the 308, so
+  // nothing may be flushed until it has returned. These two are not — neither
+  // decides existence — and they are independent of each other, so issuing them
+  // in sequence cost a round trip for nothing.
+  //
+  // ⚠️ THE FORM WAITS, and that is the design's decision rather than a
+  // limitation (design/work-items/design-notes.md § The streaming allocation at
+  // ARRIVAL). `EditIssueForm` renders `issue` and `workflow`, BOTH of which come
+  // out of the gate read, so every field's value is already in hand the moment
+  // anything can be flushed at all. There is no version of this page where a
+  // field renders empty and fills in later — which is why no <Suspense> wraps a
+  // field here, and why `members` is made CONCURRENT rather than streamed: it is
+  // the assignee picker's option list, not something the reader types into.
+  //
+  // `members` is started before `canEdit` is known, so a viewer who is bounced to
+  // the read view pays one discarded read. That is deliberate: the redirect is
+  // the rare path, and the alternative charges a second round trip to every
+  // successful edit.
+  const [{ canEdit }, members] = await Promise.all([
+    projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
+    assignableMembersService.list({
+      projectId: ctx.projectId,
+      accessLevel: ctx.project.accessLevel,
+      ctx: serviceCtx,
+    }),
+  ]);
   if (!canEdit) {
     redirect(`/items/${detail.item.identifier}`);
   }
-
-  const members = await assignableMembersService.list({
-    projectId: ctx.projectId,
-    accessLevel: ctx.project.accessLevel,
-    ctx: serviceCtx,
-  });
 
   return (
     <div className="flex flex-col gap-6">

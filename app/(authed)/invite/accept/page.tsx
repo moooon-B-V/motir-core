@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
-import { type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { AuthShell } from '@/app/(auth)/_components/AuthShell';
 import { Button } from '@/components/ui/Button';
 import { AcceptInviteButton } from './AcceptInviteButton';
@@ -35,25 +35,80 @@ interface PageProps {
   searchParams: Promise<{ token?: string }>;
 }
 
-export default async function InviteAcceptPage({ searchParams }: PageProps) {
+/**
+ * The PENDING FRAME (MOTIR-3447 · `design/workspaces/invite-arrival.mock.html`).
+ *
+ * This is the ONE surface of MOTIR-3440's twenty-four whose verdict is *a frame
+ * of its own*, and it earns that on two facts. It can paint no character of its
+ * own copy before `inspectInvite` returns — the headline names the workspace and
+ * the subhead names the inviter, and three of the four bodies replace both
+ * outright. And it is the only surface in the story reached by a HARD navigation
+ * from outside the app, from a link in a mail client, so the shell's window-1
+ * pending mark cannot speak for it either: there is no mounted shell to mark.
+ *
+ * ⚠️ IT CANNOT MISPREDICT, which is what makes a frame honest here rather than a
+ * guess. All four bodies render the same chrome — `InviteCard` wrapping
+ * `AuthShell`, a headline, a subhead, one full-width control — so the
+ * placeholder stands in for a shape that is already settled and only the words
+ * differ. It draws the SHORTEST honest shape, so every settle grows the card
+ * downward rather than shrinking it under the reader's cursor.
+ *
+ * The boxes are the drawn ones: `h-11 sm:h-15` tracks `AuthShell`'s
+ * `text-4xl sm:text-5xl leading-tight` headline (45px / 60px), the two bars are
+ * its `text-base` subhead lines, and the control takes `--height-btn-md` as a
+ * TOKEN so it flips with the style axis exactly as the real button does.
+ */
+function InviteFrame() {
+  return (
+    <InviteCard>
+      <div className="animate-pulse" aria-busy="true">
+        <section className="flex flex-col gap-8">
+          <header className="flex flex-col gap-3">
+            <div className="bg-(--el-muted) h-11 w-3/4 rounded-(--radius-control) sm:h-15" />
+            <div className="flex flex-col gap-1.5">
+              <div className="bg-(--el-muted) h-4 w-full rounded-(--radius-control)" />
+              <div className="bg-(--el-muted) h-4 w-2/3 rounded-(--radius-control)" />
+            </div>
+          </header>
+          <div className="bg-(--el-muted) h-(--height-btn-md) w-full rounded-(--radius-btn)" />
+        </section>
+      </div>
+    </InviteCard>
+  );
+}
+
+/**
+ * Everything the invite READ decides — which is every one of the four bodies.
+ *
+ * ⚠️ `inspectInvite` is NOT a gate, and that distinction is the whole reason a
+ * frame is possible on this page. A gate is a read that decides the HTTP STATUS;
+ * this route answers 200 whatever the token turns out to be — expired, used,
+ * wrong-account and valid are four BODIES, not four statuses, and the route
+ * calls `notFound()` nowhere. So the read may sit below a boundary without
+ * touching a status, and `motir-core/CLAUDE.md` § *A `loading.tsx` may NOT sit
+ * above a route that decides existence* is not engaged.
+ *
+ * The session redirect stays ABOVE, in the page: that one really does decide the
+ * response, and an unauthenticated visitor must be bounced rather than framed.
+ */
+async function InviteOutcome({
+  token,
+  sessionEmail,
+  currentEmail,
+}: {
+  token: string;
+  sessionEmail: string;
+  currentEmail: string;
+}) {
   const t = await getTranslations('auth');
-  const session = await getSession();
-  if (!session) redirect('/sign-in');
-
-  const { token } = await searchParams;
-  if (!token) {
-    return <UsedState />;
-  }
-
   const result = await workspaceInvitesService.inspectInvite(token);
 
   if (result.status === 'expired') return <ExpiredState />;
   if (result.status === 'used') return <UsedState />;
 
   // status === 'valid' — but the signed-in email may not match the invite.
-  const sessionEmail = session.user.email.trim().toLowerCase();
   if (sessionEmail !== result.email) {
-    return <WrongEmailState invitedEmail={result.email} currentEmail={session.user.email} />;
+    return <WrongEmailState invitedEmail={result.email} currentEmail={currentEmail} />;
   }
 
   return (
@@ -65,6 +120,31 @@ export default async function InviteAcceptPage({ searchParams }: PageProps) {
         <AcceptInviteButton token={token} />
       </AuthShell>
     </InviteCard>
+  );
+}
+
+export default async function InviteAcceptPage({ searchParams }: PageProps) {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+
+  const { token } = await searchParams;
+  if (!token) {
+    return <UsedState />;
+  }
+
+  // MOTIR-3447 — the invite read moves BELOW a boundary, so the card's chrome is
+  // on screen while the token is resolved. Every terminal outcome is unchanged
+  // and still rendered by `InviteOutcome`; what changed is that the reader sees
+  // the card's shape first instead of an empty content area, on the one surface
+  // in this story reached cold from an email.
+  return (
+    <Suspense fallback={<InviteFrame />}>
+      <InviteOutcome
+        token={token}
+        sessionEmail={session.user.email.trim().toLowerCase()}
+        currentEmail={session.user.email}
+      />
+    </Suspense>
   );
 }
 

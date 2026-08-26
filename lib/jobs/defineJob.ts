@@ -7,6 +7,7 @@ import { registerSchedule } from './schedules';
 import { registerEngineJob } from './engine/registry';
 import { registerJobManifest } from './engine/manifest';
 import { parseIdempotencyTemplate } from './engine/idempotency';
+import { parseDebounce, type DebounceOption } from './engine/debounce';
 import { routedToEngine } from './engine/cutover';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
@@ -175,8 +176,22 @@ export type DefineJobOptions<N extends JobEventName> = JobIdAndTrigger<N> & {
    * A job that grows a `debounce` belongs in `tests/jobs/debounce-burst.test.ts`,
    * which drives the pinned `inngest-cli` and counts the runs a burst produces.
    * Asserting the option off `fn.opts` proves only that it was forwarded.
+   *
+   * ⚠️ AND THE ENGINE NOW IMPLEMENTS IT (MOTIR-3483), so the option is no longer
+   * "forwarded to Inngest" alone. It is validated HERE at registration — the
+   * expression and both durations — and applied at ENQUEUE by
+   * `lib/jobs/engine/dispatcher.ts`. Two consequences for a job author:
+   *
+   *   1. Limit (1) above is REVERSED on the engine's lane. An expression the
+   *      engine cannot evaluate throws at module evaluation instead of merging,
+   *      and a field the payload does not carry means "no coalescing for this
+   *      event" instead of "one shared bucket". The rule about naming only
+   *      REQUIRED fields still stands — it is what keeps the two lanes agreeing
+   *      about which events are one repo's.
+   *   2. Limit (2) is FIXED on the engine's lane: the deferral cap is measured
+   *      from the first arrival and is honoured whatever the arrival rate.
    */
-  debounce?: { key: string; period: string; timeout?: string };
+  debounce?: DebounceOption;
 } & JobScheduleAndCatchUp;
 
 /**
@@ -274,6 +289,11 @@ export function defineJob<N extends JobEventName>(
   // job the engine cannot dedupe fails loudly at load rather than silently
   // stopping deduplication at dispatch (MOTIR-3459).
   if (idempotency !== undefined) parseIdempotencyTemplate(id, idempotency);
+  // ⚠️ AND THE DEBOUNCE, for the same reason and at the same moment (MOTIR-3483)
+  // — the key expression AND both durations. A `period` the engine cannot parse
+  // would otherwise surface at DISPATCH, i.e. on a request path, as an event that
+  // failed to enqueue.
+  if (debounce !== undefined) parseDebounce(id, debounce);
 
   registerEngineJob({
     id,
@@ -288,6 +308,7 @@ export function defineJob<N extends JobEventName>(
     // as the `maxAttempts` translation directly above is. Forwarding it would put
     // an unknown key in a function's synced config for no reader.
     catchUp,
+    debounce,
     handler,
   });
 
@@ -301,6 +322,7 @@ export function defineJob<N extends JobEventName>(
     maxAttempts,
     retryPolicy: options.retryPolicy,
     idempotency,
+    debounce,
   });
 
   // Terminal-failure handler (1.6.6). Inngest invokes `onFailure` ONCE, after a

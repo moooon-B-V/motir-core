@@ -68,37 +68,50 @@ import type {
 // container, which is the only useful definition of "guaranteed" for something
 // whose failure is silent.
 //
-// ⚠️ GUARANTEE 3 USED TO BE A `finally`, AND A `finally` COULD NOT HOLD IT
-// (MOTIR-2007). Supervision watches a container for up to {@link
-// DEFAULT_JOB_TIMEOUT_MS} = 3,600s. It used to do that synchronously, inside ONE
-// serverless invocation, whose ceiling is `maxDuration = 300` in
-// `app/api/inngest/route.ts` — twelve times shorter. So every CI job longer than
-// ~5 minutes had its supervisor killed mid-loop with `FUNCTION_INVOCATION_TIMEOUT`:
-// the `finally` never ran, the intent stayed `running` and held a fleet slot
-// against BOTH the per-project cap and the fail-CLOSED cross-workload ceiling
-// until the reaper aged it out 70 minutes later, the run dead-lettered while the
-// job had actually succeeded, and the container's cost was recorded late and
-// coarsely or not at all. A spend guard turning into an outage.
+// ⚠️ GUARANTEE 3 WAS A `finally`, THEN A STEP, AND IS A `finally` AGAIN — and
+// the round trip is worth reading in full, because the INCIDENT is not reversed
+// even though its remedy is (MOTIR-2007, then MOTIR-3485).
 //
-// The fix is the SHAPE, not another patch: supervision is now a DURABLE POLL
-// LOOP owned by the job (`lib/jobs/definitions/ciRunnerFleet.ts`). This service
-// exposes the three individually-BOUNDED operations it drives —
-// {@link ciRunnerBootService.bootIntent}, {@link ciRunnerBootService.pollOnce},
-// {@link ciRunnerBootService.settleSupervision} — each of which does a fixed,
-// small amount of work and returns. The job wraps each in its own `ctx.step.run`
-// and waits between polls with `ctx.step.sleep`, so no STEP ever approaches
-// `maxDuration` while the RUN spans an hour across many invocations. That is
-// what Inngest's durable execution is for, and `docs/jobs.md` rule 1 is the rule
-// this file used to be the one documented exception to.
+// Supervision watches a container for up to {@link DEFAULT_JOB_TIMEOUT_MS} =
+// 3,600s. It used to do that synchronously inside ONE SERVERLESS invocation,
+// whose ceiling was `maxDuration = 300` in `app/api/inngest/route.ts` — twelve
+// times shorter. So every CI job longer than ~5 minutes had its supervisor killed
+// mid-loop with `FUNCTION_INVOCATION_TIMEOUT`: the `finally` never ran, the intent
+// stayed `running` and held a fleet slot against BOTH the per-project cap and the
+// fail-CLOSED cross-workload ceiling until the reaper aged it out 70 minutes
+// later, the run dead-lettered while the job had actually succeeded, and the
+// container's cost was recorded late and coarsely or not at all. A spend guard
+// turning into an outage. **All of that happened, and none of it is in doubt.**
 //
-// ⚠️ WHICH IS WHY {@link ciRunnerBootService.pollOnce} MUST NEVER THROW. In a
-// stepped world there is no process holding a `finally`, and a step that fails
-// terminally is NOT followed by a step scheduled from a catch — the executor
-// finalizes the run as failed first (`PRODECT_FINDINGS` #39, the trap that made
-// `defineJob` move its dead-letter write to `onFailure`). So teardown cannot be
-// reached from a catch. Guarantee 3 is instead structural: `pollOnce` converts
-// every failure it can meet into a TYPED result, so the only way out of the loop
-// is a `done` verdict, and a `done` verdict goes to `settleSupervision`.
+// MOTIR-2007's fix was to make supervision a DURABLE POLL LOOP owned by the job,
+// so no STEP approached `maxDuration` while the RUN spanned an hour across many
+// invocations. **The ceiling that made a `finally` untrustworthy has since gone:**
+// `Dockerfile` ends `CMD ["node", "server.js"]` and motir-core has run as a
+// long-lived Fly process since MOTIR-2384, so nothing kills a supervisor
+// mid-loop. {@link ciRunnerBootService.runIntent} is the composition again — one
+// of it, not two kept in agreement by hand — and its teardown is an ordinary
+// `try`/`finally`, which now reaches a THIRD exit the stepped form could not: a
+// throw from inside the loop.
+//
+// The three individually-BOUNDED operations stay, and are what the job still
+// memoizes: {@link ciRunnerBootService.bootIntent},
+// {@link ciRunnerBootService.pollOnce}, {@link ciRunnerBootService.settleSupervision}.
+// What decides which of them keeps a `step.run` is
+// `docs/decisions/job-queue-foundation.md` §13 — the SIDE EFFECT, never the WAIT
+// — and the answer is boot and settle, because a worker restart replaying either
+// would mint a second runner or destroy a machine twice.
+//
+// ⚠️ AND {@link ciRunnerBootService.pollOnce} STILL MUST NEVER THROW. Its REASON
+// changed and the requirement did not, which is the distinction worth keeping.
+// It used to be that a step scheduled from a `catch` is never executed by the
+// Inngest executor — it finalizes the run as failed first (`PRODECT_FINDINGS`
+// #39, the trap that made `defineJob` move its dead-letter write to `onFailure`)
+// — so teardown was unreachable from one. Teardown is reachable from a `catch`
+// now. But a poll that threw would still end the pass with no verdict and no
+// diagnosis, and the structural version is the stronger property: `pollOnce`
+// converts every failure it can meet into a TYPED result, so the only way out of
+// the loop is a `done` verdict, and a `done` verdict goes to
+// `settleSupervision`.
 //
 // ⚠️ WHO DECIDES WHETHER THIS RUNS AT ALL. §10 puts the ADMISSION GATE — the
 // per-project in-flight cap, the fleet-wide ceiling and the
@@ -176,8 +189,13 @@ const POLL_BACKOFF_FACTOR = 2;
  * {@link pollOnce} already terminates on {@link DEFAULT_JOB_TIMEOUT_MS}, so this
  * is not the bound that matters — it is the bound that still holds if the clock
  * does something surprising (a frozen `now`, a test seam, a provider that never
- * reports terminal). A durable loop with no static bound is a runaway that bills
- * per iteration, so it gets one.
+ * reports terminal). A loop with no static bound is a runaway that bills per
+ * iteration, so it gets one.
+ *
+ * ⚠️ SINCE MOTIR-3485 IT IS A PER-PASS GUARD, NOT A BOUND ON TOTAL POLLS PER
+ * CONTAINER. The counter is in-memory, so a worker restart resets it — accepted
+ * rather than repaired (`docs/decisions/job-queue-foundation.md` §13.3(a)),
+ * because the sentence above already said this was never the bound that mattered.
  */
 const MAX_POLL_ITERATIONS = 2_000;
 
@@ -209,20 +227,30 @@ const DEFAULT_REAP_AFTER_MS = DEFAULT_JOB_TIMEOUT_MS + 10 * 60_000;
  * (MOTIR-2007). `docs/jobs.md` rule 2 asks for exactly this inequality; the fleet
  * was the case it did not hold for.
  *
- * Read `maxDuration` (300s, `app/api/inngest/route.ts`) as the ceiling on ONE
- * INVOCATION — i.e. on one step — never on a run. Then:
+ * ⚠️ CORRECTED (MOTIR-3485) — NOT ONE VALUE MOVED, AND THE CEILING TWO OF THEM
+ * WERE READ AGAINST IS GONE. `maxDuration` (300s, `app/api/inngest/route.ts`) is
+ * a Vercel route-segment directive, and motir-core runs as a long-lived Fly
+ * process (`Dockerfile`, MOTIR-2384). What each budget is actually for, now that
+ * it is not licensed by the stepping:
  *
- *   • `stepWorkBudgetMs` ≤ maxDuration · 1000
+ *   • `stepWorkBudgetMs`
  *        The bound on what any ONE step of the boot path does. `pollOnce` is one
  *        provider read; `settleSupervision` is a teardown plus its bookkeeping.
- *        This is the constraint that regressed into an hour-long step before.
+ *        It used to be read as `≤ maxDuration · 1000` — the constraint that
+ *        regressed into an hour-long step before. It still earns its place for a
+ *        reason that has nothing to do with a platform: a MEMOIZED step should be
+ *        SMALL, because that is what makes a resumed run cheap. The assertion in
+ *        `tests/ciFleet/fleetTimeBudgets.test.ts` is deliberately left reading the
+ *        route's number until `docs/jobs.md` rule 1 is restated (MOTIR-3488) —
+ *        one inequality, not two places to correct it.
  *
- *   • `jobTimeoutMs` > maxDuration · 1000        ← DELIBERATE, and only safe now
- *        A supervised CI job may run 3,600s, twelve times the invocation ceiling.
- *        That is legal ONLY because the RUN is stepped: no single step spans it.
- *        Shortening this to fit inside one invocation was the tempting non-fix —
- *        it caps every tenant's CI job at five minutes, which is the product
- *        regressing to fit the bug.
+ *   • `jobTimeoutMs` (3,600s)
+ *        The CONTAINER's hard kill, and always was. It bounds SPEND, never an
+ *        invocation, and it is anchored on the memoized `session.bootedAt` so it
+ *        survives a worker restart (`docs/decisions/job-queue-foundation.md`
+ *        §13.2). This block used to justify it as *"legal ONLY because the RUN is
+ *        stepped"* and warn that shortening it to fit one invocation was the
+ *        tempting non-fix — the warning stands, and its premise has evaporated.
  *
  *   • `pollIntervalMs` ≤ `maxPollIntervalMs` < `bootDeadlineMs` < `jobTimeoutMs`
  *        The boot deadline must be observable at poll granularity, and it must be
@@ -252,8 +280,10 @@ export const FLEET_TIME_BUDGETS = {
   maxPollIterations: MAX_POLL_ITERATIONS,
   /**
    * What ONE step of the boot path is allowed to spend. Not a timer this code
-   * enforces — a budget the steps are SHAPED to respect (one provider call each)
-   * and which the test asserts against the route's `maxDuration`.
+   * enforces — a budget the steps are SHAPED to respect (one provider call each),
+   * and which the test still asserts against the route's `maxDuration`. See the
+   * corrected block above for why that comparison survives the collapse as an
+   * inequality with one home rather than two.
    */
   stepWorkBudgetMs: 120_000,
   /** The GitHub `generate-jitconfig` deadline — the boot step's first call. */
@@ -277,6 +307,31 @@ export function pollWaitMs(iteration: number, options: SupervisionOptions = {}):
   return Math.min(Math.max(base, grown), Math.max(base, cap));
 }
 
+/**
+ * THE DURABLE SEAM (MOTIR-3485) — the subset of a job's `ctx.step` that
+ * {@link ciRunnerBootService.runIntent} composes against.
+ *
+ * ⚠️ IT CARRIES `run` AND NOT `sleep`. `docs/decisions/job-queue-foundation.md`
+ * §13 settles what a supervision loop keeps durable: the SIDE EFFECT, never the
+ * WAIT. A supervisor that forgets it was sleeping re-attaches to the same
+ * container out of the memoized boot; a supervisor that forgets it BOOTED mints a
+ * SECOND GitHub runner registration and provisions a second billed machine.
+ *
+ * Structurally identical to the index fleet's `SupervisionSteps` and deliberately
+ * NOT shared with it: the two services share no file today (which is why
+ * MOTIR-3484 and MOTIR-3485 are siblings rather than a chain), and a common type
+ * would couple two fleets whose only real similarity is that they both watch a
+ * container. If a third arrives, extract it then.
+ */
+export interface RunnerSupervisionSteps {
+  run<T>(id: string, fn: () => T | Promise<T>): Promise<T>;
+}
+
+/** The no-op seam: execute, do not memoize. The default for every non-job caller. */
+export const INLINE_RUNNER_STEPS: RunnerSupervisionSteps = {
+  run: async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn(),
+};
+
 /** Seams the tests drive. Defaults are the constants above; nothing else may
  *  pass them, which is why they are optional and undocumented in the API. */
 export interface SupervisionOptions {
@@ -284,8 +339,20 @@ export interface SupervisionOptions {
   jobTimeoutMs?: number;
   pollIntervalMs?: number;
   maxPollIntervalMs?: number;
+  /**
+   * The per-pass poll ceiling. Bounded by {@link MAX_POLL_ITERATIONS} — a test
+   * may LOWER it to drive the ceiling branch in milliseconds, never raise it past
+   * the shipped guard.
+   */
+  maxPollIterations?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * The durable-step seam (MOTIR-3485). The `system.ci-runner-boot` job passes
+   * its `ctx.step`; everything else passes nothing and gets
+   * {@link INLINE_RUNNER_STEPS}.
+   */
+  steps?: RunnerSupervisionSteps;
 }
 
 /**
@@ -503,44 +570,94 @@ export const ciRunnerBootService = {
   },
 
   /**
-   * Boot ONE intent and supervise it to its end, IN THIS PROCESS.
+   * Boot ONE intent and supervise it to its end — THE composition, and since
+   * MOTIR-3485 the only one.
    *
-   * ⚠️ NOT THE PRODUCTION PATH, and deliberately not reachable from one. The boot
-   * JOB drives {@link bootIntent} / {@link pollOnce} / {@link settleSupervision}
-   * as separate durable steps, which is the entire fix in MOTIR-2007 — calling
-   * this from a job would rebuild the hour-long invocation the card removed, so
-   * `tests/jobs/ci-runner-fleet.test.ts` asserts the handler does not.
+   * ⚠️ THIS COMMENT USED TO SAY "NOT THE PRODUCTION PATH, and deliberately not
+   * reachable from one", because *"calling this from a job would rebuild the
+   * hour-long invocation MOTIR-2007 removed"*. That was a statement about
+   * `app/api/inngest/route.ts`'s `maxDuration = 300` — a Vercel ceiling.
+   * `Dockerfile` ends `CMD ["node", "server.js"]` and motir-core has run as a
+   * long-lived Fly process since MOTIR-2384, so no invocation ceiling applies to
+   * a run, and `system.ci-runner-boot` now drives THIS function through the
+   * {@link RunnerSupervisionSteps} seam. One composition again — the second one
+   * existed only to be kept in agreement with this one by hand.
    *
-   * It survives because it is the honest in-process composition of the same three
-   * operations, which is what lets the service suites drive a whole supervised
-   * boot against real Postgres at millisecond deadlines. Any caller that is NOT a
-   * durable job (a script, a local harness, a test) wants exactly this.
+   * ⚠️ AND MOTIR-2007'S FINDING IS NOT REVERSED, only its remedy. That incident
+   * was real: an hour-long supervision inside one SERVERLESS invocation meant
+   * every CI job over ~5 minutes had its supervisor killed with no teardown, the
+   * intent stuck holding a fleet slot, and the run dead-lettered while the job
+   * had actually passed. What has changed is that there is no invocation to be
+   * killed. Every guarantee it bought is kept and re-grounded below.
+   *
+   * What survived the collapse, per `docs/decisions/job-queue-foundation.md`
+   * §13.4's disposition table:
+   *
+   *   • BOOT and SETTLE are memoized `step.run`s. `bootIntent` admits, claims the
+   *     intent, mints a JIT runner registration and provisions a machine;
+   *     `settleSupervision` destroys it, de-registers the runner, meters it and
+   *     settles the intent. Either running twice leaves something existing twice.
+   *   • The INTERVAL and the POLL are ordinary calls. A restart forgets them and
+   *     forgetting them costs nothing: the boot replays from its memo and the
+   *     loop re-attaches to the same container.
+   *   • The iteration ceiling is a PER-PASS guard now (§13.3(a)) — a restart
+   *     resets it, and {@link DEFAULT_JOB_TIMEOUT_MS}, anchored on the memoized
+   *     `session.bootedAt`, was always the bound that mattered.
+   *
+   * ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP, and the MECHANISM
+   * CHANGED while the guarantee did not. It was a step reachable from both exits
+   * precisely because a `finally` could not be trusted across invocations (the
+   * module header's guarantee 3). It is an ordinary `finally` again — which is
+   * what a long-lived process makes trustworthy — so §13.4 requires the property
+   * be RE-PROVEN per exit path rather than inherited: a `done` verdict, the
+   * iteration ceiling, and a throw from inside the loop each have their own test.
    */
   async runIntent(intentId: string, options: SupervisionOptions = {}): Promise<RunIntentOutcome> {
     const sleep = options.sleep ?? sleepFor;
-    const booted = await this.bootIntent(intentId, options);
+    const steps = options.steps ?? INLINE_RUNNER_STEPS;
+    // Bounded by the shipped guard: a test may LOWER it, never raise it.
+    const maxIterations = Math.min(
+      options.maxPollIterations ?? MAX_POLL_ITERATIONS,
+      MAX_POLL_ITERATIONS,
+    );
+
+    const booted = await steps.run('boot-runner', () => this.bootIntent(intentId, options));
     if (booted.phase === 'terminal') return booted.outcome;
+    const { session } = booted;
 
     let state = INITIAL_POLL_STATE;
-    for (let iteration = 1; iteration <= MAX_POLL_ITERATIONS; iteration += 1) {
-      await sleep(pollWaitMs(iteration, options));
-      const polled = await this.pollOnce(booted.session, state, options);
-      if (polled.done) return this.settleSupervision(booted.session, polled, options);
-      state = polled;
+    let verdict: Extract<PollResult, { done: true }> | null = null;
+    let outcome: RunIntentOutcome | undefined;
+    try {
+      for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+        await sleep(pollWaitMs(iteration, options));
+        const polled = await this.pollOnce(session, state, options);
+        if (polled.done) {
+          verdict = polled;
+          break;
+        }
+        state = polled;
+      }
+    } finally {
+      // Settle rather than abandon: a container nothing tears down is the failure
+      // this whole file exists to prevent. On a throw this runs FIRST and the
+      // error propagates after it, which is the arm a step reachable from the two
+      // normal exits could never cover.
+      outcome = await steps.run('settle-runner', () =>
+        this.settleSupervision(
+          session,
+          verdict ?? {
+            done: true,
+            reason: 'job_timed_out',
+            startedAt: state.startedAt,
+            bootLatencyMs: state.bootLatencyMs,
+            failureDetail: `supervision hit the ${maxIterations}-poll ceiling`,
+          },
+          options,
+        ),
+      );
     }
-    // The static ceiling bound. Settle rather than abandon: a container nothing
-    // tears down is the failure this whole file exists to prevent.
-    return this.settleSupervision(
-      booted.session,
-      {
-        done: true,
-        reason: 'job_timed_out',
-        startedAt: state.startedAt,
-        bootLatencyMs: state.bootLatencyMs,
-        failureDetail: `supervision hit the ${MAX_POLL_ITERATIONS}-poll ceiling`,
-      },
-      options,
-    );
+    return outcome;
   },
 
   /**

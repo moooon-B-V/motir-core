@@ -156,6 +156,22 @@ not depend on. **The code card narrows the gate to `getSprintReport` (with `getW
 since the table cannot render without the status map) and moves the two chart reads behind the
 boundary.** The 404 is unaffected: it is decided by the read that still runs before the flush.
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3447. THE GATE IS NOT NARROWED, AND THE REASON IS THE SAME ONE.
+>
+> The instruction above — narrow the gate to `getSprintReport` (+ `getWorkflow`) and move the two
+> chart series behind the boundary — is right about the READS and cannot be built inside
+> MOTIR-3447's boundary clause (_"does not change any chart component"_). **`SprintReport` takes all
+> four values as props**, so the page cannot render until all four resolve however the gate is
+> drawn; moving velocity and cycle behind a boundary means splitting that component.
+>
+> The narrowing would also buy less than it appears to. The `notFound()` this entry points at fires
+> on `!report` — but a sprint whose id is not in the project's list is already 404'd by
+> `sprints.find` BEFORE the wave, so the case being accelerated is the rarer one where the sprint
+> exists and its report read returns null.
+>
+> **`/sprints/[id]/report` ships no diff**, its four reads stay one wave, and the narrowing is
+> recorded here as available work for whoever owns splitting the report component.
+
 **The fallback is `SprintReport`'s own chart states**, exactly as on `/reports/burndown` — one
 vocabulary for a pending chart across both report surfaces, and no new asset in this area.
 

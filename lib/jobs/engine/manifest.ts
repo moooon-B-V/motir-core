@@ -1,4 +1,5 @@
 import type { RetryPolicyName } from '../retries';
+import type { DebounceOption } from './debounce';
 
 // THE SUBSCRIBER MANIFEST (Story MOTIR-3415 · Subtask MOTIR-3458).
 // Decided in `docs/decisions/job-queue-foundation.md` §12.
@@ -58,6 +59,12 @@ export interface JobManifestEntry {
    *  needs it: the dedup key is resolved and denormalised onto the queue row at
    *  ENQUEUE, which is the only moment the event payload is in hand. */
   idempotency: string | undefined;
+  /** The `debounce` the job declared, or `undefined` (MOTIR-3483). On the emit
+   *  path for exactly the reason `idempotency` is: the coalescing key is resolved
+   *  from the event payload, and `run_at` is decided, at ENQUEUE. This is the
+   *  table the dispatcher actually reads — the registry beside it carries the
+   *  handler and is therefore unreachable from a request. */
+  debounce: DebounceOption | undefined;
 }
 
 const manifest = new Map<string, JobManifestEntry>();

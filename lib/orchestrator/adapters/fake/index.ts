@@ -210,6 +210,36 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
 
   async describe(handle: ContainerHandle): Promise<ContainerStatus> {
     const machine = machines.get(handle.id);
+    // ⚠️ THE CROSS-PROCESS EXIT SEAM (Story MOTIR-3417 · MOTIR-3564).
+    //
+    // `completeJob()` is how a test says "the runner exited and `auto_destroy`
+    // took the machine", and it is an in-process call. That is enough for every
+    // vitest suite and reaches nothing in the E2E lane: there the supervisor runs
+    // in the WORKER, a separate Node process, so the Playwright runner has no
+    // handle to complete. Without a second door the lane's container never exits,
+    // supervision polls until `indexTimeoutMs` (30 minutes), and no spec can
+    // assert the ledger contract the whole index path exists to produce.
+    //
+    // So a container ALSO exits when the process is told what its containers
+    // should do: `MOTIR_FAKE_CONTAINER_AUTO_EXIT_CODE` makes the first `describe`
+    // that sees a STARTED machine report it gone with that code. It is read here
+    // rather than at boot so a lane can set it per process, and it is absent
+    // everywhere except that worker — every existing consumer keeps the
+    // `completeJob`-driven behaviour unchanged.
+    //
+    // It does NOT replace the orchestrator (MOTIR-3564's scope forbids that, and
+    // rightly): this IS the fake, selected by the shipped `MOTIR_FLEET_ORCHESTRATOR`
+    // config seam. What it adds is a way to drive the fake from outside its own
+    // process, which is the one thing `completeJob` structurally cannot do.
+    if (machine && !machine.gone && machine.state === 'started') {
+      const auto = process.env['MOTIR_FAKE_CONTAINER_AUTO_EXIT_CODE'];
+      if (auto !== undefined && auto !== '') {
+        const parsed = Number(auto);
+        fakeOrchestrator.completeJob(handle.id, {
+          exitCode: Number.isFinite(parsed) ? parsed : null,
+        });
+      }
+    }
     if (!machine || machine.gone) {
       return {
         handleId: handle.id,

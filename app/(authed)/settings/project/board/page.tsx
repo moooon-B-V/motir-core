@@ -1,12 +1,15 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Columns3, SearchX } from 'lucide-react';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { BoardNotFoundError } from '@/lib/boards/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { BoardSwitcher } from '../../../boards/_components/BoardSwitcher';
 import { BoardConfigEditor, type BoardConfigModel } from './_components/BoardConfigEditor';
@@ -91,13 +94,87 @@ export default async function ProjectBoardSettingsPage({
   // key (the guard above), so the edit affordances are simply on.
   const isAdmin = true;
 
+  // MOTIR-3558 — allocation row 2: SERIAL → CONCURRENT, plus the frame, plus the
+  // family's one no-shift hazard.
+  //
+  // ⚠️ TWO BOUNDARIES, ONE PROMISE — the shape `app/(authed)/items/[key]` already
+  // ships (MOTIR-3436, `motir-core/CLAUDE.md`). The board read is started HERE
+  // and awaited nowhere on this line: the breadcrumb boundary and the body
+  // boundary both consume the same promise, so the page still issues exactly one
+  // `getBoard`. Awaiting it here instead would put the whole page back behind it.
+  //
+  // WHY the breadcrumb needs a boundary of its own: `BoardSettingsHeader` renders
+  // its `text-xs` crumb ABOVE the <h1>, and only when `boardName` is present —
+  // and `boardName` comes from this read. It is tier-2 CONTENT sitting in a
+  // tier-1 POSITION, which is the one place in the family where that happens. A
+  // single boundary below the header could never fill it (streamed tier-1 markup
+  // does not re-render), and a single boundary above the header would hide a
+  // title that is perfectly knowable. So the crumb gets its own small boundary
+  // whose fallback is the reserved `h-4` line the asset asks for, and the title
+  // row beside it paints from the gate. This is NOT the "third tier" AC 6 rules
+  // out — that means content arriving AFTER the page, and row 6 is the family's
+  // only one.
+  //
+  // ⚠️ ONE BEHAVIOUR CHANGE, on the two EMPTY paths, and it is a consequence of
+  // streaming rather than a choice about them. Before this card the no-board case
+  // rendered a DIFFERENT header — `PlainHeader`, with no board switcher, on the
+  // reasoning that there is nothing to switch between. A streamed page commits its
+  // header before it knows whether a board exists, so both empty paths now render
+  // the standard header, switcher included. The switcher is self-fetching and
+  // renders empty; nothing else about either empty state moves. Recorded on
+  // MOTIR-3443 — the alternative is to hold the whole header behind the read,
+  // which is the wait this card exists to remove.
+  const boardPromise = boardsService.getBoard(
+    ctx.projectId,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    selectedBoardId,
+  );
+  const statusesPromise = workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId);
+
+  return (
+    <div className="mx-auto flex max-w-[52rem] flex-col gap-6">
+      <BoardSettingsHeader
+        projectName={ctx.project.name}
+        boardName={boardPromise.then((p) => p.name).catch(() => undefined)}
+      />
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <BoardPaneBody
+          boardPromise={boardPromise}
+          statusesPromise={statusesPromise}
+          selectedBoardId={selectedBoardId}
+          isAdmin={isAdmin}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+/**
+ * The board's two reads, below the boundary and now in ONE wave.
+ *
+ * `allSettledOrThrow` rather than a bare `Promise.all`: `getBoard` rejects on the
+ * ORDINARY not-found path (a stale / cross-project `?board=`), and both arms open
+ * a transaction — so `Promise.all` would abandon the statuses read mid-flight on
+ * every refused board (MOTIR-3066). Array order also makes the rejection the
+ * caller sees deterministic: the board's error, not whichever failed first.
+ */
+async function BoardPaneBody({
+  boardPromise,
+  statusesPromise,
+  selectedBoardId,
+  isAdmin,
+}: {
+  boardPromise: ReturnType<typeof boardsService.getBoard>;
+  statusesPromise: ReturnType<typeof workflowsService.listStatusesByProject>;
+  selectedBoardId: string | undefined;
+  isAdmin: boolean;
+}) {
+  const t = await getTranslations('settings');
+
   let projection;
+  let statuses;
   try {
-    projection = await boardsService.getBoard(
-      ctx.projectId,
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      selectedBoardId,
-    );
+    [projection, statuses] = await allSettledOrThrow([boardPromise, statusesPromise]);
   } catch (err) {
     if (err instanceof BoardNotFoundError) {
       // A stale / cross-project / cross-workspace `?board=` id → a tenant-safe
@@ -107,20 +184,15 @@ export default async function ProjectBoardSettingsPage({
       // show, since there are no boards).
       if (selectedBoardId) {
         return (
-          <BoardSettingsShell projectName={ctx.project.name}>
-            <EmptyState
-              icon={<SearchX />}
-              title={t('board.notFoundTitle')}
-              description={t('board.notFoundDescription')}
-            />
-          </BoardSettingsShell>
+          <EmptyState
+            icon={<SearchX />}
+            title={t('board.notFoundTitle')}
+            description={t('board.notFoundDescription')}
+          />
         );
       }
       return (
-        <div className="mx-auto flex max-w-[52rem] flex-col gap-6">
-          <PlainHeader title={t('board.title')} subtitle={t('board.subtitle')} />
-          <EmptyState title={t('board.noBoardTitle')} description={t('board.noBoardDescription')} />
-        </div>
+        <EmptyState title={t('board.noBoardTitle')} description={t('board.noBoardDescription')} />
       );
     }
     throw err;
@@ -128,7 +200,6 @@ export default async function ProjectBoardSettingsPage({
 
   // Resolve each column's mapped status KEYS (from the projection) to {id,label}
   // via the project's full status list — map / unmap are keyed by status id.
-  const statuses = await workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId);
   const statusByKey = new Map(statuses.map((s) => [s.key, s] as const));
 
   const model: BoardConfigModel = {
@@ -147,53 +218,42 @@ export default async function ProjectBoardSettingsPage({
     unmapped: projection.unmappedStatuses.map((s) => ({ id: s.id, label: s.label })),
   };
 
-  return (
-    <BoardSettingsShell projectName={ctx.project.name} boardName={projection.name}>
-      {/* Key by boardId so switching the configured board (the `?board=` change)
-          REMOUNTS the editor with the new board's model, rather than leaving its
-          mount-seeded column state on the previous board. */}
-      <BoardConfigEditor key={model.boardId} model={model} isAdmin={isAdmin} />
-    </BoardSettingsShell>
-  );
+  // Key by boardId so switching the configured board (the `?board=` change)
+  // REMOUNTS the editor with the new board's model, rather than leaving its
+  // mount-seeded column state on the previous board.
+  return <BoardConfigEditor key={model.boardId} model={model} isAdmin={isAdmin} />;
 }
 
-// The board-scoped settings shell (Subtask 3.7.8) — the crumb + a head-row whose
-// LEFT is the serif title + subtitle and whose RIGHT is the "Configuring board"
-// label + the board switcher (`variant="settings"`: switch-only, no New/manage —
-// picking a board re-targets `?board=` and re-lays this page). Per
-// `design/boards/per-board-settings.mock.html` panel 0.
-function BoardSettingsShell({
-  projectName,
-  boardName,
-  children,
-}: {
-  projectName: string;
-  boardName?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mx-auto flex max-w-[52rem] flex-col gap-6">
-      <BoardSettingsHeader projectName={projectName} boardName={boardName} />
-      {children}
-    </div>
-  );
-}
-
+// The board-scoped settings header (Subtask 3.7.8, re-cut by MOTIR-3558) — the
+// crumb + a head-row whose LEFT is the serif title + subtitle and whose RIGHT is
+// the "Configuring board" label + the board switcher (`variant="settings"`:
+// switch-only, no New/manage — picking a board re-targets `?board=` and re-lays
+// this page). Per `design/boards/per-board-settings.mock.html` panel 0.
+//
+// ⚠️ It renders ABOVE the page's boundary, because everything in the head-row is
+// knowable at the gate. The CRUMB is not: it names the board, which is the
+// pending read. So the crumb alone sits behind its own small boundary whose
+// fallback is the reserved `h-4` line, and the title beside it paints
+// immediately. `boardName` is therefore a PROMISE, not a string — resolving it
+// here would put the title back behind the read.
 async function BoardSettingsHeader({
   projectName,
   boardName,
 }: {
   projectName: string;
-  boardName?: string;
+  boardName: Promise<string | undefined>;
 }) {
   const t = await getTranslations('settings');
   return (
     <header className="flex flex-col gap-2">
-      {boardName ? (
-        <p className="text-xs text-(--el-text-muted)">
-          {t('board.breadcrumb', { project: projectName, board: boardName })}
-        </p>
-      ) : null}
+      {/* THE RESERVED LINE (design/settings/design-notes.md § the no-shift
+          hazard). The crumb is one `text-xs` line; the fallback is an `h-4`
+          block of the same height in the same position, so the title does not
+          jump when the board name lands. This is the only tier-1 REGION in the
+          settings family that changes on settle. */}
+      <Suspense fallback={<div className="h-4 w-64 rounded-(--radius-control) bg-(--el-muted)" />}>
+        <BoardCrumb projectName={projectName} boardName={boardName} />
+      </Suspense>
       {/* Side-by-side, NON-wrapping head-row (title left, switcher right) per the
           design mock. The left block shrinks (`min-w-0`) and the switcher block
           holds its width (`shrink-0`) so the switcher stays on the SAME row — a
@@ -221,14 +281,21 @@ async function BoardSettingsHeader({
   );
 }
 
-function PlainHeader({ title, subtitle }: { title: string; subtitle: string }) {
+/** The crumb itself — awaits the shared board promise and renders nothing when
+ *  there is no board to name (the not-found and no-board paths both land here). */
+async function BoardCrumb({
+  projectName,
+  boardName,
+}: {
+  projectName: string;
+  boardName: Promise<string | undefined>;
+}) {
+  const name = await boardName;
+  if (!name) return null;
+  const t = await getTranslations('settings');
   return (
-    <header className="flex flex-col gap-1">
-      <h1 className="flex items-center gap-2.5 font-serif text-3xl font-semibold text-(--el-text)">
-        <Columns3 className="text-(--el-text-muted) size-6 shrink-0" aria-hidden />
-        {title}
-      </h1>
-      <p className="text-(--el-text-muted) max-w-[40rem] font-sans text-sm">{subtitle}</p>
-    </header>
+    <p className="text-xs text-(--el-text-muted)">
+      {t('board.breadcrumb', { project: projectName, board: name })}
+    </p>
   );
 }
