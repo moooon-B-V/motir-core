@@ -12,8 +12,8 @@ import { revokeToken, type ApiTokenDto } from './apiTokensClient';
 // `account-settings.mock.html` Panel 6. A destructive Modal (sm) NAMING the
 // token, with a rose-tint danger callout that spells out the consequence in
 // text (never colour-only), and a danger primary action. On success the parent
-// flips the row to the muted "Revoked" state optimistically from the returned
-// DTO (the inline-edit-no-tree-refresh contract).
+// REMOVES the row optimistically (MOTIR-3546 — revoking deletes it), which is
+// what makes this modal's own promise ("can't be undone") literally true.
 export function RevokeTokenDialog({
   token,
   onClose,
@@ -21,7 +21,7 @@ export function RevokeTokenDialog({
 }: {
   token: ApiTokenDto;
   onClose: () => void;
-  onRevoked: (revoked: ApiTokenDto) => void;
+  onRevoked: (revokedId: string) => void;
 }) {
   const t = useTranslations('settings.apiTokens');
   const { toast } = useToast();
@@ -30,8 +30,8 @@ export function RevokeTokenDialog({
   async function confirm() {
     setRevoking(true);
     try {
-      const revoked = await revokeToken(token.id);
-      onRevoked(revoked);
+      await revokeToken(token.id);
+      onRevoked(token.id);
     } catch {
       toast({
         variant: 'error',

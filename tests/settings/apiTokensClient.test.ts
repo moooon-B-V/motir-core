@@ -100,16 +100,17 @@ describe('createToken', () => {
 });
 
 describe('revokeToken', () => {
-  it('DELETEs the encoded id and returns the updated row', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ token: { id: 'tok 1', revokedAt: '2026-08-10T00:00:00.000Z' } }),
-    });
-    const row = await revokeToken('tok 1');
+  it('DELETEs the encoded id and reads no body back', async () => {
+    // The route answers 204 with no body (MOTIR-3546): the row is gone, so
+    // there is no DTO to return and nothing to unwrap. A `json()` here would
+    // throw on an empty body, so asserting the helper never calls it is the
+    // assertion that would fail if someone reinstated the parse.
+    const json = vi.fn();
+    fetchMock.mockResolvedValue({ ok: true, status: 204, json });
+    await expect(revokeToken('tok 1')).resolves.toBeUndefined();
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/me/api-tokens/tok%201');
     expect(fetchMock.mock.calls[0]![1]).toEqual({ method: 'DELETE' });
-    // The response is UNWRAPPED — the island stores the row, not the envelope.
-    expect(row).toMatchObject({ id: 'tok 1' });
+    expect(json).not.toHaveBeenCalled();
   });
 
   it('raises the typed code on refusal', async () => {

@@ -148,14 +148,24 @@ prefix for secret scanners). Motir keeps its coloured personality (peach
     (peach, `--el-text-strong`, AA — finding #35); never-expiring reads "Never".
   - **Actions** — a square icon `Button` (ghost, `trash-2`, hover →
     `--el-danger`) with `aria-label` "Revoke token {label}", opening panel 6.
-  - **Revoked row** — muted cells (`--el-text-faint`) + a `Pill tone="neutral"`
-    "Revoked" instead of the revoke button (the soft-revoke row stays for audit;
-    7.8.1's `revokedAt`). Sorted after live tokens.
+  - **⚠️ There is NO revoked row (MOTIR-3546).** **Revoking DELETES the token**,
+    so the table holds live credentials only and every row keeps its revoke
+    control. This replaces the original spec — a muted row carrying a
+    `Pill tone="neutral"` "Revoked" _instead of_ the revoke button, sorted below
+    the live tokens, kept "for audit". There was no audit reader: nothing read
+    `revokedAt` but `verify` and this table, so dead rows accumulated for the
+    life of an account on the surface whose job is to answer _which of my
+    credentials are live_ — and because the pill took the Actions cell, the one
+    row a reader wanted gone was the one row with no way to remove it. The
+    mirror this surface is drawn against already works this way: Atlassian
+    (named above) _"permanently remove[s] it from your account"_ on revoke. An
+    **expired** token is a different thing and is still listed, with its muted
+    date and a working revoke button.
 
 The list is a **client island** (`'use client'`): create / revoke are optimistic
 in-place mutations (the page-state-after-mutation contract — the island owns its
-state via `useState(initialTokens)`, doing its own optimistic insert / mark-
-revoked, NOT a `router.refresh()` it can't see). The page server-reads the
+state via `useState(initialTokens)`, doing its own optimistic insert on create
+and REMOVING the row on revoke, NOT a `router.refresh()` it can't see). The page server-reads the
 initial list via `apiTokensService.listForUser`.
 
 ## Panel 4 — Create modal
@@ -210,7 +220,9 @@ A destructive `Modal` (`size="sm"`, `title='Revoke "{label}"?'`): a **rose-tint
 danger callout** (`--el-tint-rose`, `--el-text-strong`; `triangle-alert` in
 `--el-danger`) — "Any agent using this token loses access… can't be undone."
 Footer: ghost **Cancel** + **`Button variant="danger"`** "Revoke token"
-(`trash-2`). On confirm the row optimistically flips to the muted revoked state.
+(`trash-2`). On confirm the row is REMOVED from the table optimistically
+(MOTIR-3546) — which is what makes this modal's own "can't be undone" literally
+true rather than nearly true.
 
 ## Panel 7 — Empty state
 
@@ -237,7 +249,7 @@ config now — it won't be shown again." Fired from the shown-once Copy handler.
 - **`settings.apiTokens`** — `heading`, `subtitle`, `card.{title,subtitle}`,
   `create` ("Create token"), `columns.{label,token,created,expires,lastUsed,
 actions}`, `expiresIn` ("in {n} days"), `expiresNever`, `lastUsedNever`,
-  `revoked`, `revokeAria`, `create.{title,description,labelField,labelHelper,
+  `revokeAria`, `create.{title,description,labelField,labelHelper,
 expiresField,expiresHelper,submit,cancel}`, `expiry.{d30,d90,d365,never}`,
   `created.{title,description,secretLabel,copy,warning,done}`,
   `revokeConfirm.{title,body,confirm,cancel}`, `empty.{title,body,guideLink}`,
@@ -258,7 +270,7 @@ expiresField,expiresHelper,submit,cancel}`, `expiry.{d30,d90,d365,never}`,
   `-elevated`, `--spacing-card-padding` / `-control-*` / `-input-*` / `-chip-*` /
   `-icon-btn`, `--height-control` / `-input` / `-btn-*`) — no Tier-0 scale, no raw
   `rounded-md` / `p-1` / `h-9`. `rounded-full` only on the avatar / switch track.
-- **Not colour-alone** (finding #35): the expiring / revoked chips carry text;
+- **Not colour-alone** (finding #35): the expiring chip carries text;
   callouts pair tint + icon + copy; the revoke button is icon + `aria-label`; the
   "Soon" nav rows carry a text chip, not just muting.
 - **A11y**: the rail nav is grouped `SidebarSection`s; switches = `role="switch"`
@@ -508,8 +520,8 @@ disclosure, and the binding-scope picker.
    hand-minted token names its PROJECT, the `motir login` credential names its
    WORKSPACE and adds _"Every project your roles reach"_. Without that line the
    column reads as an inconsistency rather than two kinds of credential — and
-   every pre-change token is the workspace shape, so the revoked legacy row
-   reads correctly too. Summary Pill (Full access /
+   every pre-change token is the workspace shape, so a legacy row reads
+   correctly too. Summary Pill (Full access /
    Standard / Read only / Custom) and the "Can delete" chip are **kept, not
    re-decided**: at six keys a cell could nearly list them, but a cell that grows
    with the catalog breaks the day the catalog grows, and the four words read
@@ -533,8 +545,9 @@ this pass, because the AC asks for it and the AST ink guard cannot see CSS:
   `--el-text-faint` → `--el-text-secondary`. Faint measures **2.61** on the white
   modal and these are all INFORMATIONAL text (a domain heading, a nav section, an
   area eyebrow, a column heading), not decoration. Faint survives only on
-  `.panel-label` (asset chrome, not product UI), `.nav-row.soon` and
-  `.ttable tr.revoked` (disabled / inactive, which 1.4.3 exempts).
+  `.panel-label` (asset chrome, not product UI) and `.nav-row.soon` (disabled /
+  inactive, which 1.4.3 exempts). The third site, `.ttable tr.revoked`, went with
+  the revoked row itself (MOTIR-3546).
 - `.scope-desc` stays `--el-text-muted` — **4.54 on the white modal panel**, which
   is where it renders. Inside `.scope-danger` it is already overridden to
   `--el-text-strong` on the rose tint.
@@ -687,8 +700,9 @@ The list (`ApiTokensManager`, Panel 3 of 7.7.2) gains a **Scopes** column betwee
   danger-zone emphasis.
 - A **chevron `disclose` button** (`chevron-down`, `--radius-control`,
   `aria-expanded`) expands the row.
-- **Revoked rows** show the muted summary only (no chevron) — consistent with the
-  7.7.2 revoked-row muting.
+- **Every row gets the chevron.** The earlier carve-out — _revoked rows show the
+  muted summary only_ — went with the revoked row itself (MOTIR-3546): revoking
+  deletes the token, so there is no muted row left to except.
 
 ## Panel 5 — expanded scope detail
 

@@ -53,13 +53,21 @@ export interface CreateApiTokenInput {
 }
 
 export const apiTokenRepository = {
-  /** A user's tokens across ALL their workspaces, newest first — the
+  /** A user's LIVE tokens across ALL their workspaces, newest first — the
    * account-level settings list (bug 7.21: each row carries its bound workspace
    * + org so the list labels it). Runs under `withUserContext`, so RLS already
-   * narrows to the owner. */
+   * narrows to the owner.
+   *
+   * ⚠️ The `revokedAt: null` predicate is the LIST half of the same transition
+   * guard `verify` carries (MOTIR-3546), and it goes with the column. Revoking
+   * deletes the row, so in the steady state no row can match — but the OLD
+   * image still stamps `revoked_at` for the length of a rolling release, and
+   * without this a user who revoked a token on an old machine and then landed
+   * on a new one would see the dead row listed as live. That is the exact
+   * defect this card removes, so it must not reappear in the deploy window. */
   async findByUser(userId: string, tx: Prisma.TransactionClient): Promise<ApiTokenWithScope[]> {
     return tx.apiToken.findMany({
-      where: { userId },
+      where: { userId, revokedAt: null },
       orderBy: { createdAt: 'desc' },
       include: SCOPE_INCLUDE,
     });
@@ -95,19 +103,18 @@ export const apiTokenRepository = {
     return tx.apiToken.create({ data: input, include: SCOPE_INCLUDE });
   },
 
-  /** Soft-revoke: stamp `revokedAt`, leaving the row for the audit trail.
-   * Returns the row with its bound workspace + org so the service maps the
-   * scoped DTO. Required `tx`. */
-  async revoke(
-    tokenId: string,
-    revokedAt: Date,
-    tx: Prisma.TransactionClient,
-  ): Promise<ApiTokenWithScope> {
-    return tx.apiToken.update({
-      where: { id: tokenId },
-      data: { revokedAt },
-      include: SCOPE_INCLUDE,
-    });
+  /** Revoke: DELETE the row (MOTIR-3546). Revocation used to stamp `revokedAt`
+   * and leave the row "for the audit trail" — a trail nothing ever read, on the
+   * one surface whose job is to answer *which of my credentials are live*. The
+   * credential list now holds only live credentials, which is what this
+   * surface's own mirror does (`design/settings/design-notes.md`).
+   *
+   * Deleting is safe here and was checked before it was chosen: `api_token` is
+   * a leaf (no migration carries a `REFERENCES "api_token"`), and the RLS
+   * policy `api_token_owner_or_system` is `FOR ALL`, so an owner DELETE is
+   * already permitted without a policy change. Required `tx`. */
+  async remove(tokenId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.apiToken.delete({ where: { id: tokenId } });
   },
 
   /** Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. */

@@ -194,7 +194,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         label: 'rev',
         fixedGrant: DEFAULT_TOKEN_GRANT,
       });
-      await apiTokensService.revoke(fx.ownerId, revoked.dto.id);
+      await apiTokensService.deleteToken(fx.ownerId, revoked.dto.id);
       expect(await whoamiSucceeds(revoked.token)).toBe(false);
 
       // expired

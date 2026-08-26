@@ -656,10 +656,6 @@
       .ttable .meta.muted {
         color: var(--el-text-secondary);
       }
-      .ttable tr.revoked td .label,
-      .ttable tr.revoked td .meta {
-        color: var(--el-text-secondary);
-      }
       .code-chip {
         font-family: var(--font-mono);
         font-size: 12px;
@@ -1569,7 +1565,8 @@
     <!-- ════════════ PANEL 3 — Security & access pane (API tokens) ════════════ -->
     <div class="panel-label">
       3 · Security &amp; access pane — the API tokens card + table inside the area (a live token, an
-      expiring-soon token with the peach chip, and a revoked token shown muted). Rail: API tokens
+      expiring-soon token with the peach chip, and an EXPIRED one — every listed token is live and
+      every row keeps its revoke control; revoking DELETES the row, MOTIR-3546). Rail: API tokens
       active. This is the 7.8.3 surface.
     </div>
     <div class="panel">
@@ -1690,13 +1687,17 @@
                           </button>
                         </td>
                       </tr>
-                      <tr class="revoked">
+                      <tr>
                         <td><span class="label">old-ci-runner</span></td>
                         <td><span class="code-chip">motir_pat_M4tT…</span></td>
                         <td><span class="meta muted">02 Apr 2026</span></td>
-                        <td><span class="meta muted">—</span></td>
                         <td><span class="meta muted">14 May 2026</span></td>
-                        <td class="right"><span class="pill pill--neutral">Revoked</span></td>
+                        <td><span class="meta muted">14 May 2026</span></td>
+                        <td class="right">
+                          <button class="icon-btn" aria-label="Revoke token old-ci-runner">
+                            <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          </button>
+                        </td>
                       </tr>
                     </tbody>
                   </table>

@@ -2513,8 +2513,13 @@ do through the web UI in that user's active workspace — no more, no less.
   90 days is a reasonable default for an agent you re-provision periodically.
 - **Revoke on leak — instantly.** Revoking a token from Settings → Account → Tokens
   is instant: the very next tool call with that token fails the bearer
-  gate with a 401. Revocation is a soft-revoke (the row is kept for the audit
-  trail, stamped `revokedAt`).
+  gate with a 401. Revocation **DELETES the token row** (MOTIR-3546) — the list
+  holds live credentials only. It used to be a soft revoke that stamped
+  `revokedAt` and kept the row "for the audit trail"; nothing ever read that
+  trail, so the row stayed in the owner's list for ever with no way to remove
+  it. The 401 is undifferentiated either way: a revoked, expired, unknown or
+  malformed token are all one `unauthenticated`, deliberately
+  (`docs/decisions/public-api-conventions.md`).
 - **Tokens are stored only as a SHA-256 hash.** Motir persists the hash plus a
   short display prefix — never the plaintext. A database read cannot reveal a
   usable token.

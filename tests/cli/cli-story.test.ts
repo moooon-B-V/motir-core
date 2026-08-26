@@ -363,7 +363,7 @@ describe('auth + linking', () => {
   it('rejects a REVOKED token — the same uniform auth failure as an invalid one', async () => {
     const fx = await makeWorkItemFixture();
     const { token, id } = await mintToken(fx);
-    await apiTokensService.revoke(fx.ownerId, id);
+    await apiTokensService.deleteToken(fx.ownerId, id);
 
     const login = await ws.run(['auth', 'login', '--server', server.url, '--token', token]);
 

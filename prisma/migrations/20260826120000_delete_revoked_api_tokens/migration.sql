@@ -1,0 +1,34 @@
+-- MOTIR-3546 — remove every revoked API token from the database.
+--
+-- Revocation used to SOFT-delete: it stamped `revoked_at` and left the row
+-- "for the audit trail". There is no audit trail. Nothing in the product ever
+-- read `revoked_at` except `verify` (to reject the token) and the settings list
+-- (to render a muted "Revoked" row in place of that row's delete button), so
+-- the rows accumulated for the life of an account on the one surface whose job
+-- is to answer *which of my credentials are live*.
+--
+-- Revocation now DELETEs. This clears what the old behaviour left behind.
+--
+-- ⚠️ THIS DELETES ROWS, AND THAT IS THE POINT — but it is worth being precise
+-- about what is destroyed. Every row it removes is a credential that ALREADY
+-- could not authenticate: `verify` has thrown `ApiTokenRevokedError` on each of
+-- them since the moment it was stamped. No live credential matches this
+-- predicate, so nothing that works today stops working.
+--
+-- Safe to run against the live tenant, and checked before it was written:
+--   * `api_token` is a LEAF — no migration in this repository carries a
+--     `REFERENCES "api_token"`, so no dependent row is cascaded away.
+--   * the RLS policy `api_token_owner_or_system` is `FOR ALL`, and a migration
+--     runs as the owner, so the DELETE needs no policy change.
+--
+-- ⚠️ THE COLUMN IS DELIBERATELY NOT DROPPED HERE. `fly.toml`'s `[deploy]
+-- release_command` runs migrations in a temporary machine BEFORE any new
+-- machine takes traffic, so for the length of a rolling release the OLD image
+-- is still serving. Prisma emits explicit column lists, so dropping
+-- `revoked_at` in this migration would make every `api_token` read on those
+-- machines fail with `column does not exist` — including `findByTokenHash`,
+-- which is the bearer gate for `/api/v1`, the MCP surface and every dispatched
+-- agent. Expand/contract: this migration stops the column mattering, and a
+-- follow-up drops it once the new image is everywhere.
+
+DELETE FROM "api_token" WHERE "revoked_at" IS NOT NULL;

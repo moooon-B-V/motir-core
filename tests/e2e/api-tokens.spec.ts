@@ -53,7 +53,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('create → shown-once copy → revoke → revoked render', async ({ page }) => {
+test('create → shown-once copy → revoke → the row is GONE', async ({ page }) => {
   await signUp(page, 'tokens-e2e@example.com');
   await createFirstProject(page, 'Tokens E2E');
 
@@ -144,7 +144,7 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
   // The full secret is irretrievable after close — only the prefix remains.
   await expect(page.getByText(secretText, { exact: true })).toHaveCount(0);
 
-  // REVOKE — confirm, wait on the DELETE, then the row flips to muted "Revoked".
+  // REVOKE — confirm, wait on the DELETE, then the row LEAVES the table.
   await row.getByRole('button', { name: 'Revoke token claude-code' }).click();
   const revokeDialog = page.getByRole('dialog');
   await expect(revokeDialog.getByRole('heading', { name: 'Revoke "claude-code"?' })).toBeVisible();
@@ -153,9 +153,24 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
     (r) => /\/api\/me\/api-tokens\/[^/]+$/.test(r.url()) && r.request().method() === 'DELETE',
   );
   await revokeDialog.getByRole('button', { name: 'Revoke token', exact: true }).click();
-  expect((await revokeResp).status()).toBe(200);
+  expect((await revokeResp).status()).toBe(204);
 
-  await expect(page.getByRole('row', { name: /claude-code/ }).getByText('Revoked')).toBeVisible();
+  // ── The row is REMOVED, not muted (MOTIR-3546) ────────────────────────────
+  // This is the assertion that fails against the pre-fix build, where the row
+  // stayed with a neutral "Revoked" pill in place of its delete button — and
+  // stayed for ever, because that pill took the only control that could have
+  // removed it. `toHaveCount(0)` is the whole point: a revoked credential is
+  // not a credential in another state, it is not a credential.
+  await expect(page.getByRole('row', { name: /claude-code/ })).toHaveCount(0);
+  await expect(page.getByText('Revoked')).toHaveCount(0);
+
+  // And it is gone from the SERVER, not just spliced out of the island's own
+  // state — a reload re-reads `listForUser`, so an optimistic-only removal
+  // would put the row back here.
+  await page.reload();
+  await expect(page.getByRole('row', { name: /claude-code/ })).toHaveCount(0);
+  // The empty state returns: this account has no other token.
+  await expect(page.getByRole('heading', { name: 'No tokens yet' })).toBeVisible();
 });
 
 // The expiry half of the create flow (Story 7.7 · Subtask 7.7.12, the

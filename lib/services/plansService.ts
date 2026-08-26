@@ -13,6 +13,10 @@ import {
   type BlockerReadinessState,
 } from '@/lib/workItems/blockerReadiness';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import {
+  planRevisionsService,
+  type PlanRevisionAgentActor,
+} from '@/lib/services/planRevisionsService';
 
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
@@ -1529,6 +1533,37 @@ async function editAddProposal(
         { proposedFields: next as unknown as Prisma.InputJsonValue },
         tx,
       );
+      // The edit, on the plan's content trail (MOTIR-3535), in the same
+      // transaction as the merge it records — and the row this whole story
+      // exists for: `editAddProposal` merges into `proposedFields` IN PLACE, so
+      // without it a proposal deepened five times is byte-indistinguishable from
+      // one written once.
+      //
+      // ⚠️ WHO acted is decided by `expectedStatus`, which is the ONLY thing that
+      // tells the two callers apart and is exactly the right discriminator:
+      // `deepenProposal` edits a `generating` plan and is the generator, so it
+      // takes the generation actor (null on a cadence plan, the agent triple
+      // beside it); `updateProposal` edits a `planned` one and is only ever
+      // reached by a person reviewing it, so it records that person and NO agent.
+      // Reading the plan's `authorSource` for both would file a reviewer's edit
+      // under the agent that wrote what they were reviewing.
+      //
+      // The diff records the fields the edit SUPPLIED, not a value diff: the old
+      // side of a proposal is already gone by the time it is written, and the
+      // timeline shows a count rather than values in any case
+      // (`design/ai-planning/design-notes.md` Part X §5).
+      await planRevisionsService.recordRevision(
+        {
+          planId,
+          planItemId,
+          changeKind: 'edited',
+          ...(expectedStatus === 'generating'
+            ? generationActor(fresh, ctx)
+            : { changedById: ctx.userId, actor: null }),
+          diff: { fields: Object.keys(input), proposalCount: 1 },
+        },
+        tx,
+      );
       const allItems = await planItemRepository.findByPlan(planId, tx);
       return { row: fresh, items: allItems };
     },
@@ -1634,6 +1669,40 @@ function translateApproveTimeout(err: unknown, planId: string, itemCount: number
   throw err;
 }
 
+/**
+ * WHO to record on a plan's content trail (Story MOTIR-3532 · MOTIR-3535), for
+ * the four GENERATION-TIME writes — the open, an append, a deepen, the close.
+ *
+ * Two facts, and they are orthogonal:
+ *
+ *  1. **The acting USER, or null.** The null is the `cadence` case, and it is the
+ *     same abstention `Plan.createdById` documents for itself: the auto-plan
+ *     watcher runs under the PROJECT OWNER's credential so the job has one, and
+ *     `ctx.userId` on that path names somebody who did nothing. Recording them
+ *     would put a person's name on a machine's act, on the one plan whose whole
+ *     point is that nobody asked.
+ *  2. **WHICH AGENT acted**, copied onto the row rather than read off the plan at
+ *     render time. The plan's `authorSource` answers who WROTE the plan; on a
+ *     generation-time write that is also who performed it, which is exactly why
+ *     these four sites may use it — and why the review edit and both decisions
+ *     below may NOT: a person editing or deciding an agent-written plan is a
+ *     different actor from its author, and a row that stores its own cannot come
+ *     to disagree with itself.
+ */
+function generationActor(
+  plan: Pick<Plan, 'origin' | 'authorSource' | 'authorHarness' | 'authorModel'>,
+  ctx: ServiceContext,
+): { changedById: string | null; actor: PlanRevisionAgentActor } {
+  return {
+    changedById: plan.origin === 'cadence' ? null : ctx.userId,
+    actor: {
+      source: plan.authorSource,
+      harness: plan.authorHarness,
+      model: plan.authorModel,
+    },
+  };
+}
+
 export const plansService = {
   /**
    * Open a `generating` Plan — the producer (7.4 generation / 7.11 re-planning)
@@ -1645,10 +1714,16 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<PlanDto> {
     await projectAccessService.assertCanEdit(projectId, ctx);
+    // The trail's own values, resolved ONCE so the row and its revision cannot
+    // disagree about who wrote the plan (MOTIR-3535).
+    const origin = input.origin ?? 'user';
+    const authorSource = input.authorSource ?? null;
+    const authorHarness = normalizeSelfReported(input.authorHarness);
+    const authorModel = normalizeSelfReported(input.authorModel);
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
-      async (tx) =>
-        planRepository.create(
+      async (tx) => {
+        const created = await planRepository.create(
           {
             workspaceId: ctx.workspaceId,
             projectId,
@@ -1660,7 +1735,7 @@ export const plansService = {
             // request-path producer keeps recording a human-initiated plan
             // without passing anything; only the cadence watcher passes
             // `cadence`.
-            origin: input.origin ?? 'user',
+            origin,
             // WHO ASKED for it (MOTIR-2986). EXPLICIT — deliberately NOT
             // `ctx.userId`, which is always present and is the project OWNER's on
             // the cadence path (`autoPlanCadenceService` substitutes it so the
@@ -1681,12 +1756,26 @@ export const plansService = {
             // (`work-item-provenance.md` Decision 2) — trimmed here, empty → null,
             // so a caller sending `""` cannot make the surface render a blank
             // attribution that reads as a value.
-            authorSource: input.authorSource ?? null,
-            authorHarness: normalizeSelfReported(input.authorHarness),
-            authorModel: normalizeSelfReported(input.authorModel),
+            authorSource,
+            authorHarness,
+            authorModel,
           },
           tx,
-        ),
+        );
+        // The trail's first row, in the SAME transaction as the insert it
+        // records (MOTIR-3535). The plan-level acts carry no `planItemId` —
+        // there is no proposal yet, and there never is one for the open.
+        await planRevisionsService.recordRevision(
+          {
+            planId: created.id,
+            changeKind: 'created',
+            ...generationActor({ origin, authorSource, authorHarness, authorModel }, ctx),
+            diff: { title: created.title, summary: created.summary, origin },
+          },
+          tx,
+        );
+        return created;
+      },
     );
     return toPlanDto(row, 0);
   },
@@ -1765,6 +1854,36 @@ export const plansService = {
             };
             await planItemRepository.create(data, tx);
           }
+          // ONE row for the whole batch, in the same transaction (MOTIR-3535).
+          // An append is ONE ACT however many proposals it carries — the reader's
+          // question is "what arrived, and who sent it", not "how many INSERTs
+          // ran" — so the count lives in the diff rather than in the row count.
+          //
+          // ⚠️ EXCEPT AN EMPTY BATCH, WHICH IS NOT A CONTENT MUTATION AT ALL
+          // (MOTIR-3538). The MCP's CLOSE is `add_plan_items { final: true }` with
+          // NO proposals: it goes through here, inserts nothing, and hands off to
+          // `markPlanned` — which writes its own `planned` row. Recording this one
+          // too would put *"0 proposals appended"* on the timeline of every plan
+          // authored through that door, immediately above the close it belongs to.
+          // The trail records what CHANGED; nothing did.
+          if (proposals.length > 0) {
+            await planRevisionsService.recordRevision(
+              {
+                planId,
+                changeKind: 'appended',
+                ...generationActor(fresh, ctx),
+                diff: {
+                  proposalCount: proposals.length,
+                  ops: {
+                    add: proposals.filter((p) => p.op === 'add').length,
+                    modify: proposals.filter((p) => p.op === 'modify').length,
+                    remove: proposals.filter((p) => p.op === 'remove').length,
+                  },
+                },
+              },
+              tx,
+            );
+          }
           const allItems = await planItemRepository.findByPlan(planId, tx);
           return { row: fresh, items: allItems };
         },
@@ -1822,6 +1941,18 @@ export const plansService = {
           tx,
         );
         const n = await planItemRepository.countByPlan(planId, tx);
+        // The close, on the trail (MOTIR-3535) — the moment the plan stopped
+        // moving and became something a person is asked to read. The count is
+        // what that person is being asked to approve.
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: 'planned',
+            ...generationActor(fresh, ctx),
+            diff: { itemCount: n, ...(productName != null ? { productName } : {}) },
+          },
+          tx,
+        );
         return { row: updated, count: n };
       },
     );
@@ -2271,6 +2402,28 @@ export const plansService = {
             { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
             tx,
           );
+          // The approval, on the plan's content trail (MOTIR-3535), inside the
+          // very transaction that materialized the tree — so a rolled-back
+          // approve (the in-transaction status re-read rejecting, or the budget
+          // expiring) leaves no row claiming it happened.
+          //
+          // A decision is always a PERSON's: `ai:decide_plan` has no machine
+          // path, so the row records the decider and NO agent triple, however the
+          // plan itself was written. `touchedWorkItemCount` is what the approve
+          // actually did to the tree, which is the fact `itemCount` alone cannot
+          // give (a plan of `remove`s materializes none).
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              changeKind: 'approved',
+              changedById: ctx.userId,
+              diff: {
+                itemCount: proposals.length,
+                touchedWorkItemCount: touchedWorkItemIds.length,
+              },
+            },
+            tx,
+          );
           // Re-read so the returned items carry the written-back work-item ids.
           const finalItems = await planItemRepository.findByPlan(planId, tx);
           return {
@@ -2448,6 +2601,20 @@ export const plansService = {
         // has no items while `listPlans` (which counts through
         // `countByPlanIds`) says otherwise (MOTIR-3160).
         const n = await planItemRepository.countByPlan(planId, tx);
+        // The ending, on the trail (MOTIR-3535). A decision is always a PERSON's
+        // — `ai:decide_plan` has no machine path — so it records the decider and
+        // no agent triple, however the plan itself was written. The reason is the
+        // same one the row stores, so the timeline can tell the three histories
+        // `declined` covers apart without re-deriving them (MOTIR-3189).
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: 'declined',
+            changedById: ctx.userId,
+            diff: { itemCount: n, decisionReason: updated.decisionReason },
+          },
+          tx,
+        );
         return { row: updated, count: n };
       },
     );

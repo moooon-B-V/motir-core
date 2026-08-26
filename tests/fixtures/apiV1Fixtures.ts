@@ -39,7 +39,7 @@ export interface V1Caller {
   workspace: Workspace;
   /** The plaintext secret — returned ONCE by the service, as in production. */
   token: string;
-  /** The token row's id, for `apiTokensService.revoke`. */
+  /** The token row's id, for `apiTokensService.deleteToken`. */
   tokenId: string;
   /** `Authorization: Bearer …` ready to spread into a fetch/Request init. */
   headers: Record<string, string>;

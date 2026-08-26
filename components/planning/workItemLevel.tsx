@@ -182,6 +182,31 @@ export function buildWorkItemLevel(
   const anchorAdded = new Set<string>();
 
   for (const e of wi.edges) {
+    // THIS LEVEL'S EDGES ARE THE ONES WHOSE BLOCKED END IS DRAWN HERE (bug
+    // MOTIR-3557). The loop below asks only "is the BLOCKER on this level?",
+    // and until the partition above existed that was sufficient BY
+    // CONSTRUCTION: `findBlockedByEdges` selects `fromId IN (level rows)`
+    // (`lib/repositories/workItemLinkRepository.ts`), so every edge in a level
+    // payload already had its blocked end on that level. Grouping is the first
+    // thing that ever moves a row OFF a level after the read, and it broke the
+    // guarantee in both directions at once:
+    //
+    //  - at the ROOT, an edge into a row that was just grouped now points at a
+    //    node nobody draws — and its blocker still minted a ghost anchor, so a
+    //    grouped card reappeared outside the group as a red "blocked elsewhere"
+    //    warning with no arrow attached to it;
+    //  - on the GROUPED level, whose consumer hands over the root's whole edge
+    //    list, EVERY root epic became an off-level blocker — 12 of them on
+    //    Motir's own tree — and none is in `offLevelBlockers` (an epic is ON the
+    //    root level), so each drew as an ANONYMOUS anchor: `—` over the
+    //    "Blocked across stories" fallback, chained to the other epics by the
+    //    epic roadmap's own dependency graph.
+    //
+    // Restoring the missing half of the test HERE, rather than at either call
+    // site, is what makes the property the code's own again: the next feature
+    // that re-partitions a level — a filter, a collapse, a kind lens — inherits
+    // it instead of re-opening this defect in a third place.
+    if (!itemIds.has(e.blockedId)) continue;
     if (itemIds.has(e.blockerId)) {
       // within-level: a normal arrow (firm once the blocker is done).
       deps.push({

@@ -113,7 +113,7 @@ describe('verifyMcpToken', () => {
       label: 'revoked',
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
-    await apiTokensService.revoke(fx.ownerId, dto.id);
+    await apiTokensService.deleteToken(fx.ownerId, dto.id);
     expect(await verifyMcpToken(reqWithBearer(), token)).toBeUndefined();
   });
 
