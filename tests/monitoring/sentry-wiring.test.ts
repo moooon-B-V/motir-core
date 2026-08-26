@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MONITORING_TUNNEL_ROUTE } from '@/lib/monitoring/config';
@@ -135,6 +136,30 @@ describe('the BUILD-ARGUMENT seam exists, because a NEXT_PUBLIC_* value cannot b
     expect(deploy).toContain('/releases/$GITHUB_SHA/');
     expect(deploy).toMatch(/::error::Sentry has no release named/);
     expect(deploy).toMatch(/exit 1/);
+  });
+});
+
+describe("the source-map uploader's CLI binary is present without its postinstall", () => {
+  it('resolves to a file on disk', () => {
+    // `pnpm-workspace.yaml` sets `'@sentry/cli': false`, so its postinstall does
+    // not run. That is correct — the script is a CDN FALLBACK that exits 0 the
+    // moment the per-platform optional package resolves — but the failure mode
+    // if it ever stops being correct is SILENT: no binary means source maps do
+    // not upload, and a deploy with unreadable stack traces looks exactly like a
+    // healthy one. `@sentry/bundler-plugin-core` even ships a
+    // `sentryCliBinaryExists()` helper for this, whose comment says post-install
+    // scripts "may not always run".
+    //
+    // Resolved the way the upload path resolves it — from the plugin's own
+    // module — rather than from this test's directory, so a hoisting change
+    // cannot make it pass against a copy the uploader never sees.
+    const fromNextSdk = createRequire(require.resolve('@sentry/nextjs/package.json'));
+    const fromPluginCore = createRequire(fromNextSdk.resolve('@sentry/bundler-plugin-core'));
+    const SentryCli = fromPluginCore('@sentry/cli') as { getPath(): string };
+
+    const binary = SentryCli.getPath();
+    expect(binary).toContain('sentry-cli');
+    expect(existsSync(binary), `sentry-cli is not at ${binary}`).toBe(true);
   });
 });
 

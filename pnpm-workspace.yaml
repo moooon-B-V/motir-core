@@ -34,3 +34,23 @@ allowBuilds:
   # timeout flake). As a pinned devDependency the binary is fetched once at
   # install time (outside any timeout) and cached via the pnpm store.
   inngest-cli: true
+  # @sentry/cli's postinstall is a FALLBACK DOWNLOADER, and in this tree it is a
+  # verified no-op — so `false` silences pnpm's ERR_PNPM_IGNORED_BUILDS gate
+  # without withholding anything (MOTIR-1162). It arrives as a dependency of
+  # @sentry/bundler-plugin-core, which the Next SDK uses to upload source maps.
+  #
+  # The binary does NOT come from that script. It comes from one of eight
+  # per-platform OPTIONAL dependencies (`@sentry/cli-linux-x64` on CI,
+  # `@sentry/cli-linux-arm64` on this box) — plain files, no build step — and all
+  # eight are in the lockfile, so pnpm installs the right one on either arch. The
+  # last lines of `scripts/install.js` are explicit about it: it
+  # `require.resolve`s the platform package and `process.exit(0)`s when that
+  # succeeds, downloading from the Sentry CDN only when optional dependencies
+  # were skipped (`--no-optional` and friends).
+  #
+  # ⚠️ Getting this wrong would be SILENT — a missing binary means source maps
+  # simply do not upload, and a deploy with unreadable stack traces looks exactly
+  # like a healthy one. So it is not left to the argument above:
+  # `tests/monitoring/sentry-wiring.test.ts` resolves the binary the way the
+  # upload path does and asserts it exists on disk.
+  '@sentry/cli': false
