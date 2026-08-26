@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { twoFactorService } from '@/lib/services/twoFactorService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import {
@@ -375,32 +376,22 @@ export const auth = betterAuth({
         // Unlike the recovery codes above, the emailed code IS hashed at rest:
         // it is a single value compared once, so nothing needs to read it back.
         storeOTP: 'hashed',
-        // ENQUEUE the send, exactly as sendResetPassword does above — the
-        // provider call belongs in the durable `email.send` job, not on the
-        // request the user is waiting on at the challenge screen. The body is
-        // lib/emailTemplates/twoFactorOtp.tsx (MOTIR-1219); no email strings
-        // live in this wiring layer, per CLAUDE.md.
+        // The plugin has already generated and persisted the hashed challenge
+        // by the time this runs, so the send is a post-commit side effect in
+        // its ordinary shape. `dispatchOtpEmail` ENQUEUES onto the durable
+        // `email.send` job (MOTIR-1218) rather than calling the provider, so a
+        // slow or down provider never touches the request the user is waiting
+        // on — exactly as sendResetPassword does above.
         //
-        //   - workspaceId: null — signing in is identity-scoped, and the user
-        //     has not chosen a workspace yet (the challenge runs BEFORE the
-        //     session exists), so there is no workspace to attribute it to.
-        //     Same call as the password-reset send above.
-        //   - idempotencyKey: the issuance itself. A double-submitted "email me
-        //     a code" that re-fires the SAME code collapses to one delivery;
-        //     asking for a genuinely NEW code produces a new key and a second
-        //     mail, which is what a user pressing "resend" expects.
+        // The composition lives in the SERVICE, not here: CLAUDE.md keeps email
+        // logic out of the wiring layer, and a hook buried in a config literal
+        // is a hook no test can reach.
         sendOTP: async ({ user, otp }) => {
-          await sendEvent('email.send', {
-            workspaceId: null,
-            idempotencyKey: `two-factor-otp:${user.id}:${otp}`,
-            to: user.email,
-            template: 'two-factor-otp',
-            data: {
-              recipientName: user.name || 'there',
-              code: otp,
-              expiresInMinutes: TWO_FACTOR_OTP_PERIOD_MINUTES,
-              locale: await currentLocale(),
-            },
+          await twoFactorService.dispatchOtpEmail({
+            userId: user.id,
+            email: user.email,
+            name: user.name,
+            otp,
           });
         },
       },
