@@ -8,6 +8,30 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
+/**
+ * The LIFECYCLE spine of a timeline (MOTIR-3536).
+ *
+ * The rail's history is one merged sequence since the plan gained a content
+ * trail: an `appended` / `edited` row sits between the lifecycle events wherever
+ * a fixture appended or deepened a proposal. Every assertion below that predates
+ * that merge is a claim about the LIFECYCLE — which of the three endings a
+ * `declined` plan reads as (MOTIR-3189), whether a `planned` event exists at all
+ * — so it keeps making exactly that claim, over exactly those rows, rather than
+ * being widened to absorb whatever the fixture happened to append. The content
+ * rows have their own suite (`planTimelineMerge.test.ts`).
+ */
+const LIFECYCLE_KINDS = new Set([
+  'created',
+  'planned',
+  'approved',
+  'declined',
+  'discarded',
+  'abandoned',
+]);
+function lifecycleKinds(history: { kind: string }[]): string[] {
+  return history.map((h) => h.kind).filter((k) => LIFECYCLE_KINDS.has(k));
+}
+
 // Integration tests for Subtask 7.4.5 / MOTIR-847 — `planReviewService`, the
 // READ assembly behind the plan-detail UI. Real Postgres (no mocks), per
 // CLAUDE.md. Proves the assembly the canvas + review rail bind to:
@@ -116,7 +140,7 @@ describe('planReviewService.getPlanReview', () => {
     expect(remove.targetMissing).toBe(false);
 
     // History: created + planned, no decision yet, no decider.
-    expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned']);
+    expect(lifecycleKinds(review.history)).toEqual(['created', 'planned']);
     expect(review.decidedByName).toBeNull();
   });
 
@@ -761,7 +785,7 @@ describe('planReviewService.getPlanReview', () => {
     expect(review.items).toHaveLength(2);
     expect(review.items.map((i) => i.op).sort()).toEqual(['add', 'modify']);
     expect(review.decidedByName).not.toBeNull();
-    expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'declined']);
+    expect(lifecycleKinds(review.history)).toEqual(['created', 'planned', 'declined']);
     // MOTIR-3189 — a plan a person read and rejected keeps the `declined` event
     // and the original wording. It is the OTHER two endings that had to change.
     expect(review.decisionReason).toBe('reviewed');
@@ -1011,7 +1035,7 @@ describe('planReviewService.getPlanReview', () => {
 
       // No `planned` event: the generation frontier never closed, and the
       // timeline says so by ABSENCE rather than by a back-filled timestamp.
-      expect(review.history.map((h) => h.kind)).toEqual(['created', 'discarded']);
+      expect(lifecycleKinds(review.history)).toEqual(['created', 'discarded']);
       expect(review.plannedAt).toBeNull();
       expect(review.decisionReason).toBe('discarded');
       // A PERSON discarded it, so the decider is named — which is exactly what
@@ -1035,7 +1059,7 @@ describe('planReviewService.getPlanReview', () => {
 
       const review = await planReviewService.getPlanReview(planId, fx.ctx);
 
-      expect(review.history.map((h) => h.kind)).toEqual(['created', 'abandoned']);
+      expect(lifecycleKinds(review.history)).toEqual(['created', 'abandoned']);
       expect(review.decisionReason).toBe('abandoned');
       expect(review.decidedByName).toBeNull();
       expect(review.history.at(-1)!.byName).toBeNull();
@@ -1061,7 +1085,7 @@ describe('planReviewService.getPlanReview', () => {
       const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
 
       expect(review.decisionReason).toBeNull();
-      expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'declined']);
+      expect(lifecycleKinds(review.history)).toEqual(['created', 'planned', 'declined']);
     });
 
     it('an APPROVED plan carries no reason — an approval has one history', async () => {
@@ -1077,7 +1101,7 @@ describe('planReviewService.getPlanReview', () => {
 
       const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
 
-      expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'approved']);
+      expect(lifecycleKinds(review.history)).toEqual(['created', 'planned', 'approved']);
       expect(review.decisionReason).toBeNull();
     });
   });

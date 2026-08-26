@@ -23,6 +23,14 @@ import { isRegisteredDiffKey } from '@/lib/activity/renderers';
 // A computed key (e.g. a template literal `customFields.${key}`) must match a
 // registered PREFIX; any other dynamic key fails the scan outright — "I can't
 // see what you write" is itself a registry gap to resolve, not a pass.
+//
+// ⚠️ SCOPE: the WORK-ITEM revision trail, and only it. `plansService` records
+// into a second, unrelated trail (`plan_revision`, MOTIR-3535) whose payload the
+// plan review rail reads through typed DTO fields and `lib/activity/renderers.ts`
+// never sees. Those `diff:` literals are excluded by CALLEE — see
+// `isPlanTrailDiff` — rather than registered as suppressed, because a suppressed
+// entry asserts the activity feed considered a key and chose to hide it, and the
+// value of this registry is that every entry in it is true.
 
 const SERVICES_DIR = join(__dirname, '../../lib/services');
 
@@ -69,6 +77,42 @@ function computedKeyText(expr: ts.Expression, _source: ts.SourceFile): string | 
   return null;
 }
 
+/**
+ * True when this `diff:` property sits in a call to the PLAN trail's recorder
+ * (Story MOTIR-3532 · MOTIR-3535) rather than the work-item one.
+ *
+ * ⚠️ THIS IS AN EXCLUSION, NOT AN ALLOW-LIST, and the direction is the decision.
+ * The scanner opens any service file mentioning `recordRevision` and reads every
+ * `diff:` literal in it — which was total while `recordRevision` meant one thing.
+ * `plansService` now records into a SECOND, unrelated trail: `plan_revision`,
+ * whose payload is read by the plan review rail through typed DTO fields and
+ * never by `lib/activity/renderers.ts`. Registering its keys there would assert
+ * that the work-item activity feed has a considered disposition for a key that
+ * cannot reach it — a false entry in a registry whose whole value is that every
+ * entry is true.
+ *
+ * Excluding by CALLEE rather than allow-listing `workItemRevisionsService` keeps
+ * the failure direction safe: a third trail added tomorrow is SCANNED and forces
+ * a decision here, loudly. An allow-list would let a genuine work-item writer
+ * that reached the repository by another name pass unseen, which is the failure
+ * this guard exists to prevent.
+ */
+function isPlanTrailDiff(node: ts.Node): boolean {
+  for (let cur: ts.Node | undefined = node.parent; cur; cur = cur.parent) {
+    if (!ts.isCallExpression(cur)) continue;
+    const callee = cur.expression;
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      callee.name.text === 'recordRevision' &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === 'planRevisionsService'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** True when the node sits inside a function bound to the name `set`. */
 function isInsideSetBuilder(node: ts.Node): boolean {
   for (let cur: ts.Node | undefined = node.parent; cur; cur = cur.parent) {
@@ -105,7 +149,8 @@ function scanServiceFile(filePath: string, out: ScanResult): void {
     if (
       ts.isPropertyAssignment(node) &&
       propertyNameText(node.name, source) === 'diff' &&
-      ts.isObjectLiteralExpression(node.initializer)
+      ts.isObjectLiteralExpression(node.initializer) &&
+      !isPlanTrailDiff(node)
     ) {
       for (const prop of node.initializer.properties) {
         if (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) {

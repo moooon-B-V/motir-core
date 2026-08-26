@@ -158,7 +158,7 @@ export function PlanReviewRail({
         </h3>
         <ol className="flex flex-col gap-2">
           {review.history.map((ev) => (
-            <HistoryRow key={ev.kind} ev={ev} t={t} />
+            <HistoryRow key={ev.id} ev={ev} t={t} />
           ))}
           {!decided ? (
             <li className="flex items-center gap-2 text-sm text-(--el-text-secondary)">
@@ -344,16 +344,72 @@ function ReviewAttribution({
   );
 }
 
+/**
+ * WHO a timeline row names (`design/ai-planning/design-notes.md` Part X §4).
+ *
+ * Three actors, one clause, and NO second treatment for any of them:
+ *
+ *  * **a person** — their display name, which is exactly what the shipped
+ *    decision row already renders.
+ *  * **an agent** (`actorSource === 'mcp'`) — the bare HARNESS name. A harness
+ *    name is not a person's name and must not be dressed as one, so it takes no
+ *    avatar, no initial disc and no colour of its own. The 18px disc is the
+ *    human's mark and lives in the header, where one line names one person; on
+ *    this list an unadorned name is a person and a name that is a harness is not.
+ *  * **Motir** (`actorSource === 'native'`) — the product name.
+ *
+ * ⚠️ THE MODEL IS NOT IN THE CLAUSE. Measured while drawing the asset, at the
+ * rail's real 298px text column: `5 proposals appended · Claude Code` is a 36px
+ * row and `… · claude-opus-5` is 56px, so the model costs a second line on every
+ * row — and the header's attribution line carries it once already. It rides the
+ * row's `title` instead, where it costs nothing.
+ *
+ * Null when NOBODY acted as a person and no agent is named: a cadence-originated
+ * mutation has no requester, and the row says so by omitting the clause rather
+ * than by attributing it to the project owner.
+ */
+function actorLabel(ev: PlanHistoryEventDto, t: ReturnType<typeof useTranslations>): string | null {
+  // ⚠️ THE AGENT WINS, and the order is the decision rather than an accident.
+  // An agent authors under a PERSON's credential, so an agent-written row carries
+  // BOTH an acting user and an agent triple — and the four rows of Part X §4's
+  // table are mutually exclusive on `actorSource`, not on whether a name happens
+  // to be present. Reading `byName` first names the TOKEN'S OWNER on every row an
+  // agent wrote, which is precisely the *who wrote it* / *who asked for it*
+  // conflation the header spells out in words to avoid. The requester is on the
+  // header, once; a row says who performed THIS act.
+  if (ev.actorSource === 'mcp' && ev.actorHarness) return ev.actorHarness;
+  if (ev.actorSource === 'native') return t('actorMotir');
+  if (ev.byName) return ev.byName;
+  return null;
+}
+
 function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof useTranslations> }) {
+  // A CONTENT event carries a count; a lifecycle event does not. The label is
+  // the only thing that tells the two apart, and that is the decision — Part X
+  // §2: one sequence, one grammar, and the wording is the discriminator.
+  const label =
+    ev.count === undefined ? t(`event_${ev.kind}`) : t(`event_${ev.kind}`, { n: ev.count });
+  const actor = actorLabel(ev, t);
   return (
     <li className="flex items-start gap-2 text-sm">
       <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-(--el-accent)" aria-hidden="true" />
       <div className="flex min-w-0 flex-col">
-        <span className="text-(--el-text)">
-          {t(`event_${ev.kind}`)}
-          {ev.byName ? <span className="text-(--el-text-muted)"> · {ev.byName}</span> : null}
+        {/* `--el-text-secondary` (6.24:1 on the rail's `--el-surface`), NOT
+            `--el-text-muted` (4.17:1, below AA). The muted token was safe by
+            accident while only the decision row carried a name; it is now on most
+            rows, and `CLAUDE.md`'s measured table is explicit that muted clears AA
+            on the white page only. */}
+        <span className="text-(--el-text)" title={ev.actorModel ?? undefined}>
+          {label}
+          {actor ? <span className="text-(--el-text-secondary)"> · {actor}</span> : null}
         </span>
-        <span className="text-xs text-(--el-text-secondary)">{formatAt(ev.at)}</span>
+        {/* A collapsed RUN reads as a SPAN in the same slot a single event's
+            timestamp uses — no badge, no chip, no second line (Part X §5). */}
+        <span className="text-xs text-(--el-text-secondary)">
+          {ev.until
+            ? t('eventSpan', { from: formatAt(ev.at), to: formatAt(ev.until) })
+            : formatAt(ev.at)}
+        </span>
       </div>
     </li>
   );
