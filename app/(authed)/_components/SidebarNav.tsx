@@ -100,6 +100,21 @@ export interface SidebarNavProps {
    * session (the same `{ name, email }` the TopNav user menu shows).
    */
   user: { name: string; email: string };
+  /**
+   * The active org reveals the WORKSPACE tier (≥2 workspaces the viewer belongs
+   * to — `lib/workspaces/tierDisclosure.ts`). Retargets the no-project settings
+   * door: `/settings/workspace` above the threshold, `/settings/organization`
+   * at or below it, where that page hosts the folded-in workspace sections
+   * (`docs/decisions/organization-tier.md` §6d).
+   *
+   * The Job runs and Git rows below are NOT gated on this and must not be: they
+   * are workspace-SCOPED but not workspace-NAMED, and §6 reveals a tier rather
+   * than relocating every page beneath it.
+   *
+   * Defaults FALSE — an omitted prop points the door at the home that exists at
+   * every count, so a caller that forgets to thread it fails closed.
+   */
+  workspaceTierRevealed?: boolean;
 }
 
 function isActive(pathname: string, match: string): boolean {
@@ -135,6 +150,7 @@ export function SidebarNav({
   variant = 'rail',
   settingsPermissions,
   user,
+  workspaceTierRevealed = false,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -382,8 +398,17 @@ export function SidebarNav({
               label: t('nav.settings'),
               // Deep-link to project settings when a project is active;
               // otherwise there's nothing project-scoped to configure, so go to
-              // workspace.
-              href: hasProject ? PROJECT_SETTINGS_ROOT : '/settings/workspace',
+              // the settings HOME — which one depends on progressive disclosure
+              // (MOTIR-3502 · organization-tier §6d). Below the reveal threshold
+              // the workspace tier is hidden and its sections are folded into
+              // `/settings/organization`, so the door points there. Re-pointed,
+              // not removed: this is the rail's only settings entry with no
+              // active project, and a settings home exists at every count.
+              href: hasProject
+                ? PROJECT_SETTINGS_ROOT
+                : workspaceTierRevealed
+                  ? '/settings/workspace'
+                  : '/settings/organization',
               // Stay un-highlighted when a more-specific workspace-settings
               // sub-link (Job runs / GitHub) is the active route, so only one
               // row reads current.

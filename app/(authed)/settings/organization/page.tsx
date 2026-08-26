@@ -6,6 +6,10 @@ import { Lock } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import {
+  isWorkspaceTierRevealed,
+  scopeWorkspacesToActiveOrg,
+} from '@/lib/workspaces/tierDisclosure';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
@@ -16,7 +20,7 @@ import { billingService } from '@/lib/services/billingService';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
 import { BillingCard } from './_components/BillingCard';
-import { WorkspaceConfigCard } from './_components/WorkspaceConfigCard';
+import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
 import { DangerZoneCard } from './_components/DangerZoneCard';
 
 // Organization settings (Story 6.10.5, design/org-admin panel 2) — the
@@ -69,11 +73,19 @@ export default async function OrganizationSettingsPage() {
     );
   }
 
-  // Counts for the general-card footer + the fold-in card (membership-scoped to
-  // the active org). The workspace fold-in only shows at exactly one workspace.
-  const orgWorkspaces = (await workspacesService.listUserWorkspaces(session.user.id)).filter(
-    (w) => w.organizationId === org.id,
+  // Counts for the general-card footer + the fold-in (membership-scoped to the
+  // active org — the same population the shell's reveal test counts, via the
+  // same helper, so this page and the nav can never disagree about the tier).
+  const orgWorkspaces = scopeWorkspacesToActiveOrg(
+    await workspacesService.listUserWorkspaces(session.user.id),
+    org.id,
   );
+  // §6d: below the reveal threshold `/settings/workspace` does not exist (it
+  // 404s), so this page hosts its sections instead. An org-only member with no
+  // workspace at all has nothing to fold in.
+  const foldInWorkspace = isWorkspaceTierRevealed(orgWorkspaces.length)
+    ? null
+    : (orgWorkspaces[0] ?? null);
   const { total: memberCount } = await organizationsService.listMembers({
     organizationId: org.id,
     actorUserId: session.user.id,
@@ -128,8 +140,12 @@ export default async function OrganizationSettingsPage() {
         canManage={isAdmin}
       />
 
-      {orgWorkspaces.length <= 1 ? (
-        <WorkspaceConfigCard workspaceCount={orgWorkspaces.length} />
+      {foldInWorkspace ? (
+        <WorkspaceFoldInSection
+          workspaceId={foldInWorkspace.id}
+          actorUserId={session.user.id}
+          workspaceCount={orgWorkspaces.length}
+        />
       ) : null}
 
       <DangerZoneCard />

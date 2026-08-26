@@ -37,9 +37,18 @@ const ADMIN = [...BUILTIN_ROLE_PERMISSIONS.admin];
 const MEMBER = [...BUILTIN_ROLE_PERMISSIONS.member];
 const VIEWER = [...BUILTIN_ROLE_PERMISSIONS.viewer];
 
-function renderRail(permissions?: readonly PermissionKey[], project: ProjectDTO | null = PROJECT) {
+function renderRail(
+  permissions?: readonly PermissionKey[],
+  project: ProjectDTO | null = PROJECT,
+  workspaceTierRevealed = false,
+) {
   return renderWithIntl(
-    <SidebarNav activeProject={project} settingsPermissions={permissions} user={USER} />,
+    <SidebarNav
+      activeProject={project}
+      settingsPermissions={permissions}
+      user={USER}
+      workspaceTierRevealed={workspaceTierRevealed}
+    />,
   );
 }
 
@@ -86,12 +95,21 @@ describe('the Project settings door (design panel 1)', () => {
     expect(settingsRow()).toBeNull();
   });
 
-  it('with NO active project the row survives and still targets workspace settings', () => {
+  it('with NO active project the row survives and targets the settings HOME', () => {
     // Untouched by this story: workspace settings are governed by the workspace
     // role, and `settingsPermissions` is empty in this state anyway — gating on
     // it would hide a door this story has no business touching.
-    renderRail(undefined, null);
+    //
+    // WHICH home became conditional in MOTIR-3502 (organization-tier §6d): the
+    // workspace area above the tier-reveal threshold, the org settings home at
+    // or below it, where the folded-in workspace sections live. The door itself
+    // survives at every count, which is what this case has always asserted.
+    renderRail(undefined, null, true);
     expect(settingsRow()?.getAttribute('href')).toBe('/settings/workspace');
+
+    cleanup();
+    renderRail(undefined, null, false);
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/organization');
   });
 });
 
