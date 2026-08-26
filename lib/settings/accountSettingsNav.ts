@@ -1,4 +1,4 @@
-import { Bell, KeyRound, Languages, Palette, User } from 'lucide-react';
+import { Bell, KeyRound, Languages, Palette, ShieldCheck, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The account-settings navigation REGISTRY (Story 7.8 · Subtask 7.8.12) — ONE
@@ -115,6 +115,21 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
     // 7.8.2 reserved this as a "Soon" placeholder; flipping it to a real entry
     // here keeps the route↔registry totality test green by construction (the new
     // pane has an on-disk route now), exactly as 7.8.3 did for API tokens.
+  },
+  {
+    id: 'twoFactor',
+    group: 'security',
+    href: '/settings/account/security',
+    icon: ShieldCheck,
+    labelKey: 'twoFactor',
+    // Story 8.11 (MOTIR-1213) · Subtask MOTIR-1220. FIRST in the Security group,
+    // above API tokens: the registry renders in declaration order and a second
+    // factor is the more consequential of the two things this group holds.
+    //
+    // This row is the pane's ONLY door — `design/settings/two-factor.mock.html`
+    // draws it active in three panels, and the access-path gate is why. Adding it
+    // together with its route keeps the route↔registry totality test green by
+    // construction, exactly as 7.8.3 did for API tokens and 7.3.58 for Appearance.
   },
   {
     id: 'apiTokens',

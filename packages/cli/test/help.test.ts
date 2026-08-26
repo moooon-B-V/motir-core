@@ -110,8 +110,8 @@ describe('the curated overview', () => {
         logout [options]          Disconnect this terminal: remove the stored token
                                   for a server.
         auth                      Authenticate to a Motir server with a PAT.
-        link [options]            Bind this workspace-root folder to a server +
-                                  workspace + project.
+        link [options]            Bind this workspace-root folder to a project, and
+                                  clone the repositories it is missing.
         doctor [options]          Preflight your BYOK setup: auth, project link, agent
                                   binary, credential presence.
 

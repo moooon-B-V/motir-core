@@ -258,6 +258,11 @@ export const V1_COLLECTIONS = [
   'backlog',
   'sprintWorkItems',
   'ready',
+  // A project's REPOSITORY SET (Story MOTIR-3584 · MOTIR-3586). Its position is
+  // a bare row id, structurally identical to `backlog`'s and
+  // `sprintWorkItems`' — which is exactly why the collection SCOPE, not the
+  // shape, is what keeps the three cursors apart.
+  'projectRepositories',
   // Story 11.7's activity read, ONE NAME PER VIEW. The three views page over
   // different sources — the `all` view's cursor is an OPAQUE COMPOSITE carrying
   // both positions — so a cursor issued for one view and handed to another must

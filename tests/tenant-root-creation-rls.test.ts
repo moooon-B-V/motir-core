@@ -225,6 +225,16 @@ describe('RLS coverage across the public schema', () => {
       verification: 'short-lived auth tokens, consumed before any context',
       device_code: 'CLI device-authorisation grants, pre-authentication by design',
       email_change_request: 'a pending email change, keyed to the user not a tenant',
+      // Two-factor enrolment material (MOTIR-1217). Two reasons, and the first
+      // alone is decisive: there is NO tenant discriminator to guard by — 2FA is
+      // a property of the person, so a user in four workspaces has one secret
+      // and a user in none can still enrol. And it is read on the LOGIN
+      // CHALLENGE, which runs after the password step and before a session
+      // exists, so no `app.workspace_id` GUC is bound and a policy reading one
+      // would hide the row from its only legitimate reader. Both secrets in the
+      // table are symmetric-encrypted before insert. Restated in the table's
+      // migration header and its `schema.prisma` doc comment.
+      two_factor: 'per-user 2FA secrets, read pre-session on the login challenge',
       // User-scoped preference rows: keyed to the USER, who spans workspaces.
       notification_preference: 'per-user preference, deliberately cross-workspace',
       user_appearance_preference: 'per-user preference, deliberately cross-workspace',

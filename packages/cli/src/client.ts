@@ -18,6 +18,7 @@ import {
   toCommentsPage,
   toProjectList,
   toReadyPage,
+  toProjectRepositoryList,
   toSprintList,
   toWhoami,
   toWorkItemDetail,
@@ -117,6 +118,50 @@ export interface SprintSummary {
 
 export interface SprintList {
   sprints: SprintSummary[];
+}
+
+/**
+ * One repository of a project's set, as `/api/v1/…/repositories` reports it
+ * (Story MOTIR-3584 · MOTIR-3586) — everything a client needs to FIND and CLONE
+ * one, and nothing about the establish step that produced it.
+ *
+ * ⚠️ EVERY COORDINATE IS NULLABLE, for TWO different reasons, and a consumer
+ * must not collapse them:
+ *
+ *   * the row names no repository yet (a `proposed` row) — `established: false`;
+ *   * it names one whose PROVIDER this build cannot address — `established:
+ *     true`, and `cloneUrl` alone is null.
+ *
+ * `established` is the discriminator to branch on: it is the server's own
+ * two-part rule (`state` is `created` or `connected` AND the repository is still
+ * connected), published so a client never re-derives it and drifts from what
+ * dispatch resolves a checkout with.
+ *
+ * `name` is the CHECKOUT key — the host's own casing, which is what a
+ * `targetRepo` pin stores and what `resolveRepo` keys `<root>/<name>` on. It is
+ * NOT the row's authored name.
+ */
+export interface ProjectRepository {
+  /** The `project_repository` row's id — the value a work item's
+   *  `targetRepositories` names, so the two can be matched up. */
+  id: string;
+  role: string;
+  /** What distinguishes two rows of a repeated role, or null. */
+  label: string | null;
+  name: string | null;
+  repoRef: string | null;
+  cloneUrl: string | null;
+  defaultBranch: string | null;
+  /** Read-only on the host. Cloned anyway — refusing to BRANCH on one is
+   *  dispatch's job, not this read's. */
+  archived: boolean;
+  state: string;
+  established: boolean;
+}
+
+/** The whole set, IN ORDER — the first row is the project's PRIMARY repository. */
+export interface ProjectRepositoryList {
+  repositories: ProjectRepository[];
 }
 
 /** One project as `list_projects` reports it (lib/mcp/tools/listProjects.ts,
@@ -415,6 +460,22 @@ export interface DispatchPrompt {
    */
   parentKey: string | null;
   targetRepo: string | null;
+  /**
+   * WHERE `targetRepo` is cloned from, and the branch a fresh clone lands on
+   * (MOTIR-3588) — the single-repository counterpart of `targetRepos[].cloneUrl`.
+   *
+   * ⚠️ CARRIED AGAIN, having been DROPPED under the field-with-no-reader rule
+   * (MOTIR-2212). The reader now exists: a dispatch whose target checkout is
+   * missing MATERIALIZES it from this URL rather than launching the agent at the
+   * workspace root against a git workflow that cannot run there.
+   *
+   * `null` is a real answer with TWO meanings the resolution deliberately
+   * collapses into one: the card pins no repository, or Motir cannot derive a
+   * clone URL for its provider. Either way there is nothing to clone from, and
+   * the preserved bootstrap path is what answers.
+   */
+  targetRepoCloneUrl?: string | null;
+  targetRepoDefaultBranch?: string | null;
   /**
    * EVERY repository the item ships in (MOTIR-3131), ordered, primary first —
    * `targetRepos[0]?.name ?? null === targetRepo`, always.
@@ -1530,6 +1591,26 @@ export class MotirClient {
    *  how many. Still PROPOSALS: nothing here exists in the tree. */
   async getPlan(args: { planId: string }): Promise<PlanWithItems> {
     return toPlanWithItems(await this.v1.request('getPlan', { path: { planId: args.planId } }));
+  }
+
+  /**
+   * The project's repository SET (MOTIR-3586) — which repositories it has, and
+   * where each one is cloned from.
+   *
+   * Walked to exhaustion for the reason `listProjects` gives: the view model is
+   * a whole set, bounded by the project's architecture, and every consumer wants
+   * all of it. The ORDER the pages arrive in is preserved — the first row is the
+   * project's primary repository.
+   */
+  async listRepositories(args: { projectKey: string }): Promise<ProjectRepositoryList> {
+    return toProjectRepositoryList(
+      await this.walkPages((cursor) =>
+        this.v1.request('listProjectRepositories', {
+          path: { projectKey: args.projectKey },
+          query: { ...(cursor ? { cursor } : {}) },
+        }),
+      ),
+    );
   }
 
   async listSprints(args: { projectKey: string }): Promise<SprintList> {

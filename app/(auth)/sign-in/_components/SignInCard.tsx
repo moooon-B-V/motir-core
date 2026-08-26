@@ -17,6 +17,11 @@ import {
   IdeaCarried,
 } from '../../_components/AuthShell';
 import { GoogleButton } from '../../_components/GoogleButton';
+import { TwoFactorChallenge } from './TwoFactorChallenge';
+import {
+  TWO_FACTOR_OTP_PERIOD_MINUTES,
+  TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
+} from '@/lib/auth/twoFactorConfig';
 import { ONBOARDING_ENTRY_PATH, resolvePostAuthDestination } from '@/lib/navigation/landing';
 
 // ⚠️ THE DESTINATIONS ARE IMPORTED NOW (MOTIR-3373). This file used to carry
@@ -141,7 +146,12 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
     };
   }, [draftId, sessionActive, router]);
 
-  const [step, setStep] = useState<'email' | 'password'>('email');
+  // Story 8.11 · MOTIR-1221 adds the THIRD step. It is reached only from a
+  // sign-in that answered `twoFactorRedirect`, never by typing — see
+  // `TwoFactorChallenge`'s header for why it is a step rather than a route.
+  const [step, setStep] = useState<'email' | 'password' | 'twoFactor'>('email');
+  /** What the sign-in said this account can answer the challenge with. */
+  const [twoFactorMethods, setTwoFactorMethods] = useState<string[]>([]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -201,6 +211,26 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
         setSubmitting(false);
         return;
       }
+      // ⚠️ THE PASSWORD WAS RIGHT AND THERE IS STILL NO SESSION (MOTIR-1221).
+      // With 2FA enrolled, the plugin intercepts the sign-in BEFORE
+      // `createSession`: it sets a short-lived signed `two_factor` cookie and
+      // answers `{ twoFactorRedirect: true, twoFactorMethods }` instead of
+      // `{ redirect, url }`. So the redirect fetch plugin does nothing, this
+      // component is NOT on its way out, and the third step renders in place.
+      //
+      // `twoFactorClient()` is registered with no `twoFactorPage` /
+      // `onTwoFactorRedirect` precisely so that hook stays inert and the branch
+      // lives here, where the card already holds the email and the callbackURL.
+      const twoFactorRedirect = (result?.data as { twoFactorRedirect?: boolean } | undefined)
+        ?.twoFactorRedirect;
+      if (twoFactorRedirect) {
+        const methods = (result?.data as { twoFactorMethods?: string[] } | undefined)
+          ?.twoFactorMethods;
+        setTwoFactorMethods(methods ?? []);
+        setStep('twoFactor');
+        setSubmitting(false);
+        return;
+      }
       // No client-side navigation on success, on purpose — see above. The
       // redirect plugin has already started the document load, and this
       // component is on its way out, so `submitting` stays true until the page
@@ -209,6 +239,22 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
       setPasswordError(t('wrongPassword'));
       setSubmitting(false);
     }
+  }
+
+  // Step 3 replaces the whole card body: the reader has finished authenticating
+  // with what they know and is now proving what they have, so the Google button,
+  // the "Plan with AI" door and the sign-up footer are all noise at best and a
+  // way around the challenge at worst.
+  if (step === 'twoFactor') {
+    return (
+      <TwoFactorChallenge
+        email={email}
+        callbackURL={callbackURL}
+        methods={twoFactorMethods}
+        trustDeviceDays={Math.round(TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS / 86_400)}
+        otpPeriodMinutes={TWO_FACTOR_OTP_PERIOD_MINUTES}
+      />
+    );
   }
 
   return (

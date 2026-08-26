@@ -37,6 +37,7 @@ import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/op
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { plansService } from '@/lib/services/plansService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -446,6 +447,22 @@ describe('every operation’s REAL response validates against its declared schem
       'listProjectSprints',
       () => import('@/app/api/v1/projects/[projectKey]/sprints/route'),
       get(`/api/v1/projects/${pk}/sprints`),
+      { projectKey: pk },
+    );
+    // The repository SET (MOTIR-3586). Seeded as an UNESTABLISHED row on
+    // purpose: every coordinate on the resource is nullable, and a row with a
+    // realized repository would satisfy a declaration that forgot to say so
+    // while this one cannot. The non-null half is asserted in
+    // `project-repositories-route.test.ts`, which owns the endpoint.
+    await projectRepoSetService.addRow(
+      caller.fixture.projectId,
+      { role: 'web', name: 'acme-web' },
+      caller.fixture.ctx,
+    );
+    await drive(
+      'listProjectRepositories',
+      () => import('@/app/api/v1/projects/[projectKey]/repositories/route'),
+      get(`/api/v1/projects/${pk}/repositories`),
       { projectKey: pk },
     );
     const sprint = await drive(

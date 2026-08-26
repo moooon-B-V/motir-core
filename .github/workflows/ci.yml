@@ -1218,6 +1218,11 @@ jobs:
       FLY_APP: motir-core
     steps:
       - uses: actions/checkout@v6
+      # For the pool guard below, which is a Node script so its derivation can be
+      # unit-tested rather than trusted. Same version as every other job here.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
       - uses: superfly/flyctl-actions/setup-flyctl@master
       # `--local-only` builds on the runner's own Docker daemon and pushes to
       # registry.fly.io, instead of Fly's remote/Depot builder — which flaked
@@ -1264,41 +1269,39 @@ jobs:
         with:
           serve-url: ${{ vars.INNGEST_SERVE_URL || 'https://app.motir.co/api/inngest' }}
 
-      # ⚠️ Read from the PLATFORM, never from `fly.toml`. A config file is a
-      # claim about the deployment, not a reading of it: motir-ai's fly.toml
-      # promised load spilling onto fresh machines while production ran ONE
-      # machine for weeks, because `auto_start_machines` never CREATES one and
-      # no card had run `fly scale count` (MOTIR-2102 — three days of an
-      # incident filed against the wrong service, closed by one authenticated
-      # GET).
+      # ⚠️ Read the OBSERVATION from the PLATFORM, never from `fly.toml`. A config
+      # file is a claim about the deployment, not a reading of it: motir-ai's
+      # fly.toml promised load spilling onto fresh machines while production ran
+      # ONE machine for weeks, because `auto_start_machines` never CREATES one and
+      # no card had run `fly scale count` (MOTIR-2102 — three days of an incident
+      # filed against the wrong service, closed by one authenticated GET). Every
+      # number this step compares still comes from
+      # `GET /v1/apps/<app>/machines`; what `fly.toml` supplies is the EXPECTATION.
       #
-      # The EXPECTED count is a repo variable, not a constant, because the pool
-      # grows by an operator action this job cannot take: ADR §7 decides TWO
-      # machines and MOTIR-2408 creates the second one, which can only run once
-      # a first machine exists. Until it does, one machine is the truth, and a
-      # check that asserted 2 would be red for a reason that is not a defect.
-      # MOTIR-2408 sets FLY_EXPECTED_MACHINE_COUNT=2 as part of creating it.
-      - name: Assert the machine count, read from Fly's API
-        env:
-          EXPECTED: ${{ vars.FLY_EXPECTED_MACHINE_COUNT || '1' }}
-        run: |
-          set -euo pipefail
-          # Capture first, THEN test — a `curl | jq` pipeline under `pipefail`
-          # reports the wrong command's status.
-          body=$(curl -sS --max-time 30 \
-            -H "Authorization: Bearer ${FLY_API_TOKEN}" \
-            "https://api.machines.dev/v1/apps/${FLY_APP}")
-          echo "$body"
-          actual=$(jq -r '.machine_count // empty' <<<"$body")
-          if [ -z "$actual" ]; then
-            echo "::error::Fly's API returned no machine_count for ${FLY_APP} — the app is unreachable or the token cannot see it (Fly answers not-found, never forbidden)."
-            exit 1
-          fi
-          echo "machine_count=${actual}, expected=${EXPECTED}"
-          if [ "$actual" != "$EXPECTED" ]; then
-            echo "::error::${FLY_APP} runs ${actual} machine(s); ${EXPECTED} expected. Either the pool changed under us, or FLY_EXPECTED_MACHINE_COUNT is stale — read the platform before changing the variable."
-            exit 1
-          fi
+      # ⚠️ AND THE EXPECTATION IS DERIVED, NOT STORED (MOTIR-3570). This step used
+      # to assert Fly's total `machine_count` against the repo variable
+      # `FLY_EXPECTED_MACHINE_COUNT`, which MOTIR-2408 set to 2 when the pool WAS
+      # two app machines. MOTIR-3425 added the `worker` process group, the pool
+      # became four, and nothing updated the variable — so every deploy ended RED
+      # on a deploy that had SUCCEEDED: the image released, the release answered,
+      # Inngest synced, three migrations applied. `CI complete` went red and the
+      # trunk's red stopped saying anything about whether the trunk is deployed,
+      # which is the most expensive direction for a check to fail in.
+      #
+      # Re-arming the variable would only buy the interval until the next group.
+      # A SUM is the wrong assertion for a pool that is now a sum over process
+      # groups scaled independently: it cannot tell `app=2, worker=2` from
+      # `app=1, worker=3`, which halves the web tier at an unchanged total. So
+      # `scripts/assert-machine-pool.mjs` derives the SHAPE from `fly.toml` —
+      # `[processes]` names the groups that must exist, `http_service.processes`
+      # + `min_machines_running` name the running floor for the tier that serves
+      # traffic — and adding or scaling a group updates the expectation by
+      # construction. There is no repo variable left to go stale, and
+      # `tests/scripts/assert-machine-pool.test.ts` proves the derivation still
+      # goes red on real drift with deliberate negatives rather than with the
+      # absence of a failure.
+      - name: Assert the machine pool against fly.toml, read from Fly's API
+        run: node scripts/assert-machine-pool.mjs --app "$FLY_APP"
 
   # ── The one required status check on `main` (MOTIR-2008) ──────────────────
   # `protect-main` (ruleset 17227448) requires exactly ONE context: `CI complete`.

@@ -165,6 +165,7 @@ export function buildProgram(): Command {
       '--repo <name>',
       'Mark THIS directory as a single repo’s checkout (writes a "." override).',
     )
+    .option('--no-clone', 'Bind only — do not clone the project’s missing checkouts.')
     .action(linkCommand);
   register(link, 'link add').action(linkAddCommand);
   register(link, 'link remove').action(linkRemoveCommand);

@@ -60,6 +60,15 @@ model User {
   id                  String        @id @default(cuid())
   email               String        @unique
   emailVerified       Boolean       @default(false)
+  /// Whether the user has completed two-factor enrolment (Story MOTIR-1213 ·
+  /// Subtask MOTIR-1217). Owned by Better-Auth's `twoFactor` plugin, which
+  /// declares it `input: false` — nothing in the product writes it directly;
+  /// the plugin flips it inside `/two-factor/enable` (after the confirming code
+  /// on the default `skipVerificationOnEnable: false` path) and
+  /// `/two-factor/disable`. Column name is camelCase, NOT snake_case, because
+  /// this is a Better-Auth-owned column on the Better-Auth-owned `user` table —
+  /// the `emailVerified` convention, not the `platform_role` one.
+  twoFactorEnabled    Boolean       @default(false)
   name                String
   image               String?
   /// The user's GLOBAL last-active project pointer (Subtask 8.8.27) — the
@@ -231,6 +240,17 @@ model User {
   // (the appearancePreference pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
   canvasNodePositions         CanvasNodePosition[]
+  // Back-relation for TwoFactor (Story MOTIR-1213 · Subtask MOTIR-1217) — the
+  // Better-Auth `twoFactor` plugin's per-user secret + backup-code row. A LIST,
+  // not a `TwoFactor?`, because the plugin's own schema declares `userId`
+  // INDEXED and not unique (`two-factor/schema.mjs`): enable does
+  // `deleteMany({userId}) → create(...)`, so in practice a user holds 0 or 1,
+  // but a `@unique` would turn a lost race between two concurrent enrolments
+  // into a raw P2002 thrown inside the plugin, where no typed error can catch
+  // it. Cascade: 2FA material is personal auth substrate, it dies with the user
+  // (the apiTokens / deviceCodes pattern). Modelled on both sides per the
+  // FK-`@relation` rule so `migrate dev` reports no drift.
+  twoFactor                   TwoFactor[]
   // Forward relation for the GLOBAL last-active project pointer (Subtask
   // 8.8.27). SetNull on the FK: archiving/deleting the named project clears the
   // pointer, never blocks the delete (the `WorkspaceMembership.activeProject`
@@ -446,6 +466,77 @@ model EmailChangeRequest {
 
   @@index([userId])
   @@map("email_change_request")
+}
+
+/// One user's two-factor enrolment material (Story MOTIR-1213 · Subtask
+/// MOTIR-1217). Better-Auth's `twoFactor` plugin owns this table outright — every
+/// read and write goes through its adapter (`plugins/two-factor/schema.mjs`), so
+/// the PRISMA FIELD NAMES ARE FIXED: `secret`, `backupCodes`, `userId`,
+/// `verified`, addressed as `db.twoFactor`. Renaming one breaks the plugin at
+/// runtime with no typecheck error. Unlike `DeviceCode` there are NOT two
+/// writers — Motir adds no column of its own here, so the whole model is the
+/// plugin's.
+///
+/// WHAT IS IN THE TWO OPAQUE COLUMNS. `secret` is the RFC-6238 TOTP seed and
+/// `backupCodes` is the whole recovery-code SET, joined into one string; BOTH are
+/// symmetric-encrypted with `BETTER_AUTH_SECRET` before they land here (the
+/// plugin's `symmetricEncrypt`, and `storeBackupCodes: 'encrypted'` in
+/// `lib/auth/index.ts`). They are ENCRYPTED, not hashed, and that is forced
+/// rather than chosen: `BackupCodeOptions.storeBackupCodes` accepts only
+/// `'plain' | 'encrypted' | {encrypt,decrypt}` — there is no hashed arm, because
+/// verifying a code means decoding the stored list and searching it, and a
+/// consumed code is REMOVED from that list rather than marked. See the
+/// `lib/auth/index.ts` comment for why the card's "hashed at rest" phrasing
+/// cannot be satisfied by this plugin.
+///
+/// `verified` is FALSE between "the QR was shown" and "a code from it was
+/// accepted", which is what makes enrolment two-step: the sign-in path offers
+/// `totp` as a challenge method only for a row whose `verified` is not false.
+///
+/// NO TRUSTED-DEVICE TABLE. "Don't ask again on this device for 30 days" needs no
+/// storage of its own — the plugin writes a `trust-device-<random>` row into the
+/// EXISTING `verification` table with an expiry and hands the browser a signed
+/// `trust_device` cookie (`plugins/two-factor/verify-two-factor.mjs`). Revoking a
+/// device is deleting that verification row, so the revoke surface reads a table
+/// that already exists.
+///
+/// TENANCY — identity-scoped, NOT workspace-scoped, so it carries NO RLS: the
+/// `verification` / `email_change_request` / `device_code` precedent rather than
+/// the workspace-RLS table contract. The row has no workspace to be discriminated
+/// by (2FA is a property of the person, not of a tenant), and it is read
+/// PRE-AUTH — the login challenge runs after the password step and BEFORE a
+/// session exists, so there is no `app.workspace_id` GUC for a policy to gate on;
+/// a policy here would hide the row from its only legitimate reader. Authorization
+/// is the two-factor cookie the challenge presents, not row visibility.
+model TwoFactor {
+  id String @id @default(cuid())
+
+  /// The encrypted TOTP seed. `@index` because the plugin's own schema declares
+  /// one; it is never a lookup key in Motir code.
+  secret      String
+  /// The encrypted, joined recovery-code set — NOT one code per row. The plugin
+  /// rewrites the whole column each time a code is consumed or the set is
+  /// regenerated, which is why consuming one is a read-derived write and needs a
+  /// row lock (Subtask MOTIR-1218).
+  backupCodes String  @map("backup_codes")
+  /// The owner. INDEXED, deliberately NOT `@unique` — see the `User.twoFactor`
+  /// back-relation comment. Cascade: personal auth substrate, it dies with the
+  /// user (the `deviceCodes` / `apiTokens` lifecycle).
+  userId      String  @map("user_id")
+  /// False while enrolment is pending a confirming code; true once one was
+  /// accepted. Defaults TRUE to match the plugin's own default — the pending
+  /// state is written explicitly by `/two-factor/enable`, not derived from the
+  /// column default.
+  verified    Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([secret])
+  @@index([userId])
+  @@map("two_factor")
 }
 
 /// One in-flight device-authorization grant for `motir login` (RFC 8628, Story
@@ -2821,17 +2912,17 @@ model JobEvent {
 /// two constraints are complementary halves of one idea, each covering exactly
 /// the population the other cannot see.
 model JobQueueRun {
-  id             String      @id @default(cuid())
+  id                  String      @id @default(cuid())
   /// The `defineJob` function id — `email.send`, `system.attachment-gc`, …
-  jobId          String      @map("job_id")
-  eventId        String?     @map("event_id")
+  jobId               String      @map("job_id")
+  eventId             String?     @map("event_id")
   /// Denormalised from the event (or synthesised as `scheduled.<id>` for a cron
   /// run) so the ledger write needs no join, exactly as `job_run.event_name` is.
-  eventName      String      @map("event_name")
-  workspaceId    String?     @map("workspace_id")
+  eventName           String      @map("event_name")
+  workspaceId         String?     @map("workspace_id")
   /// When this run becomes claimable. A `step.sleep` re-enqueue moves it
   /// forward; a retry moves it forward by the backoff.
-  runAt          DateTime    @map("run_at")
+  runAt               DateTime    @map("run_at")
   /// THE PER-TICK KEY for a SCHEDULED run (MOTIR-3469) — the cron FIRE INSTANT
   /// this row stands for, never the moment it was enqueued. NULL on every
   /// event-triggered row, which is what keeps the unique below off them.
@@ -2839,24 +2930,24 @@ model JobQueueRun {
   /// It differs from `runAt` the moment a run is retried or yields: `run_at` moves
   /// forward, `scheduled_for` does not. That is the point — the identity of a tick
   /// must survive its own rescheduling, or a retry would look like a new fire.
-  scheduledFor   DateTime?   @map("scheduled_for")
-  attempts       Int         @default(0)
+  scheduledFor        DateTime?   @map("scheduled_for")
+  attempts            Int         @default(0)
   /// The run's total attempt budget, resolved from the job's named retry policy
   /// at enqueue (`lib/jobs/retries.ts`). Stored per-run so a policy change does
   /// not retroactively re-budget rows already in flight.
-  maxAttempts    Int         @map("max_attempts")
-  state          JobRunState @default(pending)
+  maxAttempts         Int         @map("max_attempts")
+  state               JobRunState @default(pending)
   /// The worker holding this run, and until when. A worker that dies leaves the
   /// row `running` with an expired lease, which is what makes it reclaimable
   /// rather than stuck (MOTIR-3421).
-  claimedBy      String?     @map("claimed_by")
-  leaseExpiresAt DateTime?   @map("lease_expires_at")
-  lastError      Json?       @map("last_error")
+  claimedBy           String?     @map("claimed_by")
+  leaseExpiresAt      DateTime?   @map("lease_expires_at")
+  lastError           Json?       @map("last_error")
   /// EVENT-LEVEL DEDUP KEY (MOTIR-3459), resolved from `defineJob`'s
   /// `idempotency` template at ENQUEUE and denormalised here — the only moment
   /// the event payload is in hand. NULL for every job that declares no template,
   /// and for an event that carries no value for it.
-  idempotencyKey String?     @map("idempotency_key")
+  idempotencyKey      String?     @map("idempotency_key")
   /// THE COALESCING KEY (MOTIR-3483), resolved from `defineJob`'s `debounce.key`
   /// expression at ENQUEUE — the same moment and for the same reason as
   /// `idempotency_key` above. A same-key event arriving while this row is still
@@ -2872,14 +2963,14 @@ model JobQueueRun {
   /// that still carried its key would then collide with the fresh row a push
   /// enqueued while it was running — a unique violation on the retry path, which
   /// is the worst possible place to discover one.
-  debounceKey    String?     @map("debounce_key")
+  debounceKey         String?     @map("debounce_key")
   /// WHEN THIS ROW'S DEBOUNCE WINDOW FIRST OPENED — stamped once, at the first
   /// arrival, and never moved. `debounce.timeout` is measured from it, so a
   /// steady stream cannot defer a run forever. NULL on every row that carries no
   /// `debounce_key`.
-  debounceFirstSeenAt DateTime? @map("debounce_first_seen_at")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  debounceFirstSeenAt DateTime?   @map("debounce_first_seen_at")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
 
   event     JobEvent?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

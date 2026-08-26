@@ -417,8 +417,21 @@ describe('summary + outcome rendering', () => {
         resolveDispatchTarget(ROOT, LINK, 'motir-ai', { exists: only('/home/yue/work/motir-ai') }),
       ),
     ).toContain('checkout');
+    expect(
+      cwdReasonLabel(
+        resolveDispatchTarget(ROOT, LINK, 'x', {
+          exists: none,
+          cloneUrl: 'https://github.com/moooon/x.git',
+        }),
+      ),
+    ).toContain('cloned first');
+    // ⚠️ This assertion CHANGED with MOTIR-3588, and the old text is the reason.
+    // It used to read "the prompt creates it", which was false: both GIT
+    // WORKFLOW variants open with `git worktree add`, which cannot run outside a
+    // git repository. The label now names the one case that legitimately reaches
+    // this outcome — a repository that does not exist ANYWHERE yet.
     expect(cwdReasonLabel(resolveDispatchTarget(ROOT, LINK, 'x', { exists: none }))).toContain(
-      'the prompt creates it',
+      'does not exist yet; this card creates it',
     );
     expect(cwdReasonLabel(resolveDispatchTarget(ROOT, LINK, null, { exists: none }))).toContain(
       'pins no repo',

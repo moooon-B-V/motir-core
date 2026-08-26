@@ -7,6 +7,8 @@ import {
   isSubsumptionAdvisory,
 } from './client.js';
 import type { DispatchPrompt, DispatchWorkflowMode, WorkItemClaim } from './client.js';
+import { runRepoClones, type RepoClonePlanEntry } from './repoClone.js';
+import type { CommandRunner } from './git.js';
 
 // The PURE half of single dispatch (Story 7.9 · Subtask 7.9.3 · MOTIR-881):
 // where an item's agent runs, what the human is told about it, and how a
@@ -25,20 +27,38 @@ import type { DispatchPrompt, DispatchWorkflowMode, WorkItemClaim } from './clie
 // admitting the gap.
 
 /**
- * WHY the agent's cwd is what it is — the three (and only three) routing
- * outcomes:
+ * WHY the agent's cwd is what it is — the four routing outcomes:
  *
  * - `repo_checkout` — the item names a repo AND that checkout exists: run
  *   inside it. This is what makes dispatching a `motir-ai` item while standing
  *   in `motir-core` work.
- * - `bootstrap_root` — the item names a repo whose checkout is MISSING: run at
- *   the workspace root so the prompt's GIT WORKFLOW can CREATE the checkout
- *   (the empty-folder new-project flow). Verified after a successful run.
+ * - `clonable_checkout` — the item names a repo whose checkout is MISSING, and
+ *   the payload carries a CLONE URL for it: materialize it first, then run
+ *   inside it (MOTIR-3588). `cwd` is where the checkout WILL be, and the caller
+ *   must not launch an agent until {@link materializeDispatchCheckouts} has
+ *   succeeded for it.
+ * - `bootstrap_root` — the item names a repo whose checkout is missing AND the
+ *   payload carries no clone URL: the genuine empty-folder bootstrap, where a
+ *   scaffold item's own work is to CREATE the repository. Run at the workspace
+ *   root, verified after a successful run. PRESERVED unchanged.
  * - `unpinned_root` — the payload carries no repo (`targetRepo: null`): run at
  *   the workspace root. `null` is a real answer ("Motir does not know"), never
  *   a licence to guess a checkout.
+ *
+ * ⚠️ THE DISCRIMINATOR BETWEEN THE MIDDLE TWO IS THE PRESENCE OF A CLONE URL,
+ * NOT THE ABSENCE OF A DIRECTORY. Both used to be `bootstrap_root`, on the
+ * recorded reasoning that *"the prompt creates it"* — and the prompt does not:
+ * both GIT WORKFLOW variants open with `git fetch origin && git worktree add …`,
+ * which cannot run in a directory that is not a git repository. So a repository
+ * that EXISTS on the host and simply is not cloned here was being handed a
+ * prompt whose first command fails, and the failure was reported by
+ * `checkBootstrapCheckout` only AFTER the agent had spent its tokens.
  */
-export type DispatchCwdReason = 'repo_checkout' | 'bootstrap_root' | 'unpinned_root';
+export type DispatchCwdReason =
+  | 'repo_checkout'
+  | 'clonable_checkout'
+  | 'bootstrap_root'
+  | 'unpinned_root';
 
 export interface DispatchTarget {
   /** The resolved repo NAME from the dispatch payload, or null when unpinned. */
@@ -52,6 +72,9 @@ export interface DispatchTarget {
   /** How `repoPath` was resolved (`override` from `.motir.json` / the
    *  `<root>/<repoName>` `convention`), or null when unpinned. */
   repoSource: RepoResolutionSource | null;
+  /** Where this repository is cloned from — set only on `clonable_checkout`,
+   *  which is the outcome that has one by definition. */
+  cloneUrl: string | null;
   /** True only for `bootstrap_root`: the run must be followed by a checkout
    *  existence check (see {@link checkBootstrapCheckout}). */
   verifyCheckoutAfterRun: boolean;
@@ -60,6 +83,14 @@ export interface DispatchTarget {
 export interface ResolveDispatchTargetOptions {
   /** Injectable path-existence predicate (the tests' seam). */
   exists?: (path: string) => boolean;
+  /**
+   * WHERE this repository is cloned from, when the payload says.
+   *
+   * Absent or null reads as "there is nothing to clone from", which is the
+   * preserved `bootstrap_root` path — the same answer for a card whose provider
+   * yields no URL and for a server too old to send one.
+   */
+  cloneUrl?: string | null;
 }
 
 /**
@@ -81,6 +112,7 @@ export function resolveDispatchTarget(
       reason: 'unpinned_root',
       repoPath: null,
       repoSource: null,
+      cloneUrl: null,
       verifyCheckoutAfterRun: false,
     };
   }
@@ -88,13 +120,42 @@ export function resolveDispatchTarget(
   // injected predicate so the routing decision is the one under test.
   const resolved = resolveRepo(rootDir, config, targetRepo);
   const present = exists(resolved.path);
+  const cloneUrl = opts.cloneUrl ?? null;
+
+  if (present) {
+    return {
+      targetRepo,
+      cwd: resolved.path,
+      reason: 'repo_checkout',
+      repoPath: resolved.path,
+      repoSource: resolved.source,
+      cloneUrl: null,
+      verifyCheckoutAfterRun: false,
+    };
+  }
+
+  if (cloneUrl !== null) {
+    // The repository EXISTS on the host and is simply not cloned here. `cwd` is
+    // where it will be — the caller materializes it before spawning anything.
+    return {
+      targetRepo,
+      cwd: resolved.path,
+      reason: 'clonable_checkout',
+      repoPath: resolved.path,
+      repoSource: resolved.source,
+      cloneUrl,
+      verifyCheckoutAfterRun: false,
+    };
+  }
+
   return {
     targetRepo,
-    cwd: present ? resolved.path : rootDir,
-    reason: present ? 'repo_checkout' : 'bootstrap_root',
+    cwd: rootDir,
+    reason: 'bootstrap_root',
     repoPath: resolved.path,
     repoSource: resolved.source,
-    verifyCheckoutAfterRun: !present,
+    cloneUrl: null,
+    verifyCheckoutAfterRun: true,
   };
 }
 
@@ -116,10 +177,105 @@ export function resolveDispatchTarget(
 export function resolveDispatchTargets(
   rootDir: string,
   config: LinkConfig,
-  repos: readonly string[],
+  repos: readonly (string | { name: string; cloneUrl: string | null })[],
   opts: ResolveDispatchTargetOptions = {},
 ): DispatchTarget[] {
-  return repos.map((repo) => resolveDispatchTarget(rootDir, config, repo, opts));
+  return repos.map((repo) =>
+    typeof repo === 'string'
+      ? resolveDispatchTarget(rootDir, config, repo, opts)
+      : resolveDispatchTarget(rootDir, config, repo.name, {
+          ...opts,
+          // PER ELEMENT (MOTIR-3588): a card shipping in two repositories
+          // materializes each one from ITS own URL, so a set with one missing
+          // checkout is not routed by whichever element happened to be first.
+          cloneUrl: repo.cloneUrl,
+        }),
+  );
+}
+
+/** What a pre-dispatch materialization DID, or failed to do. */
+export interface DispatchMaterialization {
+  /** Every repository that was cloned, in the order it was attempted. */
+  cloned: string[];
+  /** The repositories that could not be materialized, with the reason. Non-empty
+   *  means the dispatch MUST NOT launch an agent. */
+  failures: { repo: string; detail: string; gitMessage: string | null }[];
+}
+
+/**
+ * MATERIALIZE every `clonable_checkout` in a resolved target set, BEFORE any
+ * agent is spawned (MOTIR-3588).
+ *
+ * ⚠️ IT CALLS THE LINK CARD'S PRIMITIVE. `runRepoClones` is the one
+ * implementation of "clone a repository the user does not have", and it is where
+ * the ADR's rules live — full clone, never write into an existing path, one
+ * outcome per repository, git's own message kept. A second `git clone` site here
+ * is exactly how those rules get honoured in one place and not the other, and
+ * `packages/cli/test/architecture.test.ts` fails on one.
+ *
+ * ⚠️ A FAILURE STOPS THE DISPATCH. This is the one place the never-abort posture
+ * of the link command inverts, and deliberately: `motir link` is materializing
+ * a whole set for a person to look at, while this is materializing the ONE
+ * checkout an agent is about to be launched into. Launching it anyway would hand
+ * the agent the prompt that cannot run — the exact failure this card removes.
+ */
+export function materializeDispatchCheckouts(
+  rootDir: string,
+  targets: readonly DispatchTarget[],
+  opts: { run?: CommandRunner } = {},
+): DispatchMaterialization {
+  const clonable = targets.filter(
+    (
+      t,
+    ): t is DispatchTarget & {
+      repoPath: string;
+      repoSource: RepoResolutionSource;
+      cloneUrl: string;
+      targetRepo: string;
+    } =>
+      t.reason === 'clonable_checkout' &&
+      t.repoPath !== null &&
+      t.repoSource !== null &&
+      t.cloneUrl !== null,
+  );
+  if (clonable.length === 0) return { cloned: [], failures: [] };
+
+  const plan: RepoClonePlanEntry[] = clonable.map((target) => ({
+    label: target.targetRepo,
+    // A dispatch payload carries no establish state, and it does not need one:
+    // it only ever names repositories a card actually ships in, which the server
+    // resolved from ESTABLISHED rows already.
+    state: 'connected',
+    kind: 'clone' as const,
+    path: target.repoPath,
+    source: target.repoSource,
+    cloneUrl: target.cloneUrl,
+    archived: false,
+  }));
+
+  const outcomes = runRepoClones(rootDir, plan, opts.run ? { run: opts.run } : {});
+  return {
+    cloned: outcomes.filter((o) => o.status === 'cloned').map((o) => o.label),
+    failures: outcomes
+      .filter((o) => o.status === 'failed')
+      .map((o) => ({ repo: o.label, detail: o.detail, gitMessage: o.gitMessage })),
+  };
+}
+
+/** The lines a caller prints for a materialization — cloned first, then any
+ *  refusal with git's own sentence beneath it. */
+export function renderMaterialization(result: DispatchMaterialization): string[] {
+  const lines: string[] = [];
+  for (const repo of result.cloned) lines.push(`Cloned:     ${repo}`);
+  for (const failure of result.failures) {
+    lines.push(`Blocked:    ${failure.repo} — ${failure.detail}`);
+    if (failure.gitMessage) lines.push(`            git said: ${failure.gitMessage}`);
+  }
+  if (result.failures.length > 0) {
+    lines.push('            No agent was started: the prompt it would be handed opens with');
+    lines.push('            `git worktree add`, which cannot run without the checkout.');
+  }
+  return lines;
 }
 
 export interface SuspectDispatch {
@@ -171,8 +327,15 @@ export function cwdReasonLabel(target: DispatchTarget): string {
   switch (target.reason) {
     case 'repo_checkout':
       return `${target.targetRepo ?? ''} checkout (${target.repoSource})`;
+    case 'clonable_checkout':
+      return `${target.targetRepo ?? ''} checkout (${target.repoSource}) — cloned first`;
     case 'bootstrap_root':
-      return `workspace root — no "${target.targetRepo ?? ''}" checkout yet, the prompt creates it`;
+      // ⚠️ It no longer says "the prompt creates it", because the prompt does
+      // not: both GIT WORKFLOW variants open with `git worktree add`, which
+      // cannot run outside a git repository. This label now names the ONE case
+      // that legitimately reaches it — a repository that does not exist anywhere
+      // yet, whose creation is the dispatched card's own work.
+      return `workspace root — "${target.targetRepo ?? ''}" does not exist yet; this card creates it`;
     case 'unpinned_root':
       return 'workspace root — the item pins no repo';
   }

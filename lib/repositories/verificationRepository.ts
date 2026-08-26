@@ -6,6 +6,15 @@ import { db } from '@/lib/db';
 // Better-Auth internals) and our own invite flow (`workspace-invite:`
 // prefix on identifier).
 
+/**
+ * The `identifier` prefix Better-Auth's two-factor plugin writes a trusted-device
+ * grant under (`plugins/two-factor/verify-two-factor.mjs`). Declared here because
+ * this repository is the only thing that keys on it; it is the PLUGIN's literal,
+ * so a Better-Auth upgrade that changed it would silently empty the list — which
+ * is what `tests/twoFactorTrustedDevices.test.ts` writes a real row to catch.
+ */
+export const TRUST_DEVICE_PREFIX = 'trust-device-';
+
 export const verificationRepository = {
   async findByIdentifier(identifier: string): Promise<Verification | null> {
     return db.verification.findFirst({ where: { identifier } });
@@ -46,6 +55,71 @@ export const verificationRepository = {
    * this inside a $transaction so the deletion is atomic with the
    * membership insert.
    */
+  /**
+   * Every live TRUSTED-DEVICE grant for a user (Story 8.11 · Subtask
+   * MOTIR-1221), newest first.
+   *
+   * A trusted device is not a table — it is a row HERE, written by
+   * Better-Auth's two-factor plugin when a reader ticks "don't ask again":
+   * `identifier` is `trust-device-<32 random chars>`, `value` is the user id,
+   * and `expiresAt` is the 30-day horizon (`verify-two-factor.mjs`). So the
+   * pairing below is the whole query — the prefix says WHAT kind of grant, the
+   * value says WHOSE.
+   *
+   * ⚠️ IT CARRIES NO DEVICE IDENTITY, and that is a property of the row rather
+   * than of this read: no user-agent, no IP, no label. A surface listing these
+   * can honestly say WHEN a device was trusted and when the trust lapses, and
+   * cannot say which browser it was.
+   *
+   * Expired rows are excluded rather than shown greyed: an expired grant already
+   * fails the cookie check, so listing it would offer a reader a revoke that
+   * changes nothing.
+   *
+   * Read-only path, so the `db` singleton and no `tx`.
+   */
+  async findTrustedDevicesByUserId(userId: string): Promise<Verification[]> {
+    return db.verification.findMany({
+      where: {
+        identifier: { startsWith: TRUST_DEVICE_PREFIX },
+        value: userId,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * Delete ONE trusted-device grant, scoped to its owner.
+   *
+   * ⚠️ `value: userId` IS THE AUTHORIZATION, not a convenience filter. The `id`
+   * comes from a request body, and `verification` holds every kind of token this
+   * product mints — password resets, email-change confirmations, other people's
+   * device grants. A delete keyed on `id` alone would let any signed-in user
+   * revoke any row in the table by guessing a cuid. Pairing the id with the
+   * owner AND the prefix means a mismatched request deletes nothing and reports
+   * zero, which is what the route turns into a 404.
+   *
+   * Write → `tx` required.
+   */
+  async deleteTrustedDeviceForUser(
+    id: string,
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.verification.deleteMany({
+      where: { id, value: userId, identifier: { startsWith: TRUST_DEVICE_PREFIX } },
+    });
+    return result.count;
+  },
+
+  /** Drop EVERY trusted-device grant a user holds. Write → `tx` required. */
+  async deleteTrustedDevicesForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.verification.deleteMany({
+      where: { value: userId, identifier: { startsWith: TRUST_DEVICE_PREFIX } },
+    });
+    return result.count;
+  },
+
   async deleteByIdentifier(identifier: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.verification.deleteMany({ where: { identifier } });
     return result.count;
