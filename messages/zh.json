@@ -2229,6 +2229,7 @@
         "language": "语言",
         "notifications": "通知",
         "appearance": "外观",
+        "twoFactor": "两步验证",
         "apiTokens": "令牌",
         "soon": "即将推出"
       },
@@ -2267,6 +2268,116 @@
           "saved": "已保存",
           "error": "保存失败",
           "retry": "重试"
+        }
+      },
+      "twoFactor": {
+        "nav": "两步验证",
+        "title": "两步验证",
+        "subtitle": "为登录增加第二个步骤，这样即使密码泄露也不足以进入你的账户。输入密码后，Motir会在每台新设备上要求验证。",
+        "off": {
+          "title": "两步验证已关闭",
+          "body": "开启后，Motir会在你输入密码后要求一次性验证码。建议从身份验证器应用开始——它无需联网，也是三种方式中最安全的。",
+          "cta": "设置身份验证器应用"
+        },
+        "methods": {
+          "title": "你的第二重验证",
+          "titleOff": "将会要求的验证方式",
+          "subtitle": "Motir会优先要求主验证方式，其他方式作为备选。",
+          "subtitleOff": "Motir提供的每种方式，以及各自的代价。",
+          "on": "已开启",
+          "primary": "主方式",
+          "lowerSecurity": "安全性较低",
+          "totp": {
+            "name": "身份验证器应用",
+            "desc": "来自1Password、Google Authenticator、Authy或任何符合RFC 6238的应用的六位验证码。无需信号，也无需邮箱。",
+            "descOn": "每次登录时优先要求。",
+            "setUp": "设置",
+            "replace": "更换"
+          },
+          "email": {
+            "name": "邮箱",
+            "desc": "验证码发送至{email}。虽然方便，但邮箱并不是可靠的第二重验证——需先设置身份验证器后才可用。",
+            "descOn": "验证码发送至{email}，{minutes}分钟内有效。在验证环节以“给我发送邮件验证码”提供——不会优先要求。",
+            "available": "可用",
+            "unavailable": "请先设置身份验证器"
+          },
+          "backup": {
+            "name": "恢复代码",
+            "desc": "十个一次性代码，用于手机遗失的情况。开启两步验证时Motir会立即生成。"
+          }
+        },
+        "recovery": {
+          "title": "恢复代码",
+          "subtitle": "在身份验证器不可用时使用的一次性代码。每个代码仅能使用一次。",
+          "remaining": "，共{total}个",
+          "generateTitle": "生成新的一组",
+          "generateDesc": "替换全部十个。新代码显示的那一刻，现有代码立即失效。",
+          "generate": "生成新代码",
+          "low": "你还剩{remaining}个恢复代码。请在用完之前生成新的一组。",
+          "exhausted": "你已用完所有恢复代码。如果现在丢失身份验证器，将只能通过邮件验证码登录。请生成新的一组。"
+        },
+        "stepUp": {
+          "title": "确认是你本人",
+          "subtitle": "输入密码以修改两步验证设置。",
+          "password": "密码",
+          "continue": "继续",
+          "noPassword": "你使用Google登录，因此无需确认密码。你的Google账户即是此次操作的保护。"
+        },
+        "enrol": {
+          "stepConfirm": "确认",
+          "stepScan": "扫描",
+          "stepCode": "输入验证码",
+          "scanTitle": "设置身份验证器应用",
+          "scanSubtitle": "使用1Password、Google Authenticator、Authy或任何支持时效验证码的应用扫描。",
+          "cantScan": "无法扫描？",
+          "cantScanHelp": "改为在应用中手动输入此密钥。",
+          "copyKey": "复制设置密钥",
+          "codeTitle": "确认验证码",
+          "codeSubtitle": "输入应用当前显示的六位数字，每{seconds}秒变化一次。",
+          "codeLabel": "六位验证码",
+          "codesNext": "接下来会显示十个恢复代码。请妥善保存——遗失应用时要靠它们登录。",
+          "turnOn": "开启",
+          "back": "返回",
+          "cancel": "取消"
+        },
+        "codes": {
+          "title": "保存你的恢复代码",
+          "subtitle": "十个代码，每个仅能使用一次。请保存在无需此设备也能取用的地方。",
+          "copyAll": "全部复制",
+          "download": "下载.txt",
+          "warning": "这是唯一一次能够显示它们。Motir以加密方式存储，因此无法再次显示——你可以生成新的一组来替换这些。",
+          "acknowledge": "我已将这些代码保存在安全的地方。",
+          "done": "完成",
+          "copied": "恢复代码已复制"
+        },
+        "regenerate": {
+          "title": "生成新的恢复代码？",
+          "body": "你当前的{remaining}个代码将立即失效。你会获得十个新代码，仅显示一次。",
+          "warning": "如果你打印过旧代码或将其保存在密码管理器中，请一并替换——它们在此之后将无法使用。",
+          "confirm": "生成新代码"
+        },
+        "devices": {
+          "title": "已信任的设备",
+          "subtitle": "勾选过“不再询问”的浏览器。Motir在这些设备上{days}天内跳过第二步。",
+          "revoke": "撤销",
+          "revokeAll": "全部撤销",
+          "empty": "没有已信任的设备——Motir在所有设备上都会要求第二重验证。",
+          "trustedOn": "信任于{date}",
+          "expires": "{date}过期"
+        },
+        "disable": {
+          "title": "关闭两步验证",
+          "subtitle": "关闭后，密码将成为保护你账户的唯一屏障。",
+          "cta": "关闭",
+          "confirmTitle": "关闭两步验证？",
+          "confirmSubtitle": "请确认密码。关闭后，密码将成为保护你账户的唯一屏障。",
+          "warning": "你的身份验证器绑定和所有剩余恢复代码都会被删除。重新开启需要从头设置。",
+          "confirm": "关闭"
+        },
+        "errors": {
+          "wrongCode": "验证码不匹配。请检查手机时间是否设为自动获取，然后输入应用显示的下一个验证码。",
+          "wrongPassword": "密码不正确。",
+          "generic": "出了点问题，请重试。"
         }
       }
     },

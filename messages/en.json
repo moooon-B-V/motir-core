@@ -2229,6 +2229,7 @@
         "language": "Language",
         "notifications": "Notifications",
         "appearance": "Appearance",
+        "twoFactor": "Two-factor",
         "apiTokens": "Tokens",
         "soon": "Soon"
       },
@@ -2267,6 +2268,116 @@
           "saved": "Saved",
           "error": "Couldn't save",
           "retry": "Retry"
+        }
+      },
+      "twoFactor": {
+        "nav": "Two-factor",
+        "title": "Two-factor authentication",
+        "subtitle": "Add a second step to your sign-in, so a stolen password is not enough on its own. Motir asks for it after your password, on every new device.",
+        "off": {
+          "title": "Two-factor authentication is off",
+          "body": "Turn it on and Motir will ask for a one-time code after your password. Start with an authenticator app — it works offline and is the strongest of the three.",
+          "cta": "Set up authenticator app"
+        },
+        "methods": {
+          "title": "Your second factor",
+          "titleOff": "What you'll be asked for",
+          "subtitle": "Motir asks for the primary method first and offers the others as fallbacks.",
+          "subtitleOff": "Every method Motir offers, and what each one costs you.",
+          "on": "On",
+          "primary": "Primary",
+          "lowerSecurity": "Lower security",
+          "totp": {
+            "name": "Authenticator app",
+            "desc": "A six-digit code from 1Password, Google Authenticator, Authy or any RFC 6238 app. Works with no signal and no inbox.",
+            "descOn": "Asked for first at every sign-in.",
+            "setUp": "Set up",
+            "replace": "Replace"
+          },
+          "email": {
+            "name": "Email",
+            "desc": "A code sent to {email}. Convenient, but an inbox is not a strong second factor — available once an authenticator is set up.",
+            "descOn": "A code to {email}, valid for {minutes, plural, one {# minute} other {# minutes}}. Offered at the challenge as “Email me a code” — never asked for first.",
+            "available": "Available",
+            "unavailable": "Set up an authenticator first"
+          },
+          "backup": {
+            "name": "Recovery codes",
+            "desc": "Ten single-use codes for the day your phone is gone. Motir generates them the moment you turn 2FA on."
+          }
+        },
+        "recovery": {
+          "title": "Recovery codes",
+          "subtitle": "Single-use codes for the day your authenticator is gone. Each one works once.",
+          "remaining": "of {total} left",
+          "generateTitle": "Generate a new set",
+          "generateDesc": "Replaces all ten. The codes you have now stop working the moment the new set is shown.",
+          "generate": "Generate new codes",
+          "low": "You have {remaining, plural, one {# recovery code} other {# recovery codes}} left. Generate a new set before you run out.",
+          "exhausted": "You’ve used every recovery code. If you lose your authenticator now, only an emailed code can get you back in. Generate a new set."
+        },
+        "stepUp": {
+          "title": "Confirm it's you",
+          "subtitle": "Enter your password to change your two-factor settings.",
+          "password": "Password",
+          "continue": "Continue",
+          "noPassword": "You sign in with Google, so there’s no password to confirm. Your Google account is what protects this change."
+        },
+        "enrol": {
+          "stepConfirm": "Confirm",
+          "stepScan": "Scan",
+          "stepCode": "Enter code",
+          "scanTitle": "Set up authenticator app",
+          "scanSubtitle": "Scan this with 1Password, Google Authenticator, Authy — any app that supports time-based codes.",
+          "cantScan": "Can’t scan it?",
+          "cantScanHelp": "Type this key into your app instead.",
+          "copyKey": "Copy setup key",
+          "codeTitle": "Confirm the code",
+          "codeSubtitle": "Enter the six digits your app is showing now. It changes every {seconds} seconds.",
+          "codeLabel": "Six-digit code",
+          "codesNext": "We’ll show you ten recovery codes next. Keep them — they are how you get back in if you lose the app.",
+          "turnOn": "Turn on",
+          "back": "Back",
+          "cancel": "Cancel"
+        },
+        "codes": {
+          "title": "Save your recovery codes",
+          "subtitle": "Ten codes, each usable once. Store them somewhere you can reach without this device.",
+          "copyAll": "Copy all",
+          "download": "Download .txt",
+          "warning": "This is the only time we can show them. Motir stores them encrypted, so we can’t display them again — you can generate a new set, which replaces these.",
+          "acknowledge": "I’ve saved these codes somewhere safe.",
+          "done": "Done",
+          "copied": "Recovery codes copied"
+        },
+        "regenerate": {
+          "title": "Generate new recovery codes?",
+          "body": "Your current {remaining, plural, one {# code} other {# codes}} stop working immediately. You’ll get ten new ones, shown once.",
+          "warning": "If you’ve printed the old codes or saved them in a password manager, replace them — they will not work after this.",
+          "confirm": "Generate new codes"
+        },
+        "devices": {
+          "title": "Devices you trusted",
+          "subtitle": "Browsers that ticked “don’t ask again”. Motir skips the second step on these for {days} days.",
+          "revoke": "Revoke",
+          "revokeAll": "Revoke all",
+          "empty": "No trusted devices — Motir asks for a second factor everywhere.",
+          "trustedOn": "Trusted {date}",
+          "expires": "expires {date}"
+        },
+        "disable": {
+          "title": "Turn off two-factor authentication",
+          "subtitle": "Your password becomes the only thing standing between anyone and your account.",
+          "cta": "Turn off",
+          "confirmTitle": "Turn off two-factor authentication?",
+          "confirmSubtitle": "Confirm your password. After this your password is the only thing protecting your account.",
+          "warning": "Your authenticator enrolment and all remaining recovery codes are deleted. Turning it back on starts from scratch.",
+          "confirm": "Turn off"
+        },
+        "errors": {
+          "wrongCode": "That code didn’t match. Check your phone’s clock is set automatically, then try the next code your app shows.",
+          "wrongPassword": "That password didn’t match.",
+          "generic": "Something went wrong. Try again."
         }
       }
     },

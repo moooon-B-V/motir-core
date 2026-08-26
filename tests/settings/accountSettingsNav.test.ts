@@ -91,7 +91,12 @@ describe('accountSettingsNav registry — grouping', () => {
       'notifications',
       'appearance',
     ]);
+    // Story 8.11 · MOTIR-1220 added `twoFactor` FIRST in this group. The order is
+    // asserted, not just the membership: the registry renders in declaration
+    // order and a second factor is the more consequential of the two things the
+    // Security group holds, so a re-order would be a visible product change.
     expect(groups.find((g) => g.group === 'security')?.entries.map((e) => e.id)).toEqual([
+      'twoFactor',
       'apiTokens',
     ]);
   });
