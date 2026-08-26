@@ -159,8 +159,20 @@ describe('2 — the payload and the PROMPT agree about the COUNT', () => {
 
     expect(() => dispatchPromptSchema.parse(body)).not.toThrow();
     expect(body.targetRepos).toHaveLength(2);
-    const prInstructions = body.prompt.split('\n').filter((line) => line.includes('TITLE carries'));
+    // MOTIR-3529 — UPDATED, not removed. It used to count `TITLE carries`
+    // lines. The property is the same and is the reason this gate exists — ONE
+    // instruction per repository, because each repository has its own pull
+    // request — but the instruction is now the LINK call rather than the title,
+    // which is a string the sync had to guess at.
+    const prInstructions = body.prompt
+      .split('\n')
+      .filter((line) => line.includes('LINK it: call the link_pull_request tool'));
     expect(prInstructions).toHaveLength(body.targetRepos.length);
+    // The key stays in every title, re-framed as a label for a human reader.
+    const titleLabels = body.prompt
+      .split('\n')
+      .filter((line) => line.includes('in the TITLE as well'));
+    expect(titleLabels).toHaveLength(body.targetRepos.length);
     for (const repo of body.targetRepos) {
       expect(body.prompt).toContain(`git worktree add ../${repo.name}-`);
     }
@@ -220,9 +232,12 @@ describe('4 — SINGLE-REPOSITORY invariance', () => {
       expect(body.prompt).toContain(
         'This item has no session lineage, so it ships as ONE pull request of its own.',
       );
+      // MOTIR-3529 renumbered this: the LINK call is now step 6, so the STOP
+      // is 7. The step it asserts is unchanged — only its ordinal moved.
       expect(body.prompt).toContain(
-        '6. STOP at the open pull request. Do not merge it and do not delete the branch.',
+        '7. STOP at the open pull request. Do not merge it and do not delete the branch.',
       );
+      expect(body.prompt).toContain('6. LINK it: call the link_pull_request tool');
       expect(body.prompt).not.toContain('Repositories (');
     }
     // The three scalars still say what they always said. The project has exactly
