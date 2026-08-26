@@ -269,13 +269,38 @@ resolves back to a diff.
 
 ### The decision
 
-**Plausible**, self-hostable and cookieless, embedded as a script tag carrying
-`data-domain="app.motir.co"`.
+**Plausible**, self-hostable and cookieless, embedded as a script tag rendered
+by the server from a runtime environment variable.
+
+> **⚠️ AMENDED 2026-08-26 (MOTIR-1163) — this section's PREMISE was wrong; its
+> CONCLUSION survives, for a better reason.** As authored, the two paragraphs
+> below said the embed carries `data-domain="app.motir.co"` and that there is
+> "no project API key, no public project id". That is true of Plausible's **NPM**
+> route and **false of the Script route actually provisioned** (MOTIR-1161's
+> provisioning record, 2026-08-26): the modern Script embed carries **no
+> `data-domain` attribute at all** and identifies the site by a **hashed per-site
+> script URL** — `https://plausible.io/js/pa-<hash>.js`. The text is corrected in
+> place; this block records what it used to claim, so the next reader does not
+> re-derive the old form from a stale sentence elsewhere.
+>
+> **Why the decision still holds.** §5 chose Plausible because it needs no
+> **build-time** value, and it still needs none: the identifier is a URL the
+> SERVER renders into `<head>` at request time, so it is an ordinary runtime
+> secret (`PLAUSIBLE_SCRIPT_SRC`, a Fly runtime secret) and never reaches
+> `next build`. **The Script route was chosen over NPM precisely to keep it
+> that way** — the NPM tracker runs in the browser, so the domain must reach the
+> client, and the tempting way to do that is `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`,
+> which `next build` inlines and which would manufacture the very
+> build-argument dependency this section picked Plausible to avoid.
+>
+> **What the section demanded is unchanged**, and MOTIR-1163 shipped exactly it:
+> one accessor (`lib/analytics.ts`), the tag rendered server-side from it, and
+> unset ⇒ nothing rendered.
 
 **The decisive property is that it needs no build-time public value.** Plausible's
-embed is a `<script>` tag whose only site identifier is the site's own domain —
-a string that is public, already known, and renderable by the server at request
-time. There is no project API key, no `NEXT_PUBLIC_*` variable, and therefore
+embed is a `<script>` tag whose only site identifier is a **per-site script URL**
+— a string that is public, already known, and renderable by the server at request
+time. There is no project API key and no `NEXT_PUBLIC_*` variable, and therefore
 **no second consumer of the build-argument seam.** Given that seam does not exist
 yet (`grep -c '^ARG' Dockerfile` → `0`), a choice that does not need it is
 strictly cheaper — this is what §1's _"prefer a choice whose public surface is
@@ -444,8 +469,11 @@ contract**, for a reason that is structural rather than a preference:
   behind each.
 - **MOTIR-1163 (analytics wiring) does NOT reuse it**, because §5's choice needs
   no build-time public value. MOTIR-1161's provisioning notes say the analytics
-  public id would be a build argument; **with Plausible chosen there is no such
-  id**, and that row of its table drops out.
+  public id would be a build argument; **with Plausible chosen there is no
+  build-time id**, and that row of its table drops out. (Amended 2026-08-26 —
+  there IS an identifier, the per-site script URL, and it is a RUNTIME secret
+  (`PLAUSIBLE_SCRIPT_SRC`). "No such id" was the stale half; "no build
+  argument" is the half that mattered and is unchanged. See §5's amendment.)
 
 This is one of the two places where the four choices interact, and it is worth
 naming plainly: choosing Plausible over PostHog did not only pick an analytics
@@ -493,17 +521,17 @@ added here.
 
 ## Consequences — what this record binds on Story 8.5's cards
 
-| card                                         | what changes                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MOTIR-1123** — email provisioning          | Provision **Resend**. `RESEND_API_KEY` → Fly runtime secret. **Read and record the sending region before creating anything**, and whether it is fixed at creation                                                                                                                                                            |
-| **MOTIR-1127** — email wiring                | Implement the `resend` arm of `getEmailProvider()`; it is a stub throwing today. Owns the From-address env name — `lib/email.ts` has none                                                                                                                                                                                    |
-| **MOTIR-1161** — Sentry + analytics accounts | Create the Sentry org **in the US region (irreversible)** — §3, following the data. Analytics is **Plausible** — capture the domain, not a key. **Drop the "analytics public site id → build argument" row: there is no such id.** Record each vendor's transfer basis (§8)                                                  |
-| **MOTIR-1162** — Sentry wiring               | Owns the build-argument seam (§7): the `Dockerfile` `ARG`s and `flyctl deploy --build-arg`. Tags releases with the commit SHA; environment stays runtime (§4)                                                                                                                                                                |
-| **MOTIR-1163** — analytics wiring            | Plausible script behind ONE `analyticsEnabled()` seam; unset env = no analytics. **No build argument needed.** No cookie banner is required, and none is planned (§5)                                                                                                                                                        |
-| **MOTIR-1165** — app-level rate limiting     | **Not Upstash.** Build against the shared Postgres store; hash IP and identifier into the key (§7). There is no vendor env to leave unset — the escape hatch is `MOTIR_RATE_LIMIT_STORE=memory`                                                                                                                              |
-| **MOTIR-2037** — `/api/v1`'s shared counter  | Build the Postgres arm of `RateLimitStore` — the exact shape in §6. Whichever of 2037 / 1165 lands first writes the store and the migration; the second reuses it                                                                                                                                                            |
-| **MOTIR-1160** — DPA + subprocessor list     | The processors are now named: **Resend** (email, US), **Sentry** (error payloads, US), **Plausible** (aggregate usage, EU — no transfer). Rate limiting adds **none**. **Per §8, look up each one's DPF certification or SCCs — including Fly, Neon and Tigris — and record which.** `blocked_by` this card as of 2026-08-10 |
-| **MOTIR-1124** — production go-live          | The prod secret set on `app.motir.co` is the union of the runtime rows in §2–§4, plus the Actions/build-arg half being present before the image is built                                                                                                                                                                     |
+| card                                         | what changes                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-1123** — email provisioning          | Provision **Resend**. `RESEND_API_KEY` → Fly runtime secret. **Read and record the sending region before creating anything**, and whether it is fixed at creation                                                                                                                                                                |
+| **MOTIR-1127** — email wiring                | Implement the `resend` arm of `getEmailProvider()`; it is a stub throwing today. Owns the From-address env name — `lib/email.ts` has none                                                                                                                                                                                        |
+| **MOTIR-1161** — Sentry + analytics accounts | Create the Sentry org **in the US region (irreversible)** — §3, following the data. Analytics is **Plausible** — capture the per-site script URL (amended 2026-08-26; see §5), not a build-time key. **Drop the "analytics public site id → build argument" row: there is no such id.** Record each vendor's transfer basis (§8) |
+| **MOTIR-1162** — Sentry wiring               | Owns the build-argument seam (§7): the `Dockerfile` `ARG`s and `flyctl deploy --build-arg`. Tags releases with the commit SHA; environment stays runtime (§4)                                                                                                                                                                    |
+| **MOTIR-1163** — analytics wiring            | Plausible script behind ONE `analyticsEnabled()` seam (`lib/analytics.ts`), rendered server-side from the runtime `PLAUSIBLE_SCRIPT_SRC`; unset env = no analytics. **No build argument needed.** No cookie banner is required, and none is planned (§5)                                                                         |
+| **MOTIR-1165** — app-level rate limiting     | **Not Upstash.** Build against the shared Postgres store; hash IP and identifier into the key (§7). There is no vendor env to leave unset — the escape hatch is `MOTIR_RATE_LIMIT_STORE=memory`                                                                                                                                  |
+| **MOTIR-2037** — `/api/v1`'s shared counter  | Build the Postgres arm of `RateLimitStore` — the exact shape in §6. Whichever of 2037 / 1165 lands first writes the store and the migration; the second reuses it                                                                                                                                                                |
+| **MOTIR-1160** — DPA + subprocessor list     | The processors are now named: **Resend** (email, US), **Sentry** (error payloads, US), **Plausible** (aggregate usage, EU — no transfer). Rate limiting adds **none**. **Per §8, look up each one's DPF certification or SCCs — including Fly, Neon and Tigris — and record which.** `blocked_by` this card as of 2026-08-10     |
+| **MOTIR-1124** — production go-live          | The prod secret set on `app.motir.co` is the union of the runtime rows in §2–§4, plus the Actions/build-arg half being present before the image is built                                                                                                                                                                         |
 
 **MOTIR-1160 was not previously blocked on this decision, and now is.** A
 subprocessor list is a legal artifact that names third parties who process
