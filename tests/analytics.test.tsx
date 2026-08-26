@@ -146,9 +146,19 @@ describe('the analytics seam is the ONE reader (MOTIR-1163)', () => {
  *
  * Extracted so the assertions below can be shown to FIRE (the fixture test at
  * the end). A guard that asserts an ABSENCE passes just as green when its
- * detector matches nothing at all, and today's Dockerfile declares zero `ARG`s
- * and today's deploy passes zero `--build-arg`s — so "no build argument names
- * it" is exactly the shape that would pass vacuously forever.
+ * detector matches nothing at all, so "no build argument names it" is exactly
+ * the shape that would pass vacuously forever.
+ *
+ * ⚠️ AMENDED (MOTIR-1162): this paragraph used to rest that worry on there being
+ * no build arguments AT ALL — "today's Dockerfile declares zero `ARG`s and
+ * today's deploy passes zero `--build-arg`s". That is no longer true: MOTIR-1162
+ * built the build-argument seam Sentry's browser DSN needs, so the `Dockerfile`
+ * now declares five `ARG`s and the deploy passes five `--build-arg`s. The guard
+ * is UNAFFECTED, and deliberately so — every line must name PLAUSIBLE before any
+ * of the three shapes below is consulted, which is why the fixture test already
+ * pins `ARG MOTIR_RELEASE` as a non-match. What changed is only that the
+ * vacuity worry is now hypothetical rather than the tree's actual state; the
+ * fixture test, not this sentence, is what answers it.
  */
 function buildTimeAnalyticsReferences(text: string): string[] {
   return text.split('\n').filter((line) => {

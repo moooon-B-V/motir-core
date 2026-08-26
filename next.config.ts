@@ -1,5 +1,7 @@
+import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+import { MONITORING_TUNNEL_ROUTE, monitoringRelease } from './lib/monitoring/config';
 
 // Wires next-intl's request config (./i18n/request.ts by default) into the build.
 const withNextIntl = createNextIntlPlugin();
@@ -197,4 +199,73 @@ const nextConfig: NextConfig = {
   // `pnpm assert:nft-trace` makes the same assertion on every pull request.
 };
 
-export default withNextIntl(nextConfig);
+/**
+ * Whether this build can upload source maps — i.e. whether a Sentry auth token
+ * reached it (a GitHub Actions secret, mounted into the image build; see the
+ * `Dockerfile` and `ci.yml`'s deploy job).
+ *
+ * It gates `sourcemaps.disable` rather than being ignored, because the Sentry
+ * SDK's Turbopack path does two things on its own the moment source maps are
+ * enabled: it flips `productionBrowserSourceMaps` on, and it DELETES the
+ * generated maps after the upload. With no token the upload is a no-op, so
+ * leaving it enabled would make a self-hosted `next build` generate browser
+ * source maps and then delete them — pure cost, and a difference from today's
+ * output for a build that is not being monitored at all.
+ */
+const canUploadSourceMaps = Boolean(process.env['SENTRY_AUTH_TOKEN']?.trim());
+
+/**
+ * Error monitoring (Subtask 8.5.6 / MOTIR-1162).
+ *
+ * ⚠️ THE CARD ASKED FOR THIS TO BE VERIFIED RATHER THAN ASSUMED, because
+ * `outputFileTracingExcludes` above is a live example of a `next.config` key
+ * this build never reads (MOTIR-2403). It was verified, and the answer is that
+ * source-map upload DOES run here — by a different mechanism than the webpack
+ * one most Sentry documentation describes:
+ *
+ *   - `next build` selects Turbopack when no bundler flag is set and sets
+ *     `process.env.TURBOPACK = 'auto'` BEFORE it loads this file
+ *     (`next/dist/lib/bundler.js`, called at the top of `next/dist/cli/
+ *     next-build.js`), so the SDK's `detectActiveBundler()` sees `turbopack`.
+ *   - On Turbopack with Next ≥ 15.4.1 — this repo is on 16.2.6 — the SDK does
+ *     NOT install a webpack plugin. It sets `compiler.runAfterProductionCompile`,
+ *     which Next invokes once the compile is done, and THAT injects debug ids
+ *     and uploads the maps (`@sentry/nextjs`'s
+ *     `getFinalConfigObjectBundlerUtils.ts` → `handleRunAfterProductionCompile.ts`).
+ *
+ * So the inert-key trap does not apply, and the evidence is a log line rather
+ * than a reading: a build with a token prints
+ * `Successfully uploaded source maps to Sentry` at info level. `ci.yml`'s deploy
+ * step greps the deploy output for exactly that and FAILS the release if a
+ * token was supplied and the line is absent — the same "fail loudly rather than
+ * quietly stop mattering" shape the Dockerfile's standalone assertion uses,
+ * and the reason this card's "demonstrated to have RUN" criterion keeps holding
+ * after today.
+ */
+export default withSentryConfig(withNextIntl(nextConfig), {
+  // Read from the Actions secrets at image-build time; unset locally and in a
+  // self-hosted build, where every option below degrades to a no-op.
+  org: process.env['SENTRY_ORG'],
+  project: process.env['SENTRY_PROJECT'],
+  authToken: process.env['SENTRY_AUTH_TOKEN'],
+
+  // The same-origin relay for browser events. `withSentryConfig` turns this into
+  // a Next REWRITE and injects the path into the client bundle — see
+  // `lib/monitoring/config.ts` and `instrumentation-client.ts`.
+  tunnelRoute: MONITORING_TUNNEL_ROUTE,
+
+  // The 40-char commit SHA, arriving as a build argument. `withSentryConfig`
+  // writes it into Next's `env` as `_sentryRelease`, which is how BOTH bundles
+  // report the same release the maps were uploaded against.
+  release: { name: monitoringRelease() },
+
+  sourcemaps: { disable: !canUploadSourceMaps },
+
+  // ⚠️ NO `automaticVercelMonitors` KEY HERE, and its absence is the decision.
+  // This app moved off Vercel (MOTIR-2384), so the option has nothing to do —
+  // and passing it `false` to say so is worse than leaving it out: the SDK
+  // answers with a DEPRECATION WARNING on every single build ("use
+  // webpack.automaticVercelMonitors instead. (Not supported with Turbopack.)"),
+  // which is a line a reader has to learn to ignore in the one log where the
+  // source-map upload also reports itself.
+});

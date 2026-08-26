@@ -460,6 +460,24 @@ contract**, for a reason that is structural rather than a preference:
 
 ### Q7 — MOTIR-1162 builds the build-argument seam, once
 
+> **✅ BUILT 2026-08-26 (MOTIR-1162). The two sentences below are now a record of
+> the state this card found, not of the tree.** `Dockerfile`'s builder stage
+> declares five `ARG`s — `NEXT_PUBLIC_SENTRY_DSN`,
+> `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `MOTIR_RELEASE`, `SENTRY_ORG`,
+> `SENTRY_PROJECT` — each defaulting to empty so a build with no arguments still
+> produces a working, unmonitored image; `ci.yml`'s deploy step passes one
+> `--build-arg` per value. **One correction to the shape this section
+> anticipated:** `SENTRY_AUTH_TOKEN` is NOT among them. It is a credential, and a
+> build argument is recorded in the build's own metadata, so it arrives through
+> `flyctl deploy --build-secret` and a `RUN --mount=type=secret` on the single
+> instruction that consumes it. The seam is otherwise exactly as described:
+> adding a future build-time value is one `ARG`/`ENV` pair and one `--build-arg`.
+>
+> The deploy also now REFUSES to release when any of the four monitoring Actions
+> secrets is empty, and asserts afterwards that Sentry holds a release named for
+> the commit — because every failure mode here is silent, and a release nobody
+> can read stack traces from looks exactly like a healthy one.
+
 `Dockerfile` declares no `ARG`s and `ci.yml`'s deploy step passes no
 `--build-arg`. Exactly **one** value in this whole record needs that seam:
 `NEXT_PUBLIC_SENTRY_DSN`, plus §4's `MOTIR_RELEASE`. So:

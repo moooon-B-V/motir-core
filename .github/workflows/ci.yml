@@ -1230,8 +1230,102 @@ jobs:
       # The trade is that the Dockerfile's `node:22-slim` bases come from Docker
       # Hub anonymously; if that becomes the flake, the mirror composite
       # (`.github/actions/buildx`, MOTIR-2018) is where the fix belongs.
+      # ⚠️ FAIL HERE RATHER THAN SHIP A BLIND RELEASE (Subtask 8.5.6 /
+      # MOTIR-1162). Every value below is a GitHub Actions secret set by
+      # MOTIR-1161, and each one that is missing degrades monitoring SILENTLY:
+      # an empty `NEXT_PUBLIC_SENTRY_DSN` builds a browser bundle that reports
+      # nothing, an empty `SENTRY_AUTH_TOKEN` ships stack traces nobody can
+      # read. Nothing errors, no check goes red, and the gap is only visible
+      # months later on a surface this pipeline never opens. So the release
+      # stops instead.
+      - name: Assert the monitoring build-time secrets are present
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for name in NEXT_PUBLIC_SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            eval "value=\${$name:-}"
+            [ -n "$value" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing monitoring secret(s):$missing — see MOTIR-1161's provisioning record for the value and its home. Refusing to deploy an unmonitored release."
+            exit 1
+          fi
+          echo "all four monitoring build-time secrets are present"
+
+      # ⚠️ THE BUILD ARGUMENTS ARE NOT OPTIONAL EXTRAS — they are the ONLY way
+      # the browser half of monitoring gets configured, because `next build`
+      # inlines a `NEXT_PUBLIC_*` value into the client bundle and a Fly runtime
+      # secret cannot reach it (MOTIR-1161's warning table; the `Dockerfile`'s
+      # `ARG` block is the receiving end). `MOTIR_RELEASE` is the same story for
+      # the release name: source maps are uploaded DURING this build and must
+      # carry the string the running code reports, `.git` is in `.dockerignore`
+      # so the SDK's own `git rev-parse` fallback finds nothing, and Fly's
+      # runtime `FLY_*` variables identify the machine rather than the build.
+      #
+      # The AUTH TOKEN goes through `--build-secret`, not `--build-arg`: a build
+      # argument is recorded in the build's metadata and a credential must not
+      # be. The Dockerfile mounts it for the single `next build` command.
       - name: Build the image and release it
-        run: flyctl deploy --local-only --app "$FLY_APP"
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          flyctl deploy --local-only --app "$FLY_APP" \
+            --build-arg "NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN" \
+            --build-arg "MOTIR_RELEASE=$GITHUB_SHA" \
+            --build-arg "SENTRY_ORG=$SENTRY_ORG" \
+            --build-arg "SENTRY_PROJECT=$SENTRY_PROJECT" \
+            --build-secret "SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN" \
+            2>&1 | tee /tmp/fly-deploy.log
+
+      # ⚠️ "CONFIGURED" IS NOT "RAN", AND THIS REPO HAS THE SCAR TO PROVE IT.
+      # `next.config.ts` already carries one key — `outputFileTracingExcludes` —
+      # that Turbopack never reads: it pruned nothing for months while reading as
+      # solved (MOTIR-2403). Source-map upload is the same shape of risk, so this
+      # card's acceptance asks for the upload to be DEMONSTRATED rather than
+      # configured, and asking once at authoring time would only cover today.
+      #
+      # The hard gate is the RELEASE existing in Sentry. `@sentry/nextjs`'s
+      # Turbopack path creates it inside the same `runAfterProductionCompile`
+      # hook that then uploads the maps, so a release named after this commit is
+      # positive evidence the hook ran with a working token — and its absence is
+      # exactly the regression (a hook that silently stopped being invoked, a
+      # token that expired) that would otherwise surface as unreadable stack
+      # traces during an incident.
+      #
+      # The upload line is reported but NOT gated on: it is the bundler plugin's
+      # own wording and travels through flyctl's build-output rendering, so
+      # making a production release depend on that string would trade a real
+      # check for a brittle one.
+      - name: Assert Sentry received this release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          if grep -qF 'Successfully uploaded source maps to Sentry' /tmp/fly-deploy.log; then
+            echo "build log: source maps uploaded"
+          else
+            echo "build log: no upload line seen (flyctl may not surface it) — the release check below is the gate"
+          fi
+          code=$(curl -sS -o /tmp/sentry-release.json -w '%{http_code}' \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/releases/$GITHUB_SHA/")
+          echo "GET releases/$GITHUB_SHA → HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Sentry has no release named $GITHUB_SHA. The source-map upload did not run — stack traces from this deploy will not be symbolicated. See next.config.ts's monitoring block for how the Turbopack upload path is wired."
+            exit 1
+          fi
+          head -c 400 /tmp/sentry-release.json; echo
 
       # ── Post-deploy verification: three things only a real release can show ──
       #
