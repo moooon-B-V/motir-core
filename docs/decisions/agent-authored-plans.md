@@ -1664,7 +1664,7 @@ story rather than merely sequenced after it.
 
 ---
 
-## AMENDMENT 8 — `planned` is a PROMISE, and a plan that stops keeping it says so (MOTIR-3574, 2026-08-26)
+## AMENDMENT 9 — `planned` is a PROMISE, and a plan that stops keeping it says so (MOTIR-3574, 2026-08-26)
 
 **Read against `origin/main` `5bb1928b`.** Every code claim below was checked there.
 
@@ -1798,6 +1798,20 @@ same reason and can only be declined.
 So a `stale` plan's exits are: **wait for the drift to reverse, or decline.** That is a real
 limitation, and it is strictly better than what it replaces — a plan that is `planned`, unapprovable,
 uneditable, and _still in the queue asking a reviewer to press a button that cannot work_.
+
+**⚠️ SUPERSEDED IN PART — that capability SHIPPED, between this decision being written and
+MOTIR-3578 running (2026-08-26).** AMENDMENT 8 (MOTIR-3540) landed `correctProposal` — which carries
+`parentRef`, `blockedByRefs`, `targetRepo` and a `modify`'s `patch` — and `withdrawProposal`, backed
+by a real `planItemRepository.deleteById`. So _"neither move is possible"_ above is no longer true,
+and the paragraph is kept as the record of why the table was written with three edges rather than as
+a live constraint.
+
+**What actually remains is smaller and is a DECISION, not a missing capability.** Both new methods go
+through `assertPlanProposalsEditable`, which admits `generating | planned` and refuses everything
+else — so a `stale` plan is not editable today, and the fourth edge needs that guard widened to
+`generating | planned | stale`, not a new door built. **MOTIR-3579 must re-decide D4 rather than
+inherit it**, and weigh the widening against the frozen-proposal-set assumption named below, which is
+the reason the guard is narrow in the first place.
 
 **Restoring the fourth edge needs a way to WITHDRAW or RE-TARGET a proposal, which is its own card**
 (cited in D6). It is deliberately not smuggled in here: it changes what a `planned` plan's proposal set
