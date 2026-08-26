@@ -14,6 +14,7 @@ the same primitives — no Pencil→code gap.
 | **Appearance pane**            | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                  |
 | **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
 | **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
+| **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                        |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -996,3 +997,249 @@ password change/reset paths reuse shipped Better-Auth. The name/email inline
 edits follow the **inline-edit no-tree-refresh** page-state contract (success
 response = confirmation), and the rail identity header (`.me`) re-reads the
 updated name/avatar on a server refresh.
+
+---
+
+# Settings at ARRIVAL — the family frame (MOTIR-3441)
+
+**Asset ·** `arrival.mock.html` / `arrival.png`. **Story ·**
+[MOTIR-3440](motir:cmt8s085i003li1ph06u469kx) — the 24 heavy authed surfaces stop blocking on their
+slowest read. **Grammar ·** `design/shell/design-notes.md` § _The navigation-pending grammar_, second
+revision. This section applies that grammar to the settings family; it re-specifies none of it.
+
+Settings is **31 of the 58** `app/(authed)` routes and **14 of the 26** heavy ones — over half the
+story's population — and they share one body shape. That sameness is what makes a family answer right
+here where the rest of the story needs a decision per surface.
+
+## The frame is the PANE. The rail is not in it, and that is a fact rather than a preference
+
+The card asked which of two readings the frame takes — _the whole surface_ or _the pane only_ — and
+said the answer changes what the code card builds. **It is the pane only, and the reason is
+structural: the rail is not the page's to draw.**
+
+- `SidebarNav variant="rail"` is mounted in **`app/(authed)/layout.tsx`**, in `AppLayout`'s
+  `sidebar` slot. It is a sibling of `{children}`, not a descendant, at every route in the app.
+- The family has exactly **two** layouts — `settings/project/layout.tsx` and
+  `settings/account/layout.tsx` (`git ls-tree -r origin/main --name-only | grep -E
+'^app/\(authed\)/settings/.*layout\.tsx$'`) — and **neither renders a rail**. Both are guard-only:
+  the project one returns the no-project / no-access states, the account one re-checks the session.
+  Their own comments say where the nav lives: _"the grouped settings NAV itself lives in the app rail
+  — SidebarNav swaps to it when the route is inside this area … the App Router keeps the rail in the
+  parent (authed) layout, not a nested one under `<main>`."_
+- The swap is a **client** read of `usePathname()`, so on a soft navigation the rail exchanges its
+  item set in the same frame as the click; on a hard navigation it is server-rendered with the shell.
+
+So the rail is never pending, at any width, from any entry point. A frame that drew it as ghost blocks
+would put a skeleton over a rail that is already on screen and already correct — which is the flicker
+the reveal delay exists to remove, arriving from the other direction. **The family shape survives as
+_rail (untouched) + pane frame_.** Panel A draws both states with the rail held identical, because the
+absence of a change is the thing to see.
+
+**What this implies for the two navigations the card names:**
+
+| navigation                                            | the rail                                                                                        | the pane                                                    |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **settings → settings** (Details → Automation)        | unchanged — same item set, the active mark moves                                                | the only region that exchanges: the frame, then the content |
+| **into settings from outside** (Work Items → Details) | the item set swaps, instantly on a soft navigation (client) and with the document on a hard one | the frame, then the content                                 |
+| **out of settings**                                   | swaps back the same way                                                                         | the destination's own frame, which is not this family's     |
+
+## Which routes the frame is correct for — read from the layouts, not assumed
+
+The card required this be read rather than assumed, and reading it changes one answer.
+
+| group                      | routes | rail                                                                                                             | frame    |
+| -------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------- | -------- |
+| `settings/project/**`      | 17     | the **project-settings rail** — `SidebarNav` swaps to `lib/settings/projectSettingsNav`, filtered per permission | this one |
+| `settings/account/**`      | 6      | the **account-settings rail** — the same swap over `lib/settings/accountSettingsNav`                             | this one |
+| `settings/workspace/**`    | 4      | **no settings rail.** The ordinary project rail, with Jobs and Git as bottom-nav rows                            | this one |
+| `settings/organization/**` | 4      | **no settings rail.** The ordinary project rail                                                                  | this one |
+
+**So the answer to _"do workspace and organization settings carry a rail?"_ is NO** — eight of the 31
+routes render inside the app's ordinary rail, and only the 23 under `project/` and `account/` get a
+swapped one. **It does not change the frame**, because the frame never contained the rail in the first
+place; what it changes is the claim that may be made about the frame. The frame is correct for a pane
+with an ordinary rail beside it exactly as for one with a settings rail beside it, and it is correct
+because it draws neither.
+
+## What the frame draws — and the one place it departs from the generic one
+
+```
+mx-auto flex max-w-[Wrem] flex-col gap-6      the pane wrapper — the page's own, W from the route
+  header  flex flex-col gap-1                 THE REAL HEADER: <h1> + <p>. Not a placeholder.
+  <Suspense fallback=…>                       the boundary, BELOW the gate
+    animate-pulse                             one pulse for the region, so the blocks are in phase
+      rounded-(--radius-card) border          the card stand-in: label bar + action bar + 3 rows
+```
+
+**The header is real, and that is the family's substantive difference from `PageSkeleton`'s generic
+body.** Rule 2 of _WHICH SURFACES EARN A FRAME_ says a frame only ever covers a region that has
+nothing to show yet. A settings pane's title is `t('<pane>.title')` and its subtitle interpolates the
+project or organization name — **both already resolved by the gate**, because `getActiveProject()` is
+what the guard runs on. A generic page draws a title block because a generic page's title is not
+knowable before its read; here it is knowable before the read is even issued, so drawing a grey bar
+over it would be a frame covering a region that has something to show.
+
+**This is a requirement on `PageSkeleton`, and it is stated here because that primitive does not exist
+yet** (`design/shell/design-notes.md` § _What this asset SPECIFIES that no card owns_, item 1):
+`PageSkeleton` must let a caller supply a real header, or omit the header block, rather than always
+drawing one. The settings frame composes its **wrapper and its reveal**; it does not take its header
+block.
+
+**The card stand-in is not a new drawing.** It is `app/(authed)/settings/project/fields/loading.tsx`'s
+composition — a `rounded-(--radius-card)` bordered box at `p-(--spacing-card-padding)`, a
+`mb-4 flex items-center justify-between` row carrying an `h-4` label bar and an `h-7` action bar, then
+three `flex items-center gap-3` rows of an `size-8` square and an `h-3.5` bar at 40 / 48 / 56% —
+**with its two header placeholders removed**. Three rows is a screenful for a 42–46rem pane and is not
+a count of anything.
+
+## The WIDTH axis — the one thing the shell's no-shift claim does not reach
+
+`design/shell/design-notes.md` § _THE NO-SHIFT CLAIM_ is _heights and gaps, never widths_, and its
+reason is stated: _"the frame and the arriving page both fill `<main>`'s width."_ **On this family that
+premise is false.** Every settings pane is a CENTRED column — `mx-auto max-w-[Wrem]` — so a frame whose
+W differs from its page's moves the content horizontally on settle. Measured over all 31 routes, the
+family uses **eight distinct W**:
+
+| W       | routes                                                                                                                                                                                                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `34rem` | `account/appearance`                                                                                                                                                                                                                                                                                               |
+| `42rem` | `project` · `project/fields` · `project/components` · `project/estimation` · `project/members` · `project/code-access` · `project/roles` · `project/roles/new` · `project/ai-planning` · `project/ai-planning/lessons/[lessonId]` · `account/language` · `account/notifications` · `account/profile` · `workspace` |
+| `45rem` | `organization`                                                                                                                                                                                                                                                                                                     |
+| `46rem` | `project/automation` · `project/repositories` · `workspace/github` · `workspace/gitlab` (the last two via `GitSettingsShell`)                                                                                                                                                                                      |
+| `48rem` | `project/workflow` · `organization/billing` · `organization/members` · `organization/usage`                                                                                                                                                                                                                        |
+| `52rem` | `project/board` · `project/ai-planning/lessons`                                                                                                                                                                                                                                                                    |
+| `60rem` | `workspace/jobs`                                                                                                                                                                                                                                                                                                   |
+| `64rem` | `account/tokens`                                                                                                                                                                                                                                                                                                   |
+
+**So W is a prop and each route passes its own** — the same literal its own wrapper carries, so the two
+cannot disagree. A frame fixed at 42rem in front of the 60rem Job-runs pane settles by **144px on each
+side**. Panel C draws 42 / 48 / 60 in the same stage so the movement is visible rather than argued.
+
+**Two routes have no `max-w` of their own** and take it from a shell they render:
+`workspace/github` and `workspace/gitlab` are `GitSettingsShell`'s `46rem`. `account` and
+`project/roles/[roleKey]` are covered below.
+
+## The allocation — all 14 heavy panes, with the honest rows written
+
+Three tiers, per `design/work-items/design-notes.md` § _The item page at ARRIVAL_'s method: **with the
+frame** = painted from the gate, above the boundary · **with the first content** = behind the
+boundary · **after the page** = a second, later boundary. The gate is the reads that decide whether
+this reader may see this page — nothing may be flushed until it has run.
+
+Every project-settings pane shares the same gate prefix: `getSession` → `getTranslations` →
+`getActiveProject` → `guardSettingsPage('<entry>')`.
+
+| #   | route                                             | awaits | with the frame                                                         | with the first content                                                                  | after the page                              | what actually changes                                                                                                                                     |
+| --- | ------------------------------------------------- | ------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `settings/project`                                | 6      | header                                                                 | `Promise.all([getDetails, getManageCapabilities])`, then `getFormatter`                 | —                                           | **the frame only.** The two reads are already one wave                                                                                                    |
+| 2   | `settings/project/board`                          | 8      | `<h1>` + subtitle (see the breadcrumb note below)                      | `getBoard` ∥ `listStatusesByProject`                                                    | —                                           | **serial → concurrent.** The two are independent; `statusByKey` merely joins them                                                                         |
+| 3   | `settings/project/workflow`                       | 6      | header                                                                 | `getWorkflow` ∥ `getStatusAutomation`                                                   | —                                           | **serial → concurrent.** Independent; two editors, one each                                                                                               |
+| 4   | `settings/project/automation`                     | 6      | header                                                                 | `automationRulesService.list`, then the six-way `Promise.all`                           | —                                           | **the frame only.** The second wave needs the label ids the first returns, so it genuinely stays two waves                                                |
+| 5   | `settings/project/repositories`                   | 6      | `<h1>` only                                                            | `getRoomView` → the lead line, the summary line, the CI-paused banner and the rows      | —                                           | **the frame only.** One read; nothing to make concurrent. **The lead line is tier 2**, because which of two strings it uses depends on `view.rows.length` |
+| 6   | `settings/project/ai-planning`                    | 6      | header                                                                 | the five-way `Promise.all` (capabilities, settings, pause, formatter, `canViewLessons`) | `listLessons` — the lesson-library preview  | **a second boundary.** The preview is the one settings region that is genuinely late: it cannot start until `canViewLessons` returns                      |
+| 7   | `settings/project/ai-planning/lessons`            | 6      | back-link + header                                                     | the three-way `Promise.all` (page, formatter, `mayManage`)                              | —                                           | **the frame only.** Already one wave                                                                                                                      |
+| 8   | `settings/project/ai-planning/lessons/[lessonId]` | 7      | back-link + header                                                     | — **nothing**                                                                           | —                                           | **NOTHING STREAMS.** `getLesson` decides the `notFound()`, so it is a gate read — and once it returns the body has everything                             |
+| 9   | `settings/project/roles/[roleKey]`                | 6      | — **nothing**                                                          | — **nothing**                                                                           | —                                           | **NOTHING STREAMS.** `getRoleCatalog` decides the 404 AND supplies `RoleDetail`'s own `<h1>`                                                              |
+| 10  | `settings/project/roles/[roleKey]/edit`           | 6      | — **nothing**                                                          | — **nothing**                                                                           | —                                           | **NOTHING STREAMS.** The same catalog read, the same 404, `RoleEditor`'s header inside it                                                                 |
+| 11  | `settings/workspace/jobs`                         | 9      | header                                                                 | `getMemberRole` → the tab strip, then `countDLQ` ∥ the selected tab's list              | —                                           | **serial → concurrent** on the second wave. The role selects which list is fetched, so it precedes them                                                   |
+| 12  | `settings/workspace/gitlab`                       | 7      | the whole `GitSettingsShell` header — title, subtitle, provider switch | `getConnectionForWorkspace` → the connected / not-connected panel                       | —                                           | **the frame only.** One read, and the shell above it is pure `t('git')`                                                                                   |
+| 13  | `settings/organization`                           | 7      | header                                                                 | `listUserWorkspaces` ∥ `listMembers` ∥ `getAiAccess`                                    | —                                           | **three serial → one wave.** The largest single win in the family                                                                                         |
+| 14  | `settings/organization/billing`                   | 6      | the `sr-only` title                                                    | `listMembers` → `BillingClient`                                                         | `BillingClient`'s own screens (client-side) | **the frame only**, and a small one: the client island already owns its per-screen states                                                                 |
+
+**Three of the fourteen have no allocation at all, and writing that down is the point.** Rows 8–10 are
+`notFound()` deciders whose deciding read IS the read that fills the page. There is nothing left to put
+behind a boundary, and a `<Suspense>` added there would wrap a value already in hand — the padding the
+card said must not happen. Row 9 and row 10 do not even paint a header, because `RoleDetail` and
+`RoleEditor` own theirs and both need `role`.
+
+**Row 2's breadcrumb is the family's one no-shift hazard.** `BoardSettingsHeader` renders a
+`text-xs` breadcrumb line above the `<h1>` **only when `boardName` is present**, and `boardName` comes
+from the tier-2 `getBoard`. So the header grows by one line plus its `gap-2` when the content arrives.
+**The frame reserves that line** — an `h-4` block in the same position — so the title does not jump.
+This is the only settings pane where a tier-1 region changes height on settle.
+
+**And row 6 is the only second boundary in the family.** Everywhere else the third tier is empty, which
+is the expected shape for a pane that is one card of fields over two reads.
+
+## The two shipped settings skeletons — SUPERSEDED
+
+`app/(authed)/settings/project/fields/loading.tsx` and
+`app/(authed)/settings/project/components/loading.tsx` are the only two route-level pending states in
+the family. They are drawn in Panel D as they actually render.
+
+**Verdict: both are deleted, in the same commit that lands the shared component in those two routes.**
+
+- **Not because a boundary is illegal there.** Neither page calls `notFound()`, so both are legal
+  under `motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_.
+- **Because they are the same drawing twice, from a second source, and have already drifted:** the
+  title bar is `w-32` in one and `w-40` in the other; the action bar `w-24` and `w-28`. Neither number
+  stands for anything — the real titles are _Fields_ and _Components_, which the family frame paints
+  instead of approximating. Two hand-rolled copies of one drawing is precisely the drift rule 4 of
+  _WHICH SURFACES EARN A FRAME_ names, and `IssueTreeSkeleton` is what it looks like after eighty days.
+- **Because a route boundary that survives beside an in-page frame shows the same pending state
+  twice for one navigation** — the route fallback while the page function runs, then the page's own
+  fallback while its body resolves.
+
+**Nothing else under `app/` is touched.** `app/(planning)/loading.tsx` and
+`app/(public)/explore/(square)/loading.tsx` are outside this family and outside this story.
+
+## Token / a11y rules honoured
+
+- Every fill is `--el-muted`; every edge `--el-border`; the arrived card `--el-card` /
+  `--shadow-(--shadow-card)`. **No Tier-0 `--color-*`, no invented hue.**
+- Every radius is `--radius-card` / `--radius-control` / `--radius-btn`; padding is
+  `--spacing-card-padding`; the action bar is `h-7`, matching the shipped skeletons. No raw
+  `rounded-md` / `p-2`.
+- Header ink is `--el-text`; subtitle `--el-text-muted` **on the page surface only**, where it is
+  4.54:1 — the pane's wrapper paints no surface of its own, so the caveat in
+  `motir-core/CLAUDE.md`'s contrast table does not bite. The board's own annotation ink is
+  `--el-text-secondary`.
+- `aria-busy="true"` on the frame region; the blocks are decorative and carry no text. The region is
+  announced once, not per block.
+- The reveal is `design/shell/`'s `nav-pending-reveal` keyframe at 120ms, **referenced, never
+  re-declared** — one declaration governs the shell's mark and every page's frame.
+- Dark is the same tokens re-emitted (Panel F). The mock's dark panel carries
+  `data-appearance-scope` beside `data-theme="dark"` and declares `color` on the container, so the
+  Tier-3 layer resolves on the subtree.
+
+## Primitives composed (no hand-rolling)
+
+| element              | primitive / token                                                                 | note                                                                  |
+| -------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| the pane wrapper     | `mx-auto flex max-w-[Wrem] flex-col gap-6`                                        | the page's own wrapper, with W passed in — not a copy                 |
+| the header           | the page's real `<h1>` + `<p>`                                                    | painted from the gate; the frame does not draw it                     |
+| the wrapper + reveal | `PageSkeleton` (MOTIR-3433's, reverted — see the GIVES/TAKES below)               | composed, with the header block omitted                               |
+| the card stand-in    | `rounded-(--radius-card)` · `border-(--el-border)` · `p-(--spacing-card-padding)` | `settings/project/fields/loading.tsx`'s composition, minus its header |
+| the pulse            | `animate-pulse` on the region                                                     | one animation, so the blocks are in phase                             |
+| the rail             | `SidebarNav variant="rail"` — **unchanged, and outside the frame**                | rendered in the asset from the real component, not redrawn            |
+
+## The design-allocation sweep — what this asset GIVES and TAKES
+
+| card                                                                                | GIVES / TAKES | what                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[MOTIR-3443](motir:cmt8s08bg003oi1phhs0qf51a)** — settings opens on its own frame | **GIVES**     | the frame's composition, the pane-only decision with its evidence, the W-is-a-prop rule and the eight-width table, rows 1–10 of the allocation, the breadcrumb reservation, and the delete-both-`loading.tsx` verdict                                                                                         |
+| **[MOTIR-3448](motir:cmt8s08ik003ti1phu26fxgo9)** — workspace + organization panes  | **GIVES**     | rows 11–14, and the finding that these eight routes carry **no** settings rail — so the card must not reach for one                                                                                                                                                                                           |
+| **[MOTIR-3442](motir:cmt8s088r003ni1phat3x1o9q)** — the remaining ten surfaces      | **GIVES**     | nothing to build, and one thing to know: the CENTRED-column caveat on the no-shift claim generalises to any surface that is `mx-auto max-w-[…]` rather than full-width                                                                                                                                        |
+| **[MOTIR-3449](motir:cmt8s08js003ui1ph9dawc83l)** — the vitest gate                 | **GIVES**     | three assertions this asset makes checkable: no `loading.tsx` exists under `app/(authed)/settings/`, the frame's W equals its page's, and the two deleted files stay deleted                                                                                                                                  |
+| **MOTIR-3433's `PageSkeleton`**                                                     | **TAKES**     | a requirement it does not yet have: the header block must be **omittable**, because this family paints a real header above the boundary. `PageSkeleton` was reverted with MOTIR-3433 and no card owns rebuilding it — named in `design/shell/design-notes.md` § _What this asset SPECIFIES that no card owns_ |
+| **`design/shell/design-notes.md`** § _THE NO-SHIFT CLAIM_                           | **TAKES**     | its scope, not its content: _heights and gaps, never widths_ holds for a full-width `<main>` and not for a centred column. Stated here rather than edited there, because the shell asset's own subject is full-width                                                                                          |
+
+## How the render was produced
+
+Generated, not hand-drawn, so the asset cannot drift from the app:
+
+1. **The rail is the real `SidebarNav variant="rail"`** in its project-settings state, dumped through
+   the repository's own vitest + React-Testing-Library setup with the real `messages/en.json` and the
+   admin permission set — the same technique `design/shell/navigation-pending.mock.html` § _How the
+   render was produced_ describes. It is the settings rail the app renders, including its active mark.
+2. **The two shipped settings skeletons are the real components**, rendered the same way — Panel D is
+   their output, not a redraw of it.
+3. **Every string is the real `en` catalog's** — `settings.automation.*`, `settings.details.*`,
+   `settings.workflow.*`, `settings.jobs.*`.
+4. **The stylesheet is Tailwind's own output** over this markup, with
+   `@motir/design-system/theme.css`, so the token layers are the build's rather than a retyped block.
+5. The `.png` is exported with `node scripts/render-design-mock.mjs`.
+
+Two board artefacts, named so they are not read as design: the shell stage is held at a fixed
+**820px** (the app's shell is `h-dvh`), and the frames showing a revealed state force the reveal
+animation's end state, because a board is a still.
