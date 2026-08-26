@@ -19,6 +19,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **Show changes** on the plan canvas          | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
 | The timeline's **CONTENT events**            | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
 | The **FIFTH plan status** on every surface   | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
+| **Revising a plan under review**             | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -2482,3 +2483,178 @@ compile error until it is filled:
 **And the copy:** `aiPlanning.status.stale`, the tab label, the tab's empty state (§4), and the
 rail's outcome line (§5) are new message keys — **each needs its `zh` twin**, or the catalog parity
 gate fails.
+
+---
+
+# Part XII — Asking Motir to REVISE the plan you are reviewing (MOTIR-3597 / Story MOTIR-3595)
+
+**Its OWN asset**: `design/ai-planning/plan-revision.mock.html` + `plan-revision.png`, six panels,
+plus this section. It does not amend `plans-surface.mock.html` or any other frozen asset (_A design
+result is a MOMENT_).
+
+A reviewer reading a generated plan has three natural reactions and the product serves two of them:
+approve it, or decline the whole tree. The third — _it is nearly right_ — has nothing to press. This
+Part draws the verb that serves it.
+
+## 0. Drawn against SHIPPED reality — what was RENDERED first
+
+Before a line of the board was drawn, the real `PlanReviewRail`, `PlanProposalList` and
+`PlanChangeComposer` were bundled with esbuild against the repository's own sources, wrapped in a
+real `NextIntlClientProvider` over `messages/en.json`, painted with the real Tailwind build over
+`@motir/design-system/theme.css`, and screenshotted headlessly at the shipped 352px rail width. Four
+things that render settled — none of them legible in the `.tsx`, and each of which changed a decision
+below:
+
+1. **The rail is 352px wide with 20px padding**, so its content column is **310px**.
+2. **The decision block is bottom-anchored** (`mt-auto`), so a `planned` plan already shows a large
+   empty band between the history and Approve. The new composer costs that band, not a scroll.
+3. **The hint under the buttons already carries the reason a control is unavailable** — _Review
+   unlocks when generation completes_, swapped in for a `generating` plan. §3 reuses that grammar
+   rather than inventing a second one.
+4. **The shipped composer renders an `@` trigger inside its input.** §2 takes it away, and that is a
+   prop rather than a style.
+
+## 1. §A · Placement — INSIDE the decision block, above the two verbs, behind the rail's own rule
+
+**The access path is the affordance itself.** `/plans/<id>` is reached exactly as Part I §5 draws it;
+this story adds no route and no entrance. The door it adds is the composer, and it is drawn in place:
+a one-line field inside the bottom-anchored decision block, **above Approve and Decline, separated
+from them by a 1px `--el-border` rule**.
+
+**Why it is not a third button.** Approve and Decline are terminal — each ends the review — and a
+third control in that stack reads as a third way to end it, which is exactly what this verb is not. A
+text field is a different kind of thing: it asks for an instruction rather than a decision, and a
+reader who has just read two buttons does not mistake an input for a third. The relationship the card
+asks to be VISIBLE is therefore carried by the rule and by the FORM, not by a label explaining it.
+
+**Rejected — a button that opens the composer.** It draws a door to a door: one more click, one more
+state to specify, and a reader still has to guess what is behind it. The field IS the door and says
+what it takes.
+
+**Rejected — the composer at the very foot, BELOW the buttons.** It would put the least terminal
+control furthest down, and separate it from the two verbs the card asks it to sit next to.
+
+## 2. §B · It composes `PlanChangeComposer`, with the `@` trigger SUPPRESSED
+
+This is a real change, not a styling choice. The trigger opens `useWorkItemTargetSearch`, which
+searches the project's **committed work items**. A revision is anchored at the PLAN and the things it
+can name are **proposals**, which have no key to mention until somebody approves them. Offering the
+picker here searches the wrong universe and returns rows the instruction cannot act on.
+
+So the shipped composer gains **one prop** — `mentions={false}` — hiding the trigger and the tray,
+and the plan-revision case does not fork a second input. The alternative (a bespoke field beside the
+shipped one) buys nothing and splits the placeholder / accessible-name contract, the disabled
+handling and the Send button across two components.
+
+## 3. §C · IN FLIGHT — Approve is HELD, and the reason is real text
+
+**This section draws what MOTIR-3596 decided and decides nothing itself.**
+`docs/decisions/agent-authored-plans.md` **AMENDMENT 10 D2** closes the approve / revise race with a
+LEASE on the plan: while a revision holds it, `approvePlan` and `declinePlan` are REFUSED, the tree is
+untouched, and neither act cancels the other — the loser retries.
+
+The rail says that with the grammar it already has:
+
+- **Approve and Decline take the shipped disabled treatment**, and the hint beneath them is REPLACED
+  with `approveHintRevising` — the same swap `discardHint` already performs for a `generating` plan.
+  This is the card's own criterion that a reviewer is never offered a verb that will be refused,
+  applied to a second CONDITION rather than through a second mechanism.
+- **A band above the composer names what is running, and echoes the instruction.** `--el-tint-sky`
+  under `--el-text-strong` — the one tint no plan STATUS spends (Part XI took rose for `stale`,
+  Part I lavender / mint / sky-for-`generating`… and the band is not a status, so it must not be read
+  as one). It is **not** an alert: nothing failed, the planner is simply working. Same reading the
+  shipped answer bar makes in `PlanChangeComposer`.
+- **The optimistic hold is not the whole answer, deliberately.** A lease can be taken between the
+  render and the click, so the disabled state is a courtesy and not a guarantee. The refusal that
+  arrives anyway lands in the rail's SHIPPED `role="alert"` line above the gate — one sentence, in
+  place, plan still readable. Two mechanisms, because the client cannot know the answer and the
+  server can.
+
+## 4. §D · LANDED — the timeline says what happened; the count says how much
+
+Two new rows, in Part X's sequence and grammar — one label, one actor clause, one timestamp, no badge
+and no second treatment:
+
+| kind               | label            | why this wording                                                                   |
+| ------------------ | ---------------- | ---------------------------------------------------------------------------------- |
+| `revision_started` | Revision started | the same tense as `Generation started`, which it is the sibling of                 |
+| `revision_ended`   | Revision landed  | names what ARRIVED. _finished_ would be about the job; the reviewer wants the plan |
+
+**The pair BRACKETS the revision, and that is also what makes it the lease** (MOTIR-3596): a
+`revision_started` with no `revision_ended` after it, inside the window, is a held plan. So the
+reviewer learns a revision is running by reading the timeline they were already reading, and the
+product needed no second place to record it.
+
+**The MODEL is not in the clause**, for the reason Part X measured: at the rail's 298px text column a
+model name costs every row a second line, and the header carries it once already. It rides the row's
+`title`.
+
+**A WITHDRAWAL is legible here and nowhere else.** A proposal taken off the plan leaves no row in the
+list to mark, so the account is the header's item count moving (11 → 10) beside a timeline row saying
+one proposal was withdrawn. **No third surface is added to carry it**, and the Approve CTA — which
+names the count it will create — restates it a second time for free.
+
+## 5. §E · WHAT CHANGED — the LIST, not the canvas
+
+**The canvas already has an emphasis mode and it means something else.** Part IX's _Show changes_
+rings every PROPOSAL on the level and dims the committed cards around it: it answers _which of these
+is proposed?_ A reviewer returning from a revision asks a different question — _which of these moved
+since I looked?_ — and a second ring on the same canvas to mean a second thing gives one surface two
+highlight languages. Part IX §L3 chose the ring precisely because there was one vocabulary; adding a
+rival is the thing that rule exists to prevent.
+
+**So the recency fact goes in the LIST**, which groups by op and already carries a per-row chip
+cluster. The marker is the shipped `Pill` in the shipped slot:
+
+- **`Pill severity="info"`, reading _Revised_**, in the row's right cluster, **in front of the op
+  chip** — the same slot the shipped _Stale_ pill uses, which is also a "something happened to this
+  row" marker. The hue lives in the tint background under `--el-text-strong`, the recipe every other
+  chip on the row uses.
+- **The op chip does not change.** Op says WHICH kind of change this proposal is; the pill says THAT
+  this one moved. Orthogonal, exactly as Part IX §L2 holds for the emphasis — a build card must not
+  read either as an alternative to the other.
+- **No row fill, no ring, no border.** The board tints two rows only so they are separable on a
+  static export; that tint is the shipped hover fill and **is not part of the specification.** A
+  persistent fill would be colour carrying meaning, which the chip already carries in a word.
+
+**Show changes is untouched**, on the canvas, meaning what it has always meant.
+
+## 6. §F · Copy, tokens, a11y, page state
+
+The full string table and the per-element token table are **panel 6 of the asset**. The three things
+worth repeating outside it:
+
+- **Every new key needs its `zh` twin** or the catalog parity gate fails. Nine keys, namespace
+  `planReview`.
+- **`--el-text-secondary` for every caption on the board and every note in the surface** (6.24:1 on
+  `--el-surface`); `--el-text-muted` is 4.17:1 there and would fail, and `--el-text-faint` clears AA
+  on no surface at all.
+- **Page state after the revision lands is the hard part of the build card, and it is enumerated
+  there rather than here.** The revision arrives from a JOB while the reviewer sits on the page, and
+  `/plans/[id]` is a Server Component: `router.refresh()` re-runs `planReviewService.getPlanReview`
+  and IS what updates the canvas, the list, the item count, the timeline and the Approve state. What
+  it **cannot** reach is any client island seeded by a `useState(initialProps)` initializer — the
+  List/Canvas switcher, an expanded proposal — which needs a tick it watches. MOTIR-3601 names which
+  mechanism carries which surface in its pull-request body.
+
+## 7. §G · What this Part assigns to its sibling cards
+
+| what                                                                                         | card                                                          |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| the lease, the refusal, and what a held Approve means                                        | **MOTIR-3596** — the decision (AMENDMENT 10 D2), already made |
+| the composer, the `mentions={false}` prop, the in-flight band, the held gate, the page state | **MOTIR-3601** — the revision affordance                      |
+| the two `changeKind` verbs reaching the timeline read path                                   | **MOTIR-3599** / **MOTIR-3601**                               |
+| the _Revised_ pill's data — which proposals the latest revision touched                      | **MOTIR-3601**, off the plan's own trail; no new column       |
+
+## 8. §H · Explicitly OUT of scope (so nobody builds it twice)
+
+- **No second planning workspace.** The affordance composes the rail; `/plans/<id>` keeps its shape.
+- **No new `PlanStatus`, no status chip for one.** The plan is `planned` before, during and after a
+  revision (the story's boundary, and AMENDMENT 10's).
+- **No redraw** of the canvas, the proposal peek, the approve / decline controls, the staleness
+  summary, the decided outcome, the plans list or Part IX's _Show changes_.
+- **No proposal-edit modal.** MOTIR-3084 removed it and Part V §3 recorded why; a revision is asked
+  for in words, which is the whole point.
+- **No diff view of a proposal's before / after.** The reviewer sees the plan as it now stands, marked
+  where it moved. A per-proposal diff is a real surface and a different card; nothing here depends on
+  it.
