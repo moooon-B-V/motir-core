@@ -45,6 +45,52 @@ import type { ProposalInput } from '@/lib/dto/plans';
 //   PlanItemUnknownTargetRepoRoleError → 422 (a `targetRepoRole` outside the
 //                                          shared role vocabulary — MOTIR-1912)
 //   ProjectAccessDeniedError      → 404 browse / 403 edit
+// GET /api/internal/ai/plan-proposals?jobId=… (Story MOTIR-3595 · Subtask
+// MOTIR-3598) — READ what the job's plan currently proposes.
+//
+// ⚠️ THE ONE READ IN THIS FAMILY THAT ANSWERS ABOUT PROPOSALS. Every other
+// internal read (`plan-tree`, `get-item`, `get-subtree`, `search-work-items`)
+// answers about the COMMITTED tree, and a proposal is not in it — which is
+// exactly why a revising pass could not see the plan it was revising. Without
+// this, motir-ai's in-flight registry starts empty and the handler proposes a
+// plan from scratch: re-planning, not revising.
+//
+// Service-to-service only, resolved by `sourceJobId` like every seam beside it,
+// so a job token cannot read another job's plan. Read-only.
+export async function GET(req: Request): Promise<Response> {
+  let auth;
+  try {
+    auth = await authenticateAndLimitJobRequest(req);
+  } catch (err) {
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
+    throw err;
+  }
+
+  const jobId = new URL(req.url).searchParams.get('jobId');
+  if (!jobId) {
+    return NextResponse.json(
+      { code: 'PROPOSALS_INVALID', error: '`jobId` is required.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    return NextResponse.json(await aiGenerationService.readPlanProposals(jobId, auth.ctx));
+  } catch (err) {
+    if (err instanceof NoPlanForJobError || err instanceof PlanNotFoundError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof ProjectAccessDeniedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message },
+        { status: err.kind === 'browse' ? 404 : 403 },
+      );
+    }
+    throw err;
+  }
+}
+
 export async function POST(req: Request): Promise<Response> {
   let auth;
   try {

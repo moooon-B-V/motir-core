@@ -13,6 +13,7 @@ import { NoPlanForJobError } from '@/lib/plans/errors';
 import type {
   CorrectProposalInput,
   PlanItemDto,
+  PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
 } from '@/lib/dto/plans';
@@ -251,6 +252,27 @@ export const aiGenerationService = {
     // plan, so by here the patched item is guaranteed present in the returned set.
     const item = result.items.find((i) => i.id === planItemId)!;
     return { planId: plan.id, item };
+  },
+
+  // The INTERNAL PROPOSAL READ (Story MOTIR-3595 · Subtask MOTIR-3598) — what
+  // the plan the job is revising currently PROPOSES.
+  //
+  // ⚠️ IT IS WHAT MAKES A REVISION A REVISION. A revising pass starts from
+  // proposals that already exist and must present them to the model as the
+  // SUBJECT; motir-ai's in-flight registry is populated by the pass's own output
+  // and is EMPTY at the start of a job, so a handler with no read here reasons
+  // about an empty tree and proposes a plan from scratch — which is re-planning,
+  // the thing this story replaces. Every existing internal read answers about the
+  // COMMITTED tree, and a proposal is not in it.
+  //
+  // Resolved by `sourceJobId` like every seam beside it, so a job token cannot
+  // read another job's plan. Read-only: it creates nothing and changes nothing.
+  async readPlanProposals(jobId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new NoPlanForJobError(jobId);
+    return plansService.getPlan(plan.id, ctx);
   },
 
   // The INTERNAL CORRECTION seam (Story MOTIR-3595 · Subtask MOTIR-3598) — the

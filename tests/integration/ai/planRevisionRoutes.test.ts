@@ -12,7 +12,10 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
-import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
+import {
+  GET as proposalsGET,
+  POST as proposalsPOST,
+} from '@/app/api/internal/ai/plan-proposals/route';
 import {
   PATCH as itemPATCH,
   DELETE as itemDELETE,
@@ -252,6 +255,46 @@ describe('DELETE — the withdraw verb', () => {
     );
 
     expect((await del(fx, firstId, 'job-nobody')).status).toBe(404);
+  });
+});
+
+describe('GET — reading what the plan currently PROPOSES', () => {
+  function read(fx: WorkItemFixture, jobId: string): Promise<Response> {
+    const req = new Request(
+      `http://core/api/internal/ai/plan-proposals?jobId=${encodeURIComponent(jobId)}`,
+      { headers: { authorization: `Bearer ${SERVICE_SECRET}` } },
+    );
+    req.headers.set('x-motir-job-token', tokenFor(fx));
+    return proposalsGET(req);
+  }
+
+  it('answers with the plan’s OWN proposals — the read every other internal seam cannot make', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await plannedPlan(fx, 'job-read');
+
+    const res = await read(fx, 'job-read');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; items: { id: string; op: string }[] };
+    expect(body.id).toBe(planId);
+    // Proposals, not work items: this is what a revising pass seeds its registry
+    // from, and it is empty in every committed-tree read.
+    expect(body.items).toHaveLength(2);
+    expect(body.items.every((i) => i.op === 'add')).toBe(true);
+  });
+
+  it('cannot read a plan that is not its job’s', async () => {
+    const fx = await makeWorkItemFixture();
+    await plannedPlan(fx, 'job-read-2');
+    expect((await read(fx, 'job-somebody-else')).status).toBe(404);
+  });
+
+  it('requires a `jobId`', async () => {
+    const fx = await makeWorkItemFixture();
+    const req = new Request('http://core/api/internal/ai/plan-proposals', {
+      headers: { authorization: `Bearer ${SERVICE_SECRET}` },
+    });
+    req.headers.set('x-motir-job-token', tokenFor(fx));
+    expect((await proposalsGET(req)).status).toBe(400);
   });
 });
 
