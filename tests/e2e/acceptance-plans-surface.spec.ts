@@ -205,7 +205,7 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     // a hardcoded `4` wrong the moment it landed, and this spec went red on
     // `main` rather than on the pull request that added it. Deriving the number
     // from the same constant the component maps is what stops a sixth status
-    // costing another red lane (drive-by fix, MOTIR-3607).
+    // costing another red lane (drive-by fix, MOTIR-3622).
     await expect(tabStrip(page)).toBeVisible();
     await expect(tabStrip(page).getByRole('button')).toHaveCount(PLAN_STATUS_DTO_VALUES.length);
     await expect(tab(page, 'Planned')).toHaveAttribute('aria-pressed', 'true');
