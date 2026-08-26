@@ -3,6 +3,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { twoFactorRepository } from '@/lib/repositories/twoFactorRepository';
+import { passkeyService } from '@/lib/services/passkeyService';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
 import { toTrustedDeviceDTO, toTwoFactorStatusDTO } from '@/lib/mappers/twoFactorMappers';
 import type { BackupCodeSetDTO, TrustedDeviceDTO, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
@@ -68,10 +69,18 @@ export const twoFactorService = {
 
     const enrolment = await twoFactorRepository.findByUserId(userId);
     const remaining = enrolment ? await countBackupCodes(enrolment.backupCodes) : 0;
+    // The passkey count comes from `passkeyService`, not from a Prisma call of
+    // this service's own: `methods` must have exactly ONE answer, and the moment
+    // two places compute "does this account hold a passkey?" they can disagree.
+    // The read is unconditional — a passkey counts even with 2FA off (see the
+    // mapper), so short-circuiting it on `user.twoFactorEnabled` would produce
+    // the wrong answer for precisely the passwordless accounts this story adds.
+    const passkeyCount = await passkeyService.countForUser(userId);
 
     return toTwoFactorStatusDTO({
       enabled: user.twoFactorEnabled,
       enrolment: enrolment ? { verified: enrolment.verified } : null,
+      passkeyCount,
       backupCodesRemaining: remaining,
       // The mint size is a configuration constant, not a stored one — nothing
       // records how many the last mint produced. Reporting the configured count
