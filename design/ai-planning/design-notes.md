@@ -17,6 +17,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | What a **generating** plan offers            | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
 | The plan canvas **at arrival**               | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
 | **Show changes** on the plan canvas          | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
+| The timeline's **CONTENT events**            | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -2074,3 +2075,251 @@ holds, which is why `PlanDetail`'s view switch is `shallowPush` and shows no pen
 **`components/planning/PlanningWorkspaceSkeleton.tsx` is NOT reused here.** It is `/planning`'s, and
 `/planning` already has its boundary from [MOTIR-2069](motir:cmsehmzxf000m04l51c9b71u0); naming it
 so a code card does not reach for it by association.
+
+---
+
+# Part X — The plan timeline carrying CONTENT events (MOTIR-3534 / Story MOTIR-3532)
+
+> **The rail's timeline gains a second population of rows and no second treatment.** Everything on
+> it today is a status transition; what arrives here is an ACT — an append, a deepen, an edit, by a
+> party that is routinely not the party who decided. This Part settles how such a row reads, which
+> party it names, how much of the diff it shows, when repeated acts collapse, and what a plan with
+> none of them looks like. It draws rows on the section that already renders and nothing else.
+
+**Asset:** `plan-timeline-content-events.mock.html` + `.png` — a NEW asset, per _A design result is
+a MOMENT_ above. It does not amend `plans-surface.mock.html` and does not re-export it.
+
+## 0. What ships today, and the gap in one sentence
+
+`PlanHistoryEventDto` (`lib/dto/planReview.ts:206`) is **derived**, not stored: `planReviewService`
+computes at most four events from `Plan.createdAt` / `plannedAt` / `decidedAt` / `decisionReason`,
+and its only actor field is `byName`, set on the decision events alone. So the surface a person
+reads before pressing Approve can say that the plan's STATUS moved and nothing about its CONTENT
+moving — and it can name one of the plan's three parties (`createdById` asked,
+`authorSource`/`authorHarness`/`authorModel` wrote, `decidedById` decided).
+
+## 1. Drawn against SHIPPED reality — what was RENDERED first
+
+Per the design-against-shipped-reality rule, and Part VIII §1's format. The real
+`components/planning/PlanReviewRail.tsx` was bundled with esbuild, wrapped in a real
+`NextIntlClientProvider` over the real `messages/en.json`, painted with a real Tailwind v4 build over
+`app/globals.css` + `packages/design-system/theme.css`, and screenshotted headlessly at
+`deviceScaleFactor: 2`, light theme, in three states — `planned`, `approved`, and a PROBE fed eight
+events. The harness was deleted before the design lane ran.
+
+**Five things the render settled, none of them legible in the `.tsx`:**
+
+| #   | Measured                                                                                                                                                                    | What it settles                                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1   | The rail is **352px** wide with **20px** padding, so a row's text column is **298px**                                                                                       | Every label in §3 is chosen to hold that width                                                     |
+| 2   | A two-line row is **exactly 36px**; rows are **8px** apart → **44px per row**                                                                                               | The unit the collapse rule in §5 is argued in                                                      |
+| 3   | With the four lifecycle events the rail's fixed chrome is **528.5px**, and the rail is ONE scroller (`overflow-y-auto` on the `<aside>`, `mt-auto` on the gate)             | The rail begins to scroll at `height < 528.5 + 44N`. The decision gate is what goes below the fold |
+| 4   | The header ALREADY renders an agent as **glyph + harness + model** — and that triple takes **60px / three lines** at this width                                             | §4 borrows the vocabulary and refuses the model on a row                                           |
+| 5   | The list ALREADY carries two kinds of row: an event that happened (`--el-accent` dot, two lines) and the one PENDING row (`--el-border-strong` dot, one line, no timestamp) | §2 joins that vocabulary instead of inventing a third dot                                          |
+
+**And one thing the PROBE settled, which is a code fact rather than a drawing one.** `HistoryRow` is
+keyed `key={ev.kind}` — unique today only because each lifecycle kind occurs at most once. Feeding
+the shipped rail eight events with a repeated kind renders all eight and logs _"Encountered two
+children with the same key"_ in a development build. Measured, not inferred. Content rows repeat, so
+the key becomes the event's own identity (§8 assigns it).
+
+## 2. Lifecycle vs content — ONE sequence, ONE row grammar, and the WORDING is the discriminator
+
+**Decision: a content event is not a second kind of row.** It joins the same ordered list, in the
+same two-line box, with the same dot, and what tells a reader which kind it is, is the row's own
+wording — a lifecycle row names a **state the plan reached** (_Plan ready_, _Approved_), a content
+row names an **act somebody performed on it** (_6 proposals appended_).
+
+**Why not two treatments.** A second visual language asks the reader to learn a distinction that
+pays nothing here: nobody filters this list, nothing acts differently on the two halves, and the
+lifecycle rows are themselves acts by parties — the shipped decision row already reads
+_Approved · Zhu Yue_. What genuinely differs between the two populations is **volume**, not kind,
+and volume is answered by the collapse rule (§5), not by a dot.
+
+**Why the dot is not the place to put it.** The rail's dot already carries a meaning — _it happened_
+(`--el-accent`) versus _it has not happened yet_ (`--el-border-strong`, the pending row). A third
+tone would overload a two-value signal, and the meaning would then be carried by colour alone, which
+the row's own text already carries better.
+
+**What this implies for a plan with MANY content events:** the timeline stops being a four-row spine
+and becomes a list whose length is a property of how the plan was written. §5 is what keeps that
+readable. **For a plan with NONE:** §6 — it renders exactly as it does today, which is why nothing
+about the existing four rows changes here.
+
+## 3. The row grammar — `<label> · <actor>` over a timestamp
+
+The shipped grammar, unchanged: line one is the label plus an optional `· actor`, line two is the
+timestamp. Per element:
+
+| Element   | Primitive / token                                                                          | What it says                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| dot       | 6px circle · `--el-accent`, or `--el-border-strong` on the one pending row · `aria-hidden` | Unchanged. The ONLY two-tone signal on the list, and it does not encode lifecycle-vs-content                                 |
+| label     | 14px · `--el-text`                                                                         | A past-tense STATE for a lifecycle event; a count + noun + past-tense verb for a content one                                 |
+| actor     | 14px · `--el-text-secondary`, after a `·` separator                                        | The party who performed **this act** — not the plan's author column. Omitted entirely when nobody acted on a person's behalf |
+| timestamp | 12px · `--el-text-secondary`                                                               | One instant, or a SPAN when the row is a collapsed run (§5). Fixed-UTC formatting, as shipped                                |
+| row box   | `flex` · `items-start` · `gap-2`, 8px between rows                                         | 36px tall, 298px text column (§1)                                                                                            |
+
+**The label set, and every member MEASURED at the 298px column:**
+
+| Label                                                | Height     |
+| ---------------------------------------------------- | ---------- |
+| `6 proposals appended · Claude Code`                 | 36px ✓     |
+| `11 proposals appended · Claude Code`                | 36px ✓     |
+| `1 proposal edited · Claude Code`                    | 36px ✓     |
+| `3 proposals edited · Zhu Yue`                       | 36px ✓     |
+| `Closed for review · Claude Code`                    | 36px ✓     |
+| `5 proposals appended · Claude Code · claude-opus-5` | **56px** ✗ |
+| `Estimate and story points changed · Claude Code`    | **56px** ✗ |
+
+The two that fail are exactly the two things §4 and §5 refuse to put on a row. That is not a
+coincidence to note in passing — the measurement is the argument.
+
+## 4. Which party a row names, and how an AGENT actor renders
+
+**A row names the party who performed THAT act.** The timeline moves from naming one of three
+parties to naming whichever party acted, per row — which is precisely why a stored trail is needed:
+the three `Plan` columns are the three places an actor is currently readable, and none of them
+answers _who did this one thing_.
+
+The `source · harness · model` triple renders as **three different things in three different
+places**, and the mapping is deliberate:
+
+| Part of the triple | Where it renders                                                                                      | Why                                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `source`           | the KIND of actor label: `mcp` → the harness name; `native` → **Motir**; a human → their display name | The header's own two shipped arms (`ReviewAttribution` reads `authorSource` alone since MOTIR-2996), reused rather than re-decided |
+| `harness`          | the actor clause on the row — _· Claude Code_                                                         | It is the thing that differs between agent-written plans at a glance                                                               |
+| `model`            | **NOT on the row.** It stays on the header's attribution line, and rides the row's `title`            | Measured (§3): the model costs a second line on EVERY row, and the header already carries it once, four rows above                 |
+
+**⚠️ An agent is never styled as a person.** The 18px initial disc is the human's mark and appears
+only in the header, where one line names one person; a row carries **no** disc, no avatar, and no
+colour of its own for either party. So on this list an unadorned name is a person, and a name that
+is a harness is not — no legend, no icon column, no second treatment.
+
+**Nobody is a legitimate actor.** A cadence-originated mutation has no requester (`origin ===
+'cadence'`, which the header already reports as _auto-planned, nobody asked_). Such a row renders
+with **no actor clause at all** — _1 proposal appended_. It must not be attributed to the project
+owner, which is the same reasoning `Plan.createdById` documents for its own null.
+
+## 5. Ordering, collapse, and the DIFF a row shows at rest
+
+**Ordering.** One merged sequence, oldest first — the shipped direction. Stored and derived events
+interleave by time; a content event that happened between _Plan ready_ and _Approved_ renders
+between them, which is the single most valuable row on the whole list (§7).
+
+**Collapse — on `kind + actor + adjacency`, never on a time window.** Consecutive rows of the same
+kind, by the same actor, with nothing between them, are ONE row: the count is over the acts, and the
+timestamp becomes a span (_8:24 – 8:26 AM_), in the same 12px slot a single instant uses. No badge,
+no count chip, no second line.
+
+- **Why adjacency and not a window.** A window merges two different parties' work whenever they
+  happen to fall close together; adjacency cannot, because a different actor breaks the run by
+  construction.
+- **Why it is not cosmetic.** A titles-first pass is one skeleton append PER LAYER plus one
+  `update_plan_item` PER proposal — so ten proposals is eleven rows before a reader reaches anything
+  they care about. At 44px a row (§1) that is 484px of timeline; against 528.5px of fixed chrome, it
+  is enough on a short window to push **Approve** out of view on a plan nobody has read yet.
+- **A collapsed run never swallows a different kind.** _Plan ready_, an approve and a decline always
+  break a run, so no decision is ever hidden inside a count.
+
+**The diff at rest: a COUNT, and nothing else.** Not the field names, not the old→new values, not
+the proposal titles.
+
+- **Measured:** _Estimate and story points changed · Claude Code_ is 56px. **Two** field names
+  already spill to a second line, and a deepen touches up to **nine** fields. A row that names its
+  fields is a row that cannot hold them.
+- **And nothing expands** — no disclosure triangle, no drawer, no hover card in this revision. What
+  a proposal currently SAYS is already two surfaces away and better rendered there: the plan
+  detail's LIST view (Part VIII §3) and the proposal READ view (Part V §3). **The timeline's job is
+  what MOVED and who moved it**; what it now reads is somebody else's job, and duplicating it here
+  buys a worse copy of both.
+- **What the row does NOT show, stated so it is not re-litigated:** field names, values, proposal
+  titles, the per-proposal breakdown of a multi-proposal append, and the model.
+
+## 6. The LEGACY plan — nothing is drawn, and that is the drawing
+
+**A plan created before this ships renders exactly today's timeline**: its lifecycle events, and
+while it is undecided, the pending row. **No** _no changes recorded_ line, **no** dimmed
+placeholder, **no** explanatory caption, **no** empty-state illustration.
+
+Two reasons, and the second is the one that generalises. First, every plan in the product today is
+this plan, so an empty state here would put a permanent apology on the entire back catalogue.
+Second, the absence is not a gap: nothing was recorded because nothing recorded it, and a surface
+that draws attention to a truthful absence is inventing a problem for the reader to worry about. The
+rail already has a row for the one thing that IS outstanding, and it is the pending row.
+
+**The assertion this earns:** a plan whose revision set is empty produces byte-for-byte today's
+event list — a test the read card can write against an empty table.
+
+## 7. Copy — every string this Part introduces (namespace `planReview`)
+
+| Key              | Copy                                                                  | Notes                                                                                                     |
+| ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `event_appended` | `{n, plural, one {# proposal appended} other {# proposals appended}}` | The count is over PROPOSALS, not over calls — a collapsed run sums them                                   |
+| `event_edited`   | `{n, plural, one {# proposal edited} other {# proposals edited}}`     | Covers the deepen and the post-landing edit alike; the reader's question is the same                      |
+| `event_removed`  | `{n, plural, one {# proposal removed} other {# proposals removed}}`   | For the withdraw the sibling story introduces; the label is decided here so the two cards cannot disagree |
+| `event_actor`    | `{label} · {actor}`                                                   | The separator, so the row is one translatable unit rather than a concatenation                            |
+| `event_span`     | `{from} – {to}`                                                       | The collapsed run's timestamp. An en dash, spaced, matching the rail's existing typography                |
+| `writtenByMotir` | _(exists)_                                                            | Reused verbatim for a `native` actor — the header's own string                                            |
+
+Nothing here introduces a new empty-state string, deliberately (§6).
+
+## 8. a11y
+
+- The dot stays `aria-hidden`: it is decorative reinforcement, and the row's own text carries both
+  the kind and the actor. **No meaning on this list is conveyed by colour or glyph alone.**
+- The agent glyph in the header is unchanged and stays `aria-hidden` — the words _written by …_
+  carry it.
+- The list stays an `<ol>` in time order, so a screen reader gets the sequence as a sequence.
+- **Ink:** every actor clause is `--el-text-secondary` (6.24:1 on `--el-surface`). ⚠️ The shipped
+  `HistoryRow` paints `ev.byName` in `--el-text-muted`, which is **4.17:1 on `--el-surface`** and
+  below AA — invisible today because only the decision row carries a name, and about to be on most
+  rows. §9 assigns the correction to the card that rewrites the row.
+
+## 9. GIVES / TAKES — swept over the story SUBTREE
+
+**TAKES** (premises as well as elements):
+
+- **Part I §3 Panel B's review-rail chrome — a STRUCTURE**: the rail, its header, the History
+  section and the decision gate. Composed, not redrawn.
+- **Part III §6's DETAIL-header attribution — an ELEMENT and a PREMISE.** The glyph + harness +
+  model triple, and its rule that the roles are named in words; §4 compresses it for a row and
+  states what is dropped.
+- **Part IV's overline status tag and the title's `wrap-anywhere` guard — ELEMENTS, untouched.**
+- **Part VII §3's _a decided row names BOTH people_ — a PREMISE**: a plan has parties that differ,
+  and naming only one of them is the defect. §4 takes that one level down, to the row.
+- **Part V §3 and Part VIII §3 — PREMISES this Part leans on to REFUSE scope**: the proposal read
+  view and the list view already render what a proposal says, which is why §5 keeps values off the
+  timeline.
+- **MOTIR-3189's _the timeline's job is to say what happened_ — a PREMISE**, and the reason the four
+  derived events stay derived.
+
+**GIVES:**
+
+- **MOTIR-3536** (the review rail merges stored content events) takes §2 (one sequence, one
+  grammar), §3 (the row, per element, and the measured label set), §4 (the party mapping and the
+  agent-is-not-a-person rule), §5 (the ordering, the collapse key, the diff-at-rest and its
+  exclusions) and §6 (the legacy render). It also takes two corrections named here: the
+  **`key={ev.kind}` → per-event identity** change (§1), and the **`--el-text-muted` →
+  `--el-text-secondary`** ink fix on the actor clause (§8).
+- **MOTIR-3535** (the `PlanRevision` trail) takes §4's _a row names the party who performed that
+  act_ as the shape its actor columns must support — the acting user AND the agent triple — and §5's
+  _the count is over PROPOSALS_ as what one row's payload must make countable.
+- **MOTIR-3537** (the story vitest gate) takes §5's collapse key and §6's legacy assertion as two of
+  the properties it holds.
+- **MOTIR-3538** (the story E2E + acceptance video) takes §2's _the row arrives in the same
+  sequence_ and §4's _an agent renders beside a human and is not styled as one_ as the two beats its
+  clip must show.
+
+## 10. Access path
+
+**No new door.** The left nav's **Plans** entry → a plan row → the plan detail at `/plans/{id}`,
+where the rail is the right-hand pane and **History** is its second section, under the header and
+above the approve gate. This Part adds no route, no tab, no control and no entry affordance — it
+adds rows to a section a reader already lands on, so the entrance is stated rather than drawn.
+
+## 11. What Part X does NOT draw
+
+The plan review canvas and its node treatments; the proposal peek / read view; the List ↔ Canvas
+switcher and the list body; the approve / decline controls and the decided outcome block; the
+staleness summary; the establish band; the `/plans` list surface; and any expansion, filter or
+export of the timeline.

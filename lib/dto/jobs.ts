@@ -11,6 +11,28 @@ export interface JobRunFailure {
   code?: string;
 }
 
+/**
+ * What became of the MESSAGE an `email.send` run dispatched (Bug MOTIR-3507 ·
+ * Subtask MOTIR-3517). Distinct from `JobRunStatus`, and the whole point of the
+ * distinction: a run can be `succeeded` — the provider accepted the POST —
+ * while its message bounced.
+ *
+ * ⚠️ `delivered` does NOT mean "in the inbox". A spam-foldered message is
+ * delivered; the provider cannot see the recipient's folders.
+ */
+export type EmailDeliveryState = 'accepted' | 'delivered' | 'bounced' | 'complained' | 'delayed';
+
+/** The delivery record joined onto a run, for the operator surface. */
+export interface JobDeliveryDTO {
+  state: EmailDeliveryState;
+  /** The provider's own handle, so an operator can look the message up. */
+  providerMessageId: string | null;
+  recipient: string;
+  template: string;
+  /** When the provider last said something about it; null until an event lands. */
+  lastEventAt: string | null;
+}
+
 export interface JobRunDTO {
   id: string;
   /** Null for untenanted system jobs (e.g. system.daily-health-check). */
@@ -27,6 +49,12 @@ export interface JobRunDTO {
   /** The handler's JSON-safe resolved value, recorded on success (5.2.7) — e.g. the attachment-GC's { scanned, deleted, failed } summary. */
   output: unknown;
   idempotencyKey: string | null;
+  /**
+   * The delivery record for this run's message, or null when there is none —
+   * a job that is not `email.send`, a send that predates the record, or a send
+   * the provider refused outright (whose `status` is already `failed`).
+   */
+  delivery: JobDeliveryDTO | null;
 }
 
 /**

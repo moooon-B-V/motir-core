@@ -1,4 +1,5 @@
-import { sendEmail } from '@/lib/email';
+import { emailProviderName, sendEmail, type EmailSendResult } from '@/lib/email';
+import { emailDeliveryService } from '@/lib/services/emailDeliveryService';
 import {
   passwordResetEmail,
   type PasswordResetEmailProps,
@@ -76,6 +77,25 @@ export type TransactionalEmail =
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
 
+/**
+ * A `TransactionalEmail` plus the background-job envelope the `email.send` job
+ * already carries. Every field beyond the email itself is OPTIONAL, because
+ * the email domain knows nothing about job envelopes and a direct caller need
+ * supply none of them — they are what the delivery record (MOTIR-3513) is
+ * correlated by, not what the send needs to work.
+ *
+ * `runId` / `eventId` are the ACTIVE lane's own identifiers — a `job_queue.id`
+ * cuid on the Postgres engine, Inngest's ids on the Inngest lane. They are
+ * recorded as given rather than normalised; the discriminator is the id's
+ * shape, which is what the two ledgers already record.
+ */
+export type SendableEmail = TransactionalEmail & {
+  idempotencyKey?: string;
+  workspaceId?: string | null;
+  runId?: string | null;
+  eventId?: string | null;
+};
+
 export const emailService = {
   /**
    * Render the chosen template and dispatch it. Throws whatever the provider
@@ -91,9 +111,27 @@ export const emailService = {
    * a direct caller need not. No caller changed to gain this — the job was
    * already passing the whole `EmailSendData` payload, envelope included.
    */
-  async send(message: TransactionalEmail & { idempotencyKey?: string }): Promise<void> {
+  async send(message: SendableEmail): Promise<EmailSendResult> {
     const rendered = await renderTemplate(message);
-    await sendEmail({ to: message.to, ...rendered, idempotencyKey: message.idempotencyKey });
+    const result = await sendEmail({
+      to: message.to,
+      ...rendered,
+      idempotencyKey: message.idempotencyKey,
+    });
+    // AFTER the send returned, and deliberately not inside it: this records
+    // something that has already happened. `recordAccepted` swallows its own
+    // failures for that reason — see emailDeliveryService's header.
+    await emailDeliveryService.recordAccepted({
+      providerMessageId: result.providerMessageId,
+      provider: emailProviderName(),
+      recipient: message.to,
+      template: message.template,
+      workspaceId: message.workspaceId ?? null,
+      idempotencyKey: message.idempotencyKey ?? null,
+      runId: message.runId ?? null,
+      eventId: message.eventId ?? null,
+    });
+    return result;
   },
 };
 

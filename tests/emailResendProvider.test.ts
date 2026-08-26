@@ -297,6 +297,82 @@ describe('resendProvider', () => {
     });
   });
 
+  describe('the accepted message id (MOTIR-3513)', () => {
+    // Resend answers an accepted send with `{ id }`, and until MOTIR-3513 that
+    // body was read by nothing — the success arm was a bare `if (res.ok)
+    // return;`. The id is the only key a later delivery event can be joined
+    // back to the send that produced it, so keeping it is the whole point.
+    it('returns the id Resend answered with', async () => {
+      const provider = getEmailProvider();
+      const result = await provider({
+        to: 'alice@example.com',
+        subject: 'Reset your password',
+        html: '<p>Body</p>',
+      });
+
+      expect(result.providerMessageId).toBe('a3f1c2d4-0000-4000-8000-000000000001');
+    });
+
+    // The three arms below all describe a message Resend HAS ALREADY TAKEN.
+    // Throwing on any of them would fail a job whose email is on its way, and
+    // the retry would deliver it a second time — so each is a successful send
+    // with no handle, never an error.
+    it('is a successful send with a null id when the accepted body does not parse', async () => {
+      fetchMock.mockResolvedValue(new Response('not json at all', { status: 200 }));
+      const provider = getEmailProvider();
+
+      const result = await provider({ to: 'a@example.com', subject: 's', html: '<p>b</p>' });
+
+      expect(result.providerMessageId).toBeNull();
+    });
+
+    it('is a successful send with a null id when the accepted body carries no id', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const provider = getEmailProvider();
+
+      const result = await provider({ to: 'a@example.com', subject: 's', html: '<p>b</p>' });
+
+      expect(result.providerMessageId).toBeNull();
+    });
+
+    it('is a successful send with a null id when the accepted body is empty', async () => {
+      fetchMock.mockResolvedValue(new Response('', { status: 202 }));
+      const provider = getEmailProvider();
+
+      const result = await provider({ to: 'a@example.com', subject: 's', html: '<p>b</p>' });
+
+      expect(result.providerMessageId).toBeNull();
+    });
+
+    it('ignores a non-string id rather than recording a number as a handle', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ id: 12345 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const provider = getEmailProvider();
+
+      const result = await provider({ to: 'a@example.com', subject: 's', html: '<p>b</p>' });
+
+      expect(result.providerMessageId).toBeNull();
+    });
+
+    it('leaves the FAILURE path exactly as it was — a rejected send still throws', async () => {
+      fetchMock.mockResolvedValue(errorResponse(422, 'validation_error', 'bad address'));
+      const provider = getEmailProvider();
+
+      await expect(provider({ to: 'nope', subject: 's', html: '<p>b</p>' })).rejects.toBeInstanceOf(
+        EmailDeliveryError,
+      );
+    });
+  });
+
   describe('boot-time credential checks', () => {
     it('throws at resolution when RESEND_API_KEY is unset', () => {
       delete process.env['RESEND_API_KEY'];
