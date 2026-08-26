@@ -224,8 +224,10 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
 // than that — the repo selector and the empty state ahead of the per-repo
 // surfaces, which is what MOTIR-3446's acceptance criterion asks for — means
 // handing `CodeHealthClient` a pending state it does not have and nothing has
-// drawn, and the generic rung (`PageSkeleton`) does not exist on `main`
-// (MOTIR-3520). Reads unchanged, fan-outs untouched.
+// drawn. The generic rung (`PageSkeleton`) arrives with MOTIR-3531, on this same
+// branch — but a primitive is a wrapper, a header block and a reveal, and the
+// pending state this surface would need is the BODY, which nobody has drawn.
+// Reads unchanged, fan-outs untouched.
 export default async function CodeHealthPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
