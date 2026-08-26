@@ -15,7 +15,7 @@ import {
   INDEX_REPO_REF,
   indexEventFor,
   indexJobRuns,
-  indexSleepSteps,
+  driveIndexFleetFast,
   resetTarballBodyTrap,
   seedIndexWorkspace,
   stubIndexFleet,
@@ -60,6 +60,9 @@ beforeEach(async () => {
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
   resetTarballBodyTrap();
+  // The supervision loop is a real `await` since MOTIR-3484, so a job-level
+  // test would otherwise sleep at the shipped cadence.
+  driveIndexFleetFast();
 });
 
 afterEach(async () => {
@@ -105,7 +108,6 @@ describe('a dispatched index is visible to the ledger’s REAL consumers', () =>
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
       events: [indexEventFor({ installationId, workspaceId })],
-      steps: indexSleepSteps(projectIds),
     });
     expect(result).toMatchObject({ indexed: true, repoRef: INDEX_REPO_REF });
 
@@ -173,7 +175,6 @@ describe('four repos produce four runs with four DISTINCT repoRefs', () => {
             repoName: repo.name,
           }),
         ],
-        steps: indexSleepSteps(projectIds),
       });
       expect(result).toEqual({
         indexed: true,
@@ -302,10 +303,7 @@ describe('a container failure is legible in the ledger, not an opaque code', () 
   ] as const)(
     'exit %i lands in the failure record as %s',
     async (exitCode, exitClass) => {
-      const { workspaceId, projectIds, installationId } = await seedIndexWorkspace(
-        `seam-fail${exitCode}`,
-        1,
-      );
+      const { workspaceId, installationId } = await seedIndexWorkspace(`seam-fail${exitCode}`, 1);
       stubIndexFleet();
       containerExitsWith(exitCode);
       const event = indexEventFor({ installationId, workspaceId });
@@ -313,7 +311,6 @@ describe('a container failure is legible in the ledger, not an opaque code', () 
       const engine = new InngestTestEngine({ function: codeGraphIndex });
       const { result, error } = (await engine.execute({
         events: [event],
-        steps: indexSleepSteps(projectIds),
       })) as { result?: unknown; error?: { message?: string } };
 
       expect(result).toBeUndefined();

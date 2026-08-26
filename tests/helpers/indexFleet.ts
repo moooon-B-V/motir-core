@@ -232,21 +232,42 @@ export function indexStepIds(ctx: { step: { run: { mock: { calls: unknown[][] } 
 }
 
 /**
- * Pre-fulfilled `step.sleep` state, so the engine can cross the boundaries —
- * BOTH kinds: the admission queue's waits and supervision's poll waits.
+ * MILLISECOND SUPERVISION BUDGETS for a JOB-level test (MOTIR-3484).
  *
- * ⚠️ `step.sleep` HANGS `InngestTestEngine` UNLESS ITS STATE IS SUPPLIED. The
- * engine only records state for steps that RAN, and a sleep never "runs" — so an
- * un-stubbed sleep is re-found forever and `execute()` never resolves (it fails
- * as a test TIMEOUT, which reads like a slow test rather than a missing stub).
- * Supply more than the loop can use.
+ * ⚠️ IT REPLACES `indexSleepSteps`, AND THE REASON IS THE COLLAPSE. That helper
+ * pre-fulfilled `step.sleep` state for `index-wait:*` / `index-admit-wait:*`,
+ * because an un-stubbed sleep is re-found forever by `InngestTestEngine` and
+ * `execute()` never resolves. There are no sleeps left in this job: the interval
+ * is an ordinary `await` inside `codeGraphIndexDispatchService.runIndexContainer`
+ * (`docs/decisions/job-queue-foundation.md` §13 — the durable boundary is the
+ * SIDE EFFECT, never the WAIT).
+ *
+ * The problem it leaves behind is the mirror image: a real `await` at the SHIPPED
+ * cadence would make a four-poll test wait 3 + 6 + 12 + 24 seconds. So a
+ * job-level suite shortens the cadence through the seam the service already
+ * exposes for its own suite, and asserts the SHAPE and the LEDGER rather than the
+ * timing — the cadence itself is asserted BY VALUE against
+ * `INDEX_FLEET_TIME_BUDGETS`, which is the honest place for it.
  */
-export function indexSleepSteps(projectIds: string[], perProject = 6) {
-  return projectIds.flatMap((projectId) =>
-    Array.from({ length: perProject }, (_, i) => i + 1).flatMap((n) => [
-      { id: `index-wait:${projectId}:${n}`, handler: () => null },
-      { id: `index-admit-wait:${projectId}:${n}`, handler: () => null },
-    ]),
+export const INDEX_FAST_SUPERVISION = {
+  pollIntervalMs: 1,
+  maxPollIntervalMs: 2,
+  admissionWaitMs: 1,
+  maxAdmissionWaitMs: 2,
+} as const;
+
+/**
+ * Point the JOB's supervision at {@link INDEX_FAST_SUPERVISION}, keeping the real
+ * composition, the real steps, the real admission gate and the real ledger.
+ *
+ * A spy that calls through, exactly as this suite already does for
+ * `pollIndexContainer` — the only thing it changes is how long the loop sleeps.
+ * A caller's own options still win, so a test may narrow further.
+ */
+export function driveIndexFleetFast(): void {
+  const real = codeGraphIndexDispatchService.runIndexContainer.bind(codeGraphIndexDispatchService);
+  vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer').mockImplementation(
+    (input, options) => real(input, { ...INDEX_FAST_SUPERVISION, ...options }),
   );
 }
 

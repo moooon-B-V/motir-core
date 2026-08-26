@@ -47,7 +47,7 @@ const {
   INDEX_REPO_REF,
   indexEventFor,
   indexJobRuns,
-  indexSleepSteps,
+  driveIndexFleetFast,
   indexStepIds,
   resetTarballBodyTrap,
   seedIndexWorkspace,
@@ -101,7 +101,6 @@ function runIndex(args: { installationId: string; workspaceId: string; projectId
         eventId: `evt-${args.installationId}`,
       }),
     ],
-    steps: indexSleepSteps(args.projectIds),
   });
 }
 
@@ -115,6 +114,9 @@ beforeEach(async () => {
   getCodeAuditMock.mockReset();
   refreshCodeAuditMock.mockReset();
   refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+  // The supervision loop is a real `await` since MOTIR-3484, so a job-level
+  // test would otherwise sleep at the shipped cadence.
+  driveIndexFleetFast();
 });
 
 afterEach(async () => {
