@@ -57,6 +57,62 @@ describe('PlanRow', () => {
     expect(screen.getByText('Approved')).toBeTruthy();
   });
 
+  // ── THE FIFTH STATUS (MOTIR-3578, `design-notes.md` Part XI §2) ──────────
+  //
+  // ⚠️ THESE ARE ASSERTED BECAUSE `tsc` CANNOT FIND THEM. The icon and tint maps
+  // ARE `Record<PlanStatusDto, …>`, so those two the compiler does catch — but
+  // `StatusPill` ended in an unguarded `return <Pill tone="archived">` carrying
+  // a `// declined` comment, so a fifth status rendered as DECLINED's chip: the
+  // quiet, nearly fill-less *ended* treatment, which is the one reading this
+  // status must never have. It compiled clean and was invisible in a diff.
+
+  it('renders its OWN pill — rose danger, NOT the archived chip `declined` wears', () => {
+    renderWithIntl(<PlanRow view={view({ status: 'stale' })} />);
+
+    const pill = screen.getByText('Stale');
+    // The shipped `Pill severity="danger"` recipe: the hue in the TINT, charcoal
+    // ink on top (finding #35). Asserting the class is asserting the tone —
+    // there is no other way for a `danger` pill to render.
+    expect(pill.className).toContain('bg-(--el-tint-rose)');
+    expect(pill.className).toContain('text-(--el-text-strong)');
+    // The tell for the regression this case exists for: `tone="archived"` is a
+    // muted fill, and it must not be what a `stale` row gets.
+    expect(pill.className).not.toContain('--el-muted');
+  });
+
+  it('takes the rose icon square — the one tint no other status spends', () => {
+    const { container } = renderWithIntl(<PlanRow view={view({ status: 'stale' })} />);
+    expect(container.querySelector('.bg-\\(--el-tint-rose\\)')).toBeTruthy();
+  });
+
+  it('keeps the PLANNED verb and timestamp — the row states the plan’s own moment', () => {
+    renderWithIntl(
+      <PlanRow view={view({ status: 'stale', whenKey: 'plannedAt', whenLabel: '3 days ago' })} />,
+    );
+    // NOT *created 3 days ago*, which is what `whenFor`'s `default:` arm would
+    // have produced had the status fallen through it (Part XI §3).
+    expect(screen.getByText('planned 3 days ago')).toBeTruthy();
+  });
+
+  it('does NOT take the accent border `planned` earns', () => {
+    const { container } = renderWithIntl(<PlanRow view={view({ status: 'stale' })} />);
+    const link = container.querySelector('a')!;
+    // The accent means *awaiting your approval*. A stale plan cannot be
+    // approved, so the border would invite a click that fails (Part XI §2) —
+    // and widening `awaitingReview` by symmetry is exactly the mistake §7 names.
+    expect(link.className).toContain('border-(--el-border)');
+    expect(link.className).not.toContain('border-(--el-accent)');
+  });
+
+  it('renders the ADVISORY drift chip AND the status pill together, saying two things', () => {
+    renderWithIntl(<PlanRow view={view({ status: 'stale', staleCount: 2 })} />);
+    // After AMENDMENT 9 the count and the status are one engine at two
+    // severities, so a row legitimately carries both: *some proposals drifted*
+    // and *this cannot be approved* (Part XI §6).
+    expect(screen.getByText('2 may be out of date')).toBeTruthy();
+    expect(screen.getByText('Stale')).toBeTruthy();
+  });
+
   it('renders the declined status pill', () => {
     renderWithIntl(
       <PlanRow

@@ -14,7 +14,13 @@ import type { SprintBlockerDto } from '@/lib/dto/sprints';
  *  iterate it instead of restating it. The type below is DERIVED from this
  *  array, so the two cannot drift: adding a member here widens `PlanStatusDto`,
  *  and there is no second place to forget. */
-export const PLAN_STATUS_DTO_VALUES = ['generating', 'planned', 'approved', 'declined'] as const;
+export const PLAN_STATUS_DTO_VALUES = [
+  'generating',
+  'planned',
+  'stale',
+  'approved',
+  'declined',
+] as const;
 
 /** Wire form of the Prisma `PlanStatus` enum. */
 export type PlanStatusDto = (typeof PLAN_STATUS_DTO_VALUES)[number];

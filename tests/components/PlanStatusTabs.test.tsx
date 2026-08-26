@@ -21,7 +21,11 @@ import { PLAN_STATUS_PARAM, planStatusFromParam } from '@/lib/planning/planStatu
 // itself: its a11y contract, the URL it writes, and the counts rule the measured
 // widths decided.
 
-const COUNTS = { generating: 2, planned: 3, approved: 9, declined: 0 };
+// ⚠️ FIVE STATUSES SINCE MOTIR-3578 — `stale` sits between `planned` and
+// `approved`, and it is deliberately given a NON-ZERO count here so the strip's
+// ordinary rendering is what the a11y and navigation cases exercise. The
+// zero-count rendering has its own case below.
+const COUNTS = { generating: 2, planned: 3, stale: 4, approved: 9, declined: 0 };
 
 beforeEach(() => {
   mocks.push.mockReset();
@@ -32,13 +36,13 @@ afterEach(cleanup);
 const tab = (name: string) => screen.getByRole('button', { name: new RegExp(name) });
 
 describe('the strip’s a11y contract (MOTIR-3241)', () => {
-  it('is a LABELLED group of four real buttons, each announcing its pressed state', () => {
+  it('is a LABELLED group of five real buttons, each announcing its pressed state', () => {
     renderWithIntl(<PlanStatusTabs value="planned" counts={COUNTS} />);
 
     const group = screen.getByRole('group', { name: 'Filter plans by status' });
-    expect(within(group).getAllByRole('button')).toHaveLength(4);
+    expect(within(group).getAllByRole('button')).toHaveLength(5);
     expect(tab('Planned').getAttribute('aria-pressed')).toBe('true');
-    for (const other of ['Generating', 'Approved', 'Declined']) {
+    for (const other of ['Generating', 'Stale', 'Approved', 'Declined']) {
       expect(tab(other).getAttribute('aria-pressed')).toBe('false');
     }
   });
@@ -63,12 +67,44 @@ describe('the strip’s a11y contract (MOTIR-3241)', () => {
       .map((b) => b.textContent);
     expect(labels[0]).toContain('Generating');
     expect(labels[1]).toContain('Planned');
-    expect(labels[2]).toContain('Approved');
-    expect(labels[3]).toContain('Declined');
+    // ⚠️ `Stale` SITS BETWEEN `Planned` AND `Approved` (MOTIR-3578,
+    // `design/ai-planning/design-notes.md` Part XI §4). The strip reads in
+    // lifecycle order and `stale` is a DETOUR off `planned` — the only status it
+    // is reachable from — not an ending, so it belongs before the two terminal
+    // tabs rather than after them.
+    expect(labels[2]).toContain('Stale');
+    expect(labels[3]).toContain('Approved');
+    expect(labels[4]).toContain('Declined');
+  });
+});
+
+describe('the strip SCROLLS below `sm` (Part XI, panel 4 re-measured)', () => {
+  it('wraps the track in a horizontal scroller rather than letting it overflow the gutter', () => {
+    // ⚠️ THIS REVERSES PART VII §4's rejection of a scroller, on a MEASUREMENT.
+    // Five labels are 361.9px against the 343px content box a 375px viewport
+    // leaves after the shell's `px-4` — the four-tab strip was 310.3px and fit.
+    // The overflow is 18.9px, so `Declined` is CLIPPED rather than pushed
+    // off-screen, which is what retires §4's premise. Without this the page
+    // overflows its own gutter, silently, on every phone.
+    const { container } = renderWithIntl(<PlanStatusTabs value="planned" counts={COUNTS} />);
+    const group = screen.getByRole('group', { name: 'Filter plans by status' });
+    const scroller = group.parentElement!;
+    expect(scroller.className).toContain('overflow-x-auto');
+    expect(container.contains(scroller)).toBe(true);
   });
 });
 
 describe('the COUNTS (Part VII §4)', () => {
+  it('renders the FIFTH tab at ZERO — the strip shows which statuses EXIST', () => {
+    // Part XI §4 keeps the reason Part VII §4 already gave for `Declined 0`: a
+    // tab that appears only when populated teaches a reader that the vocabulary
+    // changes under them. The strip iterates `PLAN_STATUS_DTO_VALUES`, so the
+    // tab arrives on its own — what needed asserting is that the LABEL and the
+    // COUNT do too, which the array does not supply.
+    renderWithIntl(<PlanStatusTabs value="planned" counts={{ ...COUNTS, stale: 0 }} />);
+    expect(tab('Stale').textContent).toBe('Stale0');
+  });
+
   it('renders one per tab, and a ZERO is rendered rather than hidden', () => {
     // A tab that silently loses its number reads as a loading state, and the
     // zero is a fact worth telling a reader before they press.

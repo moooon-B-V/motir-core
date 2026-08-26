@@ -23,6 +23,19 @@ function whenFor(plan: PlanDto): { key: PlanWhenKey; iso: string } {
     case 'declined':
       return { key: 'declinedAt', iso: plan.decidedAt ?? plan.createdAt };
     case 'planned':
+    // ⚠️ `stale` READS `plannedAt` AND KEEPS ITS VERB — *"planned 2 hours ago"*
+    // (MOTIR-3578, `design/ai-planning/design-notes.md` Part XI §3). That is
+    // still the true and useful fact in a scanned list: it is the plan's own
+    // moment, and the status pill beside it already says what happened since.
+    // No `Plan` column carries WHEN the drift landed, and the row does not need
+    // one — the rail is where that question is asked, and Part XI §3 hands the
+    // `staleAt` decision to the transitions card rather than assuming it here.
+    //
+    // ⚠️ AND IT IS AN EXPLICIT ARM, not the `default:` below. That arm answers
+    // `createdAt` — right for `generating`, silently wrong for a fifth value,
+    // and NOT a type error, which is why Part XI §7 lists it among the four
+    // sites the compiler cannot find.
+    case 'stale':
       return { key: 'plannedAt', iso: plan.plannedAt ?? plan.createdAt };
     default:
       // `generating` (and any future status) reads the creation time.
@@ -30,17 +43,23 @@ function whenFor(plan: PlanDto): { key: PlanWhenKey; iso: string } {
   }
 }
 
-/** How many of a `planned` plan's proposed items have drifted out of date. Only
- *  a `planned` plan can be stale; others short-circuit to 0. A staleness read
- *  failure degrades gracefully (the row just omits the flag) rather than failing
- *  the whole list.
+/** How many of an UNDECIDED plan's proposed items have drifted out of date.
+ *  A decided plan short-circuits to 0. A staleness read failure degrades
+ *  gracefully (the row just omits the flag) rather than failing the whole list.
  *
  *  ⚠️ `computePlanStaleness` OWNS that rule (MOTIR-3165) and returns all-clear
  *  for a decided plan on its own. This guard is kept as an OPTIMISATION — the
  *  row already holds a `PlanDto`, so it spares a plan read each — not as a
- *  second source of truth; deleting it would change cost, never behaviour. */
+ *  second source of truth; deleting it would change cost, never behaviour.
+ *
+ *  ⚠️ IT ADMITS `stale` TOO, and that is the whole point of the widening
+ *  (MOTIR-3578, AMENDMENT 9 D3). This used to read `!== 'planned'`, which would
+ *  have returned 0 for the fifth status — silencing the advisory count on the
+ *  row MOST likely to carry one, and doing it at the moment a reviewer needs it
+ *  most. It mirrors the service's own guard exactly; the two are asserted to
+ *  agree in `tests/integration/plans/planStatusStale.test.ts`. */
 async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number> {
-  if (plan.status !== 'planned') return 0;
+  if (plan.status !== 'planned' && plan.status !== 'stale') return 0;
   try {
     const verdict = await planStalenessService.computePlanStaleness(plan.id, ctx);
     return verdict.items.filter((item) => item.stale).length;

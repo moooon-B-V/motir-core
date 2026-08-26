@@ -4511,9 +4511,20 @@ model ApiToken {
 /// frontier is complete; the plan is reviewable and decidable. `approved` /
 /// `declined` — terminal; the user has decided. Approve MATERIALIZES the items
 /// into the work-item tree; decline drops them with the tree untouched.
+///
+/// `stale` — the plan reached a reviewer and can no longer be approved, because
+/// a `modify`/`remove` target reached a terminal status AFTER the plan closed
+/// (MOTIR-3574, `docs/decisions/agent-authored-plans.md` AMENDMENT 9). It is
+/// NOT terminal and NOT decided: the plan is live and awaiting action, and its
+/// exits are the drift reversing (back to `planned`) or a reviewer declining
+/// it. It exists so `planned` can mean APPROVABLE — the invariant a plan
+/// carrying post-close drift used to break silently, by staying `planned` and
+/// failing at the button. Reachable only from `planned`; a `generating` plan is
+/// in front of nobody and has nothing to be stale about.
 enum PlanStatus {
   generating
   planned
+  stale
   approved
   declined
 
