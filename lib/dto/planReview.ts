@@ -202,27 +202,83 @@ export interface PlanReviewItemDto {
   targetMissing: boolean;
 }
 
-/** A history event on the plan's lifecycle (the timeline). */
+/**
+ * The LIFECYCLE half of the timeline's vocabulary — a state the plan REACHED,
+ * derived from the `Plan` row's own columns and never stored.
+ *
+ * `created` / `planned` / `approved`, and the THREE endings a `declined` plan
+ * can have — `declined` (a person reviewed it and said no), `discarded` (a
+ * person ended it mid-generation) and `abandoned` (the sweep terminated a dead
+ * producer).
+ *
+ * ⚠️ The kind is the EVENT, not the status (MOTIR-3189). All three endings leave
+ * `Plan.status = 'declined'`; what separates them is `Plan.decisionReason`, and
+ * the timeline is the surface whose whole job is to say what happened. Before
+ * this the service pushed one `declined` event for all three and the rail
+ * rendered them identically — you could see that a plan ended and not why.
+ */
+export type PlanLifecycleEventKind =
+  | 'created'
+  | 'planned'
+  | 'approved'
+  | 'declined'
+  | 'discarded'
+  | 'abandoned';
+
+/**
+ * A history event on the plan's timeline — a LIFECYCLE transition (above) or,
+ * since MOTIR-3536, a CONTENT act somebody performed on the plan.
+ *
+ * ⚠️ ONE SEQUENCE, ONE SHAPE, and the KIND's own wording is what tells a reader
+ * which of the two it is reading (`design/ai-planning/design-notes.md` Part X
+ * §2). A lifecycle kind names a state the plan reached; a content kind names an
+ * act, and carries a `count` of the proposals it covered. There is deliberately
+ * no second treatment, no second dot and no grouping into two blocks: nobody
+ * filters this list and nothing acts differently on the two halves, so a second
+ * visual language would ask the reader to learn a distinction that pays nothing.
+ *
+ * ⚠️ THE FOUR DERIVED EVENTS ARE UNCHANGED BY THE WIDENING. Every field this
+ * interface gained is optional, and a lifecycle event sets none of them — so a
+ * plan created before the trail existed produces exactly the event list it
+ * produced before, which is the state EVERY pre-existing plan is in.
+ */
 export interface PlanHistoryEventDto {
   /**
-   * `created` / `planned` / `approved`, and the THREE endings a `declined` plan
-   * can have — `declined` (a person reviewed it and said no), `discarded` (a
-   * person ended it mid-generation) and `abandoned` (the sweep terminated a dead
-   * producer).
+   * A stable per-EVENT identity — the revision's own id for a stored event,
+   * `lifecycle:<kind>` for a derived one.
    *
-   * ⚠️ The kind is the EVENT, not the status (MOTIR-3189). All three endings
-   * leave `Plan.status = 'declined'`; what separates them is
-   * `Plan.decisionReason`, and the timeline is the surface whose whole job is to
-   * say what happened. Before this the service pushed one `declined` event for
-   * all three and the rail rendered them identically — you could see that a plan
-   * ended and not why.
+   * It exists because the rail keyed its rows by `kind`, which was unique only
+   * for as long as each kind occurred at most once. Content events repeat, and
+   * React then reconciles a list of duplicate keys (measured while drawing the
+   * asset: eight events with a repeated kind render, and log *"Encountered two
+   * children with the same key"*).
    */
-  kind: 'created' | 'planned' | 'approved' | 'declined' | 'discarded' | 'abandoned';
+  id: string;
+  /** A lifecycle transition, or a stored content act (`appended`, `edited`, …). */
+  kind: PlanLifecycleEventKind | string;
   /** ISO timestamp, or null for a not-yet-reached event (the pending decision). */
   at: string | null;
-  /** The actor's display name (the decider) — only on the decision events, and
-   *  null on `abandoned`, where nobody decided. */
+  /**
+   * A collapsed RUN's LAST instant, `at` being its first — rendered as a span in
+   * the same slot a single event's timestamp uses. Absent on every event that is
+   * not a collapsed run (Part X §5).
+   */
+  until?: string | null;
+  /** How many PROPOSALS a content event covered. Absent on a lifecycle event. */
+  count?: number;
+  /** The actor's display name — the decider on a decision event, the acting
+   *  person on a content one. Null when nobody acted as a person. */
   byName?: string | null;
+  /**
+   * WHICH AGENT acted, when one did (Part X §4). `actorSource` picks the KIND of
+   * label — `mcp` renders the harness, `native` renders Motir — and `actorModel`
+   * is deliberately NOT rendered on a row: measured at the rail's 298px text
+   * column, the model costs every row a second line, and the header carries it
+   * once already. It rides the DTO so the row can carry it as a `title`.
+   */
+  actorSource?: PlanAuthorSourceDto | null;
+  actorHarness?: string | null;
+  actorModel?: string | null;
 }
 
 /** The whole plan-detail review model. */

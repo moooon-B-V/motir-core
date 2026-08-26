@@ -3,6 +3,8 @@ import type { WorkItem } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
+import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
 
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
@@ -14,6 +16,7 @@ import type {
   PlanItemProposedFields,
   StaleReason,
 } from '@/lib/dto/plans';
+import type { PlanRevision } from '@/generated/prisma/client';
 import type {
   PlanHistoryEventDto,
   PlanItemChangeDto,
@@ -169,6 +172,18 @@ export const planReviewService = {
   async getPlanReview(planId: string, ctx: ServiceContext): Promise<PlanReviewDto> {
     const plan = await plansService.getPlan(planId, ctx);
     const staleness = await planStalenessService.computePlanStaleness(planId, ctx);
+    // The plan's CONTENT trail (MOTIR-3536) — ONE query for the whole history,
+    // walking the `(plan_id, changed_at)` index. It rides the plan read rather
+    // than a per-event query because this model is re-read on every poll of a
+    // `generating` plan, which is exactly the surface a row-per-round-trip would
+    // punish hardest.
+    //
+    // ⚠️ BOUND, not the `db` singleton: `plan_revision` carries no `workspace_id`
+    // and its policy joins to the parent `plan`, so an unbound read returns an
+    // EMPTY trail rather than an error — a plan's whole history silently gone.
+    const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRevisionRepository.listByPlan(planId, tx),
+    );
 
     // One batched, workspace-scoped read of every existing target (modify/remove)
     // — includes archived rows, so a "will be archived" / drifted target still
@@ -467,8 +482,11 @@ export const planReviewService = {
       ? ((await userRepository.findById(plan.createdById))?.name ?? null)
       : null;
 
-    const history: PlanHistoryEventDto[] = [{ kind: 'created', at: plan.createdAt }];
-    if (plan.plannedAt) history.push({ kind: 'planned', at: plan.plannedAt });
+    const derived: PlanHistoryEventDto[] = [
+      { id: 'lifecycle:created', kind: 'created', at: plan.createdAt },
+    ];
+    if (plan.plannedAt)
+      derived.push({ id: 'lifecycle:planned', kind: 'planned', at: plan.plannedAt });
     if (plan.status === 'approved' || plan.status === 'declined') {
       // The EVENT kind, which for a `declined` plan is not the status
       // (MOTIR-3189). One status covers three histories — a person rejected a
@@ -481,8 +499,38 @@ export const planReviewService = {
         plan.status === 'declined' && plan.decisionReason && plan.decisionReason !== 'reviewed'
           ? plan.decisionReason
           : plan.status;
-      history.push({ kind, at: plan.decidedAt, byName: decidedByName });
+      derived.push({ id: `lifecycle:${kind}`, kind, at: plan.decidedAt, byName: decidedByName });
     }
+
+    // The CONTENT half. Every actor NAME the trail needs resolves in ONE batched
+    // read — a plan deepened proposal by proposal has a row per proposal, and a
+    // `findById` per row is the N+1 this surface cannot afford.
+    const actorIds = Array.from(
+      new Set(revisions.map((r) => r.changedById).filter((id): id is string => !!id)),
+    );
+    const actorNameById = new Map(
+      (actorIds.length > 0 ? await userRepository.findByIds(actorIds) : []).map((u) => [
+        u.id,
+        u.name,
+      ]),
+    );
+    const stored: PlanHistoryEventDto[] = revisions
+      // The four the derived events already say, dropped HERE rather than at the
+      // write: the trail is the audit record and must be complete; the timeline
+      // is a reading of it and must not say the same thing twice.
+      .filter((r: PlanRevision) => !DERIVED_EVENT_KINDS.has(r.changeKind))
+      .map((r: PlanRevision) => ({
+        id: r.id,
+        kind: r.changeKind,
+        at: r.changedAt.toISOString(),
+        count: revisionCount(r.diff),
+        byName: r.changedById ? (actorNameById.get(r.changedById) ?? null) : null,
+        actorSource: r.actorSource,
+        actorHarness: r.actorHarness,
+        actorModel: r.actorModel,
+      }));
+
+    const history = mergeTimeline(derived, stored);
 
     const staleCount = items.filter((i) => i.stale).length;
 
