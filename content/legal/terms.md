@@ -117,17 +117,36 @@ The service is provided **"as is"**. To the extent the law permits, we exclude i
 warranties of merchantability, fitness for a particular purpose, and non-infringement. We
 do not warrant uninterrupted or error-free operation.
 
-To the extent the law permits:
+### If you are a business
 
 - **We are not liable** for indirect or consequential loss, loss of profits, revenue,
   goodwill, or lost or corrupted data beyond our obligation to maintain backups.
 - **Our total liability** under these terms in any twelve-month period is limited to the
   fees you paid us in that period, or **EUR 100** if you paid nothing.
 
-**Nothing here excludes liability that cannot lawfully be excluded** — including for death
-or personal injury caused by negligence, for fraud, or for anything else Dutch law does not
-permit to be limited. **If you are a consumer, your mandatory statutory rights are
-unaffected**, and the limits above apply only so far as the law allows.
+### If you are a consumer
+
+**The limits above are written for business customers, and we do not rely on them against
+a consumer where Dutch consumer-protection law would treat them as unreasonably onerous**
+(Articles 6:233(a) and 6:237 BW). Your statutory rights are unaffected, and our liability
+to you is limited only so far as the law actually permits.
+
+We say this plainly rather than stating a cap and leaving you to discover it is
+unenforceable: a limit that has to be abandoned in a dispute protects nobody and misleads
+you in the meantime.
+
+### What is never excluded, whoever you are
+
+Nothing in these terms excludes or limits our liability for:
+
+- death or personal injury caused by negligence;
+- fraud or fraudulent misrepresentation;
+- **damage caused by intent or conscious recklessness — _opzet of bewuste
+  roekeloosheid_ — on the part of moooon B.V. or the members of its executive
+  management**, which Dutch law does not permit to be excluded and which the general
+  standard of reasonableness and fairness (Article 6:248(2) BW) would override in any
+  case;
+- anything else the law does not permit to be limited or excluded.
 
 ## 10. Governing law and disputes
 
