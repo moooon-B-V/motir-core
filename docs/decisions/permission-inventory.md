@@ -20,15 +20,22 @@ permissions page, as a complete answer.
 
 |                                            |                                               |
 | ------------------------------------------ | --------------------------------------------- |
-| API routes                                 | **252**                                       |
+| API routes                                 | **255**                                       |
 | `'use server'` action files                | **22**                                        |
 | Services in `lib/services`                 | **122**, of which **40** reach a project gate |
 | Routes — workspace membership only         | **89**                                        |
-| Routes — session only                      | **62**                                        |
+| Routes — session only                      | **65**                                        |
 | Routes — project-gated                     | **77**                                        |
 | Routes — no context resolved               | **32**                                        |
 | Routes — serviceAuth / internal (no actor) | **15**                                        |
 
+> **Three routes were added on 2026-08-26 (Story 8.11 · MOTIR-1213).** The account two-factor
+> surface — `status`, `backup-codes`, `trusted-devices` — takes the route total to **255** and the
+> session-only count to **65**. All three are R31: they act on the signed-in user's own account, the
+> user id comes from the session and is never accepted from the request, and the ownership check on
+> the revoke is a `value = <session user>` clause in the repository rather than a filter — see
+> `verificationRepository.deleteTrustedDeviceForUser`.
+>
 > **Two of these numbers were re-measured on 2026-08-06 (MOTIR-2292).** `/api/ai/coding-convention/audit-coverage`
 > shipped after this document was written, so the route total is **252**, not 251. And the project-gated
 > count was **52** because the walk in `tests/permissions/noUngovernedOperation.test.ts` mistook a
@@ -664,16 +671,19 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `user`
 
-| Operation                           | Verbs     | Gate today     | Permission | Decision    | Why |
-| ----------------------------------- | --------- | -------------- | ---------- | ----------- | --- |
-| `/api/account/confirm-email-change` | GET       | — none —       | —          | user-scoped | R31 |
-| `/api/account/request-email-change` | POST      | workspace only | —          | user-scoped | R31 |
-| `/api/appearance-preference`        | GET/PATCH | workspace only | —          | user-scoped | R31 |
-| `/api/notification-preferences`     | GET/PUT   | workspace only | —          | user-scoped | R31 |
-| `/api/notifications`                | GET       | workspace only | —          | user-scoped | R40 |
-| `/api/notifications/[id]/read`      | PATCH     | workspace only | —          | user-scoped | R40 |
-| `/api/notifications/mark-all-read`  | POST      | workspace only | —          | user-scoped | R40 |
-| `/api/notifications/unread-count`   | GET       | workspace only | —          | user-scoped | R40 |
+| Operation                                 | Verbs     | Gate today     | Permission | Decision    | Why |
+| ----------------------------------------- | --------- | -------------- | ---------- | ----------- | --- |
+| `/api/account/confirm-email-change`       | GET       | — none —       | —          | user-scoped | R31 |
+| `/api/account/two-factor/backup-codes`    | POST      | session only   | —          | user-scoped | R31 |
+| `/api/account/two-factor/status`          | GET       | session only   | —          | user-scoped | R31 |
+| `/api/account/two-factor/trusted-devices` | DELETE    | session only   | —          | user-scoped | R31 |
+| `/api/account/request-email-change`       | POST      | workspace only | —          | user-scoped | R31 |
+| `/api/appearance-preference`              | GET/PATCH | workspace only | —          | user-scoped | R31 |
+| `/api/notification-preferences`           | GET/PUT   | workspace only | —          | user-scoped | R31 |
+| `/api/notifications`                      | GET       | workspace only | —          | user-scoped | R40 |
+| `/api/notifications/[id]/read`            | PATCH     | workspace only | —          | user-scoped | R40 |
+| `/api/notifications/mark-all-read`        | POST      | workspace only | —          | user-scoped | R40 |
+| `/api/notifications/unread-count`         | GET       | workspace only | —          | user-scoped | R40 |
 
 ### `watcher`
 
