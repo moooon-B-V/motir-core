@@ -10,7 +10,13 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { plansService } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
-import type { PlanItemDto, ProposalInput, UpdateProposalInput } from '@/lib/dto/plans';
+import type {
+  CorrectProposalInput,
+  PlanItemDto,
+  ProposalInput,
+  UpdateProposalInput,
+} from '@/lib/dto/plans';
+import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // Issue-tree generation, motir-core side (Subtask 7.4.4 · MOTIR-846). The thin
@@ -166,8 +172,13 @@ export const aiGenerationService = {
     jobId: string,
     proposals: ProposalInput[],
     ctx: ServiceContext,
-    opts: { final?: boolean; productName?: string | null } = {},
-  ): Promise<{ planId: string; planItemIds: string[]; planned: boolean }> {
+    opts: {
+      final?: boolean;
+      productName?: string | null;
+      revision?: boolean;
+      actor?: PlanRevisionAgentActor;
+    } = {},
+  ): Promise<{ planId: string; planItemIds: string[]; planned: boolean; released?: boolean }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
@@ -175,12 +186,33 @@ export const aiGenerationService = {
 
     let createdIds: string[] = [];
     if (proposals.length > 0) {
-      const result = await plansService.addProposals(plan.id, proposals, ctx);
+      const result = await plansService.addProposals(plan.id, proposals, ctx, {
+        revision: opts.revision,
+      });
       // A generation job is the SOLE writer of its plan and appends sequentially
       // (the handler awaits each batch), and `addProposals` returns every item in
       // append order (createdAt asc, id asc) — so this call's creations are exactly
       // the last `proposals.length` items.
       createdIds = result.items.slice(result.items.length - proposals.length).map((i) => i.id);
+    }
+
+    // ⚠️ `final` MEANS *THIS PASS IS OVER*, and what that costs depends on which
+    // pass it was (Story MOTIR-3595 · Subtask MOTIR-3598). A GENERATION's last
+    // append closes its plan into the review queue; a REVISION's releases the
+    // lease and leaves the plan exactly where it was — `planned`, before, during
+    // and after (`agent-authored-plans.md` AMENDMENT 10). One flag, one meaning,
+    // dispatched on which pass is running rather than on a second field, so a
+    // revision that touches nothing sends the same `{ proposals: [], final: true }`
+    // shape MOTIR-3193's CLOSE already sends.
+    if (opts.revision) {
+      const released = opts.final
+        ? (
+            await plansService.releaseRevisionLease(plan.id, ctx, opts.actor ?? EMPTY_ACTOR, {
+              proposalCount: createdIds.length,
+            })
+          ).released
+        : false;
+      return { planId: plan.id, planItemIds: createdIds, planned: false, released };
     }
 
     let planned = false;
@@ -220,4 +252,57 @@ export const aiGenerationService = {
     const item = result.items.find((i) => i.id === planItemId)!;
     return { planId: plan.id, item };
   },
+
+  // The INTERNAL CORRECTION seam (Story MOTIR-3595 · Subtask MOTIR-3598) — the
+  // SECOND caller of two service methods that have had exactly one
+  // (`lib/mcp/tools/authorPlan.ts`). It adds no logic of its own: the structural
+  // fields, the ref re-check, the frozen-status refusal and the trail write are
+  // all `plansService.correctProposal`'s, unchanged.
+  //
+  // The plan is resolved from the JOB — `sourceJobId`, workspace-scoped, exactly
+  // as the append and deepen seams beside it resolve theirs — never from a
+  // caller-supplied plan id. A job token for one tenant therefore cannot correct
+  // another's plan (NoPlanForJobError → 404, the no-leak posture), and the route
+  // has no plan id to validate because it never receives one.
+  async correctProposalForJob(
+    jobId: string,
+    planItemId: string,
+    input: CorrectProposalInput,
+    ctx: ServiceContext,
+  ): Promise<{ planId: string; item: PlanItemDto }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new NoPlanForJobError(jobId);
+    const result = await plansService.correctProposal(plan.id, planItemId, input, ctx);
+    // `correctProposal` throws `PlanItemNotFoundError` when the item is not on
+    // the plan, so by here it is guaranteed present in the returned set.
+    const item = result.items.find((i) => i.id === planItemId)!;
+    return { planId: plan.id, item };
+  },
+
+  // The INTERNAL WITHDRAW seam (Subtask MOTIR-3598) — the same shape, onto
+  // `plansService.withdrawProposal`. A withdraw whose target a sibling still
+  // references is REFUSED naming the referrers, exactly as the service already
+  // does; this seam does not soften it, and it must not, because cascading would
+  // take proposals off the plan nobody asked to withdraw.
+  //
+  // Returns the plan's REMAINING item count, which is the one thing the caller
+  // cannot recompute for itself and the number the rail's header renders.
+  async withdrawProposalForJob(
+    jobId: string,
+    planItemId: string,
+    ctx: ServiceContext,
+  ): Promise<{ planId: string; itemCount: number }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new NoPlanForJobError(jobId);
+    const result = await plansService.withdrawProposal(plan.id, planItemId, ctx);
+    return { planId: plan.id, itemCount: result.items.length };
+  },
 };
+
+/** A job that names no harness records none, rather than borrowing the plan's
+ *  original author — a revision's rows must say who performed THIS act. */
+const EMPTY_ACTOR: PlanRevisionAgentActor = { source: null, harness: null, model: null };

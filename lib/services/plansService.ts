@@ -20,6 +20,7 @@ import {
 
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
+import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
@@ -65,9 +66,16 @@ import {
   PlanApproveTimedOutError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
+  PlanRevisionInFlightError,
   type PlanTargetOp,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
+import {
+  PLAN_REVISION_LEASE_MS,
+  revisionLeaseOf,
+  REVISION_STARTED_KIND,
+  REVISION_ENDED_KIND,
+} from '@/lib/planChange/revisionLease';
 import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
 import { UnknownTargetRepoError } from '@/lib/workItems/errors';
 import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
@@ -716,6 +724,29 @@ function refCarrierOfRow(item: PlanItem): ProposalRefCarrier {
  * future status is refused by default — the safe direction for a gate whose job
  * is to keep two editable records of one thing from existing.
  */
+/**
+ * REFUSE a DECISION while a REVISION holds the plan (Story MOTIR-3595 · Subtask
+ * MOTIR-3598; `agent-authored-plans.md` AMENDMENT 10 D2).
+ *
+ * ⚠️ CALLED INSIDE THE TRANSACTION, AFTER `planRepository.lockById`. That is the
+ * whole guarantee: read before the lock this is a TOCTOU check, read under it it
+ * is an exclusion, and the exclusion is what makes the two outcomes total —
+ * either the decision is refused and the tree is untouched, or it materializes a
+ * proposal set nothing is midway through rewriting.
+ *
+ * It reads the plan's own content trail, which is where the lease LIVES: a
+ * `revision_started` with no `revision_ended` after it, inside the window. No
+ * second table, and the reviewer learns a revision is running by reading the
+ * timeline they were already reading.
+ */
+async function assertNoRevisionInFlight(
+  planId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const lease = revisionLeaseOf(await planRevisionRepository.listByPlan(planId, tx), new Date());
+  if (lease) throw new PlanRevisionInFlightError(planId, lease.heldBy, lease.expiresAt);
+}
+
 function assertPlanProposalsEditable(plan: Pick<Plan, 'id' | 'status'>): void {
   if (plan.status !== 'generating' && plan.status !== 'planned') {
     throw new PlanNotEditableError(plan.id, plan.status);
@@ -1845,17 +1876,39 @@ export const plansService = {
    * lock, BEFORE the insert, naming the work item and the alternatives, instead of
    * an ORM string naming `prisma.planItem.create()`.
    */
+  /**
+   * ⚠️ `opts.revision` is AMENDMENT 10 D1's relaxation, and it is opt-in PER CALL.
+   *
+   * Absent — every shipped caller — the gate is `generating` and this method is
+   * byte-identical to what it has always been. Present, the gate becomes
+   * `assertPlanProposalsEditable`: the same two-status gate `correctProposal`
+   * uses, so a REVISION may grow a `planned` plan's proposal set.
+   *
+   * **The condition is VISIBILITY, not status.** The `generating` assertion was
+   * never about generation — it is the guarantee that a plan under review does
+   * not change under its reviewer without their knowing, which was correct for as
+   * long as every write door was invisible. A revision's append writes its
+   * `appended` row on MOTIR-3532's trail with the harness and model that made it,
+   * exactly as the correction door does, so the property the assertion protects
+   * still holds. The relaxation is bound to the trail write, not to the caller's
+   * identity — which is why there is nothing here to check about who is asking.
+   *
+   * `markPlanned` is NOT relaxed: a revision does not re-open a plan, and the
+   * plan is `planned` before, during and after one.
+   */
   async addProposals(
     planId: string,
     proposals: ProposalInput[],
     ctx: ServiceContext,
+    opts: { revision?: boolean } = {},
   ): Promise<PlanWithItemsDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
-    if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
+    if (opts.revision) assertPlanProposalsEditable(plan);
+    else if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
     proposals.forEach(validateProposal);
 
     let result: { row: Plan; items: PlanItem[] };
@@ -1867,7 +1920,12 @@ export const plansService = {
           if (!locked) throw new PlanNotFoundError(planId);
           const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
           if (!fresh) throw new PlanNotFoundError(planId);
-          if (fresh.status !== 'generating') throw new PlanNotGeneratingError(planId, fresh.status);
+          // The SAME split as the pre-transaction gate above, re-run under the
+          // lock — a plan that left `generating` while this call was in flight
+          // must still be refused on the ordinary path.
+          if (opts.revision) assertPlanProposalsEditable(fresh);
+          else if (fresh.status !== 'generating')
+            throw new PlanNotGeneratingError(planId, fresh.status);
 
           // The targets this plan ALREADY claims, read under the row lock the
           // append holds — so a second call cannot observe a stale set. Grown
@@ -2691,6 +2749,12 @@ export const plansService = {
           if (fresh.status !== 'planned') {
             throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
           }
+          // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
+          // under the lock, before a single row is materialized. Approve is
+          // one-shot, so the only safe answer to "a revision is halfway through
+          // rewriting this set" is not to materialize it. The reviewer waits,
+          // reads what changed, and approves the plan they asked for.
+          await assertNoRevisionInFlight(planId, tx);
           const proposals = await planItemRepository.findByPlan(planId, tx);
           // THE GATE, under the plan lock + the targets' row locks, on the FRESH
           // proposal set — nothing has been written yet, so a rejection here rolls
@@ -2900,6 +2964,114 @@ export const plansService = {
    * and matters more there: a half-generated plan's proposals are the only
    * record of how far the producer got.
    */
+  /**
+   * ACQUIRE the revision lease (Story MOTIR-3595 · Subtask MOTIR-3598;
+   * `agent-authored-plans.md` AMENDMENT 10 D2) — one `revision_started` row on
+   * the plan's own content trail, written under the plan row lock.
+   *
+   * ⚠️ THE LOCK IS ON THE PLAN ROW, NOT ON THE LEASE. The plan always exists, so
+   * the lock is real; a lease "row" may not exist yet, and a `FOR UPDATE` over
+   * zero rows locks NOTHING, so every racer would fall through the guard
+   * together. This is the reasoning `planTargetLockService` records for locking
+   * the work ITEM rather than its lease, and it applies here unchanged.
+   *
+   * A second acquire while one is held is REFUSED with the same error a racing
+   * decision gets — so one plan is revised by one job at a time, which is also
+   * what makes it safe for the plan's `sourceJobId` to name the revision that
+   * holds it (MOTIR-3599).
+   *
+   * A DECIDED plan is refused by `assertPlanProposalsEditable`: there is nothing
+   * to revise once the proposals have materialized or the decision is closed.
+   */
+  async acquireRevisionLease(
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+  ): Promise<{ planId: string; expiresAt: Date }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        assertPlanProposalsEditable(fresh);
+        await assertNoRevisionInFlight(planId, tx);
+
+        const at = new Date();
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: REVISION_STARTED_KIND,
+            ...generationActor(fresh, ctx),
+            actor,
+            diff: { revision: true },
+          },
+          tx,
+        );
+        return { planId, expiresAt: new Date(at.getTime() + PLAN_REVISION_LEASE_MS) };
+      },
+    );
+  },
+
+  /**
+   * RELEASE the revision lease — one `revision_ended` row, under the same lock.
+   *
+   * IDEMPOTENT by construction: with nothing held it writes nothing and reports
+   * `released: false`. A revision that touches no proposal still releases through
+   * here (its pass is over either way), and a job that DIES releases nothing at
+   * all — the expiry window in `revisionLease.ts` is the only thing that recovers
+   * such a plan, exactly as `targetLock.ts` records of its own.
+   *
+   * It does NOT assert the plan is editable. A lease taken on a `planned` plan
+   * that a race then decided must still be closeable; refusing here would leave a
+   * `revision_started` with no terminator on a plan nobody can act on.
+   */
+  async releaseRevisionLease(
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+    diff: Record<string, unknown> = {},
+  ): Promise<{ planId: string; released: boolean }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        const held = revisionLeaseOf(
+          await planRevisionRepository.listByPlan(planId, tx),
+          new Date(),
+        );
+        if (!held) return { planId, released: false };
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: REVISION_ENDED_KIND,
+            ...generationActor(fresh, ctx),
+            actor,
+            diff: { revision: true, ...diff },
+          },
+          tx,
+        );
+        return { planId, released: true };
+      },
+    );
+  },
+
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -2925,6 +3097,10 @@ export const plansService = {
           // (MOTIR-3025).
           throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned or generating');
         }
+        // A DECLINE is refused under the lease too, and for a reason of its own:
+        // `declined` is a closed decision, so a revision that finishes writing
+        // into a declined plan leaves proposals on a plan nobody will ever read.
+        await assertNoRevisionInFlight(planId, tx);
         const updated = await planRepository.update(
           planId,
           {
