@@ -19,8 +19,8 @@ agreement. Nothing here restricts what you may do with the open-source software.
 
 ## 1. Who you are contracting with
 
-**moooon B.V.**, «REGISTERED ADDRESS», registered with the Dutch Chamber of Commerce under
-KvK «KVK NUMBER» ("**we**", "**us**"). You are the individual or organisation that creates
+**moooon B.V.**, Menkemaborg 65, Lelystad, Netherlands, registered with the Dutch Chamber of Commerce under
+KvK 97763144 ("**we**", "**us**"). You are the individual or organisation that creates
 an account ("**you**").
 
 By creating an account or using the service you agree to these terms. If you are agreeing
