@@ -5180,6 +5180,40 @@ Measured against `origin/main` `9455fc3c`.
 they came from `/items`, whose table they were just looking at. Standing in for it with the same
 skeleton the sibling route uses is what makes the two read as one surface.
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3444. THE CITED SKELETON DOES NOT FIT THIS TABLE.
+>
+> **The verdict above is right and its stand-in is wrong.** The entry asserts that `/items/archived`
+> is _"the same table one route over"_ as `/items`. It is not, and the build card that went to reuse
+> `IssueTreeSkeleton` measured the difference:
+>
+> |               | `IssueTreeSkeleton`                                                                  | `ArchivedWorkItemsList`                                                                 |
+> | ------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+> | tracks        | **9**, derived from `buildIssueColumns`                                              | **4 or 5** — `minmax(0,1fr) 130px 175px 140px [150px]`, the fifth only when `canDelete` |
+> | columns       | Title · Type · Priority · Assignee · Reporter · Estimate · Points · Status · Actions | Title · Status · Archived by · Archived (· actions)                                     |
+> | row height    | **40**                                                                               | **48**                                                                                  |
+> | right padding | `pr-7`                                                                               | `pr-5`                                                                                  |
+>
+> Composing it as the fallback would lay out four fewer tracks and 8 px less per row across eight
+> rows, and settle with a visible jump — **exactly the defect `IssueTreeSkeleton`'s own header
+> comment documents** (MOTIR-3452: the fallback laid out 272 px less fixed track than its table for
+> eighty days, under a comment promising the two were in sync). An asset that cites a stand-in which
+> does not fit is worse than one that cites none: it sends the next agent to a component that
+> compiles, renders, and shifts.
+>
+> **So the archived boundary is NOT this sweep's to add, and MOTIR-3444 ships without it.** Two
+> things must be decided before it can be, and neither is a build detail:
+>
+> 1. **Which variant the frame draws.** `gridTemplate` is chosen from `showActions`, which is
+>    `canDelete` — a capability the frame cannot know before the read it is standing in for. Four
+>    tracks or five is a drawing decision, and guessing it wrong is the shift.
+> 2. **Whether it is drawn at all.** Under _WHICH SURFACES EARN A FRAME_ rule 3 the shape ladder is
+>    the page's own, then its family's, then the generic one. This table has no family, and the
+>    generic frame is `PageSkeleton`, which does not exist on `main` — the same unowned prerequisite
+>    that blocked MOTIR-3443 (planning bug MOTIR-3520).
+>
+> **What still stands, unchanged:** the gate, the tiers, the settle count, and the finding that this
+> page's two reads were already one wave. The falsified clause is the stand-in, not the allocation.
+
 ### `/items/[key]/edit` — the form
 
 |                            |                                                                                                                                                                                                                                                                  |
