@@ -116,6 +116,14 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // derives through the very same definition rather than describing a plan a
   // third time. No `planItemIds`: this call creates no proposal.
   update_plan_item: planPayload as unknown as PayloadDefinition<never>,
+  // The CORRECTION door (MOTIR-3541). Both return the whole plan for the same
+  // reason the deepen does — the caller sees the corrected (or shortened)
+  // proposal set in place without a second read — so both derive through the
+  // one plan definition rather than describing a plan a fourth and fifth time.
+  // No `planItemIds` on either: a correction creates no proposal, and a
+  // withdraw removes one.
+  update_plan_proposal: planPayload as unknown as PayloadDefinition<never>,
+  withdraw_plan_proposal: planPayload as unknown as PayloadDefinition<never>,
   open_plan_session: planSessionPayload as unknown as PayloadDefinition<never>,
   append_plan_turn: planSessionPayload as unknown as PayloadDefinition<never>,
   submit_plan_session: planSubmitPayload as unknown as PayloadDefinition<never>,

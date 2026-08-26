@@ -33,13 +33,23 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
  *
  * The column is plain text rather than an enum (the `WorkItemRevision.changeKind`
  * call, made for the same reason), so a seventh verb is a code change rather than
- * a migration. The sibling story's structural edits and withdrawals are the
- * expected next members.
+ * a migration. `withdrawn` is that seventh verb, added by MOTIR-3540 exactly as
+ * this comment anticipated — a proposal taken OFF a plan.
+ *
+ * ⚠️ A STRUCTURAL CORRECTION stays `edited` rather than gaining a verb of its
+ * own: it changes a proposal that is still on the plan, which is what `edited`
+ * already means, and its `diff` carries `correction: true` plus the fields it
+ * touched for a reader who needs to tell the two apart. A withdraw is a
+ * different verb because the proposal STOPS EXISTING, which no `edited` row can
+ * say. And it is `withdrawn`, not `removed`: a `remove` OP is a proposal to
+ * delete an existing work item from the tree, so rendering a withdraw as
+ * *"1 proposal removed"* would read to a reviewer as a card being deleted.
  */
 export type PlanRevisionChangeKind =
   | 'created'
   | 'appended'
   | 'edited'
+  | 'withdrawn'
   | 'planned'
   | 'approved'
   | 'declined';

@@ -255,6 +255,14 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
 });
 
 describe('the confirmation gate — the intra-plan ref graph', () => {
+  // ⚠️ SEEDED UNDERNEATH THE SERVICE, DELIBERATELY (MOTIR-3539). `addProposals`
+  // now REFUSES a dangling `planItem:` ref at the append, so this plan can no
+  // longer be built through the public door — which is the point of that card.
+  //
+  // The gate this test covers has not become dead code, it has become a
+  // BACKSTOP: every plan appended before that check shipped is sitting in
+  // exactly this state, and approve is where they are still caught. So the
+  // assertion is unchanged and only the seeding moved.
   it('rejects a dangling parentRef, writing nothing', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedThenBroken(

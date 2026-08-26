@@ -64,6 +64,9 @@ import {
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
+  UnresolvedPlanRefError,
+  PlanNotEditableError,
+  PlanProposalReferencedError,
   PlanPersistenceError,
 } from '@/lib/plans/errors';
 import {
@@ -416,6 +419,20 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof PlanNotGeneratingError ||
     err instanceof InvalidProposalError ||
     err instanceof DuplicatePlanTargetError ||
+    // UNRESOLVED_PLAN_REF (MOTIR-3539) — an intra-plan `planItem:` ref naming no
+    // proposal, now refused AT THE APPEND rather than discovered at approve. It
+    // is mapped for the same reason as the rest of this list: it is the caller's
+    // own typo, fixable in one hop, and the message names the ref, the proposal
+    // and the rule it broke. Unmapped, it fell through to the `throw` at the
+    // bottom and reached the agent as a JSON-RPC internal error.
+    err instanceof UnresolvedPlanRefError ||
+    // PLAN_NOT_EDITABLE / PLAN_PROPOSAL_REFERENCED (MOTIR-3540) — the two
+    // refusals the correction door owes an agent. Both name what to do next
+    // (`update_work_item` on the materialized card; the referrers to clear
+    // first), which is only worth writing if the sentence actually reaches the
+    // caller rather than a JSON-RPC internal error.
+    err instanceof PlanNotEditableError ||
+    err instanceof PlanProposalReferencedError ||
     err instanceof PlanPersistenceError
   ) {
     return toolError(err.code, err.message);

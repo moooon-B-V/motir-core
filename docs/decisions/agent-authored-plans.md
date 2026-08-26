@@ -1480,6 +1480,120 @@ terminal_.
 
 ---
 
+## AMENDMENT 8 — a proposal can be CORRECTED and WITHDRAWN, for an explicit correction only (MOTIR-3540, 2026-08-26)
+
+AMENDMENT 3 D3 fixed the deepen turn's editable set with a rule, and D4 declined the withdraw and
+deferred it to its own card. **This is that card, and it amends both.**
+
+The two answers are still right about the act they were written about, and this amendment does not
+soften either one. What neither had a case for is an AUTHOR CORRECTING ITSELF.
+
+### What forced it — a live artifact, not an argument
+
+Plan `cmt9dk0bs00a2i2phxl2xb5x1` reached the review queue carrying
+`blockedByAdd: ['planItem:PLACEHOLDER']` — a temp-ref naming no proposal, written because both
+proposals went out in ONE `add_plan_items` batch and an `add`'s id does not exist until that call
+returns. The mistake was visible one second later. **There was nothing to do about it.** The repair
+was a whole second plan (`cmt9dlzvg00c1i1n83d0fc9zd`), and the broken one still had to be declined
+by hand.
+
+The asymmetry, written down, is the argument: an agent may create a plan, append any number of
+proposals, deepen each of them, and close it for review — four write doors. To correct any of it, it
+had zero.
+
+### D3, amended — the editable set widens for a CORRECTION, and NOT for a deepen
+
+D3's line — _a deepen may change what a card SAYS and who ACTS on it; it may not change where the
+card SITS or SHIPS_ — is preserved verbatim for the deepen turn. `UpdateProposalInput` is unchanged,
+`update_plan_item` is unchanged, and the human review route stays byte-identical.
+
+**A CORRECTION is a different act**, and the difference is not a preference:
+
+|                 | a DEEPEN                                   | a CORRECTION                                                 |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------ |
+| trigger         | the second phase of titles-first authoring | the author discovered its own structural mistake             |
+| when            | mid-generation, structure freshly settled  | after the append, often after `final: true`                  |
+| the alternative | send the next layer                        | author an entire second plan and ask a person to decline one |
+
+So `CorrectProposalInput` is a SEPARATE interface carrying `parentRef`, `blockedByRefs`,
+`targetRepo` and a `modify`'s `patch`, reached by a THIRD service method (`correctProposal`).
+
+- **Rejected — widen `UpdateProposalInput`.** It would re-open structure on the deepen path as a
+  side effect, which is exactly what D3 was protecting. Two inputs is what keeps both true at once.
+- **D3(c)'s objection is answered rather than overridden.** It rejected a mutable ref graph because
+  _"refs that can be rewritten after they land let an agent build a cycle inside a `generating` plan
+  that nothing catches until a person clicks approve."_ That was true when it was written and is not
+  true now: MOTIR-3539 moved the ref check to the APPEND, and `correctProposal` re-runs the same
+  check on the corrected shape with the proposal being corrected EXCLUDED from the resolvable set —
+  so a self-reference is refused, and a ref naming nothing cannot be written by a correction any more
+  than by an append. The objection was to an UNCHECKED mutable graph.
+- **D3(b)'s capability-asymmetry objection no longer applies in the direction it was aimed.** It
+  rejected a re-pin because it would give an agent a power the human reviewer lacks. The reviewer's
+  route was subsequently REMOVED (MOTIR-3084 — _"a proposal is READ and changed by re-planning"_),
+  so there is no human editing surface to be asymmetric with; and re-planning, the remedy that
+  removal named, is precisely the remedy that costs a human a decline per typo.
+
+### D4, amended — the withdraw EXISTS, and it refuses rather than cascades
+
+D4 said NO and named exactly what was missing: _"`planItemRepository` has `create` / `findById` /
+`findByPlan` / `update` / `setWorkItemId` / `deleteByPlan`. There is no per-item delete."_ There is
+now — `deleteById` — and `withdrawProposal` is the one caller.
+
+- **It is not `op: 'remove'`,** which D4 correctly distinguished: that is a proposal to delete an
+  existing work item from the TREE at approve and requires a `workItemId`.
+- **It is not the neutering D4 rejected.** Retitling a card _withdrawn_ leaves a proposal a reviewer
+  must still read and makes the plan's item count a lie. The row goes.
+- **A referenced proposal is REFUSED, not cascaded** (`PlanProposalReferencedError`, naming every
+  referrer). This is MOTIR-3539's check in the mirror: that card made a dangling ref impossible to
+  CREATE, and this stops one arriving by DELETION instead. Cascading would take cards off the plan
+  nobody asked to withdraw; blanking the refs would change what those proposals mean.
+- **Withdrawing a `modify` RELEASES its target**, so a corrected `modify` on that work item can be
+  appended — the escape `DUPLICATE_PLAN_TARGET` never had. That falls out of the delete rather than
+  being coded: `claimedTargets` reads the rows that exist.
+
+### The boundary — `approved` and `declined` are FROZEN
+
+**Decided here, not deferred.** `generating` and `planned` are editable; the other two are not, for
+two different reasons:
+
+- **`approved`** — the proposals have MATERIALIZED. The work item is the source of truth and
+  `update_work_item` is its door; editing the proposal afterwards leaves two disagreeing records of
+  one thing.
+- **`declined`** — a closed decision, with nothing downstream for an edit to reach.
+
+`assertPlanProposalsEditable` is written as a DENY of the terminal states rather than an allow of the
+two, so a future status is refused by default. The refusal NAMES the status and points at the
+editable surface, because the caller is an agent that can act on being told where to go.
+
+### What this does NOT change
+
+- **`update_plan_item` / `deepenProposal` / `updateProposal`** — untouched, and a vitest gate pins
+  that the deepen input still cannot reach `parentRef`, `blockedByRefs` or `targetRepo`.
+- **`CLI_TOKEN_GRANT`** — not widened. `correctProposal` asserts `ai:view_plan`, the same key the
+  rest of the author writes assert, so a sandboxed run still cannot author or correct a plan.
+- **What approve materializes**, the resolver, and `PlanItem`'s `@@unique` / cascade shape.
+- **The UI.** MOTIR-3084's removal stands; no component is added or modified.
+
+### The trail
+
+Both writes go through MOTIR-3532's content trail, in the mutation's own transaction, so the
+six-site guarantee becomes eight and the structural guard in
+`tests/integration/plans/planTrailCompleteness.test.ts` holds by derivation rather than by anyone
+remembering. A correction records `edited` with `correction: true` in its diff; a withdraw records
+the seventh verb, **`withdrawn`**.
+
+**`withdrawn`, not `removed`** — a `remove` OP is a proposal to delete an existing work item, so
+rendering a withdraw as _"1 proposal removed"_ would read to a reviewer as a card being deleted from
+the tree.
+
+**And the ACTOR is the agent, not the person.** `editAddProposal` discriminates on `expectedStatus`,
+reading `planned` as _"only a person reaches this"_ — true while the review route was its sole
+caller, and false the moment this method exists. A reviewer must be able to see WHICH harness and
+model changed the tree under them, which is the whole reason this story is `blocked_by` the trail
+story rather than merely sequenced after it.
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
@@ -1496,6 +1610,15 @@ terminal_.
   MCP-authored plan its author never closed is `declined` as `no_producer` once it passes
   `ABANDONED_PLAN_MAX_AGE_HOURS` — the same constant, no second threshold, no new query shape for
   the next case. This pays the debt AMENDMENT 4 named and supersedes one bullet of AMENDMENT 6.
+- **A proposal can be CORRECTED and WITHDRAWN, for an explicit correction only** (AMENDMENT 8,
+  MOTIR-3540): `correctProposal` carries the structural fields AMENDMENT 3 D3 excluded — `parentRef`,
+  `blockedByRefs`, `targetRepo`, a `modify`'s `patch` — through a SEPARATE input, so the deepen
+  turn's contract is preserved exactly as D3 fixed it; and `withdrawProposal` pays the debt D4
+  deferred, refusing rather than cascading when a sibling still references the proposal. Legal on
+  `generating` and `planned` only: `approved` is frozen because its proposals have materialized and
+  the work item is the source of truth, `declined` because it is a closed decision. D3(c)'s
+  mutable-ref-graph objection is answered by MOTIR-3539's append-time check, which the correction
+  re-runs. No grant change, no UI, no change to what approve materializes.
 - **Neither tool is billable.** Authoring a plan never draws on the owner's generation
   allowance.
 - **The materialize pin is lifted, and the safety property is now held by the WRITE SEAMS

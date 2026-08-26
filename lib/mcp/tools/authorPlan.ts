@@ -9,6 +9,7 @@ import type {
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
+  CorrectProposalInput,
 } from '@/lib/dto/plans';
 import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -136,6 +137,8 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 export const CREATE_PLAN_TOOL_NAME = 'create_plan';
 export const ADD_PLAN_ITEMS_TOOL_NAME = 'add_plan_items';
 export const UPDATE_PLAN_ITEM_TOOL_NAME = 'update_plan_item';
+export const UPDATE_PLAN_PROPOSAL_TOOL_NAME = 'update_plan_proposal';
+export const WITHDRAW_PLAN_PROPOSAL_TOOL_NAME = 'withdraw_plan_proposal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arguments
@@ -477,6 +480,92 @@ const updatePlanItemInputSchema = {
     .describe('Estimated minutes of work; `null` clears it.'),
 };
 
+// ── The CORRECTION door (Story MOTIR-3533 · Subtask MOTIR-3541) ────────────
+// `update_plan_item` above is the DEEPEN turn and stays exactly as AMENDMENT 4
+// fixed it. These two are a different act on a different set, and the ADR that
+// separates them is AMENDMENT 8.
+//
+// ⚠️ WHY A SECOND TOOL RATHER THAN MORE ARGUMENTS ON THE FIRST. The deepen's
+// contract — *a deepen may change what a card SAYS and who ACTS on it, never
+// where it SITS or SHIPS* — is a rule an agent reads off the tool description
+// and plans against. Growing `update_plan_item` a `parentRef` would make that
+// sentence false for every caller, including motir-ai's own titles-first
+// generator, in order to serve a caller correcting a mistake. Two tools keep
+// both contracts sayable in one line each.
+//
+// Both are THIN: no logic lives here. The lock, the frozen-status gate, the ref
+// re-validation, the sparse merge, the referrer check and the trail write are all
+// `plansService.correctProposal` / `.withdrawProposal`.
+
+const correctionRefField = z
+  .string()
+  .describe('A real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan.');
+
+const updatePlanProposalInputSchema = {
+  ...updatePlanItemInputSchema,
+  planItemId: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      'The proposal to correct — one of the ids `add_plan_items` returned in `planItemIds`, ' +
+        'in the order you sent them.',
+    ),
+  parentRef: correctionRefField
+    .nullable()
+    .optional()
+    .describe(
+      '`add` only: re-parent the proposal. A real work-item id, or a `planItem:<id>` ref naming ' +
+        'another `add` on THIS plan; `null` makes it top-level. Re-validated by the same check ' +
+        'the append runs, so a ref naming nothing is refused here rather than at approve — and ' +
+        'a ref to the proposal ITSELF is refused too.',
+    ),
+  blockedByRefs: z
+    .array(correctionRefField)
+    .optional()
+    .describe(
+      'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you ' +
+        'want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
+    ),
+  targetRepo: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s ' +
+        'connected repositories; `null` unpins it.',
+    ),
+  patch: patchSchema
+    .nullable()
+    .optional()
+    .describe(
+      '`modify` only: REPLACES that proposal’s patch. This is the op no door could touch at ' +
+        'all before — and the one that carries a dependency edit, so it is usually what a ' +
+        'mistyped `planItem:` ref is sitting on.',
+    ),
+};
+
+const withdrawPlanProposalInputSchema = {
+  planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
+  planItemId: z
+    .string()
+    .trim()
+    .min(1)
+    .describe('The proposal to take off the plan — one of the ids `add_plan_items` returned.'),
+};
+
+interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
+  parentRef?: string | null;
+  blockedByRefs?: string[];
+  targetRepo?: string | null;
+  patch?: Record<string, unknown> | null;
+}
+
+interface WithdrawPlanProposalArgs {
+  planId: string;
+  planItemId: string;
+}
+
 interface CreatePlanArgs {
   projectKey: string;
   title?: string;
@@ -607,6 +696,45 @@ function summarizeDeepen(
     '',
     PROPOSAL_GATE,
   ].join('\n');
+}
+
+/**
+ * The CORRECTION summary (MOTIR-3541). Deliberately NOT `summarizeDeepen`: the
+ * two acts are legal in different statuses and their next steps differ, so the
+ * line a caller reads after each has to differ too. A correction on a `planned`
+ * plan is the case the whole story exists for, and the summary says what that
+ * means — the plan is in front of a reviewer and the change is on its timeline.
+ */
+function summarizeCorrection(
+  plan: PlanWithItemsDto,
+  planItemId: string,
+  changed: readonly string[],
+): string {
+  const structural = changed.filter((f) =>
+    ['parentRef', 'blockedByRefs', 'targetRepo', 'patch'].includes(f),
+  );
+  return [
+    `Corrected proposal ${planItemId} on plan ${plan.id} — ${plan.status}, ` +
+      `${plan.itemCount} proposal(s) in total.`,
+    changed.length > 0
+      ? `Fields set by this call: ${changed.join(', ')}. Every other field was left as it was.`
+      : 'No fields were sent, so nothing changed.',
+    structural.length > 0
+      ? `Structural fields (${structural.join(', ')}) were re-validated against this plan's own ` +
+        'proposals, so every `planItem:` ref you sent resolves.'
+      : '',
+    '',
+    plan.status === 'planned'
+      ? 'This plan is `planned` — it is in front of a reviewer, and your correction is on its ' +
+        'timeline with the harness and model that made it, so they can see what changed after ' +
+        'they started reading.'
+      : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
+        'batch to put the plan in front of a reviewer.',
+    '',
+    PROPOSAL_GATE,
+  ]
+    .filter((line, i, all) => line !== '' || all[i - 1] !== '')
+    .join('\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -897,6 +1025,69 @@ export async function runUpdatePlanItem(
   );
 }
 
+/**
+ * CORRECT a proposal on a `generating` or `planned` plan (MOTIR-3541) — a
+ * transport over `plansService.correctProposal`, adding no logic of its own.
+ *
+ * The key gap between this and `runUpdatePlanItem` is the patchable list: it
+ * carries the four STRUCTURAL members AMENDMENT 8 opened, and the same
+ * presence-then-`undefined` discipline applies to every one of them so the
+ * summary cannot claim a field this call did not touch.
+ */
+export async function runUpdatePlanProposal(
+  args: UpdatePlanProposalArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  const patchable = [
+    'title',
+    'kind',
+    'descriptionMd',
+    'explanationMd',
+    'type',
+    'priority',
+    'executor',
+    'storyPoints',
+    'estimateMinutes',
+    'parentRef',
+    'blockedByRefs',
+    'targetRepo',
+    'patch',
+  ] as const;
+
+  const input: CorrectProposalInput = {};
+  const changed: string[] = [];
+  for (const key of patchable) {
+    if (!(key in args) || args[key] === undefined) continue;
+    (input as Record<string, unknown>)[key] = args[key];
+    changed.push(key);
+  }
+
+  const plan = await plansService.correctProposal(args.planId, args.planItemId, input, ctx);
+
+  return toolOk(
+    summarizeCorrection(plan, args.planItemId, changed),
+    derived(planPayload, presentMcpPlan(plan)),
+  );
+}
+
+/**
+ * WITHDRAW a proposal from a `generating` or `planned` plan (MOTIR-3541) — a
+ * transport over `plansService.withdrawProposal`.
+ */
+export async function runWithdrawPlanProposal(
+  args: WithdrawPlanProposalArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  const plan = await plansService.withdrawProposal(args.planId, args.planItemId, ctx);
+
+  return toolOk(
+    `Withdrew proposal ${args.planItemId} from plan ${plan.id}${attribution(plan)}. ` +
+      `${plan.items.length} proposal${plan.items.length === 1 ? '' : 's'} left on the plan. ` +
+      PROPOSAL_GATE,
+    derived(planPayload, presentMcpPlan(plan)),
+  );
+}
+
 export function registerAuthorPlan(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CREATE_PLAN_TOOL_NAME,
@@ -993,6 +1184,67 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
     async (args, extra) => {
       try {
         return await runUpdatePlanItem(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    UPDATE_PLAN_PROPOSAL_TOOL_NAME,
+    {
+      title: 'Correct a proposal, including its structure',
+      description:
+        'Correct a proposal you already appended — the repair for a mistake you can see but ' +
+        `could not fix. Unlike \`${UPDATE_PLAN_ITEM_TOOL_NAME}\`, this reaches the STRUCTURAL ` +
+        'fields: `parentRef`, `blockedByRefs`, `targetRepo`, and a `modify` proposal’s `patch` ' +
+        '— which is where a mistyped dependency edge usually sits. Legal while the plan is ' +
+        '`generating` AND after you have closed it with `final: true`, while it is `planned` ' +
+        'and waiting for a reviewer. It is REFUSED once the plan is `approved` (its proposals ' +
+        'have become work items, so `update_work_item` is the door — the refusal says so) or ' +
+        '`declined` (a closed decision). The patch is SPARSE: a field you omit is left exactly ' +
+        'as it was and an explicit `null` clears it — EXCEPT `blockedByRefs`, which is a list ' +
+        'and REPLACES the set, so send the edges you want and `[]` to clear them. Every ' +
+        'structural correction re-runs the append’s own ref check, so you cannot correct your ' +
+        'way into a `planItem:` ref that names nothing, and a ref to the proposal itself is ' +
+        'refused rather than stored. The correction appears on the plan’s timeline with the ' +
+        'harness and model that made it, so a reviewer can see the tree changed under them. ' +
+        'IMPORTANT: this creates NO work item and changes nothing in the tree. Approving the ' +
+        'plan in Motir is the only path from a proposal to a work item, and approval does not ' +
+        'happen on this surface. Costs nothing and starts no job.',
+      inputSchema: updatePlanProposalInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runUpdatePlanProposal(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    WITHDRAW_PLAN_PROPOSAL_TOOL_NAME,
+    {
+      title: 'Take a proposal off a plan',
+      description:
+        'Remove one proposal from a plan you are writing, or one you have already closed for ' +
+        'review — so a proposal you should not have appended does not have to be declined by a ' +
+        'person along with everything around it. Legal while the plan is `generating` or ' +
+        '`planned`; REFUSED once it is `approved` (its proposals have become work items — ' +
+        'archive the work item instead) or `declined`. If another proposal on the plan still ' +
+        'references this one through a `planItem:` ref, the call is REFUSED and names every ' +
+        'referrer rather than leaving their refs pointing at nothing: correct or withdraw ' +
+        'those first, then retry. Withdrawing a `modify` RELEASES its target work item, so you ' +
+        'can append a corrected `modify` for that item where a second one was previously ' +
+        'refused as a duplicate target. This is NOT the `remove` op, which PROPOSES deleting an ' +
+        'existing work item from the tree at approve — this takes a proposal off the plan and ' +
+        'nothing in the tree is touched either way. Costs nothing and starts no job.',
+      inputSchema: withdrawPlanProposalInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runWithdrawPlanProposal(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }

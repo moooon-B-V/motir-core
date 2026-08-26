@@ -36,7 +36,12 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
-import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import {
+  TEMP_REF_PREFIX,
+  assertTempRefsResolvable,
+  tempRefsOf,
+  type ProposalRefCarrier,
+} from '@/lib/plans/refs';
 import {
   assertProposalSetSelfConsistent,
   collectReferencedWorkItemIds,
@@ -53,6 +58,8 @@ import {
   PlanItemNotFoundError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
+  PlanNotEditableError,
+  PlanProposalReferencedError,
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
@@ -82,6 +89,7 @@ import type {
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
+  CorrectProposalInput,
 } from '@/lib/dto/plans';
 import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
@@ -699,6 +707,50 @@ function proposalLabel(p: { op: string; workItemId?: string | null; title?: stri
  * "unpinned") both PASS — absent is not an error, and the `null` case is what
  * lets a `modify` clear a pin, exactly as the name path's does.
  */
+/**
+ * A `ProposalInput` in the shape the append-time temp-ref check reads
+ * (MOTIR-3539) — the four ref carriers plus the label a refusal names it by.
+ * `patch` rides along because an intra-plan edge on a `modify` travels there and
+ * nowhere else, which is the carrier the live artifact used.
+ */
+function refCarrier(p: ProposalInput): ProposalRefCarrier {
+  return {
+    label: proposalLabel({ op: p.op, workItemId: p.workItemId, title: p.proposedFields?.title }),
+    parentRef: p.parentRef,
+    blockedByRefs: p.blockedByRefs,
+    patch: p.patch ?? null,
+  };
+}
+
+/**
+ * A persisted `PlanItem` ROW in the ref-carrier shape (MOTIR-3540) — the twin of
+ * `refCarrier` above, which reads an inbound `ProposalInput`. The withdraw path
+ * needs the stored side: which proposals ALREADY on the plan point at the one
+ * being taken off it.
+ */
+function refCarrierOfRow(item: PlanItem): ProposalRefCarrier {
+  return {
+    label: item.id,
+    parentRef: item.parentRef,
+    blockedByRefs: item.blockedByRefs,
+    patch: item.patch as ProposalRefCarrier['patch'],
+  };
+}
+
+/**
+ * The FROZEN-status gate shared by `correctProposal` and `withdrawProposal`
+ * (MOTIR-3540). `generating` and `planned` are editable; anything else is not.
+ *
+ * Written as a DENY of the terminal states rather than an allow of the two, so a
+ * future status is refused by default — the safe direction for a gate whose job
+ * is to keep two editable records of one thing from existing.
+ */
+function assertPlanProposalsEditable(plan: Pick<Plan, 'id' | 'status'>): void {
+  if (plan.status !== 'generating' && plan.status !== 'planned') {
+    throw new PlanNotEditableError(plan.id, plan.status);
+  }
+}
+
 function assertKnownRepoRole(role: unknown, planItemId: string | null, label: string): void {
   if (role === undefined || role === null || isProjectRepoRole(role)) return;
   const printed = typeof role === 'string' ? role : String(JSON.stringify(role) ?? role);
@@ -1850,13 +1902,16 @@ export const plansService = {
           // append holds — so a second call cannot observe a stale set.
           //
           // ⚠️ READ UNCONDITIONALLY (MOTIR-3573). It used to be skipped when the
-          // batch targeted nothing existing, which was right while the only
-          // reader was the duplicate-target check below. The self-consistency
-          // gate that follows judges the plan's WHOLE ref graph — a duplicate
-          // edge or a `parentRef` cycle can be closed by the proposal being
-          // added — and a batch-only view cannot see that, so the read is now
-          // owed on every append.
-          const existingItems = await planItemRepository.findByPlan(planId, tx);
+          // batch neither targeted anything existing nor carried a temp-ref —
+          // right while its only readers were the duplicate-target check and
+          // MOTIR-3539's temp-ref resolution, both of which are no-ops for such
+          // a batch. The self-consistency gate below is not: it judges the
+          // plan's WHOLE ref graph, and a duplicate edge or a `parentRef` cycle
+          // can be CLOSED by the proposal being added, which a batch-only view
+          // cannot see. So the read is now owed on every append, and the two
+          // conditions it used to be gated on are gone.
+          const existing = await planItemRepository.findByPlan(planId, tx);
+          const carriesTempRef = proposals.some((p) => tempRefsOf(refCarrier(p)).length > 0);
 
           // THE PURE REF-GRAPH GATE, AT THE APPEND (MOTIR-3573). Everything
           // knowable about a proposal set WITHOUT a workspace read runs here,
@@ -1873,14 +1928,37 @@ export const plansService = {
           // anything that is not a Prisma error — so the caller is told its
           // proposals ARE at fault, which `PlanPersistenceError` would deny.
           assertProposalSetSelfConsistent([
-            ...existingItems.map(toProposalNode),
+            ...existing.map(toProposalNode),
             ...proposals.map(toIncomingProposalNode),
           ]);
 
           // The targets this plan ALREADY claims. Grown in-loop as well, because
           // a duplicate inside ONE batch never reaches the database to be caught
           // by anything.
-          const claimed = claimedTargets(existingItems);
+          const claimed = claimedTargets(existing);
+
+          // ⚠️ REFUSE AN UNRESOLVABLE `planItem:` REF HERE, WHERE IT IS WRITTEN
+          // (MOTIR-3539) — before the first row of the batch is inserted, so a
+          // refusal leaves the plan byte-identical rather than half-appended.
+          // `add_plan_items` returns its ids POSITIONALLY, so a partial append
+          // would desynchronise the caller's own id map, which is a worse
+          // artifact than the one being refused.
+          //
+          // The resolvable set is the plan's ALREADY-PERSISTED `add`s: a ref to a
+          // proposal in the SAME batch is refused, because its id does not exist
+          // until this call returns. That is precisely the mistake this card was
+          // written from.
+          //
+          // `resolveRef` at materialize is UNCHANGED and stays the backstop for
+          // every plan appended before this shipped.
+          if (carriesTempRef) {
+            const resolvable = new Set(existing.filter((i) => i.op === 'add').map((i) => i.id));
+            assertTempRefsResolvable(
+              proposals.map(refCarrier),
+              resolvable,
+              (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
+            );
+          }
 
           for (const p of proposals) {
             if (p.op !== 'add' && p.workItemId) {
@@ -2306,6 +2384,266 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'generating');
+  },
+
+  /**
+   * CORRECT a proposal on a `generating` or `planned` plan (Story MOTIR-3533 ·
+   * Subtask MOTIR-3540) — the repair an agent that mistyped one field has never
+   * had.
+   *
+   * ⚠️ HOW THIS DIFFERS FROM `deepenProposal` / `updateProposal`, and why it is a
+   * THIRD method rather than a widening of either. Those two are one act — a
+   * deepen — split by the status it is legal in, and
+   * `agent-authored-plans.md` AMENDMENT 3 D3 fixed their editable set with a rule
+   * that is still right: *a deepen may change what a card SAYS and who ACTS on
+   * it, never where it SITS or SHIPS.* A CORRECTION is a different act. Its
+   * trigger is the author discovering its own structural mistake, and its only
+   * alternative today is authoring a whole second plan and asking a person to
+   * decline the first. AMENDMENT 7 records the amendment; widening
+   * `UpdateProposalInput` instead would have re-opened structure on the deepen
+   * path too, which is the thing D3 was protecting.
+   *
+   * ⚠️ AND IT RE-RUNS THE APPEND'S REF CHECK (MOTIR-3539). A correction is the
+   * one path that could re-introduce the defect the sibling card just closed —
+   * the cure re-opening the hole the prevention shut, on a path nobody would
+   * think to re-test. The resolvable set EXCLUDES the proposal being corrected,
+   * so a self-reference is refused rather than accepted as a one-node cycle.
+   *
+   * Legal on `generating` AND `planned`; `approved` / `declined` are FROZEN and
+   * the refusal names the status (`PlanNotEditableError`).
+   */
+  async correctProposal(
+    planId: string,
+    planItemId: string,
+    input: CorrectProposalInput,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    // The same key the rest of the author writes assert (`addProposals` /
+    // `markPlanned` / `editAddProposal`). NOT `ai:decide_plan`: correcting a
+    // proposal is authoring, not deciding.
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    // Resolved BEFORE the transaction, because it reads the project's repository
+    // domain and that is a read the write lock has no business holding.
+    let resolvedTargetRepo: string | null | undefined;
+    if (input.targetRepo !== undefined) {
+      try {
+        resolvedTargetRepo = await resolveAuthoredTargetRepoInProject(
+          input.targetRepo,
+          plan.projectId,
+          ctx,
+        );
+      } catch (err) {
+        if (err instanceof UnknownTargetRepoError) {
+          throw new PlanItemUnknownTargetRepoError(planItemId, input.targetRepo ?? '', err.message);
+        }
+        throw err;
+      }
+    }
+
+    const { row, items } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        assertPlanProposalsEditable(fresh);
+
+        const all = await planItemRepository.findByPlan(planId, tx);
+        const item = all.find((i) => i.id === planItemId);
+        if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
+
+        const data: Prisma.PlanItemUncheckedUpdateInput = {};
+        const touched: string[] = [];
+
+        if (item.op === 'add') {
+          if (input.patch !== undefined) {
+            throw new InvalidProposalError(
+              'A `patch` belongs to a `modify` proposal; this proposal is an `add`.',
+            );
+          }
+          const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+          const next = mergeProposedFields(current, input);
+          if (resolvedTargetRepo !== undefined) next.targetRepo = resolvedTargetRepo;
+          if (!next.title?.trim()) {
+            throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
+          }
+          validateProposedSizing(next);
+          data.proposedFields = next as unknown as Prisma.InputJsonValue;
+          touched.push(
+            ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),
+          );
+        } else {
+          // A `modify` / `remove` targets an EXISTING work item, so it carries no
+          // proposed body and no pin of its own — the content keys and
+          // `targetRepo` are meaningless on it rather than merely unsupported.
+          const contentKeys = Object.keys(input).filter(
+            (k) => k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef',
+          );
+          if (contentKeys.length > 0) {
+            throw new InvalidProposalError(
+              `A \`${item.op}\` proposal has no proposed body to correct; ${contentKeys.join(', ')} apply to an \`add\`. Correct its \`patch\` instead.`,
+            );
+          }
+          if (input.patch !== undefined) {
+            if (item.op !== 'modify') {
+              throw new InvalidProposalError('Only a `modify` proposal carries a `patch`.');
+            }
+            validateStoryPoints(input.patch?.storyPoints ?? null);
+            validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            assertKnownRepoRole(
+              input.patch?.targetRepoRole,
+              item.id,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
+            data.patch = (input.patch ?? Prisma.JsonNull) as Prisma.InputJsonValue;
+            touched.push('patch');
+          }
+        }
+
+        if (input.parentRef !== undefined) {
+          if (item.op !== 'add') {
+            throw new InvalidProposalError('Only an `add` proposal carries a `parentRef`.');
+          }
+          data.parentRef = input.parentRef;
+          touched.push('parentRef');
+        }
+        if (input.blockedByRefs !== undefined) {
+          data.blockedByRefs = input.blockedByRefs;
+          touched.push('blockedByRefs');
+        }
+
+        if (touched.length === 0)
+          throw new InvalidProposalError('A correction must change something.');
+
+        // ⚠️ THE APPEND'S OWN CHECK, RE-RUN ON THE CORRECTED SHAPE (MOTIR-3539).
+        // The resolvable set is every OTHER `add` on this plan — excluding this
+        // one, so `planItem:<itself>` is refused rather than stored as a
+        // one-node cycle for materialize to trip over.
+        const corrected: ProposalRefCarrier = {
+          label: proposalLabel({
+            op: item.op,
+            workItemId: item.workItemId,
+            title: (data.proposedFields as { title?: string } | undefined)?.title,
+          }),
+          parentRef: (data.parentRef as string | null | undefined) ?? item.parentRef,
+          blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+          patch: (input.patch !== undefined
+            ? input.patch
+            : (item.patch as ProposalRefCarrier['patch'])) as ProposalRefCarrier['patch'],
+        };
+        assertTempRefsResolvable(
+          [corrected],
+          new Set(all.filter((i) => i.op === 'add' && i.id !== item.id).map((i) => i.id)),
+          (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
+        );
+
+        await planItemRepository.update(planItemId, data, tx);
+
+        // The correction, on the plan's content trail (MOTIR-3535), in the same
+        // transaction as the write it records.
+        //
+        // ⚠️ THE AGENT ACTOR, not the person — the discriminator `editAddProposal`
+        // uses (`expectedStatus`) is the wrong one here. It reads `planned` as
+        // "only a person reaches this", which was true while the review route was
+        // the sole caller. This method exists precisely so an AGENT can reach a
+        // `planned` plan, and a reviewer must be able to see WHICH harness and
+        // model changed the tree under them — that is the story's own criterion.
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            planItemId,
+            changeKind: 'edited',
+            ...generationActor(fresh, ctx),
+            diff: { fields: touched, proposalCount: 1, correction: true },
+          },
+          tx,
+        );
+        return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
+      },
+    );
+    return toPlanWithItemsDto(row, items);
+  },
+
+  /**
+   * WITHDRAW a proposal from a `generating` or `planned` plan (Story MOTIR-3533 ·
+   * Subtask MOTIR-3540) — the substrate `agent-authored-plans.md` AMENDMENT 3 D4
+   * recorded as absent and deferred to this card.
+   *
+   * Two things it is NOT. It is not `op: 'remove'`, which is a PROPOSAL to delete
+   * an existing work item from the tree at approve and requires a `workItemId`;
+   * this takes a proposal off the PLAN and nothing reaches the tree either way.
+   * And it is not the neutering D4 rejected — retitling a card *withdrawn* and
+   * emptying it leaves a proposal a reviewer must still read and makes the plan's
+   * item count a lie.
+   *
+   * ⚠️ IT REFUSES rather than cascades when a sibling still references it. This
+   * is MOTIR-3539's check in the mirror: that card made a dangling ref impossible
+   * to CREATE, and this stops one arriving by DELETION instead. Cascading would
+   * take cards off the plan nobody asked to withdraw; blanking the refs would
+   * change what those proposals mean.
+   *
+   * Withdrawing a `modify` RELEASES its target, so a corrected `modify` on that
+   * work item can be appended — the escape `DUPLICATE_PLAN_TARGET` has never had.
+   * That falls out of the delete rather than being coded: `claimedTargets` reads
+   * the rows that exist.
+   */
+  async withdrawProposal(
+    planId: string,
+    planItemId: string,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    const { row, items } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        assertPlanProposalsEditable(fresh);
+
+        const all = await planItemRepository.findByPlan(planId, tx);
+        const item = all.find((i) => i.id === planItemId);
+        if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
+
+        const ref = `${TEMP_REF_PREFIX}${planItemId}`;
+        const referrers = all
+          .filter((i) => i.id !== planItemId)
+          .filter((i) => tempRefsOf(refCarrierOfRow(i)).some((t) => t.ref === ref))
+          .map((i) => i.id);
+        if (referrers.length > 0) throw new PlanProposalReferencedError(planItemId, referrers);
+
+        await planItemRepository.deleteById(planItemId, tx);
+
+        // ⚠️ `planItemId` is NOT recorded on the revision: the row it names has
+        // just been deleted, and `PlanRevision.planItemId` is a real relation, so
+        // recording it would either fail the insert or be nulled by the cascade —
+        // a trail row that quietly loses its subject. The id rides in the `diff`
+        // instead, where it is a value rather than a reference.
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: 'withdrawn',
+            ...generationActor(fresh, ctx),
+            diff: { proposalCount: 1, withdrewPlanItemId: planItemId, op: item.op },
+          },
+          tx,
+        );
+        return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
+      },
+    );
+    return toPlanWithItemsDto(row, items);
   },
 
   /**

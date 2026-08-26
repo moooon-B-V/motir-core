@@ -76,6 +76,21 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * **9.3 s**. So a local reading is in the same units and runs at or below the CI
  * cost — never above it. Re-measure from the first green run that includes it.
  *
+ * ⚠️ `plan-proposal-correction.spec.ts` (MOTIR-3543) carries the LOCAL provenance
+ * too, and the guard caught it with no entry on its FIRST CI run — the failure
+ * this file exists to make loud, working exactly as designed: the spec passed
+ * locally and would have been assigned to no leg and never run.
+ *
+ * Measured on 2026-08-26 against a production build, on its own port and
+ * database, THREE times: **14.7 s** on a cold server, then **7.4 s** and
+ * **6.3 s** warm. The COLD reading is what is recorded, following
+ * `plan-decision-permission.spec.ts` above — under-estimating is the direction
+ * that unbalances a bin-packer, and this spec's first navigation compiles the
+ * plan-detail route. The spread is wider than the others here because the spec
+ * drives six MCP round trips interleaved with four page loads, so a warm run
+ * saves proportionally more. Re-measure from the first green CI run that
+ * includes it; expect something between the two.
+ *
  * ⚠️ `jobs-fanout-engine.spec.ts` (MOTIR-3462) carries the LOCAL provenance too,
  * and for the reason the guard exists: a brand-new spec with no entry here is
  * assigned to no leg and never runs — which is exactly what the guard caught on
@@ -275,6 +290,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'permission-gated-ui.spec.ts': 10.8,
   'plan-change-planner-turn.spec.ts': 6.7,
   'plan-decision-permission.spec.ts': 2.8,
+  'plan-proposal-correction.spec.ts': 14.7,
   'planning-anchor-level.spec.ts': 9.4,
   'plans-review.spec.ts': 6.3,
   'profile.spec.ts': 10.8,
