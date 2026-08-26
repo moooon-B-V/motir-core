@@ -2361,16 +2361,61 @@
 
     <!-- ═══ PANEL 3 — enrol an authenticator, both steps ════════════════════ -->
     <div class="panel-label">
-      PANEL 3 · <b>Set up authenticator app.</b> Two steps in ONE modal, with the rail at the top so
-      the reader knows there is a second step before they scan. Step 1 shows the QR AND the manual
-      key, because the reader may be running the authenticator on the machine displaying the code —
-      a QR alone strands a desktop 1Password user. Step 2 is the confirming code: this is what makes
-      enrolment two-phase, and it is what stops a mis-scanned QR from locking somebody out of their
-      own account. Nothing is enabled until step 2 succeeds.
+      PANEL 3 · <b>Set up authenticator app — THREE steps, and the first one is not optional.</b>
+      `enableTwoFactor` is the call that MINTS the secret, and it is password-gated
+      (`shouldRequirePassword` → `validatePassword`), so the step-up has to come BEFORE the QR
+      exists rather than after it: there is nothing to draw until that call returns. Step 2 shows
+      the QR AND the manual key, because the reader may be running the authenticator on the machine
+      displaying the code — a QR alone strands a desktop 1Password user. Step 3 is the confirming
+      code, which is what makes enrolment two-phase and what stops a mis-scanned QR from locking
+      somebody out of their own account. Nothing is enabled until step 3 succeeds.
+      <br /><br />
+      <b>The step-up is ONE shared modal</b>, not three bespoke password fields: the same screen
+      fronts enrol, regenerate-codes and turn-off, which is the story's own "all 2FA-management
+      actions sit behind a recent-auth check" made concrete.
+      <b>And it is SKIPPED for an account with no password</b> — see panel 3b.
     </div>
     <div class="panel">
       <div class="mstage">
         <div class="overlay-tint"></div>
+        <!-- STEP 1 — the shared step-up. Reused verbatim by regenerate + turn-off. -->
+        <div class="modal" role="dialog" aria-labelledby="m3z-t">
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-head">
+            <h2 class="modal-title" id="m3z-t">Confirm it's you</h2>
+            <p class="modal-desc">Enter your password to change your two-factor settings.</p>
+          </div>
+          <div class="steps" aria-hidden="true">
+            <span class="s now"><span class="num">1</span>Confirm</span>
+            <span class="bar"></span>
+            <span class="s"><span class="num">2</span>Scan</span>
+            <span class="bar"></span>
+            <span class="s"><span class="num">3</span>Enter code</span>
+          </div>
+          <div class="modal-body">
+            <div class="field">
+              <label for="m3zpw">Password</label>
+              <div class="input focused">
+                <input
+                  id="m3zpw"
+                  type="password"
+                  value="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+                  aria-label="Password"
+                />
+                <span class="eye" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Continue</button>
+          </div>
+        </div>
+
         <div class="modal" role="dialog" aria-labelledby="m3a-t">
           <button class="modal-close" aria-label="Close">
             <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
@@ -2383,9 +2428,11 @@
             </p>
           </div>
           <div class="steps" aria-hidden="true">
-            <span class="s now"><span class="num">1</span>Scan</span>
+            <span class="s"><span class="num">1</span>Confirm</span>
             <span class="bar"></span>
-            <span class="s"><span class="num">2</span>Confirm</span>
+            <span class="s now"><span class="num">2</span>Scan</span>
+            <span class="bar"></span>
+            <span class="s"><span class="num">3</span>Enter code</span>
           </div>
           <div class="modal-body">
             <div class="pair">
@@ -2586,9 +2633,11 @@
             </p>
           </div>
           <div class="steps" aria-hidden="true">
-            <span class="s"><span class="num">1</span>Scan</span>
+            <span class="s"><span class="num">1</span>Confirm</span>
             <span class="bar"></span>
-            <span class="s now"><span class="num">2</span>Confirm</span>
+            <span class="s"><span class="num">2</span>Scan</span>
+            <span class="bar"></span>
+            <span class="s now"><span class="num">3</span>Enter code</span>
           </div>
           <div class="modal-body">
             <div class="otp" role="group" aria-label="Six-digit code">
@@ -2609,6 +2658,99 @@
           <div class="modal-foot">
             <button class="btn btn-ghost">Back</button>
             <button class="btn btn-primary is-disabled" disabled>Turn on</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 3b — the account that has no password ═════════════════════ -->
+    <div class="panel-label">
+      PANEL 3b ·
+      <b
+        >A Google-only account skips step 1, and that is a CONFIGURATION fact rather than a
+        kindness.</b
+      >
+      Motir ships Google as a peer sign-in method, so an account whose only <code>Account</code> row
+      is <code>providerId: 'google'</code> is ordinary — the Profile asset already branches on it.
+      Such a reader has no password, so there is nothing for a step-up to ask: enrolment opens on
+      the QR and the rail is two steps. <br /><br />
+      <b>This panel exists because getting it wrong is silent and total.</b>
+      <code>shouldRequirePassword</code> reads <code>if (!allowPasswordless) return true</code> —
+      the DEFAULT demands a password from every user — while <code>validatePassword</code> returns
+      false unconditionally for an account with no credential row. On the default, a Google-only
+      user asking to turn 2FA on gets <code>INVALID_PASSWORD</code> for a password they were never
+      asked to set, and no copy on this pane could explain it. The config now sets
+      <code>allowPasswordless: true</code>, which keeps the password mandatory for everyone who HAS
+      one and stops excluding everyone who does not (MOTIR-1217). <br /><br />
+      The same skip applies to regenerate and to turn-off — one flag, three actions.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal" role="dialog" aria-labelledby="m3c-t">
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-head">
+            <h2 class="modal-title" id="m3c-t">Set up authenticator app</h2>
+            <p class="modal-desc">
+              Scan this with 1Password, Google Authenticator, Authy — any app that supports
+              time-based codes.
+            </p>
+          </div>
+          <div class="steps" aria-hidden="true">
+            <span class="s now"><span class="num">1</span>Scan</span>
+            <span class="bar"></span>
+            <span class="s"><span class="num">2</span>Enter code</span>
+          </div>
+          <div class="modal-body">
+            <div class="callout">
+              <span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+              ></span>
+              <p>
+                You sign in with Google, so there’s no password to confirm. Your Google account is
+                what protects this change.
+              </p>
+            </div>
+            <div class="keyrow">
+              <code>JBSW Y3DP EHPK 3PXP</code>
+              <button class="icon-btn" aria-label="Copy setup key">
+                <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Continue</button>
+          </div>
+        </div>
+
+        <div class="modal" role="dialog" aria-labelledby="m3d-t">
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-head">
+            <h2 class="modal-title" id="m3d-t">Generate new recovery codes?</h2>
+            <p class="modal-desc">
+              Your current seven codes stop working immediately. You’ll get ten new ones, shown
+              once.
+            </p>
+          </div>
+          <div class="modal-body">
+            <div class="callout danger">
+              <span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert-triangle" /></svg
+              ></span>
+              <p>
+                If you’ve printed the old codes or saved them in a password manager, replace them —
+                they will not work after this.
+              </p>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Generate new codes</button>
           </div>
         </div>
       </div>
@@ -2690,6 +2832,25 @@
                 If you’ve printed the old codes or saved them in a password manager, replace them —
                 they will not work after this.
               </p>
+            </div>
+            <!-- The SAME step-up as panel 3 step 1, inline rather than as a
+                 separate modal: `generateBackupCodes` is
+                 password-gated on the identical `shouldRequirePassword` path,
+                 and one destructive action does not earn two modals. Hidden for
+                 an account with no password — panel 3b. -->
+            <div class="field">
+              <label for="m4bpw">Password</label>
+              <div class="input">
+                <input
+                  id="m4bpw"
+                  type="password"
+                  value="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+                  aria-label="Password"
+                />
+                <span class="eye" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ></span>
+              </div>
             </div>
           </div>
           <div class="modal-foot">
@@ -2821,9 +2982,11 @@
                 </p>
               </div>
               <div class="steps" aria-hidden="true">
-                <span class="s"><span class="num">1</span>Scan</span>
+                <span class="s"><span class="num">1</span>Confirm</span>
                 <span class="bar"></span>
-                <span class="s now"><span class="num">2</span>Confirm</span>
+                <span class="s"><span class="num">2</span>Scan</span>
+                <span class="bar"></span>
+                <span class="s now"><span class="num">3</span>Enter code</span>
               </div>
               <div class="modal-body">
                 <div class="otp err" role="group" aria-label="Six-digit code">

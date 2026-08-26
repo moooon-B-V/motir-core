@@ -1335,14 +1335,15 @@ construction — the same move 7.8.3 made for API tokens and 7.3.58 for Appearan
 
 ## Panels
 
-| #   | what it draws                                                                               |
-| --- | ------------------------------------------------------------------------------------------- |
-| 1   | **Off** — the empty state + the "what you'll be asked for" explainer + the access path      |
-| 2   | **On** — four cards: the methods, the recovery counter, the trusted devices, the way out    |
-| 3   | **Enrol** — one modal, two steps: QR + manual key, then the confirming code                 |
-| 4   | **Recovery codes** — the shown-once set, and the regenerate confirmation                    |
-| 5   | **The states the happy path hides** — 2 left, 0 left, the turn-off step-up, a rejected code |
-| 6   | **Dark parity** — panel 2 under `data-theme="dark"`                                         |
+| #   | what it draws                                                                                   |
+| --- | ----------------------------------------------------------------------------------------------- |
+| 1   | **Off** — the empty state + the "what you'll be asked for" explainer + the access path          |
+| 2   | **On** — four cards: the methods, the recovery counter, the trusted devices, the way out        |
+| 3   | **Enrol** — three steps: the password step-up, QR + manual key, then the confirming code        |
+| 3b  | **Enrol, no password** — the Google-only account: step 1 skipped, and why that is a config fact |
+| 4   | **Recovery codes** — the shown-once set, and the regenerate confirmation                        |
+| 5   | **The states the happy path hides** — 2 left, 0 left, the turn-off step-up, a rejected code     |
+| 6   | **Dark parity** — panel 2 under `data-theme="dark"`                                             |
 
 ## Per-control map — primitive, endpoint, tokens
 
@@ -1366,6 +1367,86 @@ construction — the same move 7.8.3 made for API tokens and 7.3.58 for Appearan
 | "I've saved these" tick | `Checkbox`                  | —                                                     | on: `--el-accent` + `--el-accent-text`                                                               | `--radius-xs`                              |
 | trusted-device row      | `.drow`                     | the `verification` `trust-device-*` rows              | `--el-text` / `--el-text-muted` on the white card                                                    | hairline `--el-border-soft`                |
 | "Revoke" / "Turn off"   | `Button` danger-ghost       | `authClient.twoFactor.disable`                        | `--el-danger`, hover `--el-tint-rose`                                                                | `--radius-btn`, `--height-btn-sm`          |
+
+## ⚠️ THE STEP-UP IS NOT DECORATION — the endpoints refuse without it
+
+Added in review (the question _"can we actually link an authenticator app?"_),
+after checking the drawing against the endpoint contracts rather than against the
+story's prose. The first draft of panel 3 opened on the QR. **It could not have
+been built**, and the reason generalises past this card.
+
+**Three of this pane's actions are password-gated by the plugin, not by us:**
+
+| action           | endpoint                                                   | gate                                                   |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| enrol            | `auth.api.enableTwoFactor` (`authClient.twoFactor.enable`) | `shouldRequirePassword` → `validatePassword`           |
+| regenerate codes | `auth.api.generateBackupCodes`                             | the same, plus `twoFactorEnabled` must already be true |
+| turn off         | `auth.api.disableTwoFactor`                                | the same                                               |
+
+**And for enrol the ORDER is forced, which is the part a drawing gets wrong
+silently.** `enableTwoFactor` is the call that MINTS the secret and returns the
+`totpURI`, so the password comes BEFORE the QR — there is nothing to render until
+that call returns. A design that puts the step-up after the scan is not a
+different taste, it is a screen whose data does not exist yet.
+
+So the enrol rail is **Confirm → Scan → Enter code**, and the step-up is ONE
+shared modal that also fronts regenerate (drawn inline in panel 4, since one
+destructive action does not earn two modals) and turn-off (panel 5). That is the
+story's own _"all 2FA-management actions sit behind a recent-auth/step-up check"_
+made concrete rather than restated.
+
+**The codes come from `enable`, not from a later call.** `enableTwoFactor`
+returns `{ totpURI, backupCodes }` together, at step 2. The pane shows the codes
+after step 3 succeeds, so the client HOLDS them across the confirm — there is no
+second endpoint to fetch them from, and looking for one is the obvious wrong
+turn. (`viewBackupCodes` exists but takes a `userId` and is a server-side
+administrative read, not this flow.)
+
+**An abandoned enrolment is a real state and panel 1 draws it.** Step 2 has
+already written the `two_factor` row with `verified: false` while
+`twoFactorEnabled` stays false, so a reader who closes the modal leaves a stale
+row behind. `verifyTOTP` is what flips both.
+
+## ⚠️ AND THE STEP-UP IS SKIPPED FOR AN ACCOUNT WITH NO PASSWORD — panel 3b
+
+The second half of the same finding, and the more serious one, because its
+failure mode is total and silent:
+
+```js
+// shouldRequirePassword
+if (!allowPasswordless) return true; // the DEFAULT — every user
+return Boolean(credentialAccount); // with the flag — the real question
+
+// validatePassword
+if (!credentialAccount || !currentPassword) return false; // a Google-only user
+```
+
+On the default, a Google-only account — ordinary in Motir, since
+`trustedProviders: ['google']` ships and this file's own Profile section already
+branches on credential-vs-OAuth-only — is answered `INVALID_PASSWORD` for a
+password it was never asked to set. **It could not turn 2FA on at all**, and no
+copy on this pane could explain why.
+
+`lib/auth/index.ts` now sets `allowPasswordless: true` (MOTIR-1217), which keeps
+the password mandatory for every account that HAS one and stops excluding every
+account that does not. Panel 3b draws what that reader sees: a two-step rail, and
+a callout saying their Google account is what protects the change.
+
+## The QR is a DRAWING, not an encoding — panel 3
+
+Stated because it is exactly the kind of thing a reader assumes either way. The
+`<svg>` in panel 3 is a deterministic module grid with real finder patterns,
+timing rows and an alignment block: it reads as a QR code at a glance, which is
+what a layout board needs, and it **encodes nothing**. Scanning it yields no
+`otpauth://` URI.
+
+The real one comes from `enable`'s `totpURI`, built by
+`createOTP(secret, { digits, period }).url(issuer, user.email)` — so the string
+the implementer renders is
+`otpauth://totp/Motir:zhuyue@motir.co?secret=…&issuer=Motir&digits=6&period=30`,
+with `issuer` and the two numbers coming from the constants MOTIR-1217 pins. The
+mock's manual key (`JBSW Y3DP EHPK 3PXP`) is likewise a plausible Base32 sample,
+not a secret.
 
 ## The copy, and the four places it is load-bearing
 
