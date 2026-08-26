@@ -1464,6 +1464,10 @@ export default defineConfig({
         'app/**/settings/account/_components/PasskeyManager.tsx',
         'app/**/settings/account/_components/AccountSecurityPanes.tsx',
         'app/**/settings/account/_components/twoFactorMethods.ts',
+        // Story 8.12 · Subtask MOTIR-3613 — the sign-in card's passwordless
+        // route. `SignInCard.tsx` itself is NOT added: this card put one control
+        // in it and did not write the 400-line two-step state machine around it.
+        'app/**/_components/PasskeySignInButton.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1871,6 +1875,14 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/settings/account/_components/twoFactorMethods.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story 8.12 · Subtask MOTIR-3613 — MEASURED at
+        // 95.83 / 90.47 / 100 / 100 (statements / branches / functions / lines).
+        'app/**/_components/PasskeySignInButton.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

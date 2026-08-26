@@ -879,7 +879,13 @@
         "generic": "Something went wrong. Try again."
       }
     },
-    "couldntSendResetLink": "We couldn’t send the reset email just now. Please try again in a moment."
+    "couldntSendResetLink": "We couldn’t send the reset email just now. Please try again in a moment.",
+    "passkey": {
+      "signIn": "Sign in with a passkey",
+      "waiting": "Waiting for your browser…",
+      "noMatch": "No passkey on this device matches a Motir account. Sign in with your email and password, then add a passkey from your account settings.",
+      "challengeExpired": "That took too long, so we started over. Try again."
+    }
   },
   "shell": {
     "nav": {

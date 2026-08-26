@@ -879,7 +879,13 @@
         "generic": "出了点问题，请重试。"
       }
     },
-    "couldntSendResetLink": "我们暂时无法发送重置邮件，请稍后重试。"
+    "couldntSendResetLink": "我们暂时无法发送重置邮件，请稍后重试。",
+    "passkey": {
+      "signIn": "用通行密钥登录",
+      "waiting": "正在等待你的浏览器…",
+      "noMatch": "本设备上没有与 Motir 账户匹配的通行密钥。请先用邮箱和密码登录，然后在账户设置中添加一把通行密钥。",
+      "challengeExpired": "这一步花的时间太久，我们已重新开始。请再试一次。"
+    }
   },
   "shell": {
     "nav": {
