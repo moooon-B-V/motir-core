@@ -77,10 +77,18 @@ async function gotoBoardSettings(page: Page): Promise<void> {
 // The board-config column cards in DOM order (each SortableColumn is a listitem
 // whose aria-label is "<name> column, <n> statuses").
 async function columnNames(page: Page): Promise<string[]> {
-  const labels = await page
-    .getByTestId('board-config-columns')
-    .getByRole('listitem')
-    .evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+  // ⚠️ WAIT FOR THE FIRST COLUMN BEFORE READING. `evaluateAll` resolves its
+  // locator ONCE and does not auto-retry, so it returns [] whenever the editor
+  // has not arrived yet. That was safe while this page rendered settled in one
+  // flush; MOTIR-3443 put its body behind an in-page <Suspense>, so the columns
+  // now stream in after the header and a bare read races them. Every caller here
+  // expects columns to exist, so the wait belongs in the shared reader rather
+  // than at each of the three call sites.
+  const items = page.getByTestId('board-config-columns').getByRole('listitem');
+  await expect(items.first()).toBeAttached();
+  const labels = await items.evaluateAll((els) =>
+    els.map((e) => e.getAttribute('aria-label') ?? ''),
+  );
   return labels.map((l) => l.replace(/ column,.*$/, ''));
 }
 

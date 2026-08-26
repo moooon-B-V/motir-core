@@ -272,6 +272,25 @@ ten surfaces whose verdict is _a frame of its own_, and therefore the only one t
 | **settles**                | **once**                                                                                                                                                                                                          |
 | **verdict**                | **A FRAME OF ITS OWN.** This is the case rule 2 is written for: there is genuinely nothing to show until the gate resolves                                                                                        |
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3447. `inspectInvite` IS NOT A GATE, AND THE FRAME DEPENDS ON THAT.
+>
+> The table above files `workspaceInvitesService.inspectInvite(token)` under **the gate**, on the
+> grounds that it _"selects all four bodies"_. It does select all four bodies — and it is **not a
+> gate**, because a gate is a read that decides the HTTP STATUS. This route answers **200** whatever
+> the token turns out to be: expired, used, wrong-account and valid are four BODIES, not four
+> statuses, and the page calls `notFound()` nowhere.
+>
+> **The distinction is the whole reason a frame is possible here.** Had the read been a gate, a
+> boundary placed after it would cover nothing — the body would already be resolved — and this
+> surface's verdict would collapse to the same _none_ as the other nine. Because it is a content
+> read, it moves BELOW the boundary and the card's chrome paints while the token resolves.
+>
+> What stays above, in the page, is the **session redirect** — that one does decide the response,
+> and an unauthenticated visitor must be bounced rather than framed. The token-less case is answered
+> above it too: there is nothing to resolve, so there is nothing to frame.
+>
+> Everything else in this entry is unchanged and shipped as drawn.
+
 **Why this one and not the other nine.** Every other surface in the sweep can paint a title, a
 toolbar, a switcher or a back-link from strings the gate already has. This one cannot paint a single
 character of its own copy — and it is the only surface in the story reached by a **hard navigation

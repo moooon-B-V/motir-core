@@ -1515,6 +1515,18 @@ Measured against `origin/main` `9455fc3c`.
 | **settles**                | **twice, and legitimately** — the filter chrome, then the columns. The second settle is the canvas's own and predates this story                                                                                                         |
 | **verdict**                | **NONE — reuse.** `app/(authed)/boards/_components/BoardSkeleton.tsx` is already the drawn pending state for the column region and is what the board shows today. This asset does not redraw it, and the code card composes it unchanged |
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3445. THE CITED SKELETON COVERS A TIER THIS SWEEP DOES NOT TOUCH.
+>
+> The entry's verdict — **NONE** — stands, and so does every tier. What it implies about the code
+> card does not. `BoardSkeleton` is imported by `app/(authed)/boards/_components/BoardContainer.tsx`
+> and by nothing else: it is the client island's own pending state for the COLUMN region, which is
+> tier 3, and it is already composed there. There is nothing for a server-side boundary to do with
+> it, and the card composes it "unchanged" by leaving it alone.
+>
+> The tier-2 region — the seven-way filter-chrome wave — has **no drawn stand-in**, so no boundary
+> is added around it either. MOTIR-3445 therefore ships **no diff** for this page: its seven reads
+> were already one wave, which is the finding the entry states correctly.
+
 **Nothing here is serial**, which is the finding: the count of seven awaits is the `Promise.all`'s
 own members. The only change this surface takes from the story is the boundary that lets the header
 and the switcher paint before the filter chrome resolves.

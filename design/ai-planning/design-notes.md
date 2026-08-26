@@ -2042,6 +2042,36 @@ read. **And note what it is not** — the canvas/chat body renders from the `rev
 holds, which is why `PlanDetail`'s view switch is `shallowPush` and shows no pending state at all
 (`design/shell/design-notes.md` § _THE SWITCH RULE_, unchanged by this sweep).
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3445. TWO CLAUSES ABOVE WERE ASSERTED, NOT MEASURED.
+>
+> The build card read both pages and found two of this entry's clauses false. The **allocation**
+> — the gate, the tiers, the settle count, the verdicts — is unchanged; what was wrong is the
+> rendering detail underneath it, in both cases because it was reasoned from the route's shape
+> rather than read off the component.
+>
+> **1. `/plans`' tab strip is NOT paintable with the frame.** The entry says
+> _"the status tab strip — the tabs are static route links, not derived from any read"_.
+> `PlanStatusTabs` takes `counts`, which comes from the tier-2
+> `Promise.all([listPlans, countPlansByStatus])` — and `counts` also decides `projectIsEmpty`,
+> which selects whether the page renders the tab strip at all or a project-level `EmptyState`.
+> So tier 1 on this page is the `<h1>` and its subtitle, and nothing else.
+>
+> **2. `BacklogSkeleton` is not a stand-in for a plan-row list.** It draws TWO bordered regions,
+> each a header row plus three `h-9` bars — the backlog's sprint/backlog grouping, which the plans
+> list does not have. It is `app/(authed)/backlog/_components/BacklogContainer.tsx`'s and is used
+> only there. Composing it here would stand in for a shape this page never renders, which is the
+> same defect measured on `/items/archived` in `design/work-items/design-notes.md` (planning bug
+> MOTIR-3521).
+>
+> **So `/plans` takes no boundary in MOTIR-3445**, and what it would need first is a drawn
+> stand-in for a plan-row list — or the generic rung, `PageSkeleton`, which does not exist on
+> `main` (MOTIR-3520).
+>
+> **3. `/plans/[id]`'s two follow-on reads WERE serial and are now one wave**, which the entry
+> got right in substance and wrong in detail: it said `assertProjectInWorkspace` _"can start with
+> the plan read"_. It cannot — it takes `review.projectId`. What it can do is overlap
+> `getEstablishView`, which takes the same value. MOTIR-3445 ships that.
+
 **`components/planning/PlanningWorkspaceSkeleton.tsx` is NOT reused here.** It is `/planning`'s, and
 `/planning` already has its boundary from [MOTIR-2069](motir:cmsehmzxf000m04l51c9b71u0); naming it
 so a code card does not reach for it by association.

@@ -1,9 +1,11 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { FieldsSettingsEditor } from './_components/FieldsSettingsEditor';
 import { guardSettingsPage } from '../_guard';
 
@@ -43,20 +45,18 @@ export default async function ProjectFieldsPage() {
 
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
-  // The membership + workspace-role reads that used to ride this batch existed
-  // ONLY to compute the private admin check MOTIR-2469 retired — two fewer round
-  // trips on every load of this page.
-  const fields = await customFieldsService.listFields(actor);
-
-  // MOTIR-2469 retired the private admin check that used to sit here — a role
-  // comparison against the workspace and project membership rows, written before
-  // there was a permission model to ask, and a SECOND policy answering a question
-  // the catalog already answers. The page is reached only by an actor who holds
-  // its registry key (the guard above), so the manage affordances are simply on.
-  const canManage = true;
-
+  // MOTIR-3558 — the gate is DONE at this line. Everything above decides who
+  // may see this page and whether it exists; nothing below can change the
+  // status, so the boundary is safe here and would not have been one line
+  // earlier. `app/(authed)/settings/project/fields/loading.tsx` used to draw
+  // this wait from a route file; it is deleted, because a route-level fallback
+  // plus an in-page one shows the same pending state twice for one navigation.
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
+      {/* REAL, and painted from the gate: the title is a translated string and
+          the subtitle interpolates a project name `getActiveProject()` already
+          resolved. A frame over either would cover something that has something
+          to show. This is why `SettingsPaneFrame` draws no header. */}
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">
           {t('customFields.title')}
@@ -69,11 +69,35 @@ export default async function ProjectFieldsPage() {
         </p>
       </header>
 
-      <FieldsSettingsEditor
-        projectKey={ctx.project.identifier}
-        fields={fields}
-        canManage={canManage}
-      />
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <FieldsPaneBody actor={actor} projectKey={ctx.project.identifier} />
+      </Suspense>
     </div>
   );
+}
+
+/**
+ * The pane's own read, moved below the boundary so the header flushes first.
+ *
+ * The membership + workspace-role reads that used to ride this batch existed
+ * ONLY to compute the private admin check MOTIR-2469 retired — two fewer round
+ * trips on every load of this page.
+ */
+async function FieldsPaneBody({
+  actor,
+  projectKey,
+}: {
+  actor: Parameters<typeof customFieldsService.listFields>[0];
+  projectKey: string;
+}) {
+  const fields = await customFieldsService.listFields(actor);
+
+  // MOTIR-2469 retired the private admin check that used to sit here — a role
+  // comparison against the workspace and project membership rows, written before
+  // there was a permission model to ask, and a SECOND policy answering a question
+  // the catalog already answers. The page is reached only by an actor who holds
+  // its registry key (the guard above), so the manage affordances are simply on.
+  const canManage = true;
+
+  return <FieldsSettingsEditor projectKey={projectKey} fields={fields} canManage={canManage} />;
 }

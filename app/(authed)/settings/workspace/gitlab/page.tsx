@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { ExternalLink, FolderGit2, KeyRound } from 'lucide-react';
@@ -11,6 +12,7 @@ import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import { GitSettingsShell } from '../_components/GitSettingsShell';
 import { SettingsBanner, GrantRow, IdentityHeader } from '../_components/gitSettingsPrimitives';
@@ -69,27 +71,44 @@ export default async function GitlabSettingsPage({ searchParams }: GitlabSetting
     );
   }
 
-  const connection = await gitlabConnectionService.getConnectionForWorkspace({
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-
   const sp = await searchParams;
   const bannerStatus = sp.gitlab;
   const bannerTone = bannerStatus ? BANNER_TONE[bannerStatus] : undefined;
 
+  // MOTIR-3448 — allocation row 12: THE FRAME ONLY. One read, so there is
+  // nothing to make concurrent. `GitSettingsShell`'s whole header — title,
+  // subtitle, provider switch — is pure `t('git')` and paints from the gate, so
+  // the boundary goes INSIDE the shell rather than around it. The banner is
+  // read off the query string and is not a read at all, so it stays above too.
   return (
     <GitSettingsShell provider="gitlab">
       {bannerTone ? (
         <SettingsBanner tone={bannerTone} message={t(`banner.${bannerStatus}`)} />
       ) : null}
 
-      {!connection ? (
-        <NotConnectedPanel connectHref={OAUTH_START_PATH} />
-      ) : (
-        <ConnectedPanel connection={connection} />
-      )}
+      <Suspense fallback={<SettingsPaneFrame />}>
+        <GitlabConnectionPanel userId={ctx.userId} workspaceId={ctx.workspaceId} />
+      </Suspense>
     </GitSettingsShell>
+  );
+}
+
+/** The connection read and the panel it chooses between. */
+async function GitlabConnectionPanel({
+  userId,
+  workspaceId,
+}: {
+  userId: string;
+  workspaceId: string;
+}) {
+  const connection = await gitlabConnectionService.getConnectionForWorkspace({
+    userId,
+    workspaceId,
+  });
+  return !connection ? (
+    <NotConnectedPanel connectHref={OAUTH_START_PATH} />
+  ) : (
+    <ConnectedPanel connection={connection} />
   );
 }
 

@@ -1099,8 +1099,9 @@ yet** (`design/shell/design-notes.md` § _What this asset SPECIFIES that no card
 drawing one. The settings frame composes its **wrapper and its reveal**; it does not take its header
 block.
 
-**The card stand-in is not a new drawing.** It is `app/(authed)/settings/project/fields/loading.tsx`'s
-composition — a `rounded-(--radius-card)` bordered box at `p-(--spacing-card-padding)`, a
+**The card stand-in is not a new drawing.** It is the composition that shipped as the Fields pane's
+own route-level skeleton until MOTIR-3558 deleted it, and it now lives in
+`components/settings/SettingsPaneFrame.tsx` — a `rounded-(--radius-card)` bordered box at `p-(--spacing-card-padding)`, a
 `mb-4 flex items-center justify-between` row carrying an `h-4` label bar and an `h-7` action bar, then
 three `flex items-center gap-3` rows of an `size-8` square and an `h-3.5` bar at 40 / 48 / 56% —
 **with its two header placeholders removed**. Three rows is a screenful for a 42–46rem pane and is not
@@ -1177,11 +1178,16 @@ is the expected shape for a pane that is one card of fields over two reads.
 
 ## The two shipped settings skeletons — SUPERSEDED
 
-`app/(authed)/settings/project/fields/loading.tsx` and
-`app/(authed)/settings/project/components/loading.tsx` are the only two route-level pending states in
-the family. They are drawn in Panel D as they actually render.
+The Fields and Components panes each carried a route-level `loading.tsx` — the only two in the family.
+They are drawn in Panel D as they rendered.
 
 **Verdict: both are deleted, in the same commit that lands the shared component in those two routes.**
+
+> ✅ **DONE — MOTIR-3558 (`2a27a1a2`).** Both files are gone and both panes mount
+> `components/settings/SettingsPaneFrame.tsx` in-page instead, in that one commit. Their paths are
+> deliberately no longer written out above: a design asset names the file an agent should MIRROR, and
+> a path that resolves to nothing sends them looking for it — which is what
+> `tests/design-asset-addresses.test.ts` caught on the story's own pull request.
 
 - **Not because a boundary is illegal there.** Neither page calls `notFound()`, so both are legal
   under `motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_.
