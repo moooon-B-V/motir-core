@@ -20,8 +20,12 @@ import { join } from 'node:path';
 //      ride `deployment_status` — an event Vercel raises and Fly does not — so
 //      leaving that trigger would have stopped the sync silently, reproducing
 //      the fault MOTIR-1970 fixed (five production jobs dead for a month).
-//   4. Verification reads the PLATFORM, never `fly.toml`. A config file is a
+//   4. Verification reads its OBSERVATION from the PLATFORM. A config file is a
 //      claim about the deployment, not a reading of it — MOTIR-2102 verbatim.
+//      ⚠️ NARROWED by MOTIR-3570: `fly.toml` now supplies the EXPECTATION, which
+//      is a different half and the whole point of that card. The assertion used
+//      to be that the deploy job's text does not mention `fly.toml` at all, and
+//      that blanket form would have forbidden the fix — see the describe below.
 //   5. The WORKFLOW-level concurrency lets a run on `main` FINISH (MOTIR-3106).
 //      The three above are all about the deploy job's own body, and every one
 //      of them held while the deploy was in practice never reached. An
@@ -37,10 +41,16 @@ const SYNC_ACTION_PATH = join(process.cwd(), '.github/actions/inngest-sync/actio
 const SYNC_ACTION_REF = 'uses: ./.github/actions/inngest-sync';
 
 const DEPLOY_JOB = 'deploy';
+/** The pool guard the deploy step invokes (MOTIR-3570). */
+const POOL_GUARD = 'scripts/assert-machine-pool.mjs';
+const POOL_GUARD_PATH = join(process.cwd(), POOL_GUARD);
 /** The Vitest matrix and the Playwright matrix — "the existing gates". */
 const GATE_JOBS = ['test', 'e2e'];
 
 const ci = readFileSync(CI_PATH, 'utf8');
+const poolGuard = [POOL_GUARD, 'scripts/machinePool.mjs']
+  .map((rel) => readFileSync(join(process.cwd(), rel), 'utf8'))
+  .join('\n');
 const syncWorkflow = readFileSync(SYNC_WORKFLOW_PATH, 'utf8');
 const syncAction = readFileSync(SYNC_ACTION_PATH, 'utf8');
 
@@ -213,20 +223,46 @@ describe('post-deploy verification reads the platform (MOTIR-2390 / MOTIR-2102)'
     expect(deployCode).toContain('.fly.dev');
   });
 
-  it('reads the machine count from Fly’s API, never from fly.toml', () => {
+  it('reads the OBSERVED pool from Fly’s API', () => {
     // `auto_start_machines` NEVER creates a machine, so a fly.toml that
     // describes a pool of N is a claim, not a behaviour: motir-ai ran ONE
-    // machine for weeks behind a config that said otherwise.
-    expect(deployCode).toContain('https://api.machines.dev/v1/apps/');
-    expect(deployCode).toContain('machine_count');
-    expect(deployCode).not.toContain('fly.toml');
+    // machine for weeks behind a config that said otherwise. The read moved
+    // into a script (MOTIR-3570) so its derivation could be unit-tested, which
+    // is why this asserts on the script the step invokes rather than on the
+    // step's own shell — the property is that SOMETHING in this path calls the
+    // Machines API, not that the YAML does it inline.
+    expect(deployCode).toContain(POOL_GUARD);
+    expect(poolGuard).toContain('https://api.machines.dev/v1/apps/');
   });
 
-  it('fails on a machine-count mismatch', () => {
+  it('DERIVES the expectation from fly.toml — no stored count anywhere', () => {
+    // ⚠️ THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACES, deliberately.
+    // The old spec read `expect(deployCode).not.toContain('fly.toml')`, meaning
+    // to say "the observation is not taken from a config file" — and what it
+    // actually said was that the deploy job may not mention the file at all. A
+    // guard that derives its expectation from `[processes]` is exactly what that
+    // wording forbids, so the test would have gone red on the fix and been the
+    // last word on whether the fix was allowed.
+    //
+    // The defect it was standing over: `FLY_EXPECTED_MACHINE_COUNT` said 2 from
+    // MOTIR-2408, MOTIR-3425 added the `worker` group, and every deploy after
+    // that ended RED on a deploy that had SUCCEEDED. A stored total goes stale by
+    // construction; the group set and the running floor cannot, because they are
+    // the same lines the release itself acts on.
+    expect(codeOf(ci)).not.toContain('FLY_EXPECTED_MACHINE_COUNT');
+    expect(poolGuard).toContain('fly.toml');
+  });
+
+  it('fails the job when the pool does not match', () => {
     // A verification step that reads a number and does not compare it is a log
-    // line, not a check.
-    expect(deployCode).toMatch(/if \[ "\$actual" != "\$EXPECTED" \]/);
-    expect(deployCode).toMatch(/::error::.*expected/);
+    // line, not a check. The comparison itself lives in
+    // `tests/scripts/assert-machine-pool.test.ts`, which drives it with
+    // deliberate negatives; what belongs HERE is that its exit code is allowed
+    // to reach the job — a `continue-on-error` or a trailing `|| true` would
+    // make every one of those specs decorative.
+    expect(deployCode).not.toContain('continue-on-error');
+    expect(deployCode).not.toMatch(new RegExp(`${POOL_GUARD}[^\n]*\\|\\|`));
+    expect(existsSync(POOL_GUARD_PATH)).toBe(true);
   });
 });
 
