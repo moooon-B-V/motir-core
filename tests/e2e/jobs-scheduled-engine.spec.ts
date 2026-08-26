@@ -22,22 +22,25 @@
 // disposition owes it immediately. No cadence is waited out, no constant moves,
 // and the job that runs is a REAL one on its REAL schedule.
 //
-// ⚠️ AND THE `skip` HALF NEEDS ITS OWN WORKER, for a structural reason worth
-// stating. `skip` suppresses a fire from before the SCHEDULER started, and the
-// lane's shared worker starts in `globalSetup` — before every spec. Through it,
-// every observable fire is one it was watching for, so `skip` and `latest` are
-// indistinguishable however long a spec waits. The second scenario therefore
-// starts its own worker with a PRIVATE routing file (see
-// `_helpers/job-worker-process.ts`), which is a worker restart across a fire in
-// the only form this lane can express.
+// ⚠️ THE `skip` HALF USED TO LIVE HERE AND NO LONGER DOES (MOTIR-3314). It needed
+// its own worker — `skip` suppresses a fire from before the SCHEDULER started,
+// and the lane's shared worker starts in `globalSetup`, so through it `skip` and
+// `latest` are indistinguishable however long a spec waits — and it needed a
+// per-minute job, so that a fire would also arrive ON its watch inside the spec's
+// patience. Clustering the crons ended the second requirement for every
+// production job, and moved the one `skip` job to `latest` besides. The full
+// argument, and where that coverage lives now
+// (`tests/jobs/engine-scheduler.test.ts`, over synthetic definitions with an
+// injected clock), is at the removal site below.
+//
+// What survives here is the half this lane is uniquely good for: a REAL job, on
+// its REAL schedule, fired by the REAL worker process, landing on the REAL
+// dashboard.
 
 import { expect, test, type Page } from '@playwright/test';
-import { rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
-import { startSpecJobWorker, stopSpecJobWorker } from './_helpers/job-worker-process';
 import { startSignedOut } from './_helpers/shell-session';
 
 // Every direct-DB call is `adminDb`, the owner client — post-condition
@@ -65,12 +68,6 @@ const OPERATOR_EMAIL = process.env['PLATFORM_ADMIN_EMAIL'] ?? 'sched-platform-ad
  * an empty table. Its most recent fire is by construction hours old.
  */
 const CATCH_UP_JOB = 'system.attachment-gc';
-/** The one `skip` job in the fourteen — `* * * * *`, so a fire arrives inside a spec. */
-const SKIP_JOB = 'system.ci-runner-provision-sweep';
-
-/** The spec worker's PRIVATE view of the cutover switch. */
-const SPEC_ROUTING_FILE = path.resolve('/tmp/motir-spec-job-routing');
-
 test.beforeEach(async () => {
   await resetDatabase();
   await truncateJobRuns();
@@ -80,13 +77,10 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  // Unconditional and in this order: stop the spec worker BEFORE clearing its
-  // routing, so it cannot schedule one last tick against a file the next spec
-  // owns. Then clear the lane's shared routing — a spec that leaves a job routed
-  // hands the next one a server behaving differently from the one it was written
-  // against.
-  await stopSpecJobWorker();
-  await rm(SPEC_ROUTING_FILE, { force: true });
+  // Clear the lane's shared routing — a spec that leaves a job routed hands the
+  // next one a server behaving differently from the one it was written against.
+  // (The spec-private WORKER teardown that stood here went with the `skip`
+  // scenario below; nothing in this file starts one any more.)
   await clearJobRouting();
 });
 
@@ -194,64 +188,32 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
   await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true })).toHaveCount(0);
 });
 
-test('a worker restart across a fire honours the declared CATCH-UP policies', async ({ page }) => {
-  // Up to two minute-boundaries for the `skip` job's control, plus the app.
-  test.setTimeout(180_000);
-  await signUp(page, OPERATOR_EMAIL);
-
-  // ⚠️ BOTH JOBS ARE ROUTED ON THE SPEC WORKER'S PRIVATE FILE, and neither on the
-  // lane's. That is what makes this a restart: this worker's scheduler starts
-  // NOW, so every fire before this moment is one it was down for — which is the
-  // only way `skip` is distinguishable from `latest` in a lane whose shared
-  // worker has been up since `globalSetup`.
-  await writeFile(SPEC_ROUTING_FILE, `${CATCH_UP_JOB},${SKIP_JOB}`, 'utf8');
-  const startedAt = await startSpecJobWorker(SPEC_ROUTING_FILE);
-
-  // ── the CATCH-UP job runs the fire it was down for ───────────────────────
-  await expect
-    .poll(async () => adminDb.jobQueueRun.count({ where: { jobId: CATCH_UP_JOB } }), {
-      timeout: 60_000,
-      intervals: [500],
-    })
-    .toBe(1);
-  const caught = await adminDb.jobQueueRun.findFirstOrThrow({ where: { jobId: CATCH_UP_JOB } });
-  // The fire predates the restart — that is the whole claim.
-  expect(caught.scheduledFor!.getTime()).toBeLessThan(startedAt.getTime());
-
-  // ── the SKIP job does NOT run the fire it was down for ───────────────────
-  // Its cadence is per-minute, so a fire certainly passed before the restart, and
-  // `skip` says that one is lost rather than late.
-  const missed = await adminDb.jobQueueRun.findFirst({
-    where: { jobId: SKIP_JOB, scheduledFor: { lt: startedAt } },
-  });
-  expect(missed, 'a fire from before the restart must not be enqueued').toBeNull();
-
-  // ── THE CONTROL, and without it the assertion above proves nothing ───────
-  // A job that is simply broken also enqueues nothing. So wait out one real
-  // minute boundary: a fire that happens ON this scheduler's watch MUST be
-  // enqueued, which separates "skipped the missed one" from "never schedules".
-  await expect
-    .poll(
-      async () =>
-        adminDb.jobQueueRun.count({
-          where: { jobId: SKIP_JOB, scheduledFor: { gte: startedAt } },
-        }),
-      { timeout: 90_000, intervals: [1_000] },
-    )
-    .toBe(1);
-
-  // And still nothing for the fire it was down for — the later fire did not drag
-  // the earlier one in behind it.
-  expect(
-    await adminDb.jobQueueRun.count({
-      where: { jobId: SKIP_JOB, scheduledFor: { lt: startedAt } },
-    }),
-  ).toBe(0);
-
-  // The operator surface shows the runs that did happen, unchanged by any of it.
-  await gotoSystemTab(page);
-  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true })).toHaveCount(1);
-});
+// ⚠️ THE `skip` SCENARIO WAS REMOVED HERE (MOTIR-3314), AND ITS COVERAGE MOVED
+// RATHER THAN VANISHED. It routed `system.ci-runner-provision-sweep` — then the
+// only `skip` job, and the only one on `* * * * *` — onto a private worker and
+// asserted that a fire from before the restart was not enqueued, with a control
+// waiting out one real minute boundary to prove the scheduler was alive at all.
+//
+// Clustering the crons ended BOTH of its premises, and neither by accident:
+//
+//   * no job is per-minute any more, so the control — "a fire that happens ON
+//     this scheduler's watch MUST be enqueued", polled for 90 s — cannot be
+//     satisfied by any production schedule; the nearest fire is up to 30 minutes
+//     out. That break comes from the CADENCE alone and would have happened
+//     whatever the disposition;
+//   * and `skip`'s rationale ("the next fire is at most 60 seconds away") went
+//     with it, so that job is `latest` and no job declares `skip` at all.
+//
+// The header above rejected a test-only job as "shipped production code carrying
+// a fixture", and that judgement still holds — so this lane cannot express the
+// `skip` half any more. It does not need to: `tests/jobs/engine-scheduler.test.ts`
+// covers both directions over SYNTHETIC definitions with an injected clock —
+// "`skip` enqueues NOTHING for a fire from before the scheduler started" AND its
+// control, "`skip` DOES enqueue a fire that happens while the scheduler is
+// watching". That is the better tier for a SCHEDULER CAPABILITY, because it does
+// not depend on which dispositions the product happens to use this month; what
+// this lane uniquely proved was the real worker PROCESS, and the `latest`
+// scenario above still proves that.
 
 test('a scheduled job NOT routed to the engine produces no engine rows at all', async ({
   page,
