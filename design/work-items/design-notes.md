@@ -5154,3 +5154,55 @@ check that makes the recipe worth writing down rather than re-derived.
 One board artefact, named so nobody reads it as design: the frames that show the frame REVEALED force
 the animation's end state, because a board is a still and a time-based state has to be frozen at the
 moment it is being drawn.
+
+---
+
+## The streaming allocation at ARRIVAL — `/items/archived` and `/items/[key]/edit` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+### `/items/archived` — the list
+
+|                            |                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **the gate**               | `getSession` → `getTranslations('issueViews')` → `getActiveProject` → `getCapabilities` (`canBrowse`)                                                                                                                                                                                |
+| **with the frame**         | the back-link to `/items` and the `<h1>`                                                                                                                                                                                                                                             |
+| **with the first content** | `searchParams` → `getLocale` → `Promise.all([getWorkflow, listArchivedWorkItems])` — already one wave — then `toArchivedRows`                                                                                                                                                        |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                                            |
+| **settles**                | **once**                                                                                                                                                                                                                                                                             |
+| **verdict**                | **NONE — reuse.** The late region is a table of work-item rows, and `app/(authed)/items/_components/IssueTreeSkeleton.tsx` is the drawn pending state for exactly that, already composed by `/items` behind its own `<Suspense>`. `/items/archived` is the same table one route over |
+
+**This is the one route in the ten where the reader arrives with the shape already in their head** —
+they came from `/items`, whose table they were just looking at. Standing in for it with the same
+skeleton the sibling route uses is what makes the two read as one surface.
+
+### `/items/[key]/edit` — the form
+
+|                            |                                                                                                                                                                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations` → `getActiveProject` → `params` → `getIssueDetail` (**`notFound()`**, and the `permanentRedirect` onto the canonical key when the alias resolves) → `getCapabilities` (**`redirect`** to the read view when `canEdit` is false) |
+| **with the frame**         | — nothing worth naming. The `<h1>` is `t('editIssue')` and could paint, but see the verdict                                                                                                                                                                      |
+| **with the first content** | — **nothing**                                                                                                                                                                                                                                                    |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                        |
+| **settles**                | **once**                                                                                                                                                                                                                                                         |
+| **verdict**                | **NONE.** Both `notFound()` and the two redirects are decided by gate reads, and the same `detail` that decides them carries every value the form renders — `issue`, `workflow`, and every relationship `RelationshipsPanel` draws                               |
+
+**THE FORM DECISION, stated as the card required it: the FORM WAITS.** It is not a preference and it
+is not a compromise — it falls out of the reads. `EditIssueForm` takes `issue` and `workflow`, both
+from `getIssueDetail`, which is a **gate** read because it decides the 404. So by the time anything
+can be flushed at all, every field's value is already in hand. There is no version of this page
+where a field renders empty and fills in later, and therefore nothing to protect against.
+
+**The one read that is genuinely behind the others is `members`** — the assignee picker's option
+list, currently issued serially after `getCapabilities`. It is **not a field the reader types into**;
+it is a picker's options. The decision is to make it **concurrent with the capabilities read** rather
+than to stream it: one round trip instead of two, and the form still arrives complete. A discarded
+`members` read on the rare `canEdit === false` redirect is cheaper than a second settle on every
+successful edit.
+
+**A route boundary is PROHIBITED here, not declined** — this route calls `notFound()`
+(`motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_).

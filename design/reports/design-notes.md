@@ -548,3 +548,29 @@ MOTIR-1288 fixes the snapshot.
 - **Repointing the consumers** to the new DTO/component (8.14.6).
 - The **velocity chart**, dashboards beyond the burndown repoint, and `startSprint`
   snapshot logic — explicit story boundary (MOTIR-1297).
+
+---
+
+## The streaming allocation at ARRIVAL — `/reports/burndown` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+|                            |                                                                                                                                                                                                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations('reports')` → `getActiveProject` → `sprintsService.listByProject`, which selects the **no-sprints** empty state and supplies the default sprint                                                                                |
+| **with the frame**         | `ReportPageChrome`'s back-link, crumb and title — all `t('reports.*')`. **Its `subLine` is not**: it is `[project.name, selected.name]`, and `selected.name` comes from the gate's own sprint read, so it arrives with the chrome rather than before it        |
+| **with the first content** | `searchParams` → the sprint picker (`pickerSprints`, from the same read)                                                                                                                                                                                       |
+| **after the page**         | `reportsService.getSprintCycleGraph(selected.id)` — the series the chart draws                                                                                                                                                                                 |
+| **settles**                | **twice, deliberately.** The picker is usable while the series is still resolving, which is the whole point: a reader who landed on the wrong sprint can switch before the wrong chart has finished arriving                                                   |
+| **verdict**                | **NONE — the chart's own pending state serves.** `BurndownReport` already renders `ReportStateMessage` for its empty and not-started cases and owns the region; the boundary goes around the chart and its fallback is that component's own, not a new drawing |
+
+**This answers the card's question directly:** the chart's state serves, and a frame wrapped around
+it would be a second pending vocabulary over a region that already has one. What the page gains from
+this story is the boundary that lets the chrome and the picker paint ahead of the series — not a
+mock.
+
+**A route boundary is declined as a preference** — `/reports/burndown` does not call `notFound()`.
