@@ -258,7 +258,31 @@ test('a project viewer gets the read-only surface: thread visible, no composer, 
   await expect(list.getByText('visible to the viewer')).toBeVisible();
   // The read-only notice replaces the composer (panel 9); no rest invitation,
   // and no per-row affordances anywhere in the thread.
-  await expect(page.getByText(/Read-only access/)).toBeVisible();
+  //
+  // ⚠️ SCOPED TO `#main`, and that is load-bearing — do not "simplify" it back
+  // (MOTIR-3563).
+  //
+  // WHAT WAS OBSERVED, on the trunk: this unscoped locator failed strict mode
+  // against TWO byte-identical `<p>` elements carrying the same class list —
+  // one addressable under `#main`, one not. There is a single render site for
+  // that markup (`CommentsSection.tsx`), so it is one element present twice,
+  // not two strings colliding on a loose regex.
+  //
+  // WHAT IS INFERRED, and honestly so: the item page streams its late stack —
+  // Activity, and so comments — behind `<Suspense>` (MOTIR-3436), and CLAUDE.md
+  // documents the resulting class under *"a boundary makes every unscoped
+  // locator a race"*: React keeps the previous subtree mounted while the new
+  // one renders, and Playwright resolves locators BEFORE filtering on
+  // visibility, so both copies match. That fits every detail here, but the
+  // duplicate did not reproduce locally, so treat the mechanism as the best
+  // available reading rather than as measured fact.
+  //
+  // Either way the REMEDY is the same and is sound under both: `#main` is the
+  // shell's live content region (`AppLayout`), and the assertion is about the
+  // notice a reader actually sees. A `.first()` would also go green while
+  // leaving the assertion pointed at whichever copy resolved first — including
+  // one on its way out of the DOM — which is the repair this card refuses.
+  await expect(page.locator('#main').getByText(/Read-only access/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add a comment…' })).toHaveCount(0);
   await expect(list.getByRole('button', { name: 'Reply', exact: true })).toHaveCount(0);
   await expect(list.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
