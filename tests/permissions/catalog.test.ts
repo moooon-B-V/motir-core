@@ -255,11 +255,18 @@ const PLAN_DECISION_ENFORCED: PermissionKey[] = ['ai:decide_plan'];
  * `PLAN_DECISION_ENFORCED` gives for being a third: membership of a list here is
  * evidence about the STORY that wired the key, and these two were wired by none
  * of MOTIR-2256, MOTIR-2291 or MOTIR-3188. They arrive `enforced` because the
- * predicates (`canViewLessons` / `canManageLessons` in `lib/projects/access.ts`)
- * land in the same change — there was never a moment where the catalog
- * advertised them and nothing resolved through them.
+ * predicates (`canViewLessons` / `canManageLessons` / `canReinforceLessons` in
+ * `lib/projects/access.ts`) land in the same change — there was never a moment
+ * where the catalog advertised one and nothing resolved through it.
  */
-const LESSON_LIBRARY_ENFORCED: PermissionKey[] = ['lesson:view', 'lesson:manage'];
+const LESSON_LIBRARY_ENFORCED: PermissionKey[] = [
+  'lesson:view',
+  'lesson:manage',
+  // MOTIR-3553 — the THIRD lesson key, and it belongs to this list on the same
+  // terms as the other two: it was wired by none of the earlier stories, and it
+  // arrives `enforced` because `canReinforceLessons` lands in the same change.
+  'lesson:reinforce',
+];
 
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {

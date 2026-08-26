@@ -75,6 +75,14 @@ export const EXEMPT_TOOLS = {
     '`nothing-matched` and `unavailable` are opposite answers that both carry an empty ' +
     '`lessons`, so a caller reading the payload structurally must be able to tell them apart ' +
     '(MOTIR-3480).',
+  reinforce_lesson:
+    'Returns WHAT WAS REINFORCED and whether this call counted — `{ id, title, scope, ' +
+    'lastOccurredAt, recurrenceCount, counted }`. Exempt for the same reason its two lesson ' +
+    'siblings are: the store lives in motir-ai and no `/api/v1` operation returns a lesson at ' +
+    'all, so there is no shared component to derive from. ⚠️ `counted` is load-bearing rather ' +
+    'than decorative: `false` means the occurrence was ALREADY on the ledger, so nothing was ' +
+    'written and both counters stand — a caller reading the payload structurally must be able ' +
+    'to tell that from a fresh record without parsing the prose (MOTIR-3553).',
   link_pull_request:
     'Returns the DECLARED LINK — `{ key, created, movedFrom, pullRequest: { repo, number, url, ' +
     'title, state, ci, linkedManually } }`. The row is a `LinkedPullRequestDto`, the shape the ' +

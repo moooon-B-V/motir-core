@@ -228,6 +228,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // legacy table has no lesson axis, and the real gate is the PERMISSION
   // (`lesson:view`, in `toolPermissions.ts`). A READ, so it files under `read`.
   search_lessons: 'read',
+  // `reinforce_lesson` (MOTIR-3553). Same note as both siblings: this legacy
+  // table has no lesson axis, and the real gate is the PERMISSION
+  // (`lesson:reinforce`, in `toolPermissions.ts`). A WRITE — it records an
+  // occurrence and moves a lesson's clock — so it files beside `add_lesson`
+  // under the nearest write bucket rather than inventing a scope in a table this
+  // story deprecates.
+  reinforce_lesson: 'work_items:write',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',
   // `link_pull_request` (MOTIR-3526). A WRITE — it sets the change-request row's

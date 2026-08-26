@@ -79,6 +79,13 @@ describe('the tool is reachable by the caller it was built for', () => {
     expect([...CLI_TOKEN_GRANT]).toEqual([
       'project:browse',
       'lesson:view',
+      // MOTIR-3553 — the FOURTH deliberate widening of this grant, and the
+      // second for the lesson corpus. `search_lessons` let a dispatched run READ
+      // what went wrong before; this lets it say that one of those lessons
+      // described what just went wrong. Without it the corpus decays on a timer
+      // no amount of use resets. Additive, idempotent, and unable to change or
+      // retire a lesson — which is why it is its own key and not `lesson:manage`.
+      'lesson:reinforce',
       'work_item:edit',
       'comment:add',
       'ai:plan',

@@ -36,6 +36,7 @@ import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/t
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
+import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
 import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
 import { LINK_PULL_REQUEST_TOOL_NAME, registerLinkPullRequest } from './tools/linkPullRequest';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
@@ -111,6 +112,7 @@ export const MCP_TOOL_NAMES = [
   ADD_COMMENT_TOOL_NAME,
   ADD_LESSON_TOOL_NAME,
   SEARCH_LESSONS_TOOL_NAME,
+  REINFORCE_LESSON_TOOL_NAME,
   ATTACH_FILE_TOOL_NAME,
   LINK_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
@@ -237,6 +239,7 @@ export function registerMcpTools(
   registerAddComment(target, resolveContext);
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
+  registerReinforceLesson(target, resolveContext);
   // The general attachment door (MOTIR-3058) — the agent-facing half of
   // MOTIR-3057's `/api/v1` route, over the same service path.
   registerAttachFile(target, resolveContext);

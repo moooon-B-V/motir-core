@@ -476,6 +476,10 @@
     "lesson_manage": {
       "label": "修改经验库",
       "description": "停用某条经验或新增一条——两者都会改变规划器所遵循的既定指引。"
+    },
+    "lesson_reinforce": {
+      "label": "记录经验复现",
+      "description": "记录某条经验所述的错误再次发生。这不会改变经验本身的内容。"
     }
   },
   "localeToggle": {
