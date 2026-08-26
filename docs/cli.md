@@ -223,7 +223,7 @@ overrides only:
 ```sh
 motir link add motir-ai ../elsewhere/motir-ai   # repo lives off-convention
 motir link remove motir-ai                      # drop the override
-motir link                                      # bare re-run: show the binding
+motir link                                      # bare re-run: show it, and clone what is missing
 ```
 
 If this very directory _is_ the single repo's checkout, say so:
@@ -232,8 +232,67 @@ If this very directory _is_ the single repo's checkout, say so:
 motir link --project ACME --repo acme-app       # writes { "acme-app": "." }
 ```
 
-An **empty folder is first class**: bind it and go — the first scaffold work
-items create the checkouts themselves.
+### Linking BRINGS THE CODE DOWN
+
+`motir link` finishes with the project's repositories on disk. It reads the
+project's repository set from the server and **clones the ones that are
+missing**, each into the path the resolution above computes for it — the
+override when there is one, `<root>/<repoName>` otherwise.
+
+```
+Linked /home/yue/work → acme/ACME on https://app.motir.co
+Wrote /home/yue/work/.motir.json
+Cloning 2 of 4 repositories…
+Checkouts:
+  acme-web: cloned → /home/yue/work/acme-web
+  acme-api: cloned → /home/yue/work/acme-api
+  acme-shared: already present — /home/yue/work/acme-shared
+  mobile: skipped (proposed) — no repository behind this row yet
+```
+
+**One line per repository of the set**, and four outcomes:
+
+| Outcome             | What it means                                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloned`            | it was missing; it is there now. An archived repository is cloned too, and says so — read-only is not unreadable.                                                   |
+| `already present`   | the path exists and was **not touched** — see the invariant below.                                                                                                  |
+| `skipped (<state>)` | the row names no repository yet (`proposed`, `creating`, `skipped`, `failed`), or names one whose provider Motir cannot derive a clone URL for. Nothing went wrong. |
+| `failed`            | a clone was attempted and git refused. The line carries git's own message.                                                                                          |
+
+**A failure does not abort the rest.** Every remaining repository is still
+attempted, and the command **exits non-zero when at least one clone failed** —
+and only then. An existing path and a skipped row are not failures.
+
+**⚠️ It never writes into a path that already exists.** Not to update it, not
+to repair it, not to re-point a checkout whose `origin` is somewhere else: the
+path is reported and left alone, whatever is in it. `motir link` clones what is
+missing and does nothing else — it does not fetch, pull, rebase or prune. That
+is what makes it safe to run twice; a second run re-clones nothing.
+
+**The bare re-run is how you pick up a repository added later.** `motir link`
+with no flags shows the binding and materializes anything missing, so a
+repository somebody added to the project after you linked arrives without a
+re-bind.
+
+To bind **only** — the behaviour before this shipped — pass `--no-clone`:
+
+```sh
+motir link --project ACME --no-clone            # write .motir.json, touch nothing else
+```
+
+**Whose credential clones?** Yours. The command shells out to `git clone` and
+lets your credential helper, SSH agent or `gh` do what they already do for
+every other repository on the machine — Motir never hands git a token. If a
+clone is refused, the likeliest cause is a repository Motir created in its own
+org that your GitHub account has not yet accepted the collaborator invitation
+for; the message says so, and keeps git's own words beneath it.
+
+An **empty folder is first class**: bind it and the code arrives. A repository
+that does not exist _anywhere_ yet is the one thing binding cannot fetch —
+that is what a scaffold work item creates.
+
+The reasoning behind each of these is recorded in
+[`docs/decisions/link-materializes-the-checkouts.md`](./decisions/link-materializes-the-checkouts.md).
 
 ---
 
@@ -468,17 +527,17 @@ Every command and flag the binary registers. `motir`, `motir help`, and
 
 ### Setup
 
-| Command                        | Flags                                                                         |
-| ------------------------------ | ----------------------------------------------------------------------------- |
-| `motir login`                  | `--server <url>` · `--no-browser`                                             |
-| `motir logout`                 | `--server <url>`                                                              |
-| `motir auth login`             | `--server <url>` · `--token <pat>`                                            |
-| `motir auth status`            | `--server <url>`                                                              |
-| `motir auth logout`            | `--server <url>`                                                              |
-| `motir link`                   | `--server <url>` · `--workspace <slug>` · `--project <key>` · `--repo <name>` |
-| `motir link add <repo> <path>` | —                                                                             |
-| `motir link remove <repo>`     | —                                                                             |
-| `motir doctor`                 | `--agent <cmd>` · `--json`                                                    |
+| Command                        | Flags                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------- |
+| `motir login`                  | `--server <url>` · `--no-browser`                                                            |
+| `motir logout`                 | `--server <url>`                                                                             |
+| `motir auth login`             | `--server <url>` · `--token <pat>`                                                           |
+| `motir auth status`            | `--server <url>`                                                                             |
+| `motir auth logout`            | `--server <url>`                                                                             |
+| `motir link`                   | `--server <url>` · `--workspace <slug>` · `--project <key>` · `--repo <name>` · `--no-clone` |
+| `motir link add <repo> <path>` | —                                                                                            |
+| `motir link remove <repo>`     | —                                                                                            |
+| `motir doctor`                 | `--agent <cmd>` · `--json`                                                                   |
 
 ```sh
 motir login                                    # the usual way in
@@ -486,6 +545,7 @@ motir login --no-browser                       # …over SSH: just print the cod
 motir auth login --server https://app.motir.co --token motir_pat_…
 motir auth status --server https://app.motir.co
 motir link --project ACME --repo acme-app
+motir link --project ACME --no-clone           # bind only; clone nothing
 motir link add motir-ai ../elsewhere/motir-ai
 motir doctor --agent "codex exec --sandbox workspace-write" --json
 ```

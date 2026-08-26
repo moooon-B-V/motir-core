@@ -113,6 +113,23 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * unbalances a bin-packer, and the calibration note above says a local reading
  * runs at or below the CI cost.
  *
+ * ⚠️ `project-repositories-api.spec.ts` (MOTIR-3591) carries the LOCAL
+ * provenance too, and the guard caught it with no entry on its FIRST CI run —
+ * the failure this file exists to make loud, working exactly as designed. It is
+ * worth saying what that cost, because it is the sharpest instance yet: the spec
+ * had been run locally and was green, the five bulk legs were green, and the
+ * spec had run in NEITHER of them. A green bulk leg is not evidence that a new
+ * spec ran.
+ *
+ * Measured on 2026-08-26 against a production build, on its own port and
+ * database, twice: **3.2 s** on a cold server (1.7 + 0.9 + 0.5) and **1.8 s**
+ * warm. The COLD reading is recorded, following the specs above — the first
+ * request compiles the `/api/v1/projects/[projectKey]/repositories` route, and
+ * under-estimating is the direction that unbalances a bin-packer. It is cheap
+ * because it drives no browser: three bearer-authenticated HTTP reads and their
+ * seeding, with no page load at all. Re-measure from the first green CI run that
+ * includes it.
+ *
  * ⚠️ `jobs-scheduled-engine.spec.ts` (MOTIR-3473) is the same story, one card
  * later — brand new, and the guard caught it with no entry on its first CI run.
  * Same LOCAL provenance, measured on 2026-08-25 against a production build.
@@ -298,6 +315,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'project-details.spec.ts': 8.0,
   'project-isolation.spec.ts': 4.9,
   'project-logo.spec.ts': 9.0,
+  'project-repositories-api.spec.ts': 3.2,
   'project-square-flow.spec.ts': 4.3,
   'projects-flow.spec.ts': 5.3,
   'provenance.spec.ts': 14.8,

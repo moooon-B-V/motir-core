@@ -359,7 +359,8 @@ function reposCheck(link: FoundLink | null, probe: DoctorProbe): DoctorCheck {
       ...base,
       status: 'warn',
       detail: `${missingOverrides.length} override path(s) do not exist: ${summary.join(', ')}`,
-      remediation: 'Fix with `motir link add <repo> <path>`, or clone the checkout there.',
+      remediation:
+        'Point the override at the real checkout with `motir link add <repo> <path>`, or run `motir link` to clone what is missing.',
     };
   }
   return { ...base, status: 'pass', detail: summary.join(', ') };

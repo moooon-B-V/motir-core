@@ -233,7 +233,7 @@ export const CLI_STEPS: readonly CliStep[] = [
       },
       {
         kind: 'prose',
-        text: 'If your workspace has exactly one project, `motir link` on its own is the whole step. `.motir.json` holds **no secret** — server, workspace, project — so it is safe to commit. An empty folder is first class: bind it and go, and the first scaffold work items create the checkouts themselves.',
+        text: 'If your workspace has exactly one project, `motir link` on its own is the whole step. `.motir.json` holds **no secret** — server, workspace, project — so it is safe to commit. Linking also **brings the code down**: it reads the project’s repositories and clones the ones that are missing, one reported line each, never writing into a path that already exists. Run it again any time — nothing already there is re-cloned, and a repository added to the project later arrives. Pass `--no-clone` to bind and nothing else. An empty folder is first class: bind it and the code is there. The one thing binding cannot fetch is a repository that does not exist anywhere yet — that is what a scaffold work item creates.',
       },
     ],
   },

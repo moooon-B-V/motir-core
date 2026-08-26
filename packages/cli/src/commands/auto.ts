@@ -22,6 +22,8 @@ import {
   renderFindingsPolicy,
   renderReplanSubmitted,
   renderRepositoriesBlock,
+  materializeDispatchCheckouts,
+  renderMaterialization,
   resolveDispatchTarget,
   resolveDispatchTargets,
   type DispatchTarget,
@@ -473,13 +475,31 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       const targets = resolveDispatchTargets(
         session.link.dir,
         session.link.config,
-        (dispatch.targetRepos ?? []).map((r) => r.name),
+        // The clone URL travels WITH the name (MOTIR-3588).
+        (dispatch.targetRepos ?? []).map((r) => ({ name: r.name, cloneUrl: r.cloneUrl })),
       );
       const resolved =
         targets.length > 0
           ? targets
-          : [resolveDispatchTarget(session.link.dir, session.link.config, dispatch.targetRepo)];
+          : [
+              resolveDispatchTarget(session.link.dir, session.link.config, dispatch.targetRepo, {
+                cloneUrl: dispatch.targetRepoCloneUrl ?? null,
+              }),
+            ];
       const target = resolved[0]!;
+
+      // ⚠️ MATERIALIZE BEFORE `repos.ensure` (MOTIR-3588). `ensure` creates the
+      // session branch IN a real checkout, so a repository that is missing but
+      // clonable has to arrive first — and a clone that fails halts the run
+      // rather than launching an agent at the workspace root against a prompt
+      // whose first command is `git worktree add`.
+      const materialized = materializeDispatchCheckouts(session.link.dir, resolved);
+      for (const line of renderMaterialization(materialized)) info(line);
+      if (materialized.failures.length > 0) {
+        stopReason = 'halted';
+        break;
+      }
+
       let repo: RepoSession[] | null;
       try {
         repo = repos.ensure(resolved);

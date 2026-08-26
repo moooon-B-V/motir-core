@@ -389,7 +389,7 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: '**If your workspace has exactly one project, that is the whole step** — it is chosen for you and nothing is asked. With more than one, the command lists them and asks which; pass `--project <key>` to answer up front, which is also what a non-interactive shell needs.',
+        text: '**If your workspace has exactly one project, it is chosen for you and nothing is asked.** With more than one, the command lists them and asks which; pass `--project <key>` to answer up front, which is also what a non-interactive shell needs. Linking then **clones the project’s repositories into `/workspace`**, which is the whole point of mounting it: the container starts empty, and the agent needs the code on a filesystem. Pass `--no-clone` if you mounted checkouts you already had.',
       },
     ],
   },

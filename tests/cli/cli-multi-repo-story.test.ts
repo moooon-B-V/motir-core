@@ -89,16 +89,30 @@ async function linkedProject(): Promise<WorkItemFixture> {
   return fx;
 }
 
-/** Connect a repository to the workspace — the registry a pin validates against. */
-async function connectRepo(fx: WorkItemFixture, name: string): Promise<string> {
+/**
+ * Connect a repository to the workspace — the registry a pin validates against.
+ *
+ * ⚠️ `provider` is a parameter because a repository Motir CANNOT DERIVE A CLONE
+ * URL FOR is a distinct fixture (MOTIR-3588): a missing checkout whose payload
+ * carries a URL is now CLONED before the agent starts, so the "nowhere to go"
+ * case survives only for a repository whose location Motir does not know.
+ * `repoCloneUrl` returns null for a provider this build cannot address, and the
+ * pin still validates — an un-addressable repository stays in the domain.
+ */
+async function connectRepo(
+  fx: WorkItemFixture,
+  name: string,
+  opts: { provider?: string } = {},
+): Promise<string> {
+  const provider = opts.provider ?? 'github';
   const inst = await adminDb.githubInstallation.upsert({
-    where: { installationId: `inst-${fx.workspaceId}` },
+    where: { installationId: `inst-${fx.workspaceId}-${provider}` },
     create: {
-      installationId: `inst-${fx.workspaceId}`,
+      installationId: `inst-${fx.workspaceId}-${provider}`,
       workspaceId: fx.workspaceId,
       accountLogin: 'moooon',
       accountType: 'Organization',
-      provider: 'github',
+      provider,
     },
     update: {},
   });
@@ -111,7 +125,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<string> {
       name,
       defaultBranch: 'main',
       archived: false,
-      provider: 'github',
+      provider,
     },
   });
   return repo.id;
@@ -250,7 +264,11 @@ describe('a two-repository card, end to end through the BUILT binary', () => {
     //     half is already merged or whether their checkout lives elsewhere.
     const fx = await linkedProject();
     await connectRepo(fx, 'motir-core');
-    await connectRepo(fx, 'motir-ai');
+    // ⚠️ Un-addressable ON PURPOSE (MOTIR-3588). A missing checkout Motir CAN
+    // clone is now materialized before the agent starts, which is the fix; the
+    // half-done run this test is about survives only where there is nothing to
+    // clone from, and that is what this provider makes true.
+    await connectRepo(fx, 'motir-ai', { provider: 'bitbucket' });
     const core = makeLocalRepo(ws.root, 'motir-core');
     installFakeGh(ws.binDir);
     const agent = writeFakeAgent(join(ws.root, '.agent'));

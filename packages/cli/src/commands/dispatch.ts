@@ -44,6 +44,8 @@ import {
   renderPromptEchoHeader,
   renderResumeNotice,
   renderSessionOutcomes,
+  materializeDispatchCheckouts,
+  renderMaterialization,
   resolveDispatchTarget,
   resolveDispatchTargets,
   type AgentSource,
@@ -269,9 +271,16 @@ async function deliver(input: DeliverInput): Promise<void> {
   const targets = resolveDispatchTargets(
     link.dir,
     link.config,
-    (dispatch.targetRepos ?? []).map((repo) => repo.name),
+    // The clone URL travels WITH the name (MOTIR-3588): a checkout that is
+    // missing but materializable resolves to `clonable_checkout` rather than to
+    // the workspace root.
+    (dispatch.targetRepos ?? []).map((repo) => ({ name: repo.name, cloneUrl: repo.cloneUrl })),
   );
-  const target = targets[0] ?? resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
+  const target =
+    targets[0] ??
+    resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo, {
+      cloneUrl: dispatch.targetRepoCloneUrl ?? null,
+    });
   const summary = renderDispatchSummary({
     key,
     title,
@@ -326,6 +335,22 @@ async function deliver(input: DeliverInput): Promise<void> {
   if (resume) info(resume);
   if (advisory) info(advisory);
   info(policyLine);
+
+  // ⚠️ MATERIALIZE BEFORE THE SPAWN (MOTIR-3588). A checkout that is missing but
+  // clonable is cloned here, and a clone that FAILS stops the dispatch: the
+  // prompt the agent would be handed opens with `git worktree add`, so launching
+  // it anyway spends a session's tokens to reach a failure this line already
+  // knows about.
+  const materialized = materializeDispatchCheckouts(
+    link.dir,
+    targets.length > 0 ? targets : [target],
+  );
+  for (const line of renderMaterialization(materialized)) info(line);
+  if (materialized.failures.length > 0) {
+    process.exitCode = 1;
+    return;
+  }
+
   info('');
   // BEFORE the spawn, so the prompt is on the stream even when the agent then
   // fails, times out or is killed — the run you most want the transcript for.

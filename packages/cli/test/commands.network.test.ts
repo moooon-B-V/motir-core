@@ -480,12 +480,29 @@ describe('motir link', () => {
     expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects');
   });
 
-  it('a bare re-run SHOWS the existing binding instead of rewriting it', async () => {
+  it('a bare re-run SHOWS the existing binding instead of rewriting it — and MATERIALIZES', async () => {
     await linked();
     const io = capture();
 
     await linkCommand({});
 
+    expect(io.stdout()).toContain('Project:   PROD');
+    // ⚠️ This assertion INVERTED with MOTIR-3587, deliberately. The bare re-run
+    // used to make no network call at all; it is now the idempotent fetch verb
+    // (ADR `link-materializes-the-checkouts.md` §1), so it reads the repository
+    // set and clones what is missing. Nothing is REWRITTEN — the binding is
+    // untouched, which is what the line above still asserts.
+    expect(server.v1Calls.map((c) => c.path)).toEqual(['/api/v1/projects/PROD/repositories']);
+  });
+
+  it('a bare re-run with --no-clone touches neither the binding nor the network', async () => {
+    await linked();
+    const io = capture();
+
+    await linkCommand({ clone: false });
+
+    // The escape hatch, and the property the assertion above used to own: bind
+    // only, exactly as this command behaved before it learned to clone.
     expect(io.stdout()).toContain('Project:   PROD');
     expect(server.v1Calls).toHaveLength(0);
   });

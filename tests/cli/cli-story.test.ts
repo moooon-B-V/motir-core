@@ -132,15 +132,33 @@ async function linkedProject(): Promise<LinkedProject> {
 
 /** Connect a repo to the workspace — the single registry a `targetRepo` pin
  *  validates against (the 7.10.3 installation mirror). */
-async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
+/**
+ * Connect one repository to the fixture's workspace.
+ *
+ * ⚠️ `provider` is a parameter because a repository Motir CANNOT DERIVE A CLONE
+ * URL FOR is a distinct, load-bearing fixture (MOTIR-3588). Since a dispatch now
+ * CLONES a missing checkout whose payload carries a URL, the only way to reach
+ * the preserved `bootstrap_root` path — the genuine empty-folder case, where the
+ * card's own work is to create the repository — is a name Motir knows without
+ * knowing where it lives. `repoCloneUrl` returns null for a provider this build
+ * cannot address (`lib/repos/cloneUrl.ts`), and the pin still validates because
+ * an un-addressable repository stays IN the dispatch domain rather than being
+ * filtered out of it (`lib/workItems/targetRepo.ts`).
+ */
+async function connectRepo(
+  fx: WorkItemFixture,
+  name: string,
+  opts: { provider?: string } = {},
+): Promise<void> {
+  const provider = opts.provider ?? 'github';
   const inst = await adminDb.githubInstallation.upsert({
-    where: { installationId: `inst-${fx.workspaceId}` },
+    where: { installationId: `inst-${fx.workspaceId}-${provider}` },
     create: {
-      installationId: `inst-${fx.workspaceId}`,
+      installationId: `inst-${fx.workspaceId}-${provider}`,
       workspaceId: fx.workspaceId,
       accountLogin: 'moooon',
       accountType: 'Organization',
-      provider: 'github',
+      provider,
     },
     update: {},
   });
@@ -153,7 +171,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
       name,
       defaultBranch: 'main',
       archived: false,
-      provider: 'github',
+      provider,
     },
   });
 }
@@ -1301,7 +1319,12 @@ describe('single dispatch — motir next / run / done', () => {
 describe('repo routing — where the agent actually runs', () => {
   it('EMPTY root: the scaffold item runs at the root, and the next one routes INTO the checkout it created', async () => {
     const { fx } = await linkedProject();
-    await connectRepo(fx, 'motir-core');
+    // ⚠️ A repository Motir cannot derive a clone URL for — which is what makes
+    // this the GENUINE bootstrap (MOTIR-3588). A github-connected repository
+    // with a missing checkout is now CLONED rather than dispatched at the root,
+    // and rightly so; the path this test owns is the other one, where there is
+    // nothing to clone from and the card's own work is to create it.
+    await connectRepo(fx, 'motir-core', { provider: 'bitbucket' });
     const agent = writeFakeAgent(join(ws.root, '.agent'));
     // The bootstrap agent does what its prompt says: it creates the checkout.
     agent.script([{ create: 'motir-core' }, {}]);
@@ -1314,7 +1337,9 @@ describe('repo routing — where the agent actually runs', () => {
 
     const first = await ws.run(['run', scaffold.identifier, '--agent', agent.command]);
     expect(first.exitCode).toBe(0);
-    expect(first.stderr).toContain('no "motir-core" checkout yet');
+    // The label no longer claims the PROMPT creates the checkout — it does not;
+    // its first command is `git worktree add`. It names the card instead.
+    expect(first.stderr).toContain('"motir-core" does not exist yet; this card creates it');
     expect(agent.invocations()[0]?.cwd).toBe(ws.root);
     expect(existsSync(ws.path('motir-core'))).toBe(true);
 
@@ -1352,7 +1377,9 @@ describe('repo routing — where the agent actually runs', () => {
 
   it('a bootstrap that produced NO checkout is reported as suspect — in `next` AND in `auto`', async () => {
     const { fx } = await linkedProject();
-    await connectRepo(fx, 'motir-core');
+    // The genuine bootstrap fixture — see the sibling test above for why the
+    // provider is the thing that makes it one.
+    await connectRepo(fx, 'motir-core', { provider: 'bitbucket' });
     installFakeGh(ws.binDir);
     const agent = writeFakeAgent(join(ws.root, '.agent'));
     // Exit 0, create nothing — the silent-failure shape a real agent can produce.
