@@ -38,7 +38,7 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
  *
  * ⚠️ `revision_started` / `revision_ended` are the eighth and ninth, and they are
  * not describing a change to a PROPOSAL at all — they BRACKET a revision, and the
- * pair IS the lease `agent-authored-plans.md` AMENDMENT 9 D2 decides on. A plan
+ * pair IS the lease `agent-authored-plans.md` AMENDMENT 10 D2 decides on. A plan
  * holds a revision lease when the latest `revision_started` has no
  * `revision_ended` after it and the most recent row at or after it is inside
  * `PLAN_REVISION_LEASE_MS`; `approvePlan` / `declinePlan` refuse while it is

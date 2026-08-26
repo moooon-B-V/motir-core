@@ -3,7 +3,7 @@
 //
 // ⚠️ THIS FILE CARRIES A CONSTANT AND NOTHING ELSE. The acquire, the refusal and
 // the release are the implementing cards' (`docs/decisions/agent-authored-plans.md`
-// AMENDMENT 9, "The constant and the type this card ships"); a decision card that
+// AMENDMENT 10, "The constant and the type this card ships"); a decision card that
 // shipped the mechanism as well would have decided it twice.
 //
 // ── WHY A LEASE AT ALL ──────────────────────────────────────────────────────

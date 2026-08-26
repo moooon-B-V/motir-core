@@ -12,7 +12,7 @@
   MOTIR-3095 (projected validity on the MCP), MOTIR-3096 (projected reads),
   MOTIR-3097 (the story's vitest gate). AMENDMENT 6 amends AMENDMENT 2 — its
   empty-only exclusion — and is written by MOTIR-3189.
-  AMENDMENT 9 amends AMENDMENT 8's boundary — it is written by MOTIR-3596 and consumed by
+  AMENDMENT 10 amends AMENDMENT 8's boundary — it is written by MOTIR-3596 and consumed by
   MOTIR-3598 (the job-token door), MOTIR-3599 (the `revise_plan` submit), MOTIR-3600 (the motir-ai
   handler), MOTIR-3601 (the review-surface affordance) and MOTIR-3602 (the story's vitest gate).
 
@@ -1595,7 +1595,7 @@ caller, and false the moment this method exists. A reviewer must be able to see 
 model changed the tree under them, which is the whole reason this story is `blocked_by` the trail
 story rather than merely sequenced after it.
 
-## AMENDMENT 9 — a `planned` plan can be REVISED, and an approve that races one is REFUSED (MOTIR-3596, 2026-08-26)
+## AMENDMENT 10 — a `planned` plan can be REVISED, and an approve that races one is REFUSED (MOTIR-3596, 2026-08-26)
 
 AMENDMENT 8 gave an author two doors onto a plan it had already closed — `correctProposal` and
 `withdrawProposal`, legal on `generating` and `planned` alike. It answered the question it was asked
@@ -1751,7 +1751,16 @@ the write lock has no business holding. That stays. What changes is its warrant:
 **This is a DEFECT that already ships**, not a consequence of this story, and it is filed as its own
 bug rather than absorbed here. What this amendment owes it is the rule the fix implements.
 
-### The boundary — what AMENDMENT 9 does NOT decide
+### The boundary — what AMENDMENT 10 does NOT decide
+
+> **⚠️ THE FIFTH `PlanStatus` IS IN FLIGHT ELSEWHERE, AND THIS AMENDMENT DECIDES NOTHING ABOUT IT.**
+> MOTIR-3574's AMENDMENT 9 adds `stale` and was unmerged when this was written (pull request #2309,
+> read on its branch — which is also why this one is numbered 10). Everything above is stated against
+> the FOUR-member enum as it stands on `origin/main`: the editable set is `generating` + `planned`,
+> written as a DENY of the terminal states, so a fifth member is refused by default and its
+> disposition is AMENDMENT 9's to make, not this one's. What this amendment owes that work is one
+> sentence: **a lease is orthogonal to status** — it excludes a concurrent DECISION, and which
+> statuses a decision is legal from is the status amendment's question.
 
 - **No `PlanStatus` member.** The plan is `planned` before a revision, during it and after it. A
   revision is a thing that happens TO a plan under review, not a state the plan enters, and the
@@ -1809,7 +1818,7 @@ one blocks implement the acquire, the refusal and the release.
   the work item is the source of truth, `declined` because it is a closed decision. D3(c)'s
   mutable-ref-graph objection is answered by MOTIR-3539's append-time check, which the correction
   re-runs. No grant change, no UI, no change to what approve materializes.
-- **A `planned` plan can be REVISED, and an approve that races one is REFUSED** (AMENDMENT 9,
+- **A `planned` plan can be REVISED, and an approve that races one is REFUSED** (AMENDMENT 10,
   MOTIR-3596): an append is legal on a `planned` plan exactly when it declares itself part of a
   revision and records itself on the trail as one — the `generating` assertion was never about
   generation, it was the guarantee that a plan does not change INVISIBLY under its reviewer, and a
