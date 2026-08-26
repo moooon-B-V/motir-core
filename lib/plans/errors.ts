@@ -94,12 +94,33 @@ export class PlanNotInExpectedStatusError extends Error {
 /**
  * A PlanItem references (parentRef / a blockedByRef) an intra-plan temp-ref
  * that does not resolve to a materialized add in the same plan, or a real
- * work-item id that does not exist. Surfaced at materialize (approve). → 422
+ * work-item id that does not exist.
+ *
+ * Raised at TWO moments now, and the second is the one that matters
+ * (MOTIR-3539):
+ *
+ *   · at APPEND, by `assertRefsResolvable`, against the proposals the plan
+ *     already holds — which is the whole resolvable set a temp-ref may name, so
+ *     the answer is final the instant the ref arrives;
+ *   · at MATERIALIZE (approve), by `resolveRef`, which stays exactly as it was
+ *     — the backstop for every plan appended before the append check shipped.
+ *
+ * `proposal` is OPTIONAL and present only on the append side, where the batch is
+ * still in hand and the offending proposal can be named. The approve path
+ * constructs it with one argument and produces a byte-identical message to the
+ * one it produced before this second call site existed. → 422
  */
 export class UnresolvedPlanRefError extends Error {
   readonly code = 'UNRESOLVED_PLAN_REF' as const;
-  constructor(ref: string) {
-    super(`Plan reference "${ref}" could not be resolved to a work item.`);
+  constructor(ref: string, proposal?: string) {
+    super(
+      proposal
+        ? `Plan reference "${ref}" on ${proposal} names no proposal in this plan. ` +
+            'An intra-plan `planItem:` ref may only name an `add` returned by an ' +
+            'EARLIER `add_plan_items` call on this same plan — never one appended ' +
+            'in the same batch, whose id does not exist until that call returns.'
+        : `Plan reference "${ref}" could not be resolved to a work item.`,
+    );
     this.name = 'UnresolvedPlanRefError';
   }
 }

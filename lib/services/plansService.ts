@@ -36,7 +36,12 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
-import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import {
+  TEMP_REF_PREFIX,
+  assertTempRefsResolvable,
+  tempRefsOf,
+  type ProposalRefCarrier,
+} from '@/lib/plans/refs';
 import {
   collectReferencedWorkItemIds,
   validatePlanProposals,
@@ -670,6 +675,21 @@ function proposalLabel(p: { op: string; workItemId?: string | null; title?: stri
  * "unpinned") both PASS — absent is not an error, and the `null` case is what
  * lets a `modify` clear a pin, exactly as the name path's does.
  */
+/**
+ * A `ProposalInput` in the shape the append-time temp-ref check reads
+ * (MOTIR-3539) — the four ref carriers plus the label a refusal names it by.
+ * `patch` rides along because an intra-plan edge on a `modify` travels there and
+ * nowhere else, which is the carrier the live artifact used.
+ */
+function refCarrier(p: ProposalInput): ProposalRefCarrier {
+  return {
+    label: proposalLabel({ op: p.op, workItemId: p.workItemId, title: p.proposedFields?.title }),
+    parentRef: p.parentRef,
+    blockedByRefs: p.blockedByRefs,
+    patch: p.patch ?? null,
+  };
+}
+
 function assertKnownRepoRole(role: unknown, planItemId: string | null, label: string): void {
   if (role === undefined || role === null || isProjectRepoRole(role)) return;
   const printed = typeof role === 'string' ? role : String(JSON.stringify(role) ?? role);
@@ -1826,10 +1846,43 @@ export const plansService = {
           // the common shape: a skeleton layer is all `add`s, and MOTIR-3193's
           // CLOSE sends no proposals at all. Neither can collide with anything,
           // so neither pays for the read.
+          //
+          // ⚠️ THE REF CHECK NEEDS THE SAME READ (MOTIR-3539), so the condition is
+          // now the UNION and the read still happens at most once. A batch that
+          // carries no temp-ref and targets nothing existing — the common
+          // skeleton layer, and MOTIR-3193's CLOSE — still pays for neither.
           const targetsExisting = proposals.some((p) => p.op !== 'add' && p.workItemId);
+          const carriesTempRef = proposals.some((p) => tempRefsOf(refCarrier(p)).length > 0);
+          const existing =
+            targetsExisting || carriesTempRef
+              ? await planItemRepository.findByPlan(planId, tx)
+              : [];
           const claimed = targetsExisting
-            ? claimedTargets(await planItemRepository.findByPlan(planId, tx))
+            ? claimedTargets(existing)
             : new Map<string, PlanTargetOp>();
+
+          // ⚠️ REFUSE AN UNRESOLVABLE `planItem:` REF HERE, WHERE IT IS WRITTEN
+          // (MOTIR-3539) — before the first row of the batch is inserted, so a
+          // refusal leaves the plan byte-identical rather than half-appended.
+          // `add_plan_items` returns its ids POSITIONALLY, so a partial append
+          // would desynchronise the caller's own id map, which is a worse
+          // artifact than the one being refused.
+          //
+          // The resolvable set is the plan's ALREADY-PERSISTED `add`s: a ref to a
+          // proposal in the SAME batch is refused, because its id does not exist
+          // until this call returns. That is precisely the mistake this card was
+          // written from.
+          //
+          // `resolveRef` at materialize is UNCHANGED and stays the backstop for
+          // every plan appended before this shipped.
+          if (carriesTempRef) {
+            const resolvable = new Set(existing.filter((i) => i.op === 'add').map((i) => i.id));
+            assertTempRefsResolvable(
+              proposals.map(refCarrier),
+              resolvable,
+              (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
+            );
+          }
 
           for (const p of proposals) {
             if (p.op !== 'add' && p.workItemId) {
