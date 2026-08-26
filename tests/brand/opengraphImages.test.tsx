@@ -85,11 +85,23 @@ describe('the fonts the cards are set in (§6)', () => {
     }
     // ...and only those routes: a key broad enough to hit every page would put
     // ~1 MB of fonts into every serverless function in the app.
+    //
+    // ⚠️ AMENDED (MOTIR-1162): this used to assert that NO key matches a
+    // non-card route, and that is stricter than the sentence above it. The
+    // hazard is the FONTS reaching every function, not the existence of a broad
+    // key — and `withSentryConfig` legitimately adds one: `@sentry/nextjs`'s
+    // `maybeAddOutputFileTracingIncludes` merges `'/*': [meriyah.mjs,
+    // meriyah.cjs]` unconditionally on Next ≥ 14.1, because its server code can
+    // run under any route and needs that parser. Asserting on the VALUES is
+    // what this guard was always about; asserting on the key SET made an
+    // unrelated dependency's correct configuration read as a regression.
+    // A fonts key widened to `/*` still fails here, which is the tooth.
     for (const route of ['/dashboard', '/manifest.webmanifest', '/items/[key]']) {
-      const matching = Object.keys(includes!).filter((key) =>
-        picomatch(key, { dot: true, contains: true })(route),
-      );
-      expect(matching, route).toEqual([]);
+      const fontsOnThisRoute = Object.entries(includes!)
+        .filter(([key]) => picomatch(key, { dot: true, contains: true })(route))
+        .flatMap(([, patterns]) => patterns)
+        .filter((pattern) => pattern.includes('_brand/fonts'));
+      expect(fontsOnThisRoute, route).toEqual([]);
     }
     // Sanity that we imported the real config and not an empty module.
     expect(DOCS_REDIRECTS.length).toBeGreaterThan(0);
