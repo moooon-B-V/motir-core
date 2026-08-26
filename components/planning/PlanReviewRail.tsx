@@ -1,9 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertTriangle, Bot, Check, OctagonAlert, RotateCw, Sparkles, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  Check,
+  LoaderCircle,
+  OctagonAlert,
+  RotateCw,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
+import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanDecisionReasonDto } from '@/lib/dto/plans';
 import type { PlanStatusDto, StaleReason } from '@/lib/dto/plans';
@@ -79,6 +89,23 @@ export interface PlanReviewRailProps {
   busy: boolean;
   errorCode: string | null;
   codeOutcome?: PlanCodeOutcome | null;
+  /**
+   * ASK MOTIR TO CHANGE THIS PLAN (Story MOTIR-3595 · Subtask MOTIR-3601;
+   * `design/ai-planning/design-notes.md` Part XII).
+   *
+   * Optional, so every surface that renders this rail without a revision
+   * affordance keeps working — and so the composer is absent rather than inert
+   * where nothing can submit it.
+   */
+  onRevise?: (prompt: string) => void;
+  /** The instruction currently in the field. Owned by the island, like the
+   *  approve/decline handlers, because the island is what submits it. */
+  reviseDraft?: string;
+  onReviseDraftChange?: (value: string) => void;
+  /** The submit is in flight LOCALLY — between the click and the route's answer,
+   *  before the lease is readable. Distinct from `review.revision`, which is the
+   *  server's fact. */
+  revising?: boolean;
 }
 
 export function PlanReviewRail({
@@ -88,6 +115,10 @@ export function PlanReviewRail({
   busy,
   errorCode,
   codeOutcome,
+  onRevise,
+  reviseDraft = '',
+  onReviseDraftChange,
+  revising = false,
 }: PlanReviewRailProps) {
   const t = useTranslations('planReview');
   // ⚠️ `stale` IS NOT DECIDED, and keeping it out of this predicate is the whole
@@ -114,6 +145,19 @@ export function PlanReviewRail({
   // learns which one they are doing.
   const generating = review.status === 'generating';
   const staleItems = review.items.filter((i) => i.stale);
+
+  // ── THE REVISION (Part XII §A/§C) ────────────────────────────────────────
+  // HELD is the server's fact, read off the plan's own trail; `revising` is the
+  // local window between the click and the route answering. Both hold the gate,
+  // for different durations, and neither is a substitute for the other.
+  const revisionInFlight = review.revision !== null;
+  const held = revisionInFlight || Boolean(revising);
+  // The affordance is present only where a revision is POSSIBLE — which falls
+  // out of the placement rather than needing a second predicate: a decided plan
+  // renders `DecidedOutcome` instead of the gate, so the composer is structurally
+  // absent there. The explicit check is for `generating`, where the plan is not
+  // yet something to revise.
+  const canRevise = Boolean(onRevise) && planned;
 
   return (
     <aside
@@ -208,17 +252,62 @@ export function PlanReviewRail({
       <div className="mt-auto flex flex-col gap-2">
         {errorCode ? (
           <p role="alert" className="text-xs font-medium text-(--el-danger-text)">
-            {t('actionError')}
+            {/* The REFUSAL that beats the optimistic hold gets its own sentence
+                (Part XII §C). A lease can be taken between the render and the
+                click, so the disabled state is a courtesy and the server's answer
+                is the guarantee — two mechanisms, because the client cannot know
+                and the server can. */}
+            {errorCode === 'PLAN_REVISION_IN_FLIGHT' ? t('reviseRefused') : t('actionError')}
           </p>
         ) : null}
         {decided ? (
           <DecidedOutcome review={review} t={t} codeOutcome={codeOutcome ?? null} />
         ) : (
           <>
+            {/* IN FLIGHT — not an alert: nothing failed, the planner is working.
+                `--el-tint-sky` is the one tint no plan STATUS spends, so the band
+                cannot be read as one. */}
+            {revisionInFlight ? (
+              <div
+                data-testid="plan-revision-running"
+                className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
+              >
+                <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin" aria-hidden="true" />
+                <span className="min-w-0 wrap-anywhere">
+                  {review.revision?.heldBy
+                    ? t('reviseRunningBy', { harness: review.revision.heldBy })
+                    : t('reviseRunning')}
+                </span>
+              </div>
+            ) : null}
+            {canRevise ? (
+              <div className="flex flex-col gap-2 border-t border-(--el-border) pt-3">
+                {/* The shipped composer, with the `@` picker suppressed — it
+                    searches COMMITTED work items and a revision can only name
+                    PROPOSALS (Part XII §B). */}
+                <PlanChangeComposer
+                  draft={reviseDraft}
+                  onDraftChange={onReviseDraftChange ?? (() => {})}
+                  targets={[]}
+                  onAddTarget={() => {}}
+                  onRemoveTarget={() => {}}
+                  onSubmit={(text) => onRevise?.(text)}
+                  placeholder={t('revisePlaceholder')}
+                  disabled={held || busy}
+                  mentions={false}
+                />
+                {/* Only while the field carries text: at rest the placeholder is
+                    the whole ask, and the one thing a reviewer needs to know the
+                    moment an instruction exists is that Send does not approve. */}
+                {reviseDraft.trim().length > 0 ? (
+                  <p className="text-xs text-(--el-text-secondary)">{t('reviseNote')}</p>
+                ) : null}
+              </div>
+            ) : null}
             <Button
               variant="primary"
               onClick={onApprove}
-              disabled={!planned || busy}
+              disabled={!planned || busy || held}
               loading={busy}
               leftIcon={<Check className="size-4" aria-hidden="true" />}
             >
@@ -253,7 +342,12 @@ export function PlanReviewRail({
                 // It is enabled TOGETHER WITH `declinePlan`'s guard widening, in
                 // one commit, so the rail never offers a button the service
                 // rejects.
-                disabled={(!planned && !stalePlan) || busy}
+                // …AND a revision holds it too (MOTIR-3598, AMENDMENT 10 D2).
+                // `declinePlan` refuses under the lease whatever the status, so
+                // a `stale` plan being declinable does not make it declinable
+                // WHILE something is rewriting it: a revision that finishes into
+                // a closed decision leaves proposals on a plan nobody will read.
+                disabled={(!planned && !stalePlan) || busy || held}
                 leftIcon={<X className="size-4" aria-hidden="true" />}
               >
                 {t('declineCta')}
@@ -283,16 +377,23 @@ export function PlanReviewRail({
                 {t('staleStatusOutcome')}
               </p>
             ) : null}
+            {/* ⚠️ `held` IS THE OUTERMOST BRANCH, above every status. A plan
+                being `stale`, or `generating`, says what a reviewer may do with
+                it in general; a revision holding it says what they may do RIGHT
+                NOW, and that answer outranks the others for as long as it lasts
+                (MOTIR-3598, AMENDMENT 10 D2). */}
             <p className="text-center text-xs text-(--el-text-secondary)">
-              {planned
-                ? review.stale
-                  ? t('approveHintStale', { n: review.staleCount })
-                  : t('approveHint')
-                : generating
-                  ? t('discardHint')
-                  : stalePlan
-                    ? t('staleReviewHint')
-                    : t('reviewLocked')}
+              {held
+                ? t('approveHintRevising')
+                : planned
+                  ? review.stale
+                    ? t('approveHintStale', { n: review.staleCount })
+                    : t('approveHint')
+                  : generating
+                    ? t('discardHint')
+                    : stalePlan
+                      ? t('staleReviewHint')
+                      : t('reviewLocked')}
             </p>
           </>
         )}

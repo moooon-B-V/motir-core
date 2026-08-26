@@ -5,6 +5,11 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
+import {
+  revisionLeaseOf,
+  REVISION_STARTED_KIND,
+  REVISION_ENDED_KIND,
+} from '@/lib/planChange/revisionLease';
 
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
@@ -161,6 +166,45 @@ function buildChanges(
   return changes;
 }
 
+/**
+ * When the plan's LATEST revision began, or null if it has never been revised.
+ *
+ * Walks backwards to the most recent `revision_started`, whether or not it has
+ * been terminated — a LANDED revision is exactly the case the *Revised* pill
+ * exists for, so stopping at a terminator (as the lease predicate must) would
+ * blank the marker the moment the thing it marks finished.
+ */
+function lastRevisionStartAt(
+  rows: readonly { changeKind: string; changedAt: Date }[],
+): Date | null {
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    if (rows[i]!.changeKind === REVISION_STARTED_KIND) return rows[i]!.changedAt;
+  }
+  return null;
+}
+
+/**
+ * The proposals the latest revision touched — every trail row at or after
+ * `startedAt` that names one.
+ *
+ * The two BRACKET rows are excluded: they carry no `planItemId` (they are about
+ * the plan, not a proposal), so they contribute nothing either way, and naming
+ * them here would be a claim about a row that has no target.
+ */
+function revisedSince(
+  rows: readonly { changeKind: string; changedAt: Date; planItemId: string | null }[],
+  startedAt: Date | null,
+): Set<string> {
+  const touched = new Set<string>();
+  if (!startedAt) return touched;
+  for (const r of rows) {
+    if (r.changedAt < startedAt) continue;
+    if (r.changeKind === REVISION_STARTED_KIND || r.changeKind === REVISION_ENDED_KIND) continue;
+    if (r.planItemId) touched.add(r.planItemId);
+  }
+  return touched;
+}
+
 export const planReviewService = {
   /**
    * Assemble the plan-detail review model for `planId`. Reads the plan + its
@@ -184,6 +228,19 @@ export const planReviewService = {
     const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRevisionRepository.listByPlan(planId, tx),
     );
+
+    // ── THE REVISION, read off the SAME trail (Subtask MOTIR-3601) ────────────
+    // The lease IS a `revision_started` with no `revision_ended` after it, inside
+    // the window (`agent-authored-plans.md` AMENDMENT 10 D2) — so the surface
+    // that must hold Approve and the timeline that tells the reviewer WHY read
+    // one fact from one place, and nothing needed a column.
+    const lease = revisionLeaseOf(revisions, new Date());
+    const revisionStartedAt = lastRevisionStartAt(revisions);
+    // WHICH proposals the latest revision touched. Every trail row written at or
+    // after that start names its `planItemId`, so the set falls out of rows this
+    // method already has. An unrevised plan yields an empty set and every row
+    // renders exactly as it did before this story.
+    const revisedItemIds = revisedSince(revisions, revisionStartedAt);
 
     // One batched, workspace-scoped read of every existing target (modify/remove)
     // — includes archived rows, so a "will be archived" / drifted target still
@@ -465,6 +522,8 @@ export const planReviewService = {
         statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],
+        // A RECENCY fact, not a second reading of `op` (Part XII §E).
+        revised: revisedItemIds.has(item.id),
         stale: reasons.length > 0,
         staleReasons: reasons,
         targetMissing,
@@ -558,6 +617,15 @@ export const planReviewService = {
       authorSource: plan.authorSource,
       authorHarness: plan.authorHarness,
       authorModel: plan.authorModel,
+      // Present ⟺ the lease is HELD. A null is one check at the call site and
+      // cannot be misread as *a revision that finished*.
+      revision: lease
+        ? {
+            heldBy: lease.heldBy,
+            expiresAt: lease.expiresAt.toISOString(),
+            startedAt: (revisionStartedAt ?? new Date()).toISOString(),
+          }
+        : null,
       history,
       items,
       stale: staleCount > 0,

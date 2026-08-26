@@ -529,3 +529,39 @@ export class PlanProposalReferencedError extends Error {
     this.name = 'PlanProposalReferencedError';
   }
 }
+
+/**
+ * A DECISION raced a REVISION, and the decision lost (Story MOTIR-3595 ·
+ * Subtask MOTIR-3598; `docs/decisions/agent-authored-plans.md` AMENDMENT 10 D2).
+ *
+ * `approvePlan` re-reads the proposal set FRESH under the plan row lock and
+ * materializes it in ONE transaction, so every individual write is atomic and
+ * the COMPOSITION is not: a revision is a SEQUENCE of transactions, and an
+ * approve that takes the lock between the third and the fourth of them
+ * materializes a tree that is neither the plan the reviewer read nor the plan
+ * they asked for. Approve is one-shot — there is no un-approve — so the failure
+ * is unrecoverable and the guard is a REFUSAL rather than a merge.
+ *
+ * ⚠️ THROWN INSIDE THE TRANSACTION, under the same plan row lock the lease is
+ * acquired with. Checked before it, this would be a TOCTOU read; checked under
+ * the lock it is an exclusion. Nothing is written when it fires: the plan stays
+ * `planned`, no proposal is touched, and no work item is created.
+ *
+ * Neither act cancels the other — the loser retries — so the message says WHO
+ * holds the plan and WHEN the lease expires, which is what makes retrying a real
+ * instruction rather than advice. → 409
+ */
+export class PlanRevisionInFlightError extends Error {
+  readonly code = 'PLAN_REVISION_IN_FLIGHT' as const;
+  constructor(
+    readonly planId: string,
+    readonly heldBy: string | null,
+    readonly expiresAt: Date,
+  ) {
+    super(
+      `Plan ${planId} is being revised${heldBy ? ` by ${heldBy}` : ''} and cannot be decided until the revision lands. ` +
+        `The revision holds this plan until ${expiresAt.toISOString()}; nothing has been changed. Try again once it lands.`,
+    );
+    this.name = 'PlanRevisionInFlightError';
+  }
+}

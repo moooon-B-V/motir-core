@@ -121,6 +121,7 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     changes,
     stale: false,
     staleReasons: [],
+    revised: false,
     targetMissing: false,
   };
 }

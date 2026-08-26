@@ -157,11 +157,13 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         changes: [],
         stale: false,
         staleReasons: [],
+        revised: false,
         targetMissing: false,
       },
     ],
     stale: false,
     staleCount: 0,
+    revision: null,
     ...over,
   };
 }

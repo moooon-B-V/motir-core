@@ -88,3 +88,27 @@ export async function updateProposalRequest(
   if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
   return (await res.json()) as PlanWithItemsDto;
 }
+
+/**
+ * ASK MOTIR TO CHANGE THIS PLAN (Story MOTIR-3595 · Subtask MOTIR-3601).
+ *
+ * The revision is a JOB: this returns as soon as it is DISPATCHED, and the change
+ * lands later. The `planId` that comes back is the one that went in — the story's
+ * first criterion, asserted server-side and echoed here so a caller that
+ * persisted it can check.
+ */
+export async function revisePlanRequest(
+  planId: string,
+  prompt: string,
+): Promise<{ jobId: string; planId: string }> {
+  const res = await fetch('/api/ai/revise', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ planId, prompt }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
+    throw new PlanRequestError(res.status, body.code ?? 'REVISE_FAILED');
+  }
+  return (await res.json()) as { jobId: string; planId: string };
+}

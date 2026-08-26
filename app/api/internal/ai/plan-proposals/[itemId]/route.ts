@@ -6,12 +6,16 @@ import {
   InvalidProposalError,
   NoPlanForJobError,
   PlanItemNotFoundError,
+  PlanItemUnknownTargetRepoError,
+  PlanNotEditableError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
+  PlanProposalReferencedError,
+  UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
-import type { UpdateProposalInput } from '@/lib/dto/plans';
+import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@/lib/dto/plans';
 
 // PATCH /api/internal/ai/plan-proposals/[itemId] (Subtask 7.4.4a · MOTIR-1441) —
 // the INTERNAL generation-time DEEPEN seam motir-ai's `generate_tree` handler
@@ -42,6 +46,24 @@ import type { UpdateProposalInput } from '@/lib/dto/plans';
 //     PlanNotGeneratingError              → 409 (the plan already left `generating`)
 //   InvalidProposalError                  → 422 (empty title / editing a non-`add` / bad sizing)
 //   ProjectAccessDeniedError              → 404 browse / 403 edit
+//
+// ── `mode: 'correct'` (Story MOTIR-3595 · Subtask MOTIR-3598) ────────────────
+// The SECOND door onto `plansService.correctProposal`, which has had exactly one
+// (`lib/mcp/tools/authorPlan.ts`) — so an external MCP agent could revise a
+// landed plan and Motir's own planner could not. It carries the STRUCTURAL
+// fields the deepen turn may not touch (`parentRef`, `blockedByRefs`,
+// `targetRepo`, and a `modify`'s `patch`) and is legal on a `planned` plan as
+// well as a `generating` one, exactly as the service is.
+//
+// ⚠️ THE MODE IS EXPLICIT, NEVER INFERRED FROM WHICH KEYS ARE PRESENT. Inferring
+// it would make a deepen that happens to carry `parentRef` silently become a
+// correction — a different act, on a different gate, recorded on the trail with
+// a different meaning. Absent, `mode` is `deepen` and this route is byte-identical
+// to what it has always been.
+//
+//   PlanNotEditableError                  → 409 (the plan is `approved`/`declined`)
+//   UnresolvedPlanRefError                → 422 (a corrected ref names no proposal)
+//   PlanItemUnknownTargetRepoError        → 422 (a repo outside the project's set)
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ itemId: string }> },
@@ -112,7 +134,15 @@ export async function PATCH(
   };
 
   try {
-    const result = await aiGenerationService.patchProposal(jobId, itemId, input, auth.ctx);
+    const result =
+      b.mode === 'correct'
+        ? await aiGenerationService.correctProposalForJob(
+            jobId,
+            itemId,
+            correctionFrom(b, input),
+            auth.ctx,
+          )
+        : await aiGenerationService.patchProposal(jobId, itemId, input, auth.ctx);
     return NextResponse.json(result);
   } catch (err) {
     if (
@@ -122,11 +152,129 @@ export async function PATCH(
     ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
-    if (err instanceof PlanNotInExpectedStatusError || err instanceof PlanNotGeneratingError) {
+    if (
+      err instanceof PlanNotInExpectedStatusError ||
+      err instanceof PlanNotGeneratingError ||
+      err instanceof PlanNotEditableError
+    ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
-    if (err instanceof InvalidProposalError) {
+    if (
+      err instanceof InvalidProposalError ||
+      err instanceof UnresolvedPlanRefError ||
+      err instanceof PlanItemUnknownTargetRepoError
+    ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    if (err instanceof ProjectAccessDeniedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message },
+        { status: err.kind === 'browse' ? 404 : 403 },
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * The STRUCTURAL half of a correction, taken off the request beside the content
+ * half the deepen parser already produced.
+ *
+ * Each key is read only when PRESENT — the service's patch is sparse, so an
+ * absent key means *leave it alone* and an explicit `null` means *clear it*, and
+ * collapsing the two here would make a correction that omits `targetRepo` unpin
+ * the proposal. `blockedByRefs` is the exception the DTO documents: it is a LIST
+ * and REPLACES the set, so `[]` clears it.
+ */
+function correctionFrom(
+  b: Record<string, unknown>,
+  content: UpdateProposalInput,
+): CorrectProposalInput {
+  return {
+    ...content,
+    ...('parentRef' in b
+      ? { parentRef: typeof b.parentRef === 'string' ? b.parentRef : null }
+      : {}),
+    ...(Array.isArray(b.blockedByRefs)
+      ? { blockedByRefs: b.blockedByRefs.filter((r): r is string => typeof r === 'string') }
+      : {}),
+    ...('targetRepo' in b
+      ? { targetRepo: typeof b.targetRepo === 'string' ? b.targetRepo : null }
+      : {}),
+    // ⚠️ `modifyPatch`, NOT `patch` — and the rename is the bug fix, not a
+    // preference. On THIS route `patch` has meant the CONTENT bag since the
+    // deepen seam shipped (`patch.title`, `patch.descriptionMd`, …), while a
+    // `modify` proposal's `patch` is an entirely different object: the field
+    // edits that will be applied to an existing work item at approve. Reading one
+    // key as both makes every `add` correction that carries content fail with
+    // *a `patch` belongs to a `modify` proposal* — which is the service refusing
+    // correctly about a request nobody meant to send. Two things, two names.
+    ...('modifyPatch' in b
+      ? {
+          patch: (typeof b.modifyPatch === 'object' && b.modifyPatch !== null
+            ? b.modifyPatch
+            : null) as PlanItemPatch | null,
+        }
+      : {}),
+  };
+}
+
+// DELETE /api/internal/ai/plan-proposals/[itemId] (Subtask MOTIR-3598) — the
+// job-token door onto `plansService.withdrawProposal`: take one proposal OFF a
+// `generating` or `planned` plan. Nothing reaches the tree either way.
+//
+// ⚠️ It is NOT `op: 'remove'`, which is a PROPOSAL to delete an existing work
+// item at approve and requires a `workItemId`. And a withdraw whose target a
+// sibling still references is REFUSED naming every referrer (409) rather than
+// cascaded — the mirror of the append-time ref check, and this route does not
+// soften it.
+//
+// The `jobId` rides a query parameter rather than a body, because a DELETE with
+// a body is unreliable across the fetch stacks this seam is called from.
+//
+// Typed errors → status:
+//   JobAuthError                          → 401
+//   NoPlanForJobError / PlanNotFoundError /
+//     PlanItemNotFoundError               → 404
+//   PlanNotEditableError                  → 409 (`approved` / `declined`)
+//   PlanProposalReferencedError           → 409 (a sibling still refs it)
+//   ProjectAccessDeniedError              → 404 browse / 403 edit
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ itemId: string }> },
+): Promise<Response> {
+  let auth;
+  try {
+    auth = await authenticateAndLimitJobRequest(req);
+  } catch (err) {
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
+    throw err;
+  }
+
+  const { itemId } = await params;
+  const jobId = new URL(req.url).searchParams.get('jobId');
+  if (!jobId) {
+    return NextResponse.json(
+      { code: 'PROPOSALS_INVALID', error: '`jobId` is required.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    return NextResponse.json(
+      await aiGenerationService.withdrawProposalForJob(jobId, itemId, auth.ctx),
+    );
+  } catch (err) {
+    if (
+      err instanceof NoPlanForJobError ||
+      err instanceof PlanNotFoundError ||
+      err instanceof PlanItemNotFoundError
+    ) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof PlanNotEditableError || err instanceof PlanProposalReferencedError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
     if (err instanceof ProjectAccessDeniedError) {
       return NextResponse.json(

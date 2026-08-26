@@ -45,6 +45,9 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     changes: [],
     stale: false,
     staleReasons: [],
+    // MOVED in the plan's latest revision (MOTIR-3601) — false by default, so
+    // every existing case keeps describing a plan nobody has revised.
+    revised: false,
     targetMissing: false,
     ...over,
   };
@@ -79,6 +82,10 @@ export function planReview(
     authorHarness: null,
     authorModel: null,
     history: [],
+    // No revision running (MOTIR-3601). Null rather than a falsy object, so a
+    // case that wants an IN-FLIGHT rail opts in and no existing one silently
+    // renders a held Approve.
+    revision: null,
     items,
     stale: false,
     staleCount: 0,
