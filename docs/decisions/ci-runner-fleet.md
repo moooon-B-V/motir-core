@@ -277,11 +277,22 @@ Composed from the published numbers rather than asserted:
 
 **What STARTS the clock, and what keeps it honest (MOTIR-1996).** The boot is dispatched by
 the `workflow_job` webhook itself, in the same request that records the intent — the first
-row of the table is a synchronous hop, not a scheduled one. The minute-granularity
-`system.ci-runner-provision-sweep` is the **recovery** trigger only: it re-drives an intent
-whose hot dispatch was dropped, and it is the retry loop a **deferred** intent waits in. A
-fleet whose primary trigger were the cron would spend up to 60 s of a 30 s budget before the
-gate was consulted, so "the sweep found it" is a fallback path, never the measured one.
+row of the table is a synchronous hop, not a scheduled one. `system.ci-runner-provision-sweep`
+is the **recovery** trigger only: it re-drives an intent whose hot dispatch was dropped. A
+fleet whose primary trigger were the cron would spend the whole budget before the gate was
+consulted, so "the sweep found it" is a fallback path, never the measured one.
+
+**Two corrections to the sentence above, both made in the code before they were made here.**
+_"and it is the retry loop a **deferred** intent waits in"_ — **false since MOTIR-2852**: a
+deferred intent is dispatched by the admission WAKE the moment its project's slot is
+released (`ciRunnerBootService.dispatchNextPendingForProject`, called from the one funnel
+every terminal transition goes through). A slot freeing is an event this service already
+observes; rediscovering it on a timer was the poll. And _"minute-granularity"_ — **false
+since MOTIR-3314**: the sweep runs at `0,30 * * * *`, clustered with every other `system.*`
+job so the database can suspend (`docs/decisions/application-hosting.md` §21). **Neither
+touches this SLO**, because the budget was already defined over the webhook path and this
+section already said the sweep is never the measured one — which is exactly why the drift
+survived two changes: nothing that reads this table depends on the clause that went stale.
 
 **What the SLO does and does not cover — state this or it is unmeasurable.** The budget
 applies to a job the admission gate **ADMITTED**. A job the gate **DEFERRED** (project at

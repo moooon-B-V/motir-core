@@ -74,33 +74,60 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
  *
  * So the cost is the SHAPE of the schedule, not the frequency of its loudest
  * member — see the reaper's cron below, where that is now argued out.
+ *
+ * ⚠️ AND IT IS CHANGED NOW (MOTIR-3314): `* * * * *` → the cluster. The
+ * paragraph above is right that this line was not the LEVER — deleting it left a
+ * 7-minute gap — and it is not an argument for keeping sixty wakes an hour once
+ * the shape is being fixed. Re-timing every `system.*` job onto
+ * `SCHEDULE_CLUSTER_MINUTES` is what buys the gap; this job is simply the largest
+ * single contributor to the old one.
+ *
+ * WHAT IT GAVE UP: up to 30 minutes of RECOVERY latency for an intent whose boot
+ * dispatch was dropped in transit, against up to 60 seconds before. That is the
+ * whole cost, and it lands only on the backstop path — a queued job is still
+ * dispatched by the `workflow_job` webhook within the §6 budget, and a deferred
+ * one by the admission wake the moment its slot frees. Neither waits on this
+ * cron. A dropped dispatch is a transport blip a sender swallows; it is rare, and
+ * nothing about it gets worse with waiting except the wait.
+ * WHAT IT BOUGHT: fifty-eight wake-minutes an hour, which is the difference
+ * between a compute that never sleeps and one that sleeps half the hour.
  */
-export const CI_RUNNER_PROVISION_SWEEP_CRON = '* * * * *';
+export const CI_RUNNER_PROVISION_SWEEP_CRON = '0,30 * * * *';
 
-/** Every 10 minutes. The reaper only ever finds something when a supervisor died,
- *  so it is almost always a single provider list call that returns nothing
- *  actionable — cheap enough to run often, and running often is the point: the
- *  window between an orphan appearing and being destroyed is billed.
+/** Every 30 minutes, ON the cluster. The reaper only ever finds something when a
+ *  supervisor died, so it is almost always a single provider list call that
+ *  returns nothing actionable.
  *
- *  ⚠️ THE OFFSET RATIONALE IS SUPERSEDED, AND DELIBERATELY LEFT AS A CORRECTION
- *  RATHER THAN DELETED (MOTIR-2853, 2026-08-21). This comment used to read
- *  "offset off the hour so it never lines up with the other `system.*` schedules".
- *  That is textbook load-spreading and it is correct on a machine that is always
- *  on. On a compute that SUSPENDS WHEN IDLE it is exactly inverted: the only
- *  quantity billed is how often the thing wakes, and every distinct offset is
- *  another wake. Ten jobs on ten offsets wake it ten times; the same ten aligned
- *  onto shared minutes wake it once.
+ *  ⚠️ THE OFFSET RATIONALE WAS INVERTED, AND THIS COMMENT NOW DESCRIBES THE SHAPE
+ *  THAT REPLACED IT (MOTIR-2853 diagnosed it, MOTIR-3314 acted on it). Two
+ *  superseded forms, kept in order because the second is the one a reader is
+ *  likeliest to re-derive:
  *
- *  Measured (MOTIR-2853): the schedule's fourteen distinct wake-minutes leave a
- *  longest gap of 7 minutes, under the ~9 min suspend delay, so the compute never
- *  sleeps — 100% duty cycle over 6 h 12 m. The spreading is what costs the money.
+ *  1. It first read "offset off the hour so it never lines up with the other
+ *     `system.*` schedules". That is textbook load-spreading and it is correct on
+ *     a machine that is always on. On a compute that SUSPENDS WHEN IDLE it is
+ *     exactly inverted: the only quantity billed is how often the thing wakes,
+ *     and every distinct offset is another wake.
+ *  2. It then read "running often is the point: the window between an orphan
+ *     appearing and being destroyed is billed" — true, and it prices only ONE of
+ *     the two bills. An orphaned container is rare and costs container-minutes
+ *     while it survives; the wake it takes to look for one is charged every 10
+ *     minutes forever, whether or not anything is there. The cadence was set
+ *     against the cost of finding something and never against the cost of
+ *     looking.
  *
- *  **This cron is NOT changed here.** Re-timing the schedule is a coordinated
- *  change across every `system.*` job and belongs to its own work item, with the
- *  contention argument this comment used to make weighed against the wake count
- *  rather than assumed away. What is fixed here is the REASON, so the next reader
- *  does not re-derive the tension from scratch and reach the old answer. */
-export const CI_RUNNER_REAP_CRON = '7,17,27,37,47,57 * * * *';
+ *  WHAT IT GAVE UP: an orphan now survives up to 30 minutes instead of 10 — at
+ *  most 20 extra container-minutes, and only in the rare case where a supervisor
+ *  actually died. WHAT IT BOUGHT: five of the fourteen old wake-minutes, this job
+ *  being the single largest contributor to the spread after the provision sweep.
+ *  The trade is roughly 20 container-minutes per orphan against ~$14/mo of
+ *  always-awake Neon compute, which is not close.
+ *
+ *  Measured (MOTIR-2853): the old schedule's fourteen distinct wake-minutes left
+ *  a longest gap of 7 minutes, under the ~9 min suspend delay, so the compute
+ *  never slept — 100% duty cycle over 6 h 12 m. The spreading is what cost the
+ *  money; `lib/jobs/schedules.ts` now asserts the gap so it cannot re-open. */
+export const CI_RUNNER_REAP_CRON = '0,30 * * * *';
 
 /** How many pending intents one sweep will fan out. A ceiling rather than
  *  "everything", so a backlog drains at a predictable rate instead of firing
@@ -112,14 +139,21 @@ export const ciRunnerProvisionSweep = defineJob(
   {
     id: 'system.ci-runner-provision-sweep',
     cron: CI_RUNNER_PROVISION_SWEEP_CRON,
-    // The ONLY `skip` among the fourteen (`docs/decisions/job-queue-foundation.md`
-    // §11.4). At `* * * * *` the next fire is under a minute away, so replaying a
-    // missed one saves less than the claim loop's own poll interval — while after
-    // a six-hour outage it would enqueue 360 rows fanning out against the batch
-    // ceiling below, which exists to protect GitHub's registration limit. Note
-    // that its sibling `system.ci-runner-reap` is `latest` despite a comparable
-    // cadence: the dispositions differ because the COSTS do, not the schedules.
-    catchUp: 'skip',
+    // ⚠️ WAS `skip`, AND THE CADENCE IS WHAT JUSTIFIED IT (MOTIR-3314). The
+    // argument was "at `* * * * *` the next fire is under a minute away, so
+    // replaying a missed one saves less than the claim loop's own poll interval
+    // — while after a six-hour outage it would enqueue 360 rows fanning out
+    // against the batch ceiling below." Both halves were properties of the
+    // minute cadence, and both are false at `0,30 * * * *`: the next fire is up
+    // to 30 minutes away, and a six-hour outage owes 12 fires, not 360.
+    //
+    // So §11.3's discriminator now lands on the other side. The sweep is
+    // convergent — `listRunnableIntentIds` reads the CURRENT pending set, so one
+    // pass answers for every fire it missed — and 30 minutes of a stranded
+    // intent is a real cost paid by whoever is waiting on a CI runner. That is
+    // exactly the `latest` case, and it is the same argument its sibling
+    // `system.ci-runner-reap` has always made.
+    catchUp: 'latest',
     // `idempotent`: the sweep only READS pending intents and fans out events;
     // the claim that follows is a compare-and-set, so a duplicate event costs one
     // losing claim and nothing else.

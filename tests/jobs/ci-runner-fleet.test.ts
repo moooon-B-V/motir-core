@@ -176,27 +176,33 @@ describe('all three fleet jobs are REGISTERED and reach the service through the 
 });
 
 describe('the schedules say what they can and cannot promise', () => {
-  it('the provision sweep runs every minute — the floor, and an honest one (§6)', () => {
-    // §6 budgets p50 ≤ 30s webhook-to-start. A minute-granularity cron CANNOT
-    // meet that, which is why the sweep is documented as the interim trigger and
-    // MOTIR-1922's gate owns the hot path.
-    expect(CI_RUNNER_PROVISION_SWEEP_CRON).toBe('* * * * *');
+  it('the provision sweep is a BACKSTOP on the cluster, and says so (§6, MOTIR-3314)', () => {
+    // §6 budgets p50 ≤ 30s webhook-to-start, and no cron can meet that — which is
+    // why the hot path is the `workflow_job` webhook (MOTIR-1996) and a DEFERRED
+    // intent is dispatched by the admission wake (MOTIR-2852). This schedule
+    // covers only a dispatch dropped in transit, so its cadence is priced against
+    // the wake bill rather than against admission latency.
+    expect(CI_RUNNER_PROVISION_SWEEP_CRON).toBe('0,30 * * * *');
     const config = configFor({
       id: 'system.ci-runner-provision-sweep',
       cron: CI_RUNNER_PROVISION_SWEEP_CRON,
-      catchUp: 'skip',
+      catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
-    expect(config?.triggers).toEqual([{ cron: '* * * * *' }]);
+    expect(config?.triggers).toEqual([{ cron: '0,30 * * * *' }]);
   });
 
-  it('the reaper runs every 10 minutes, clear of the top of the hour', () => {
-    // The window between an orphan appearing and being destroyed is BILLED, so
-    // the reaper runs often; offsetting it off :00 keeps it clear of the other
-    // `system.*` schedules.
-    const minuteField = CI_RUNNER_REAP_CRON.split(' ')[0]!;
-    expect(minuteField.split(',')).toHaveLength(6);
-    expect(minuteField.split(',')).not.toContain('0');
+  it('the reaper runs every 30 minutes, ON the cluster (MOTIR-3314)', () => {
+    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS. It read "clear of the top of
+    // the hour" and asserted the minute field held six offsets and NOT '0' —
+    // encoding the load-spreading rationale that a suspend-when-idle compute
+    // turns into a bill. The window between an orphan appearing and being
+    // destroyed is still billed, but so is every wake spent looking for one; the
+    // trade is argued at the constant. The gap itself is asserted by
+    // `tests/jobs/schedule-cluster.test.ts` over the whole table, so what belongs
+    // here is only this job's own shape.
+    expect(CI_RUNNER_REAP_CRON).toBe('0,30 * * * *');
+    expect(CI_RUNNER_REAP_CRON.split(' ')[0]!.split(',')).toEqual(['0', '30']);
   });
 });
 
@@ -216,7 +222,7 @@ describe('the retry budgets are correctness decisions, not defaults', () => {
     const sweep = configFor({
       id: 'system.ci-runner-provision-sweep',
       cron: CI_RUNNER_PROVISION_SWEEP_CRON,
-      catchUp: 'skip',
+      catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
     const reap = configFor({

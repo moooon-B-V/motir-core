@@ -95,7 +95,7 @@ describe('system.code-graph-offboard-sweep is a registered cron sweep', () => {
   });
 
   it('runs daily, off-peak, and clear of the other sweeps', () => {
-    expect(CODE_GRAPH_OFFBOARD_SWEEP_CRON).toBe('45 4 * * *');
+    expect(CODE_GRAPH_OFFBOARD_SWEEP_CRON).toBe('0 5 * * *');
     // And on a slot of its own. This assertion has already earned its place: the
     // first choice was 04:15, which `system.automation-retention-sweep` already
     // holds. Three table-walking sweeps on one minute is not a correctness bug,
