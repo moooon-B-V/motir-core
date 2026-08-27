@@ -22,7 +22,10 @@ export function toOrganizationTwoFactorPolicyDTO(
 }
 
 /**
- * A workspace row plus its org's setting → the workspace policy DTO.
+ * A workspace row plus its ORGANIZATION row → the workspace policy DTO.
+ *
+ * The whole org row rather than just its boolean, because the locked control
+ * must NAME the organization and the caller is already holding it.
  *
  * `lockedByOrganization` is the org's value verbatim, and deliberately not
  * `orgRequires && !workspaceRequires`: the control is locked whenever the org
@@ -33,13 +36,14 @@ export function toOrganizationTwoFactorPolicyDTO(
  */
 export function toWorkspaceTwoFactorPolicyDTO(
   workspace: Pick<Workspace, 'id' | 'requiresTwoFactor'>,
-  organizationRequiresTwoFactor: boolean,
+  organization: Pick<Organization, 'name' | 'requiresTwoFactor'>,
 ): WorkspaceTwoFactorPolicyDTO {
   return {
     workspaceId: workspace.id,
     requiresTwoFactor: workspace.requiresTwoFactor,
-    organizationRequiresTwoFactor,
-    lockedByOrganization: organizationRequiresTwoFactor,
+    organizationRequiresTwoFactor: organization.requiresTwoFactor,
+    organizationName: organization.name,
+    lockedByOrganization: organization.requiresTwoFactor,
   };
 }
 

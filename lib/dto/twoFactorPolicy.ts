@@ -39,6 +39,16 @@ export interface WorkspaceTwoFactorPolicyDTO {
   /** The owning organization's setting — the floor this workspace sits on. */
   organizationRequiresTwoFactor: boolean;
   /**
+   * The owning organization's NAME.
+   *
+   * ⚠️ It travels with the policy rather than being fetched beside it because
+   * the locked control has to SAY who locked it — *"Required by Acme"* — and a
+   * surface that had to make a second query to name the organization would make
+   * it on every render of a settings pane. The read that produces this DTO is
+   * already holding the org row.
+   */
+  organizationName: string;
+  /**
    * `true` when the organization already requires it, so the workspace control
    * renders locked ON and says who locked it.
    *

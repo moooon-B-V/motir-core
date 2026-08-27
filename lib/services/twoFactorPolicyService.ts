@@ -141,7 +141,7 @@ export const twoFactorPolicyService = {
       // exists and is visible; a null here is a row that vanished mid-transaction.
       if (!org) throw new OrganizationNotFoundError(workspace.organizationId);
 
-      return toWorkspaceTwoFactorPolicyDTO(workspace, org.requiresTwoFactor);
+      return toWorkspaceTwoFactorPolicyDTO(workspace, org);
     });
   },
 
@@ -188,7 +188,7 @@ export const twoFactorPolicyService = {
         const org = await organizationRepository.findByIdInTx(access.organizationId, tx);
         if (!org) throw new OrganizationNotFoundError(access.organizationId);
 
-        return toWorkspaceTwoFactorPolicyDTO(workspace, org.requiresTwoFactor);
+        return toWorkspaceTwoFactorPolicyDTO(workspace, org);
       },
     );
   },

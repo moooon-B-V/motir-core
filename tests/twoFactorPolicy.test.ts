@@ -128,16 +128,29 @@ describe('the policy DTO mappers', () => {
       for (const workspaceRequires of [false, true]) {
         const dto = toWorkspaceTwoFactorPolicyDTO(
           { id: 'w1', requiresTwoFactor: workspaceRequires },
-          orgRequires,
+          { name: 'Acme', requiresTwoFactor: orgRequires },
         );
         expect(dto).toEqual({
           workspaceId: 'w1',
           requiresTwoFactor: workspaceRequires,
           organizationRequiresTwoFactor: orgRequires,
+          organizationName: 'Acme',
           lockedByOrganization: orgRequires,
         });
       }
     }
+  });
+
+  it('carries the organization NAME, because the locked control has to say it', () => {
+    // MOTIR-3647 renders "Required by {org}". A DTO that answered only the
+    // boolean would force a second query to name the organization, on every
+    // render of a settings pane.
+    const dto = toWorkspaceTwoFactorPolicyDTO(
+      { id: 'w1', requiresTwoFactor: false },
+      { name: 'Acme', requiresTwoFactor: true },
+    );
+    expect(dto.organizationName).toBe('Acme');
+    expect(dto.lockedByOrganization).toBe(true);
   });
 });
 
@@ -439,6 +452,7 @@ describe('getWorkspacePolicy', () => {
       workspaceId: workspace.id,
       requiresTwoFactor: true,
       organizationRequiresTwoFactor: true,
+      organizationName: 'Acme',
       lockedByOrganization: true,
     });
   });
