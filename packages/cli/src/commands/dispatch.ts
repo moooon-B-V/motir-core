@@ -9,14 +9,9 @@ import {
   type ParsedAgentCommand,
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
+import { runDispatchLeg } from '../dispatchLeg.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
-import {
-  execCommand,
-  runIdFromDate,
-  sessionBranchName,
-  workReachedRemote,
-  type CommandRunner,
-} from '../git.js';
+import { execCommand, runIdFromDate, sessionBranchName, type CommandRunner } from '../git.js';
 import {
   claimScopeForRun,
   readOpenChildren,
@@ -29,9 +24,7 @@ import { drainScope } from './scopeDrain.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
 import { closeOutRepos, parseMax, requireAgent } from './auto.js';
 import {
-  agentSubmittedReplan,
   autoOnlyFlagError,
-  checkBootstrapCheckout,
   findingsPolicyOf,
   renderAgentFailure,
   renderAgentSuccess,
@@ -44,12 +37,9 @@ import {
   renderPromptEchoHeader,
   renderResumeNotice,
   renderSessionOutcomes,
-  materializeDispatchCheckouts,
-  renderMaterialization,
   resolveDispatchTarget,
   resolveDispatchTargets,
   type AgentSource,
-  type DispatchTarget,
   type FindingsPolicyOptions,
   type PromptEchoOptions,
 } from '../dispatch.js';
@@ -336,40 +326,45 @@ async function deliver(input: DeliverInput): Promise<void> {
   if (advisory) info(advisory);
   info(policyLine);
 
-  // ⚠️ MATERIALIZE BEFORE THE SPAWN (MOTIR-3588). A checkout that is missing but
-  // clonable is cloned here, and a clone that FAILS stops the dispatch: the
-  // prompt the agent would be handed opens with `git worktree add`, so launching
-  // it anyway spends a session's tokens to reach a failure this line already
-  // knows about.
-  const materialized = materializeDispatchCheckouts(
-    link.dir,
-    targets.length > 0 ? targets : [target],
-  );
-  for (const line of renderMaterialization(materialized)) info(line);
-  if (materialized.failures.length > 0) {
+  // ⚠️ THE SHARED LEG (MOTIR-3695) — materialize-before-spawn (MOTIR-3588),
+  // echo-before-spawn (MOTIR-3052), exit-0-is-not-an-outcome (MOTIR-3018) and
+  // exit-0-is-not-a-push (MOTIR-3004), in that order, from the one place that
+  // implements them. `motir batch` runs the same function; what each command
+  // does with the VERDICT is where they legitimately differ, and that stays
+  // here.
+  const verdict = await runDispatchLeg({
+    client,
+    rootDir: link.dir,
+    key,
+    dispatch,
+    agent: agent.parsed,
+    targets,
+    primary: target,
+    sessionBranch: dispatch.sessionBranch,
+    onMaterialization: (lines: string[]) => {
+      for (const line of lines) info(line);
+    },
+    beforeSpawn: () => {
+      info('');
+      echoPromptIfAsked(opts, key, dispatch);
+    },
+    ...(deps.run ? { run: deps.run } : {}),
+  });
+
+  if (verdict.kind === 'checkout_unavailable') {
     process.exitCode = 1;
     return;
   }
 
-  info('');
-  // BEFORE the spawn, so the prompt is on the stream even when the agent then
-  // fails, times out or is killed — the run you most want the transcript for.
-  echoPromptIfAsked(opts, key, dispatch);
-  const result = await runAgent({
-    command: agent.parsed,
-    prompt: dispatch.prompt,
-    cwd: target.cwd,
-  });
-
-  if (result.exitCode !== 0) {
+  if (verdict.kind === 'agent_failed') {
     // The item stays In Progress on purpose — work was started. Record it so
     // the next `motir next` moves past it instead of re-picking the failure.
     addExclude(serverUrl, projectKey, { key });
     info('');
-    info(renderAgentFailure(key, result.exitCode, dispatch));
+    info(renderAgentFailure(key, verdict.exitCode, dispatch));
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
     // must be able to tell a failed run from a successful one.
-    process.exitCode = result.exitCode;
+    process.exitCode = verdict.exitCode;
     return;
   }
 
@@ -378,7 +373,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   // else. This read comes FIRST — before the push check — because a refusing
   // agent reverts its worktree and pushes nothing by design, so the push check
   // would otherwise report a correctly-refused card as work that went missing.
-  if (await agentSubmittedReplan(client, key)) {
+  if (verdict.kind === 'replan_submitted') {
     // Nothing to exclude: `planning` is in the in-progress CATEGORY, so the card
     // is already out of the pickable set — which is the entire reason that
     // status exists (MOTIR-2425). Adding it to the session exclude list would
@@ -394,10 +389,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   // built work that exists only in a worktree the run is about to delete, so the
   // recording is refused and the card stays In Progress, which is what an
   // interrupted run actually looks like.
-  if (
-    workReachedRemote(target.cwd, key, dispatch.sessionBranch, deps.run ?? execCommand) ===
-    'nothing'
-  ) {
+  if (verdict.kind === 'nothing_pushed') {
     addExclude(serverUrl, projectKey, { key });
     info('');
     info(renderNothingPushed(key, dispatch));
@@ -416,7 +408,7 @@ async function deliver(input: DeliverInput): Promise<void> {
       // command launched — not the CLI that launched it — and the model is the
       // agent's own report, or null.
       implementationHarness: deriveAgentHarness(agent.parsed.binary),
-      implementationModel: result.model,
+      implementationModel: verdict.model,
     });
   } else {
     await client.transitionStatus({ key, status: IMPLEMENTED });
@@ -426,7 +418,11 @@ async function deliver(input: DeliverInput): Promise<void> {
   // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
   // second half had no checkout to happen in is exactly the run that otherwise
   // exits 0 with half the work missing.
-  const suspects = suspectCheckouts(targets, target);
+  //
+  // ⚠️ A WARNING here, and a FAILURE in `motir batch` — the leg reports the
+  // suspects and lets each command decide, because the two genuinely disagree
+  // and a refactor is not the place to settle it.
+  const suspects = verdict.suspects;
   info('');
   info(renderAgentSuccess(key, dispatch));
   for (const suspect of suspects) {
@@ -434,13 +430,6 @@ async function deliver(input: DeliverInput): Promise<void> {
     info(suspect.message);
     info(`Hint: ${suspect.hint}`);
   }
-}
-
-/** The bootstrap post-condition, over the whole set — falling back to the
- *  primary alone when the server sent no set (MOTIR-3133). */
-function suspectCheckouts(targets: DispatchTarget[], primary: DispatchTarget) {
-  const over = targets.length > 0 ? targets : [primary];
-  return over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
 }
 
 /**

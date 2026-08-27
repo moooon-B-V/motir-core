@@ -13,6 +13,7 @@ import {
   classifySnapshotItem,
   renderBatchSummary,
   renderSnapshotPlan,
+  type BatchRecord,
   type BatchSummary,
 } from '../src/batchPlan.js';
 import { parseMax } from '../src/commands/auto.js';
@@ -322,6 +323,9 @@ interface DriveOptions {
   /** The git runner the MOTIR-3004 push check asks; the default answers "the
    *  agent pushed". */
   git?: CommandRunner;
+  /** The BETWEEN-ITERATION gate (MOTIR-3695) — MOTIR-3685 hangs the CI watch
+   *  here. Absent in production, so absent by default. */
+  afterCard?: (record: BatchRecord) => Promise<'continue' | 'stop'>;
 }
 
 async function drive(
@@ -357,6 +361,7 @@ async function drive(
         args[0] === 'ls-remote'
           ? { exitCode: 0, stdout: 'abc123\trefs/heads/subtask/pushed', stderr: '' }
           : { exitCode: 0, stdout: '', stderr: '' }),
+    ...(drives.afterCard ? { afterCard: drives.afterCard } : {}),
   };
   const summary = await runBatch(input);
   return { summary, dispatched };
@@ -1285,5 +1290,82 @@ describe('the end-of-run summary block', () => {
     expect(text).toContain('1 became ready during the run — NOT dispatched');
     expect(text).toContain('PROD-3');
     expect(text).not.toContain('null');
+  });
+});
+
+// ── THE BETWEEN-ITERATION SEAM (Story MOTIR-3655 · MOTIR-3695) ───────────────
+//
+// It exists so MOTIR-3685 can put a CI gate between cards: `motir batch` must
+// not start the next card while the one it just finished is red, which is what
+// makes batch different from `motir auto` (whose pull requests are for every
+// card at once). Asserted here, empty, because a seam that is only proven when
+// its first consumer arrives is a seam whose shape was never checked.
+
+describe('the between-iteration seam', () => {
+  it('runs after EVERY card the drain finishes, in order, with that card’s record', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    const seen: string[] = [];
+
+    const { summary } = await drive(server, {
+      afterCard: async (record) => {
+        seen.push(`${record.key}:${record.outcome}`);
+        return 'continue';
+      },
+    });
+
+    expect(seen).toEqual(['PROD-1:implemented', 'PROD-2:implemented']);
+    expect(summary.records).toHaveLength(2);
+    expect(summary.stopReason).toBe('completed');
+  });
+
+  it('STOPS the drain when it says so, and the untouched cards land in notReached', async () => {
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1'),
+      leaf('idB', 'PROD-2'),
+      leaf('idC', 'PROD-3'),
+    ]);
+
+    const { summary, dispatched } = await drive(server, {
+      afterCard: async (record) => (record.key === 'PROD-1' ? 'stop' : 'continue'),
+    });
+
+    // The card that ran is recorded in full; the next one was never dispatched.
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(summary.records.map((r) => r.key)).toEqual(['PROD-1']);
+    expect(summary.notReached.map((e) => e.key)).toEqual(['PROD-2', 'PROD-3']);
+    // Its OWN reason, not `halted`: nothing failed, and the remaining cards are
+    // untouched and still ready. An operator reading `halted` would go looking
+    // for a broken agent.
+    expect(summary.stopReason).toBe('gated');
+  });
+
+  it('runs AFTER the exclude bookkeeping, so a stop leaves the card exactly as it would have been', async () => {
+    // The gate must be able to stop a run without changing what the finished
+    // card recorded — otherwise MOTIR-3685's red-CI stop would also corrupt the
+    // report of the card whose CI is red.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+
+    const { summary } = await drive(server, {
+      agentResults: (key) =>
+        key === 'PROD-1' ? { exitCode: 3, signal: null } : { exitCode: 0, signal: null },
+      opts: { keepGoing: true },
+      afterCard: async () => 'stop',
+    });
+
+    const first = summary.records[0];
+    expect(first?.outcome).toBe('failed');
+    // The failing card was excluded exactly as it is without a gate — the stop
+    // did not roll that back, and did not skip it either.
+    expect(readExcludes('https://app.motir.co', 'PROD').map((e) => e.key)).toContain('PROD-1');
+    expect(summary.stopReason).toBe('gated');
+  });
+
+  it('is ABSENT by default — the drain runs exactly as it did', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+
+    const { summary, dispatched } = await drive(server);
+
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
+    expect(summary.stopReason).toBe('completed');
   });
 });

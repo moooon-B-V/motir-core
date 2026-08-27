@@ -79,6 +79,10 @@ const WORK_ITEM_DETAIL = {
   implementationHarness: null,
   implementationModel: null,
   archivedAt: null,
+  // The DELIVERY SET (MOTIR-3697). An ARRAY on every work item, never null and
+  // never absent — a card with none carries `[]`, which is the ordinary answer
+  // and the one this fixture stands for.
+  deliveries: [],
 };
 
 const PROJECT = {

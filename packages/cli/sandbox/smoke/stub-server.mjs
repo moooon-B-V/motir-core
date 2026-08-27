@@ -392,6 +392,11 @@ function workItemDetail(key) {
     implementationHarness: null,
     implementationModel: null,
     archivedAt: null,
+    // The DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — required on the detail
+    // body, so a stub that omits it sends a response the generated client
+    // rightly refuses. `[]` is the ordinary answer: nothing is RECORDED, which
+    // is not the same claim as nothing has landed.
+    deliveries: [],
   };
 }
 

@@ -356,6 +356,15 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     implementationHarness: null,
     implementationModel: null,
     archivedAt: null,
+    // The DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — every pull request that
+    // delivers this card. Required on the detail body for the same reason
+    // `targetRepositories` is: it is an ARRAY on every work item, never null and
+    // never absent, so a double that omits it publishes a response the generated
+    // client rightly refuses.
+    //
+    // `[]` is the ordinary answer, and it means nothing is RECORDED — never that
+    // nothing has landed.
+    deliveries: [],
     ...over,
   };
 }
