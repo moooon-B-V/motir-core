@@ -30,6 +30,8 @@ import type { Page } from '@playwright/test';
 // ── THE SEAMS, named per the card's own configuration check ────────────────
 // Verified before a line was written, and recorded on MOTIR-3662:
 //
+//   * the card's RESTING STATUS is the product's, not the spec's — the `opened`
+//     delivery lands it at Implemented and the hold keeps it there;
 //   * the App installation + BOTH repository mirrors — `seedGithubInstallation`
 //     with `E2E_REPO_SECOND`, the extra-repos parameter MOTIR-2730 added;
 //   * the pull requests — REAL signed deliveries to `/api/github/webhook`
@@ -122,6 +124,13 @@ function developmentSection(page: Page) {
 
 const CORE_PR = 4101;
 const SECOND_PR = 4202;
+
+/** A pull-request row's meta line, exactly as `DevelopmentSection` renders it
+ *  (`{repo} · #{number}`) — the ONE string that identifies a row uniquely when
+ *  one repository's name is a prefix of another's. */
+function prMeta(repo: typeof E2E_REPO | typeof E2E_REPO_SECOND, number: number): string {
+  return `${repo.owner}/${repo.name} · #${number}`;
+}
 
 function headRefFor(identifier: string, n: number): string {
   return `subtask/${identifier.toLowerCase()}-part-${n}`;
@@ -237,7 +246,10 @@ test('a card delivered by TWO pull requests holds until both have merged', async
     number: SECOND_PR,
     repo: E2E_REPO_SECOND,
   });
-  await transition(page, card.id, 'in_review');
+  // ⚠️ NO explicit status write. The `pull_request opened` delivery lands the
+  // card at IMPLEMENTED on its own — the same thing `repository-set.spec.ts`
+  // relies on — and forcing a status here would assert a state the product did
+  // not produce.
 
   // ── 1 — both deliveries are visible, and neither has landed ───────────────
   await chapter('Open a card that two pull requests deliver', async () => {
@@ -246,15 +258,20 @@ test('a card delivered by TWO pull requests holds until both have merged', async
     await expect(development).toBeVisible();
     await beat();
 
-    // Both pull requests, each named by its own repository. This is the row the
-    // singular link column could never have shown for more than one of them.
-    await expect(development.getByText(`${E2E_REPO.owner}/${E2E_REPO.name}`)).toBeVisible();
-    await expect(
-      development.getByText(`${E2E_REPO_SECOND.owner}/${E2E_REPO_SECOND.name}`),
-    ).toBeVisible();
+    // Both pull requests, each named by its own repository AND its own number.
+    // This is the row the singular link column could never have shown for more
+    // than one of them.
+    //
+    // ⚠️ QUALIFIED BY NUMBER, and it has to be: `motir-demo` is a PREFIX of
+    // `motir-demo-api`, so the bare repository name matches BOTH rows and trips
+    // strict mode. The number is what makes each locator resolve to one element
+    // — and it asserts more than the name did, because it pins the right pull
+    // request to the right repository rather than merely to the section.
+    await expect(development.getByText(prMeta(E2E_REPO, CORE_PR))).toBeVisible();
+    await expect(development.getByText(prMeta(E2E_REPO_SECOND, SECOND_PR))).toBeVisible();
     await beat();
 
-    await expect(statusCard(page).getByText('In Review')).toBeVisible();
+    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
     await beat();
   });
 
@@ -273,9 +290,9 @@ test('a card delivered by TWO pull requests holds until both have merged', async
     await page.reload();
     await beat();
 
-    // Still In Review. On `origin/main` before this story, the first merge
+    // Still IMPLEMENTED. On `origin/main` before this story, the first merge
     // closed the card outright with the second pull request still open.
-    await expect(statusCard(page).getByText('In Review')).toBeVisible();
+    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
     await beat();
 
     // …and the card SAYS what it is waiting for. The gate's hold comment names
@@ -304,16 +321,15 @@ test('a card delivered by TWO pull requests holds until both have merged', async
     await page.reload();
     await beat();
 
-    await expect(statusCard(page).getByText('Done')).toBeVisible();
+    await expect(statusCard(page).getByText('Done', { exact: true })).toBeVisible();
     await beat();
 
     // Both pull requests are still listed, both merged — the card's record of
-    // what delivered it survives the close.
+    // what delivered it survives the close. Number-qualified for the same
+    // prefix reason as chapter 1.
     const development = developmentSection(page);
-    await expect(development.getByText(`${E2E_REPO.owner}/${E2E_REPO.name}`)).toBeVisible();
-    await expect(
-      development.getByText(`${E2E_REPO_SECOND.owner}/${E2E_REPO_SECOND.name}`),
-    ).toBeVisible();
+    await expect(development.getByText(prMeta(E2E_REPO, CORE_PR))).toBeVisible();
+    await expect(development.getByText(prMeta(E2E_REPO_SECOND, SECOND_PR))).toBeVisible();
     await beat();
   });
 });
