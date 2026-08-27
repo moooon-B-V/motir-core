@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { MotirAiError } from '@/lib/ai/errors';
@@ -33,12 +33,6 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
-
-  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
-  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
-  // already resolved, so this costs one policy query and no second auth trip.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
 
   // The shared AI ceiling (8.5.9 / MOTIR-1165), keyed on workspace + user because
   // what is being protected is the model-provider bill, not capacity. Spent

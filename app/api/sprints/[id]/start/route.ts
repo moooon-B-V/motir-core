@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { sprintsService } from '@/lib/services/sprintsService';
 import {
@@ -43,12 +43,6 @@ export async function POST(
       { status: 400 },
     );
   }
-
-  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
-  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
-  // already resolved, so this costs one policy query and no second auth trip.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
 
   const { id } = await params;
 

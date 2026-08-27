@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { MigrateOnboardingExistsError } from '@/lib/migrateOnboarding/errors';
@@ -22,12 +22,6 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
-
-  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
-  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
-  // already resolved, so this costs one policy query and no second auth trip.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
 
   // The connect-step repo ref may be supplied up front or set as connect
   // completes; the body is optional.

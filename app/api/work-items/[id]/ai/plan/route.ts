@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { contextualPlanningService } from '@/lib/services/contextualPlanningService';
 import { mapContextualPlanError, noActiveProject } from './_errors';
@@ -42,12 +42,6 @@ export async function GET(
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();
 
-  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
-  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
-  // already resolved, so this costs one policy query and no second auth trip.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
-
   const { id } = await params;
   const parsed = parseTargetKeys(new URL(req.url).searchParams.getAll('targetKey'));
   if ('error' in parsed) return parsed.error;
@@ -74,12 +68,6 @@ export async function POST(
 
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();
-
-  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
-  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
-  // already resolved, so this costs one policy query and no second auth trip.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
 
   const { id } = await params;
 

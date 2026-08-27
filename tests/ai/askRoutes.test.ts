@@ -135,6 +135,31 @@ describe('POST /api/ai/ask — the gates and the body', () => {
     expect((await ask(askReq({ body: 'why?' }))).status).toBe(404);
   });
 
+  // Story MOTIR-1215 · MOTIR-3653 — the 2FA hold, in `requireCompliantSession`
+  // at the very top of the route. `/api/ai/ask` is the composer's ONE door and
+  // it SUBMITS a job, so a member held at the enrolment screen reaching it from
+  // a browser console would be spending the org's AI credits from behind a wall
+  // every page refuses them at.
+  //
+  // Real rows and the real predicate — this file mocks only `getSession` /
+  // `getActiveProject` and the motir-ai boundary, so the policy read runs
+  // against the org this fixture actually created.
+  it('403s a member their organization is holding — before any job is submitted', async () => {
+    const workspace = await adminDb.workspace.findUniqueOrThrow({
+      where: { id: fx.workspaceId },
+    });
+    await adminDb.organization.update({
+      where: { id: workspace.organizationId },
+      data: { requiresTwoFactor: true },
+    });
+
+    const res = await ask(askReq({ body: 'why?' }));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: 'TWO_FACTOR_REQUIRED' });
+    expect(submitJobMock).not.toHaveBeenCalled();
+  });
+
   it('400s on invalid JSON, and on a body that names neither a turn nor text', async () => {
     expect((await ask(askReq(null, '{not json'))).status).toBe(400);
     expect((await ask(askReq({}))).status).toBe(400);

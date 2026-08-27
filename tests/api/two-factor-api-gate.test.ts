@@ -167,6 +167,47 @@ describe('every session-reading route under app/api is gated or exempt with a re
   });
 });
 
+describe('⚠️ NO ROUTE GATES TWICE', () => {
+  it('a folded route does not ALSO call the compliance half', () => {
+    // The defect this catches was mine, and it was invisible in every test: the
+    // session sweep folded a route's preamble into `requireCompliantSession`,
+    // and the active-project sweep then inserted `refuseIfNonCompliant` below
+    // it. 47 files, 57 sites. Both resolve the SAME person — `getActiveProject`
+    // reaches `getSession` through `getWorkspaceContext`, so `ctx.userId` IS
+    // `session.user.id` — so the second call costs a policy query per request on
+    // the hot path and its `if (hold) return hold;` can never be true. A
+    // permanently-false branch is also how `app/api/ai/ask/route.ts` fell under
+    // its pinned 90% branch threshold, which is the only reason it was noticed.
+    const doubled = walk(API)
+      .map((abs) => ({ rel: relative(ROOT, abs).split(sep).join('/'), src: code(abs) }))
+      .filter(
+        (f) =>
+          (f.src.includes('requireCompliantSession(') ||
+            f.src.includes('requireCompliantWorkspaceContext(')) &&
+          f.src.includes('refuseIfNonCompliant('),
+      )
+      .map(
+        (f) =>
+          `${f.rel} — the folded gate already refused this person; drop the refuseIfNonCompliant call`,
+      );
+
+    expect(doubled).toEqual([]);
+  });
+
+  it('every `refuseIfNonCompliant` call site keeps its OWN no-session arm', () => {
+    // The other direction: the compliance half exists for a route whose
+    // no-session answer is not the folded 401 — so a file calling it must still
+    // read a door itself. One that reads none has lost its authentication.
+    const orphaned = walk(API)
+      .map((abs) => ({ rel: relative(ROOT, abs).split(sep).join('/'), src: code(abs) }))
+      .filter((f) => f.src.includes('refuseIfNonCompliant('))
+      .filter((f) => !DOORS.some((door) => f.src.includes(`await ${door}()`)))
+      .map((f) => f.rel);
+
+    expect(orphaned).toEqual([]);
+  });
+});
+
 describe('⚠️ app/api/auth/** needs no exemption — it reads no session at all', () => {
   it("Better-Auth's own handler is structurally out of reach", () => {
     // It OWNS every enrolment ceremony (`/api/auth/two-factor/*`,

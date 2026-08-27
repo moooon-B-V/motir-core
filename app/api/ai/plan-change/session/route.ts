@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { mapPlanChangeError, noActiveProject } from '../_errors';
@@ -24,12 +24,6 @@ export async function POST(): Promise<Response> {
 
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();
-
-  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
-  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
-  // already resolved, so this costs one policy query and no second auth trip.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
 
   try {
     const result = await planChangeSessionsService.getOrCreateForProject(ctx);
