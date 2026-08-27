@@ -75,7 +75,7 @@ export const V1_OPERATIONS = {
   "archiveWorkItem": {
     method: "POST",
     path: "/api/v1/work-items/{key}/archive",
-    permission: "work_item:delete",
+    permission: "work_item:archive",
     successStatus: 200,
     responseComponent: "WorkItemDetail",
   },
@@ -320,7 +320,7 @@ export const V1_OPERATIONS = {
   "restoreWorkItem": {
     method: "POST",
     path: "/api/v1/work-items/{key}/restore",
-    permission: "work_item:delete",
+    permission: "work_item:archive",
     successStatus: 200,
     responseComponent: "WorkItemDetail",
   },

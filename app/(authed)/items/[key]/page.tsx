@@ -111,15 +111,26 @@ export default async function IssueDetailPage({
   //   * `canEdit` (`work_item:edit`) — a read-only actor sees NO edit
   //     affordances: the "Edit" link is hidden and the edit route is blocked
   //     (edit/page.tsx). Inline field controls render disabled (6.4.6).
-  //   * `canDelete` (`work_item:delete`) — the ⋯ menu's Archive and Delete rows.
-  //     NOT the same people as `canEdit`: a member holds edit and not delete, so
-  //     the Archive row it used to offer them was an affordance that 403'd.
+  //   * `canArchive` (`work_item:archive`) — the ⋯ menu's Archive / Restore rows
+  //     and the delete dialog's "Archive instead" escape-hatch (MOTIR-3629).
+  //     A MEMBER holds this and not `work_item:delete`, which is the split the
+  //     comment below used to describe as an unfixable 403.
+  //   * `canDelete` (`work_item:delete`) — the ⋯ menu's Delete row alone.
+  //     NOT the same people as `canEdit`: a member holds edit and not delete.
+  //     ⚠️ It used to gate Archive too, on the reading that "a member holds edit
+  //     and not delete, so the Archive row it used to offer them was an
+  //     affordance that 403'd" — a correct diagnosis whose only available remedy
+  //     was to hide Archive from every member, because one key spanned the
+  //     reversible hide and the irreversible subtree destroy. MOTIR-3629 split
+  //     the key instead, so the row is offered to exactly the actors the service
+  //     admits.
   //   * `canManageProject` (`project:administer`) — the epic-privacy control.
   const held = await projectAccessService.getPermissions(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
   const canEdit = held.has('work_item:edit');
+  const canArchive = held.has('work_item:archive');
   const canDelete = held.has('work_item:delete');
   const canManageProject = held.has('project:administer');
 
@@ -367,6 +378,7 @@ export default async function IssueDetailPage({
                 identifier={item.identifier}
                 title={item.title}
                 canEdit={canEdit}
+                canArchive={canArchive}
                 canDelete={canDelete}
                 archived={isArchived}
                 activeSprintId={activeSprint?.id ?? null}

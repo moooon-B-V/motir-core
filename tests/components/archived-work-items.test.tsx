@@ -5,6 +5,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ArchivedRowData } from '@/app/(authed)/items/archived/_components/archivedRows';
 import { toArchivedRows } from '@/app/(authed)/items/archived/_components/archivedRows';
 import { ArchivedWorkItemsList } from '@/app/(authed)/items/archived/_components/ArchivedWorkItemsList';
@@ -21,8 +22,16 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 //
 // ⚠️ MOTIR-2473 re-keyed BOTH affordances onto `work_item:delete`. Restore used
 // to be gated on `canEdit` and Delete on `canDelete` (`project:administer`) —
-// but `unarchiveWorkItem` (`:2208`) and `deleteWorkItem` (`:2267`) assert the
-// SAME key, so a member was offered a Restore button that 403'd. One key now.
+// but `unarchiveWorkItem` and `deleteWorkItem` asserted the SAME key, so a member
+// was offered a Restore button that 403'd. One key then.
+//
+// ⚠️ AND TWO AGAIN (MOTIR-3629), which is not a return to the 2.9.5 matrix. That
+// one gated Restore on `work_item:edit`, a key `unarchiveWorkItem` never
+// asserted, so it described a product that could not exist. This one gates it on
+// `work_item:archive`, the key `unarchiveWorkItem` now DOES assert — a
+// reversible, non-cascading soft-remove that a MEMBER holds and delete's cascade
+// is not. Both fixes were right about the same defect; 2473 could only close it
+// by removing an affordance, because one key spanned both operations.
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -30,17 +39,20 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/items/archived',
 }));
 
-// `canDelete` is read from the provider (the WorkItemRowActions pattern), so
-// every render wraps one — defaulting to NOT manageable, so the 2.9.3 tests keep
-// their pre-Delete behaviour (the actions column is then canEdit-only).
-function render(ui: ReactElement, { canDelete = false }: { canDelete?: boolean } = {}) {
+// Both keys are read from the provider (the WorkItemRowActions pattern), so every
+// render wraps one. `canArchive` defaults to TRUE — it is what a MEMBER holds,
+// and it is what the 2.9.3 page-state cases are about — while `canDelete`
+// defaults to false, so the actions column starts as Restore-only.
+function render(
+  ui: ReactElement,
+  { canDelete = false, canArchive = true }: { canDelete?: boolean; canArchive?: boolean } = {},
+) {
+  const permissions: PermissionKey[] = ['work_item:edit'];
+  if (canArchive) permissions.push('work_item:archive');
+  if (canDelete) permissions.push('work_item:delete');
   return renderWithIntl(
     <ToastProvider>
-      <ProjectAccessProvider
-        permissions={canDelete ? ['work_item:edit', 'work_item:delete'] : ['work_item:edit']}
-      >
-        {ui}
-      </ProjectAccessProvider>
+      <ProjectAccessProvider permissions={permissions}>{ui}</ProjectAccessProvider>
     </ToastProvider>,
   );
 }
@@ -92,7 +104,7 @@ describe('ArchivedWorkItemsList', () => {
     expect(within(screen.getByTestId('archived-row-PROD-28')).getByText('—')).toBeTruthy();
   });
 
-  it('canEdit: Restore removes the row only after the unarchive 200 (page-state)', async () => {
+  it('canArchive: Restore removes the row only after the unarchive 200 (page-state)', async () => {
     let resolveFetch: (v: { ok: boolean }) => void = () => {};
     const fetchMock = vi.fn(
       (..._args: unknown[]) =>
@@ -125,7 +137,7 @@ describe('ArchivedWorkItemsList', () => {
     expect(screen.getByTestId('archived-row-PROD-28')).toBeTruthy();
   });
 
-  it('canEdit: a failed restore keeps the row and surfaces an error toast', async () => {
+  it('canArchive: a failed restore keeps the row and surfaces an error toast', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: false, json: async () => ({ code: 'BOOM' }) })),
@@ -143,8 +155,10 @@ describe('ArchivedWorkItemsList', () => {
     expect(screen.getByTestId('archived-row-PROD-49')).toBeTruthy();
   });
 
-  it('view-only (no `work_item:delete`): the list renders but no Restore action exists', () => {
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />);
+  it('view-only (neither removal key): the list renders but no Restore action exists', () => {
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canArchive: false,
+    });
     expect(screen.getByTestId('archived-row-PROD-49')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Restore/ })).toBeNull();
     expect(screen.queryByText('Actions')).toBeNull();
@@ -156,12 +170,13 @@ describe('ArchivedWorkItemsList', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 
-  // ⚠️ THE GATE MATRIX COLLAPSED (MOTIR-2473), and that IS the finding. 2.9.5
-  // gated Restore on `canEdit` and Delete on `canManage`, independently — but
-  // `unarchiveWorkItem` (`workItemsService:2208`) and `deleteWorkItem` (`:2267`)
-  // assert the SAME key, `work_item:delete`. So the two-gate matrix described a
-  // product that could not exist: an actor with edit-and-not-delete was offered
-  // a Restore button whose POST returned 403. One key, one column, both rows.
+  // ⚠️ THE GATE MATRIX IS TWO KEYS AGAIN (MOTIR-3629) — and this time both are
+  // keys the services assert. 2.9.5's matrix gated Restore on `work_item:edit`,
+  // which `unarchiveWorkItem` never asserted, so MOTIR-2473 collapsed it onto one
+  // key and an actor with edit-and-not-delete lost the button along with the 403.
+  // Restore now asks `work_item:archive` and Delete asks `work_item:delete`, so
+  // the independence the original matrix claimed is real: a member restores and
+  // does not delete.
   it('canDelete gates the row `⋯` Delete affordance independently of Restore', () => {
     render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
       canDelete: true,
@@ -177,23 +192,42 @@ describe('ArchivedWorkItemsList', () => {
     expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
   });
 
-  it('the two affordances now rise and fall TOGETHER — one key, not two', () => {
-    // The replacement for the old "delete without edit" case. `work_item:edit`
-    // alone buys neither affordance, which is the honest answer: it never bought
-    // a working Restore, it only ever bought the button.
+  // ⚠️ INVERTED (MOTIR-3629). This read "the two affordances now rise and fall
+  // TOGETHER — one key, not two", and it was the honest statement of what one key
+  // could buy: `work_item:edit` alone got neither, because it never bought a
+  // working Restore, only the button. The split gives the three states the
+  // surface always needed, and this asserts all three.
+  it('the three states are all reachable — Restore alone, both, neither', () => {
+    // A MEMBER: archive yes, delete no. The state 2473 could not draw.
     render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canArchive: true,
+      canDelete: false,
+    });
+    const memberRow = screen.getByTestId('archived-row-PROD-49');
+    expect(within(memberRow).getByRole('button', { name: 'Restore PROD-49' })).toBeTruthy();
+    expect(within(memberRow).queryByRole('button', { name: 'Actions for PROD-49' })).toBeNull();
+
+    cleanup();
+    // A browse-only viewer: no column at all.
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canArchive: false,
       canDelete: false,
     });
     expect(screen.queryByRole('button', { name: /Restore/ })).toBeNull();
     expect(screen.queryByText('Actions')).toBeNull();
 
     cleanup();
+    // An admin: both. (`work_item:delete` also CONFERS archive at resolution, so
+    // this row is what a delete-holder sees whether or not the archive key was
+    // ticked — that half is asserted where resolution happens, not here: this
+    // component reads a permission set it is handed.)
     render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canArchive: true,
       canDelete: true,
     });
-    const row = screen.getByTestId('archived-row-PROD-49');
-    expect(within(row).getByRole('button', { name: 'Restore PROD-49' })).toBeTruthy();
-    expect(within(row).getByRole('button', { name: 'Actions for PROD-49' })).toBeTruthy();
+    const adminRow = screen.getByTestId('archived-row-PROD-49');
+    expect(within(adminRow).getByRole('button', { name: 'Restore PROD-49' })).toBeTruthy();
+    expect(within(adminRow).getByRole('button', { name: 'Actions for PROD-49' })).toBeTruthy();
   });
 
   it('canDelete: Delete… removes the row only after the delete 204 (page-state)', async () => {

@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe('WorkItemActionsMenu — permission gating', () => {
-  function openMenu(props: { canEdit: boolean; canDelete: boolean }) {
+  function openMenu(props: { canEdit: boolean; canArchive?: boolean; canDelete: boolean }) {
     render(
       <WorkItemActionsMenu
         itemId="wi-1"
@@ -32,6 +32,7 @@ describe('WorkItemActionsMenu — permission gating', () => {
         title="A bug"
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
+        canArchive={props.canArchive ?? props.canEdit}
         {...props}
       />,
     );
@@ -59,10 +60,42 @@ describe('WorkItemActionsMenu — permission gating', () => {
     expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
   });
+
+  // ── MOTIR-3629 — ARCHIVE HAS ITS OWN GATE ────────────────────────────────
+  // Every case above passes `canArchive` defaulted to `canEdit`, which is what
+  // this menu did unconditionally before the split. These three are the cases
+  // that default could not express, and the first is the one that shipped as a
+  // live defect: a member held `work_item:edit`, saw the Archive row, and earned
+  // a 403 from a service asserting `work_item:delete`.
+
+  it('hides Archive from an editor who cannot archive — the row no longer rides on canEdit', () => {
+    openMenu({ canEdit: true, canArchive: false, canDelete: false });
+    expect(screen.getByRole('menuitem', { name: 'Edit details' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
+  });
+
+  it('offers Archive to an actor who can archive but NOT edit — the two are independent', () => {
+    // Not a built-in role, and that is the point: the keys are separable, so a
+    // custom role can compose this and the menu must draw it correctly.
+    openMenu({ canEdit: false, canArchive: true, canDelete: false });
+    expect(screen.queryByRole('menuitem', { name: 'Edit details' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Archive' })).toBeTruthy();
+  });
+
+  it('draws the separator for a delete-only actor, whose only row below it is Delete', () => {
+    // The separator used to test `canEdit || canDelete`; it tests
+    // `canArchive || canDelete` now, so this asserts it did not become dependent
+    // on a key that no longer draws anything beneath it.
+    openMenu({ canEdit: false, canArchive: false, canDelete: true });
+    expect(screen.getByRole('menuitem', { name: 'Delete…' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+    expect(screen.getByRole('separator')).toBeTruthy();
+  });
 });
 
 describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
-  function openArchivedMenu(props: { canEdit: boolean; canDelete: boolean }) {
+  function openArchivedMenu(props: { canEdit: boolean; canArchive?: boolean; canDelete: boolean }) {
     render(
       <WorkItemActionsMenu
         itemId="wi-1"
@@ -71,6 +104,7 @@ describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
         archived
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
+        canArchive={props.canArchive ?? props.canEdit}
         {...props}
       />,
     );
@@ -89,6 +123,16 @@ describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
     openArchivedMenu({ canEdit: true, canDelete: false });
     expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
+  });
+
+  it('hides Restore too when the actor cannot archive (MOTIR-3629)', () => {
+    // Restore is `unarchiveWorkItem`, which asserts the same key archive does —
+    // so the row it swaps with has to move with it. It did not before the split,
+    // which is why the archived VIEW had the same 403ing affordance the active
+    // menu had.
+    openArchivedMenu({ canEdit: true, canArchive: false, canDelete: false });
+    expect(screen.queryByRole('menuitem', { name: 'Restore' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
   });
 
   it('opens the ARCHIVED confirm variant from Delete… — no "Archive instead" escape hatch', async () => {
@@ -196,6 +240,7 @@ describe('WorkItemActionsMenu — Add to active sprint (Subtask 2.4.14)', () => 
         identifier="PROD-1"
         title="A bug"
         canEdit={canEdit}
+        canArchive={canEdit}
         canDelete={false}
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
@@ -270,6 +315,7 @@ describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () =
         identifier="PROD-1"
         title="An epic"
         canEdit={canEdit}
+        canArchive={canEdit}
         canDelete={false}
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
@@ -359,6 +405,7 @@ describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () =
         identifier="PROD-1"
         title="An epic"
         canEdit
+        canArchive
         canDelete={false}
         onDeleted={vi.fn()}
         onArchived={vi.fn()}

@@ -272,13 +272,26 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   update_plan_proposal: 'ai:view_plan',
   withdraw_plan_proposal: 'ai:view_plan',
 
-  // ── work_item:delete — the recoverable and the irreversible ──────────────
-  // `archiveWorkItem` / `unarchiveWorkItem` / `deleteWorkItem` all assert
-  // `work_item:delete` by name. The old `work_items:archive` /
-  // `work_items:delete` split has no counterpart in the gates: the product
-  // already governs both with one key (ADR §3).
-  archive_work_item: 'work_item:delete',
-  unarchive_work_item: 'work_item:delete',
+  // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
+  // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /
+  // `unarchiveWorkItem` / `deleteWorkItem` all assert `work_item:delete` by name.
+  // The old `work_items:archive` / `work_items:delete` split has no counterpart
+  // in the gates: the product already governs both with one key (ADR §3)."
+  //
+  // That was an accurate reading of the gates and a false thing to keep. The
+  // grouping came from `permission-inventory.md` R42 — "archive / delete cascades
+  // over a subtree" — and archive does not cascade: it stamps `archivedAt` on ONE
+  // row and leaves the children live. So one key spanned a reversible single-row
+  // hide and an irreversible subtree destroy, and no grantor could confer the
+  // first without the second. `work_item:archive` is that missing term
+  // (`docs/decisions/token-permissions.md` §10); the services moved with it, and
+  // this map still names exactly what each tool's service asserts (§3).
+  //
+  // A grant holding `work_item:delete` alone still reaches these two, because
+  // `PERMISSION_IMPLICATIONS` confers archive from delete at resolution — so no
+  // minted token and no authored role lost an operation on the day this shipped.
+  archive_work_item: 'work_item:archive',
+  unarchive_work_item: 'work_item:archive',
   delete_work_item: 'work_item:delete',
 };
 
@@ -297,6 +310,18 @@ export function toolPermission(toolName: McpToolName): PermissionKey {
  * the old comment named). It deliberately EXCLUDES `sprint:manage` and
  * `work_item:delete`: a credential living unattended on a remote box must not be
  * able to delete a subtree.
+ *
+ * ⚠️ AND IT EXCLUDES `work_item:archive` TOO (MOTIR-3629), which is a decision
+ * rather than an omission — the split made archive separately grantable for the
+ * first time, so the question "should the device grant take it?" now has to be
+ * answered instead of being settled by delete's absence. It should not: this set
+ * covers exactly what the CLI CALLS, and the CLI calls neither
+ * `archive_work_item` nor `unarchive_work_item`. The workflow that wants archive
+ * routinely — the re-plan procedure's *archive the superseded nodes* — runs under
+ * the WORKSPACE PAT, which chooses its own grant, and that PAT is what the split
+ * was filed for. §7's rule is that this set is widened only where a card argues
+ * for it (as `lesson:view` and `lesson:reinforce` do, directly below); nothing
+ * here argues for archive, so it stays out.
  *
  * It lives HERE, beside {@link TOOL_PERMISSIONS}, because that co-location IS the
  * guardrail: adding an MCP tool now carries a second question next to its map

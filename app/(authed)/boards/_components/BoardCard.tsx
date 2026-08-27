@@ -173,8 +173,13 @@ export function BoardCard({
   // through `boardsService`'s `assertCanEdit` (`work_item:edit`), and the ⋯
   // menu's Delete row through `workItemsService.deleteWorkItem`
   // (`work_item:delete`). They were one boolean apart and are two permissions.
+  // MOTIR-3629 makes it THREE: the menu's Archive row goes through
+  // `archiveWorkItem`, which asserts `work_item:archive` — a member holds it and
+  // does not hold delete, which is precisely the pair the old two booleans could
+  // not tell apart.
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
+  const canArchive = can('work_item:archive');
   const canDelete = can('work_item:delete');
   const notifyIssuesChanged = useNotifyIssuesChanged();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -224,6 +229,7 @@ export function BoardCard({
           identifier={card.identifier}
           title={card.title}
           canEdit={canEdit}
+          canArchive={canArchive}
           canDelete={canDelete}
           onDeleted={notifyIssuesChanged}
           onArchived={notifyIssuesChanged}

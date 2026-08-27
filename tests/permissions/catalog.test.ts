@@ -5,10 +5,12 @@ import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import {
   ENFORCED_PERMISSIONS,
+  PERMISSION_IMPLICATIONS,
   PERMISSIONS,
   PERMISSION_CATALOG,
   PERMISSION_DOMAINS,
   PLANNED_PERMISSIONS,
+  withImpliedPermissions,
   isEnforced,
   isPermissionKey,
   permissionDescriptor,
@@ -18,6 +20,7 @@ import {
 } from '@/lib/permissions/catalog';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { IRREVERSIBLE_PERMISSIONS } from '@/lib/tokens/grant';
 
 // The permission-CATALOG guards (Story MOTIR-2255 · Subtask MOTIR-2260). The
 // catalog is typed `Record<PermissionKey, …>`, so a key added without a
@@ -268,6 +271,18 @@ const LESSON_LIBRARY_ENFORCED: PermissionKey[] = [
   'lesson:reinforce',
 ];
 
+/**
+ * The key MOTIR-3629 split out of `work_item:delete` — a FIFTH list, on exactly
+ * the terms the third and fourth give for not being appended to an earlier one:
+ * membership of a list here is evidence about the STORY that wired the key, and
+ * this one was wired by none of MOTIR-2256, MOTIR-2291, MOTIR-3188 or
+ * MOTIR-3336. It arrives `enforced` because both gates
+ * (`workItemsService.archiveWorkItem` / `unarchiveWorkItem`) move in the same
+ * change — there was never a moment where the catalog advertised it and nothing
+ * asserted it.
+ */
+const REMOVAL_SPLIT_ENFORCED: PermissionKey[] = ['work_item:archive'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -331,12 +346,17 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => LESSON_LIBRARY_ENFORCED.includes(k)).sort()).toEqual(
       [...LESSON_LIBRARY_ENFORCED].sort(),
     );
+    // …and MOTIR-3629's removal split, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => REMOVAL_SPLIT_ENFORCED.includes(k)).sort()).toEqual(
+      [...REMOVAL_SPLIT_ENFORCED].sort(),
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
         MEMBER_FACING_ENFORCED.length +
         PLAN_DECISION_ENFORCED.length +
-        LESSON_LIBRARY_ENFORCED.length,
+        LESSON_LIBRARY_ENFORCED.length +
+        REMOVAL_SPLIT_ENFORCED.length,
     );
   });
 
@@ -412,6 +432,85 @@ describe('i18n totality — BOTH catalogs, so a key cannot ship half-translated'
         expect(slugs.has(entry), `${locale} has orphan permission string "${entry}"`).toBe(true);
       }
     }
+  });
+});
+
+describe('PERMISSION_IMPLICATIONS — the one key that confers another (MOTIR-3629)', () => {
+  it('maps `work_item:delete` to `work_item:archive`, and nothing else', () => {
+    // Asserted as the WHOLE map, not as one lookup: an entry added without an
+    // argument is the failure mode this guard exists for, and an extra row here
+    // would otherwise pass every test in this file.
+    expect(PERMISSION_IMPLICATIONS).toEqual({ 'work_item:delete': ['work_item:archive'] });
+  });
+
+  it('names only real catalog keys, on both sides', () => {
+    for (const [key, implied] of Object.entries(PERMISSION_IMPLICATIONS)) {
+      expect(isPermissionKey(key), `implier "${key}" is not a catalog key`).toBe(true);
+      for (const k of implied ?? []) {
+        expect(isPermissionKey(k), `implied "${k}" is not a catalog key`).toBe(true);
+      }
+    }
+  });
+
+  it('is IRREFLEXIVE and NOT transitive — no implied key is itself an implier', () => {
+    // `withImpliedPermissions` expands in ONE pass rather than to a closure, so
+    // the two agree only while this holds. It holds trivially today, and the day
+    // an entry would break it is the day someone must choose deliberately
+    // between a second pass and a different edge — a red build, not a silent
+    // widening. (See the constant's own header.)
+    const impliers = new Set(Object.keys(PERMISSION_IMPLICATIONS));
+    for (const [key, implied] of Object.entries(PERMISSION_IMPLICATIONS)) {
+      for (const k of implied ?? []) {
+        expect(k, 'an implication must not be reflexive').not.toBe(key);
+        expect(impliers.has(k), `"${k}" is implied AND implies — expansion is one pass`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it('expands a held set, leaves an unrelated one alone, and never mutates its input', () => {
+    const held = new Set<PermissionKey>(['project:browse', 'work_item:delete']);
+    const expanded = withImpliedPermissions(held);
+    expect([...expanded].sort()).toEqual(
+      ['project:browse', 'work_item:archive', 'work_item:delete'].sort(),
+    );
+    expect([...held].sort()).toEqual(['project:browse', 'work_item:delete'].sort());
+    expect([...withImpliedPermissions(['work_item:edit'] as PermissionKey[])]).toEqual([
+      'work_item:edit',
+    ]);
+    // The other direction is NOT implied: archiving does not confer destroying.
+    expect([...withImpliedPermissions(['work_item:archive'] as PermissionKey[])]).toEqual([
+      'work_item:archive',
+    ]);
+  });
+
+  it('leaves the IRREVERSIBLE set to `work_item:delete` alone', () => {
+    // The reason the implication is safe to run everywhere: it only ever adds
+    // the reversible half. A key that implied an irreversible one would put a
+    // destroy behind a grant nobody ticked.
+    for (const implied of Object.values(PERMISSION_IMPLICATIONS).flatMap((v) => v ?? [])) {
+      expect(IRREVERSIBLE_PERMISSIONS).not.toContain(implied);
+    }
+  });
+});
+
+describe('the work_item domain reads in order of severity (MOTIR-3629)', () => {
+  it('places archive between edit and delete, contiguously within its domain', () => {
+    // The picker groups by domain and renders each group in PERMISSIONS order,
+    // so the flat list and the grouped one agree only while every domain's keys
+    // are contiguous here (MOTIR-3361). The ORDER within the domain is the
+    // card's own argument made structural: edit a field, hide a row, destroy a
+    // subtree.
+    const workItem = PERMISSIONS.filter((k) => PERMISSION_CATALOG[k].domain === 'work_item');
+    expect(workItem).toEqual([
+      'work_item:edit',
+      'work_item:archive',
+      'work_item:delete',
+      'work_item:triage',
+    ]);
+    const first = PERMISSIONS.indexOf(workItem[0]!);
+    expect(PERMISSIONS.slice(first, first + workItem.length)).toEqual(workItem);
   });
 });
 

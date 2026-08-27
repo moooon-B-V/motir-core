@@ -362,9 +362,13 @@
       "label": "编辑工作项",
       "description": "创建、更新、分配和移动工作项，并在面板上流转其状态。"
     },
+    "work_item_archive": {
+      "label": "归档工作项",
+      "description": "归档工作项，之后可恢复。仅影响该工作项，其下级保持不变。"
+    },
     "work_item_delete": {
       "label": "删除工作项",
-      "description": "归档或删除工作项及其下级内容。"
+      "description": "永久删除工作项及其下级内容，无法撤销。"
     },
     "work_item_triage": {
       "label": "处理收件箱",

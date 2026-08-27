@@ -2,6 +2,7 @@ import {
   PERMISSIONS,
   isPermissionKey,
   sortByCatalogOrder,
+  withImpliedPermissions,
   type PermissionKey,
 } from '@/lib/permissions/catalog';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
@@ -123,6 +124,16 @@ export const UNGRANTABLE_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.fil
  * grant must withhold. `work_item:delete` cascades to the whole subtree
  * (`lib/mcp/tools/deleteWorkItem.ts`); nothing else a token can reach is
  * unrecoverable.
+ *
+ * ⚠️ `work_item:archive` IS NOT ONE, AND THAT UNDOES A NARROWING (MOTIR-3629).
+ * ADR §8 recorded that {@link DEFAULT_TOKEN_GRANT} had stopped conferring archive
+ * — not because anyone chose to withhold a recoverable operation, but because
+ * archive and delete shared one key and "all but the irreversible one"
+ * necessarily withheld both. With the key split, archive is grantable and
+ * reversible, so it falls into the default grant by the SAME derivation that had
+ * excluded it, with no arm added here. A token minted with the default grant can
+ * archive again and still cannot delete — which is what §8 said it wanted and
+ * could not have.
  */
 export const IRREVERSIBLE_PERMISSIONS: readonly PermissionKey[] = ['work_item:delete'];
 
@@ -224,5 +235,17 @@ export function expandStoredGrant(stored: readonly string[]): {
     }
     for (const key of expanded) grant.add(key);
   }
-  return { grant: sortByCatalogOrder(grant), unrecognised };
+  // The IMPLICATIONS, applied to the whole grant rather than per stored value
+  // (MOTIR-3629) — so a row carrying `work_item:delete` confers
+  // `work_item:archive` too, and no token minted before the archive key existed
+  // lost an operation on the day it shipped. This is the token half of the
+  // back-compatibility decision (`docs/decisions/token-permissions.md` §10); the
+  // role half is `resolvePermissions`. It runs here, inside the ONE reader of the
+  // column, so the grant a surface DISPLAYS and the grant a gate CHECKS are the
+  // same set — an implied key that only the gate could see would put the token
+  // list in the position of describing a credential it cannot describe.
+  //
+  // Nothing is rewritten, exactly as before: the expansion is on READ, and no
+  // migration touches a live credential's row.
+  return { grant: sortByCatalogOrder(withImpliedPermissions(grant)), unrecognised };
 }

@@ -76,6 +76,14 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'project:browse',
   'project:administer',
   'work_item:edit',
+  // MOTIR-3629 — the REVERSIBLE half of removal, split out of `work_item:delete`.
+  // Role-gated (a role may hold or withhold it) and NOT level-gated: an access
+  // level decides who may see and edit a project, and hiding a row you may
+  // already edit is not a different kind of act. It sits beside `work_item:edit`
+  // rather than beside `work_item:delete` because that is who holds it —
+  // `member` gains it, `admin` gains it as part of this whole set, and the
+  // implicit workspace-member grant does not.
+  'work_item:archive',
   'comment:add',
   'comment:moderate',
   'attachment:create',
@@ -139,9 +147,12 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
  *                  moderates comments and attachments, manages watchers.
  *   * **member** — browses, edits work items, comments, attaches, and (MOTIR-2291)
  *                  runs the planner, manages sprints and saved filters, triages
- *                  and acts on a generated plan. No administrative or moderation
+ *                  and acts on a generated plan, and (MOTIR-3629) ARCHIVES a work
+ *                  item. No administrative or moderation
  *                  grant, and NOT `import:run` / `work_item:delete` — both mirrors
- *                  put a bulk import and a delete cascade at admin.
+ *                  put a bulk import and a delete cascade at admin, and the
+ *                  reversible soft-remove is what MOTIR-3629 separated from the
+ *                  second of those.
  *   * **viewer** — READ-ONLY EVERYWHERE. Browse, plus (MOTIR-2291) `report:view`:
  *                  the shipped viewer contract denies comment and attachment
  *                  creation on every access level (the Story 5.1 decision), and a
@@ -157,6 +168,18 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
   member: new Set<PermissionKey>([
     'project:browse',
     'work_item:edit',
+    // MOTIR-3629 — and this one is NOT behaviour-neutral; it is the point of the
+    // split. A member holds `work_item:edit` and not `work_item:delete`, so under
+    // one key they could not archive at all — a far stronger restriction than
+    // "may not destroy a subtree", and one nobody chose: the shared ⋯ menu offers
+    // them the Archive row on `work_item:edit` and the service refused it on
+    // `work_item:delete`, so the product has been showing a member an affordance
+    // that 403s. The mirror it is read from is the one this archive semantic is
+    // already copied from — Linear, where archiving is every member's ordinary
+    // remove and destroying is not (`archiveWorkItem`'s own header cites "the
+    // Linear shape" for leaving children intact). `viewer` does NOT gain it: a
+    // read-only actor removes nothing.
+    'work_item:archive',
     'comment:add',
     'attachment:create',
     // MOTIR-2291 — the six member-facing keys the decision puts at `member`.
@@ -196,6 +219,13 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
  * membership is not one. Argued in `docs/decisions/member-facing-permissions.md`
  * §2 — copying `member`'s set here is now a REAL capability grant, not a
  * shortcut.
+ *
+ * ⚠️ AND `work_item:archive` DOES NOT ENTER EITHER (MOTIR-3629), which is the
+ * one place that key parts from `member`. The argument above is what decides it:
+ * archiving takes a row out of every active view for the whole team, and a
+ * stranger to the project making the board's contents disappear is an act of
+ * ownership even though it is reversible. Editing a field they can already read
+ * is not the same act, which is why `work_item:edit` is here and this is not.
  */
 export const IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS: ReadonlySet<PermissionKey> =
   new Set<PermissionKey>([

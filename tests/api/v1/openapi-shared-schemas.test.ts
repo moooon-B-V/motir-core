@@ -370,16 +370,26 @@ describe('the v1 security scheme', () => {
     }
   });
 
-  it('exposes work_item:delete ONLY for archive/restore — never a cascade delete', () => {
-    // ⚠️ The old rule read "v1 does not expose the delete scope", and it cannot
-    // survive the merge: archive and delete assert ONE key (ADR §3), and v1
-    // legitimately exposes archive. So the property worth protecting is stated
-    // over OPERATIONS instead of over the key — v1 must expose no operation that
-    // cascade-deletes, whatever permission it names.
-    const declaring = V1_OPERATIONS.filter((o) => o.permission === 'work_item:delete').map(
+  // ⚠️ RESTORED BY MOTIR-3629. This rule has now been stated three ways, and the
+  // third is the first one again. It began as "v1 does not expose the delete
+  // key"; the archive/delete merge falsified that, because v1 legitimately
+  // exposes archive and the two shared one key, so it was restated over
+  // OPERATIONS — "expose no operation that cascade-deletes, whatever permission
+  // it names". That was the honest expression available at the time and it is
+  // strictly weaker: it can only check what the operations DO, never what the
+  // document SAYS a caller must hold. With `work_item:archive` in the catalog
+  // the original form is true again, and both halves are worth asserting.
+  it('exposes work_item:archive and NOT work_item:delete — the key AND the operations', () => {
+    expect(V1_EXPOSED_PERMISSIONS).toContain('work_item:archive');
+    expect(V1_EXPOSED_PERMISSIONS).not.toContain('work_item:delete');
+    expect(V1_UNEXPOSED_PERMISSIONS).toContain('work_item:delete');
+    expect(V1_OPERATIONS.filter((o) => o.permission === 'work_item:delete')).toEqual([]);
+    const archiving = V1_OPERATIONS.filter((o) => o.permission === 'work_item:archive').map(
       (o) => o.operationId,
     );
-    expect([...declaring].sort()).toEqual(['archiveWorkItem', 'restoreWorkItem']);
+    expect([...archiving].sort()).toEqual(['archiveWorkItem', 'restoreWorkItem']);
+    // The operation-shaped half of the old form, kept: the document saying the
+    // right thing and the surface doing the right thing are two properties.
     expect(
       V1_OPERATIONS.some((o) => o.method === 'DELETE' && o.path === '/api/v1/work-items/{key}'),
     ).toBe(false);

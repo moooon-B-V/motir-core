@@ -116,16 +116,18 @@ operation asserts — would be exactly that lie, one level up.
 directions: no grantable key without an operation, no operation whose key is
 ungrantable.
 
-At this document's date the derived set is **six keys**:
+At this document's date the derived set was **six keys** (it is seven since
+MOTIR-3629 split archive out of delete — §10):
 
-| key                | domain    | reachable through                                               |
-| ------------------ | --------- | --------------------------------------------------------------- |
-| `project:browse`   | project   | every read, on both seams                                       |
-| `work_item:edit`   | work_item | create / update / transition / link / move / integration writes |
-| `work_item:delete` | work_item | archive · unarchive · delete (the irreversible one)             |
-| `comment:add`      | comment   | `add_comment`, `POST …/comments`                                |
-| `sprint:manage`    | sprint    | the sprint lifecycle + backlog/sprint membership                |
-| `ai:plan`          | ai        | `expand_item`, the three plan-session operations                |
+| key                 | domain    | reachable through                                               |
+| ------------------- | --------- | --------------------------------------------------------------- |
+| `project:browse`    | project   | every read, on both seams                                       |
+| `work_item:edit`    | work_item | create / update / transition / link / move / integration writes |
+| `work_item:archive` | work_item | archive · unarchive (the reversible one — MOTIR-3629, §10)      |
+| `work_item:delete`  | work_item | delete (the irreversible cascade) and its dry run               |
+| `comment:add`       | comment   | `add_comment`, `POST …/comments`                                |
+| `sprint:manage`     | sprint    | the sprint lifecycle + backlog/sprint membership                |
+| `ai:plan`           | ai        | `expand_item`, the three plan-session operations                |
 
 The number is a consequence, not a target: it moves when an operation moves, and
 the guard is what keeps the picker and the gates agreeing about it.
@@ -150,11 +152,21 @@ Three consequences are deliberate, and each is a real narrowing:
 - **Commenting separates from editing.** `add_comment` asserts `comment:add`
   (`commentsService` → `getCommentCapabilities` → `canComment`), not
   `work_item:edit`.
-- **Archive joins delete.** `archiveWorkItem` / `unarchiveWorkItem` assert
+- ~~**Archive joins delete.**~~ **⚠️ REVERSED by MOTIR-3629 (2026-08-26) — see
+  §10.** This consequence read: _"`archiveWorkItem` / `unarchiveWorkItem` assert
   `work_item:delete` in shipped code, so the old `work_items:archive` /
   `work_items:delete` split does not survive contact with the gates. It is a
-  narrowing for archive, and the honest one: the product already governs both
-  with one key.
+  narrowing for archive, and the honest one: the product already governs both with
+  one key."_
+
+  It was an accurate reading of the gates, and the rule it applied — _read the map
+  off the SERVICE, never off the old scope_ — was the right rule. What it could not
+  see is that the SERVICE was itself reading a mis-grouped key: the two operations
+  shared `work_item:delete` because `permission-inventory.md` R42 grouped them on
+  _"cascades over a subtree"_, which archive does not do. So this bullet faithfully
+  propagated a defect one tier up, and the legacy split it dismissed was the
+  evidence rather than the noise. `work_item:archive` restores it, at the tier
+  where it belongs.
 
 **No exceptions — the rule is total.** Every one of the 39 tool entries and 40
 operation declarations names the permission its own service asserts, with no row
@@ -205,14 +217,14 @@ each stored string into the permission set its operations assert, applied when a
 token is read. Nothing rewrites a row. `TokenScope` survives **only** as this
 table's key type; nothing new may be typed against it.
 
-| stored scope         | expands to                                 |
-| -------------------- | ------------------------------------------ |
-| `read`               | `project:browse`                           |
-| `work_items:write`   | `work_item:edit`, `comment:add`, `ai:plan` |
-| `work_items:archive` | `work_item:delete`                         |
-| `work_items:delete`  | `work_item:delete`                         |
-| `sprints:write`      | `sprint:manage`                            |
-| `integration`        | `work_item:edit`                           |
+| stored scope         | expands to                                                |
+| -------------------- | --------------------------------------------------------- |
+| `read`               | `project:browse`                                          |
+| `work_items:write`   | `work_item:edit`, `comment:add`, `ai:plan`                |
+| `work_items:archive` | `work_item:archive` (MOTIR-3629 — was `work_item:delete`) |
+| `work_items:delete`  | `work_item:delete`                                        |
+| `sprints:write`      | `sprint:manage`                                           |
+| `integration`        | `work_item:edit`                                          |
 
 The union of the six equals the set the pre-change default grant conferred plus
 `work_item:delete` — i.e. everything — and a test checks that rather than
@@ -356,6 +368,26 @@ same key, can now also delete. That is the second half of the §5 merge, in the
 same grounds: the gates already govern both with one key, so the old split was
 describing a distinction the product stopped making.
 
+> ⚠️ **BOTH PARAGRAPHS ABOVE ARE UNDONE BY MOTIR-3629 (2026-08-26), and the
+> second one's closing sentence is what this section got wrong.** The old split
+> was describing a distinction the product had never stopped NEEDING — it had
+> only stopped being able to SAY it. With `work_item:archive` in the catalog:
+>
+> - `DEFAULT_TOKEN_GRANT` **confers archive again**, by the same derivation that
+>   had excluded it — archive is grantable and is not in
+>   `IRREVERSIBLE_PERMISSIONS`, so no arm was added anywhere. The narrowing this
+>   section regretted, and the trade it explicitly refused to make (putting
+>   `work_item:delete` in the default grant so archive would work), are both gone:
+>   a default-minted token archives and still cannot subtree-delete.
+> - A stored `work_items:archive` row **stops conferring delete**. It expands to
+>   `work_item:archive` alone (§5), which is what that string meant when it was
+>   minted. That is a NARROWING of stored data, always legal here; the direction a
+>   legacy row may never take is wider.
+>
+> `work_item:delete` remains the one key marked irreversible and the one the
+> default grant withholds. Nothing in that rule changed — only the set it applies
+> to stopped containing an operation it was never about.
+
 ### 9. The denial wire code
 
 The MCP gate's stable code becomes **`PERMISSION_NOT_GRANTED`**;
@@ -367,6 +399,105 @@ message names the missing `resource:action` key.
 
 `/api/v1` keeps its **403** and its error envelope; only the message and the
 error class's name change (`InsufficientScopeError` → the permission-shaped one).
+
+### 10. REMOVAL is TWO keys — `work_item:archive` and `work_item:delete` (MOTIR-3629, 2026-08-26)
+
+**§3's third consequence — _"archive joins delete"_ — is reversed here, and §8's
+regretted narrowing goes with it.** The two sections are struck in place above;
+this is the decision.
+
+**The defect.** `permission-inventory.md` R42 grouped archive with delete because
+both _"cascade over a subtree"_. Archive does not: `archiveWorkItem` stamps
+`archivedAt` on ONE row and leaves the children live, which the v1 route header
+and the `archive_work_item` tool description each say unprompted. So the two
+operations were grouped on the single property archive does NOT have, and they
+differ on **both** axes that make delete dangerous — reversibility and blast
+radius — under a key named after the destructive one. §3 read that key off the
+service and faithfully propagated it, which is the rule working on a bad input.
+
+**The tell that it was a real gap and not a tidiness complaint: the product was
+already paying for the missing term, in two places.** `/api/v1` exposes archive
+and not delete, so its route audit had to admit the archive PATHS by name because
+the permission could no longer express the difference; and §5's own table carried
+`work_items:archive` and `work_items:delete` as two legacy strings that had
+collapsed onto one key. A path allow-list standing in for a permission is a
+missing vocabulary item announcing itself.
+
+**The decisions, each of which had a live alternative:**
+
+**(a) The split.** `work_item:archive` gates `archiveWorkItem` / `unarchiveWorkItem`
+on all three seams — the service, the two MCP tools, the two `/api/v1`
+operations. `work_item:delete` keeps the irreversible cascade and its dry run,
+stays the sole member of `IRREVERSIBLE_PERMISSIONS`, and stays unexposed by v1.
+No OPERATION changed: archive is still reversible and still non-cascading. What
+changed is the boundary of who may invoke which.
+
+**(b) Back-compatibility: IMPLICATION, not migration, and not accepted loss.**
+An existing grant holding `work_item:delete` alone would otherwise lose archive on
+the day this shipped. The three candidates were: imply archive from delete at
+resolution; migrate the stored grants; or accept the loss and name it.
+
+- **Accepting the loss is rejected** — it silently breaks live credentials and
+  live custom roles for no gain, and it is the only part of this change that
+  could.
+- **Migration is rejected, and by a rule this document already made.** §5's
+  posture is _no migration, no rewritten rows_, and `ApiToken.scopes`' own schema
+  comment says NOTHING rewrites them. `project_role_definition.permissions` is
+  read the same way (`customRoleBase` drops what the catalog no longer knows and
+  never widens). A migration here would be the first exception to a rule with two
+  carriers, in exchange for nothing the read path cannot do.
+- **IMPLICATION is chosen.** `PERMISSION_IMPLICATIONS` (`lib/permissions/catalog.ts`)
+  maps `work_item:delete → work_item:archive`, and `withImpliedPermissions` is
+  applied by both resolution seams — `resolvePermissions` for a role or a stored
+  custom-role array, `expandStoredGrant` for a token's stored column. Every
+  credential and every role that could archive before can archive after, with
+  nothing rewritten.
+
+  **⚠️ It is not a compatibility shim, and that is why it has no sunset.** It is a
+  statement about the OPERATIONS: destroying a subtree irreversibly strictly
+  dominates hiding one row reversibly, so withholding archive from a holder of
+  delete expresses nothing a grantor could mean. It is equally true of a grant
+  authored tomorrow. The map is deliberately single-entry, expanded in ONE pass
+  rather than as a closure, and a guard pins that no implied key is itself an
+  implier — this is not a permission hierarchy, and the catalog stays a flat set.
+
+  It applies at RESOLUTION, so the role editor still shows what a role LISTS while
+  the grid and the gates agree on what it CONFERS — the same relationship a legacy
+  scope string has to its §5 expansion.
+
+**(c) Role assignment: `member` GAINS `work_item:archive`.** Not behaviour-neutral,
+deliberately. Under one key a member — who may edit every field of every work
+item — could not archive at all, which is a far stronger restriction than _"may not
+destroy a subtree"_ and one nobody chose: it fell out of the grouping. It was
+also already visible as a defect, because the shared ⋯ menu drew the Archive row
+on `work_item:edit` while the service refused it on `work_item:delete`, so the
+product has been offering members an affordance that 403s. The mirror is Linear,
+whose archive semantics this operation already copies — `archiveWorkItem`'s own
+header cites _"the Linear shape"_ for leaving children intact — and where
+archiving is every member's ordinary remove. `viewer` does not gain it (a
+read-only actor removes nothing), and neither does the implicit workspace-member
+grant: taking a row out of every active view for the whole team is an act of
+ownership on a project nobody put you on, reversible or not.
+
+**(d) The device grant is NOT widened.** `CLI_TOKEN_GRANT` covers exactly what the
+CLI CALLS, and the CLI calls neither archive tool. The workflow that wants archive
+routinely — the re-plan procedure's _archive the superseded nodes_ — runs under a
+workspace PAT that chooses its own grant, and that PAT is the caller this split
+was filed for. §7's rule stands: this set widens only where a card argues for it.
+
+**(e) The legacy map is corrected rather than left merged.** `work_items:archive`
+now expands to `work_item:archive` alone, restoring what that string meant when it
+was minted and closing the archive → delete half of §5's accepted merge — a
+credential granted only the recoverable operation had silently gained the
+irreversible one. `work_items:delete` is unchanged and its holder keeps archiving,
+via (b).
+
+**What is machine-checked, so this cannot quietly revert:** the v1 route audit's
+`ARCHIVE_PATHS` carve-out is DELETED and the rule keys on the permission again —
+any v1 route declaring `work_item:delete` is a violation with no exception, which
+is the proof that the vocabulary now says what the product means.
+
+---
 
 ---
 

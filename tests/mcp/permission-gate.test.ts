@@ -7,7 +7,12 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { permissionDenial, PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { toolPermission } from '@/lib/mcp/toolPermissions';
-import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS, type TokenGrant } from '@/lib/tokens/grant';
+import {
+  DEFAULT_TOKEN_GRANT,
+  GRANTABLE_PERMISSIONS,
+  expandStoredGrant,
+  type TokenGrant,
+} from '@/lib/tokens/grant';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -83,10 +88,14 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     }
   });
 
-  it('the default grant passes every tool EXCEPT the irreversible three', () => {
-    // Archive joins delete here, and that is the narrowing ADR §8 records: both
-    // assert `work_item:delete`, so one key cannot hold them apart.
-    const withheld = new Set(['delete_work_item', 'archive_work_item', 'unarchive_work_item']);
+  // ⚠️ THREE BECOMES ONE (MOTIR-3629). This read "EXCEPT the irreversible three",
+  // and its comment named the reason: "archive joins delete here, and that is the
+  // narrowing ADR §8 records — both assert `work_item:delete`, so one key cannot
+  // hold them apart." The key that holds them apart now exists, so the withheld
+  // set is exactly the tool that is actually irreversible, and the default grant
+  // archives again (ADR §10).
+  it('the default grant passes every tool EXCEPT the irreversible one', () => {
+    const withheld = new Set(['delete_work_item']);
     for (const name of MCP_TOOL_NAMES) {
       const denied = permissionDenial(name, DEFAULT_TOKEN_GRANT);
       if (withheld.has(name)) {
@@ -205,7 +214,7 @@ describe('permission gate — wired through the MCP server', () => {
     await scopeShort.close();
   });
 
-  it('the default grant can neither delete NOR archive — they share one key', async () => {
+  it('the default grant CAN archive and cannot delete — the two are separable now', async () => {
     const fx = await makeWorkItemFixture();
     const item = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'Archive vs delete' },
@@ -220,15 +229,17 @@ describe('permission gate — wired through the MCP server', () => {
     expect(del.isError).toBe(true);
     expect(textOf(del.content)).toContain(PERMISSION_NOT_GRANTED_CODE);
 
-    // Archive was ON by default under the six scopes. Both operations assert
-    // `work_item:delete` in shipped code, so "all but the irreversible one"
-    // withholds both — ADR §8, asserted here rather than discovered.
+    // ⚠️ INVERTED (MOTIR-3629). Archive was ON by default under the six scopes;
+    // ADR §8 recorded losing it as the accepted cost of one key serving two
+    // operations, and this assertion pinned the loss. With `work_item:archive`
+    // split out, "all but the irreversible one" withholds only the destroy —
+    // which is what §8 said it wanted and could not have. Same grant, same
+    // client, opposite answers on the two tools: that IS the split.
     const arch = await client.callTool({
       name: 'archive_work_item',
       arguments: { key: item.identifier },
     });
-    expect(arch.isError).toBe(true);
-    expect(textOf(arch.content)).toContain('work_item:delete');
+    expect(arch.isError).toBeFalsy();
     await client.close();
   });
 
@@ -238,12 +249,65 @@ describe('permission gate — wired through the MCP server', () => {
       { projectId: fx.projectId, kind: 'task', title: 'Archivable' },
       fx.ctx,
     );
-    const client = await connectClient(fx.ctx, ['project:browse', 'work_item:delete']);
+    // ⚠️ THE GRANT IS BUILT THE WAY `apiTokensService.verify` BUILDS IT, and that
+    // is the point of this case after MOTIR-3629. The stored value is the one a
+    // token minted before the split carries — `work_item:delete` and no archive
+    // key — and the implication is applied by `expandStoredGrant` at that single
+    // seam, so no gate ever sees an unexpanded grant. `connectClient` injects a
+    // grant directly, so it has to do the expansion the transport would.
+    //
+    // The distinction is worth keeping sharp: THE GATE IS AN EXACT MEMBERSHIP
+    // TEST and must stay one (the case below proves it). Back-compatibility is a
+    // property of how a stored row RESOLVES, not of how the gate compares.
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:delete']);
+    const client = await connectClient(fx.ctx, grant);
     const arch = await client.callTool({
       name: 'archive_work_item',
       arguments: { key: item.identifier },
     });
     expect(arch.isError).toBeFalsy();
+    const del = await client.callTool({
+      name: 'delete_work_item',
+      arguments: { key: item.identifier },
+    });
+    expect(del.isError).toBeFalsy();
+    await client.close();
+  });
+
+  it('the GATE itself implies nothing — an unexpanded delete grant is refused the archive', () => {
+    // The companion to the case above, and the reason it is worth writing: if the
+    // gate ever learned the implication too, the rule would live in two places
+    // and could disagree. `permissionDenial` is a pure membership decision over
+    // the grant it is handed; `expandStoredGrant` is where a stored row becomes
+    // that grant. One seam, one rule.
+    expect(
+      permissionDenial('archive_work_item', ['project:browse', 'work_item:delete']),
+    ).not.toBeNull();
+    expect(
+      permissionDenial('archive_work_item', ['project:browse', 'work_item:archive']),
+    ).toBeNull();
+  });
+
+  it('an ARCHIVE-only grant archives and is refused the delete, naming the key', async () => {
+    // The other direction, and the one no grant could express before: the
+    // implication runs one way only.
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Tidy-only' },
+      fx.ctx,
+    );
+    const client = await connectClient(fx.ctx, ['project:browse', 'work_item:archive']);
+    const arch = await client.callTool({
+      name: 'archive_work_item',
+      arguments: { key: item.identifier },
+    });
+    expect(arch.isError).toBeFalsy();
+    const del = await client.callTool({
+      name: 'delete_work_item',
+      arguments: { key: item.identifier },
+    });
+    expect(del.isError).toBe(true);
+    expect(textOf(del.content)).toContain('work_item:delete');
     await client.close();
   });
 });

@@ -104,9 +104,10 @@ Those permissions are exactly what the CLI's requests need: `project:browse` for
 the selection, detail and prompt endpoints, `work_item:edit` for the status flips
 and for marking an item integrated / closing a session (which `motir auto` and
 `motir done --session` use), `comment:add` for posting a comment, and `ai:plan`
-for a planning submit. It calls nothing gated by `sprint:manage` or
-`work_item:delete` — so a credential living unattended on a remote box cannot
-delete a subtree.
+for a planning submit. It calls nothing gated by `sprint:manage`,
+`work_item:archive` or `work_item:delete` — so a credential living unattended on a
+remote box cannot delete a subtree, and cannot archive one either (it never asks
+to).
 
 **A missing permission is an HTTP 403, and the CLI names it.** Every `/api/v1`
 endpoint declares the permission it requires, and the CLI knows that declaration

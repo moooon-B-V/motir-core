@@ -97,7 +97,13 @@ afterAll(async () => {
 });
 
 describe('work_item:delete — a member keeps every edit and loses the cascade', () => {
-  it('lets a MEMBER edit the item and refuses them archive, unarchive and delete', async () => {
+  // ⚠️ THE MEMBER'S ROW SPLIT IN TWO (MOTIR-3629). This asserted that a member is
+  // refused "archive, unarchive AND delete", which was the whole reach of one key
+  // — and the archive third of it was never argued: it fell out of grouping a
+  // reversible single-row hide with an irreversible subtree destroy. A member now
+  // archives; the cascade and its preview stay admin-only, which is what the
+  // describe block's title has always been about.
+  it('lets a MEMBER edit the item and ARCHIVE it, and refuses them the cascade', async () => {
     const fx = await makeFixture('del-member');
     const id = await itemFor(fx);
 
@@ -106,9 +112,10 @@ describe('work_item:delete — a member keeps every edit and loses the cascade',
       workItemsService.updateWorkItem(id, { title: 'Renamed by a member' }, fx.memberCtx),
     ).resolves.toBeTruthy();
 
-    await expect(workItemsService.archiveWorkItem(id, fx.memberCtx)).rejects.toBeInstanceOf(
-      PermissionDeniedError,
-    );
+    // …and so does the reversible removal, both ways round.
+    await expect(workItemsService.archiveWorkItem(id, fx.memberCtx)).resolves.toBeTruthy();
+    await expect(workItemsService.unarchiveWorkItem(id, fx.memberCtx)).resolves.toBeTruthy();
+
     await expect(workItemsService.deleteWorkItem(id, fx.memberCtx)).rejects.toBeInstanceOf(
       PermissionDeniedError,
     );
@@ -122,12 +129,17 @@ describe('work_item:delete — a member keeps every edit and loses the cascade',
   it('refuses a VIEWER the same three, and admits the ADMIN', async () => {
     const fx = await makeFixture('del-admin');
     const id = await itemFor(fx);
+    // A viewer is refused BOTH removals, which is unchanged by MOTIR-3629: the
+    // reversible half is still a removal, and a read-only actor removes nothing.
     await expect(workItemsService.archiveWorkItem(id, fx.viewerCtx)).rejects.toBeInstanceOf(
       PermissionDeniedError,
     );
 
-    // The preview and the destroy now ask the SAME key — the correction this card
-    // makes. Both work for an admin; neither did for the member above.
+    // The preview and the destroy ask the SAME key — MOTIR-2354's correction.
+    // Both work for an admin; neither did for the member above. The archive below
+    // now asks a DIFFERENT key, and the admin passes it via the implication:
+    // `work_item:delete` confers `work_item:archive` at resolution (ADR §10),
+    // which is why this line needed no edit when the key split.
     await expect(workItemsService.getDeletePreview(id, fx.adminCtx)).resolves.toBeTruthy();
     const archived = await workItemsService.archiveWorkItem(id, fx.adminCtx);
     expect(archived.archivedAt).not.toBeNull();

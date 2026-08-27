@@ -2870,6 +2870,15 @@ export const workItemsService = {
    * its descendants stay live (and simply drop out of any subtree filtered to
    * non-archived ancestors). A destructive tree-delete is a separate,
    * explicit action — never a side effect of archive.
+   *
+   * ⚠️ GATED ON `work_item:archive`, NOT `work_item:delete` (MOTIR-3629). The
+   * paragraph above is the reason: the key that governs this had been named after
+   * an operation this one is not, on a rationale — R42's "cascades over a
+   * subtree" — that the sentence "children are deliberately LEFT INTACT"
+   * directly falsifies. A `work_item:delete` grant still reaches this method,
+   * because holding the irreversible destroy confers the reversible hide at
+   * resolution (`PERMISSION_IMPLICATIONS`); what changed is that a role or token
+   * can now hold the hide WITHOUT the destroy, which is what a member holds.
    */
   async archiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
     const { dto, parentId } = await withWorkspaceContext(ctx, async (tx) => {
@@ -2878,7 +2887,7 @@ export const workItemsService = {
       // the archive write.
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
-      await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
+      await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:archive', tx);
 
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
 
@@ -2922,15 +2931,16 @@ export const workItemsService = {
    * {@link archiveWorkItem}, the Jira "restore" action (Subtask 7.8.14). Clears
    * `archivedAt` and records an `'unarchived'` revision, so the item returns to
    * active views (`list_ready` / search) and the History feed shows the restore
-   * the same way it shows the archive. Same tenant-gate + 6.4 edit gate as
-   * archive. The `from` in the revision diff is the archived timestamp the row
+   * the same way it shows the archive. Same tenant-gate + `work_item:archive`
+   * gate as archive (MOTIR-3629) — restoring is the inverse of a reversible act,
+   * so it can never be the tighter of the two. The `from` in the revision diff is the archived timestamp the row
    * carried before the restore (null if it was already live — a no-op restore).
    */
   async unarchiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
     const { dto, parentId } = await withWorkspaceContext(ctx, async (tx) => {
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
-      await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
+      await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:archive', tx);
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent

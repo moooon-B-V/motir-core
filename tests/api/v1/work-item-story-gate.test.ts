@@ -105,10 +105,11 @@ describe('gate — the work-item route surface exists and is clean', () => {
      */
     const expectedPermission = (file: string, method: string): string => {
       if (method === 'GET') return 'project:browse';
-      // Archive and restore assert `work_item:delete` in shipped code — the old
-      // `work_items:archive` / `work_items:delete` split has no counterpart in
-      // the gates (ADR §3), so v1's two archive operations name the one key.
-      if (/\/(archive|restore)\//.test(file)) return 'work_item:delete';
+      // Archive and restore assert `work_item:archive` — the REVERSIBLE,
+      // non-cascading soft-remove, which MOTIR-3629 split out of
+      // `work_item:delete` (ADR §10). The old split the six scopes carried was
+      // right after all; what it lacked was a catalog key to land on.
+      if (/\/(archive|restore)\//.test(file)) return TOOL_PERMISSIONS.archive_work_item;
       // Sprint + backlog writes, keyed on the SPRINT: every write under a
       // `sprints` or `backlog` segment takes `sprint:manage`, including the
       // membership move that happens to end in `/work-items`.
@@ -199,11 +200,7 @@ describe('gate — the work-item route surface exists and is clean', () => {
       );
     });
 
-    it('catches a NON-archive route declaring the irreversible permission', () => {
-      // ⚠️ The rule can no longer key on the permission alone: archive and
-      // delete share `work_item:delete` (ADR §3) and v1 legitimately exposes
-      // archive. So it admits the archive/restore PATHS and fails anything else
-      // — which is the property the old `declares-delete-scope` rule protected.
+    it('catches ANY route declaring the irreversible permission', () => {
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
         export const POST = withV1Route({ permission: 'work_item:delete' }, async () => Response.json({}));
@@ -213,15 +210,40 @@ describe('gate — the work-item route surface exists and is clean', () => {
       );
     });
 
-    it('does NOT fire on the archive/restore routes, which legitimately declare it', () => {
-      const archive = `
+    // ⚠️ INVERTED BY MOTIR-3629, and the inversion is this card's machine-checkable
+    // deliverable. This case used to be "does NOT fire on the archive/restore
+    // routes, which legitimately declare it": archive and delete shared
+    // `work_item:delete`, v1 exposes archive and not delete, and the permission
+    // could no longer express the difference — so the audit admitted the two
+    // archive PATHS by name. A path allow-list standing in for a permission is a
+    // missing vocabulary item announcing itself. With the key split there is
+    // nothing left to except.
+    it('fires on the ARCHIVE path too — the carve-out is gone, not merely unused', () => {
+      const stillDeclaringDelete = `
         import { withV1Route } from '@/lib/api/v1/route';
         export const POST = withV1Route({ permission: 'work_item:delete' }, async () => Response.json({}));
+      `;
+      const rules = auditV1RouteSource(
+        'app/api/v1/work-items/[key]/archive/route.ts',
+        stillDeclaringDelete,
+      ).map((v) => v.rule);
+      expect(rules).toContain('declares-unexposed-permission');
+    });
+
+    it('passes an archive route declaring its own key', () => {
+      const archive = `
+        import { withV1Route } from '@/lib/api/v1/route';
+        export const POST = withV1Route({ permission: 'work_item:archive' }, async () => Response.json({}));
       `;
       const rules = auditV1RouteSource('app/api/v1/work-items/[key]/archive/route.ts', archive).map(
         (v) => v.rule,
       );
       expect(rules).not.toContain('declares-unexposed-permission');
+      // …and so does one at any OTHER path, which is the point of keying on the
+      // permission: a new route reaching archive gets the property for free.
+      expect(
+        auditV1RouteSource('app/api/v1/somewhere/else/route.ts', archive).map((v) => v.rule),
+      ).not.toContain('declares-unexposed-permission');
     });
 
     it('reads a per-verb permission map that distinguishes a GET from its sibling POST', () => {

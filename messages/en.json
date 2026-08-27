@@ -362,9 +362,13 @@
       "label": "Edit work items",
       "description": "Create, update, assign and move work items, and transition them on the board."
     },
+    "work_item_archive": {
+      "label": "Archive work items",
+      "description": "Archive a work item and restore it later. Affects that item only — its children stay."
+    },
     "work_item_delete": {
       "label": "Delete work items",
-      "description": "Archive or delete a work item and everything beneath it."
+      "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
     "work_item_triage": {
       "label": "Triage requests",
