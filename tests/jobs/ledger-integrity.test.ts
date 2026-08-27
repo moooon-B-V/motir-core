@@ -340,30 +340,24 @@ describe('the abandoned-run reap', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('the reap job is registered on both lanes', () => {
-  it('is in the ENGINE registry, daily, with the catch-up disposition stated', () => {
+  it('is in the ENGINE registry under the cron this module exports', () => {
     // ⚠️ AN UNREGISTERED CRON FIRES SILENTLY NEVER — no error, no ledger row,
     // nothing. A reaper that never runs is worse than none, because the ledger
     // then LOOKS supervised.
+    //
+    // ⚠️ AND THE CADENCE ITSELF IS NOT ASSERTED HERE, deliberately. Two structural
+    // guards already own it and both are stronger than a per-job restatement
+    // would be: `tests/jobs/schedule-cluster.test.ts` walks the whole schedule and
+    // fails with the offending job's name if a minute leaves the cluster, and
+    // `tests/jobs/engine-units.test.ts` reads the cron AND the catch-up
+    // disposition back out of `job-queue-foundation.md` §11.4 so the code and the
+    // record cannot drift. Restating either here would only buy a second place
+    // for them to disagree. (Both fired on this job's first draft, which picked
+    // `10 4 * * *` — a free-looking minute, which is exactly the reasoning the
+    // cluster guard exists to stop.)
     const registered = engineJob('system.job-run-reap');
     expect(registered).toBeDefined();
     expect(registered!.cron).toBe(JOB_RUN_REAP_CRON);
-    // `skip`, not `latest`: the candidate set is defined by elapsed time, so the
-    // next fire already sees everything a missed one would have. Re-running the
-    // stale tick would do the same work twice.
-    expect(registered!.catchUp).toBe('skip');
-  });
-
-  it('joins the DAILY band rather than opening a tighter cadence', () => {
-    // The clustering constraint (`planTargetLockSweep`'s comment): the longest
-    // quiet gap the schedule can ever have is bounded by its TIGHTEST cadence, so
-    // a new frequent cron re-prices the always-awake compute for every job. What
-    // this recovers has already been wrong for at least six hours and nothing is
-    // waiting on it, so daily is right on the merits too.
-    const [minute, hour, dom, month, dow] = JOB_RUN_REAP_CRON.split(' ');
-    expect([dom, month, dow]).toEqual(['*', '*', '*']);
-    expect(Number(hour)).toBeGreaterThanOrEqual(0);
-    // Not the top of the hour — a shared minute is a pile-up on one machine.
-    expect(minute).not.toBe('0');
   });
 
   it('its handler calls the sweep and returns what the sweep counted', async () => {

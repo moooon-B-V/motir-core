@@ -26,28 +26,40 @@ import { defineJob } from '../defineJob';
 // over several passes rather than holding one transaction across the backlog.
 
 /**
- * Daily, at 04:10 UTC.
+ * Daily, at 06:00 UTC.
  *
- * ⚠️ THE CADENCE IS CHOSEN AGAINST THE SCHEDULE AS A WHOLE, not against this
- * job's own urgency (the clustering argument in `planTargetLockSweep`): the
- * longest quiet gap the cluster can ever have is bounded by its TIGHTEST cadence,
- * so a new frequent cron re-prices the whole always-awake compute bill. Daily is
- * right here on the merits anyway — what this recovers is a row that has ALREADY
- * been wrong for at least six hours, and nothing downstream is waiting on it. It
- * joins the daily housekeeping band rather than opening a new one.
+ * ⚠️ THE MINUTE IS NOT A FREE CHOICE — `:00` or `:30`, and nothing else
+ * (`SCHEDULE_CLUSTER_MINUTES`). Motir's Postgres suspends when idle and bills by
+ * how often it WAKES, and every tick of every scheduled job is a guaranteed
+ * write, so the bill is a property of the SET of schedules and no single job's
+ * comment can defend it. `tests/jobs/schedule-cluster.test.ts` asserts the
+ * resulting quiet gap; the measurement it is priced against is
+ * `docs/decisions/application-hosting.md` §21.
  *
- * `catchUp: 'skip'`: a fire the worker was down across is worth nothing to
- * re-run. The candidate set is defined by elapsed time, so the next fire sees
- * everything the missed one would have, plus whatever accrued since. Running the
- * stale tick as well would do the same work twice.
+ * **This job picked `:10` first, for the load-spreading reason that is correct on
+ * an always-on machine and wrong here, and the guard caught it.** Separation
+ * between the daily sweeps is bought by the HOUR instead — 06:00 shares its cold
+ * start with nothing, sits after the 03:30–05:00 housekeeping band, and lands
+ * before the 09:00 health check, so an operator reading that report sees a ledger
+ * the reap has already been over.
+ *
+ * Daily is right on the merits too: what this recovers has ALREADY been wrong for
+ * at least six hours and nothing downstream is waiting on it.
+ *
+ * `catchUp: 'latest'` (§11.4): a missed fire still owes its work. The candidate
+ * set is defined by elapsed time, so ONE pass sees everything every missed pass
+ * would have — and what waiting for the next scheduled fire costs is another day
+ * of the operator surface showing a dead run as `running`, which is the precise
+ * harm this job exists to end. Replaying is free because the sweep converges: a
+ * closed row stops matching `status = 'running'`.
  */
-export const JOB_RUN_REAP_CRON = '10 4 * * *';
+export const JOB_RUN_REAP_CRON = '0 6 * * *';
 
 export const jobRunReap = defineJob(
   {
     id: 'system.job-run-reap',
     cron: JOB_RUN_REAP_CRON,
-    catchUp: 'skip',
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
