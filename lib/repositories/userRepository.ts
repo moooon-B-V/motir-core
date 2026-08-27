@@ -37,6 +37,18 @@ export const userRepository = {
    * and then re-reads a non-zero count (no duplicate default workspace).
    * Returns null when the user id doesn't exist. Read-inside-a-transaction
    * → requires `tx` per CLAUDE.md.
+   *
+   * ⚠️ AND BY `entitlementsService.assertCanCreateOrganization` (MOTIR-3717),
+   * for the same reason one axis up: the §4.5 org-creation gate counts the
+   * ACTOR's owner/admin orgs, and the window it fails in is the one where that
+   * count is ZERO — so there is no organization row to serialize on and this is
+   * the row that exists first. The two callers now share an invariant worth
+   * naming: **the actor's `user` row is the anchor for any check-then-create
+   * whose predicate is empty on the first call.** `user` carries no RLS
+   * (`relrowsecurity = false`), so unlike `organization` this lock cannot be
+   * filtered out by an UPDATE policy the caller's context does not arm — the
+   * failure mode MOTIR-3710 found. That is a schema fact, so the entitlements
+   * suite re-measures it rather than trusting this sentence.
    */
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
