@@ -5,6 +5,7 @@ import { toPlatformOperatorDTO } from '@/lib/mappers/platformMappers';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
 import { platformAuditService } from '@/lib/services/platformAuditService';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { AdminShell } from './_components/AdminShell';
 
 /**
@@ -46,6 +47,15 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     if (err instanceof NotPlatformStaffError) notFound();
     throw err;
   }
+
+  // The 2FA enforcement gate (MOTIR-3648) — after the staff gate, before the
+  // audit write and before any tenant-scoped read.
+  //
+  // ⚠️ PLATFORM STAFF ARE NOT EXEMPT, and that is the decision rather than an
+  // oversight: this console reaches every tenant's data, so it is the LAST place
+  // a second factor should be optional. The exemption list in `twoFactorGate.ts`
+  // names surfaces that RESOLVE the hold, and nothing here does.
+  await assertTwoFactorCompliance(principal.userId);
 
   // Entering the console IS an audited event — the first question a SOC-2-style
   // reviewer asks the trail is who was in it, and when. One row per admin page

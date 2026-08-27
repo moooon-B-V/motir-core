@@ -918,6 +918,14 @@
       "waiting": "Waiting for your browser…",
       "noMatch": "No passkey on this device matches a Motir account. Sign in with your email and password, then add a passkey from your account settings.",
       "challengeExpired": "That took too long, so we started over. Try again."
+    },
+    "twoFactorRequired": {
+      "requiredBy": "Required by {tier}",
+      "headline": "Set up a second factor to continue",
+      "bodyOrganization": "{tier} requires everyone in the organization to sign in with a second factor. It takes about a minute, and you will go straight back to what you were opening. Nothing has been deleted and you are still a member of every workspace you were in.",
+      "bodyWorkspace": "{tier} requires everyone in the workspace to sign in with a second factor. It takes about a minute, and you will go straight back to what you were opening. Nothing has been deleted and your membership has not changed.",
+      "signOut": "Not now — sign out",
+      "signOutNote": "You can come back and set this up any time you sign in."
     }
   },
   "shell": {

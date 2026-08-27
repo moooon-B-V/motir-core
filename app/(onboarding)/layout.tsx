@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { isAiPlanningConfigured } from '@/lib/ai/planningConfig';
 import { ConnectAiGate } from '@/app/_components/ConnectAiGate';
 import { ONBOARDING_ENTRY_PATH } from '@/lib/onboarding/pendingIdea';
@@ -41,5 +42,9 @@ export default async function OnboardingGroupLayout({ children }: { children: Re
   // with `next=/onboarding`, so after signing in they land back in onboarding
   // rather than the default dashboard. The sign-in form honors `?next`.
   if (!session) redirect(`/sign-in?next=${encodeURIComponent(ONBOARDING_ENTRY_PATH)}`);
+  // The 2FA enforcement gate (MOTIR-3648) — after the session read, before
+  // anything tenant-scoped. This group has no other read to ride, so it is
+  // awaited on its own; that is the whole cost here.
+  await assertTwoFactorCompliance(session.user.id);
   return children;
 }

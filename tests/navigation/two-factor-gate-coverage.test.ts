@@ -1,0 +1,170 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+// Story MOTIR-1215 · Subtask MOTIR-3648 — the gate is ONE helper with FOUR call
+// sites, and four copies of the same three lines is how one route group quietly
+// stays open.
+//
+// So the set is MEASURED rather than remembered: enumerate the route-group
+// layouts under `app/` from the filesystem and fail when one neither calls
+// `assertTwoFactorCompliance` nor appears below with a reason. A new signed-in
+// route group added without the gate turns the suite red on the day it lands,
+// not on the day somebody audits the family.
+
+const ROOT = process.cwd();
+const APP = join(ROOT, 'app');
+const HELPER = 'assertTwoFactorCompliance';
+
+/** Source with comments stripped — a mention in prose is not a call. */
+const code = (rel: string): string =>
+  readFileSync(join(ROOT, rel), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+
+/** Every `app/(group)/layout.tsx` — the choke point each group's pages share. */
+function routeGroupLayouts(): string[] {
+  return readdirSync(APP)
+    .filter((entry) => entry.startsWith('(') && entry.endsWith(')'))
+    .filter((group) => {
+      const p = join(APP, group, 'layout.tsx');
+      try {
+        return statSync(p).isFile();
+      } catch {
+        return false;
+      }
+    })
+    .map((group) => `app/${group}/layout.tsx`)
+    .sort();
+}
+
+/**
+ * The groups that do NOT gate, each with the reason.
+ *
+ * ⚠️ ASSERTED TIGHT IN BOTH DIRECTIONS below, so this cannot rot into a mute
+ * button: an unlisted ungated group fails, and a listed group that HAS started
+ * gating fails too.
+ */
+const EXEMPT: { group: string; why: string }[] = [
+  {
+    group: '(auth)',
+    why: 'Serves people who are NOT signed in — and it must stay exempt for a second reason: the forced-enrolment screen this gate redirects TO lives in this group, so gating it would make the redirect target redirect to itself. The screen carries its own three gates instead (anonymous → /sign-in, compliant → their destination, otherwise render).',
+  },
+  {
+    group: '(public)',
+    why: 'Anonymous by design — public project pages, /explore, the changelog and its feeds. There is no session to hold, and holding one would gate a surface a signed-out reader sees anyway. It also has NO group layout at all, so there is no choke point to gate even if it wanted one; the entry is here to say that is correct rather than an omission.',
+  },
+];
+
+/** A group's layout source, or `null` when the group has none (`(public)`). */
+function layoutSource(group: string): string | null {
+  const rel = `app/${group}/layout.tsx`;
+  try {
+    statSync(join(ROOT, rel));
+  } catch {
+    return null;
+  }
+  return code(rel);
+}
+
+describe('the 2FA enforcement gate covers every signed-in route group', () => {
+  it('every route-group layout either CALLS the helper or is exempt with a reason', () => {
+    const exempt = new Set(EXEMPT.map((e) => e.group));
+    const ungated = routeGroupLayouts()
+      .filter((rel) => !code(rel).includes(HELPER))
+      .filter((rel) => !exempt.has(rel.split('/')[1]!))
+      .map((rel) => `${rel} — call ${HELPER}(userId) after the session read, or add it to EXEMPT`);
+
+    expect(ungated).toEqual([]);
+  });
+
+  it('the four signed-in groups call it, named individually', () => {
+    // The enumeration above cannot tell "all four gate" from "there are no
+    // groups"; this is the positive statement of the same fact.
+    for (const group of ['(authed)', '(onboarding)', '(planning)', '(admin)']) {
+      expect(code(`app/${group}/layout.tsx`), group).toContain(HELPER);
+    }
+  });
+
+  it('an EXEMPT entry that has started gating is a stale exemption, and fails', () => {
+    // Tight the other way, so the list only ever shrinks. A group with no layout
+    // has nothing to read and nothing to have started doing.
+    for (const { group } of EXEMPT) {
+      const src = layoutSource(group);
+      if (src === null) continue;
+      expect(src, `${group} now calls the helper — remove it from EXEMPT`).not.toContain(HELPER);
+    }
+  });
+
+  it('(public) genuinely has no group layout — the exemption is not hiding one', () => {
+    // If it ever gains one, that layout becomes a choke point and this test
+    // fails, which is the moment to decide whether it gates.
+    expect(layoutSource('(public)')).toBeNull();
+  });
+
+  it('⚠️ (auth) is exempt, and the reason names the redirect LOOP it prevents', () => {
+    // The load-bearing half of that exemption: the screen the gate redirects to
+    // lives in this group. Gating it would send a held visitor to a page that
+    // holds them again.
+    const auth = EXEMPT.find((e) => e.group === '(auth)');
+    expect(auth).toBeTruthy();
+    expect(auth!.why).toMatch(/redirect target/i);
+  });
+
+  it('the helper is declared in exactly ONE module', () => {
+    const found: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const p = join(dir, entry);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (entry.endsWith('.ts') && readFileSync(p, 'utf8').includes(`function ${HELPER}`))
+          found.push(p);
+      }
+    };
+    walk(join(ROOT, 'lib'));
+    expect(found).toHaveLength(1);
+    expect(found[0]!.endsWith('lib/auth/twoFactorGate.ts')).toBe(true);
+  });
+});
+
+describe('⚠️ the gate runs AFTER the session read and never as a fifth sequential trip', () => {
+  it('(authed) — the call sits inside the existing Promise.all wave', () => {
+    // MOTIR-3433's wave is a documented performance fix, and this gate runs on
+    // every signed-in page load in the product. An `await` on its own line above
+    // the wave would add a fifth round trip to every one of them.
+    const src = code('app/(authed)/layout.tsx');
+    const session = src.indexOf('await getSession()');
+    const wave = src.indexOf('await Promise.all([');
+    const call = src.indexOf(`${HELPER}(session.user.id)`);
+
+    expect(session).toBeGreaterThan(-1);
+    expect(wave).toBeGreaterThan(session);
+    // Inside the wave, not before it.
+    expect(call).toBeGreaterThan(wave);
+    expect(call).toBeLessThan(src.indexOf('])', wave));
+    // …and NOT awaited on its own line.
+    expect(src).not.toMatch(new RegExp(`await ${HELPER}\\(`));
+  });
+
+  it('(onboarding) and (planning) — after the session read, before children render', () => {
+    for (const group of ['(onboarding)', '(planning)']) {
+      const src = code(`app/${group}/layout.tsx`);
+      const session = src.indexOf('await getSession()');
+      const call = src.indexOf(`await ${HELPER}(`);
+      const render = src.indexOf('return children');
+      expect(call, group).toBeGreaterThan(session);
+      expect(render, group).toBeGreaterThan(call);
+    }
+  });
+
+  it('(admin) — after the staff gate, before the audit write', () => {
+    // Platform staff are NOT exempt: this console reaches every tenant's data,
+    // so it is the last place a second factor should be optional.
+    const src = code('app/(admin)/layout.tsx');
+    const staff = src.indexOf('await requirePlatformStaff()');
+    const call = src.indexOf(`await ${HELPER}(`);
+    const audit = src.indexOf('platformAuditService.record');
+    expect(call).toBeGreaterThan(staff);
+    expect(audit).toBeGreaterThan(call);
+  });
+});

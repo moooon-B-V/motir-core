@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
 
 // The planning route group's layout (Subtask MOTIR-1729). The universal planning
@@ -21,5 +22,8 @@ import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
 export default async function PlanningGroupLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
   if (!session) redirect(`/sign-in?next=${encodeURIComponent(PLANNING_WORKSPACE_PATH)}`);
+  // The 2FA enforcement gate (MOTIR-3648) — after the session read, before
+  // anything tenant-scoped.
+  await assertTwoFactorCompliance(session.user.id);
   return children;
 }

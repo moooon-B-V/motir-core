@@ -301,6 +301,11 @@ export default defineConfig({
         // 100/100/100/100 apiece before pinning.
         'app/**/workspace/security/actions.ts',
         'app/**/_components/WorkspaceFoldInSection.tsx',
+        // Story MOTIR-1215 · Subtask MOTIR-3648 — the enforcement gate and the
+        // screen it holds people at. Measured at 100/100/100/100 apiece.
+        'lib/auth/twoFactorGate.ts',
+        'app/**/two-factor-required/page.tsx',
+        'app/**/two-factor-required/_components/SignOutLink.tsx',
         // ⚠️ `_guard.tsx` is REPORT-ONLY (below `thresholds`), and the reason is
         // worth stating rather than quietly omitting: MOTIR-2476 measured it at
         // 50% lines, and the uncovered half is `guardSettingsPage`'s body — one
@@ -1557,6 +1562,24 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/WorkspaceFoldInSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/auth/twoFactorGate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/two-factor-required/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/two-factor-required/_components/SignOutLink.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

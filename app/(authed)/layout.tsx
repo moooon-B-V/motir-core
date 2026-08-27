@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
@@ -109,11 +110,21 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // keeps its existing order. This is the only performance work in the card: no
   // query changed, no index, no cache, and the shell renders exactly what it
   // rendered before.
+  //   · assertTwoFactorCompliance()  — the 2FA enforcement gate (MOTIR-3648).
+  //                                  Held IN THIS WAVE rather than awaited above
+  //                                  it: it runs on every signed-in page load,
+  //                                  and a fifth sequential round trip is exactly
+  //                                  what MOTIR-3433's wave exists to avoid. It
+  //                                  redirects by throwing, so the rejection
+  //                                  leaves the `Promise.all` and the framework
+  //                                  answers it — nothing below here runs for a
+  //                                  visitor who is being held.
   const [ctx, workspaceModels, platformStanding, cookieStore] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(session.user.id),
     platformStaffRepository.findStandingByUserId(session.user.id),
     cookies(),
+    assertTwoFactorCompliance(session.user.id),
   ]);
   const isPlatformStaff = platformStanding?.platformRole != null;
 
