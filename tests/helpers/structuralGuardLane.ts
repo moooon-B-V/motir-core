@@ -58,6 +58,14 @@ export const STRUCTURAL_GUARD_SPECS = [
   // nothing, and imports nothing from `lib/` or `app/`, so it carries no
   // coverage out of the merged report.
   'tests/theme/shellViewportUnits.test.ts',
+  // ── tests/legal/ — the subprocessor-list guard (MOTIR-3631) ───────────────
+  // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
+  // read against `content/legal/subprocessors.md` and `package.json`. It opens
+  // no database, renders nothing, and imports nothing from `lib/` or `app/`, so
+  // it carries no coverage into the merged report — but it reads ~1 650 files,
+  // which is precisely the profile this lane exists to keep out of the sharded
+  // database job.
+  'tests/legal/subprocessor-list-guard.test.ts',
 ] as const;
 
 /**
