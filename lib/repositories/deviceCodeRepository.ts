@@ -106,4 +106,15 @@ export const deviceCodeRepository = {
   async deleteById(id: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.deviceCode.delete({ where: { id } });
   },
+
+  /**
+   * Drop every in-flight `motir login` grant this user has claimed — the
+   * erasure sweep's DELETE group (MOTIR-3702). A claimed-but-unapproved grant
+   * is a live credential in the making, and an erased account must not be able
+   * to finish one.
+   */
+  async deleteAllForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.deviceCode.deleteMany({ where: { userId } });
+    return count;
+  },
 };

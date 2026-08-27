@@ -407,6 +407,12 @@ export interface JobEventDataMap {
   'system.public-follow-digest-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
+  /** The ACCOUNT-ERASURE sweep (Story 8.4 · MOTIR-3702) — erases and anonymises
+   *  the accounts whose 30-day grace period has run out, which is what makes
+   *  `content/legal/privacy.md` §6's *"we erase or anonymise within 30 days"*
+   *  true. Cron triggered, so it carries no tenant: the due set spans users and
+   *  tenants and the ledger row is untenanted, like every `system.*` sweep. */
+  'system.account-erasure-sweep': SystemScheduledData;
   /** The code-graph OFFBOARDING sweep (Story MOTIR-2192 · MOTIR-2168) — drains
    *  due `code_graph_offboarding` rows through motir-ai's offboard seam, which is
    *  what makes §14's retention window real. Cron triggered, so it carries no

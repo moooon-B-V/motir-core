@@ -254,6 +254,24 @@ export default defineConfig({
         // test exercises.
         'lib/services/accountDeletionService.ts',
         'lib/auth/accountDeletionCancellation.ts',
+        // Story 8.4 · Subtask MOTIR-3702 — the ERASURE SWEEP that acts on those
+        // rows: the vocabulary, the service that performs the three DECISION 3
+        // groups, and the cron definition that runs it. All three MEASURED at
+        // 100/100/100/100 on this branch before being pinned, per the note at
+        // the top of this block. Gated for a reason stronger than the two above
+        // it: this is the only code in the product that makes
+        // `content/legal/privacy.md` §6's *"we erase or anonymise within 30
+        // days"* true, and the arms a regression would take out silently — the
+        // status re-read under the lock that makes a day-29 cancel stick, the
+        // per-account catch that stops one failure holding the queue, the
+        // organization block re-checked at erasure time — are exactly the ones
+        // no happy-path test exercises. The job DEFINITION is included as well
+        // (unlike `attachmentGc`, and like `codeGraphOffboardSweep`): a
+        // retention sweep whose handler never runs is a window the product
+        // states and never enforces.
+        'lib/users/accountErasure.ts',
+        'lib/services/accountErasureSweepService.ts',
+        'lib/jobs/definitions/accountErasureSweep.ts',
         'lib/repositories/publicFollowRepository.ts',
         'lib/services/publicFollowService.ts',
         'lib/services/publicFollowDigestService.ts',
@@ -1807,6 +1825,26 @@ export default defineConfig({
           statements: 90,
         },
         'lib/auth/accountDeletionCancellation.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story 8.4 · Subtask MOTIR-3702 — all three measured at 100 on every
+        // axis (see the `include` block's note). 90 is the standard floor.
+        'lib/users/accountErasure.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/accountErasureSweepService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/accountErasureSweep.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

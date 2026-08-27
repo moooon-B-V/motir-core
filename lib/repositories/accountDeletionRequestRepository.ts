@@ -170,6 +170,47 @@ export const accountDeletionRequestRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * The ERASURE SWEEP's work set (MOTIR-3702) — every request the nightly job
+   * has something to do for, newest deadline last.
+   *
+   * TWO ARMS, and the second is not a convenience:
+   *
+   *   * `scheduled` and past its deadline — the ordinary due set, served by the
+   *     `(status, erasure_due_at)` index this table already carries.
+   *   * `completed` and finished since `resumeFloor` — the RESUME arm. The
+   *     erasure commits in one locked transaction and then deletes the
+   *     reader's sole-membership workspaces AFTER it (through
+   *     `workspacesService.deleteWorkspace`, which opens its own transactions
+   *     and so cannot be inside one). A crash between the two leaves a
+   *     `completed` request whose workspaces still stand, and the first arm can
+   *     never see it again. `lib/users/accountErasure.ts`'s
+   *     `ERASURE_RESUME_WINDOW_DAYS` is where the bound is argued.
+   *
+   * ⚠️ `tx` REQUIRED, like every read here — the table is RLS-gated and the
+   * sweep binds `app.system_admin` (the policy's other arm). On the `db`
+   * singleton the predicate is NULL and this returns ZERO ROWS while raising
+   * nothing, which on this surface reads as *"nobody is due for erasure"*.
+   *
+   * `take` bounds one tick's work; the residue is the next tick's, exactly as
+   * `attachmentGc`'s cursor bound is.
+   */
+  async findDueOrResumable(
+    input: { now: Date; resumeFloor: Date; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<AccountDeletionRequest[]> {
+    return tx.accountDeletionRequest.findMany({
+      where: {
+        OR: [
+          { status: 'scheduled', erasureDueAt: { lte: input.now } },
+          { status: 'completed', completedAt: { gte: input.resumeFloor } },
+        ],
+      },
+      orderBy: [{ erasureDueAt: 'asc' }, { id: 'asc' }],
+      take: input.take,
+    });
+  },
+
   /** Move one request to a terminal state (cancelled / completed). Write → `tx`
    *  required. Keyed by `id` — the caller has just locked that row. */
   async update(

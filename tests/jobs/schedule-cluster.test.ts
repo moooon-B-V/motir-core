@@ -135,7 +135,10 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // NOT move is everything below it. 16 since `system.job-run-reap`
     // (MOTIR-3683), whose first draft picked `10 4 * * *` and was stopped by the
     // minute assertion above, exactly as §21 predicts a fifteenth job would be.
-    expect(jobSchedules().length).toBe(16);
+    // 17 since `system.account-erasure-sweep` (MOTIR-3702), which took `0 3 * * *`
+    // — an hour of its own at the FRONT of the nightly cascade, on a minute the
+    // set already wakes on, so the four assertions below are untouched.
+    expect(jobSchedules().length).toBe(17);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);
