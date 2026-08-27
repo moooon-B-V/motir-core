@@ -904,6 +904,23 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
   /\bdesign-notes\.md\b/i,
   /\.pen\b/i,
   /\bthree-file\b/i,
+  // ── The SUBJECT, not only the PATH (MOTIR-3625) ────────────────────────────
+  // A criterion can be ABOUT a design artefact while naming no file at all. The
+  // canonical one is an EXPORT spec — *"each `.png` is a full-page export of its
+  // own mock rendered … at `deviceScaleFactor: 2`"* — which names the thing it
+  // exports and no path, so the path-only reading saw `page` + `rendered` and
+  // read a design card's own export criterion as the surface that card draws.
+  // The card was then reported against ITSELF, which is the one shape the
+  // exclusion below exists to prevent.
+  //
+  // ⚠️ A BARE `.png` IS DELIBERATELY NOT A TELL. It is also an upload format and
+  // an avatar's, so `\.png\b` alone would MANUFACTURE a design criterion on a
+  // card that has none — and a manufactured design criterion plus any ordinary
+  // render criterion is a brand-new false positive, the exact cost this widening
+  // is paying down. Every export criterion that motivated it names its mock.
+  /\bmock(?:-?ups?|s)?\b/i,
+  /\bartboards?\b/i,
+  /\bdesign assets?\b/i,
 ];
 
 /**
@@ -926,7 +943,7 @@ const SURFACE_VERB_RE =
  */
 const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[jt]sx\b/i;
 
-/** Whether a criterion's own deliverable is a design asset. */
+/** Whether a criterion's own SUBJECT is a design asset — a path or an artefact. */
 function namesDesignAsset(text: string): boolean {
   return DESIGN_ASSET_MATCHERS.some((re) => re.test(text));
 }
@@ -968,6 +985,21 @@ export interface SelfBlockingDesignCriteria {
  * stays quiet — and a card with no acceptance-criteria heading returns `null`
  * here, the same never-suppress-on-a-heuristic contract
  * {@link firstPostMergeCriterion} has.
+ *
+ * ⚠️ That exclusion is per-CRITERION and stays per-criterion (MOTIR-3625). What
+ * widened is what makes a criterion a design one — the ARTEFACT matchers above,
+ * so an export spec naming its mock rather than a path is excluded too. It did
+ * NOT widen to *"any criterion on a card that produces an asset anywhere"*,
+ * which reads well and is self-defeating: the design criterion is, by
+ * construction, a criterion that names an asset, so that reading would leave
+ * every card with a design criterion and none with a surface criterion, and the
+ * check could never fire again.
+ *
+ * ⚠️ AND THIS FUNCTION READS NO EDGES, BY DESIGN. A card whose design is already
+ * LIFTED into a sibling it is `blocked_by` still names the mock it consumes and
+ * still builds the surface, so it is indistinguishable HERE from one that never
+ * lifted anything. That population is separated by the caller, which holds the
+ * graph — see `selfBlockingDesignAdvisory`'s `hasDesignBlocker`.
  */
 export function selfBlockingDesignCriteria(
   md: string | null | undefined,

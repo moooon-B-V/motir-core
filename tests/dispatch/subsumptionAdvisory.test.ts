@@ -378,6 +378,10 @@ describe('the batch path — validate_work_item scans a whole subtree in ONE que
         storyPoints: 3,
         estimateMinutes: 45,
         hasChildren: false,
+        // No design blocker (MOTIR-3625) — the value that leaves the
+        // SELF-BLOCKING-DESIGN check free to fire, so this helper never
+        // suppresses a family it is not about.
+        hasDesignBlocker: false,
       })),
       fx.ctx,
     );
