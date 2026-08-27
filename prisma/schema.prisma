@@ -342,6 +342,20 @@ model User {
   // Modelled on both sides per the FK-`@relation` rule so `migrate dev` reports
   // no drift.
   legalAcceptances            LegalAcceptance[]
+  // Account-erasure requests this person has raised (Story 8.4 · MOTIR-3698).
+  // A LIST rather than an optional one-to-one: at most one may be OPEN at a
+  // time (the `account_deletion_request_open_per_user_key` partial unique index
+  // enforces it in the database), but a cancelled request stays on record and a
+  // second one may follow it. Cascade — the request is substrate for erasing
+  // this account and has no meaning once the account is gone (the
+  // `legalAcceptances` / `apiTokens` semantics). Modelled on both sides per the
+  // FK-`@relation` rule so `migrate dev` reports no drift.
+  accountDeletionRequests     AccountDeletionRequest[]
+  // Personal-data export requests this person has raised (Story 8.4 ·
+  // MOTIR-3698). A LIST for the same reason: each request builds its own
+  // archive, and the previous ones remain as history until they expire.
+  // Cascade, same semantics.
+  dataExportRequests          DataExportRequest[]
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -7539,4 +7553,188 @@ model LegalAcceptance {
   /// filters on; the slug narrows it in the same index.
   @@index([userId, documentSlug])
   @@map("legal_acceptance")
+}
+
+/// What state an {@link AccountDeletionRequest} is in — a Postgres ENUM, not a
+/// string, and that is a decision rather than a default (Story 8.4 ·
+/// MOTIR-3698).
+///
+/// The `Data › Data & privacy` pane renders ONE state per value and the erasure
+/// sweep branches on them, so every consumer will hold a `Record<Status, …>`
+/// that TypeScript certifies as total. Over a free `String` column that
+/// certificate certifies nothing: the database can hold a value the map has
+/// never heard of, and an unknown status resolving to a plausible default is
+/// indistinguishable from the real thing on a surface that tells someone when
+/// their account will be erased. The enum is what makes the compiler's totality
+/// claim true of the DATA and not merely of the type.
+///
+/// THREE values, and there is no `pending` / `failed` arm. Scheduling is a
+/// single committed transaction, so a request is `scheduled` the moment it
+/// exists; a sweep that cannot finish leaves the row `scheduled` and retries,
+/// because a deletion that has not happened is still due (MOTIR-3702 owns the
+/// sweep and its retry semantics).
+enum AccountDeletionStatus {
+  /// The account is closed and the erasure is due at `erasureDueAt`. The ONE
+  /// state the partial unique index treats as open — a user may hold at most
+  /// one row here.
+  scheduled
+  /// The person signed back in (or used the banner) before the window ran out.
+  /// Terminal: cancelling does not reopen, a new request is a new row.
+  cancelled
+  /// The erasure sweep ran and finished. Terminal.
+  completed
+
+  @@map("account_deletion_status")
+}
+
+/// What state a {@link DataExportRequest} is in — a Postgres ENUM for the same
+/// reason as {@link AccountDeletionStatus} (Story 8.4 · MOTIR-3698). The pane
+/// draws one panel per value: a spinner, a Download button, a failure with a
+/// contact route, and an expired archive that must be requested again.
+enum DataExportStatus {
+  /// The background build is running (or queued). No file exists yet.
+  preparing
+  /// The archive is built and downloadable until `expiresAt`.
+  ready
+  /// The build failed; `failureReason` says why and the pane routes the reader
+  /// to `privacy@motir.co` (design DECISION 2's Art. 12(3) path).
+  failed
+  /// The seven-day retention ran out and the blob was deleted. The row survives
+  /// so the pane can say what happened instead of showing nothing.
+  expired
+
+  @@map("data_export_status")
+}
+
+/// One request to close and erase an account — GDPR Art. 17 (Story 8.4 ·
+/// MOTIR-3698; design of record `design/settings/design-notes.md` →
+/// `Data & privacy` → DECISION 4).
+///
+/// DELETION SCHEDULES, IT DOES NOT FIRE. The account closes immediately and the
+/// erasure runs `ACCOUNT_ERASURE_WINDOW_DAYS` later; signing in before then
+/// cancels it. This row is that schedule: it exists so the window is a fact in
+/// the database rather than a promise in copy, and so the app-wide cancel banner
+/// has something to read.
+///
+/// ⚠️ `erasureDueAt` IS COMPUTED, NEVER TYPED. `lib/account/dataSubjectRequests.ts`
+/// derives it from `ACCOUNT_ERASURE_WINDOW_DAYS`, which is the number
+/// `content/legal/privacy.md` §6 publishes as a promise to users. A literal `30`
+/// in a service or a migration is how a published legal promise and shipped
+/// behaviour quietly diverge — and here the divergence would be about when
+/// somebody's account is erased.
+///
+/// AT MOST ONE OPEN REQUEST PER USER, enforced by the PARTIAL UNIQUE INDEX
+/// `account_deletion_request_open_per_user_key` (`(user_id) WHERE status =
+/// 'scheduled'`) and NOT by application code. Scheduling is a check-then-write,
+/// and a `SELECT … FOR UPDATE` over a predicate matching ZERO rows locks
+/// nothing: two concurrent requests both read "no open request" and both insert.
+/// The index is therefore the real guard on the FIRST write and the lock is the
+/// guard on every subsequent one; the service (MOTIR-3700) translates the
+/// resulting `P2002` into its typed domain error rather than letting a raw
+/// driver code escape as a 500.
+///
+/// The index is deliberately the table's ONLY index on `(user_id)` alone: Prisma
+/// pairs a database index to a datamodel index BY COLUMN LIST and cannot express
+/// a `WHERE` clause, so an `@@index([userId])` beside it would drift for ever as
+/// a spurious rename (`CLAUDE.md`, the partial-index rule). The history read
+/// uses `(userId, requestedAt)`, which earns its second column from its own
+/// `ORDER BY`.
+///
+/// TENANCY — identity-scoped, so the RLS policy keys on `app.user_id` (the
+/// `api_token` / `legal_acceptance` precedent), with a `system_admin` arm for the
+/// erasure sweep, which runs with no user bound. See the migration for the full
+/// reasoning.
+model AccountDeletionRequest {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  /// When the person asked. The window is measured from HERE, not from `now()`
+  /// at read time, so a request's due date never moves.
+  requestedAt  DateTime              @default(now()) @map("requested_at")
+  /// When the erasure becomes due — `requestedAt + ACCOUNT_ERASURE_WINDOW_DAYS`.
+  /// Persisted rather than derived at read time because it is the promise the
+  /// banner and the pane both display, and a stored deadline survives a change
+  /// to the constant for requests already in flight.
+  erasureDueAt DateTime              @map("erasure_due_at")
+  status       AccountDeletionStatus @default(scheduled)
+  /// When the person cancelled, if they did. Null for every other state.
+  cancelledAt  DateTime?             @map("cancelled_at")
+  /// When the erasure sweep finished, if it has. Null for every other state.
+  completedAt  DateTime?             @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The pane's history read — this person's requests, newest first. NOT
+  /// `([userId])`: see the model's doc comment on the partial-index rule.
+  @@index([userId, requestedAt])
+  /// The erasure sweep's read — every request whose window has run out. Both
+  /// columns are in its `WHERE`, so the second earns its place.
+  @@index([status, erasureDueAt])
+  @@map("account_deletion_request")
+}
+
+/// One request for a copy of everything this account holds — GDPR Art. 15 +
+/// Art. 20 (Story 8.4 · MOTIR-3698; design of record
+/// `design/settings/design-notes.md` → `Data & privacy` → DECISIONs 1 and 2).
+///
+/// THE FILE IS HANDED OVER IN THE PANE, NOT IN THE EMAIL. A private object is
+/// served through a presigned URL with a 300-second TTL (`signedDownloadUrl` in
+/// `lib/blob/uploader.ts`), and a URL that dies in five minutes cannot be emailed
+/// to a human being. So the shape is: request → background build → email
+/// notification → the reader RETURNS to the pane → Download mints a fresh link.
+/// That return trip is only a real instruction if the archive is still there when
+/// they make it, which is what `expiresAt` is: `builtAt +
+/// DATA_EXPORT_RETENTION_DAYS`. The sweep that expires a row and deletes its blob
+/// rides with the export build (MOTIR-3701); this model carries the column.
+///
+/// NO UNIQUENESS CONSTRAINT, deliberately — unlike {@link AccountDeletionRequest}.
+/// Two archives of the same account are wasteful, not incorrect: nothing is
+/// destroyed, no promise is doubled, and the pane simply shows the newest. The
+/// throttle that stops somebody queueing fifty of them is a rate limit in the
+/// service (MOTIR-3701), which is where a policy decision belongs — a unique
+/// index here would instead make a second legitimate request after a failure
+/// impossible.
+///
+/// TENANCY — identity-scoped, same policy shape as
+/// {@link AccountDeletionRequest}; the `system_admin` arm is the export BUILD
+/// job, which runs with no user bound.
+model DataExportRequest {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  requestedAt DateTime         @default(now()) @map("requested_at")
+  status      DataExportStatus @default(preparing)
+
+  /// Where the built archive lives in blob storage — the pathname
+  /// `signedDownloadUrl` mints a link for. Null until the build succeeds, and
+  /// null again once the expiry sweep has deleted the object, so a non-null
+  /// value means "there is a file to serve".
+  blobPathname  String?   @map("blob_pathname")
+  /// When the archive finished building. The retention window is measured from
+  /// here, not from `requestedAt`: a build that took an hour must still be
+  /// downloadable for the full seven days after it exists.
+  builtAt       DateTime? @map("built_at")
+  /// When the archive stops being downloadable — `builtAt +
+  /// DATA_EXPORT_RETENTION_DAYS`. Persisted for the same reason
+  /// `erasureDueAt` is: it is displayed, and a stored deadline does not move.
+  expiresAt     DateTime? @map("expires_at")
+  /// Why a `failed` build failed, in operator terms. Never rendered verbatim to
+  /// the reader — the pane shows the copy DECISION 2 fixes and routes to
+  /// `privacy@motir.co`; this column is for the person answering that mail.
+  failureReason String?   @map("failure_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The pane's read — this person's exports, newest first.
+  @@index([userId, requestedAt])
+  /// The expiry sweep's read — every ready archive whose retention has run out.
+  /// Both columns are in its `WHERE`.
+  @@index([status, expiresAt])
+  @@map("data_export_request")
 }

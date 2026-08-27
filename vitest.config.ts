@@ -216,6 +216,15 @@ export default defineConfig({
         'lib/legal/reconsentGate.ts',
         'lib/repositories/legalAcceptanceRepository.ts',
         'lib/services/legalAcceptanceService.ts',
+        // Story 8.4 · Subtask MOTIR-3698 — the data-subject-request SUBSTRATE
+        // (account erasure + personal-data export). All three MEASURED at
+        // 100/100/100/100 on this branch before being pinned, per the note at
+        // the top of this block. The two windows and both repositories are what
+        // 8.4.18-8.4.23 all read or write, so a regression here is a regression
+        // in every slice above them.
+        'lib/users/dataSubjectRequests.ts',
+        'lib/repositories/accountDeletionRequestRepository.ts',
+        'lib/repositories/dataExportRequestRepository.ts',
         'lib/repositories/publicFollowRepository.ts',
         'lib/services/publicFollowService.ts',
         'lib/services/publicFollowDigestService.ts',
@@ -1609,6 +1618,28 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/legalAcceptanceService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story 8.4 · Subtask MOTIR-3698 — all three measured at 100 on every
+        // axis (see the `include` block's note). 90 is the standard floor, so
+        // there is headroom before the gate bites; it is a ratchet against a
+        // regression, not a target to hit.
+        'lib/users/dataSubjectRequests.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/accountDeletionRequestRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/dataExportRequestRepository.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
