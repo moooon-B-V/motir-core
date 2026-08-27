@@ -168,6 +168,29 @@ export const commentRepository = {
   },
 
   /**
+   * How many comments this user WROTE in a workspace — the erasure preview's
+   * `anonymised` comment number (MOTIR-3699), read per SHARED workspace.
+   *
+   * Replies included, `isPublic` comments included: a public-request comment is
+   * still something the reader wrote and still carries their name, and §6's
+   * promise (*"we anonymise your contributions — your name is removed"*) is
+   * about the attribution, not about which surface renders the row.
+   *
+   * `tx` REQUIRED, unlike its two neighbours: `comment_active_workspace` gates
+   * on `app.workspace_id`, and this read is issued once per workspace inside
+   * that workspace's own `withWorkspaceContext`. An unbound count would answer
+   * zero everywhere and raise nothing — an empty ledger that looks like a reader
+   * who never wrote anything.
+   */
+  async countByAuthorInWorkspace(
+    authorId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.comment.count({ where: { workspaceId, authorId } });
+  },
+
+  /**
    * How many comments a work item holds — replies INCLUDED (the Activity
    * section's header count: "N comments" counts every comment, not threads).
    * The denominator behind "Show more comments (N older)". Read-only path →

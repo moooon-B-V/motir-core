@@ -122,6 +122,24 @@ export const workspaceMembershipRepository = {
   },
 
   /**
+   * How many members a workspace has, WITHOUT locking anything — the read the
+   * account-erasure impact preview (MOTIR-3699) uses to decide whether the
+   * reader is a workspace's SOLE member (and so whether it goes with their
+   * account or is a choice they can escape by inviting somebody).
+   *
+   * ⚠️ DELIBERATELY NOT {@link countByWorkspaceForUpdate}. That one exists to
+   * serialize a read-derived WRITE; nothing has been decided at preview time, so
+   * a lock here would take row locks on every workspace the reader belongs to
+   * for a screen that only renders numbers. `tx` is REQUIRED all the same — the
+   * `membership_visible_active_or_own` policy counts only the ACTIVE workspace's
+   * rows plus the caller's own, so an unbound count would answer `1` for every
+   * workspace and report the whole account as solely-owned.
+   */
+  async countByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workspaceMembership.count({ where: { workspaceId } });
+  },
+
+  /**
    * Count of memberships in a workspace, LOCKING those rows `FOR UPDATE` inside
    * the caller's transaction — the race-safe read the last-member guard in
    * workspacesService.removeMember uses (lock-before-read-derived-update,
