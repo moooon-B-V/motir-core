@@ -29,6 +29,20 @@ import ts from 'typescript';
 // property of the element itself — which is why that one is the enforced sweep
 // and the muted one is scoped to what a single file can prove.
 //
+// ⚠️ CORRECTED (MOTIR-3523) — THE FENCE WAS TIGHTER THAN "THE FILE", AND SAYING
+// "file" MADE A REACHABLE CASE LOOK UNREACHABLE. `nearestSurface` walks the ink
+// element's own ANCESTORS, so it stops at the root of the COMPONENT the ink is
+// written in — not at the file. A file that writes the ink in a local `Th` and
+// paints the tint on the `<thead>` that USES it abstains, with both halves in
+// this one AST. That is what hid eight column labels at 4.17:1 on the operator
+// jobs dashboard for the whole life of the file, under a green lint.
+//
+// `ScanOptions.resolveUseSites` closes that half by walking the component's use
+// sites in this same file; the CROSS-MODULE half above is untouched and really
+// does need the import graph. The option is OFF by default — see its own note
+// for why the sweep and the switch belong to one later card rather than to the
+// change that built the arm.
+//
 // ── The class and the element can come apart (MOTIR-2489) ───────────────────
 // The premise above — the verdict is a property of the ELEMENT — survives, but
 // its first implementation assumed the element the class is WRITTEN on is the
@@ -473,6 +487,88 @@ function nearestSurface(node: ts.Node): { className: string; tinted: boolean } |
 }
 
 /**
+ * The component this node is declared inside, when that component is declared
+ * at the TOP LEVEL OF THIS FILE — `function Th(…)`, or `const Th = (…) => …`,
+ * with a capitalised name. Anything else (a nested helper, an import, a default
+ * export of an expression) returns `null`.
+ */
+function enclosingLocalComponent(node: ts.Node): string | null {
+  for (let cursor: ts.Node | undefined = node; cursor; cursor = cursor.parent) {
+    // ⚠️ THE INNERMOST enclosing function decides, and a non-top-level one
+    // decides AGAINST resolving. Walking PAST a nested helper to the top-level
+    // function around it would attribute that function's use sites to the
+    // helper — a surface the helper may never sit on, and a false positive
+    // pointing at a line the reader cannot act on.
+    if (ts.isFunctionDeclaration(cursor) || ts.isFunctionExpression(cursor)) {
+      return cursor.name && ts.isSourceFile(cursor.parent) && /^[A-Z]/.test(cursor.name.text)
+        ? cursor.name.text
+        : null;
+    }
+    if (ts.isArrowFunction(cursor)) {
+      const declaration = cursor.parent;
+      if (!ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name)) return null;
+      const statement = declaration.parent.parent;
+      return ts.isVariableStatement(statement) &&
+        ts.isSourceFile(statement.parent) &&
+        /^[A-Z]/.test(declaration.name.text)
+        ? declaration.name.text
+        : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Every surface a locally-declared component is USED over, within this file.
+ *
+ * ── Why this exists ─────────────────────────────────────────────────────────
+ * `nearestSurface` walks the ink element's own ancestors, which stops at the
+ * root of the component the element is written in. So a file that puts the ink
+ * in `<Th>` and the tint on the `<thead>` that USES it reads as "no surface
+ * found here" and the muted arm abstains — silently, since an abstention emits
+ * no finding at all. That is not the cross-MODULE boundary the guard documents
+ * as out of reach: both halves are in one file and one AST, which is exactly
+ * what this walk can already see. MOTIR-3523 is the defect it missed for that
+ * reason — eight column labels at 4.17:1 on a page an operator reads while
+ * something is on fire.
+ *
+ * ── The two ways to be wrong, and which one this picks ──────────────────────
+ * A component used at several sites can sit over a tint at one and white at
+ * another, and the ink is genuinely unreadable at the tinted one. So ANY tinted
+ * use site is a violation, matching the tinted arm's standing policy that
+ * over-reporting is the safe direction (`inkContrastLint.test.ts`).
+ *
+ * ── The hop is ONE level, deliberately ──────────────────────────────────────
+ * A use site whose own surface is unresolved is not chased through a second
+ * component. One hop terminates without a cycle check and covers the shape this
+ * was written for; a transitive resolver is the import-graph problem the file
+ * header defers, and inheriting its cost here would buy nothing measured.
+ */
+function surfacesAtUseSites(
+  source: ts.SourceFile,
+  component: string,
+): { className: string; tinted: boolean; line: number }[] {
+  const surfaces: { className: string; tinted: boolean; line: number }[] = [];
+  const visit = (node: ts.Node) => {
+    const element = ts.isJsxElement(node)
+      ? node.openingElement
+      : ts.isJsxSelfClosingElement(node)
+        ? node
+        : null;
+    if (element && ts.isIdentifier(element.tagName) && element.tagName.text === component) {
+      // Start the walk at the PARENT: a use site paints the ink's background
+      // from above it, and `<Th className="bg-…">` would be the carrier's own
+      // surface, which `nearestSurface` has already ruled on.
+      const surface = element.parent ? nearestSurface(element.parent) : null;
+      if (surface) surfaces.push({ ...surface, line: lineAt(source, element.getStart(source)) });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return surfaces;
+}
+
+/**
  * A predicate for ONE simple selector, or `null` when the selector is past what
  * this resolver reads. `null` is not "no match" — it is "I cannot tell", and it
  * has to stay distinct from an empty match set, because both end in
@@ -589,11 +685,31 @@ function snippetOf(
   return text.length > 140 ? `${text.slice(0, 137)}…` : text;
 }
 
+export interface ScanOptions {
+  /**
+   * Resolve a muted ink's surface from the USE SITES of the component it is
+   * written in, when the element's own ancestors paint none (MOTIR-3523).
+   *
+   * ⚠️ OFF BY DEFAULT, and that is a scope decision rather than a doubt about
+   * the resolution. Turning it on un-blinds a population the repo-wide lint has
+   * been green on since it shipped, and this repo has twice paid for pointing a
+   * widened ink guard at the tree in the same change that built it: the arm is
+   * built and proven on fixtures first (MOTIR-2459), a card sweeps the sites it
+   * reports, and that card turns it on (MOTIR-2475 / MOTIR-2477). The successor
+   * card carries the measured list.
+   */
+  resolveUseSites?: boolean;
+}
+
 /**
  * Scan one source file. `fileName` is only used for reporting, so a synthetic
  * fixture can be scanned by passing its text directly.
  */
-export function scanSource(fileName: string, text: string): InkFinding[] {
+export function scanSource(
+  fileName: string,
+  text: string,
+  options: ScanOptions = {},
+): InkFinding[] {
   const source = ts.createSourceFile(
     fileName,
     text,
@@ -680,14 +796,26 @@ export function scanSource(fileName: string, text: string): InkFinding[] {
       if (isDecorative(element, paintsText(element, token))) continue;
       if (isDisabledElement(element) || inDisabledBranch(node, element)) continue;
       const surface = nearestSurface(element);
-      if (!surface?.tinted) continue;
+      // No surface in the element's OWN ancestors: before abstaining, ask where
+      // the component this element belongs to is USED in this file (MOTIR-3523).
+      // No surface in the element's OWN ancestors: before abstaining, ask where
+      // the component this element belongs to is USED in this file (MOTIR-3523).
+      const component =
+        surface || !options.resolveUseSites ? null : enclosingLocalComponent(element);
+      const inherited = component
+        ? surfacesAtUseSites(source, component).find((use) => use.tinted)
+        : undefined;
+      const resolved = surface ?? inherited;
+      if (!resolved?.tinted) continue;
       findings.push({
         file: fileName,
         line,
         ink: 'muted',
         verdict: 'violation',
         element: tagNameOf(element),
-        reason: `--el-text-muted is 4.12–4.34:1 on ${surface.className}; it clears AA only on the white page/card`,
+        reason: inherited
+          ? `--el-text-muted is 4.12–4.34:1 on ${inherited.className}, which <${tagNameOf(element)}> inherits from this component's use site at line ${inherited.line}; it clears AA only on the white page/card`
+          : `--el-text-muted is 4.12–4.34:1 on ${resolved.className}; it clears AA only on the white page/card`,
         snippet: snippetOf(source, node, element === carrier ? undefined : element),
       });
     }

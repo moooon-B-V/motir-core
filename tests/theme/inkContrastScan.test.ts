@@ -534,3 +534,116 @@ describe('ink-contrast scanner — the inks it is not about', () => {
     expect(violations(findings)).toHaveLength(2);
   });
 });
+
+describe('ink-contrast scanner — the surface a component INHERITS from its use site (MOTIR-3523)', () => {
+  // The blind spot this describes is the one that let a real defect stand on
+  // `main` for as long as the file existed: the operator jobs dashboard writes
+  // its column labels in a local `Th` and paints the tint on the `<thead>` that
+  // USES it, so the ink and the surface never share an ancestor chain. Eight
+  // labels sat at 4.17:1 with every guard in the tree green.
+  //
+  // It is NOT the cross-module boundary `inkContrastLint.test.ts` documents as
+  // out of reach. Both halves are in one file and one AST, which is what makes
+  // this resolvable at all — and what makes the abstention worth closing.
+  //
+  // ⚠️ THE ARM IS OPT-IN, and the fixtures below assert BOTH states. Pointing it
+  // at the tree is a separate card with a measured population behind it; see
+  // `ScanOptions.resolveUseSites`.
+  const source = `
+    function Th({ children }: { children: ReactNode }) {
+      return <th className="px-3 py-2 text-(--el-text-muted)">{children}</th>;
+    }
+
+    function RunsTable() {
+      return (
+        <table>
+          <thead className="bg-(--el-surface)">
+            <tr><Th>Status</Th></tr>
+          </thead>
+        </table>
+      );
+    }
+  `;
+
+  it('ABSTAINS by default — the shipped repo-wide lint is unchanged by this arm', () => {
+    expect(scanSource('fixture.tsx', source)).toEqual([]);
+  });
+
+  it('flags the ink once the use-site resolution is asked for, naming the line that paints it', () => {
+    const finding = only(scanSource('fixture.tsx', source, { resolveUseSites: true }));
+    expect(finding).toMatchObject({ ink: 'muted', verdict: 'violation', element: 'th' });
+    expect(finding.reason).toContain('bg-(--el-surface)');
+    // The line the reader has to open is the USE SITE, not the ink — the ink's
+    // own line is already in `file:line`, and on its own it looks blameless.
+    expect(finding.reason).toContain('use site at line 10');
+  });
+
+  it('clears the same component when its use site paints the white card', () => {
+    expect(
+      scanSource('fixture.tsx', source.replace('bg-(--el-surface)', 'bg-(--el-card)'), {
+        resolveUseSites: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it('flags a component used over a tint at ONE site and white at another', () => {
+    // Over-reporting is the tinted arm's standing policy, and here it is not
+    // even over-reporting: the label really is unreadable at the tinted site.
+    const findings = scanSource(
+      'fixture.tsx',
+      `
+        function Label({ children }: { children: ReactNode }) {
+          return <span className="text-(--el-text-muted)">{children}</span>;
+        }
+
+        function Panel() {
+          return (
+            <>
+              <div className="bg-(--el-card)"><Label>safe</Label></div>
+              <div className="bg-(--el-surface)"><Label>unreadable</Label></div>
+            </>
+          );
+        }
+      `,
+      { resolveUseSites: true },
+    );
+    expect(findings.map((finding) => finding.verdict)).toEqual(['violation']);
+  });
+
+  it('stays silent for a component nothing in this file uses', () => {
+    // An EXPORTED component's callers live in other modules, which is the
+    // import-graph problem this arm deliberately does not take on. No use site
+    // in this file means no surface, and no surface means abstain — never a
+    // clean bill of health.
+    expect(
+      scanSource(
+        'fixture.tsx',
+        `export function Th({ children }: { children: ReactNode }) {
+           return <th className="text-(--el-text-muted)">{children}</th>;
+         }`,
+        { resolveUseSites: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not read a NESTED helper as the component whose use sites count', () => {
+    // Only a TOP-LEVEL declaration is resolvable. Walking past `Row` to the
+    // `Panel` around it would let PANEL's use sites decide ROW's surface — a
+    // surface `Row` may never sit on, reported at a line the reader cannot act
+    // on. The innermost enclosing function decides, and a nested one decides to
+    // abstain. (`Row` is genuinely over a tint here, and the arm still declines
+    // to say so: under-reporting is the price of not mis-attributing, and this
+    // arm is opt-in precisely so that trade can be revisited with a measured
+    // population rather than a fixture.)
+    expect(
+      scanSource(
+        'fixture.tsx',
+        `function Panel() {
+           const Row = () => <span className="text-(--el-text-muted)">12 issues</span>;
+           return <div className="bg-(--el-surface)"><Row /></div>;
+         }`,
+        { resolveUseSites: true },
+      ),
+    ).toEqual([]);
+  });
+});
