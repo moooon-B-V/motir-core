@@ -10,6 +10,8 @@ import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PublicTabNav } from '@/app/(public)/_components/PublicTabNav';
 import { PublicChangelog } from '@/app/(public)/_components/PublicChangelog';
+import { PublicFollowControl } from '@/app/(public)/_components/PublicFollowControl';
+import { publicFollowService } from '@/lib/services/publicFollowService';
 
 // The public CHANGELOG tab (Story 8.9 · Subtask 8.9.4 · design
 // `public-changelog.mock.html` Panel B) — the PUSH half of the public project,
@@ -69,10 +71,12 @@ export default async function PublicChangelogPage({
 
   let page;
   let overview;
+  let followState;
   try {
-    [page, overview] = await Promise.all([
+    [page, overview, followState] = await Promise.all([
       publicProjectsService.getChangelog(identifier, actorUserId),
       getPublicOverview(identifier, actorUserId),
+      publicFollowService.getFollowState(identifier, actorUserId),
     ]);
   } catch (err) {
     if (err instanceof ProjectNotFoundError) notFound();
@@ -113,13 +117,24 @@ export default async function PublicChangelogPage({
     <>
       <PublicTabNav identifier={identifier} active="changelog" />
       <div className="p-(--spacing-card-padding)">
-        <header className="mb-1">
-          <h1 className="font-serif text-[22px] font-bold text-(--el-text)">
-            {t('changelogTitle')}
-          </h1>
-          <p className="mt-1.5 max-w-[60ch] text-[13.5px] leading-relaxed text-(--el-text-secondary)">
-            {t('changelogLede')}
-          </p>
+        <header className="mb-1 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-[22px] font-bold text-(--el-text)">
+              {t('changelogTitle')}
+            </h1>
+            <p className="mt-1.5 max-w-[60ch] text-[13.5px] leading-relaxed text-(--el-text-secondary)">
+              {t('changelogLede')}
+            </p>
+          </div>
+          {/* The Follow control lives here as well as in the top bar: this is
+              the page a person lands on from a "follow along" link, and the
+              moment they are most likely to subscribe is while reading it. */}
+          <PublicFollowControl
+            identifier={identifier}
+            initialState={followState}
+            signedIn={session !== null}
+            feedUrl={`${url}.xml`}
+          />
         </header>
 
         {page.entries.length === 0 ? (

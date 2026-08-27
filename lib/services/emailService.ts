@@ -4,6 +4,10 @@ import {
   passwordResetEmail,
   type PasswordResetEmailProps,
 } from '@/lib/emailTemplates/passwordReset';
+import {
+  followConfirmEmail,
+  type FollowConfirmEmailProps,
+} from '@/lib/emailTemplates/followConfirm';
 import { emailChangeEmail, type EmailChangeEmailProps } from '@/lib/emailTemplates/emailChange';
 import {
   workspaceInviteEmail,
@@ -74,7 +78,8 @@ export type TransactionalEmail =
       template: 'automation-rule-failed';
       data: AutomationRuleFailedEmailProps;
     }
-  | { to: string; template: 'two-factor-otp'; data: TwoFactorOtpEmailProps };
+  | { to: string; template: 'two-factor-otp'; data: TwoFactorOtpEmailProps }
+  | { to: string; template: 'follow-confirm'; data: FollowConfirmEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -141,6 +146,8 @@ async function renderTemplate(message: TransactionalEmail) {
   switch (message.template) {
     case 'password-reset':
       return passwordResetEmail(message.data);
+    case 'follow-confirm':
+      return followConfirmEmail(message.data);
     case 'email-change':
       return emailChangeEmail(message.data);
     case 'workspace-invite':
