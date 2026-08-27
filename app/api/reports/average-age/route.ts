@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { reportsService } from '@/lib/services/reportsService';
 import { parseDaysBack, parsePeriod, parseReportScope } from '@/lib/reports/params';
 import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/reports/average-age (Story 8.8 · Subtask 8.8.13) — the point-in-time
 // average-age data behind the report page (8.8.7) and the `average_age`
@@ -12,8 +12,9 @@ import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
 // Thin HTTP transport per CLAUDE.md: workspace context, parse, ONE service
 // call, map typed config errors (InvalidReportScope/Window → 422). No db here.
 export async function GET(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { searchParams } = new URL(req.url);
   try {

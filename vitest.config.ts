@@ -304,6 +304,10 @@ export default defineConfig({
         // Story MOTIR-1215 · Subtask MOTIR-3648 — the enforcement gate and the
         // screen it holds people at. Measured at 100/100/100/100 apiece.
         'lib/auth/twoFactorGate.ts',
+        // Story MOTIR-1215 · Subtask MOTIR-3653 — the API half of the same gate,
+        // and the module ~190 route files now authenticate through. Measured at
+        // 100/100/100/100 before pinning.
+        'lib/auth/requireCompliantSession.ts',
         'app/**/two-factor-required/page.tsx',
         'app/**/two-factor-required/_components/SignOutLink.tsx',
         // ⚠️ `_guard.tsx` is REPORT-ONLY (below `thresholds`), and the reason is
@@ -1568,6 +1572,12 @@ export default defineConfig({
           statements: 90,
         },
         'lib/auth/twoFactorGate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/auth/requireCompliantSession.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

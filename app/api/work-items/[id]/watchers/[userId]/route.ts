@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { watchersService } from '@/lib/services/watchersService';
 import { mapWatcherError } from '@/lib/watchers/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // DELETE /api/work-items/[id]/watchers/[userId] (Story 5.4 · Subtask 5.4.4)
 // — the "Manage watchers" remove: take ANOTHER user off the issue's watcher
@@ -15,8 +15,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; userId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id, userId } = await params;
 

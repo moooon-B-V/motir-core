@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { reportsService } from '@/lib/services/reportsService';
 import {
   parseCumulative,
@@ -8,6 +7,7 @@ import {
   parseReportScope,
 } from '@/lib/reports/params';
 import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/reports/created-vs-resolved (Story 6.3 · Subtask 6.3.2) — the
 // two-series difference/area data behind the report page (6.3.6) and the
@@ -25,8 +25,9 @@ import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
 // Typed errors → status codes:
 //   InvalidReportScopeError / InvalidReportWindowError → 422
 export async function GET(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { searchParams } = new URL(req.url);
   try {

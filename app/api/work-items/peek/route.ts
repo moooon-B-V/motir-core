@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { Locale } from '@/lib/i18n/locales';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/work-items/peek?key=<identifier> (bug 8.8.2) — the data half of the
 // quick-view (peek) modal, fetched CLIENT-side by IssueQuickViewController so the
@@ -26,6 +27,12 @@ export async function GET(req: Request): Promise<Response> {
   if (!ctx) {
     return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   const key = new URL(req.url).searchParams.get('key')?.trim();
   if (!key) {

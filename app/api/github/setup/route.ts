@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { resolveTwoFactorHold } from '@/lib/auth/requireCompliantSession';
 import { decodeInstallState } from '@/lib/github/installState';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -29,6 +30,17 @@ export async function GET(req: NextRequest): Promise<Response> {
     // with GitHub's install params intact.
     const next = encodeURIComponent(`${req.nextUrl.pathname}${req.nextUrl.search}`);
     return NextResponse.redirect(`${resolveBaseUrlTrimmed()}/sign-in?next=${next}`);
+  }
+
+  // The 2FA hold (MOTIR-3653), shaped as a REDIRECT rather than the 403 the
+  // other 85 routes return: GitHub sends the person here in the ADDRESS BAR, so
+  // a JSON body would be rendered as text. The return target rides along for the
+  // same reason it does above — enrol, come back, and the installation still
+  // binds instead of being lost.
+  const hold = await resolveTwoFactorHold(session.user.id);
+  if (hold) {
+    const next = encodeURIComponent(`${req.nextUrl.pathname}${req.nextUrl.search}`);
+    return NextResponse.redirect(`${resolveBaseUrlTrimmed()}${hold.enrolAt}?next=${next}`);
   }
 
   const params = req.nextUrl.searchParams;

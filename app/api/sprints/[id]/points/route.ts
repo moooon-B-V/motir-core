@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { estimationService } from '@/lib/services/estimationService';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
 import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/sprints/[id]/points (Story 4.4 · Subtask 4.4.9 — finding #69) — the
 // live pre-start points roll-up for a sprint: `{ committed, completed, remaining }`
@@ -28,8 +28,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

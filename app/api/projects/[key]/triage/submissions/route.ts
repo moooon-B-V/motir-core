@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { triageService, type TriageSubmissionKind } from '@/lib/services/triageService';
 import { mapTriageSubmissionError } from '@/lib/triage/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/projects/[key]/triage/submissions (Story 6.11 · Subtask 6.11.4) —
 // the in-app "report a bug / request a feature" intake. A signed-in workspace
@@ -22,8 +22,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
 

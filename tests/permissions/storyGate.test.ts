@@ -131,6 +131,10 @@ const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
     file: 'lib/services/projectAccessService.ts',
     why: 'the enforcement half of the model itself — it resolves the three facts and applies `lib/permissions/resolve.ts`',
   },
+  {
+    file: 'lib/services/twoFactorPolicyService.ts',
+    why: 'a WORKSPACE-level and ORGANIZATION-level security policy (Story MOTIR-1215 · MOTIR-3645), gated on the workspace / org role. It resolves no project, so no project permission can govern it — the `jobsDashboardService` argument. Reading the policy needs no role at all; only SETTING it is gated, and that gate is the tier admin',
+  },
 ];
 
 /**
@@ -184,6 +188,21 @@ const UI_AFFORDANCE_DERIVATIONS = [
   // same argument MOTIR-2294 made about `repository:connect`. It is the only
   // survivor, and it is not MOTIR-2258's to remove.
   'app/(authed)/settings/workspace/jobs/page.tsx',
+  // ⚠️ Story MOTIR-1215 · Subtask MOTIR-3647 — the require-2FA switch, at the
+  // workspace tier and in its organization-tier fold-in. Both derive
+  // `isWorkspaceManager` for the SAME reason the jobs page above does, and the
+  // same reason keeps them out of MOTIR-2258's reach: the question is a
+  // WORKSPACE-tier role, so no project permission could govern it either way.
+  //
+  // They are affordance-only in the strict sense this pin means. The control is
+  // rendered READ-ONLY rather than hidden for somebody who may not set it (the
+  // card's own decision — a member should see the policy that governs them), and
+  // the write is refused by `twoFactorPolicyService.setWorkspacePolicy`, which
+  // asserts the role server-side and is covered by
+  // `tests/twoFactorPolicy.test.ts`. A page that guessed wrong would draw an
+  // enabled switch that the server then refuses.
+  'app/(authed)/settings/organization/_components/WorkspaceFoldInSection.tsx',
+  'app/(authed)/settings/workspace/security/page.tsx',
 ];
 
 function derivations(): { path: string; label: string }[] {

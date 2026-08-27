@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
@@ -28,8 +28,8 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // `MOTIR_AI_OUT_OF_CREDITS` the 7.4.9 UI branches to the paywall — never collapsed
 // into the generic 502 every other motir-ai failure maps to.
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -38,6 +38,12 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   // The AI ceiling, applied on the door that SUBMITS the job (MOTIR-2597). Its own
   // `ai:generate` bucket, tighter than `ai:chat`, because a generation costs many

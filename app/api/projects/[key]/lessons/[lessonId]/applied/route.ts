@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
@@ -8,6 +7,7 @@ import {
   MotirAiJobNotFoundError,
   MotirAiUnavailableError,
 } from '@/lib/ai/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // PUT /api/projects/[key]/lessons/[lessonId]/applied (Subtask MOTIR-3345 ·
 // Story MOTIR-3330) — the one decision this surface offers: whether Motir is
@@ -49,8 +49,9 @@ interface RouteParams {
 }
 
 export async function PUT(req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key, lessonId } = await params;
 
   let body: unknown;

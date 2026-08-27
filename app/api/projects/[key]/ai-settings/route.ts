@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectAiSettingsService } from '@/lib/services/projectAiSettingsService';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import type { UpdateProjectAiSettingsInput } from '@/lib/dto/projectAiSettings';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET / PATCH /api/projects/[key]/ai-settings (Story 7.13 · Subtask MOTIR-919)
 // Read or admin-update a project's AI-planning configuration — the auto-plan
@@ -31,8 +31,9 @@ interface RouteParams {
 }
 
 export async function GET(_req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   try {
@@ -46,8 +47,9 @@ export async function GET(_req: Request, { params }: RouteParams): Promise<Respo
 }
 
 export async function PATCH(req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   let body: unknown;

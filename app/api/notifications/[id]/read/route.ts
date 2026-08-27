@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { NotificationNotFoundError } from '@/lib/notifications/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // PATCH /api/notifications/[id]/read (Story 5.7 · Subtask 5.7.4) — mark ONE
 // notification the caller owns read. Thin HTTP layer over notificationsService;
@@ -18,8 +18,9 @@ export async function PATCH(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   try {

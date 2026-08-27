@@ -11,6 +11,13 @@ import { truncateAuthTables } from '../helpers/db';
 // hits the real Postgres.
 
 const session: { current: { user: { id: string } } | null } = { current: null };
+// MOTIR-3653 / MOTIR-3648 — every route and route group now resolves the 2FA
+// hold first. This suite is about this route's own gates, so the policy answers
+// "nobody is asking", which is the state each case below was written in.
+vi.mock('@/lib/services/twoFactorPolicyService', async () =>
+  (await import('../helpers/noTwoFactorPolicy')).noTwoFactorPolicy(),
+);
+
 vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 
 const { GET: startGET, GITHUB_OAUTH_STATE_COOKIE } =

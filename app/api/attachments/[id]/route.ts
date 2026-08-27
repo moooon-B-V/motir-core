@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { AttachmentError } from '@/lib/blob/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // DELETE /api/attachments/[id] (Story 5.2 · Subtask 5.2.2) — permanently
 // remove one attachment from its issue's panel (row + blob; no tombstone).
@@ -33,8 +33,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/work-items/mention-search?q=<text> (Story 5.8 · Subtask 5.8.4) — the
 // candidate read behind the `@`-mention picker in the rich-text editor. A thin
@@ -22,8 +22,9 @@ import { workItemsService } from '@/lib/services/workItemsService';
 const MENTION_SEARCH_LIMIT = 8;
 
 export async function GET(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const q = new URL(req.url).searchParams.get('q') ?? '';
   const results = await workItemsService.quickSearch(q, ctx, { limit: MENTION_SEARCH_LIMIT });

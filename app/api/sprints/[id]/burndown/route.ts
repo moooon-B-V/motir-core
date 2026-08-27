@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { reportsService } from '@/lib/services/reportsService';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/sprints/[id]/burndown (Story 4.6 · Subtask 4.6.3; reframed by Story
 // 8.14 · Subtask 8.14.4) — the in-sprint CYCLE GRAPH: Linear's burn-UP of LIVE
@@ -26,8 +26,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { InviteEmailMismatchError, InviteExpiredOrMissingError } from '@/lib/workspaces/errors';
 
@@ -12,10 +12,9 @@ interface RouteParams {
 }
 
 export async function POST(_req: Request, { params }: RouteParams): Promise<Response> {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
-  }
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const { token } = await params;
   try {

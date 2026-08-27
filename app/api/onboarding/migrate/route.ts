@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { MigrateOnboardingExistsError } from '@/lib/migrateOnboarding/errors';
@@ -13,8 +13,8 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // HTTP only (CLAUDE.md 4-layer): resolve the session + active project, call ONE
 // service method, map typed errors. The service owns the transaction.
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
   const ctx = await getActiveProject();
   if (!ctx) {
     return NextResponse.json(
@@ -22,6 +22,12 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   // The connect-step repo ref may be supplied up front or set as connect
   // completes; the body is optional.

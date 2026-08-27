@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { labelsService } from '@/lib/services/labelsService';
 import { mapLabelError } from '@/lib/labels/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/projects/[key]/labels?q=<prefix> (Story 5.4 · Subtask 5.4.2) —
 // the label-picker autocomplete: a case-insensitive prefix match over the
@@ -17,8 +17,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const q = new URL(req.url).searchParams.get('q') ?? '';

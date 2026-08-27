@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { mapAutomationError } from '@/lib/automation/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/automation-rules/[ruleId]/executions (Story 6.6 · Subtask
 // 6.6.6) — the per-rule audit-log read (admin-only). A rule not owned by this
@@ -15,8 +15,9 @@ import { mapAutomationError } from '@/lib/automation/errorResponse';
 type Params = { params: Promise<{ key: string; ruleId: string }> };
 
 export async function GET(req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, ruleId } = await params;
   const pageParam = new URL(req.url).searchParams.get('page');

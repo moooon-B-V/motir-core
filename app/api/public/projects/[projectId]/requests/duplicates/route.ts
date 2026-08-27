@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { mapPublicProjectError } from '@/lib/publicProjects/errorResponse';
 
@@ -19,8 +19,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const { projectId } = await params;
   const title = new URL(req.url).searchParams.get('title') ?? '';

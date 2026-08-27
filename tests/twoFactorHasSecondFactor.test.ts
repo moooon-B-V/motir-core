@@ -152,6 +152,10 @@ const KNOWN_READERS: { file: string; why: string }[] = [
     why: 'One documentation line warning that a passkey counts even with the column false. No code reads it.',
   },
   {
+    file: 'lib/auth/twoFactorGate.ts',
+    why: 'One documentation line (MOTIR-3648) stating that compliance is `methods.length > 0` and NOT this column — the gate names it only to say it does not use it.',
+  },
+  {
     file: 'lib/dto/platform.ts',
     why: "A DISPLAY field on the platform-admin user DTO — 'does this account have 2FA on', shown as a pill. Not a compliance verdict.",
   },

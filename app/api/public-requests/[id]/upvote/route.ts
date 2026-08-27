@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { publicRequestsService } from '@/lib/services/publicRequestsService';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
@@ -27,8 +27,9 @@ export async function POST(
   const limited = await enforcePublicWriteRateLimit(req);
   if (limited) return limited;
 
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const { id } = await params;
   try {

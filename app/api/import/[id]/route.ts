@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
 import { ImportNotFoundError } from '@/lib/import/errors';
 import { importErrorResponse } from '@/lib/import/httpErrors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/import/:id (Story 7.16 · MOTIR-941) — one import's status + per-outcome
 // counts, for the wizard's progress / resume view. Thin HTTP layer over
@@ -16,8 +16,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   try {

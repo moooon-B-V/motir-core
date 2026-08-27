@@ -3,6 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { AttachmentError } from '@/lib/blob/errors';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/upload/project-image (MOTIR-2677) — the thin HTTP layer over
 // projectsService.uploadImage, mirroring app/api/upload/avatar. Multipart body
@@ -24,6 +25,12 @@ export async function POST(req: Request): Promise<Response> {
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   let file: FormDataEntryValue | null;
   let projectKey: FormDataEntryValue | null;

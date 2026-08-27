@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { mapDashboardError } from '@/lib/dashboards/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/dashboards/[dashboardId]/widgets/[widgetId]/move (Story 6.3 ·
 // Subtask 6.3.1) — move a widget on the grid (owner-only). Body:
@@ -20,8 +20,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ dashboardId: string; widgetId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   let body: unknown;
   try {

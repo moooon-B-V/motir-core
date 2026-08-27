@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { mapDashboardError } from '@/lib/dashboards/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/dashboards (Story 6.3 · Subtask 6.3.1) — the workspace-scoped
 // dashboards collection. Thin HTTP layer over dashboardsService;
@@ -11,8 +11,9 @@ import { mapDashboardError } from '@/lib/dashboards/errorResponse';
 // GET /api/dashboards — the bounded home/switcher list (mine +
 // workspace-shared; private dashboards of others never appear).
 export async function GET(): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const dashboards = await dashboardsService.listDashboards(ctx);
   return NextResponse.json({ dashboards });
@@ -25,8 +26,9 @@ export async function GET(): Promise<Response> {
 // Typed errors → status codes (mapDashboardError):
 //   InvalidDashboardName/Access/LayoutError → 422
 export async function POST(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   let body: unknown;
   try {

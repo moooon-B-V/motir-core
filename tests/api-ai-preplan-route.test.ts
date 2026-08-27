@@ -22,6 +22,13 @@ import type { RawPreplanSession, RawPreplanStateResponse } from '@/lib/ai/types'
 const session = { current: null as { user: { id: string; email: string; name: string } } | null };
 const activeCtx = { current: null as ProjectContext | null };
 
+// MOTIR-3653 / MOTIR-3648 — every route and route group now resolves the 2FA
+// hold first. This suite is about this route's own gates, so the policy answers
+// "nobody is asking", which is the state each case below was written in.
+vi.mock('@/lib/services/twoFactorPolicyService', async () =>
+  (await import('./helpers/noTwoFactorPolicy')).noTwoFactorPolicy(),
+);
+
 vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
 

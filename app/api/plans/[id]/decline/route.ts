@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
 import { PlanNotFoundError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/plans/[id]/decline — DECLINE = drop the proposals (Subtask 7.4.5 /
 // MOTIR-847, calling the MOTIR-1336 substrate). The PlanItems are deleted; the
@@ -17,8 +17,9 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   try {

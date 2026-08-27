@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
 import { importErrorResponse } from '@/lib/import/httpErrors';
 import type { ImportSource } from '@/generated/prisma/client';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/import (Story 7.16 · MOTIR-941) — create a DRAFT import for a
 // project. Thin HTTP layer over `importService.createDraft` (the 4-layer rule:
@@ -11,8 +11,9 @@ import type { ImportSource } from '@/generated/prisma/client';
 const SOURCES: ReadonlySet<string> = new Set(['jira', 'linear', 'github', 'plane', 'csv']);
 
 export async function POST(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   let body: { projectId?: unknown; source?: unknown; sourceRef?: unknown };
   try {

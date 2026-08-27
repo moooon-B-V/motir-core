@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomBytes } from 'node:crypto';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { GithubOAuthNotConfiguredError } from '@/lib/github/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -19,8 +19,8 @@ export const GITHUB_OAUTH_STATE_COOKIE = 'github_oauth_state';
 const SETTINGS_PATH = '/settings/workspace/github';
 
 export async function GET(_req: NextRequest): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const state = randomBytes(32).toString('base64url');
 

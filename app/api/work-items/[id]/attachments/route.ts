@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { AttachmentError } from '@/lib/blob/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET/POST /api/work-items/[id]/attachments (Story 5.2 · Subtask 5.2.2) — the
 // issue's attachment panel. Thin HTTP layer over attachmentsService; no db /
@@ -33,8 +33,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   const cursor = new URL(req.url).searchParams.get('cursor') ?? undefined;
@@ -53,8 +54,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

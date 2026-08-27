@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { commentsService } from '@/lib/services/commentsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -10,6 +9,7 @@ import {
   InvalidParentCommentError,
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET/POST /api/work-items/[id]/comments (Story 5.1 · Subtask 5.1.2) — the
 // issue's comment threads. Thin HTTP layer over commentsService; no db / no
@@ -50,8 +50,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   const url = new URL(req.url);
@@ -82,8 +83,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

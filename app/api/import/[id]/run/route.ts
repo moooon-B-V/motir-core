@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
 import { importErrorResponse } from '@/lib/import/httpErrors';
 import type { ImportRunProgress } from '@/lib/import/engine/importPersistService';
 import type { ImportConnectionConfig } from '@/lib/dto/import';
 import type { ImportMapping } from '@/lib/import/engine/types';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/import/:id/run (Story 7.16 · MOTIR-941) — execute the import (the
 // SLICE-A engine with writes ON) and STREAM progress as newline-delimited JSON
@@ -21,8 +21,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   let body: { mapping?: ImportMapping; connection?: ImportConnectionConfig };

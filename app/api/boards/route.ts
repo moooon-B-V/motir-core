@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -21,8 +21,8 @@ import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 // (BoardSummaryDto[], ordered by position). Any member may read (the switcher
 // is not a config write); the workspace gate is the active-project context.
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -31,6 +31,12 @@ export async function GET(): Promise<Response> {
       { status: 400 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   const boards = await boardsService.listBoards(ctx.projectId, {
     userId: ctx.userId,
@@ -49,8 +55,8 @@ export async function GET(): Promise<Response> {
 //   ProjectNotFoundError (cannot browse the project)             → 404
 //   ProjectNotFoundError                          → 404
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -59,6 +65,12 @@ export async function POST(req: Request): Promise<Response> {
       { status: 400 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   let body: unknown;
   try {

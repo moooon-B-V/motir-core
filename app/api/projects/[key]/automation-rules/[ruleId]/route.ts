@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { mapAutomationError } from '@/lib/automation/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/automation-rules/[ruleId] (Story 6.6 · Subtask 6.6.1) —
 // the single-rule routes (admin-only). A rule not owned by this project reads
@@ -17,8 +17,9 @@ import { mapAutomationError } from '@/lib/automation/errorResponse';
 type Params = { params: Promise<{ key: string; ruleId: string }> };
 
 export async function GET(_req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, ruleId } = await params;
   try {
@@ -32,8 +33,9 @@ export async function GET(_req: Request, { params }: Params): Promise<Response> 
 }
 
 export async function PATCH(req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, ruleId } = await params;
 
@@ -79,8 +81,9 @@ export async function PATCH(req: Request, { params }: Params): Promise<Response>
 }
 
 export async function DELETE(_req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, ruleId } = await params;
   try {

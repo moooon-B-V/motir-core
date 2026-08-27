@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
 import { isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 import type { PatchProjectRepoInput } from '@/lib/dto/projectRepos';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // ONE row of a project's repository set (Story MOTIR-1775 · MOTIR-1782).
 //
@@ -24,8 +24,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ rowId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { rowId } = await params;
   const body = (await req.json().catch(() => null)) as Partial<PatchProjectRepoInput> | null;
@@ -66,8 +67,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ rowId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { rowId } = await params;
   try {

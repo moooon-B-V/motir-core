@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { billingService } from '@/lib/services/billingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -33,6 +34,13 @@ const NOT_APPLICABLE: AiAccessDTO = {
 export async function GET(): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json(NOT_APPLICABLE);
+  // The 2FA gate's compliance half only (MOTIR-3653). The anonymous arm above
+  // keeps its `NOT_APPLICABLE` sentinel — this route's contract is *never
+  // error, always answer*, and a 401 here would be a behaviour change this card
+  // is not making. A HELD member is a different case: they hold a valid session
+  // and must not learn a scoped answer through it.
+  const refusal = await refuseIfNonCompliant(session.user.id);
+  if (refusal) return refusal;
 
   const ctx = await getActiveProject();
   if (!ctx) return NextResponse.json(NOT_APPLICABLE);

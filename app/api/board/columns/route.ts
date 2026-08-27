@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import { BoardNotFoundError, InvalidColumnNameError } from '@/lib/boards/errors';
@@ -19,8 +19,8 @@ import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 //   BoardNotFoundError     → 404 (unknown / cross-workspace board)
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -29,6 +29,12 @@ export async function POST(req: Request): Promise<Response> {
       { status: 400 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   let body: unknown;
   try {

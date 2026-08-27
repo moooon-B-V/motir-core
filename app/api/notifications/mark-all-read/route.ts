@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { notificationsService } from '@/lib/services/notificationsService';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/notifications/mark-all-read (Story 5.7 · Subtask 5.7.4) — mark ALL
 // of the caller's unread notifications read in ONE bulk operation (the drawer
@@ -11,8 +11,9 @@ import { notificationsService } from '@/lib/services/notificationsService';
 //   from this response — the inline-edit contract)
 
 export async function POST(): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const result = await notificationsService.markAllRead(ctx);
   return NextResponse.json(result);

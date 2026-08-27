@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { GithubUserOrgsError } from '@/lib/github/userOrgs';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // The acting member's GitHub ORGANIZATIONS (Story MOTIR-1775 · MOTIR-1939) — the
 // takeover picker's "Your organizations" group.
@@ -22,8 +22,9 @@ import { GithubUserOrgsError } from '@/lib/github/userOrgs';
 // picker renders.
 
 export async function GET(): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   try {
     const organizations = await githubIdentityService.listOrganizations(ctx.userId);

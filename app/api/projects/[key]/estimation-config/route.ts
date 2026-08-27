@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { EstimationConfigForbiddenError, InvalidScaleConfigError } from '@/lib/estimation/errors';
 import type { UpdateEstimationConfigInput } from '@/lib/dto/estimation';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET / PATCH /api/projects/[key]/estimation-config (Story 4.3 · Subtask 4.3.3)
 // Read or admin-update a project's estimation config (statistic + point scale +
@@ -25,8 +25,9 @@ interface RouteParams {
 }
 
 export async function GET(_req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   try {
@@ -42,8 +43,9 @@ export async function GET(_req: Request, { params }: RouteParams): Promise<Respo
 }
 
 export async function PATCH(req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   let body: unknown;

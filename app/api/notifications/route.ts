@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { notificationsService } from '@/lib/services/notificationsService';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/notifications (Story 5.7 · Subtask 5.7.4) — one cursor-paged window
 // of the caller's notification feed for the active workspace. Thin HTTP layer
@@ -13,8 +13,9 @@ import { notificationsService } from '@/lib/services/notificationsService';
 // failure mode is 401 (no session).
 
 export async function GET(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const url = new URL(req.url);
   const cursor = url.searchParams.get('cursor') ?? undefined;

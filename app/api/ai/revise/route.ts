@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
@@ -29,8 +29,8 @@ import {
 //   PlanRevisionInFlightError    → 409 (another revision holds this plan)
 //   MotirAiOutOfCreditsError     → 402 · MotirAiError → 502
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -39,6 +39,12 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   // The same `ai:generate` bucket the three sibling submits spend, and spent in
   // the same place: after the gates, before the body is read, long before the

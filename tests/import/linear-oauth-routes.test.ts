@@ -26,6 +26,13 @@ import { truncateAuthTables } from '../helpers/db';
 
 const ctxRef = { current: null as WorkspaceContext | null };
 
+// MOTIR-3653 / MOTIR-3648 — every route and route group now resolves the 2FA
+// hold first. This suite is about this route's own gates, so the policy answers
+// "nobody is asking", which is the state each case below was written in.
+vi.mock('@/lib/services/twoFactorPolicyService', async () =>
+  (await import('../helpers/noTwoFactorPolicy')).noTwoFactorPolicy(),
+);
+
 vi.mock('@/lib/workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/workspaces')>();
   return { ...actual, getWorkspaceContext: async () => ctxRef.current };

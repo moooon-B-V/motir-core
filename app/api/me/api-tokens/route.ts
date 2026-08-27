@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import {
   InvalidApiTokenLabelError,
@@ -42,16 +42,18 @@ const ALLOWED_EXPIRY_DAYS = new Set([30, 90, 365]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const tokens = await apiTokensService.listForUser(session.user.id);
   return NextResponse.json({ tokens });
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   let body: unknown;
   try {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectRepoTakeoverService } from '@/lib/services/projectRepoTakeoverService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // TAKE IT OVER — the per-row handoff to the user's own GitHub (Story MOTIR-1775 ·
 // MOTIR-711).
@@ -24,8 +24,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ rowId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { rowId } = await params;
   const body = (await req.json().catch(() => null)) as { newOwner?: unknown } | null;

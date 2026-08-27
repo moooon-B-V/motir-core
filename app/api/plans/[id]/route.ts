@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/plans/[id] — the plan-detail REVIEW model (Subtask 7.4.5 / MOTIR-847):
 // the plan + its proposed items (op-enriched with live targets), per-item
@@ -18,8 +18,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   try {

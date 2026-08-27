@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/members (Story 6.4 · Subtask 6.4.4)
 //   GET  — list the project's members (any workspace member; read-only for
@@ -24,6 +25,12 @@ export async function GET(_req: Request, { params }: RouteParams): Promise<Respo
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { key } = await params;
 
   try {
@@ -45,6 +52,12 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { key } = await params;
 
   let body: unknown;

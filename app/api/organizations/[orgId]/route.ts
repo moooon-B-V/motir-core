@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { mapOrgError } from '@/lib/organizations/errorResponse';
 
@@ -16,8 +16,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
   const { orgId } = await params;
 
   let body: unknown;

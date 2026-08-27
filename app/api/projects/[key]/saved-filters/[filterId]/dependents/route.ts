@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { mapSavedFilterError } from '@/lib/savedFilters/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/saved-filters/[filterId]/dependents (Story 6.2 ·
 // Subtask 6.2.1) — the delete-impact enumeration behind the Cloud-style
@@ -15,8 +15,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ key: string; filterId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, filterId } = await params;
   try {

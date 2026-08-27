@@ -335,6 +335,12 @@ describe('no SECOND policy path — every gate resolves through projectAccessSer
       // A WORKSPACE-level dashboard gated on the workspace role. No project is
       // resolved, so no project permission can govern it (the MOTIR-2294 argument).
       'lib/services/jobsDashboardService.ts',
+      // The require-2FA policy (Story MOTIR-1215 · MOTIR-3645), at the WORKSPACE
+      // and ORGANIZATION tiers. Same argument again: no project is resolved, so
+      // no project permission could govern who may demand a second factor of a
+      // whole tenant. Reading the policy is ungated; only SETTING it derives the
+      // role, and `tests/twoFactorPolicy.test.ts` asserts both directions.
+      'lib/services/twoFactorPolicyService.ts',
     ]);
     const DERIVATION =
       /\bisOwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;

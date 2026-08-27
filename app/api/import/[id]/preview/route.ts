@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
 import { importErrorResponse } from '@/lib/import/httpErrors';
 import type { ImportConnectionConfig } from '@/lib/dto/import';
 import type { ImportMapping } from '@/lib/import/engine/types';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/import/:id/preview (Story 7.16 · MOTIR-941) — the DRY-RUN: classify
 // every source issue (CREATE/UPDATE/SKIP) with NO writes, via the SLICE-A engine.
@@ -13,8 +13,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   let body: { mapping?: ImportMapping; connection?: ImportConnectionConfig };

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { labelsService } from '@/lib/services/labelsService';
 import { mapLabelError } from '@/lib/labels/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // DELETE /api/work-items/[id]/labels/[labelId] (Story 5.4 · Subtask 5.4.2) —
 // detach one label chip from the issue. The service runs the
@@ -15,8 +15,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; labelId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id, labelId } = await params;
 

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { backlogService } from '@/lib/services/backlogService';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
 import { parseIssueFilter } from '@/lib/issues/issueListFilter';
 import { upgradeFacetsIntoAst } from '@/lib/issues/issueListAdvancedFilter';
 import { decodeFilterParam } from '@/lib/filters/ast';
 import { FilterValidationError } from '@/lib/filters/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // GET /api/sprints/[id]/issues (Subtask 4.1.4) — a sprint's ranked issues as a
@@ -34,8 +34,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

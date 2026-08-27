@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { backlogService } from '@/lib/services/backlogService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { BulkBatchTooLargeError } from '@/lib/sprints/errors';
 import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/backlog/bulk-move (Subtask 4.2.2) — move a multi-selection of issues
 // back to the backlog ATOMICALLY (the "Move to backlog" bulk action). Thin HTTP
@@ -19,8 +19,9 @@ import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 //   BulkBatchTooLargeError  → 400
 //   WorkItemNotFoundError   → 404
 export async function POST(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   let body: unknown;
   try {

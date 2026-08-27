@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject, type ProjectContext } from '@/lib/projects';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import { MotirAiError } from '@/lib/ai/errors';
@@ -18,7 +19,15 @@ export async function resolveActiveProjectContext(): Promise<
   { ctx: ProjectContext } | { response: NextResponse }
 > {
   const ctx = await getActiveProject();
-  if (ctx) return { ctx };
+  if (ctx) {
+    // The 2FA hold (MOTIR-3653). This helper IS the authentication door for the
+    // four `/api/ai/coding-convention/*` routes — they never name `getSession`
+    // or `getActiveProject` themselves — so gating them means gating here. A
+    // held member holds a valid session and would otherwise resolve a context
+    // and read the project's convention through it.
+    const hold = await refuseIfNonCompliant(ctx.userId);
+    return hold ? { response: hold } : { ctx };
+  }
   const session = await getSession();
   return {
     response: NextResponse.json(

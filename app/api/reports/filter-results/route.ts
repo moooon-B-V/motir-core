@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { reportsService } from '@/lib/services/reportsService';
 import { parsePositiveInt, parseReportScope } from '@/lib/reports/params';
 import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/reports/filter-results (Story 6.3 · Subtask 6.3.2) — the
 // paginated issue table behind the filter-results widget (6.3.5). Scope =
@@ -18,8 +18,9 @@ import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
 // Typed errors → status codes:
 //   InvalidReportScopeError → 422
 export async function GET(req: Request): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { searchParams } = new URL(req.url);
   try {

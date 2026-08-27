@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // ESTABLISH the project's repository set (Story MOTIR-1775 · MOTIR-1782) — the
 // endpoint behind **Continue** on the default path, **Set up N repositories** on
@@ -29,8 +29,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const body = (await req.json().catch(() => null)) as { rowId?: unknown } | null;

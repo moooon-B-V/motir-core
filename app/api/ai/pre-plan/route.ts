@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession, refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import { MotirAiError } from '@/lib/ai/errors';
@@ -29,8 +29,8 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 // state, so no model job is submitted and no provider money is spent on this path. The AI
 // ceiling guards the doors that SUBMIT; adding one here would only cap a database read.
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -39,6 +39,12 @@ export async function GET(): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   try {
     const state = await aiPreplanService.getPreplanState(ctx);
@@ -70,8 +76,8 @@ export async function GET(): Promise<Response> {
 // preview mode, NOT an axis, and is never sent here.
 
 export async function PATCH(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -80,6 +86,12 @@ export async function PATCH(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The 2FA hold (MOTIR-3653) — placed AFTER the no-project arm, which keeps
+  // its own answer. `ctx.userId` is the session user `getWorkspaceContext`
+  // already resolved, so this costs one policy query and no second auth trip.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   const body: unknown = await req.json().catch(() => null);
   const dc = (body as { designChoice?: unknown } | null)?.designChoice;

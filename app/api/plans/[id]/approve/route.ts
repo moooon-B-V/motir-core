@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getTranslations } from 'next-intl/server';
 
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
 import {
   PlanApproveTimedOutError,
@@ -15,6 +14,7 @@ import {
   PlanTargetImmutableError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
@@ -29,8 +29,9 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   // The provisional name an AI-onboarding draft is minted with (MOTIR-1486,

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { aiUsageService } from '@/lib/services/aiUsageService';
 import { mapOrgError } from '@/lib/organizations/errorResponse';
 import { MotirAiError } from '@/lib/ai/errors';
@@ -33,8 +33,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const { orgId } = await params;
   const url = new URL(req.url);
