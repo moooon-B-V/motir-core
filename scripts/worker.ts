@@ -34,7 +34,9 @@
  * as `/app/migrate` brings its own Prisma CLI, and for the same reason: a lane
  * that runs from the app's image must not inherit its files by accident.
  */
+import * as Sentry from '@sentry/nextjs';
 import { db } from '@/lib/db';
+import { serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JobWorker } from '@/lib/jobs/engine/worker';
@@ -78,7 +80,37 @@ async function installE2ESeams(): Promise<void> {
   console.info('[worker] E2E_TEST_CODE_GRAPH active — index-writer seam mocked.');
 }
 
+/**
+ * ⚠️ ERROR MONITORING, AND THE REASON IT IS HERE RATHER THAN INHERITED
+ * (MOTIR-3606).
+ *
+ * `instrumentation.ts` is what initialises Sentry for the app — and it is a
+ * NEXT.JS HOOK, so this process never runs it, exactly as its own header says of
+ * the E2E seams two functions up. The consequence was not a missing convenience:
+ * **every scheduled job in production ran in a process with no error monitoring
+ * at all.** `system.daily-health-check` dead-lettered every morning for 23 days
+ * and the only trace it left anywhere was a `job_run` row, which is a surface a
+ * person has to decide to go and look at. That is half of why nobody found out.
+ *
+ * The options come from the same builder the Next server uses
+ * (`serverSentryInitOptions()`), so the two Node runtimes cannot drift in what
+ * they report or in what they refuse to send — and it returns null with no
+ * `SENTRY_DSN`, which keeps the self-host contract: no init, no integrations, no
+ * transport, phones nowhere.
+ *
+ * FIRST in `main()`, above the seams and the loop, so an exception thrown while
+ * the worker is still starting is reported rather than lost.
+ */
+function initMonitoring(): void {
+  const options = serverSentryInitOptions();
+  if (!options) return;
+  Sentry.init(options);
+  console.info(`[worker] error monitoring on (environment: ${options.environment ?? 'unset'})`);
+}
+
 async function main(): Promise<void> {
+  initMonitoring();
+
   // Before anything claims a run: a supervised job's first act is an external
   // call, so the seam has to be in place before the loop starts.
   await installE2ESeams();

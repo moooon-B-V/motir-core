@@ -258,11 +258,28 @@ export const fleetCeilingService = {
    */
   async release(workload: FleetWorkloadKind, ref: string, ownerRef?: string): Promise<boolean> {
     try {
-      return await withSystemContext((tx) =>
+      const released = await withSystemContext((tx) =>
         ownerRef === undefined
           ? slots.release(workload, ref, tx)
           : slots.releaseOwned(workload, ref, ownerRef, tx),
       );
+      // ⚠️ A RELEASE THAT REMOVED NOTHING IS THE MOMENT A LEAK IS BORN, AND IT
+      // WAS SILENT (MOTIR-3684). The boolean is returned and every caller on the
+      // index path discards it, so the only trace a leaked slot left was the
+      // refusals it caused hours later — by which time the run that leaked it is
+      // one of hundreds in the ledger and nothing links the two. This is the one
+      // place that knows, so it says so. It is a WARNING, not an error: a
+      // double-release is legitimate (a retried teardown), as is a refused
+      // release of another run's slot — what is diagnostic is that it happened
+      // at all, and which `ref` it was.
+      if (!released) {
+        console.warn('[fleetCeilingService] a fleet-slot release removed no row', {
+          workload,
+          ref,
+          ownerRef: ownerRef ?? null,
+        });
+      }
+      return released;
     } catch (err) {
       console.error('[fleetCeilingService] could not release a fleet slot', {
         workload,
@@ -273,9 +290,22 @@ export const fleetCeilingService = {
     }
   },
 
-  /** Drop slots whose safety net has expired. Housekeeping only — the count
-   *  already ignores them, so this changes no decision; it keeps the table
-   *  readable as "the live fleet" for whoever opens it during an incident. */
+  /**
+   * Drop slots whose safety net has expired — the OPERATOR's door onto the reap.
+   *
+   * ⚠️ THIS IS NOT THE PATH THAT RECOVERS A LEAKED SLOT, AND IT NEVER WAS
+   * (MOTIR-3684). It shipped with no caller anywhere in the repository and stayed
+   * that way, so the expiry it exists to enforce was enforced by nothing at all;
+   * the reap that actually runs is inside
+   * `codeGraphIndexAdmissionService.admit`, under the fleet admission lock, on
+   * the one path a starved dispatch is guaranteed to reach. This stays as the
+   * hand-run equivalent for an operator with a table to clear.
+   *
+   * It used to say the count already ignores expired rows "so this changes no
+   * decision". `fleetInFlightSlotRepository.deleteExpired` carries what went
+   * wrong with that sentence, and it is worth reading before adding another
+   * read of this table.
+   */
   async sweepExpired(now = new Date()): Promise<number> {
     return withSystemContext((tx) => slots.deleteExpired(now, tx));
   },

@@ -278,6 +278,21 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/settings/account/api-tokens',
     why: 'The same point-in-time record in the notes beside that mock — specifically its RENDERED-first section, which states which URL was screenshotted. Re-pointing it would falsify the record of what was actually rendered.',
   },
+  // ── FORWARD-LOOKING: an asset drawn BEFORE its route exists ───────────────
+  // Both rows are TEMPORARY and each names the card that deletes it — the
+  // distinction the point-in-time rows above are careful to make. Story 8.13
+  // (MOTIR-1215) draws the require-2FA control before either Security route is
+  // built, which is what a design gate IS: the drawing comes first.
+  {
+    file: 'design/org-admin/design-notes.md',
+    address: '/settings/workspace/security',
+    why: 'FORWARD-LOOKING (Story 8.13 · 8.13.1 / MOTIR-3642). The workspace Security pane is drawn before it is built; MOTIR-3647 creates the route and DELETES this row.',
+  },
+  {
+    file: 'design/workspaces/design-notes.md',
+    address: '/settings/workspace/security',
+    why: 'FORWARD-LOOKING — the cross-reference row pointing a reader of the workspaces area at the asset that owns that pane. Same route, same card: MOTIR-3647 creates it and DELETES this row.',
+  },
   {
     file: 'design/roadmap/design-notes.md',
     address: '/roadmap/sprint',
@@ -972,6 +987,12 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  moment 8.9.1's decision record joined this branch — which is what their own
   //  `why` said would happen, enforced by the tight test below rather than by
   //  anyone remembering.)
+  // ── Forward-looking: the asset PROPOSES the file (MOTIR-3680) ─────────────
+  {
+    file: 'design/settings/design-notes.md',
+    path: 'app/(authed)/settings/account/data/page.tsx',
+    why: "Forward-looking: the Data & privacy pane's route, which MOTIR-1136 creates. The design STOPPER merges ahead of its code branch, so the asset legitimately names a file that is not on `main` yet — and naming it exactly is the point, because landing that route in the same commit as the `ACCOUNT_SETTINGS_NAV` entry is what keeps `tests/settings/accountSettingsNav.test.ts`'s route↔registry totality green by construction. DELETE THIS ROW with the commit that creates the file: once it resolves the citation is real again, and `carries no KNOWN_PATHS entry that has stopped applying` will fail until the row is gone.",
+  },
 ];
 
 describe('a design asset cites source paths that still exist', () => {

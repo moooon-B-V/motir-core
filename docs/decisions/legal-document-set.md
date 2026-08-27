@@ -53,16 +53,16 @@ both change an answer the card anticipated:
 
 ## §1 — The decisions, in one table
 
-|        | Question                                     | Decision                                                                                                                                                              |
-| ------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Q1** | Whose law governs the cloud service?         | **Netherlands law**, courts of moooon B.V.'s registered seat — with the EU consumer carve-out stated, not overclaimed (§2)                                            |
-| **Q2** | Who is the controller?                       | **moooon B.V.** for the **cloud** offering only. A self-hoster is their own controller, and every document says so on its face (§3)                                   |
-| **Q3** | What is the controller's published identity? | Legal name **moooon B.V.**; registered address and KvK number are an **OPEN INPUT the founder supplies** — named here as a publication precondition, not guessed (§3) |
-| **Q4** | What contact addresses are printed?          | `privacy@motir.co`, `security@motir.co`, `legal@motir.co` — free aliases into the existing `zhuyue@motir.co` mailbox (§4)                                             |
-| **Q5** | Is a DPO required?                           | **No**, on the Art. 37(1) reading in §5, with the trigger to revisit recorded                                                                                         |
-| **Q6** | Is a cookie-consent banner required?         | **No — positively, not conditionally.** Every cookie the product sets is strictly necessary or functional, and the analytics vendor sets none (§6)                    |
-| **Q7** | Which documents gate launch?                 | ToS, Privacy Policy, AUP, Cookie Policy, subprocessor list **block launch**. The DPA template is **ready-on-request and does not gate** (§7)                          |
-| **Q8** | Who authors them?                            | **Vetted template → agent drafts → counsel reviews → founder approves.** The drafting atom and the review atom are different executors, and §8 splits them            |
+|        | Question                                     | Decision                                                                                                                                                                                        |
+| ------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Q1** | Whose law governs the cloud service?         | **Netherlands law**, courts of moooon B.V.'s registered seat — with the EU consumer carve-out stated, not overclaimed (§2)                                                                      |
+| **Q2** | Who is the controller?                       | **moooon B.V.** for the **cloud** offering only. A self-hoster is their own controller, and every document says so on its face (§3)                                                             |
+| **Q3** | What is the controller's published identity? | Legal name **moooon B.V.**; registered address and KvK number are an **OPEN INPUT the founder supplies** — named here as a publication precondition, not guessed (§3)                           |
+| **Q4** | What contact addresses are printed?          | `privacy@motir.co`, `security@motir.co`, `legal@motir.co` — free aliases into the existing `zhuyue@motir.co` mailbox (§4)                                                                       |
+| **Q5** | Is a DPO required?                           | **No**, on the Art. 37(1) reading in §5, with the trigger to revisit recorded                                                                                                                   |
+| **Q6** | Is a cookie-consent banner required?         | **No — positively, not conditionally.** Every cookie the product sets is strictly necessary or functional, and the analytics vendor sets none (§6)                                              |
+| **Q7** | Which documents gate launch?                 | ToS, Privacy Policy, AUP, Cookie Policy, subprocessor list **and the model-provider list** (added 2026-08-27) **block launch**. The DPA template is **ready-on-request and does not gate** (§7) |
+| **Q8** | Who authors them?                            | **Vetted template → agent drafts → counsel reviews → founder approves.** The drafting atom and the review atom are different executors, and §8 splits them                                      |
 
 ---
 
@@ -284,10 +284,53 @@ follow-up.
 | **Acceptable Use Policy** | **YES**                   | Motir hosts **public projects** where signed-in strangers post feature requests and comments. Moderation and takedown need a published basis _before_ the first submission, not after the first problem                                        |
 | **Cookie Policy**         | **YES**                   | cheap, and it is the artifact §6's answer lives in. Its absence is conspicuous next to a Privacy Policy                                                                                                                                        |
 | **Subprocessor list**     | **YES**                   | the Privacy Policy's processors section must mirror it (MOTIR-1160), so it exists at launch by construction. Publishing it is the marginal step                                                                                                |
+| **Model-provider list**   | **YES**                   | the subprocessor list stops short of naming the model providers and points here instead, so the pair only discloses fully if both exist. See the amendment below for why it is a separate page                                                 |
 | **DPA template**          | **NO — ready on request** | Art. 28 binds a controller↔processor relationship that begins when a _business customer_ asks. Drafting it is launch work; a countersigned DPA is not a launch gate, and gating on one would block launch on a customer who does not exist yet |
 
 The DPA's exclusion is a scheduling decision, not a quality one: MOTIR-1160 still
 authors it in full, and it must be sendable the day it is first requested.
+
+### ⚠️ AMENDED 2026-08-27 — the set is SEVEN pages, and the seventh is deliberately not versioned like the others
+
+`content/legal/model-providers.md` was added after this ADR was written. It holds the
+model providers that can serve an AI request, each linked to its own published data
+practices, and `content/legal/subprocessors.md` points at it rather than restating it.
+
+**Why it is a separate page rather than a section.** The provider set changes whenever a
+gateway channel is enabled, and hosted agents (Epic 9) will select models independently
+of the planner, so the set churns for two reasons at once. Welding a churning list into a
+document that is versioned, counsel-reviewed and subject to re-consent produces one of
+two bad outcomes: the list goes stale, or every routing change drags a contract document
+through a version bump. **That coupling is the mechanism behind all four staleness
+incidents this page has already had.**
+
+**What follows from the split.** The seventh page carries the contractual commitments of
+none of the others: it does not vary the ToS, the Privacy Policy or a signed DPA, and an
+edit to it carries no notice period. It is a factual roster. The commitments about model
+providers — that a provider must carry a recorded transfer basis to serve EU traffic, and
+that this is enforced at the gateway rather than by convention — stay in the documents
+that are versioned.
+
+**Why it still blocks launch.** The subprocessor list is launch-blocking and now
+deliberately incomplete on its own: it keeps the COMMITMENTS — your content goes to the
+provider you selected, we do not train on it, only a provider with a recorded transfer
+basis may serve EU traffic — and defers the roster of who those providers currently are.
+Shipping one without the other would disclose less than the single page did before the
+split.
+
+**The roster's shape follows a public routing service rather than a subprocessor list.**
+One flat row per provider carrying its region, prompt retention, and whether it trains —
+the two facts a customer can act on per request — with its own terms LINKED rather than
+summarised, since a summary of somebody else's policy is a promise we cannot keep. An
+earlier draft grouped providers into three transfer tiers; that was invented here and
+matched no comparable, it duplicated the transfer-basis table that already exists, and
+the duplicate carried facts that churn ("currently holds one company"). Transfer basis
+stays in ONE place: `subprocessors.md` § _Transfer bases_.
+
+**A consequence for the guard.** `tests/legal/subprocessor-list-guard.test.ts` reads BOTH
+pages. A vendor moved from one to the other must remain disclosed somewhere, or the split
+becomes a way to lose a row — which is the failure this whole line of work exists to
+prevent.
 
 ---
 

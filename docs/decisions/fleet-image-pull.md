@@ -290,6 +290,53 @@ identical provider errors with no statement of the underlying cause.
    that was pullable at preflight and is not now (a GC'd mirror, §5.2; a revoked visibility).
    It should carry a distinguishable reason so it is not confused with "Fly is down."
 
+### §6.3 — AMENDMENT (MOTIR-3606): the preflight asks the pull question the way the BOOT will, and that is not always anonymously
+
+**What went wrong.** The preflight built on §6.1 probes anonymously — and §5's mirror is on
+`registry.fly.io`, which serves nothing anonymously. So from the day `MOTIR_INDEXER_IMAGE` was
+first set, the indexer's preflight could return only `unpullable`, and
+`system.daily-health-check` dead-lettered **every morning from 2026-08-04 to 2026-08-26** on an
+image that was intact the entire time. Twenty-three days, and the check that exists to say
+production is broken was the thing that was broken.
+
+**The measurement (2026-08-27, against the live registries):**
+
+| request                                                                        | response                                                           |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `registry.fly.io` · the production indexer digest, anonymous                   | `401` · `www-authenticate: Basic realm="flyio-registry.fly.dev"`   |
+| `registry.fly.io` · a repository that does NOT exist, anonymous                | `401` · **byte-identical**                                         |
+| `registry.fly.io` · the same digest, `Authorization: Basic` with the org token | **`200`** · `docker-content-digest: sha256:0b4d2747…`              |
+| `ghcr.io` · a public image, anonymous                                          | `401` · `www-authenticate: Bearer realm="https://ghcr.io/token",…` |
+
+The second row is the one that matters: **anonymously, a collected mirror and an intact one are
+the same 401.** The verdict carried no information at all, and §5's second constraint names
+detecting a collected mirror as the entire reason the preflight exists on this path.
+
+**The correction, and why it is a narrowing rather than a weakening.** §0's reduction —
+"can Fly boot this image?" is "will the registry serve a stranger?" — rests on §2.3: the
+Machines API create payload has no field to hand Fly a credential with. That is exact **for a
+third-party registry**. It does not hold for Fly's OWN registry, and §5 already says why in its
+first sentence: _"Machines pull from it with no credential in the machine config — Fly
+authenticates the pull itself."_ Both halves were written down; nothing joined them. So:
+
+- a registry that challenges with **Bearer** is probed **anonymously, unchanged** — for GHCR and
+  Docker Hub the anonymous answer IS the answer Fly will get, and a credential must never turn a
+  private third-party image into a green preflight;
+- `registry.fly.io` is probed with the fleet's **own org token** (`FLY_FLEET_API_TOKEN`, via
+  `flyFleetConfig()`) — the same credential the boot uses;
+- a registry whose challenge the probe cannot satisfy and for which no credential is configured
+  is **`indeterminate`**, never `unpullable`. "I could not ask" is a fact about the probe, not a
+  claim about the image, and only a definite refusal is loud (§6.1's own rule, applied to a case
+  it had not met).
+
+**And the test fixture was the reason CI never saw it.**
+`tests/ciFleet/fleetImagePull.test.ts` described `registry.fly.io` as a **Bearer** registry with
+a `/token` endpoint. No such registry exists. Every test in that file was green for the whole 23
+days, because the fixture answered a question nobody had asked the real registry. **A fixture is
+a claim about the wire**, and this ADR's own §2 header — _"what was measured, and how"_ — is the
+standard it failed: §2.1–§2.5 measured GHCR and the Machines API and never measured the mirror's
+own challenge.
+
 ## §7 — `isFlyFleetConfigured()`: strengthened, but SPLIT — and what MOTIR-2006 wires
 
 The card asked whether the predicate should mean **bootable** rather than _three strings are

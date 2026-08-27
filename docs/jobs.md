@@ -918,6 +918,84 @@ someone to name it.
 - **Rolling back is removing the id.** Same one-line change, same immediacy. That
   reversibility is what the whole migration is built on.
 
+### ⚠️ "A change takes effect without a deploy" is true of the SWITCH and false of a NEW JOB
+
+The bullet above is about the ENV VAR, and it is exact: `routedToEngine` re-reads
+`process.env` on every call, so moving an id between lanes needs no deploy. It is
+also the sentence that makes the following trap invisible.
+
+**`fly secrets set` restarts the machines on the CURRENT RELEASE, not on `main`.**
+The scheduler and the dispatcher both iterate the ENGINE REGISTRY, and the
+registry is whatever the running IMAGE's `lib/jobs/definitions` evaluated to. So
+routing an id whose job is not in that image routes it **nowhere**: the scheduler
+never sees a definition to compute a fire for, `defineJob`'s Inngest guard never
+runs because Inngest has no such function registered either, and the job has no
+timer on either lane. Nothing errors. The secret reads back byte-for-byte correct
+from every machine, which is the reassuring measurement that does not answer the
+question.
+
+**Measured on 2026-08-27** (MOTIR-3682): `system.public-follow-digest-tick` and
+`public-follow/digest` were routed at 10:32Z and 10:44Z. Both were absent from the
+running image, because the last deploy was **v166 at 01:50Z** and the pull request
+that added them merged at 07:07Z — releases v167–v172 were all `secrets set`
+restarts on that same image. `plan-drift/transitioned`, routed in the same edit,
+WAS in the image and did start running. Same command, same secret, two different
+outcomes, and only one of them visible from the secret.
+
+**So confirm the job is in the RUNNING IMAGE before reading the ledger for it:**
+
+```bash
+# the deployed image, and whether it knows the job at all
+fly ssh console -a motir-core -C "sh -c \"grep -rlm1 '<the job id>' /app/worker; echo \$FLY_IMAGE_REF\""
+# a hit  → routing it takes effect on the next scheduler tick
+# nothing → it has not deployed yet; the ledger will stay empty and that is not a bug
+```
+
+An empty `job_run` for a freshly-routed id has two causes that look identical —
+_the job has not fired yet_ and _the job is not in the image_ — and the grep above
+is what separates them.
+
+### The CENSUS — and why the safety default is not enough on its own
+
+**The default protects a forgotten job from being MIGRATED. It does nothing to
+make a forgotten job VISIBLE**, and while this migration was in flight three jobs
+joined the codebase and were routed by nobody: `system.public-follow-digest-tick`
+and `public-follow/digest` (#2344), and `plan-drift/transitioned` (#2309). Every
+cutover card had scoped itself by counting the population — _"the 20
+event-triggered jobs"_, _"the 14 SCHEDULED jobs"_ — and every count was correct on
+the day it was taken. Nothing noticed the counts and the codebase coming apart;
+two of the three were found by hand while fixing the first.
+
+So `tests/jobs/every-job-declares-its-lane.test.ts` (#2348) holds a **census** —
+two checked-in lists, `MIGRATED_TO_ENGINE` and `DELIBERATELY_ON_INNGEST`, that
+between them name **every** registered job — and asserts it is TOTAL over the
+engine registry in both directions. A job cannot then join the codebase without
+someone stating its lane: the build fails, by name, on the pull request that adds
+it. `DELIBERATELY_ON_INNGEST` going EMPTY is the condition MOTIR-3418
+(_"Retire Inngest"_) is premised on, and the honest way to check that premise.
+
+**⚠️ THE CENSUS IS A DECLARATION; THE SECRET IS THE DEPLOYMENT — keep them equal
+by hand.** No test can read production, and none should: CI would go red for an
+operator action taken minutes earlier and green when somebody changed production
+rather than the code. So changing a job's lane is TWO edits plus a read-back, and
+doing one without the other is a drift nothing catches:
+
+```bash
+# 1. the declaration — move the id between the two lists, and ship it.
+# 2. the deployment — set the secret:
+fly secrets set -a motir-core "MOTIR_POSTGRES_JOB_IDS=<the full list>"
+# 3. the read-back — from inside a machine, NOT from the console:
+fly ssh console -a motir-core -C "node -e \"console.log(process.env.MOTIR_POSTGRES_JOB_IDS)\""
+```
+
+**⚠️ Step 2 is READ-MODIFY-WRITE on a value two people can be editing.** The
+secret is one string, `fly secrets set` replaces it whole, and there is no
+compare-and-swap. Two sessions appending an id each will lose one of them — on
+2026-08-27 two runs raced on exactly this and the second append re-added an id the
+first had already written, leaving a duplicate. That one was harmless
+(`parseRoutedJobIds` builds a `Set`), and a LOST id would not have been. Read the
+value immediately before you write, write once, and read it back.
+
 **How to confirm a job actually moved.** Two tables, both for that job id:
 
 - `job_queue` — a row per enqueued run (`job_id`, `event_id`, `state`).

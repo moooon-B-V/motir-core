@@ -19,6 +19,16 @@ and annotations.
 | `invite-accept.pen` | `invite-accept.png`, `invite-accept-expired.png`, `invite-accept-used.png`, `invite-accept-wrong-email.png` |
 | `invite-email.pen`  | `invite-email-html.png`, `invite-email-text.png`                                                            |
 
+### Surfaces owned ELSEWHERE that render inside workspace settings
+
+| Surface                              | Asset (in another area)                      | Why it lives there                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Workspace Security — require 2FA** | `design/org-admin/security-policy.mock.html` | Story 8.13 (MOTIR-1215) · 8.13.1 (MOTIR-3642). The org and workspace tiers render the **same card**, and the state that matters most — LOCKED ON because the organization mandates it — is only meaningful with both tiers in one drawing. It also has **two homes**: `/settings/workspace/security` above the workspace-tier reveal threshold, and the `/settings/organization` fold-in below it (`docs/decisions/organization-tier.md` §6d). Drawn once, in the org-admin area, rather than half here and half there. |
+
+⚠️ **So a reader of this area is not looking at an undrawn surface.** The
+workspace Security pane composes INTO the page `settings.pen` owns; that asset is
+not re-specified there, and this one does not draw the control.
+
 ---
 
 ## New primitive required for 1.2.6

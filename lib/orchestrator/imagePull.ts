@@ -1,26 +1,54 @@
-// CAN THIS IMAGE REFERENCE BE PULLED WITHOUT A CREDENTIAL? (Story MOTIR-1916 ·
-// MOTIR-2006) — the OCI Distribution v2 probe behind the fleet's boot preflight.
+// CAN THIS IMAGE REFERENCE BE PULLED BY THE THING THAT WILL BOOT IT? (Story
+// MOTIR-1916 · MOTIR-2006 · MOTIR-3606) — the OCI Distribution v2 probe behind
+// the fleet's boot preflight.
 //
 // `docs/decisions/fleet-image-pull.md` is why this file exists, and §0 is the
 // finding that shapes it: **the Fly Machines API has no registry-credential
 // field at all** (§2.3, measured — there is no `registry_auth`, no `docker_auth`,
-// no `image_pull_secret`). So "can Fly boot this image?" reduces, exactly, to
-// "does the registry serve this manifest to an ANONYMOUS caller?" — which is a
-// question this repository can ask directly, cheaply, and without Fly.
+// no `image_pull_secret`). So for a THIRD-PARTY registry, "can Fly boot this
+// image?" reduces exactly to "does the registry serve this manifest to an
+// ANONYMOUS caller?" — a question this repository can ask directly, cheaply, and
+// without Fly.
 //
-// That reduction is the whole reason the probe is provider-neutral. It names no
-// Fly concept, takes an image reference and nothing else, and therefore lives
-// OUTSIDE `adapters/fly/` — `tests/ciFleet/orchestratorPortBoundary.test.ts`
-// would fail it otherwise, and rightly: a registry is not a container platform.
-// `verifyFleetBootable()` in the composition root is what marries this to the
-// fleet's configured image.
+// ⚠️ THAT REDUCTION DOES NOT HOLD FOR THE PLATFORM'S OWN REGISTRY, AND ASSUMING
+// IT DID COST 23 DAYS OF A RED HEALTH CHECK (MOTIR-3606). `registry.fly.io` is
+// not a third party Fly has to be handed a credential for — it is Fly, and a
+// Machine authenticates to it as the org. Which is precisely WHY §5 mirrors a
+// closed image there. Measured 2026-08-27 against the live registry:
+//
+//   registry.fly.io · a real digest      → 401 · www-authenticate: Basic realm="flyio-registry.fly.dev"
+//   registry.fly.io · a repo that is GONE → 401 · BYTE-IDENTICAL
+//   ghcr.io         · a public image      → 401 · www-authenticate: Bearer realm="https://ghcr.io/token",…
+//
+// An anonymous probe against a Basic-auth registry therefore returns the SAME
+// answer for an intact mirror and for one that was garbage-collected last night
+// — which is the exact fault §5's second constraint says the preflight exists to
+// catch. Reporting that answer as `unpullable` was not a conservative reading of
+// a genuine refusal; it was a verdict carrying zero information, delivered
+// loudly, every morning. So:
+//
+//   * a registry that challenges with **Bearer** is probed ANONYMOUSLY, unchanged
+//     — that is what "public" means on GHCR and Docker Hub, and it is the
+//     question that matters for an image Fly must pull as a stranger;
+//   * a registry that challenges with a scheme this probe cannot satisfy
+//     anonymously (**Basic**, or no challenge at all) is probed with a
+//     CREDENTIAL when the caller supplied one for that host, and is otherwise
+//     "could not tell" — never a claim about the image.
+//
+// The credential arrives as a RESOLVER the caller passes in, keyed by registry
+// HOST. That keeps the file provider-neutral: it names no Fly concept, so it
+// still lives OUTSIDE `adapters/fly/` and
+// `tests/ciFleet/orchestratorPortBoundary.test.ts` still passes. The composition
+// root — the one file permitted to name the adapter — is what marries a host to
+// a token, exactly as it already marries the probe to the configured image.
 //
 // ⚠️ THREE-VALUED ON PURPOSE — `true` / `false` / "could not tell". A registry
-// that refuses is a statement ABOUT THE IMAGE; a registry that cannot be reached
-// is a statement about the network, and collapsing the two would let one DNS
-// blip page an operator with "the runner image is private" (it isn't) or, worse,
-// let a genuinely private image hide behind a retry. §6's preflight only fails
-// loudly on the DEFINITE refusal; see `FleetBootableVerdict`.
+// that refuses is a statement ABOUT THE IMAGE; a registry that cannot be reached,
+// or cannot be asked at all, is a statement about the PROBE, and collapsing the
+// two would let one DNS blip page an operator with "the runner image is private"
+// (it isn't) or, worse, let a genuinely private image hide behind a retry. §6's
+// preflight only fails loudly on the DEFINITE refusal; see
+// `FleetBootableVerdict`.
 
 /** How long one registry call may take. A preflight that hangs is a preflight
  *  that turns into a timeout somewhere less legible than here. */
@@ -56,6 +84,31 @@ export interface ParsedImageReference {
   readonly isDigest: boolean;
 }
 
+/** A username / password pair for a registry that authenticates with HTTP Basic.
+ *
+ *  Provider-neutral by construction — a host and two strings. `registry.fly.io`
+ *  takes any username with the org token as the password, and a second platform
+ *  registry would fill the same shape without this file learning its name. */
+export interface RegistryBasicCredential {
+  readonly username: string;
+  readonly password: string;
+}
+
+/**
+ * Resolve the credential to probe one registry HOST with, or null when the
+ * caller has none for it.
+ *
+ * ⚠️ IT IS ONLY EVER CONSULTED FOR A CHALLENGE THIS PROBE CANNOT ANSWER
+ * ANONYMOUSLY, and that is the whole point of passing it rather than a flat
+ * credential. A Bearer registry keeps being asked the anonymous question —
+ * "would a stranger be served this?" — because for GHCR and Docker Hub that IS
+ * the question Fly's machine-create asks. Supplying a credential must never
+ * turn a private third-party image into a green preflight.
+ */
+export type RegistryCredentialResolver = (
+  registry: string,
+) => RegistryBasicCredential | null | undefined;
+
 /**
  * The probe's answer about one reference.
  *
@@ -64,7 +117,8 @@ export interface ParsedImageReference {
  * the caller re-assembling it.
  */
 export type ImagePullVerdict =
-  /** The registry served the manifest to an anonymous caller. Fly can boot it. */
+  /** The registry served the manifest to the caller that will boot it — anonymously
+   *  on a Bearer registry, or with the supplied credential on a Basic one. */
   | { pullable: true; reference: string; registry: string; digest: string | null }
   /** DEFINITE refusal. `unauthorized` = private (or the token endpoint said so);
    *  `absent` = the repository or digest does not exist; `refused` = any other
@@ -76,13 +130,15 @@ export type ImagePullVerdict =
       reason: 'unauthorized' | 'absent' | 'refused';
       detail: string;
     }
-  /** Could not tell: a transport failure, or a reference this probe cannot
-   *  parse. Never a statement about the image. */
+  /** Could not tell: a transport failure, a reference this probe cannot parse,
+   *  or a registry whose authentication scheme this probe cannot satisfy and for
+   *  which no credential was supplied (`unauthenticatable`). Never a statement
+   *  about the image. */
   | {
       pullable: null;
       reference: string;
       registry: string | null;
-      reason: 'unreachable' | 'unparseable';
+      reason: 'unreachable' | 'unparseable' | 'unauthenticatable';
       detail: string;
     };
 
@@ -191,7 +247,57 @@ async function anonymousToken(challenge: Record<string, string>): Promise<string
 }
 
 /**
- * Can an anonymous caller resolve this image reference's manifest?
+ * The authentication SCHEME a `WWW-Authenticate` header names, lower-cased —
+ * `bearer`, `basic`, something else, or null when there is no header at all.
+ *
+ * Split out from {@link parseBearerChallenge} because the two answer different
+ * questions and only one of them used to be asked. That function returns null
+ * for BOTH "this is a Basic registry" and "this Bearer challenge is malformed",
+ * and the probe read that single null as *the registry refused us* — which is
+ * how a Fly-mirrored image reported `unpullable` every night for 23 days
+ * (MOTIR-3606). Naming the scheme is what lets the two be told apart.
+ */
+export function challengeScheme(header: string | null): string | null {
+  if (!header) return null;
+  const match = /^\s*([A-Za-z][A-Za-z0-9-]*)\b/.exec(header);
+  return match ? (match[1] as string).toLowerCase() : null;
+}
+
+/** `Authorization: Basic …` for a username/password pair. */
+function basicAuthHeader(credential: RegistryBasicCredential): string {
+  const raw = `${credential.username}:${credential.password}`;
+  return `Basic ${Buffer.from(raw, 'utf8').toString('base64')}`;
+}
+
+/**
+ * Ask the caller's resolver for a credential, treating a THROW as "none".
+ *
+ * ⚠️ THE SWALLOW BELONGS HERE, NOT IN EVERY RESOLVER. A resolver reads
+ * deployment configuration, and this repository's configuration accessors THROW
+ * on an unwired deployment by design (`flyFleetConfig()` and its siblings,
+ * deliberately — see `lib/orchestrator/index.ts`). {@link probeImagePull}'s
+ * contract is that it NEVER throws, so the one place that can guarantee that is
+ * the one place that declares it. A `try` in each resolver would be the same
+ * code repeated per registry, and the first one written without it would break a
+ * health check rather than return a verdict.
+ *
+ * "None" is the right reading of a throw either way: a credential that cannot be
+ * read is a credential this deployment does not have, which lands on
+ * `unauthenticatable` — a "could not tell", not an alarm.
+ */
+function credentialFor(
+  resolve: RegistryCredentialResolver | undefined,
+  registry: string,
+): RegistryBasicCredential | null {
+  try {
+    return resolve?.(registry) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Can the thing that will boot this image resolve its manifest?
  *
  * The exact question Fly answers at machine-create time, asked before any job
  * depends on the answer. Measured against the real thing on 2026-08-02: the flow
@@ -202,11 +308,20 @@ async function anonymousToken(challenge: Record<string, string>): Promise<string
  * pair of states Fly itself reports as HTTP 201 and HTTP 400 `failed to get
  * manifest …: unauthorized`.
  *
+ * `resolveCredential` is consulted ONLY for a challenge the anonymous dance
+ * cannot answer — see {@link RegistryCredentialResolver}. Omit it and the probe
+ * behaves exactly as it did for every Bearer registry, and answers
+ * `unauthenticatable` (a "could not tell") rather than `unauthorized` for a
+ * Basic one.
+ *
  * NEVER THROWS. Every failure is a verdict, because the callers are a health
  * check and an operator surface; a throw would turn "could not reach ghcr.io"
  * into a stack trace in the one place that exists to produce a sentence.
  */
-export async function probeImagePull(image: string): Promise<ImagePullVerdict> {
+export async function probeImagePull(
+  image: string,
+  resolveCredential?: RegistryCredentialResolver,
+): Promise<ImagePullVerdict> {
   const parsed = parseImageReference(image);
   if (!parsed) {
     return {
@@ -220,31 +335,66 @@ export async function probeImagePull(image: string): Promise<ImagePullVerdict> {
 
   const { registry, repository, reference } = parsed;
   const manifestUrl = `https://${registry}/v2/${repository}/manifests/${reference}`;
+  /** Did the resolved answer come from a CREDENTIALED call? Only the refusal
+   *  arms read it, and only to say which fix the operator needs. */
+  let usedCredential = false;
 
   try {
     let res = await registryFetch(manifestUrl, { accept: MANIFEST_ACCEPT });
 
     if (res.status === 401) {
-      // The standard challenge → anonymous-token dance. A registry that hands
-      // out a token for a PUBLIC repository and refuses for a private one is
-      // exactly how "is this public?" is answered on the wire.
-      const challenge = parseBearerChallenge(res.headers.get('www-authenticate'));
-      const token = challenge ? await anonymousToken(challenge) : null;
-      if (!token) {
-        return {
-          pullable: false,
-          reference: image,
-          registry,
-          reason: 'unauthorized',
-          detail: challenge
-            ? 'the registry refused an anonymous pull token — the repository is private or absent'
-            : 'the registry demanded authentication and offered no bearer challenge',
-        };
+      const wwwAuthenticate = res.headers.get('www-authenticate');
+      const challenge = parseBearerChallenge(wwwAuthenticate);
+
+      if (challenge) {
+        // The standard challenge → anonymous-token dance. A registry that hands
+        // out a token for a PUBLIC repository and refuses for a private one is
+        // exactly how "is this public?" is answered on the wire. A credential is
+        // deliberately NOT offered here: on a Bearer registry the anonymous
+        // answer IS the answer Fly will get.
+        const token = await anonymousToken(challenge);
+        if (!token) {
+          return {
+            pullable: false,
+            reference: image,
+            registry,
+            reason: 'unauthorized',
+            detail:
+              'the registry refused an anonymous pull token — the repository is private or absent',
+          };
+        }
+        res = await registryFetch(manifestUrl, {
+          accept: MANIFEST_ACCEPT,
+          authorization: `Bearer ${token}`,
+        });
+      } else {
+        // ⚠️ NOT a refusal — a challenge this probe cannot answer anonymously.
+        // `registry.fly.io` answers `Basic realm="flyio-registry.fly.dev"` and
+        // hands out nothing without a credential, INCLUDING for a repository
+        // that does not exist: the 401 is byte-identical either way, so an
+        // anonymous verdict here carries no information about the image at all
+        // (MOTIR-3606, measured 2026-08-27). Reporting it as `unauthorized` made
+        // the daily health check red for 23 days over an image that was intact
+        // the whole time.
+        const credential = credentialFor(resolveCredential, registry);
+        const scheme = challengeScheme(wwwAuthenticate) ?? 'none';
+        if (!credential) {
+          return {
+            pullable: null,
+            reference: image,
+            registry,
+            reason: 'unauthenticatable',
+            detail:
+              `the registry authenticates with \`${scheme}\` and no credential is configured ` +
+              `for it — an anonymous probe cannot tell an intact image from a missing one here`,
+          };
+        }
+        usedCredential = true;
+        res = await registryFetch(manifestUrl, {
+          accept: MANIFEST_ACCEPT,
+          authorization: basicAuthHeader(credential),
+        });
       }
-      res = await registryFetch(manifestUrl, {
-        accept: MANIFEST_ACCEPT,
-        authorization: `Bearer ${token}`,
-      });
     }
 
     if (res.ok) {
@@ -261,7 +411,16 @@ export async function probeImagePull(image: string): Promise<ImagePullVerdict> {
         reference: image,
         registry,
         reason: 'unauthorized',
-        detail: `the registry refused the manifest to an anonymous caller (HTTP ${res.status})`,
+        // ⚠️ TWO DIFFERENT FIXES, so two different sentences. Refused ANONYMOUSLY
+        // means the image is private and the fix is its visibility; refused WITH
+        // the deployment's own credential means the credential is wrong or
+        // expired, and sending an operator to the registry's visibility settings
+        // for that is sending them to the wrong page (`flyMachines.ts` draws the
+        // same distinction for the Machines API's own `unauthorized`).
+        detail: usedCredential
+          ? `the registry refused the manifest to this deployment's OWN registry credential ` +
+            `(HTTP ${res.status}) — suspect an expired or wrong-org token before the image`
+          : `the registry refused the manifest to an anonymous caller (HTTP ${res.status})`,
       };
     }
     if (res.status === 404) {

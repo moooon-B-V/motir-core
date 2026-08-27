@@ -6,7 +6,7 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
-import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { createTestProject, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -613,5 +613,236 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
     await plansService.declinePlan(planId, fx.ctx);
     const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(workItemCount).toBe(0);
+  });
+});
+
+describe('a CROSS-PROJECT ref — the gate sees one workspace, not one project (MOTIR-3581)', () => {
+  // ── The defect this block pins ────────────────────────────────────────────
+  // `runPersistGate` resolves refs through `findByIdsInWorkspace`, and it has
+  // TWO call sites in `approvePlan`. The pre-transaction one opens its own
+  // `withWorkspaceServiceContext` (workspace-bound). The in-transaction one runs
+  // on the approve transaction, which `withWorkspaceContext` binds to
+  // `plan.projectId` — and `work_item_project_narrow` is a RESTRICTIVE FOR
+  // SELECT policy that reads `app.project_id`. So the locked pass could not see
+  // a work item one project over, `liveById` missed it, and `assertRefsResolve`
+  // raised `dangling` saying the ref "names no work item in this workspace"
+  // while the item sat in that very workspace. Two passes of ONE gate disagreed
+  // about what exists, and the stricter one decided.
+  //
+  // ⚠️ THESE CASES NEED A REAL DATABASE AND CANNOT BE PROVEN ONE TIER UP.
+  // `tests/plans/validateProposals.test.ts` hands the validator a `liveById` map
+  // built by hand, so it asserts what the gate CONCLUDES from a resolution — and
+  // the bug was entirely in what the RESOLUTION returned. A pure test of the
+  // verdict passes with the defect fully present. Only Postgres, with the
+  // policy applied and the GUC bound, measures the thing that was wrong.
+
+  /** A SIBLING project in the same workspace, plus a not-done item in it. */
+  async function siblingProjectBlocker(
+    fx: WorkItemFixture,
+    identifier = 'BETA',
+  ): Promise<{ projectId: string; blockerId: string }> {
+    const project = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: `Sibling ${identifier}`,
+      identifier,
+    });
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Cross-project blocker' },
+      fx.ctx,
+    );
+    return { projectId: project.id, blockerId: blocker.id };
+  }
+
+  it('APPROVES an add whose blockedByRefs names a not-done item in another project, and materializes a REAL edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const { blockerId } = await siblingProjectBlocker(fx);
+
+    // `plannedPlan` closes through `markPlanned`, so this ALSO asserts the third
+    // acceptance criterion: the close gate admits the very plan approve accepts.
+    // The close and both approve passes agree, measured on one plan.
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Depends on the platform', kind: 'task' },
+        blockedByRefs: [blockerId],
+      },
+    ]);
+
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { projectId: fx.projectId, title: 'Depends on the platform' },
+    });
+    const links = await adminDb.workItemLink.findMany({
+      where: { fromId: created.id, kind: 'is_blocked_by' },
+    });
+    expect(links).toHaveLength(1);
+    expect(links[0]!.toId).toBe(blockerId);
+  });
+
+  it('APPROVES a modify whose patch.blockedByAdd names a cross-project item', async () => {
+    const fx = await makeWorkItemFixture();
+    const { blockerId } = await siblingProjectBlocker(fx, 'GAMMA');
+    const target = await seedItem(fx, 'Existing card');
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: target, patch: { blockedByAdd: [blockerId] } },
+    ]);
+
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
+
+    const links = await adminDb.workItemLink.findMany({
+      where: { fromId: target, kind: 'is_blocked_by' },
+    });
+    expect(links).toHaveLength(1);
+    expect(links[0]!.toId).toBe(blockerId);
+  });
+
+  it('REFUSES a parentRef naming a cross-project item at BOTH gates — a PLACEMENT, not a dependency', async () => {
+    // The asymmetry is the product's, not this gate's: a dependency is
+    // workspace-scoped by design (`work_item_link` carries no project
+    // narrowing), while parentage is same-project by invariant on three layers
+    // (`workItemsService`'s `CrossProjectParentError`, the
+    // `WI_PARENT_CROSS_PROJECT` trigger, `move_to_parent`). The point of
+    // refusing in the GATE is that the alternative is that trigger firing
+    // halfway through `materialize` — a raw 23514 for a decision that can be
+    // taken before a single row is written.
+    const fx = await makeWorkItemFixture();
+    const project = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: 'Sibling DELTA',
+      identifier: 'DELTA',
+    });
+    // A `story`, so `story -> task` is a legal PAIR and the kind-parent grammar
+    // has nothing to say — the only thing wrong with it as a parent is the
+    // project. With a `task` here the case would pass for the wrong reason.
+    const foreignParent = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'story', title: 'Foreign story' },
+      fx.ctx,
+    );
+
+    // ── GATE 1: the CLOSE. Since MOTIR-3573 a knowable rejection may not reach
+    //    the review queue at all, so such a plan never becomes `planned`.
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Proposed' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Misplaced child', kind: 'task' },
+          parentRef: foreignParent.id,
+        },
+      ],
+      fx.ctx,
+    );
+    const closeErr = await plansService.markPlanned(plan.id, fx.ctx).catch((e: unknown) => e);
+    expect(closeErr).toBeInstanceOf(PlanGrammarError);
+    expect((closeErr as PlanGrammarError).reason).toBe('illegal_parent');
+
+    // ── GATE 2: APPROVE. Reached the way one actually is in production — closed
+    //    VALID, then edited. This is the pass that runs INSIDE the
+    //    project-bound transaction, so it is the one the narrowing broke.
+    const before = await treeSnapshot(fx);
+    const planId = await plannedThenBroken(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Misplaced child', kind: 'task' } }],
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { parentRef: foreignParent.id },
+        });
+      },
+    );
+    const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanGrammarError);
+    expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+
+    // ⚠️ THE MESSAGE IS HALF THE DEFECT. The original refusal asserted something
+    // the caller could observe to be false, which sent them looking for a typo
+    // or a deleted row and finding neither. Both gates owe the true reason.
+    for (const e of [closeErr, err]) {
+      expect((e as Error).message).not.toContain('names no work item in this workspace');
+      expect((e as Error).message).toContain('DIFFERENT project');
+      expect((e as Error).message).toContain('blockedByRefs');
+    }
+    expect(await treeSnapshot(fx)).toEqual(before);
+  });
+
+  it('still raises `dangling` for a ref that genuinely resolves to NOTHING', async () => {
+    const fx = await makeWorkItemFixture();
+    // Closed VALID, then broken — `markPlanned` refuses a dangling ref outright
+    // now (MOTIR-3573), so this is the post-close-edit shape the gate exists for.
+    const planId = await plannedThenBroken(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Orphan', kind: 'task' } }],
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { blockedByRefs: ['wi_does_not_exist'] },
+        });
+      },
+    );
+
+    const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanRefGraphError);
+    expect((err as PlanRefGraphError).reason).toBe('dangling');
+  });
+
+  it('still REFUSES a ref naming a work item in a DIFFERENT WORKSPACE — the no-existence-leak boundary is unchanged', async () => {
+    // The suspension lifts the PROJECT narrowing only; `app.workspace_id` stays
+    // bound throughout and `findByIdsInWorkspace` filters on it explicitly as
+    // well. A tenancy widening would show up right here.
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHR' });
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: other.projectId, kind: 'task', title: 'Another tenant' },
+      other.ctx,
+    );
+
+    const planId = await plannedThenBroken(
+      fx,
+      [{ op: 'add', proposedFields: { title: 'Leaky', kind: 'task' } }],
+      async ([addId]) => {
+        await adminDb.planItem.update({
+          where: { id: addId! },
+          data: { blockedByRefs: [foreign.id] },
+        });
+      },
+    );
+
+    const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanRefGraphError);
+    expect((err as PlanRefGraphError).reason).toBe('dangling');
+
+    // And no link was created into the other tenant.
+    const links = await adminDb.workItemLink.count({ where: { toId: foreign.id } });
+    expect(links).toBe(0);
+  });
+
+  it('re-takes the DONE-WORK IMMUTABILITY verdict under the lock — the suspension did not move it out', async () => {
+    // ⚠️ THE REGRESSION GUARD FOR THE FIX ITSELF. The tempting smaller change was
+    // to carry the pre-transaction pass's resolved map into the locked pass. That
+    // would have fixed the visibility bug and silently moved THIS verdict — which
+    // is the entire reason the second pass runs under the row locks — back onto a
+    // stale snapshot. The narrowing was what was wrong, so only the narrowing was
+    // lifted; the locked pass still reads fresh.
+    const fx = await makeWorkItemFixture();
+    const { blockerId } = await siblingProjectBlocker(fx, 'EPSI');
+    const target = await seedItem(fx, 'Will finish mid-approve');
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: target, patch: { blockedByAdd: [blockerId] } },
+    ]);
+
+    // Transition AFTER the close, so the pre-transaction pass reads a snapshot
+    // that is already stale by the time the locks are taken.
+    await markDone(fx, target);
+
+    const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanTargetImmutableError);
   });
 });

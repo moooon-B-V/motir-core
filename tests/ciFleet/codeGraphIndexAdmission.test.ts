@@ -927,6 +927,143 @@ describe('a settle may only release the slot ITS OWN run took', () => {
   });
 });
 
+// ── An EXPIRED slot is debris, not a holder ─────────────────────────────────
+
+describe('a slot whose safety net has passed does not hold the work it named', () => {
+  /** Plant a slot that expired `agoMs` ago — a run that took capacity and never
+   *  gave it back. `take` is the real repository write, so the row is exactly
+   *  the shape a leaked one has in production. */
+  async function plantExpiredSlot(
+    fx: Fixture,
+    repoRef: string,
+    options: { ownerRef?: string | null; agoMs?: number; workload?: string } = {},
+  ): Promise<string> {
+    const ref =
+      options.workload && options.workload !== 'code_graph_index'
+        ? repoRef
+        : indexSlotRef(fx.projectId, repoRef);
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: options.workload ?? 'code_graph_index',
+          ref,
+          ownerRef: options.ownerRef ?? null,
+          organizationId: fx.organizationId,
+          workspaceId: fx.workspaceId,
+          expiresAt: new Date(NOW.getTime() - (options.agoMs ?? 3_600_000)),
+        },
+        tx,
+      ),
+    );
+    return ref;
+  }
+
+  // ⚠️ THE PRODUCTION FIXTURE, AND THE ONE TO MUTATION-CHECK (MOTIR-3684).
+  // Delete the `slots.deleteExpired(now, tx)` line from
+  // `codeGraphIndexAdmissionService.admit` and this case MUST go red with
+  // `repo_index_in_flight`. That is precisely what shipped: a slot for
+  // `<project>:moooon-B-V/motir-core` expired at 2026-08-26T15:40:28Z and refused
+  // every refresh of that repository for the next nineteen hours — 60 attempts
+  // over ~1.7 hours per run, nine runs, a 100% failure rate — while the fleet held
+  // ZERO live containers.
+  it('does NOT defer a later dispatch — the leak recovers itself', async () => {
+    const fx = await seedTenant();
+    await plantExpiredSlot(fx, 'moooon/core', { ownerRef: 'evt-dead' });
+
+    const verdict = await admit(fx, 'moooon/core', 'evt-later');
+
+    expect(verdict.outcome).toBe('admitted');
+    // And the row the new dispatch holds is ITS OWN, not the corpse rewritten.
+    const slot = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.findByRef(
+        'code_graph_index',
+        indexSlotRef(fx.projectId, 'moooon/core'),
+        tx,
+      ),
+    );
+    expect(slot).toMatchObject({ ownerRef: 'evt-later' });
+    expect(slot!.expiresAt.getTime()).toBeGreaterThan(NOW.getTime());
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // The OTHER production row: taken 2026-08-07 by a run that ended
+  // `teardown_failed` — which deliberately does not release, "left for the
+  // reaper". There was no reaper, so `moooon-B-V/motir-meta` went twenty days
+  // without a code-graph refresh. An unowned row defers while it is LIVE (the
+  // migration-window case above); once expired it is debris like any other.
+  it('recovers even when nothing can name the run that leaked it', async () => {
+    const fx = await seedTenant();
+    await plantExpiredSlot(fx, 'moooon/legacy', {
+      ownerRef: null,
+      agoMs: 20 * 24 * 3_600_000,
+    });
+
+    expect(await admit(fx, 'moooon/legacy', 'evt-later')).toMatchObject({ outcome: 'admitted' });
+  });
+
+  // ⚠️ THE PROPERTY MOTIR-2160 BOUGHT MUST SURVIVE THE REAP. The reap keys on
+  // EXPIRY and nothing else, so a second run arriving while the first's container
+  // is genuinely alive still waits — which is the whole of what stops two
+  // containers doing one unit of work.
+  it('still defers behind a LIVE holder — expiry is the only thing the reap reads', async () => {
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '12');
+    const fx = await seedTenant();
+    expect(await admit(fx, 'moooon/core', 'evt-A')).toMatchObject({ outcome: 'admitted' });
+
+    expect(await admit(fx, 'moooon/core', 'evt-B')).toMatchObject({
+      outcome: 'deferred',
+      reason: 'repo_index_in_flight',
+    });
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // The reap runs under the fleet admission lock, which serializes every
+  // workload's admission — so it clears every workload's debris, and a starved
+  // repo's own refresh is what pays for the sweep. It must NOT touch a live row
+  // of another workload: that would under-count a container still spending, the
+  // one direction the ceiling may never err in.
+  it('clears another workload’s expired debris and leaves its LIVE slots alone', async () => {
+    const fx = await seedTenant();
+    await plantExpiredSlot(fx, 'agent-run-dead', { workload: 'hosted_agent' });
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'hosted_agent',
+          ref: 'agent-run-live',
+          ownerRef: 'agent-run-live',
+          organizationId: fx.organizationId,
+          workspaceId: fx.workspaceId,
+          expiresAt: new Date(NOW.getTime() + CONTAINER_TIMEOUT_MS),
+        },
+        tx,
+      ),
+    );
+
+    expect((await admit(fx, 'moooon/core')).outcome).toBe('admitted');
+
+    const rows = await adminDb.fleetInFlightSlot.findMany({
+      where: { workload: 'hosted_agent' },
+      select: { ref: true },
+    });
+    expect(rows.map((r) => r.ref)).toEqual(['agent-run-live']);
+  });
+
+  // ⚠️ A RELEASE THAT REMOVES NOTHING IS THE MOMENT A LEAK IS BORN, and it used
+  // to leave no trace at all — the boolean is returned and the index path
+  // discards it, so the only evidence was the refusals hours later, by which time
+  // nothing linked them to the run that caused them.
+  it('says so when a release removes no row', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await codeGraphIndexAdmissionService.release('never:taken', RUN)).toBe(false);
+
+    expect(warn).toHaveBeenCalledWith(
+      '[fleetCeilingService] a fleet-slot release removed no row',
+      expect.objectContaining({ workload: 'code_graph_index', ref: 'never:taken' }),
+    );
+  });
+});
+
 // ── No bypass ───────────────────────────────────────────────────────────────
 
 describe('nothing bypasses the index caps', () => {

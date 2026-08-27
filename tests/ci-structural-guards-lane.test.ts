@@ -165,6 +165,7 @@ const SELF_WALKING_MEMBERS = [
   // self-walking half of this list exists.
   'tests/helpers/importGraph.test.ts',
   'tests/ci-structural-guards-lane.test.ts',
+  'tests/legal/subprocessor-list-guard.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {
