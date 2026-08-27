@@ -178,6 +178,12 @@ const INSTALLED = new Set([
 const HOSTS = hostsInTree();
 /** Each page's parsed sections, paired with the page that produced them. */
 const PARSED = PAGES.map((p) => ({ ...p, bySection: vendorsBySection(p.path) }));
+/**
+ * The vendors that have a row in the *Transfer bases* table, which lives on the
+ * subprocessor page even for the model providers listed on the other one.
+ */
+const WITH_TRANSFER_BASIS = vendorsIn(['Transfer bases'], PARSED[0]!.bySection);
+
 /** Every vendor disclosed anywhere, across both pages. */
 const LIVE = new Set(PARSED.flatMap((p) => [...vendorsIn([...p.liveSections], p.bySection)]));
 
@@ -279,6 +285,27 @@ describe('the subprocessor list agrees with the repository (MOTIR-3631)', () => 
       `these vendors are on the page for reasons this guard cannot re-derive, and one has ` +
         `disappeared from a live section. If that is deliberate, remove it from ` +
         `INVISIBLE_TO_THIS_GUARD in the same change and say where it went.`,
+    ).toEqual([]);
+  });
+
+  it('gives EVERY disclosed vendor a transfer basis', () => {
+    // ⚠️ THE CHECK THAT WAS MISSING, and the gap was real. Five vendors —
+    // GitHub, GitLab, Atlassian/Jira, Linear and Plane — sat in a live section
+    // with no row in *Transfer bases* at all, and this suite passed the whole
+    // time, because every other assertion here asks whether a vendor is LISTED
+    // and none asked whether the listing is COMPLETE.
+    //
+    // A subprocessor list without a transfer basis is the half a customer's
+    // privacy reviewer actually reads. Naming a US company and saying nothing
+    // about how the data lawfully gets there is not disclosure; it is a name.
+    const missing = [...LIVE].filter((v) => !WITH_TRANSFER_BASIS.has(v)).sort();
+
+    expect(
+      missing,
+      `these vendors are disclosed as receiving data but have no row in the ` +
+        `"Transfer bases" table of content/legal/subprocessors.md. Every vendor outside ` +
+        `the EEA needs a recorded Chapter V basis, and one inside it needs a row saying ` +
+        `so — an unanswered row is the question a privacy reviewer asks first.`,
     ).toEqual([]);
   });
 
