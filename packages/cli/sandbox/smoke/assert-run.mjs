@@ -287,17 +287,40 @@ check(
 
 // ── the pull request ────────────────────────────────────────────────────────
 
+// ONE pull request, opened EARLY and refreshed at the close-out (Story
+// MOTIR-3655 · MOTIR-3681). The pull request is opened at the repository's
+// FIRST implemented card, not at the end of the run, so what it is CREATED with
+// describes only that card — the run a reviewer reads is the REFRESHED one.
+// Both halves are asserted: opening more than once is the duplicate-PR bug, and
+// a body that never grows is a pull request that lies about its own run.
 const ghCalls = readFileSync(GH_PATH, 'utf8').split('\n').filter(Boolean);
 const created = ghCalls.filter((line) => line.startsWith('pr create'));
+const edited = ghCalls.filter((line) => line.startsWith('pr edit'));
 
 check(created.length === 1, `expected exactly ONE pull request, got ${created.length}`);
 check(
   created[0]?.includes('--base main'),
   `the session pull request did not target main: ${created[0]}`,
 );
+
+// It is opened BEFORE the run ends — the property the eager open exists for. A
+// pull request opened at the close-out is the LAST thing gh is asked to do.
+check(
+  ghCalls.indexOf(created[0]) < ghCalls.length - 1,
+  'the pull request was the last gh call — it was opened at the close-out, not at the first implemented card',
+);
+
+// The close-out REFRESHES it rather than opening a second one. `updateSessionPr`
+// reports a `gh` failure instead of throwing, so a broken refresh leaves the run
+// exiting 0 and is visible only here.
+check(edited.length >= 1, 'the close-out never refreshed the session pull request');
+
+// The story the REVIEWER reads is the LAST write of the body, whichever call
+// made it — not the thin one the pull request was opened with.
+const finalBody = edited.at(-1) ?? created[0];
 for (let i = 1; i <= ITEMS; i += 1) {
   check(
-    created[0]?.includes(`${PROJECT}-${i}`),
+    finalBody?.includes(`${PROJECT}-${i}`),
     `${PROJECT}-${i} is missing from the session pull-request body`,
   );
 }

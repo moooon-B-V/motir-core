@@ -145,7 +145,18 @@ $(head -5 "$AUTO_LOG")"
     local created
     created="$(grep -c '^pr create' "$GH_LOG" || true)"
     [ "$created" -eq 1 ] \
-        || fail "leg $label: expected exactly ONE pull request after the failure, got $created (the run aborted before close-out — MOTIR-1836)"
+        || fail "leg $label: expected exactly ONE pull request after the failure, got $created"
+
+    # ⚠️ The count above STOPPED being proof that the close-out ran. The pull
+    # request is now opened at the first implemented card (Story MOTIR-3655 ·
+    # MOTIR-3681), so SMOKE-1 alone produces it — a run that then died exactly
+    # as MOTIR-1836 died would still show one create. The close-out's own
+    # signature is the REFRESH it issues over the finished run, so that is what
+    # this asserts now.
+    local edited
+    edited="$(grep -c '^pr edit' "$GH_LOG" || true)"
+    [ "$edited" -ge 1 ] \
+        || fail "leg $label: the pull request was opened but never refreshed (the run aborted before close-out — MOTIR-1836)"
 
     local branch
     branch="$(sed -n 's/.*\(motir\/auto-[0-9-]*\).*/\1/p' "$AUTO_LOG" | head -1)"
