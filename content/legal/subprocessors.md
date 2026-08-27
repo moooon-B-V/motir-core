@@ -85,89 +85,68 @@ Email-and-password sign-in reaches no third party.
 
 ## AI features — the model you choose
 
-Motir's AI features — planning, and the hosted agents that carry out the work — send
-the text you provide to a **model provider you select**. **If you never use an AI
-feature, no prompt data leaves the core service.**
+Motir's AI features — planning, and the hosted agents that carry out the work — send the
+text you provide to a **model provider you select**. **If you never use an AI feature, no
+prompt data leaves the core service.**
 
-**moooon B.V. operates its own relay between the two, and it is NOT a subprocessor.**
-`motir-ai` and `motir-gateway` are our own services, run by the same legal entity that
-operates Motir. A subprocessor is a _third party_ a processor engages; these are us,
-and listing them here would pad this page with our own server names while telling you
-nothing about who else can see your data. What they run **on** is a different question
-and a real one: they are hosted by **Fly.io**, which is a subprocessor and is listed
-under _Core subprocessors_ above.
+### ⚠️ Three of the names in that path are ours, and none of them is a subprocessor
 
-So the chain is `Motir → our gateway → the provider you chose`, and the only rows below
-are that last hop.
+moooon B.V. builds three products, and two of them sit between Motir and a model
+provider. They are worth naming because they are separate products a reader may meet on
+their own — not because they are third parties, which they are not:
 
-| Subprocessor                                                       | Purpose                                                   | Data reached                                            | Location                    |
-| ------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------- | --------------------------- |
-| **OpenAI** (OpenAI, L.L.C.)                                        | A selectable model, and the embedding model behind search | The prompt text, and the content sent for embedding     | USA                         |
-| **Anthropic** (Anthropic PBC)                                      | A selectable model (Claude)                               | The prompt text, and the work-item content sent with it | USA                         |
-| **Alibaba Cloud** (Alibaba Cloud Computing Ltd.)                   | A selectable model (Qwen), served from Model Studio       | The prompt text, and the work-item content sent with it | **Frankfurt, Germany (EU)** |
-| **Zhipu AI** (Beijing Zhipu Huazhang Technology Co., Ltd.)         | A selectable model (GLM)                                  | The prompt text, and the work-item content sent with it | People's Republic of China  |
-| **Moonshot AI** (Beijing Moonshot Technology Co., Ltd.)            | A selectable model (Kimi)                                 | The prompt text, and the work-item content sent with it | People's Republic of China  |
-| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | A selectable model                                        | The prompt text, and the work-item content sent with it | People's Republic of China  |
-| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning or agent request needs one    | The search query, which is derived from what you asked  | USA                         |
+- **motir-core** — the planning and project-management application. Open source, and
+  usable standalone as self-hosted PM software.
+- **motir-ai** — the planning intelligence. It can plan into other project-management
+  tools, not only into Motir.
+- **motir-gateway** — the LLM routing layer: one OpenAI-compatible interface in front of
+  many providers, with metering. It is intended to be offered to other companies, and it
+  is the same shape as a public routing service such as OpenRouter.
 
-**The set was read from the gateway's own administration on 2026-08-26 and RE-READ
-on 2026-08-27**, not inferred from source. Our gateway is a multi-provider relay
-whose enabled upstream _channels_ live in its own database rather than in a
-repository, which is why the read has to happen against the running service — see
-_How this list is compiled_ below. **Brave** is the one non-model upstream: it
-serves web search when a request needs one, and the gateway's per-call-unit path
-prices exactly one unit, `search.brave`, so Brave is the whole of that path.
+**A subprocessor is a _third party_ a processor engages.** All three are moooon B.V., so
+listing them here would name a company to itself and tell you nothing about who else can
+see your data. What they run **on** is a different question and a real one: they are
+hosted by **Fly.io**, which is a subprocessor and is listed under _Core subprocessors_
+above.
 
-**⚠️ This table names the providers that may serve you, not a fixed assignment.**
-Which one answers a given request depends on the model selected for that project —
-and, once hosted agents ship, on the model selected for the agent, which need not
-be the same one. A provider is listed here if it **can** receive your content,
-because that is the question a subprocessor list exists to answer. The transfer
-position of each is what differs, and it is set out next.
+**motir-gateway holds no model and produces no answers.** It accepts a request, decides
+which upstream channel can serve the model asked for, forwards it, meters what it cost
+and returns the response. It does not train on your content, and what it retains is a
+usage record — token counts, model name, channel, timestamp — rather than a transcript.
+Once a request reaches a provider, **that provider's own terms govern it**, which is why
+they are linked rather than summarised.
+
+So the chain is `Motir → our gateway → the provider you chose`, and only that last hop
+introduces a company other than moooon B.V.
+
+### The providers, and where the list lives
+
+**→ [The full model-provider list is at `/legal/model-providers`](/legal/model-providers)**,
+with each provider's own data practices linked.
+
+It is a separate page deliberately. The provider set changes whenever a channel is
+enabled, and a list that changes should not be welded into a document that is versioned
+and re-approved — that coupling is what makes a subprocessor page go stale. The
+contractual commitments stay here and in the [DPA](/legal/dpa); the current roster lives
+there.
+
+What does not change, and therefore belongs here, is the shape of the transfer position.
+Providers fall into three groups, and the difference is the paperwork rather than the
+flag on the company:
+
+| Group                                              | Transfer position                                                                                  |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **EU-resident inference**                          | No transfer outside the EEA at all, so Chapter V never engages                                     |
+| **Transfer with the full instrument**              | An Art. 28 processing agreement incorporating the SCCs (Modules 2 and 3, Decision 2021/914)        |
+| **Transfer with no processing agreement on offer** | The vendor publishes neither a DPA nor clauses — disclosed, never the default, and explained below |
+
+**The first group is not the Western providers.** It currently holds one company, and it
+is Chinese. That is the whole reason this page groups by instrument instead of by
+country, and it is set out in _The three providers without a processing agreement_ below.
 
 **Only providers with a recorded transfer basis may serve EU traffic**, and that is
-enforced at the gateway — a residency group a no-basis upstream cannot enter —
-rather than by convention. `docs/decisions/ai-upstream-transfer-basis.md` carries
-the decision. Each provider above has its own row in _Transfer bases_ below.
-
-### The model providers fall into three tiers, and the difference is the paperwork
-
-They are not interchangeable from a data-protection standpoint, and a list that
-presented them as one undifferentiated block would hide the only distinction a
-reader actually needs.
-
-**Tier 1 — no transfer at all.** **Alibaba Cloud** serves Qwen from **Model Studio's
-Frankfurt region**, and the workspace deployment scope is pinned to the EU, so
-inference stays inside the Union. Chapter V does not engage. This is the strongest
-position on the page, and it belongs to a Chinese company's model — which is worth
-saying plainly, because the intuition that a Chinese model implies a Chinese
-transfer is wrong, and it is the whole reason this section is tiered by paperwork
-rather than by flag.
-
-**Tier 2 — a third-country transfer with the full instrument.** **OpenAI** and
-**Anthropic** each publish an Art. 28 processing agreement with the Commission's
-Standard Contractual Clauses (Modules 2 and 3, Decision 2021/914) incorporated.
-**Brave** does the same for search. These are ordinary, documented transfers.
-
-**Tier 3 — no processing agreement is on offer.** **DeepSeek**, **Zhipu AI** (GLM)
-and **Moonshot AI** (Kimi) publish no Art. 28 agreement and no clauses for their
-hosted APIs. What that means, and what it does not, is set out in full under
-_Transfer bases_ below. In short: it is a gap in three vendors' paperwork, **not** a
-consequence of where they are established — SCCs are available for any third
-country, and Tier 1 is a Chinese provider with a clean instrument.
-
-> **⚠️ You choose which tier serves your workspace.** The planner model is a
-> per-project setting, not something we pick for you. **At general availability the
-> DEFAULT will be a Tier 1 or Tier 2 provider**, so reaching a Tier 3 model is a
-> deliberate choice made with this page in front of you. That is a commitment about
-> launch and not a description of today: the current default is a Tier 3 model,
-> which is accurate to state on a page nobody can yet sign up to and would not be
-> accurate to state on one they could. It is enforced at the gateway — a residency
-> group that a no-basis upstream cannot enter — rather than by convention, so that
-> a later configuration change cannot quietly undo it. That is the same shape the
-> large model gateways use — the provider is selected by the customer, and the
-> gateway's job is to make the selection informed and to enforce it — and it is why
-> this page tiers the providers instead of averaging them.
+enforced at the gateway — a residency group a no-basis upstream cannot enter — rather
+than by convention. `docs/decisions/ai-upstream-transfer-basis.md` carries the decision.
 
 ## Optional integrations — only if you connect them
 

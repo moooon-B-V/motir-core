@@ -88,19 +88,40 @@ import {
 // through, which is that somebody else had already looked.
 
 const ROOT = join(__dirname, '..', '..');
-const PAGE = join(ROOT, 'content', 'legal', 'subprocessors.md');
+/**
+ * The disclosure is spread over TWO pages, and the guard has to read both or the
+ * split becomes a way to lose a vendor. `subprocessors.md` carries the companies
+ * that serve the product itself; `model-providers.md` carries the model providers,
+ * which live on their own page because that set changes whenever a gateway channel
+ * is enabled and should not be welded into a versioned contract document.
+ *
+ * Each page declares the sections whose rows name a vendor. A section NOT listed
+ * here is invisible to the guard by construction, which is deliberate — both pages
+ * carry explanatory tables (the three-product table, the transfer-position summary)
+ * whose first bolded cell is not a company name.
+ */
+const PAGES = [
+  {
+    path: join(ROOT, 'content', 'legal', 'subprocessors.md'),
+    liveSections: [
+      'Core subprocessors',
+      'Sign-in',
+      'Product analytics',
+      'Optional integrations',
+      'Corporate correspondence',
+      'Payments',
+    ],
+  },
+  {
+    path: join(ROOT, 'content', 'legal', 'model-providers.md'),
+    liveSections: [
+      'No transfer outside the EEA',
+      'Transfer outside the EEA, with a processing agreement',
+      'Transfer outside the EEA, with no processing agreement',
+    ],
+  },
+] as const;
 const SCAN_ROOTS = ['lib', 'app'];
-
-/** Sections whose rows name a vendor that will receive data at general availability. */
-const LIVE_SECTIONS = [
-  'Core subprocessors',
-  'Sign-in',
-  'Product analytics',
-  'AI features',
-  'Optional integrations',
-  'Corporate correspondence',
-  'Payments',
-];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir).sort()) {
@@ -125,11 +146,11 @@ function hostsInTree(): Set<string> {
   return found;
 }
 
-/** The page's vendor rows, by section: the FIRST bolded span of each table row. */
-function vendorsBySection(): Map<string, Set<string>> {
+/** One page's vendor rows, by section: the FIRST bolded span of each table row. */
+function vendorsBySection(page: string): Map<string, Set<string>> {
   const bySection = new Map<string, Set<string>>();
   let section = '';
-  for (const line of readFileSync(PAGE, 'utf8').split('\n')) {
+  for (const line of readFileSync(page, 'utf8').split('\n')) {
     const heading = /^##+\s+(.*)$/.exec(line);
     if (heading) section = heading[1]!;
     const row = /^\|\s+\*\*([^*]+)\*\*/.exec(line);
@@ -159,8 +180,10 @@ const INSTALLED = new Set([
 ]);
 
 const HOSTS = hostsInTree();
-const BY_SECTION = vendorsBySection();
-const LIVE = vendorsIn(LIVE_SECTIONS, BY_SECTION);
+/** Each page's parsed sections, paired with the page that produced them. */
+const PARSED = PAGES.map((p) => ({ ...p, bySection: vendorsBySection(p.path) }));
+/** Every vendor disclosed anywhere, across both pages. */
+const LIVE = new Set(PARSED.flatMap((p) => [...vendorsIn([...p.liveSections], p.bySection)]));
 
 /** The evidence that makes a vendor live, or an empty array. */
 function evidenceFor(sig: (typeof VENDOR_SIGNATURES)[number]): string[] {
@@ -176,11 +199,14 @@ describe('the subprocessor list agrees with the repository (MOTIR-3631)', () => 
     // totality test dies quietly.
     expect(HOSTS.size).toBeGreaterThanOrEqual(20);
     expect(LIVE.size).toBeGreaterThanOrEqual(8);
-    for (const prefix of LIVE_SECTIONS) {
-      expect(
-        [...BY_SECTION.keys()].some((s) => s.startsWith(prefix)),
-        `the page no longer has a section starting "${prefix}" — a rename would silently empty the live set`,
-      ).toBe(true);
+    for (const page of PARSED) {
+      for (const prefix of page.liveSections) {
+        expect(
+          [...page.bySection.keys()].some((s) => s.startsWith(prefix)),
+          `${page.path} no longer has a section starting "${prefix}" — a rename, or a ` +
+            `table moved to the other page, would silently empty part of the live set`,
+        ).toBe(true);
+      }
     }
   });
 
