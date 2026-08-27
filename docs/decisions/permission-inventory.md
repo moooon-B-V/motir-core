@@ -597,17 +597,21 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `public_request`
 
-| Operation                                              | Verbs | Gate today                                                                        | Permission               | Decision | Why |
-| ------------------------------------------------------ | ----- | --------------------------------------------------------------------------------- | ------------------------ | -------- | --- |
-| `/api/public-requests/[id]/comments`                   | POST  | workspace only                                                                    | `public_request:comment` | existing | R36 |
-| `/api/public-requests/[id]/upvote`                     | POST  | workspace only                                                                    | `public_request:comment` | existing | R36 |
-| `/api/public/categories`                               | GET   | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
-| `/api/public/explore`                                  | GET   | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
-| `/api/public/p/[identifier]/items`                     | GET   | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
-| `/api/public/p/[identifier]/roadmap`                   | GET   | session only                                                                      | `public_request:submit`  | existing | R33 |
-| `/api/public/p/[identifier]/tree`                      | GET   | session only                                                                      | `public_request:submit`  | existing | R33 |
-| `/api/public/projects/[projectId]/requests`            | POST  | session only                                                                      | `public_request:submit`  | existing | R33 |
-| `/api/public/projects/[projectId]/requests/duplicates` | GET   | `assertCanSubmitToTriage`                                                         | `public_request:submit`  | existing | R33 |
+| Operation                                              | Verbs  | Gate today                                                                        | Permission               | Decision | Why |
+| ------------------------------------------------------ | ------ | --------------------------------------------------------------------------------- | ------------------------ | -------- | --- |
+| `/api/public-requests/[id]/comments`                   | POST   | workspace only                                                                    | `public_request:comment` | existing | R36 |
+| `/api/public-requests/[id]/upvote`                     | POST   | workspace only                                                                    | `public_request:comment` | existing | R36 |
+| `/api/public/categories`                               | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/explore`                                  | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/p/[identifier]/changelog`                 | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/follow`                    | POST   | session + `assertCanBrowsePublic`                                                 | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/follow`                    | DELETE | session + `assertCanBrowsePublic`                                                 | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/subscribe`                 | POST   | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/items`                     | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/roadmap`                   | GET    | session only                                                                      | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/tree`                      | GET    | session only                                                                      | `public_request:submit`  | existing | R33 |
+| `/api/public/projects/[projectId]/requests`            | POST   | session only                                                                      | `public_request:submit`  | existing | R33 |
+| `/api/public/projects/[projectId]/requests/duplicates` | GET    | `assertCanSubmitToTriage`                                                         | `public_request:submit`  | existing | R33 |
 
 ### `report`
 

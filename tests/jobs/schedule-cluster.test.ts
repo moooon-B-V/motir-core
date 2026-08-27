@@ -129,7 +129,7 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // the record too rather than silently leaving §21 describing a schedule that
     // no longer exists. Not a second copy of the invariant: the invariant is a
     // floor any clustered shape could satisfy, and this is THIS shape.
-    expect(jobSchedules().length).toBe(14);
+    expect(jobSchedules().length).toBe(15);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

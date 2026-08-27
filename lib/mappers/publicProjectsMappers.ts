@@ -3,6 +3,7 @@ import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { CommentDTO } from '@/lib/dto/comments';
 import type {
+  PublicChangelogEntryDto,
   PublicProjectLinksDto,
   PublicProjectOverviewDto,
   PublicProjectStatsDto,
@@ -15,6 +16,7 @@ import type {
   PublicWorkItemTreeRowDto,
 } from '@/lib/dto/publicProjects';
 import type {
+  PublicChangelogRow,
   PublicRequestMatchRow,
   PublicRoadmapRow,
 } from '@/lib/repositories/workItemRepository';
@@ -272,5 +274,36 @@ export function toPublicRequestMatchDto(row: PublicRequestMatchRow): PublicReque
     title: row.title,
     status: row.status,
     voteCount: row.voteCount,
+  };
+}
+
+// --- CHANGELOG projection (Story 8.9 · Subtask 8.9.3) ----------------------
+
+/**
+ * Map one changelog row → its public entry. A pure field-selector, like every
+ * mapper above: the repository read already SELECTs only the public-safe
+ * columns, so the boundary is structural in two places rather than enforced
+ * here.
+ *
+ * The epic chip collapses the row's two nullable columns into one nullable
+ * object, because a chip with an identifier and no title is not a state the UI
+ * has — the read produces both or neither.
+ */
+export function toPublicChangelogEntryDto(row: PublicChangelogRow): PublicChangelogEntryDto {
+  return {
+    identifier: row.identifier,
+    key: row.key,
+    title: row.title,
+    kind: row.kind,
+    status: row.status,
+    priority: row.priority,
+    shippedAt: row.shippedAt.toISOString(),
+    epic:
+      row.epicIdentifier && row.epicTitle
+        ? { identifier: row.epicIdentifier, title: row.epicTitle }
+        : null,
+    // Only when the read projected it — `undefined` keeps the key off the page's
+    // JSON entirely rather than shipping an explicit null nobody reads.
+    ...(row.descriptionMd === undefined ? {} : { descriptionMd: row.descriptionMd }),
   };
 }

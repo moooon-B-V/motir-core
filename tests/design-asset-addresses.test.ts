@@ -968,29 +968,10 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  what made sure nobody had to remember.)
   // MOTIR-2653 CREATED `app/(authed)/home/page.tsx`, so its forward-looking row
   // is gone — deleted by the card that built the file, in the same commit.
-
-  // Story 8.9 — the DESIGN STOPPER cites a decision record its own story
-  // creates on a SIBLING branch. Same family as the `lib/permissions/limits.ts`
-  // pair above, and the same instruction: both rows delete themselves the moment
-  // the ADR reaches `main`, and the `carries no KNOWN_PATHS entry that has
-  // stopped applying` test below is what makes sure nobody has to remember.
-  //
-  // Why it cannot simply be fixed in place: 8.9.2 is a design child, so it ships
-  // on its own approval branch off `main` while 8.9.1's record ships on the
-  // story's parent branch. Cutting the design branch off the parent instead
-  // would put the ADR in two pull requests, and dropping the citation would make
-  // the asset look self-authored — which is the opposite of true. It DRAWS a
-  // model the record decides, and saying so is the point.
-  {
-    file: 'design/public-projects/design-notes.md',
-    path: 'docs/decisions/public-follow-and-changelog.md',
-    why: "MOTIR-1109 (8.9.1) creates it, on the same story's parent branch. The design asset is deliberately downstream of the record — every behaviour it draws is fixed there — so the citation is correct today and merely early. Delete this row when the ADR lands on `main`.",
-  },
-  {
-    file: 'design/public-projects/public-changelog.mock.html',
-    path: 'docs/decisions/public-follow-and-changelog.md',
-    why: "The same citation in the mock's own header comment, which names the six sections of the record it draws (tiers, derivation, entry shape, digest, feed, privacy) so the next reader grounds in the record rather than in the pixels. Same lifetime as the row above — delete both together.",
-  },
+  // (Story 8.9's two rows lived here for one commit and deleted themselves the
+  //  moment 8.9.1's decision record joined this branch — which is what their own
+  //  `why` said would happen, enforced by the tight test below rather than by
+  //  anyone remembering.)
 ];
 
 describe('a design asset cites source paths that still exist', () => {

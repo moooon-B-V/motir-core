@@ -37,6 +37,20 @@ export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT = 10;
 export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
+ * Following / subscribing (Story 8.9 · Subtask 8.9.5). Sized like the password
+ * reset rather than like a public write, and for the same reason: an accepted
+ * email opt-in SENDS AN EMAIL to an address the caller supplied, so the cost of
+ * abuse is our sending reputation rather than CPU. Nobody legitimately follows
+ * five projects a minute from one address.
+ *
+ * The account follow/unfollow toggle shares the budget. It sends nothing, but
+ * separating them would buy a second env var and a second thing to reason
+ * about for a control a person presses once.
+ */
+export const DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT = 5;
+export const DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT_WINDOW_MS = 600_000;
+
+/**
  * AI: a distinct budget because the resource being protected is MONEY, not
  * capacity — every call costs real tokens at a model provider, so one runaway
  * loop is a bill rather than an outage.
@@ -140,6 +154,15 @@ export function passwordResetBudget(): RateLimitBudget {
 }
 
 /** Internet-facing writes on public projects and public requests. */
+export function publicFollowBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_PUBLIC_FOLLOW_RATE_LIMIT',
+    'MOTIR_PUBLIC_FOLLOW_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT,
+    DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
 export function publicWriteBudget(): RateLimitBudget {
   return budget(
     'MOTIR_PUBLIC_WRITE_RATE_LIMIT',
