@@ -1,14 +1,13 @@
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb, db } from './_helpers/db-reset';
 import { addVirtualAuthenticator } from './_helpers/webauthn';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import type { Page } from '@playwright/test';
+import { createTestPerson } from './_helpers/testPerson';
 
 // ACCEPTANCE — an admin requires a second factor, and nobody loses their place
 // (Story 8.13 · MOTIR-1215 · Subtask MOTIR-3651). The story's own
@@ -88,22 +87,6 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.waitForURL('**/home');
 }
 
-/**
- * Record the legal acceptance a UI sign-up would have recorded.
- *
- * ⚠️ WITHOUT THIS THE MEMBER IS HELD AT THE RE-CONSENT SCREEN, not at the work
- * item — and the failure lands three chapters later, on an assertion about
- * something else entirely. MOTIR-1135's hold runs in every signed-in route
- * group, and its rows are written by the Better-Auth `user.create.after` hook.
- * `usersService.createUser` writes through Prisma directly and never fires that
- * hook, so a fixture user created that way has agreed to nothing and is held on
- * their first page load. (Only seed scripts and tests reach `createUser`; no
- * product path does, so this is a fixture concern rather than a defect.)
- */
-async function acceptTheTerms(userId: string): Promise<void> {
-  await legalAcceptanceService.recordAcceptance(userId);
-}
-
 /** A real passkey, through the shipped pane. */
 async function enrolPasskey(page: Page): Promise<void> {
   const verified = page.waitForResponse(
@@ -169,7 +152,7 @@ test('an organization requires a second factor, and nobody loses their place', a
       { userId: owner.id, workspaceId: workspace.id },
     );
 
-    const member = await usersService.createUser({
+    const member = await createTestPerson({
       email: MEMBER,
       password: PASSWORD,
       name: 'Grace Hopper',
@@ -178,7 +161,6 @@ test('an organization requires a second factor, and nobody loses their place', a
       data: { organizationId: org.id, userId: member.id, role: ORGANIZATION_ROLE.member },
     });
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
-    await acceptTheTerms(member.id);
 
     await enrolPasskey(page);
 

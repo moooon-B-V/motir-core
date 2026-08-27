@@ -14,12 +14,12 @@
 // The nudge test stubs `GET /api/ready/nudge` to return a fixed suggestion.
 
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { createTestPerson } from './testPerson';
 
 export const AUGMENT_REPLAN_SEED_PASSWORD = 'ai-augment-replan-e2e-pass-9';
 
@@ -59,7 +59,7 @@ export interface AiAugmentReplanSeed {
 
 /** A sign-in-able tenant with four work-item clusters for all three operations. */
 export async function seedAiAugmentReplan(email: string): Promise<AiAugmentReplanSeed> {
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: AUGMENT_REPLAN_SEED_PASSWORD,
     name: 'Augment Owner',

@@ -1,11 +1,11 @@
 import { db } from './db-reset';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
+import { createTestPerson } from './testPerson';
 
 // The fixture for the SCOPED-RUN acceptance walk (Story MOTIR-3001 ·
 // MOTIR-3201): a story whose children a run can claim as one set, plus the
@@ -61,7 +61,7 @@ export interface ScopedRunSeed {
  * two permissions rather than about a broadly-granted token.
  */
 export async function seedScopedRun(email: string, identifier: string): Promise<ScopedRunSeed> {
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: SCOPED_RUN_PASSWORD,
     name: 'Scoped Runner',

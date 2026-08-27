@@ -17,12 +17,12 @@
 // are produced by the same paths the product uses. No raw plan inserts.
 
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { createTestPerson } from './testPerson';
 
 export const PLANS_SURFACE_PASSWORD = 'plans-surface-e2e-pass-7';
 
@@ -87,7 +87,7 @@ async function makeTenant(email: string): Promise<{
   ownerName: string;
 }> {
   const ownerName = 'Yue Owner';
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: PLANS_SURFACE_PASSWORD,
     name: ownerName,
@@ -124,7 +124,7 @@ export async function seedPlansSurface(email: string): Promise<PlansSurfaceSeed>
   // correct behaviour and would make this fixture assert an absence while
   // looking like it asserted a name.
   const requesterName = 'Mara Requester';
-  const requester = await usersService.createUser({
+  const requester = await createTestPerson({
     email: `requester-${email}`,
     password: PLANS_SURFACE_PASSWORD,
     name: requesterName,

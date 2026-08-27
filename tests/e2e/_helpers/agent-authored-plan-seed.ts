@@ -21,7 +21,6 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { plansService } from '@/lib/services/plansService';
@@ -29,6 +28,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { ADD_PLAN_ITEMS_TOOL_NAME, CREATE_PLAN_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { createTestPerson } from './testPerson';
 
 /** Satisfies the credential-strength rule (same shape as plans-review-seed's). */
 export const AGENT_PLAN_SEED_PASSWORD = 'agent-authored-plan-e2e-pass-7';
@@ -68,7 +68,7 @@ export interface AgentPlanSeed {
 
 export async function seedAgentAuthoredPlan(email: string): Promise<AgentPlanSeed> {
   const reviewerName = 'Mara Okafor';
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: AGENT_PLAN_SEED_PASSWORD,
     name: reviewerName,

@@ -1,9 +1,9 @@
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
+import { createTestPerson } from './testPerson';
 
 // Fixture for the GENERAL attachment door's journey (Story MOTIR-3000 ·
 // Subtask MOTIR-3061).
@@ -62,7 +62,7 @@ export async function seedGeneralAttachment(
   email: string,
   projectKey = 'SRCH',
 ): Promise<GeneralAttachmentSeed> {
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: GENERAL_ATTACHMENT_PASSWORD,
     name: 'Robin Vale',

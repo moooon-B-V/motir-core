@@ -1,13 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { adminDb, db, resetDatabase } from './_helpers/db-reset';
 import { addVirtualAuthenticator, type VirtualAuthenticator } from './_helpers/webauthn';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
+import { createTestPerson } from './_helpers/testPerson';
 
 // Story MOTIR-1215 · Subtask MOTIR-3650 — THE STORY'S WALK, in a real browser
 // against a real database. It is the story's `verification_recipe`, automated.
@@ -143,29 +142,12 @@ async function addTeammate(
   organizationId: string,
   workspaceId: string,
 ): Promise<string> {
-  const member = await usersService.createUser({ email, password: PASSWORD, name: 'Grace' });
+  const member = await createTestPerson({ email, password: PASSWORD, name: 'Grace' });
   await adminDb.organizationMembership.create({
     data: { organizationId, userId: member.id, role: ORGANIZATION_ROLE.member },
   });
   await workspacesService.addMember({ userId: member.id, workspaceId });
-  await acceptTheTerms(member.id);
   return member.id;
-}
-
-/**
- * Record the legal acceptance a UI sign-up would have recorded.
- *
- * ⚠️ WITHOUT THIS THE MEMBER IS HELD AT THE RE-CONSENT SCREEN, not at the work
- * item — and the failure lands three chapters later, on an assertion about
- * something else entirely. MOTIR-1135's hold runs in every signed-in route
- * group, and its rows are written by the Better-Auth `user.create.after` hook.
- * `usersService.createUser` writes through Prisma directly and never fires that
- * hook, so a fixture user created that way has agreed to nothing and is held on
- * their first page load. (Only seed scripts and tests reach `createUser`; no
- * product path does, so this is a fixture concern rather than a defect.)
- */
-async function acceptTheTerms(userId: string): Promise<void> {
-  await legalAcceptanceService.recordAcceptance(userId);
 }
 
 /** A work item to be interrupted on the way to — the DEEP destination. */
