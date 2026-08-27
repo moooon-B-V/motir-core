@@ -32,13 +32,21 @@ import { defineJob } from '../defineJob';
 // retention with no record that anything was owed.
 
 /**
- * 04:45 every day — off-peak, and deliberately NOT sharing a slot with another
- * sweep: 03:30 is `system.attachment-gc` and 04:15 is
- * `system.automation-retention-sweep`. Both of those walk large tables, and this
- * one additionally makes an external call per row, so stacking them on one
- * minute would put three table-walking jobs on the same cold start for no reason.
+ * 05:00 every day — off-peak, and LAST in the nightly table-walk cascade: 03:30
+ * `system.attachment-gc`, 04:00 `system.rate-limit-sweep`, 04:30
+ * `system.automation-retention-sweep`, then this one. All of those walk large
+ * tables and this one additionally makes an external call per row, so they are
+ * still deliberately not stacked on one cold start.
+ *
+ * ⚠️ RE-TIMED 04:45 → 05:00 (MOTIR-3314), and the "not sharing a slot" property
+ * this comment protects SURVIVES INTACT — separation just moved from the minute
+ * axis to the HOUR axis. That is the whole reason the cluster has two slots
+ * rather than one (`lib/jobs/schedules.ts`): a nightly cascade can be spread a
+ * full hour apart while every member still lands on a clustered minute, so the
+ * spreading costs no extra wake. Each of the four now has an hour to itself,
+ * where 04:15 and 04:45 were thirty minutes apart and 04:10 and 04:15 were five.
  */
-export const CODE_GRAPH_OFFBOARD_SWEEP_CRON = '45 4 * * *';
+export const CODE_GRAPH_OFFBOARD_SWEEP_CRON = '0 5 * * *';
 
 export const codeGraphOffboardSweep = defineJob(
   {

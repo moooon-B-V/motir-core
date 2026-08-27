@@ -19,7 +19,15 @@ import { defineJob } from '../defineJob';
 // to a single durable step that returns the { scanned, due, enqueued } summary
 // for the run ledger.
 
-/** Top of every hour — clear of the 09:00 health check + 03:30 attachment GC. */
+/** Top of every hour. The handler scans the CURRENT UTC hour, so the top of it
+ *  is the meaningful instant rather than an offset chosen to dodge neighbours.
+ *
+ *  ⚠️ VALUE UNCHANGED, RATIONALE CORRECTED (MOTIR-3314). It read "clear of the
+ *  09:00 health check + 03:30 attachment GC" — the load-spreading argument, which
+ *  is inverted on a compute that suspends when idle: every distinct wake-minute
+ *  is billed, so sharing one is the goal and avoiding one is the cost. :00 is a
+ *  clustered minute (`lib/jobs/schedules.ts`) and this job now shares it with the
+ *  abandoned-plan sweep and three half-hourly sweeps, deliberately. */
 export const FILTER_SUBSCRIPTION_TICK_CRON = '0 * * * *';
 
 export const filterSubscriptionTick = defineJob(

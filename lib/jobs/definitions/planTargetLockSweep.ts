@@ -35,16 +35,38 @@ import { defineJob } from '../defineJob';
 // slice of the table in one.
 
 /**
- * Every 10 minutes.
+ * Every 30 minutes, ON the cluster.
  *
  * FAR more often than the daily housekeeping sweeps beside it, and deliberately:
  * those reclaim space, and this one unblocks a person who is trying to work. The
  * cost of the cadence is one indexed read of `(expires_at)` that returns nothing
  * almost every time; the cost of running it daily would be telling someone their
- * epic is unplannable until tomorrow. The 30-minute lease dominates the total
- * wait either way — this only decides how much is added to it.
+ * epic is unplannable until tomorrow.
+ *
+ * ⚠️ THIS IS THE SHARPEST TRADE THE CLUSTERING MAKES (MOTIR-3314), and it is
+ * named here rather than averaged into a total. A ten-minute cadence was chosen against exactly
+ * the cost this cadence increases, so the honest statement is the arithmetic:
+ *
+ *   worst-case wait for a stranded lease  =  the 30-minute LEASE + the sweep gap
+ *     before:  30 + 10  =  40 min      after:  30 + 30  =  60 min
+ *
+ * The sentence that stood here — "the 30-minute lease dominates the total wait
+ * either way, this only decides how much is added to it" — was true at ten minutes
+ * and is exactly half true now: the added term equals the lease instead of being
+ * a third of it. WHAT IT BOUGHT: ten minutes was the single tightest cadence in the
+ * whole `system.*` set, and the longest quiet gap can never exceed the tightest
+ * cadence in the set — so at ten minutes NO arrangement of the other thirteen jobs
+ * could have produced a gap over 10 minutes, against a suspend delay observed at
+ * ~9. This job alone decided whether the compute could ever sleep.
+ *
+ * WHY IT IS ACCEPTED: what it recovers is a rare failure (a planner that crashed,
+ * a machine that vanished mid-job, a closed tab), the remedy is automatic in both
+ * cases, and 60 minutes is still far inside "not tomorrow". Against it stands a
+ * measured $19.50/mo of always-awake Neon compute. If that judgement is ever
+ * revisited, revisit it as a §21 decision — a shorter cadence HERE re-prices the
+ * whole schedule, which is the thing this comment exists to say.
  */
-export const PLAN_TARGET_LOCK_SWEEP_CRON = '*/10 * * * *';
+export const PLAN_TARGET_LOCK_SWEEP_CRON = '0,30 * * * *';
 
 export const planTargetLockSweep = defineJob(
   {
