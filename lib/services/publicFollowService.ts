@@ -282,16 +282,21 @@ export const publicFollowService = {
     if (found.confirmTokenExpiresAt && found.confirmTokenExpiresAt.getTime() < Date.now()) {
       throw new FollowTokenInvalidError();
     }
-    const project = await projectRepository.findById(found.projectId);
-    if (!project) throw new FollowTokenInvalidError();
-
-    await withWorkspaceServiceContext(found.workspaceId, (tx) =>
-      publicFollowRepository.update(
+    // BOUND — the row named its workspace, so the project read and the write
+    // both run inside it. Unbound, `project` is policy-gated and would come back
+    // NULL for a project that exists, turning a valid confirmation into
+    // "that link is no longer valid" with nothing logged.
+    const project = await withWorkspaceServiceContext(found.workspaceId, async (tx) => {
+      const row = await projectRepository.findById(found.projectId, tx);
+      if (!row) return null;
+      await publicFollowRepository.update(
         found.id,
         { confirmedAt: new Date(), confirmTokenHash: null, confirmTokenExpiresAt: null },
         tx,
-      ),
-    );
+      );
+      return row;
+    });
+    if (!project) throw new FollowTokenInvalidError();
     return { projectIdentifier: project.identifier };
   },
 

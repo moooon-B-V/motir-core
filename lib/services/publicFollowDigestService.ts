@@ -99,7 +99,12 @@ export const publicFollowDigestService = {
     // person unsubscribed, which is exactly what should stop this mail.
     if (!follow || !follow.digestOptIn || !follow.confirmedAt) return { sent: false, itemCount: 0 };
 
-    const project = await projectRepository.findById(follow.projectId);
+    // BOUND, for the same reason the follow read above is: `project` is
+    // policy-gated, so an unbound read returns NULL for a project that exists
+    // and the digest would silently decide there was nothing to send.
+    const project = await withWorkspaceServiceContext(args.workspaceId, (tx) =>
+      projectRepository.findById(follow.projectId, tx),
+    );
     if (!project) return { sent: false, itemCount: 0 };
 
     const since = follow.lastDigestAt ?? new Date(args.now.getTime() - FIRST_DIGEST_WINDOW_MS);
