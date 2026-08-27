@@ -179,6 +179,19 @@ const expected = [];
 for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, READBACK, INTEGRATION);
 expected.push(READY); // the drain probe
 
+// ── THE CI WATCH, once per landed card, AFTER the drain (MOTIR-3685) ────────
+//
+// `motir auto` does NOT gate between cards — its pull requests are for the whole
+// run, so they are not finished until the run is. It keeps picking work up and
+// watches once the ready set is drained, which is why these reads come after the
+// drain probe rather than being interleaved with the loop. That ORDER is the
+// lane's defining property and this sequence is where it is asserted.
+//
+// ONE read per card here because the stub answers `deliveries: []` — nothing to
+// watch, so the loop returns on its first poll. A project with a CI mirror pays
+// more, and pays it deliberately.
+for (let i = 1; i <= ITEMS; i += 1) expected.push(READBACK);
+
 check(
   loopShapes.join(',') === expected.join(','),
   `request sequence mismatch:\n  expected: ${expected.join(' → ')}\n  actual:   ${loopShapes.join(
