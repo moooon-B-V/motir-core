@@ -6,6 +6,8 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { runLinkPullRequest, resolveCoordinate } from '@/lib/mcp/tools/linkPullRequest';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -670,5 +672,147 @@ describe('githubPullRequestService.linkPullRequestByCoordinates — the picker i
 
     const dto = await githubPullRequestService.linkPullRequest(item.id, row.id, s.ctx);
     expect(dto).toMatchObject({ number: 70, repo: s.repo, linkedManually: true });
+  });
+});
+
+// ── BLOCK 7 ───────────────────────────────────────────────────────────────
+// The DELIVERY LINK the call now writes beside the FK (Story MOTIR-3655 ·
+// MOTIR-3658, ADR `docs/decisions/work-item-delivery-links.md`).
+//
+// This is the EXPAND window, so BOTH are written — and the two disagree about a
+// re-link ON PURPOSE. The FK is singular, so a re-link MOVES it (block 4 pins
+// that, unchanged). The table ADDS, because one pull request delivering several
+// cards is a real shape the column could never express. Every test below asserts
+// the divergence rather than papering over it, because a reader who finds only
+// one of the two would reasonably conclude the other is a bug.
+describe('block 7 — the DELIVERY LINK, written beside the FK', () => {
+  async function deliveries(s: Scenario, workItemId: string) {
+    return withWorkspaceContext(s.ctx, (tx) =>
+      workItemDeliveryRepository.listByWorkItem(workItemId, tx),
+    );
+  }
+
+  it('a link writes a delivery row carrying the pull request AND its repository', async () => {
+    const s = await makeScenario({
+      email: 'delivery-one@example.com',
+      identifier: 'DL1',
+      repoName: 'alpha',
+      repoHostId: '941001',
+      installationId: INST_A,
+    });
+    const item = await makeItem(s, 'Delivered once');
+
+    await link(s, { key: item.identifier, repository: s.repo, number: 11 });
+
+    const set = await deliveries(s, item.id);
+    expect(set).toHaveLength(1);
+    // The repository is on the ROW, so the completion gate can compare this
+    // member's merge against ITS default branch without a join per member.
+    expect(set[0].repoId).toBe(s.repoRowId);
+    expect(set[0].pullRequest.number).toBe(11);
+  });
+
+  it('a SECOND pull request for the same card ADDS a member — the shape the story exists for', async () => {
+    const s = await makeScenario({
+      email: 'delivery-two@example.com',
+      identifier: 'DL2',
+      repoName: 'alpha',
+      repoHostId: '941002',
+      installationId: INST_A,
+    });
+    const item = await makeItem(s, 'Two deliveries');
+
+    await link(s, { key: item.identifier, repository: s.repo, number: 21 });
+    await link(s, { key: item.identifier, repository: s.repo, number: 22 });
+
+    const set = await deliveries(s, item.id);
+    expect(set).toHaveLength(2);
+    expect(new Set(set.map((d) => d.pullRequest.number))).toEqual(new Set([21, 22]));
+  });
+
+  it('ONE pull request linked to a second card DELIVERS BOTH — where the table and the FK part company', async () => {
+    const s = await makeScenario({
+      email: 'delivery-both@example.com',
+      identifier: 'DLB',
+      repoName: 'alpha',
+      repoHostId: '941003',
+      installationId: INST_A,
+    });
+    const a = await makeItem(s, 'Item A');
+    const b = await makeItem(s, 'Item B');
+
+    await link(s, { key: a.identifier, repository: s.repo, number: 31 });
+    const moved = await link(s, { key: b.identifier, repository: s.repo, number: 31 });
+
+    // The FK MOVED, and the tool still says so — block 4's contract is untouched.
+    expect(structured(moved)).toMatchObject({ movedFrom: a.identifier });
+    const row = await adminDb.githubPullRequest.findFirstOrThrow({
+      where: { repoId: s.repoRowId, number: 31 },
+    });
+    expect(row.workItemId).toBe(b.id);
+
+    // The TABLE kept both, which is the answer the column could not give: this
+    // pull request delivers two cards, exactly as a `motir auto` one does.
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({
+      where: { repoId: s.repoRowId, number: 31 },
+    });
+    const delivered = await withWorkspaceContext(s.ctx, (tx) =>
+      workItemDeliveryRepository.listByPullRequest(prRow.id, tx),
+    );
+    expect(new Set(delivered.map((d) => d.workItemId))).toEqual(new Set([a.id, b.id]));
+  });
+
+  it('a repeat link writes no second row — a redelivery and an agent retry are no-ops', async () => {
+    const s = await makeScenario({
+      email: 'delivery-idem@example.com',
+      identifier: 'DLI',
+      repoName: 'alpha',
+      repoHostId: '941004',
+      installationId: INST_A,
+    });
+    const item = await makeItem(s, 'Linked twice');
+
+    await link(s, { key: item.identifier, repository: s.repo, number: 41 });
+    await link(s, { key: item.identifier, repository: s.repo, number: 41 });
+    await link(s, { key: item.identifier, repository: s.repo, number: 41 });
+
+    expect(await deliveries(s, item.id)).toHaveLength(1);
+  });
+
+  it('unlink removes ONE member and leaves the others and the FK alone', async () => {
+    const s = await makeScenario({
+      email: 'delivery-unlink@example.com',
+      identifier: 'DLU',
+      repoName: 'alpha',
+      repoHostId: '941005',
+      installationId: INST_A,
+    });
+    const item = await makeItem(s, 'One wrong link');
+
+    await link(s, { key: item.identifier, repository: s.repo, number: 51 });
+    await link(s, { key: item.identifier, repository: s.repo, number: 52 });
+    const wrong = await adminDb.githubPullRequest.findFirstOrThrow({
+      where: { repoId: s.repoRowId, number: 51 },
+    });
+
+    const first = await githubPullRequestService.unlinkPullRequest(item.id, wrong.id, s.ctx);
+    // A second call has nothing to remove and says so rather than reporting a
+    // success that did nothing.
+    const second = await githubPullRequestService.unlinkPullRequest(item.id, wrong.id, s.ctx);
+
+    expect(first).toEqual({ removed: true });
+    expect(second).toEqual({ removed: false });
+
+    const set = await deliveries(s, item.id);
+    expect(set).toHaveLength(1);
+    expect(set[0].pullRequest.number).toBe(52);
+
+    // The legacy column is DELIBERATELY untouched: its readers have not moved
+    // yet, and clearing it would take a delivery's status sync away from a card
+    // whose other links are perfectly good.
+    const stillLinked = await adminDb.githubPullRequest.findFirstOrThrow({
+      where: { repoId: s.repoRowId, number: 51 },
+    });
+    expect(stillLinked.workItemId).toBe(item.id);
   });
 });

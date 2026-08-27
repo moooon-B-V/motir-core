@@ -1124,6 +1124,17 @@ DIFFERENT work item takes the link off the first — the result's `movedFrom`
 names it, so a caller cannot read a move as an addition. Two pull requests may
 point at one work item; one pull request cannot point at two.
 
+> **⚠️ That last clause is a property of the FK, and it is being retired**
+> (Story MOTIR-3655, ADR `docs/decisions/work-item-delivery-links.md`). The call
+> now ALSO writes a row in `work_item_delivery`, a join table that records every
+> `(work item, pull request)` pair — so one pull request delivering several cards
+> is already recorded, which is what a `motir auto` run actually does. The
+> paragraph above still describes what a CALLER observes, because the completion
+> gate and the status sync still read the FK; **MOTIR-3659 moves those readers to
+> the table, and it is the card that rewrites this paragraph and the tool's own
+> description to say ADDS.** Until then the two are written together and only the
+> column is read.
+
 ⚠️ **It works BEFORE any webhook delivery** — that is the case it exists for. The
 detail page's "+ Link pull request" picker can only choose a pull request Motir
 has already ingested, and addresses it by an internal id an agent has never seen.
