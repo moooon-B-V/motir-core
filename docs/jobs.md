@@ -975,6 +975,15 @@ by name, on the pull request that adds it. `DELIBERATELY_ON_INNGEST` going EMPTY
 is the condition MOTIR-3418 (_"Retire Inngest"_) is premised on, and the honest
 way to check that premise.
 
+**As of MOTIR-3489 that list IS empty.** Its last three entries were the
+container supervisors — `system.code-graph-index`, `system.code-graph-refresh`,
+`system.ci-runner-boot` — and they moved to `MIGRATED_TO_ENGINE` with the card
+that also carried the operator half. Nothing is deliberately on the old lane any
+more, so MOTIR-3418's premise now holds and is asserted rather than assumed
+(`tests/jobs/lane-reconciliation.test.ts`). An entry coming BACK is still legal
+and still needs its reason; what the emptiness records is that on 2026-08-27 no
+job needed one.
+
 (The lists lived INSIDE that test file until MOTIR-3716. They moved into shipped
 code for one reason: a constant a test owns cannot be read by the running
 process, so nothing could ever compare it to the secret. See the next section.)
