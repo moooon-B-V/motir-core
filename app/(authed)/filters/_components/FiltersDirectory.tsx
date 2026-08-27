@@ -411,7 +411,7 @@ function ApplyNameButton({
           {name}
         </span>
         {description ? (
-          <span className="truncate text-xs text-(--el-text-muted)">{description}</span>
+          <span className="truncate text-xs text-(--el-text-secondary)">{description}</span>
         ) : null}
       </span>
     </button>

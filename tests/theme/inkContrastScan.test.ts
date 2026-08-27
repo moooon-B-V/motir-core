@@ -546,9 +546,13 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
   // out of reach. Both halves are in one file and one AST, which is what makes
   // this resolvable at all — and what makes the abstention worth closing.
   //
-  // ⚠️ THE ARM IS OPT-IN, and the fixtures below assert BOTH states. Pointing it
-  // at the tree is a separate card with a measured population behind it; see
-  // `ScanOptions.resolveUseSites`.
+  // ⚠️ THE ARM IS UNCONDITIONAL (MOTIR-3711). It shipped behind an opt-in
+  // `ScanOptions.resolveUseSites` for exactly one pull request, so that the
+  // sweep of the population it un-blinds could land WITH the switch rather than
+  // after it (MOTIR-2496 is what the other order costs). MOTIR-3711 swept those
+  // eight sites and removed the flag; `scanSource` takes no options at all now.
+  // What the fixtures below still pin is what the walk DECLINES to resolve —
+  // that is the part a later widening would be changing.
   const source = `
     function Th({ children }: { children: ReactNode }) {
       return <th className="px-3 py-2 text-(--el-text-muted)">{children}</th>;
@@ -565,12 +569,12 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
     }
   `;
 
-  it('ABSTAINS by default — the shipped repo-wide lint is unchanged by this arm', () => {
-    expect(scanSource('fixture.tsx', source)).toEqual([]);
-  });
-
-  it('flags the ink once the use-site resolution is asked for, naming the line that paints it', () => {
-    const finding = only(scanSource('fixture.tsx', source, { resolveUseSites: true }));
+  it('flags the ink with no option asked for, naming the line that paints it', () => {
+    // This assertion is the inverse of the one that stood here while the arm was
+    // opt-in ('ABSTAINS by default'), on the same fixture. Kept as an inversion
+    // rather than a deletion: the fixture is the shape that hid a real defect,
+    // and what changed is only who has to ask for the walk.
+    const finding = only(scanSource('fixture.tsx', source));
     expect(finding).toMatchObject({ ink: 'muted', verdict: 'violation', element: 'th' });
     expect(finding.reason).toContain('bg-(--el-surface)');
     // The line the reader has to open is the USE SITE, not the ink — the ink's
@@ -580,9 +584,7 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
 
   it('clears the same component when its use site paints the white card', () => {
     expect(
-      scanSource('fixture.tsx', source.replace('bg-(--el-surface)', 'bg-(--el-card)'), {
-        resolveUseSites: true,
-      }),
+      scanSource('fixture.tsx', source.replace('bg-(--el-surface)', 'bg-(--el-card)')),
     ).toEqual([]);
   });
 
@@ -605,7 +607,6 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
           );
         }
       `,
-      { resolveUseSites: true },
     );
     expect(findings.map((finding) => finding.verdict)).toEqual(['violation']);
   });
@@ -621,7 +622,6 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
         `export function Th({ children }: { children: ReactNode }) {
            return <th className="text-(--el-text-muted)">{children}</th>;
          }`,
-        { resolveUseSites: true },
       ),
     ).toEqual([]);
   });
@@ -632,9 +632,13 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
     // surface `Row` may never sit on, reported at a line the reader cannot act
     // on. The innermost enclosing function decides, and a nested one decides to
     // abstain. (`Row` is genuinely over a tint here, and the arm still declines
-    // to say so: under-reporting is the price of not mis-attributing, and this
-    // arm is opt-in precisely so that trade can be revisited with a measured
-    // population rather than a fixture.)
+    // to say so: under-reporting is the price of not mis-attributing. That trade
+    // is the one a later widening would be revisiting, and this fixture is where
+    // it is recorded. Note what it is NOT evidence of: an abstention emits no
+    // finding, so MOTIR-3711's sweep of the tree could not have counted the
+    // instances of this shape, and its silence says nothing about how many there
+    // are. Measuring them is the first step of any card that wants to change
+    // this trade.)
     expect(
       scanSource(
         'fixture.tsx',
@@ -642,7 +646,6 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
            const Row = () => <span className="text-(--el-text-muted)">12 issues</span>;
            return <div className="bg-(--el-surface)"><Row /></div>;
          }`,
-        { resolveUseSites: true },
       ),
     ).toEqual([]);
   });

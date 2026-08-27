@@ -479,7 +479,9 @@ function ReviewAttribution({
               <span className="text-(--el-text-faint)" aria-hidden>
                 ·
               </span>
-              <span className="min-w-0 truncate text-(--el-text-muted)">{review.authorModel}</span>
+              <span className="min-w-0 truncate text-(--el-text-secondary)">
+                {review.authorModel}
+              </span>
             </>
           ) : null}
         </>

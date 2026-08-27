@@ -23,25 +23,25 @@ import ts from 'typescript';
 // the JSX tree to the nearest ancestor that paints one.
 //
 // ── What it deliberately cannot see ─────────────────────────────────────────
-// Surface inheritance stops at the file boundary: an element whose background
-// is painted by a `<Card>` in another module reads here as "no surface in this
-// file", and the muted rule abstains. The faint rule has no such hole — it is a
-// property of the element itself — which is why that one is the enforced sweep
-// and the muted one is scoped to what a single file can prove.
+// Surface inheritance stops at the MODULE boundary: an element whose background
+// is painted by a `<Card>`, a `<Popover.Content>` or a layout in another module
+// reads here as "no surface", and the muted rule abstains — it does not rule the
+// site safe, it declines to rule at all. Resolving that needs the import graph,
+// which this file does not build. The faint rule has no such hole — it is a
+// property of the element itself — which is why that one has always been the
+// unqualified sweep.
 //
-// ⚠️ CORRECTED (MOTIR-3523) — THE FENCE WAS TIGHTER THAN "THE FILE", AND SAYING
-// "file" MADE A REACHABLE CASE LOOK UNREACHABLE. `nearestSurface` walks the ink
-// element's own ANCESTORS, so it stops at the root of the COMPONENT the ink is
-// written in — not at the file. A file that writes the ink in a local `Th` and
-// paints the tint on the `<thead>` that USES it abstains, with both halves in
-// this one AST. That is what hid eight column labels at 4.17:1 on the operator
-// jobs dashboard for the whole life of the file, under a green lint.
-//
-// `ScanOptions.resolveUseSites` closes that half by walking the component's use
-// sites in this same file; the CROSS-MODULE half above is untouched and really
-// does need the import graph. The option is OFF by default — see its own note
-// for why the sweep and the switch belong to one later card rather than to the
-// change that built the arm.
+// The fence used to be drawn one step further in, at the COMPONENT the ink is
+// written in: a file that wrote the ink in a local `Th` and painted the tint on
+// the `<thead>` that USED it abstained, with both halves in this one AST. That
+// hid eight column labels at 4.17:1 on the operator jobs dashboard for the whole
+// life of the file, under a green lint (MOTIR-3523), and eight more across the
+// swimlane board, the filters directory, billing, the board-config editor and
+// both planning review surfaces (MOTIR-3711). `surfacesAtUseSites` closes it by
+// walking the component's use sites in this same file. That walk is
+// UNCONDITIONAL — MOTIR-3523 shipped it behind an opt-in `ScanOptions` flag only
+// so that the sweep could land with the switch rather than after it (MOTIR-2496
+// is what the other order costs), and MOTIR-3711 did both and removed the flag.
 //
 // ── The class and the element can come apart (MOTIR-2489) ───────────────────
 // The premise above — the verdict is a property of the ELEMENT — survives, but
@@ -762,31 +762,19 @@ function snippetOf(
   return text.length > 140 ? `${text.slice(0, 137)}…` : text;
 }
 
-export interface ScanOptions {
-  /**
-   * Resolve a muted ink's surface from the USE SITES of the component it is
-   * written in, when the element's own ancestors paint none (MOTIR-3523).
-   *
-   * ⚠️ OFF BY DEFAULT, and that is a scope decision rather than a doubt about
-   * the resolution. Turning it on un-blinds a population the repo-wide lint has
-   * been green on since it shipped, and this repo has twice paid for pointing a
-   * widened ink guard at the tree in the same change that built it: the arm is
-   * built and proven on fixtures first (MOTIR-2459), a card sweeps the sites it
-   * reports, and that card turns it on (MOTIR-2475 / MOTIR-2477). The successor
-   * card carries the measured list.
-   */
-  resolveUseSites?: boolean;
-}
-
 /**
  * Scan one source file. `fileName` is only used for reporting, so a synthetic
  * fixture can be scanned by passing its text directly.
+ *
+ * There is no options argument. The use-site resolution below was briefly an
+ * opt-in `ScanOptions.resolveUseSites` (MOTIR-3523), off while the population it
+ * un-blinds went unswept — the ordering this repo has twice paid for getting
+ * wrong (MOTIR-2496). MOTIR-3711 swept those eight sites and removed the flag in
+ * the same change, because a knob every caller sets to `true` is only ever
+ * reachable as a way to make a red lint green, and this guard deliberately has
+ * no allowlist to make optional.
  */
-export function scanSource(
-  fileName: string,
-  text: string,
-  options: ScanOptions = {},
-): InkFinding[] {
+export function scanSource(fileName: string, text: string): InkFinding[] {
   const source = ts.createSourceFile(
     fileName,
     text,
@@ -875,10 +863,7 @@ export function scanSource(
       const surface = nearestSurface(element);
       // No surface in the element's OWN ancestors: before abstaining, ask where
       // the component this element belongs to is USED in this file (MOTIR-3523).
-      // No surface in the element's OWN ancestors: before abstaining, ask where
-      // the component this element belongs to is USED in this file (MOTIR-3523).
-      const component =
-        surface || !options.resolveUseSites ? null : enclosingLocalComponent(element);
+      const component = surface ? null : enclosingLocalComponent(element);
       const inherited = component
         ? surfacesAtUseSites(source, component).find((use) => use.tinted)
         : undefined;

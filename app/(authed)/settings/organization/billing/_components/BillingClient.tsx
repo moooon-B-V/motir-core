@@ -375,7 +375,7 @@ function AvatarCluster({ count }: { count: number }) {
         />
       ))}
       {count > shown ? (
-        <span className="ml-1 font-sans text-xs text-(--el-text-muted)">+{count - shown}</span>
+        <span className="ml-1 font-sans text-xs text-(--el-text-secondary)">+{count - shown}</span>
       ) : null}
     </span>
   );

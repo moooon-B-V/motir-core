@@ -248,7 +248,7 @@ export function SwimlaneBoard({
 function LaneLabel({ lane, isCatchAll }: { lane: BoardSwimlaneDto; isCatchAll: boolean }) {
   if (isCatchAll) {
     return (
-      <span className="inline-flex items-center gap-2 text-[13px] font-medium text-(--el-text-muted)">
+      <span className="inline-flex items-center gap-2 text-[13px] font-medium text-(--el-text-secondary)">
         <span
           className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-dashed border-(--el-border-strong) bg-(--el-muted) text-[10px] text-(--el-text-faint)"
           aria-hidden
