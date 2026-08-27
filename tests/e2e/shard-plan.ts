@@ -434,6 +434,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'triage-flow.spec.ts': 11.6,
   'passkeys.spec.ts': 4.7,
   'two-factor.spec.ts': 13.3,
+  // ⚠️ MEASURED LOCALLY, not from a CI artifact (Story MOTIR-1215 · MOTIR-3650).
+  // The file is new, so there is no green `main` run to read `result.duration`
+  // out of yet. Summing the five tests' durations against a local prod build:
+  // 35.9 s. That is the same quantity the table holds — Playwright attributes
+  // hook time to the test it runs for — measured on a quieter box than a CI
+  // runner, so treat it as a FLOOR and re-measure from the artifacts on the next
+  // green run, exactly as this file's header prescribes.
+  'two-factor-enforcement.spec.ts': 35.9,
   'work-item-delete.spec.ts': 5.7,
   'work-item-mentions.spec.ts': 5.6,
   'work-item-type-vocabulary.spec.ts': 7.4,
