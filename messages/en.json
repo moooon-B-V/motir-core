@@ -4662,7 +4662,19 @@
     "editGuardTitle": "Discard unsaved changes?",
     "editGuardBody": "You’ve edited the tagline, tags, or overview but haven’t saved. Leaving now discards those changes.",
     "editGuardKeepEditing": "Keep editing",
-    "editGuardDiscard": "Discard"
+    "editGuardDiscard": "Discard",
+    "tabChangelog": "Changelog",
+    "changelogTitle": "What shipped",
+    "changelogLede": "Everything this project has shipped, newest first — straight from the tracker, so it is never out of date.",
+    "changelogEmptyTitle": "Nothing shipped yet",
+    "changelogEmptyBody": "When work items on this project are marked done, they'll appear here automatically.",
+    "changelogErrorTitle": "We couldn't load more",
+    "changelogErrorBody": "Something went wrong reading the changelog. Try again in a moment.",
+    "changelogLoadMore": "Load more",
+    "changelogLoading": "Loading…",
+    "changelogShippedOn": "Shipped {date}",
+    "changelogMetaDescription": "Everything {name} has shipped, newest first — a public changelog generated from the project’s own work items.",
+    "linkChangelogNative": "Changelog"
   },
   "workItemActions": {
     "menuTrigger": "More actions",

@@ -899,13 +899,13 @@ launch act is _"follow along"_, and there is presently nothing to follow.
 
 ### Panels (review EACH — mistake #31)
 
-| panel | what it draws                                                                                                                                                                                                                                              | consumed by  |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| **A** | **THE ENTRANCE — three doors**, each drawn as real UI inside its real parent and numbered to its note: (1) the **Changelog tab** in the public sub-bar, (2) the **sidebar Links row**, before → after, and (3) the **Follow button** in the public top bar | 8.9.4, 8.9.5 |
-| **B** | the **changelog page**, populated — date-grouped entries, the epic chip, follower count, Load more                                                                                                                                                         | 8.9.4        |
-| **C** | the **subscribe popover**, signed-in (C1) and signed-out (C2) — all three follower tiers in one surface                                                                                                                                                    | 8.9.5, 8.9.6 |
-| **D** | **follow states** — rest / followed / hover-to-unfollow, the signed-out path, the "check your inbox" state, the unsubscribe landing                                                                                                                        | 8.9.5, 8.9.7 |
-| **E** | **states** — nothing shipped yet, loading, error, and the self-hosted build with no email backend                                                                                                                                                          | 8.9.4, 8.9.7 |
+| panel | what it draws                                                                                                                                                                                                                                              | consumed by                      |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **A** | **THE ENTRANCE — three doors**, each drawn as real UI inside its real parent and numbered to its note: (1) the **Changelog tab** in the public sub-bar, (2) the **sidebar Links row**, before → after, and (3) the **Follow button** in the public top bar | doors 1–2: 8.9.4 · door 3: 8.9.5 |
+| **B** | the **changelog page**, populated — date-grouped entries, the epic chip, follower count, Load more                                                                                                                                                         | 8.9.4                            |
+| **C** | the **subscribe popover**, signed-in (C1) and signed-out (C2) — all three follower tiers in one surface                                                                                                                                                    | 8.9.5, 8.9.6                     |
+| **D** | **follow states** — rest / followed / hover-to-unfollow, the signed-out path, the "check your inbox" state, the unsubscribe landing                                                                                                                        | 8.9.5, 8.9.7                     |
+| **E** | **states** — nothing shipped yet, loading, error, and the self-hosted build with no email backend                                                                                                                                                          | 8.9.4, 8.9.7                     |
 
 ### The access path is DRAWN, and there are THREE doors
 
@@ -919,7 +919,14 @@ numbered badge matching the note underneath it.
 2. **The sidebar Links row** — the external `links.changelog` row is **REPLACED,
    not joined**, and loses its `↗` glyph because the destination no longer leaves
    the site. A project that never set the external URL **gains** the row for the
-   first time, because the native changelog always exists.
+   first time, because the native changelog always exists — which also makes the
+   whole Links card unconditional, where it used to disappear for a project that
+   had authored no links at all.
+   (**Owner corrected 2026-08-27:** built by **8.9.4**, not 8.9.5. This asset
+   first attributed it to 8.9.5 because the row sits beside the Follow control in
+   the drawing; 8.9.4's card owns `PublicOverviewSidebar` and says so in its own
+   acceptance criteria. The card is the authority on scope, not the panel
+   layout.)
 3. **The Follow button** — in the public top bar, to the **LEFT of Sign in**. It
    is the project's affordance rather than the account's, so it leads the account
    CTAs instead of hiding behind them, and it is present for a signed-out viewer
@@ -1007,12 +1014,26 @@ is the whole cloud-vs-self-host split for this story.
 
 ### Primitives composed (no hand-rolling)
 
-`Button` (primary / outline / ghost / block), `Pill` (the tint tones for the epic
-chip), `SectionLabel` (the sidebar + popover section labels), `Card` (the entry
-row + the side cards), `Popover` (subscribe), `Input` (the address field),
-`EmptyState` / `ErrorState` / skeleton, the `IssueTypeIcon` kind hue
+`Button`, `Pill`, `SectionLabel` (the sidebar + popover section labels), `Card`
+(the entry row + the side cards), `Popover` (subscribe), `Input` (the address
+field), `EmptyState` / `ErrorState` / skeleton, the `IssueTypeIcon` kind hue
 (`--el-type-*`), and the shipped public chrome (top bar / banner / sub-bar /
 Links sidebar) reused verbatim from `public-projects.mock.html`.
+
+> **⚠️ THE MOCK'S CLASS NAMES ARE NOT THE PRIMITIVES' PROP VALUES — build from
+> this table, not from the CSS** (corrected 2026-08-27, while 8.9.4 built the
+> page against the real components):
+>
+> | in the mock                                              | the shipped prop                                                                                                                                                                                 |
+> | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | `.btn-primary`                                           | `<Button variant="primary">`                                                                                                                                                                     |
+> | `.btn-outline`                                           | `<Button variant="secondary">` — there is **no** `outline` variant                                                                                                                               |
+> | `.btn-ghost`                                             | `<Button variant="ghost">`                                                                                                                                                                       |
+> | `.pill-lav` / `.pill-mint` / `.pill-sky` (the epic chip) | `<Pill tone="neutral">` — `Pill`'s `tone` set is `neutral` / `private` / `archived`; the tinted classes are the MOCK's palette, and the shipped chip for a non-semantic label is the neutral one |
+>
+> The mock's classes come from `public-projects.mock.html`, which predates the
+> `@motir/design-system` extraction. Where the two disagree, the PACKAGE wins —
+> a mock is a layout floor, and a prop value it does not have is not a layout.
 
 ### Copy index (8.9.4–8.9.7 wire these to i18n; en shown)
 

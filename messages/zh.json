@@ -4662,7 +4662,19 @@
     "editGuardTitle": "放弃未保存的改动？",
     "editGuardBody": "你修改了标语、标签或概览，但尚未保存。现在离开将放弃这些改动。",
     "editGuardKeepEditing": "继续编辑",
-    "editGuardDiscard": "放弃"
+    "editGuardDiscard": "放弃",
+    "tabChangelog": "更新日志",
+    "changelogTitle": "已发布内容",
+    "changelogLede": "该项目已发布的全部内容，最新在前——直接来自任务看板，因此永不过时。",
+    "changelogEmptyTitle": "尚未发布任何内容",
+    "changelogEmptyBody": "当该项目的工作项被标记为完成后，会自动显示在这里。",
+    "changelogErrorTitle": "无法加载更多",
+    "changelogErrorBody": "读取更新日志时出错，请稍后重试。",
+    "changelogLoadMore": "加载更多",
+    "changelogLoading": "加载中…",
+    "changelogShippedOn": "发布于 {date}",
+    "changelogMetaDescription": "{name} 已发布的全部内容，最新在前——根据项目自身的工作项生成的公开更新日志。",
+    "linkChangelogNative": "更新日志"
   },
   "workItemActions": {
     "menuTrigger": "更多操作",
