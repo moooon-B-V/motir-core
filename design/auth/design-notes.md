@@ -11,6 +11,7 @@ asset was drawn.
 | **2FA challenge**   | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.**                                                                                                                                                                           |
 | **Passkey sign-in** | **`passkey-sign-in.mock.html`** (HTML mock)      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`.                                                              |
 | **2FA required**    | **`two-factor-required.mock.html`** (HTML mock)  | The screen a member without a second factor meets once their organization or workspace starts REQUIRING one (Story 8.13 · MOTIR-3643): who is asking, the three ways to satisfy it, the mounted enrolment surface, the return to where they were going, and the way out. Signed IN but held — it wears the `(auth)` frame precisely so nothing else is reachable. **Gates MOTIR-3648**; the admin-facing half is `../org-admin/security-policy.mock.html`. |
+| **Legal agreement** | **`legal-agreement.mock.html`** (HTML mock)      | Two surfaces, one agreement (Story 8.4 · MOTIR-3679): the notice at the sign-up card's FOOT — on BOTH steps, because `Continue with Google` creates an account from step 1 and never saw the old one — and the re-consent interstitial a material change holds a signed-in reader on. **Gates MOTIR-1135**; for the agreement element it SUPERSEDES `03-signup-desktop.png`, and for everything else on that screen it does not.                           |
 | CLI hand-off        | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                                                                                     |
 | Brand lockup        | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                                                                               |
 
@@ -908,3 +909,360 @@ the app does not, because `data-theme` lives on `<html>` there.
    today, and it is the honest one for this story. If support ever needs a
    per-user exemption, that is a new card and a new admin surface, not a clause
    smuggled into this screen.
+
+---
+
+## The sign-up agreement + the re-consent interstitial (Story 8.4 · 8.4.15)
+
+**Asset:** `legal-agreement.mock.html` + `legal-agreement.png`. Gates
+**MOTIR-1135** (capture acceptance at sign-up, re-consent on material change).
+Filed by the `motir run MOTIR-657` parent run, which stopped at the design gate
+rather than invent two surfaces on the strength of MOTIR-1135's _"No new design
+asset"_ line.
+
+### Two surfaces in one asset, and why they are not two assets
+
+They are two halves of one question — what a person agrees to, and what happens
+when it changes — and the answer to each constrains the other. Drawing them
+apart is how the sign-up line and the interstitial end up asserting different
+things about the same agreement.
+
+### ⚠️ It does NOT touch `auth-screens.pen`
+
+The sign-up screen's legacy source cannot be re-exported (divergence ledger row
+1: the twelve PNGs still read "Prodect" because re-exporting them needs Pencil,
+which is not in this repo). So the agreement element is specified HERE, in the
+modern form, exactly as the area's three other HTML mocks were added.
+
+**Which source wins for the sign-up screen, from now on.** For the two things
+this asset draws — the agreement notice and where it sits in the card — **this
+asset wins**, and screen 03's table above is the record of what the card held
+before it. For every OTHER element of `/sign-up` (the headline, the Google
+button, the OR rule, the email field, the two steps) screen 03 plus divergence 6
+remain the reference, unchanged. The area therefore now specifies the sign-up
+surface in two places, deliberately, and this paragraph is the boundary between
+them.
+
+### ⚠️ The render found a gap the code reading would have missed
+
+`/sign-up` was served from `next dev` and screenshotted at 1440×1000 and 390×844
+before anything was drawn, and the card measured in Chromium: 448px on
+`--el-page-bg`, submit 48px (`--height-btn-lg`), the shipped legal line 13px in
+`--el-text-secondary` (measured `rgb(93, 91, 84)`).
+
+**What that settled: the shipped legal line renders on the PASSWORD step only.**
+`SignUpCard`'s `step === 'password'` branch holds it; the identity step does not
+— and `Continue with Google` sits on the identity step and creates an account
+outright. **A person who signs up with Google is never shown the Terms at all**,
+and Art. 13 transparency is owed at collection, which for that path is step 1.
+
+The fix is placement, not new copy: the notice moves to the **card FOOT**, below
+the footer prompt and outside the step branch, so both steps render it. Panel 1
+draws both doors and marks the one that carries nothing today.
+
+### THE DECISION: a passive statement at sign-up, an affirmative act at re-consent
+
+The card that filed this one assumed a required checkbox and said outright that
+choosing was this card's job. It is **not** a checkbox, for three reasons and one
+measurement:
+
+- **Consent is not the lawful basis.** The account is Art. 6(1)(b), performance
+  of a contract. A tick-box is _evidence_, not a legal requirement — which the
+  filing card already said.
+- **Rung 1 is unanimous.** Linear, Vercel, Notion, GitHub and Stripe all state it
+  passively at the submit control.
+- **It adds a new failure mode** to the highest-value control in the product, in
+  exchange for evidence a submit-time record already provides. Panel 4 draws that
+  failure mode — the submit-blocked error the filing card asked for — as part of
+  the REJECTED option rather than as something to build.
+- **`SignUpCard.tsx`'s own docstring already said so**, at MOTIR-1134: _"MOTIR-1135
+  owns capturing acceptance and turns this line into the statement that agreeing
+  is what the button does."_ This asset is that sentence, drawn.
+
+**The interstitial takes the opposite shape, and that asymmetry is the argument.**
+There is no other act to attach the agreement to, and `content/legal/terms.md`
+§14 promises outright that we _"will not treat silence as agreement to a material
+change"_. A passive line on a hold screen would be exactly the silence that clause
+disclaims. So the interstitial has a real primary button.
+
+### Does it REPLACE MOTIR-1134's line, or keep it?
+
+**KEEPS it — there is exactly ONE line and it is that one.** MOTIR-1134 shipped
+`legal.signUpNotice` as a pure link, deliberately not claiming a record. This card
+moves it to the card foot so both steps carry it, and changes one word: _an
+account_ → _a Motir account_, which is what makes the same string read correctly
+on step 1 where the Google button is the subject. **Do not add a second line.**
+
+**The version is recorded, not printed.** MOTIR-1135 records the version served at
+submit time; a semver string beside a sign-up button is noise to every reader and
+evidence to none.
+
+**The AUP is not a third link.** `content/legal/terms.md` §15 makes the Terms, the
+AUP and the Privacy Policy the whole agreement, and `acceptable-use.md`'s own header
+says it _"forms part of the Terms of Service"_ — so linking the Terms reaches it.
+It IS listed by name on the interstitial when it is the document that moved, which
+is the moment naming it carries information.
+
+### ⚠️ THE RE-CONSENT SET IS THREE OF THE SEVEN — and every exclusion is published
+
+`content/legal/` holds seven documents. Comparing all seven asks every user to
+re-agree on every routing change. **In scope:**
+
+| document                  | why it is in                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Terms of Service**      | the contract itself. §14 is the mechanism this screen implements                                                                           |
+| **Privacy Policy**        | §12: _"where the change affects the terms you accepted, you will be asked to review them"_                                                 |
+| **Acceptable Use Policy** | "forms part of the Terms of Service"; its own Changes section says material changes are _"notified under the Terms of Service"_ — it rides |
+
+**Out of scope, each on a published ground rather than a judgement made here:**
+
+| document                      | the ground                                                                                                                                                                                                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cookie Policy**             | no cookie consent is sought at all (every cookie is strictly necessary or a preference the reader set, under the ePrivacy Art. 5(3) exemption). A future non-essential cookie brings a BANNER, which that document itself promises                                   |
+| **Subprocessors**             | Terms §14 names _"a new sub-processor already covered by the Privacy Policy"_ as an example of a NON-material change that _"takes effect when published"_. DPA customers get DPA §6's thirty-day objection window instead — a bilateral notice, not an app-wide hold |
+| **Data Processing Agreement** | a template, offered on request and signed bilaterally. Not part of what an individual accepts at sign-up, and amended with the customer who signed it through its own §6 / §11                                                                                       |
+| **Model providers**           | `docs/decisions/legal-document-set.md` §7 (amended 2026-08-27): a factual roster that varies no commitment and _"carries no notice period"_                                                                                                                          |
+
+**The subprocessor list was the one the filing card called "genuinely arguable"
+and said the mock need not resolve.** It is resolved, because the shipped Terms
+resolve it in as many words. Panel 9 draws all four exclusions on screen so the
+decision cannot be lost in prose.
+
+### ⚠️ THE TRIGGER IS MATERIALITY, NOT A VERSION COMPARISON
+
+MOTIR-1135's build notes say to prompt _"when the current document version exceeds
+the user's accepted version"_. **That contradicts the document it is implementing.**
+Terms §14 promises that non-material changes — _"clarifications, corrections, a new
+sub-processor already covered by the Privacy Policy"_ — **take effect when
+published**, with no prompt. A bare `>` comparison prompts on every typo fix, which
+is both a worse product and a promise broken in the direction that annoys everyone.
+
+**The convention this asset specifies, and it needs nothing new:** the front matter
+already carries semver (`version: 1.0.0` in all seven files, parsed by
+`lib/legal/documents.ts`).
+
+- **MAJOR or MINOR bump ⇒ MATERIAL.** Prompts.
+- **PATCH bump ⇒ NON-MATERIAL.** Takes effect when published. Silent.
+
+Panel 6 draws the rule working: the Acceptable Use Policy also moved in that
+fixture, `1.0.0 → 1.0.1`, and is deliberately absent from the list.
+
+### What a person can still do behind it
+
+The product is **unreachable** — it is a hold, and it wears the `(auth)` frame for
+the reason `two-factor-required.mock.html` records: drawing a hold inside the app
+shell advertises everything the person cannot reach, and a shell that renders is a
+shell whose data was loaded. **Two exceptions, both load-bearing:**
+
+1. **The legal pages themselves stay reachable**, signed in or out. You cannot ask
+   somebody to accept a document you will not let them open. Panel 8 shows the
+   signed-out card still linking to it.
+2. **Sign-out is always available.** Panel 8.
+
+### The three exits, and they are three different things
+
+| exit                   | what it is                       | what happens                                                                                  |
+| ---------------------- | -------------------------------- | --------------------------------------------------------------------------------------------- |
+| **Agree and continue** | the affirmative act §14 requires | the version + timestamp are recorded and the person lands back where they were going          |
+| **Not now — sign out** | DEFERRING, not declining         | nothing is recorded, nothing changes, the same screen appears at the next sign-in             |
+| **I don't accept**     | DECLINING                        | panel 7 — the consequence §14 already promises, and two routes. **Nothing is destroyed here** |
+
+**Deferring is the ghost button in the foot**, on every held panel, never competing
+with the primary action — the same shape and the same reasoning as
+`two-factor-required.mock.html`'s way out. The line under it removes the fear that
+leaving costs something.
+
+**Declining is drawn whole, because it is the half most likely to be skipped and
+the half a regulator reads first.** A decline path that silently does nothing is
+worse than no decline path. The screen states the outcome the Terms already promise
+— _"If you do not accept it, you may terminate and receive a pro-rata refund of
+prepaid fees for the unused period"_ — and offers export-first then close-account,
+in that order, plus **legal@motir.co** for a person who would rather talk to
+someone. It is `content/legal/terms.md` §15's own notice address.
+
+### ⚠️ It MOUNTS the export / delete surface; it does not redraw it
+
+Panel 7's dashed outline is review chrome, not a border to build. Both decline
+routes lead to the account surface that owns them — MOTIR-1136's, designed in
+**8.4.16 (MOTIR-3680)** under the account-settings area. Drawing an export flow
+here would build it twice and drift from the real one.
+
+### Which documents changed, on screen
+
+_"A person asked to re-accept is owed a link to what changed."_ Each changed
+document is a row carrying its title, its version delta as a mono chip, a
+one-sentence summary of what moved, and a link to the new version. **The summary
+needs a front-matter key that does not exist yet** — see the planning flags.
+
+### The arrival, and the departure
+
+Nobody navigates here; they are held on their way somewhere. Panel 5 draws the
+arrival as a four-step flow with a concrete case and the departure back to the same
+URL. **The same-origin validation the 2FA-required screen's notes spell out applies
+verbatim** — a leading `/`, no scheme, no `//`, no `..`, and a fixed safe fallback
+otherwise. Never a generic dashboard.
+
+### ⚠️ NOT an error state
+
+**No `--el-danger` fill, no red banner, no alert role anywhere in this asset.**
+Nothing has gone wrong: a document was updated. The pills carry their hue in the
+tint BACKGROUND with `--el-text-strong` ink — `--el-tint-sky` for _takes effect_,
+`--el-tint-mint` for _signed out_ — which is also what keeps them AA in both
+themes. The only `--el-danger` on the board is the submit-blocked error inside
+panel 4, which is drawn as the REJECTED option.
+
+**And no copy implies a deadline** beyond the effective date the Terms themselves
+carry. No string says "or else", and none counts down.
+
+### Panels
+
+| #   | panel                         | what it shows                                                               |
+| --- | ----------------------------- | --------------------------------------------------------------------------- |
+| 1   | **Where the notice goes**     | both account-creating controls, and the one carrying nothing today          |
+| 2   | **Sign-up · identity step**   | the notice at the card foot — the Google path covered                       |
+| 3   | **Sign-up · password step**   | MOTIR-1134's line kept, re-worded, re-placed                                |
+| 4   | **The rejected tick-box**     | unchecked / checked / submit-blocked, and why it is not what ships          |
+| 5   | **Re-consent · one document** | the held screen, and the arrival drawn as a flow                            |
+| 6   | **Re-consent · several**      | one agreement covering all, and the PATCH change deliberately not listed    |
+| 7   | **Declining**                 | the §14 consequence, and the two routes — nothing destroyed here            |
+| 8   | **Deferring**                 | signed out, nothing changed, the document still readable                    |
+| 9   | **What does NOT trigger it**  | the four excluded documents, each with its published ground                 |
+| 10  | **Mobile (390px)**            | a width, not a second design — with one measurement that came out otherwise |
+| 11  | **Dark**                      | both surfaces, tokens flipped                                               |
+
+### Per-control map — primitive, tokens
+
+| element                  | primitive                    | colour                                                                           | shape                              |
+| ------------------------ | ---------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| page + card              | `app/(auth)/layout.tsx`      | `--el-auth-wash` page, `--el-page-bg` card, `--shadow-elevated`                  | `--radius-card`                    |
+| brand lockup             | `BrandMark size={28}`        | glyph `--el-accent`, wordmark `--el-text`                                        | —                                  |
+| headline + subhead       | `AuthShell`                  | `--el-text` / `--el-text-muted` (on the white card — AA 4.54)                    | —                                  |
+| **the agreement notice** | a `p`, NOT a control         | `--el-text-secondary`, links `--el-link`; a `--el-border` rule above it          | `13px`, card foot                  |
+| Google button            | `GoogleButton`               | `--el-button-border`, Google's own four-colour glyph                             | `--radius-btn`, `--height-btn-lg`  |
+| email / password field   | `Input` + addonStart         | `--el-input-border`; placeholder `--el-text-muted` on `--el-page-bg`             | `--radius-input`, `--height-input` |
+| email recap row          | a display row, not a control | `--el-surface`; its glyph `--el-text-secondary`, NOT muted                       | `--radius-input`, `--height-input` |
+| "takes effect" chip      | `Pill`                       | `--el-tint-sky` background, `--el-text-strong` ink                               | `--radius-badge`                   |
+| "signed out" chip        | `Pill`                       | `--el-tint-mint` background, `--el-text-strong` ink                              | `--radius-badge`                   |
+| changed-document row     | `Card`                       | `--el-card` + `--el-border`; icon tile `--el-card-icon-bg` / `--el-card-icon-fg` | `--radius-card`                    |
+| the version delta chip   | a mono chip                  | `--el-code-bg` / `--el-code-text`                                                | `--radius-control`                 |
+| Agree and continue       | `Button` primary             | `--el-accent` / `--el-accent-text`                                               | `--radius-btn`, `--height-btn-md`  |
+| Not now — sign out       | `Button` ghost               | `--el-text-secondary`                                                            | `--height-btn-sm`                  |
+| decline routes           | `Card` each                  | as the document rows                                                             | `--radius-card`                    |
+| excluded-document row    | a quiet row                  | `--el-surface-soft`, ink `--el-text-secondary`                                   | `--radius-card`                    |
+| the REJECTED tick-box    | `Checkbox`                   | on: `--el-accent` + `--el-accent-text`; invalid border `--el-danger`             | `--radius-xs`                      |
+
+No Tier-0 `--color-*` is referenced by any element rule (only the `:root` /
+`[data-theme='dark']` token blocks define them), and no raw `rounded-*` / `p-*` /
+`h-*` appears on a control's own box. **`--el-text-faint` appears nowhere.**
+`--el-text-muted` appears in exactly two rules, both resolving against
+`--el-page-bg` (the white card), which is the one surface it clears AA on.
+
+**The `--el-*` layer is re-declared inside `[data-theme='dark']`** for the reason
+this area's other assets record: a custom property is substituted at the element it
+is DECLARED on, so panel 11's nested board would otherwise inherit the resolved
+LIGHT values. In the app `data-theme` lives on `<html>`.
+
+### Copy strings
+
+**Sign-up** — the existing `legal.signUpNotice`, one word changed:
+
+- `legal.signUpNotice` — **"By creating a Motir account you agree to our
+  &lt;terms&gt;Terms of Service&lt;/terms&gt; and &lt;privacy&gt;Privacy
+  Policy&lt;/privacy&gt;."** (was _"an account"_.) The `zh` twin moves with it
+  (`tests/i18n-catalog.test.ts`).
+
+**Re-consent** — new `legal.reconsent.*` keys for MOTIR-1135. Every `en` key needs
+its `zh` twin.
+
+- Chip **"Takes effect {date}"**.
+- Headline, one document **"We've updated our {document}"**; several **"We've
+  updated {n} of our documents"**.
+- Body **"We won't treat carrying on in silence as agreement, so we're asking you
+  to read what changed and say yes. Nothing has been deleted, your projects and
+  workspaces are untouched, and your subscription has not changed."**
+- Row link **"Read the new version →"**.
+- Primary **"Agree and continue"** / **"Agree to both and continue"** /
+  **"Agree to all and continue"**.
+- Way out **"Not now — sign out"** · **"We'll ask again the next time you sign in.
+  Or {decline}."** · decline link **"tell us you don't accept"**.
+- Signed-out headline **"No problem — take your time"**; body **"You've been signed
+  out and nothing has changed. We'll ask again the next time you sign in, and you
+  can read the new Terms whenever you like."**; link **"Read it without signing in
+  →"**; primary **"Back to sign in"**.
+- Decline headline **"If you don't accept, you can close your account"**; body
+  **"Your Terms say that if you don't accept a material change you may end your
+  agreement and get back the unused part of anything you've prepaid. That's still
+  true — and nothing happens on this screen until you choose it."**
+- Decline routes **"Download your data first"** / **"Your projects, work items,
+  comments and attachments, as a file you keep. Do this before you close
+  anything."** · **"Close my account"** / **"We'll show you exactly what goes and
+  what your workspaces keep, and ask you to confirm, before anything is deleted."**
+- Decline foot **"Would rather talk to a person about it? Write to legal@motir.co
+  and we'll answer."** · back **"← Back"**.
+
+### Accessibility
+
+Everything the area's a11y section states holds. Four additions:
+
+- **The agreement notice takes no focus of its own** — it is a paragraph, and only
+  its two links are focusable. It is last in the DOM, so `autoFocus` on the email
+  field is unaffected and a reader who types straight away never meets it.
+- **The held screen is not an alert.** No `role="alert"`, no `aria-live`: nothing
+  has gone wrong, and announcing a policy update as an error is both wrong and
+  alarming. It is an ordinary page with an `h1` that says what it is.
+- **One agreement, one control.** A per-document tick-box would ask for three
+  decisions where the product offers one outcome, and each would need its own
+  label. The button's own words carry the scope (_"Agree to both and continue"_).
+- **The version delta chip is not the only carrier.** The row's title names the
+  document and the summary says what moved, so a reader who never resolves
+  `1.0.0 → 2.0.0` still knows what they are agreeing to.
+
+### ⚠️ Planning flags for MOTIR-1135
+
+1. **The materiality signal has to be WRITTEN somewhere, and today it is not.**
+   The semver convention above is the cheapest form — it needs no new field, and
+   `lib/legal/documents.ts` already parses `version`. But **nothing enforces that
+   an author bumps the right component**, and the whole promise rides on it. Either
+   MOTIR-1135 adds the check to `tests/legal/` (a version bump whose component
+   disagrees with the diff's size is at least a prompt to think), or the risk is
+   accepted and written down. Do not leave it implicit.
+2. **The per-document "what changed" summary needs a front-matter key.**
+   `changeSummary:` (or `summary:`) beside `version:` / `effectiveDate:` — a
+   one-sentence, human-written line. `parseLegalDocument` is fifteen lines and
+   takes another scalar for free. **Drawn with the summary; the degraded form —
+   the version delta and a link, with no sentence — is an acceptable fallback**,
+   not a reason to hold the card. It is the same shape as the 2FA screen's
+   destination-chip flag.
+3. **The gate needs the current path, and the mechanism already exists.**
+   `two-factor-required.mock.html`'s notes record `x-current-path` (MOTIR-3652) as
+   the carrier and the same-origin validation the consumer owes. **This screen is
+   the second consumer of that header.** If the 2FA gate ships first, reuse it; if
+   this one does, expect the other to.
+4. **Two gates will want the same slot.** Both this and 2FA-required hold an
+   authenticated reader at the app's front door, in the same `(auth)` frame, on the
+   same redirect. **Order them once, deliberately** — the recommendation is 2FA
+   first (it is about who is signing in) and re-consent second (it is about what
+   they are agreeing to), and a person who owes both should not meet two full-page
+   holds in a row without the second saying so. That ordering is a decision
+   MOTIR-1135 should record, not discover.
+5. **Self-host.** MOTIR-1135's own criteria already say gating keys off the CLOUD
+   document version. Nothing on this screen changes for a self-hoster except that
+   it should not appear at all: their operator sets their own terms, and
+   `content/legal/` ships as our copy of ours.
+
+### Self-review
+
+- The affordance is a paragraph, not a control, so it cannot grow a validation
+  state later without somebody deciding to make it one.
+- The one place a tick-box IS right — the interstitial — has an affirmative button
+  rather than a tick-box plus a button, which would be two acts for one decision.
+- Every exclusion in the re-consent set quotes a document we are bound by, so a
+  future reader can check the reasoning against the source rather than against
+  this file.
+- Panel 10 records a measurement that came out AGAINST what the panel note first
+  claimed, and the note was corrected rather than the panel.
+- Every icon is a lucide path at `viewBox="0 0 24 24"`, sized by CSS; the brand
+  glyph and the Google mark are the shipped path data, not stand-ins.
+- No nested interactive elements. The three affordances that change the card's own
+  state rather than navigating are `button`s styled as links, not anchors with an
+  address that does not exist.
