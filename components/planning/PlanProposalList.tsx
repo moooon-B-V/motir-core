@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RotateCw } from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -212,6 +212,18 @@ function ProposalRow({ item, decided }: { item: PlanReviewItemDto; decided: bool
         <ChangeLines changes={item.changes} />
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {/* MOVED in the plan's latest revision (Part XII §E). The SHIPPED `Pill`
+            in the SHIPPED slot, in front of the op chip — the same cluster the
+            stale pill uses, which is also a "something happened to this row"
+            marker. It contains its own WORD, so no row's state is carried by
+            colour alone, and the op chip is untouched: op says WHICH kind of
+            change this is, the pill says THAT this one moved. */}
+        {item.revised ? (
+          <Pill severity="info">
+            <RotateCw className="h-3 w-3" aria-hidden />
+            {t('listRevised')}
+          </Pill>
+        ) : null}
         {item.stale ? (
           <Pill severity="warning">
             <AlertTriangle className="h-3 w-3" aria-hidden />

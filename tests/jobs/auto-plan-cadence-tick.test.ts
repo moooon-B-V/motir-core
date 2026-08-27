@@ -8,6 +8,7 @@ import { defineJob } from '@/lib/jobs/defineJob';
 import { jobFunctions } from '@/lib/jobs/registry';
 import { jobServices } from '@/lib/jobs/services';
 import { RETRY_POLICIES } from '@/lib/jobs/retries';
+import { ABANDONED_PLAN_SWEEP_CRON } from '@/lib/jobs/definitions/abandonedPlanSweep';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import {
   autoPlanCadenceTick,
@@ -67,19 +68,28 @@ describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', ()
       const config = spy.mock.calls.at(-1)?.[0] as
         | { triggers?: Array<{ cron?: string }>; retries?: number }
         | undefined;
-      expect(config?.triggers).toEqual([{ cron: '20 * * * *' }]);
+      expect(config?.triggers).toEqual([{ cron: '30 * * * *' }]);
     } finally {
       spy.mockRestore();
     }
   });
 
-  it('is scheduled clear of the other system crons — no top-of-hour pile-up', () => {
-    // The rationale recorded in the definition: :20 keeps the sweep off the
-    // filter-subscription tick's :00 slot. Assert the MINUTE field is distinct
-    // rather than re-listing every sibling schedule.
-    const minuteField = AUTO_PLAN_CADENCE_TICK_CRON.split(' ')[0];
-    expect(minuteField).toBe('20');
-    expect(minuteField).not.toBe('0');
+  it('is scheduled ON the cluster, and AFTER the abandoned-plan sweep', () => {
+    // ⚠️ INVERTED FROM WHAT THIS ASSERTED (MOTIR-3314). It read "is scheduled
+    // clear of the other system crons — no top-of-hour pile-up", asserting the
+    // minute was '20' and NOT '0'. Keeping this tick off its neighbours' minutes
+    // is load-spreading, which is correct on an always-on machine and is what
+    // holds a suspend-when-idle compute awake — the argument is at the constant
+    // and in `docs/decisions/application-hosting.md` §21.
+    //
+    // What genuinely matters to THIS job is the ORDER: its only upstream is the
+    // abandoned-plan sweep, and reconciling before it is what lets a plan freed
+    // this hour unpause that project's planning in the SAME hour's tick. That
+    // property survived the re-timing and is what is asserted now.
+    expect(AUTO_PLAN_CADENCE_TICK_CRON).toBe('30 * * * *');
+    expect(Number(AUTO_PLAN_CADENCE_TICK_CRON.split(' ')[0])).toBeGreaterThan(
+      Number(ABANDONED_PLAN_SWEEP_CRON.split(' ')[0]),
+    );
   });
 
   it('takes the IDEMPOTENT retry budget — safe only because the sweep re-derives every gate', () => {

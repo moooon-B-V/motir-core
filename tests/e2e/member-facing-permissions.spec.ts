@@ -217,8 +217,10 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
       data: { projectId: t.projectId, source: 'csv' },
     });
     expect(importDraft.status(), 'import:run — an admin runs importers').toBeLessThan(300);
+    // MOTIR-3629 — an admin archives via `work_item:archive`, which they hold by
+    // implication from `work_item:delete` (nothing else changed here).
     const archived = await page.request.post(`/api/work-items/${t.itemId}/archive`, { data: {} });
-    expect(archived.status(), 'work_item:delete — an admin archives').toBeLessThan(300);
+    expect(archived.status(), 'work_item:archive — an admin archives').toBeLessThan(300);
   });
 
   test('a project MEMBER keeps the everyday work and loses the two admin keys', async ({
@@ -241,7 +243,33 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     const ranked = await page.request.post(`/api/work-items/${t.itemId}/rank`, { data: {} });
     expect(ranked.status(), 'sprint:manage — a member still ranks the backlog').toBeLessThan(300);
 
-    // 2 · The two the decision record takes from them, each asserted on its
+    // ⚠️ MOTIR-3629 — ARCHIVE IS A MEMBER'S WRITE NOW, so it moves from part 2 to
+    // part 1. This spec asserted the refusal on its AUTHORITATIVE post-condition
+    // (`archivedAt` stayed null), and the refusal was never argued: it fell out
+    // of `work_item:delete` spanning a reversible single-row hide and an
+    // irreversible subtree destroy. `work_item:archive` is the reversible half
+    // and `member` holds it, so the same call succeeds and the post-condition
+    // inverts — asserted, not merely deleted.
+    const archived = await page.request.post(`/api/work-items/${t.itemId}/archive`, { data: {} });
+    expect(archived.status(), 'work_item:archive — a member archives').toBeLessThan(300);
+    const archivedItem = await db.workItem.findUniqueOrThrow({ where: { id: t.itemId } });
+    expect(archivedItem.archivedAt, 'the archive actually landed').not.toBeNull();
+    // …and it is REVERSIBLE by the same actor, which is the property the key is
+    // named for and the reason a member may hold it.
+    //
+    // ⚠️ THE INTERNAL RESTORE IS `DELETE …/archive`, NOT `POST …/restore`. The
+    // `/restore` PATH is the `/api/v1` shape (`app/api/v1/work-items/[key]/restore`);
+    // the internal API puts both directions on ONE route — POST archives, DELETE
+    // unarchives (`app/api/work-items/[id]/archive/route.ts`, and
+    // `permission-inventory.md`'s row says `DELETE/POST` for exactly this
+    // reason). A `POST …/restore` here is a 404 from a route that does not
+    // exist, which reads as a permission failure and is not one.
+    const restored = await page.request.delete(`/api/work-items/${t.itemId}/archive`);
+    expect(restored.status(), 'work_item:archive — and restores').toBeLessThan(300);
+    const restoredItem = await db.workItem.findUniqueOrThrow({ where: { id: t.itemId } });
+    expect(restoredItem.archivedAt, 'the restore actually landed').toBeNull();
+
+    // 2 · The keys the decision record takes from them, each asserted on its
     // AUTHORITATIVE POST-CONDITION rather than on a status alone.
     const importRefused = await page.request.post('/api/import', {
       data: { projectId: t.projectId, source: 'csv' },
@@ -249,12 +277,12 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     expect(importRefused.status(), 'import:run is admin-only').toBe(403);
     expect(await db.import.count({ where: { projectId: t.projectId } })).toBe(0);
 
-    const archiveRefused = await page.request.post(`/api/work-items/${t.itemId}/archive`, {
-      data: {},
-    });
-    expect(archiveRefused.status(), 'work_item:delete is admin-only').toBe(403);
+    // The IRREVERSIBLE half stays admin-only, which is what the row above was
+    // always about — and is now asserted on the operation that actually cascades.
+    const deleteRefused = await page.request.delete(`/api/work-items/${t.itemId}`);
+    expect(deleteRefused.status(), 'work_item:delete is admin-only').toBe(403);
     const item = await db.workItem.findUniqueOrThrow({ where: { id: t.itemId } });
-    expect(item.archivedAt, 'the refused archive changed nothing').toBeNull();
+    expect(item.id, 'the refused delete destroyed nothing').toBe(t.itemId);
   });
 
   test('a project VIEWER browses everything and writes nothing', async ({ page }) => {
@@ -278,8 +306,17 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     }
     const sprint = await db.sprint.findUniqueOrThrow({ where: { id: t.sprintId } });
     expect(sprint.state, 'the refused start left the sprint planned').toBe('planned');
+    // MOTIR-3629 — a viewer is refused the REVERSIBLE removal too, which is the
+    // one place `work_item:archive` parts from the member it was given to: a
+    // read-only actor removes nothing, reversibly or otherwise.
+    const archiveRefused = await page.request.post(`/api/work-items/${t.itemId}/archive`, {
+      data: {},
+    });
+    expect(archiveRefused.status(), 'work_item:archive is not a viewer key').toBe(403);
+
     const item = await db.workItem.findUniqueOrThrow({ where: { id: t.itemId } });
     expect(item.sprintId, 'the refused move left the item in the backlog').toBeNull();
+    expect(item.archivedAt, 'the refused archive changed nothing').toBeNull();
     expect(
       await db.savedFilter.count({ where: { projectId: t.projectId } }),
       'the refused save created no filter',

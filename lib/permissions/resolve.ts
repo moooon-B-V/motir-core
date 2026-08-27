@@ -1,6 +1,6 @@
 import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
 import { isWorkspaceManager } from '@/lib/projects/roles';
-import type { PermissionKey } from '@/lib/permissions/catalog';
+import { withImpliedPermissions, type PermissionKey } from '@/lib/permissions/catalog';
 import {
   BUILTIN_ROLE_PERMISSIONS,
   IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
@@ -125,11 +125,11 @@ export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<Perm
   // 2 · The always-pass rail — the "site admin sees + manages every project" tier.
   if (isWorkspaceManager(i.workspaceRole)) {
     for (const key of ROLE_GATED_PERMISSIONS) held.add(key);
-    return held;
+    return withImpliedPermissions(held);
   }
 
   // 3 · The null-deny rail — outside the workspace, nothing beyond layer 1.
-  if (i.workspaceRole == null) return held;
+  if (i.workspaceRole == null) return withImpliedPermissions(held);
 
   // Between the rails: the project role's base set, minus what the level takes.
   //
@@ -164,7 +164,33 @@ export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<Perm
     held.add(key);
   }
 
-  return held;
+  // The IMPLICATIONS, applied last (MOTIR-3629). `work_item:delete` confers
+  // `work_item:archive`: destroying a subtree irreversibly strictly dominates
+  // hiding one row reversibly, so an actor who holds the first and not the second
+  // is expressing nothing anyone could have meant. Applying it AFTER the level
+  // filter is deliberate and is also a no-op today — `levelGrants` names only
+  // `work_item:edit` / `comment:add` / `attachment:create`, so both keys take the
+  // same default arm on every level — but the order states which wins if a future
+  // branch ever separates them: the level SUBTRACTS from a role, and an
+  // implication describes the operations rather than the actor, so it must not
+  // hand back a key a level took away. It cannot: `work_item:delete` is subtracted
+  // by exactly the levels that subtract `work_item:archive`, so if the implier
+  // survived, so did the implied.
+  //
+  // ⚠️ It reaches a stored CUSTOM ROLE too, via `customRoleBase` above — which is
+  // the back-compatibility half: a role authored before the split holds only
+  // `work_item:delete`, and its members keep archiving with no migration over
+  // `project_role_definition.permissions`. The EDITOR still shows what the role
+  // LISTS; this is what it CONFERS, the same relationship a legacy token scope
+  // has to its expansion (`docs/decisions/token-permissions.md` §5, §10).
+  //
+  // ⚠️ EVERY return of this function is wrapped, including the two rails above
+  // where it is provably a no-op today (the manager rail resolves to the whole
+  // role-gated catalog, which already lists both keys; the null-deny rail can
+  // hold only the level-gated `public_request:*` grants). Wrapping the exit
+  // rather than the one branch that needs it is what keeps the property TOTAL:
+  // the day a second implication is added, there is no rail it silently misses.
+  return withImpliedPermissions(held);
 }
 
 /**

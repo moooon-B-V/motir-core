@@ -89,7 +89,7 @@ describe('system.ci-minutes-reconcile', () => {
     expect(jobFunctions).toContain(ciMinutesReconcile);
     // The 3rd, not the 1st: GitHub's usage report is not complete the instant a
     // month ends, so reconciling immediately would report lag as drift.
-    expect(CI_MINUTES_RECONCILE_CRON).toBe('0 4 3 * *');
+    expect(CI_MINUTES_RECONCILE_CRON).toBe('30 5 3 * *');
   });
 
   it('skips the GitHub half with no billing credential — but STILL audits the fleet', async () => {

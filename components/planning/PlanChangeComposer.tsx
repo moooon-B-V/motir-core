@@ -70,6 +70,23 @@ export interface PlanChangeComposerProps {
   awaitingQuestion?: string | null;
   /** Jump to the pending question in the transcript. */
   onSeeQuestion?: () => void;
+  /**
+   * Offer the `@` TARGET picker. Default `true` — every shipped call site is a
+   * planning turn anchored at committed work items, and none of them passes this.
+   *
+   * ⚠️ `false` FOR A PLAN REVISION (Story MOTIR-3595 · Subtask MOTIR-3601;
+   * `design/ai-planning/design-notes.md` Part XII §B), and it is a correctness
+   * flag rather than a styling one. The trigger opens `useWorkItemTargetSearch`,
+   * which searches the project's COMMITTED work items; a revision is anchored at
+   * the PLAN and the things it can name are PROPOSALS, which have no key to
+   * mention until somebody approves them. Offering the picker there searches the
+   * wrong universe and returns rows the instruction cannot act on.
+   *
+   * One prop rather than a second input, because a bespoke field would split the
+   * placeholder/accessible-name contract, the disabled handling and the Send
+   * button across two components.
+   */
+  mentions?: boolean;
 }
 
 export function PlanChangeComposer({
@@ -84,6 +101,7 @@ export function PlanChangeComposer({
   disabled = false,
   awaitingQuestion = null,
   onSeeQuestion,
+  mentions = true,
 }: PlanChangeComposerProps) {
   const t = useTranslations('planningWorkspace.targets');
   const tc = useTranslations('planningWorkspace.conversation');
@@ -102,7 +120,7 @@ export function PlanChangeComposer({
   const atLimit = targets.length >= MAX_PLANNING_TARGETS;
   // Closed while the turn is in flight too: the composer is locked, so an open
   // dropdown would be a control the user cannot act on.
-  const open = mention !== null && !dismissed && !atLimit && !disabled;
+  const open = mentions && mention !== null && !dismissed && !atLimit && !disabled;
   const { results, loading, tooShort } = useWorkItemTargetSearch(mention?.query ?? '', open);
 
   const foundIndex = activeId === null ? -1 : results.findIndex((r) => r.id === activeId);
@@ -231,7 +249,7 @@ export function PlanChangeComposer({
         </div>
       ) : null}
 
-      {targets.length > 0 ? (
+      {mentions && targets.length > 0 ? (
         <div
           role="group"
           aria-label={t('trayLabel', { count: targets.length })}
@@ -277,31 +295,43 @@ export function PlanChangeComposer({
             textbox role (every existing consumer — and the acceptance spec —
             addresses it that way), while `aria-controls` /
             `aria-activedescendant` on the input still voice the active row. */}
+        {/* ⚠️ WITHOUT MENTIONS THE COMBOBOX ROLE GOES TOO, not just the button.
+            A `role="combobox"` that owns no popup and can never expand is a lie
+            told to a screen reader — it promises an autocomplete the surface does
+            not have. So the wrapper degrades to a plain `div`, and the input keeps
+            its native textbox role, which is what every consumer addresses it by
+            anyway. */}
         <div
-          role="combobox"
-          aria-expanded={open}
-          aria-haspopup="listbox"
-          // Named unconditionally (the role REQUIRES it): the listbox is the
-          // popup this combobox owns whenever it has one, and an id pointing at
-          // nothing is how a closed combobox reads.
-          aria-controls={LISTBOX_ID}
+          {...(mentions
+            ? {
+                role: 'combobox' as const,
+                'aria-expanded': open,
+                'aria-haspopup': 'listbox' as const,
+                // Named unconditionally (the role REQUIRES it): the listbox is
+                // the popup this combobox owns whenever it has one, and an id
+                // pointing at nothing is how a closed combobox reads.
+                'aria-controls': LISTBOX_ID,
+              }
+            : {})}
           className="relative flex min-w-0 flex-1 items-center"
         >
-          <button
-            type="button"
-            onClick={triggerMention}
-            disabled={disabled || atLimit}
-            aria-label={t('trigger')}
-            data-testid="planning-target-trigger"
-            className="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
-          >
-            <AtSign className="size-4" aria-hidden="true" />
-          </button>
+          {mentions ? (
+            <button
+              type="button"
+              onClick={triggerMention}
+              disabled={disabled || atLimit}
+              aria-label={t('trigger')}
+              data-testid="planning-target-trigger"
+              className="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+            >
+              <AtSign className="size-4" aria-hidden="true" />
+            </button>
+          ) : null}
           <input
             ref={inputRef}
             type="text"
             value={draft}
-            aria-autocomplete="list"
+            {...(mentions ? { 'aria-autocomplete': 'list' as const } : {})}
             {...(open && results.length > 0
               ? {
                   'aria-controls': LISTBOX_ID,
@@ -329,7 +359,7 @@ export function PlanChangeComposer({
             // (4.17:1 for muted), and it is load-bearing here — the prompt IS
             // the placeholder, and the accessible name tracks it. Secondary is
             // 6.24:1 on that surface.
-            className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+            className={`h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) ${mentions ? 'pl-8' : 'pl-(--spacing-input-x)'} text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60`}
           />
         </div>
         {/* Send gains the WORD "Answer" while a question is pending — the third

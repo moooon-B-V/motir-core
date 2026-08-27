@@ -24,22 +24,47 @@ import type { TrustedDeviceDTO, TwoFactorMethod, TwoFactorStatusDTO } from '@/li
  * configured (it is — lib/auth/index.ts). It is second in the list and second
  * in `primaryMethod` because an email inbox is not a strong possession factor
  * (NIST 800-63B), so it is the fallback and the pane labels it as one.
+ *
+ * ⚠️ `passkey` (Story MOTIR-1214) BREAKS THE SYMMETRY, and this function is
+ * where it breaks. Both existing methods are answers to a challenge, so both are
+ * gated on `enabled` and `primaryMethod` could simply be `methods[0]`. A passkey
+ * is neither: it is a PRIMARY credential that mints a session outright, so
+ *
+ *   - it belongs in `methods` on `passkeyCount >= 1` REGARDLESS of `enabled` —
+ *     the passkey plugin never touches `user.twoFactorEnabled`, so gating it
+ *     would report a genuinely multi-factor account as having nothing; and
+ *   - it may NEVER be `primaryMethod`, because there is no challenge for it to
+ *     be offered at.
+ *
+ * That is why `primaryMethod` is now derived from its own list rather than from
+ * `methods[0]`. Collapsing the two back into one expression is the regression to
+ * watch for: it reads as a simplification and it silently starts telling the
+ * challenge screen to offer a passkey.
  */
 export function toTwoFactorStatusDTO(args: {
   enabled: boolean;
   enrolment: { verified: boolean } | null;
+  passkeyCount: number;
   backupCodesRemaining: number;
   backupCodesTotal: number;
 }): TwoFactorStatusDTO {
-  const methods: TwoFactorMethod[] = [];
+  // The challenge-answerable methods, in the order the challenge offers them.
+  // `primaryMethod` reads THIS list and nothing else.
+  const challengeMethods: TwoFactorMethod[] = [];
   if (args.enabled) {
-    if (args.enrolment?.verified) methods.push('totp');
-    methods.push('email');
+    if (args.enrolment?.verified) challengeMethods.push('totp');
+    challengeMethods.push('email');
   }
+
+  // What the account is ENROLLED in — the challenge methods plus the passkey,
+  // which is enrolled-but-not-challengeable.
+  const methods: TwoFactorMethod[] = [...challengeMethods];
+  if (args.passkeyCount >= 1) methods.push('passkey');
+
   return {
     enabled: args.enabled,
     methods,
-    primaryMethod: methods[0] ?? null,
+    primaryMethod: challengeMethods[0] ?? null,
     backupCodesRemaining: args.backupCodesRemaining,
     backupCodesTotal: args.backupCodesTotal,
   };

@@ -2098,6 +2098,90 @@ the reaper's own "offset so it never lines up" rationale assumed. Clustering the
 schedules is the fix, and it is a coordinated change across every `system.*` job
 rather than a constant to tune; it has its own work item.
 
+**⚠️ AND THE SCHEDULE IS NOW CLUSTERED — MOTIR-3314, 2026-08-26. THE NUMBERS BELOW
+ARE PREDICTED, NOT MEASURED, AND MUST NOT BE READ AS THE PARAGRAPH ABOVE IS READ.**
+The paragraph above is a MEASUREMENT of the old shape. This one is the change made
+in response to it, and its duty cycle has not been observed.
+
+**The change.** All fourteen `system.*` crons are re-timed onto two shared minutes
+past the hour — `SCHEDULE_CLUSTER_MINUTES = {0, 30}` in `lib/jobs/schedules.ts`.
+Nine expressions moved, five already sat on a clustered minute; the loudest,
+`CI_RUNNER_PROVISION_SWEEP_CRON`, went from `* * * * *` to `0,30 * * * *`.
+
+|                       | before                                                                                 | after              |
+| --------------------- | -------------------------------------------------------------------------------------- | ------------------ |
+| union of wake-minutes | every minute (`* * * * *`), and `{0,7,10,17,20,22,27,30,37,40,47,50,52,57}` without it | **`{0, 30}`**      |
+| longest quiet gap     | **1 min** as deployed · 7 min with the sweep deleted                                   | **30 min**         |
+| duty cycle            | **100%**, measured over 6 h 12 m (above)                                               | **~30% predicted** |
+
+**The gap is COMPUTED, not asserted** — `lib/jobs/schedules.ts` unions the MINUTE
+field of every registered expression and measures the cyclic stretches between
+them, and `tests/jobs/schedule-cluster.test.ts` fails the build if one drops below
+the floor. That is the part of this change that outlives the number: a fifteenth
+job picking a free-looking minute is the failure mode that produced the 100%, and
+it now breaks a test instead of a bill.
+
+**⚠️ AND THE GUARD ASSERTS THE SHORTEST GAP, NOT THE LONGEST — worth stating
+because the longest is the number this section quotes.** A longest-gap assertion
+does not defend the bill, which was found by writing the test that adds a
+fifteenth job and watching it pass: put one job at :17 on a `{0, 30}` schedule and
+the minutes become `{0, 17, 30}` — :17 splits ONE half-hour and leaves the OTHER
+untouched, so the longest gap is still 30 while the compute stops sleeping for
+half of every hour. A compute sleeps in a gap only for the part exceeding the
+delay, so awake time is driven by EVERY gap and the smallest is what binds: **a
+schedule is only as clustered as its tightest pair.** MOTIR-3314's criterion asks
+for the longest gap, which is the right summary of the OLD shape — 7 minutes,
+honestly describing a set with no gap wide enough to sleep in — and the wrong
+quantity to guard on. Both are computed; the longest is reported, the shortest is
+asserted.
+
+**What the margin is priced against, and when it was last measured.** 30 minutes
+against the **~9 min** delay measured **2026-08-20** (the table at the top of this
+section: two endpoints, control-plane sampling with no database connection of the
+run's own) is **21 minutes of margin, 3.3×**. Against the **~5m12s** measured
+**2026-08-23** on `motir-gateway`'s endpoint by the same method it is **5.8×**.
+**Deliberately priced against the MEASUREMENTS and deliberately not against a
+threshold**, because this section's own finding is that a measured delay is a
+reading with a date on it and this one moved by four minutes in three days. 30 is
+the same spacing `motir-gateway` took for the same reason
+([MOTIR-3411](motir:cmt6cyvie003ei4ph1uyq1qsm)), after 10-minute spacing cleared the
+then-believed threshold by about a minute and cost a **77%** duty cycle. A gap
+chosen to sit just past ~9 min would be that near-miss for a third time.
+
+| gap        | awake at ~5m12s | awake at ~9 min                         |
+| ---------- | --------------- | --------------------------------------- |
+| 10 min     | 52%             | **~98%** — the near-miss, twice already |
+| 15 min     | 35%             | 60%                                     |
+| **30 min** | **17%**         | **30%**                                 |
+
+**What it costs.** The tightest cadence in the set IS the gap — no arrangement of
+the other jobs can produce a quiet stretch longer than the shortest one — so the
+clustering is one decision, not fourteen. It is paid mostly by
+`system.plan-target-lock-sweep`: a stranded planning lease's worst-case wait goes
+from 30 + 10 = **40 min** to 30 + 30 = **60 min**. The other costs are a CI-runner
+orphan surviving up to 30 min instead of 10, and a dropped boot dispatch recovered
+in up to 30 min instead of 60 s — the latter on a backstop path only, since the
+hot path is the `workflow_job` webhook and the admission wake. Each trade is argued
+at its own constant. The nightly table-walking sweeps did **not** lose their
+separation: it moved from the minute axis to the HOUR axis (03:30 → 04:00 → 04:30 →
+05:00), which is why the cluster has two slots rather than one, and is strictly
+more clearance than the old 04:10/04:15 pair had.
+
+**⚠️ THE RE-MEASUREMENT IS OWED, AND THIS SECTION IS NOT SETTLED UNTIL IT IS
+TAKEN.** ~30% predicts a Neon line of roughly **$5.85/mo** against the $19.50/mo
+measured above. **Nobody has watched the compute at this shape.** The method is
+[MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo)'s and is what makes the reading
+trustworthy: sample the Neon control plane only — **no database connection of the
+run's own**, or the probe wakes what it measures — for **≥ 6 h**, against the
+deployed release, in a window carrying **no `motir` commands, no deploy and no
+merge**, and read `current_state` plus `active_time_seconds` against wall-clock.
+Until that is done, every figure in this block is a projection and is labelled as
+one. The prediction is also FALSIFIABLE in a specific way worth naming: if the
+delay at `motir-core`'s endpoint is nearer the gateway's ~5 min than the ~9 min
+measured on 2026-08-20, the duty cycle comes in at ~17% rather than ~30% — a
+better result from the same change, and evidence about the endpoint question this
+section explicitly leaves open.
+
 **So the `motir-core` row above stands, and its $19.50/mo is a standing bill that
 is now measured rather than inferred.**
 

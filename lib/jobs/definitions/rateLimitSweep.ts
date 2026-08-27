@@ -22,8 +22,17 @@ import { defineJob } from '../defineJob';
 // run (batch x max-batches in `rateLimitService`), so a backlog drains over
 // several days rather than locking a large slice of a hot table in one pass.
 
-/** 04:10 every day — off-peak, clear of attachmentGc (03:30) and the 09:00 health check. */
-export const RATE_LIMIT_SWEEP_CRON = '10 4 * * *';
+/** 04:00 every day — off-peak, and second in the nightly table-walk cascade
+ *  (03:30 attachment GC → 04:00 here → 04:30 automation retention → 05:00
+ *  code-graph offboard).
+ *
+ *  ⚠️ RE-TIMED :10 → :00 (MOTIR-3314). Nothing about this job's cadence or its
+ *  cost changed; the MINUTE moved onto `SCHEDULE_CLUSTER_MINUTES` so it stops
+ *  opening a wake-minute of its own. What it gave up is ten minutes of when;
+ *  what it bought is that the separation from its neighbours is now by HOUR
+ *  rather than by minute, which is strictly MORE separation than the old
+ *  04:10/04:15 pair had — those were five minutes apart. */
+export const RATE_LIMIT_SWEEP_CRON = '0 4 * * *';
 
 export const rateLimitSweep = defineJob(
   {

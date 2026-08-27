@@ -713,6 +713,11 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/plan/generate/route.ts',
     'app/api/ai/plan/sprint/route.ts',
     'app/api/ai/replan/route.ts',
+    // `revise_plan` (Story MOTIR-3595 · MOTIR-3599) — the fourth plan-edit
+    // submit, spending the same `ai:generate` bucket as the three above. Its
+    // target is a PLAN id rather than a work-item key, which changes nothing
+    // about what it costs: it dispatches a model job.
+    'app/api/ai/revise/route.ts',
   ];
 
   // Each of these submits NO model job. The reason is in the route's own header
@@ -741,6 +746,9 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/plan/sprint/approve/route.ts',
     'app/api/ai/pre-plan/route.ts',
     'app/api/ai/replan/[jobId]/stream/route.ts',
+    // The revision stream RELAYS a job already paid for at its submit door —
+    // the same reason every other `[jobId]/stream` in this list is here.
+    'app/api/ai/revise/[jobId]/stream/route.ts',
   ];
 
   async function aiRoutes(): Promise<string[]> {

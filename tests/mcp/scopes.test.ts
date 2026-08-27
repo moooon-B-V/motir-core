@@ -77,10 +77,17 @@ describe('the permission split the six scopes could not express', () => {
     expect(TOOL_PERMISSIONS.add_comment).toBe('comment:add');
   });
 
-  it('puts archive on the same key as delete, because the shipped gates do', () => {
-    for (const name of ['archive_work_item', 'unarchive_work_item', 'delete_work_item'] as const) {
-      expect(TOOL_PERMISSIONS[name]).toBe('work_item:delete');
+  // ⚠️ INVERTED BY MOTIR-3629. This read "puts archive on the same key as
+  // delete, because the shipped gates do", and it was a true statement about the
+  // gates that pinned a defect in them: `permission-inventory.md` R42 grouped the
+  // two on "cascades over a subtree", which archive does not do. The map still
+  // names exactly what each tool's service asserts (ADR §3) — the services moved
+  // (`token-permissions.md` §10).
+  it('separates the REVERSIBLE removal from the irreversible one', () => {
+    for (const name of ['archive_work_item', 'unarchive_work_item'] as const) {
+      expect(TOOL_PERMISSIONS[name]).toBe('work_item:archive');
     }
+    expect(TOOL_PERMISSIONS.delete_work_item).toBe('work_item:delete');
   });
 
   it('keeps the two integration writes on the work-item edit gate they actually reach', () => {

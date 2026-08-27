@@ -66,6 +66,13 @@ const CANONICAL_JOB_KINDS = [
   // already in motir-ai's canonical set. Adding it HERE closes the drift that
   // card's envelope documented while this consumer was unbuilt.
   'ask_project',
+  // `revise_plan` (Story MOTIR-3595 — MOTIR-3599 submit / MOTIR-3600 handler).
+  // The FIRST kind whose target is a PLAN rather than a work item. Added to
+  // motir-ai's copy in the same parent run; the two pull requests may merge in
+  // either order, because an unrecognised kind on either side is refused by the
+  // envelope rather than mis-dispatched — this guard exists to make the window
+  // between them visible rather than silent.
+  'revise_plan',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

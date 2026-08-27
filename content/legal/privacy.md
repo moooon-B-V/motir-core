@@ -1,8 +1,8 @@
 ---
 title: Privacy Policy
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Privacy Policy
@@ -13,8 +13,6 @@ status: draft
 source, and anyone can run it on their own infrastructure. If you are using such an
 install, **your data never reaches moooon B.V.**, the operator of that install is the
 controller, and this document does not describe what they do. Ask them.
-
-> **⚠️ DRAFT — not yet reviewed by counsel and not yet published.** Pending MOTIR-3621.
 
 ---
 
@@ -94,13 +92,22 @@ with each company's purpose, what it reaches, and where it is — is published a
 [/legal/subprocessors](/legal/subprocessors)**, and this section does not duplicate it:
 one list, kept accurate, is worth more than two that can drift apart.
 
-In outline: the application runs on **Fly.io**, the database is **Neon**, uploaded files
-are in **Tigris**, background jobs pass through **Inngest**, and email is sent via
-**Resend**. Analytics is **Plausible**, which is cookieless and EU-hosted. **Google**
-appears only if you choose Google sign-in. AI features go through **motir-ai**, our own
-gateway, to an upstream model provider. Integrations you connect yourself — GitHub,
-GitLab, Jira, Linear, Plane — receive or supply data only for the workspace that
-authorised them.
+We describe them here by **category**, and the linked list names the companies. That
+split is deliberate: Article 13(1)(e) asks for _"the recipients or categories of
+recipients"_, and a category stays true when a vendor is added, replaced or removed —
+which a second copy of the vendor list does not. This page has one enumeration and it is
+not on this page.
+
+| What it does                                                                | Reaches                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hosting, database and object storage**                                    | Everything you store in Motir                                                                                                                                                                                 |
+| **Background job processing**                                               | Job payloads, which reference your work items and may carry their content                                                                                                                                     |
+| **Transactional email**                                                     | The recipient address, name and message body                                                                                                                                                                  |
+| **Error monitoring**                                                        | Error and performance events, including the IP address and browser user agent of the session that hit the error                                                                                               |
+| **Product analytics**                                                       | Page-level usage events. Cookieless, and no individual is identified                                                                                                                                          |
+| **AI features — only when you use one**                                     | The text you send, and the work-item content you ask the planner to reason over. It goes through our own gateway to an upstream model provider, and to a search provider where a lookup is part of the answer |
+| **Sign-in with Google — only if you choose it**                             | Your Google account identifier, name and email                                                                                                                                                                |
+| **Integrations you connect yourself** — GitHub, GitLab, Jira, Linear, Plane | Only what that connection covers, and only for the workspace that authorised it                                                                                                                               |
 
 **We do not sell your data. We do not use your content to train machine-learning models,
 ours or anyone else's.**

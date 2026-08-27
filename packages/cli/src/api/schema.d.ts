@@ -214,7 +214,7 @@ export interface paths {
          * Archive a work item
          * @description A recoverable soft-remove. Does NOT cascade to children — the irreversible subtree delete is not exposed by this API at all (ADR §3).
          *
-         *     Requires the `work_item:delete` permission.
+         *     Requires the `work_item:archive` permission.
          */
         post: operations["archiveWorkItem"];
         delete?: never;
@@ -236,7 +236,7 @@ export interface paths {
          * Restore an archived work item
          * @description The inverse of archiving. Idempotent on an item that is not archived.
          *
-         *     Requires the `work_item:delete` permission.
+         *     Requires the `work_item:archive` permission.
          */
         post: operations["restoreWorkItem"];
         delete?: never;

@@ -26,6 +26,7 @@ import {
   approvePlanRequest,
   declinePlanRequest,
   fetchPlanReview,
+  revisePlanRequest,
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
@@ -116,6 +117,12 @@ export function PlanDetail({
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  // ── THE REVISION (Subtask MOTIR-3601) ────────────────────────────────────
+  // The DRAFT and the local in-flight window live here rather than in the rail:
+  // the island is what submits, and the rail is presentational, exactly as the
+  // approve/decline handlers already are.
+  const [reviseDraft, setReviseDraft] = useState('');
+  const [revising, setRevising] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
 
@@ -130,6 +137,36 @@ export function PlanDetail({
     },
     [planId],
   );
+
+  // ⚠️ POLL WHILE A REVISION HOLDS THE PLAN, and re-run the SERVER read when it
+  // lands (Part XII §F). The revision arrives from a JOB while the reviewer sits
+  // on the page, so nothing on the client knows when it finished; the same
+  // `getPlan` re-fetch the generating poll uses answers it, because the lease it
+  // must observe is derived from the plan's own trail.
+  //
+  // `router.refresh()` on the LANDING is what updates the surfaces only the
+  // server renders. It cannot reach this island's own `useState` seed — which is
+  // exactly why `refetch` runs too, and why the two are not interchangeable.
+  useEffect(() => {
+    if (review.revision === null) return;
+    const ctrl = new AbortController();
+    const handle = setInterval(() => {
+      void refetch(ctrl.signal)
+        .then((fresh) => {
+          if (fresh.revision === null) {
+            setRevising(false);
+            router.refresh();
+          }
+        })
+        .catch(() => {
+          /* best-effort poll — a transient failure just retries next tick */
+        });
+    }, POLL_MS);
+    return () => {
+      ctrl.abort();
+      clearInterval(handle);
+    };
+  }, [review.revision, refetch, router]);
 
   // Live polling WHILE generating — the proposed items stream in per level as the
   // engine emits them. Stops the instant the plan leaves `generating`.
@@ -146,6 +183,40 @@ export function PlanDetail({
       clearInterval(handle);
     };
   }, [review.status, refetch]);
+
+  const onRevise = useCallback(
+    async (prompt: string) => {
+      const text = prompt.trim();
+      if (!text) return;
+      setRevising(true);
+      setErrorCode(null);
+      try {
+        await revisePlanRequest(planId, text);
+        // Clear the field only on a DISPATCHED revision: a submit that was
+        // refused leaves the instruction where the reviewer can send it again.
+        setReviseDraft('');
+        // Read the lease back immediately rather than waiting a poll tick, so
+        // the gate holds in the same breath the reviewer pressed Send.
+        await refetch();
+      } catch (err) {
+        setRevising(false);
+        setErrorCode(
+          err instanceof PlanRequestError ? (err.code ?? 'REVISE_FAILED') : 'REVISE_FAILED',
+        );
+        // ⚠️ PUT THE INSTRUCTION BACK. The shipped composer clears its own draft
+        // the moment it submits (`onSubmit(text); onDraftChange('')`), which is
+        // right for a chat turn that always lands and wrong for a submit that can
+        // be REFUSED — a reviewer whose revision was refused by a lease would
+        // otherwise have to retype what they just asked for, at the exact moment
+        // they are being told to try again.
+        setReviseDraft(text);
+        // A refusal is usually a fact about the plan (a lease, a frozen status),
+        // so show the reader what the plan actually is beside the message.
+        await refetch().catch(() => undefined);
+      }
+    },
+    [planId, refetch],
+  );
 
   const runAction = useCallback(
     async (
@@ -382,6 +453,10 @@ export function PlanDetail({
             busy={busy}
             errorCode={errorCode}
             codeOutcome={codeOutcome}
+            onRevise={onRevise}
+            reviseDraft={reviseDraft}
+            onReviseDraftChange={setReviseDraft}
+            revising={revising}
           />
         }
       />

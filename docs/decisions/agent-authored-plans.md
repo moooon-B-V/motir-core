@@ -12,6 +12,9 @@
   MOTIR-3095 (projected validity on the MCP), MOTIR-3096 (projected reads),
   MOTIR-3097 (the story's vitest gate). AMENDMENT 6 amends AMENDMENT 2 — its
   empty-only exclusion — and is written by MOTIR-3189.
+  AMENDMENT 10 amends AMENDMENT 8's boundary — it is written by MOTIR-3596 and consumed by
+  MOTIR-3598 (the job-token door), MOTIR-3599 (the `revise_plan` submit), MOTIR-3600 (the motir-ai
+  handler), MOTIR-3601 (the review-surface affordance) and MOTIR-3602 (the story's vitest gate).
 
 > Every reading below was taken off `origin/main` at `d82b5fa7` on 2026-08-18. Where a
 > reading and a card's prose disagreed, the code won and the difference is recorded — in
@@ -1592,6 +1595,202 @@ caller, and false the moment this method exists. A reviewer must be able to see 
 model changed the tree under them, which is the whole reason this story is `blocked_by` the trail
 story rather than merely sequenced after it.
 
+## AMENDMENT 10 — a `planned` plan can be REVISED, and an approve that races one is REFUSED (MOTIR-3596, 2026-08-26)
+
+AMENDMENT 8 gave an author two doors onto a plan it had already closed — `correctProposal` and
+`withdrawProposal`, legal on `generating` and `planned` alike. It answered the question it was asked
+(_may an author fix its own structural mistake?_) and left two it did not have to: whether a
+correction may ADD, and what happens when the one irreversible act on the whole planning surface
+runs at the same time as one.
+
+**Both become load-bearing the moment a REVIEWER can ask for a revision**, which is the story this
+amendment is written for. A correction door reachable only by the agent that wrote the plan races
+nothing in practice — the author is finished before the plan reaches the queue. A door on the review
+surface is pressed by definition while a person is looking at Approve.
+
+> Every reading below was taken off `origin/main` at `3d1ffb25` on 2026-08-26.
+
+### D1 — a revision MAY append, and the condition is VISIBILITY rather than status
+
+`addProposals` asserts `plan.status === 'generating'`, twice — once before the transaction and once
+under the plan row lock. So the one revision verb the substrate does not permit is the archetypal
+request: _"split that story in two"_ needs a card that does not exist yet.
+
+**Decision: an append to a `planned` plan is permitted exactly when the append DECLARES itself part
+of a revision, and therefore records itself on the plan's content trail as one.** Concretely,
+`addProposals` gains a fourth, optional argument; absent, the gate is `generating` and the method is
+byte-identical to today; present, the gate is `assertPlanProposalsEditable` — the same two-status
+gate `correctProposal` already uses.
+
+**Why that is a rule and not an exception.** The `generating` assertion was never about generation.
+It is the guarantee that _a plan under review does not change under the reviewer without their
+knowing_ — which is why it was correct for as long as every write door was invisible. Restated as
+the property it actually protects, the assertion reads: **the proposal set of a `planned` plan may
+not change INVISIBLY.** AMENDMENT 8's correction door already satisfies that property (it writes an
+`edited` row on MOTIR-3532's trail, with the harness and model that made it), and an append that
+writes its `appended` row satisfies it identically. The relaxation is bound to the trail write, not
+to the caller's identity, so there is nothing to check about who is asking.
+
+Rejected:
+
+- **No append at all — corrections and withdraws only.** It is a coherent boundary and it halves the
+  feature. Most requests to change a plan are requests to add something; a revision that can only
+  edit and delete leaves the reviewer's commonest ask on the decline path, which is the cost this
+  story exists to remove.
+- **Relax the assertion for everyone.** It would take the guarantee away from the four shipped
+  producers to serve one new caller, and none of them asked. A gate that is relaxed by default is
+  not a gate.
+- **A second method — `appendRevisionProposals`.** It would duplicate the append's ref check, its
+  `claimedTargets` map and its topological insert. MOTIR-3539's whole point is that the ref check
+  lives where the write is; two writes means two places for it to drift.
+
+**What D1 does NOT relax.** `markPlanned` still requires `generating`: a revision does not re-open a
+plan, and `final: true` has no second meaning here — the plan is already `planned` and stays
+`planned` throughout (the story's own boundary). And the resolvable set for a `planItem:` ref is
+unchanged — the plan's already-persisted `add`s — which now simply includes everything the original
+authoring pass wrote. A revision can therefore reference the tree it is revising, for free.
+
+### ⚠️ D2 — an APPROVE that races a REVISION is REFUSED, by a LEASE on the plan's own trail
+
+**The failure, named exactly.** `approvePlan` takes the plan row lock, re-reads the proposal set
+FRESH under it, and materializes the whole set in one transaction. Every individual write is
+therefore atomic and the COMPOSITION is not: a revision is a SEQUENCE of transactions — one proposal
+per call, the discipline every shipped sink call site already follows — and an approve that takes the
+lock between the third and the fourth of them materializes a tree that is neither the plan the
+reviewer read nor the plan they asked for. **Approve is one-shot.** There is no un-approve, so the
+cost of discovering this empirically is a half-revised tree in somebody's backlog with nothing to
+say which cards were meant.
+
+**And it is not a hazard this story introduces — it is one this story is the first to have to
+answer.** `approvePlan` resolves its repository pins from a PRE-transaction snapshot, and justifies
+that in its own comment: _"on a `planned` plan the proposal set is frozen"_, followed by an
+enumeration of the doors that cannot move it. AMENDMENT 8's `correctProposal` reaches `targetRepo`
+on a `planned` plan, so the enumeration is already incomplete on `origin/main` and a correction
+landing between the snapshot and the transaction is dropped — the card materializes with the old pin
+or with none. The comment's own warning named `mergeProposedFields`; the widening arrived through a
+different door and walked past it. **A list of the doors that cannot move a set is a list that goes
+stale silently.** D4 replaces it with a property.
+
+**Decision: a LEASE on the plan. `approvePlan` and `declinePlan` REFUSE while a revision holds it,
+naming the holder and the expiry. Neither act ever cancels the other; the loser retries.**
+
+- **HELD** means: the plan's trail carries a `revision_started` with no `revision_ended` after it,
+  and the most recent trail row at or after that `revision_started` is inside the lease window.
+- **ACQUIRE** is a trail write under `planRepository.lockById` — the lock every plan mutation already
+  takes. The plan row always exists, so the lock is real; this is the reasoning
+  `planTargetLockService` records for locking the work ITEM rather than the lease row, and it applies
+  here for the same reason.
+- **The refusal is checked INSIDE the approve transaction, under that same lock.** Checked before
+  the transaction it would be a TOCTOU read; checked under the lock it is an exclusion.
+- **RELEASE** is `revision_ended`, written by the job that started it, in the transaction of its last
+  write. A job that dies writes nothing and the lease ages out. **The expiry is the ONLY recovery
+  path**, exactly as `lib/planChange/targetLock.ts` says of its own, and for the same reason: a plan
+  whose edit job died sits at `planned` and no product event ever fires to say the session is over.
+- **The window REFRESHES on every write the revision makes**, because it is measured from the latest
+  trail row and every correction writes one. A long revision never ages out while it is doing
+  something; the clock only starts running down once it stops, which is the condition the expiry
+  exists to detect.
+
+Rejected:
+
+- **OPTIMISTIC — the revision carries a revision count, approve refuses if it moved.** Wrong at both
+  ends, which is what disqualifies it rather than its cost. It cannot see a HALF-written revision,
+  because the count moves on the revision's first write and the danger is the fourth; and it REFUSES
+  an approve after a COMPLETED revision, which is precisely the act this story exists to allow — a
+  reviewer approving the plan they asked for. A guard that fires on the safe case and not on the
+  unsafe one is not a weaker version of the lease.
+- **APPROVE WINS — cancel the in-flight revision.** It does not close the window. The revision runs
+  in another service over HTTP; a cancel is cooperative and its in-flight call still lands after the
+  approve has begun. And it silently discards work the user asked for at the moment they were most
+  engaged, which is the exact complaint the story opens with.
+- **A LEASE IN ITS OWN TABLE**, the shape `planTargetLockService` uses. Right when the lock's subject
+  is a work item that may have no lease row yet; here it is a migration for a fact
+  `PlanRevision.changeKind` already has somewhere to put — the column is plain text precisely so a
+  new verb is a code change rather than a migration, which `planRevisionsService` records in as many
+  words. Rejected as redundant, not as wrong. It also keeps the lease and its VISIBILITY the same
+  record: the reviewer learns a revision is running by reading the timeline they were already
+  reading.
+
+### D3 — the two outcomes, and what a refused reviewer sees
+
+An approve concurrent with a revision resolves to **exactly one** of these, and to nothing else:
+
+1. **The approve is REFUSED.** `PlanRevisionInFlightError` — thrown before `materialize`, so the plan
+   stays `planned`, no proposal is touched and **no work item is created**. The reviewer is told a
+   revision is running, by which harness and model, and when the lease expires. They wait, read what
+   changed, and approve the plan they asked for.
+2. **The approve SUCCEEDS**, on a plan whose lease is not held — the revision had already ended, or
+   had not yet started — and materializes a wholly consistent proposal set.
+
+**Never a partially materialized tree.** That is the property the story's own criterion asserts and
+the one its vitest gate drives against a real Postgres with a genuinely concurrent approve; a
+sequential approximation never takes the lock in the window and proves nothing.
+
+**And a revision is never cancelled by a decision.** A `declined` plan is a closed decision, so
+`declinePlan` refuses under the lease for the same reason `approvePlan` does — a revision that
+finishes writing into a declined plan leaves proposals on a plan nobody will ever read.
+
+### D4 — the pre-transaction pin snapshot is justified by the LOCK, not by an enumeration
+
+`approvePlan`'s repository-pin resolution runs before the transaction because it makes a domain read
+the write lock has no business holding. That stays. What changes is its warrant:
+
+- **The enumeration is deleted.** _"`addProposals` / `deepenProposal` require `generating`,
+  `updateProposal`'s editable set does not include `targetRepo`, …"_ was a list of doors, and
+  AMENDMENT 8 opened one the list does not name.
+- **Under the lease, a JOB-driven revision cannot interleave at all** — it is excluded by the lock,
+  which is a property of the mechanism rather than a fact about the current door set.
+- **The residual case is the MCP correction door, which takes no lease and needs none**: it is ONE
+  transaction, so approve either sees it whole or does not see it. What it can still do is invalidate
+  the snapshot. **So approve compares, inside the transaction, the pins its fresh proposal set
+  AUTHORS against the keys its pre-transaction snapshot resolved, and REFUSES when they disagree** —
+  a Map-versus-set comparison over rows it has already read, no domain read, no second resolution.
+  A refusal that costs a reviewer one retry is the right trade against materializing a card pinned to
+  the wrong repository, or to none.
+
+**This is a DEFECT that already ships**, not a consequence of this story, and it is filed as its own
+bug rather than absorbed here. What this amendment owes it is the rule the fix implements.
+
+### The boundary — what AMENDMENT 10 does NOT decide
+
+> **⚠️ THE FIFTH `PlanStatus` IS IN FLIGHT ELSEWHERE, AND THIS AMENDMENT DECIDES NOTHING ABOUT IT.**
+> MOTIR-3574's AMENDMENT 9 adds `stale` and was unmerged when this was written (pull request #2309,
+> read on its branch — which is also why this one is numbered 10). Everything above is stated against
+> the FOUR-member enum as it stands on `origin/main`: the editable set is `generating` + `planned`,
+> written as a DENY of the terminal states, so a fifth member is refused by default and its
+> disposition is AMENDMENT 9's to make, not this one's. What this amendment owes that work is one
+> sentence: **a lease is orthogonal to status** — it excludes a concurrent DECISION, and which
+> statuses a decision is legal from is the status amendment's question.
+
+- **No `PlanStatus` member.** The plan is `planned` before a revision, during it and after it. A
+  revision is a thing that happens TO a plan under review, not a state the plan enters, and the
+  timeline is what tells the reviewer it moved.
+- **No migration.** Two new `changeKind` verbs (`revision_started`, `revision_ended`) on a plain-text
+  column, and one constant. `PlanRevisionChangeKind` reaches nine members; nothing switches
+  exhaustively on it, and the timeline read filters by a derived-kind set rather than mapping a
+  closed union.
+- **No change to what approve MATERIALIZES**, to `resolveRef`, or to `PlanItem`'s shape. The revision
+  changes the proposals; materialize reads whatever set it finds under the lock, exactly as today.
+- **No widening of the MCP surface.** `update_plan_proposal` / `withdraw_plan_proposal` keep their
+  contract and their permission. The revision's door is the job-token seam, which is a different
+  caller with a different credential.
+- **`CLI_TOKEN_GRANT` is not widened.** A sandboxed run still cannot author, correct or revise a
+  plan.
+- **Not the three existing plan-edit jobs.** `augment` / `expand_item` / `replan` keep resolving
+  work-item keys against the committed tree. `revise_plan` is a fourth kind beside them.
+
+### The constant and the type this card ships
+
+`PLAN_REVISION_LEASE_MS` — **ten minutes**, in a pure module beside the target lock's own constants
+so the ADR, the service and the tests name one value. Sized against what it races: ONE motir-ai job
+over a tree that is already written, which is minutes rather than the tens of minutes
+`PLAN_TARGET_LOCK_LEASE_MS` is sized for (that one races a human-paced conversation). Short enough
+that _"wait for it to clear"_ is a real answer to a stuck lease rather than a joke, and refreshed on
+every write so length is never what ends a revision that is still working.
+
+The two verbs join `PlanRevisionChangeKind`. **No service logic ships in this card** — the cards this
+one blocks implement the acquire, the refusal and the release.
+
 ---
 
 ## Consequences
@@ -1619,6 +1818,18 @@ story rather than merely sequenced after it.
   the work item is the source of truth, `declined` because it is a closed decision. D3(c)'s
   mutable-ref-graph objection is answered by MOTIR-3539's append-time check, which the correction
   re-runs. No grant change, no UI, no change to what approve materializes.
+- **A `planned` plan can be REVISED, and an approve that races one is REFUSED** (AMENDMENT 10,
+  MOTIR-3596): an append is legal on a `planned` plan exactly when it declares itself part of a
+  revision and records itself on the trail as one — the `generating` assertion was never about
+  generation, it was the guarantee that a plan does not change INVISIBLY under its reviewer, and a
+  trail row is what makes a change loud. The approve/revise race is closed by a LEASE held on the
+  plan's own content trail (`revision_started` … `revision_ended`, checked inside the approve
+  transaction under the plan row lock), so an approve resolves to exactly one of _refused, tree
+  untouched_ or _succeeded on a consistent set_ — never a partially materialized tree. Neither act
+  cancels the other; the loser retries. No `PlanStatus` member, no migration, no MCP change: two
+  plain-text `changeKind` verbs and one constant. It also replaces `approvePlan`'s pin-snapshot
+  warrant — an enumeration of doors AMENDMENT 8 had already outgrown — with the lock, and names the
+  residual MCP-door case as a shipped defect filed on its own.
 - **Neither tool is billable.** Authoring a plan never draws on the owner's generation
   allowance.
 - **The materialize pin is lifted, and the safety property is now held by the WRITE SEAMS

@@ -7,6 +7,7 @@ import {
   InvalidProposalError,
   NoPlanForJobError,
   PlanItemUnknownTargetRepoRoleError,
+  PlanNotEditableError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
@@ -44,6 +45,52 @@ import type { ProposalInput } from '@/lib/dto/plans';
 //   PlanItemUnknownTargetRepoRoleError → 422 (a `targetRepoRole` outside the
 //                                          shared role vocabulary — MOTIR-1912)
 //   ProjectAccessDeniedError      → 404 browse / 403 edit
+// GET /api/internal/ai/plan-proposals?jobId=… (Story MOTIR-3595 · Subtask
+// MOTIR-3598) — READ what the job's plan currently proposes.
+//
+// ⚠️ THE ONE READ IN THIS FAMILY THAT ANSWERS ABOUT PROPOSALS. Every other
+// internal read (`plan-tree`, `get-item`, `get-subtree`, `search-work-items`)
+// answers about the COMMITTED tree, and a proposal is not in it — which is
+// exactly why a revising pass could not see the plan it was revising. Without
+// this, motir-ai's in-flight registry starts empty and the handler proposes a
+// plan from scratch: re-planning, not revising.
+//
+// Service-to-service only, resolved by `sourceJobId` like every seam beside it,
+// so a job token cannot read another job's plan. Read-only.
+export async function GET(req: Request): Promise<Response> {
+  let auth;
+  try {
+    auth = await authenticateAndLimitJobRequest(req);
+  } catch (err) {
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
+    throw err;
+  }
+
+  const jobId = new URL(req.url).searchParams.get('jobId');
+  if (!jobId) {
+    return NextResponse.json(
+      { code: 'PROPOSALS_INVALID', error: '`jobId` is required.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    return NextResponse.json(await aiGenerationService.readPlanProposals(jobId, auth.ctx));
+  } catch (err) {
+    if (err instanceof NoPlanForJobError || err instanceof PlanNotFoundError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof ProjectAccessDeniedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message },
+        { status: err.kind === 'browse' ? 404 : 403 },
+      );
+    }
+    throw err;
+  }
+}
+
 export async function POST(req: Request): Promise<Response> {
   let auth;
   try {
@@ -84,20 +131,51 @@ export async function POST(req: Request): Promise<Response> {
   // (absent/null/non-string) is "no name" — the consumer keeps the placeholder.
   const rawProductName = (body as { productName?: unknown })?.productName;
   const productName = typeof rawProductName === 'string' ? rawProductName : null;
+  // ── THE REVISION PASS (Story MOTIR-3595 · Subtask MOTIR-3598) ──────────────
+  // `revision: true` says WHICH PASS this append belongs to, and it changes two
+  // things and nothing else: the status gate becomes the editable pair rather
+  // than `generating` alone (`agent-authored-plans.md` AMENDMENT 10 D1), and
+  // `final` RELEASES the revision lease instead of marking the plan `planned` —
+  // because a revision does not open a plan and does not close one. Absent, this
+  // route is byte-identical to what it has always been, gate and all.
+  //
+  // The actor triple rides beside it so the `revision_ended` row names the
+  // harness and model that performed the act, which is what lets a reviewer see
+  // WHO changed the tree under them.
+  const revision = (body as { revision?: unknown })?.revision === true;
+  const rawActor = (body as { actor?: unknown })?.actor;
+  const actor =
+    typeof rawActor === 'object' && rawActor !== null
+      ? {
+          source: null,
+          harness:
+            typeof (rawActor as { harness?: unknown }).harness === 'string'
+              ? ((rawActor as { harness: string }).harness ?? null)
+              : null,
+          model:
+            typeof (rawActor as { model?: unknown }).model === 'string'
+              ? ((rawActor as { model: string }).model ?? null)
+              : null,
+        }
+      : undefined;
 
   try {
     const result = await aiGenerationService.appendProposals(
       jobId,
       rawProposals as ProposalInput[],
       auth.ctx,
-      { final, productName },
+      { final, productName, revision, ...(actor ? { actor } : {}) },
     );
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof NoPlanForJobError || err instanceof PlanNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
-    if (err instanceof PlanNotGeneratingError || err instanceof PlanNotInExpectedStatusError) {
+    if (
+      err instanceof PlanNotGeneratingError ||
+      err instanceof PlanNotInExpectedStatusError ||
+      err instanceof PlanNotEditableError
+    ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
     // A second `modify`/`remove` for a work item this plan already targets

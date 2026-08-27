@@ -388,7 +388,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Archive a work item',
     description:
       'A recoverable soft-remove. Does NOT cascade to children — the irreversible subtree delete is not exposed by this API at all (ADR §3).',
-    permission: 'work_item:delete',
+    permission: 'work_item:archive',
     parameters: [keyParameter],
     response: {
       status: 200,
@@ -403,7 +403,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'restoreWorkItem',
     summary: 'Restore an archived work item',
     description: 'The inverse of archiving. Idempotent on an item that is not archived.',
-    permission: 'work_item:delete',
+    permission: 'work_item:archive',
     parameters: [keyParameter],
     response: {
       status: 200,

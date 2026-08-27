@@ -142,7 +142,11 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
  *
  * ⚠️ `import:run` and `work_item:delete` are DELIBERATELY absent — both mirrors
  * put a bulk import and a delete cascade at admin, so a project member loses
- * them when their wiring cards land.
+ * them when their wiring cards land. `work_item:archive` (MOTIR-3629) is NOT the
+ * same answer re-litigated: it is the OTHER operation `work_item:delete` was
+ * carrying — reversible, one row — and a member holds it. The rows below list it
+ * beside this helper rather than in it, since it belongs to neither MOTIR-2291's
+ * six nor this helper's argument.
  */
 function MEMBER_FACING_AT_MEMBER(): PermissionKey[] {
   return [
@@ -181,6 +185,12 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // is MOTIR-2291's six, and folding a later key in would make membership
       // of it stop meaning anything.
       'ai:decide_plan',
+      // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
+      // Listed here for the same reason, and note what it is NOT beside: the
+      // helper's own header says `work_item:delete` is deliberately absent
+      // because a delete cascade belongs at admin. That stays true — this is the
+      // other operation the one key was carrying.
+      'work_item:archive',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -203,6 +213,12 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // is MOTIR-2291's six, and folding a later key in would make membership
       // of it stop meaning anything.
       'ai:decide_plan',
+      // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
+      // Listed here for the same reason, and note what it is NOT beside: the
+      // helper's own header says `work_item:delete` is deliberately absent
+      // because a delete cascade belongs at admin. That stays true — this is the
+      // other operation the one key was carrying.
+      'work_item:archive',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -223,6 +239,12 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // is MOTIR-2291's six, and folding a later key in would make membership
       // of it stop meaning anything.
       'ai:decide_plan',
+      // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
+      // Listed here for the same reason, and note what it is NOT beside: the
+      // helper's own header says `work_item:delete` is deliberately absent
+      // because a delete cascade belongs at admin. That stays true — this is the
+      // other operation the one key was carrying.
+      'work_item:archive',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -246,6 +268,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       ...MEMBER_FACING_AT_MEMBER(),
       // MOTIR-3188 — see the note on the `open` row above.
       'ai:decide_plan',
+      // MOTIR-3629 — see the note on the `open` row above.
+      'work_item:archive',
       ...PUBLIC_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
@@ -357,8 +381,14 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // MOTIR-2349 widened two of them ON PURPOSE — a viewer gains `report:view`,
     // a member gains six — and MOTIR-3188 widened `member` by one more, also on
     // purpose: `ai:decide_plan`, split out of `ai:view_plan`, lands exactly where
-    // the key it was cut from already sat. Those are the only additions this
-    // assertion admits.
+    // the key it was cut from already sat. MOTIR-3629 widens `member` once more,
+    // and this one does NOT land where its parent sat: `work_item:archive` was
+    // cut from `work_item:delete`, which `member` does not hold, so this is the
+    // one addition here that changes what a member can DO. It is argued in
+    // `docs/decisions/token-permissions.md` §10 — a member could already edit
+    // every field and could not hide a row, which is a stronger restriction than
+    // "may not destroy a subtree" and one nobody chose. Those are the only
+    // additions this assertion admits.
     expect([...(catalog.roles.find((r) => r.key === 'viewer')?.permissions ?? [])].sort()).toEqual(
       ['project:browse', 'report:view'].sort(),
     );
@@ -366,6 +396,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
       [
         'project:browse',
         'work_item:edit',
+        'work_item:archive',
         'comment:add',
         'attachment:create',
         ...MEMBER_FACING_AT_MEMBER(),

@@ -855,11 +855,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // The gate's verdict per tool: only delete_work_item is withheld. (We
       // assert the GATE decision — that downstream execution is correct is the
       // tool/UI-parity pillar's job — so this stays robust to mutation ordering.)
-      // ⚠️ ARCHIVE JOINS DELETE. Under the six scopes archive was on by default
-      // (recoverable) and delete off; both assert `work_item:delete` in shipped
-      // code, so one key cannot hold them apart and "all but the irreversible
-      // one" withholds all three (ADR §8).
-      const defaultOff = new Set(['delete_work_item', 'archive_work_item', 'unarchive_work_item']);
+      // ⚠️ ARCHIVE LEAVES DELETE AGAIN (MOTIR-3629). This read "ARCHIVE JOINS
+      // DELETE: under the six scopes archive was on by default (recoverable) and
+      // delete off; both assert `work_item:delete` in shipped code, so one key
+      // cannot hold them apart and 'all but the irreversible one' withholds all
+      // three (ADR §8)." The key that holds them apart is `work_item:archive`
+      // (ADR §10), so the default grant is back to withholding exactly the
+      // irreversible tool — by the same derivation, with no arm added.
+      const defaultOff = new Set(['delete_work_item']);
       for (const name of MCP_TOOL_NAMES) {
         const res = await client.callTool({ name, arguments: argFor[name] });
         if (defaultOff.has(name)) {
@@ -871,7 +874,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       await client.close();
     });
 
-    it('a DEFAULT token DOES the non-delete work — a representative write/sprint/integration succeed, archive does not', async () => {
+    it('a DEFAULT token DOES the non-delete work — write/sprint/integration AND archive succeed', async () => {
       const fx = await makeWorkItemFixture();
       const key = await makeTask(fx, 'Default does work');
       const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
@@ -886,11 +889,17 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         arguments: { key, status: 'in_progress' },
       });
       expect(moved.isError).toBeFalsy();
-      // ARCHIVE is NO LONGER default-on: it asserts `work_item:delete`, the one
-      // key the default grant withholds (ADR §8). Asserting the refusal here
-      // keeps this test honest about what a default token can do.
+      // ⚠️ ARCHIVE IS DEFAULT-ON AGAIN (MOTIR-3629). This asserted the REFUSAL —
+      // "archive is no longer default-on: it asserts `work_item:delete`, the one
+      // key the default grant withholds (ADR §8)" — and that refusal was the
+      // accepted cost of one key serving two operations. Archive asserts
+      // `work_item:archive` now, so a default-minted token archives and still
+      // cannot delete. The restore below returns the item to the state the
+      // committed-effects assertions at the end of this test expect.
       const archived = await client.callTool({ name: 'archive_work_item', arguments: { key } });
-      expect(archived.isError).toBe(true);
+      expect(archived.isError).toBeFalsy();
+      const restored = await client.callTool({ name: 'unarchive_work_item', arguments: { key } });
+      expect(restored.isError).toBeFalsy();
       // sprint:manage — create a sprint.
       const sprintRes = await client.callTool({
         name: 'create_sprint',

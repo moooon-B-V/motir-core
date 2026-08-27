@@ -1,12 +1,13 @@
 import { cache } from 'react';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
+import { passkey } from '@better-auth/passkey';
 import { nextCookies } from 'better-auth/next-js';
 import { deviceAuthorization } from 'better-auth/plugins';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
-import { resolveBaseUrl } from '@/lib/baseUrl';
+import { resolveBaseUrl, resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendAuthEmail } from '@/lib/auth/authMail';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
@@ -27,6 +28,7 @@ import {
   TWO_FACTOR_TOTP_PERIOD_SECONDS,
   TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
 } from './twoFactorConfig';
+import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from './passkeyConfig';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -440,6 +442,60 @@ export const auth = betterAuth({
       // again on this device". Also the plugin's default; pinned so the copy and
       // the cookie cannot drift apart.
       trustDeviceMaxAge: TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
+    }),
+    // passkey (Story MOTIR-1214 · Subtask MOTIR-3610) is Better-Auth's WebAuthn
+    // plugin, shipped as its own package rather than a `better-auth/plugins/*`
+    // subpath. It mounts /passkey/generate-register-options,
+    // /passkey/verify-registration, /passkey/generate-authenticate-options,
+    // /passkey/verify-authentication, /passkey/list-user-passkeys,
+    // /passkey/update-passkey and /passkey/delete-passkey under the existing
+    // /api/auth/* handler, and persists credentials in the `passkey` model.
+    //
+    // ⚠️ A PASSKEY IS A PRIMARY CREDENTIAL, NOT A STEP INSIDE THE 2FA CHALLENGE.
+    // `verifyPasskeyAuthentication` mints a session directly (which is why its
+    // error set carries UNABLE_TO_CREATE_SESSION), so a passkey sign-in never
+    // answers `{ twoFactorRedirect: true }` and never reaches the `twoFactor`
+    // plugin's challenge above. That is why the affordance MOTIR-3613 adds sits
+    // on the sign-in card's EMAIL step beside the Google button, and not in the
+    // challenge screen — and it is correct product shape as well as correct
+    // wiring: a UV-required credential is already two factors, so demanding a
+    // second one after it would be theatre.
+    //
+    // NO CHALLENGE TABLE. The plugin keeps the WebAuthn challenge in a cookie
+    // (`advanced.webAuthnChallengeCookie`, default `better-auth-passkey`) with a
+    // hard-coded 300-second life, so there is nothing here to store, expire or
+    // sweep. `PASSKEY_CHALLENGE_TTL_*` in ./passkeyConfig mirrors that number for
+    // the panes, which have to explain a lapsed challenge in the user's units.
+    //
+    // NO DIRECT @simplewebauthn DEPENDENCY. `@simplewebauthn/server` and
+    // `/browser` are the plugin's OWN dependencies; adding an entry for either to
+    // package.json would pin a second copy against the one the plugin resolves.
+    passkey({
+      // Derived from lib/baseUrl.ts — the ONE module that owns the app's origin
+      // — so `app.motir.co` in production and `localhost` in dev and tests fall
+      // out of the same value Better-Auth's own `baseURL` above is built from. A
+      // literal here, or a second env var, would be a second answer to a question
+      // that module exists to answer once. `rpID` is the bare HOSTNAME (no
+      // scheme, no port) because that is what the WebAuthn relying-party id is.
+      rpID: new URL(resolveBaseUrl()).hostname,
+      // What the operating system's own passkey prompt shows above the
+      // fingerprint reader.
+      rpName: PASSKEY_RP_NAME,
+      // The full origin, trailing slash trimmed — the plugin's own docstring says
+      // "do NOT include any trailing /", and `resolveBaseUrlTrimmed()` is exactly
+      // that guarantee rather than a hope about how the secret was typed.
+      origin: resolveBaseUrlTrimmed(),
+      // ⚠️ `userVerification` MUST BE SET — this is the load-bearing line of the
+      // whole registration. SimpleWebAuthn defaults to `'preferred'`, which
+      // accepts an assertion the authenticator produced with no PIN, no
+      // fingerprint and no face: possession only, ONE factor. `'required'` makes
+      // the credential multi-factor on its own (NIST SP 800-63B), which is what
+      // lets Story 8.13 (MOTIR-1215) count `passkey` towards a require-2FA
+      // policy. The values live in ./passkeyConfig so the pane can state them.
+      authenticatorSelection: {
+        userVerification: PASSKEY_USER_VERIFICATION,
+        residentKey: PASSKEY_RESIDENT_KEY,
+      },
     }),
   ],
 });

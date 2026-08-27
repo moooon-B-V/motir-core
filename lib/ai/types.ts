@@ -61,6 +61,22 @@ export const JOB_KINDS = [
   // dispatches the SHIPPED plan-change submit for the same turn. Mirror of the
   // closed motir-ai enum (the open-core boundary).
   'ask_project',
+  // `revise_plan` (Story MOTIR-3595 — MOTIR-3599 submit / MOTIR-3600 handler) —
+  // the FIRST job whose target is a PLAN rather than a tree. Every sibling
+  // resolves a work-item KEY (`targetKeys` / `rootItemKey`) and a proposal on an
+  // unapproved plan has no key, so none of them could ever name one: the AI that
+  // wrote a plan could not change it, on the one surface where the reviewer is
+  // most engaged. Its context carries `planId` + the reviewer's instruction; the
+  // handler reads the plan's OWN proposals, seeds its registry from them, and
+  // emits corrections / withdraws / appends against them by `planItemId` — which
+  // is what makes it a REVISION rather than a re-plan.
+  //
+  // It writes NO work item, opens NO plan and closes none: the plan is `planned`
+  // before, during and after (`docs/decisions/agent-authored-plans.md`
+  // AMENDMENT 10). Mirror of the closed motir-ai enum in `src/envelope.ts` — each
+  // side declares its own types against the shared contract (the open-core
+  // boundary).
+  'revise_plan',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -125,6 +141,17 @@ export interface BugAnalysisContext {
 export interface JobContextBag {
   prompt?: string | null;
   rootItemKey?: string | null;
+  // The PLAN a `revise_plan` job is revising (Story MOTIR-3595 · MOTIR-3599
+  // producer ↔ MOTIR-3600 consumer). Beside `rootItemKey`, never instead of it:
+  // every other plan-edit job names a work ITEM and this one names a PLAN, which
+  // is the whole reason it is a fourth kind rather than a fourth caller of the
+  // three. A proposal on an unapproved plan has no `MOTIR-<n>`, so `rootItemKey`
+  // could never have addressed one.
+  //
+  // The handler reads that plan's OWN proposals through core and seeds its
+  // registry from them BEFORE the model's first turn — the difference between
+  // revising and re-planning.
+  planId?: string | null;
   // The CONTEXTUAL-PLANNING anchor SET (7.12.3 · MOTIR-909 producer ↔ 7.12.2 /
   // MOTIR-908 consumer) — the work-item IDENTIFIERS a chat turn is anchored at.
   // PRESENT ⇒ the submit is a contextual turn: motir-ai classifies the intent from

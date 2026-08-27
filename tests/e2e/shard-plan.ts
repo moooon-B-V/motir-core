@@ -151,29 +151,35 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * later — brand new, and the guard caught it with no entry on its first CI run.
  * Same LOCAL provenance, measured on 2026-08-25 against a production build.
  *
- * ⚠️ BUT ITS NUMBER IS A CEILING, NOT AN AVERAGE, AND THAT IS THE POINT. Its
- * catch-up scenario waits for a REAL `* * * * *` fire to pass on the scheduler's
- * own watch — the only way to observe the `skip` disposition, which suppresses a
- * fire from before start-up and is therefore indistinguishable from `latest`
- * through the lane's long-running shared worker. That wait is uniformly 0–60 s
- * depending on where in the minute the spec starts, so this spec's cost is not a
- * point value — and two back-to-back runs against the same server MEASURED that
- * directly: the catch-up scenario took **10.1 s** in one and **51.0 s** in the
- * next, a 41 s swing from nothing but the wall clock. Totals were 23.3 s and
- * 61.8 s of test bodies; the sum of per-test maxima is 64.2 s, and the true
- * worst case is that plus the ~9 s the longer run still had left to wait.
+ * ⚠️ ITS 85.0 WAS A CEILING BOUGHT BY ONE SCENARIO, AND MOTIR-3314 REMOVED THAT
+ * SCENARIO — so the entry is now **25.0**. The reasoning is kept rather than
+ * replaced, because the ceiling argument is still right and only its input
+ * changed.
  *
- * **85.0 is recorded, the worst case rather than the observation**, because this
- * file's own argument cuts that way: under-estimating is the direction that
- * unbalances a bin-packer, and a spec whose true cost can exceed its entry by a
- * minute is exactly the input that produced the `bulk-4` degradation this plan
- * exists to fix. A leg packed against the ceiling is merely early; one packed
- * against the average is occasionally over.
+ * What made the old number a ceiling: the catch-up scenario waited for a REAL
+ * `* * * * *` fire to pass on the scheduler's own watch — the only way to
+ * observe the `skip` disposition through this lane — and that wait was uniformly
+ * 0–60 s depending on where in the minute the spec started. Two back-to-back
+ * runs against the same server MEASURED the swing directly: that scenario took
+ * **10.1 s** in one and **51.0 s** in the next, 41 s from nothing but the wall
+ * clock. Totals were 23.3 s and 61.8 s of test bodies.
  *
- * ⚠️ IT ALSO RUNS A THIRD PROCESS. This spec's lane starts the Postgres job
- * engine's worker (`tests/e2e/_helpers/job-worker-process.ts`), whose startup is
- * paid ONCE in `globalSetup` and therefore does NOT appear in this per-spec cost.
- * Re-measure from the first green run that includes it.
+ * Clustering the crons left no per-minute job for it to wait on, so the scenario
+ * was removed and its coverage moved to `tests/jobs/engine-scheduler.test.ts`
+ * (see the removal note in the spec). **Subtracting it from the two measured
+ * runs leaves 13.2 s and 10.8 s of test bodies** — the wall-clock swing was
+ * entirely that scenario's, which is why the remainder is nearly a point value.
+ * 25.0 keeps this file's own bias: round UP, because under-estimating is the
+ * direction that unbalances a bin-packer, and a leg packed against the ceiling
+ * is merely early.
+ *
+ * **This is DERIVED from the two recorded runs, not re-measured.** Re-measure
+ * from the first green CI run that includes the change.
+ *
+ * ⚠️ IT NO LONGER RUNS A THIRD PROCESS. This spec used to start the Postgres job
+ * engine's worker (`tests/e2e/_helpers/job-worker-process.ts`) for the scenario
+ * above; nothing in it does now. That startup was paid ONCE in `globalSetup` and
+ * never appeared in this per-spec cost either way.
  *
  * ⚠️ `shell-viewport-floor.spec.ts` (MOTIR-3208, re-measured for MOTIR-3286)
  * carries a FOURTH provenance: it had never run in this lane, so it was measured
@@ -241,6 +247,27 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * So a long declared wait is not a reason to record a large cost here — it is a
  * reason to check whether the spec is asserting the wait or merely serving it.
  * Re-measure both from the first green CI run that includes them.
+ *
+ * ⚠️ `passkeys.spec.ts` (MOTIR-3615) carries the LOCAL provenance too, and the
+ * guard would have caught it with no entry before it reached CI — the spec
+ * passed locally and would have been assigned to no leg and never run.
+ *
+ * Measured on 2026-08-26 against a production build, on its own port (3177) and
+ * its own database, THREE times: **3.8 s**, **4.2 s** and **4.7 s** of TEST time
+ * (2.2/2.4/2.9 s for the journey, then ~0.9 s apiece for the two refusals). The
+ * HIGHEST is recorded, following the entries above — under-estimating is the
+ * direction that unbalances a bin-packer.
+ *
+ * ⚠️ AND THE WALL CLOCK IS NOT THE COST. Each of those runs took ~2 minutes end
+ * to end, essentially all of it the `webServer`'s own `next build` — a fixed
+ * cost every lane pays once, not this spec's. Reading the wall clock would have
+ * recorded ~115 s here, roughly nine times the heaviest real entry, and the
+ * bin-packer would have built a leg around a number that does not exist. Take
+ * the per-test durations the `list` reporter prints, never the summary line.
+ *
+ * It is cheap for what it does because the ceremonies are virtual: a CDP
+ * authenticator answers instantly, where the 2FA spec pays for six real sign-in
+ * journeys.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
@@ -305,7 +332,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-fanout-engine.spec.ts': 8.3,
   'jobs-flow.spec.ts': 89.7,
   'jobs-postgres-engine.spec.ts': 22.0,
-  'jobs-scheduled-engine.spec.ts': 85.0,
+  'jobs-scheduled-engine.spec.ts': 25.0,
   'labels-components-watch.spec.ts': 27.6,
   'link-search-flow.spec.ts': 12.6,
   'mcp-docs.spec.ts': 2.2,
@@ -378,6 +405,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'token-permissions.spec.ts': 2.2,
   'top-bar-budget.spec.ts': 6.8,
   'triage-flow.spec.ts': 11.6,
+  'passkeys.spec.ts': 4.7,
   'two-factor.spec.ts': 13.3,
   'work-item-delete.spec.ts': 5.7,
   'work-item-mentions.spec.ts': 5.6,

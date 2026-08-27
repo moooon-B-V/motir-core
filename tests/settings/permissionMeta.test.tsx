@@ -140,8 +140,28 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     // order-preservation assertions in this file are what caught it.
     const [left, right] = permissionColumnsForTokens();
     const rows = (gs: PermissionDomainGroup[]) => gs.reduce((n, g) => n + g.permissions.length, 0);
-    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(1);
     expect(rows(left) + rows(right)).toBe(GRANTABLE_PERMISSIONS.length);
+    // ⚠️ THE INVARIANT IS RESTATED, NOT RELAXED (MOTIR-3629). It read
+    // `Math.abs(rows(left) - rows(right)) <= 1`, and that stopped being a
+    // property of the layout the moment a group grew past what the boundaries
+    // could absorb: with groups of 4·3·1·1·3 the best boundary is 7/5, and no
+    // arrangement of THESE groups does better. A `<= 1` that happens to hold is
+    // a coincidence being asserted as a rule.
+    //
+    // The rule the splitter actually implements — and the one worth pinning,
+    // because it stays true at every cardinality — is: no group is broken across
+    // the columns (asserted below), and of the boundaries that satisfies, the
+    // split takes the one with the SMALLEST imbalance. The numbers are the
+    // tripwire; this is the rule.
+    const sizes = permissionsByDomainForTokens().map((g) => g.permissions.length);
+    const total = sizes.reduce((n, x) => n + x, 0);
+    const bestImbalance = Math.min(
+      ...sizes.map((_, i) => {
+        const head = sizes.slice(0, i + 1).reduce((n, x) => n + x, 0);
+        return Math.abs(head - (total - head));
+      }),
+    );
+    expect(Math.abs(rows(left) - rows(right))).toBe(bestImbalance);
     //
     // ⚠️ 2026-08-25 (MOTIR-3480): NINE to TEN, and the next "look again".
     // `search_lessons` is the first MCP tool to assert `lesson:view`, so that key
@@ -165,13 +185,27 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     // actually hold this. The two literals are a TRIPWIRE on the numbers, not a
     // second statement of the rule.
     //
-    // ⚠️ THE ASSET IS NOW THREE ROWS BEHIND, not two. The note above asked for a
-    // re-measure "when the set next grows", and it has now grown three times
-    // since MOTIR-2578 measured it. That is a DESIGN card, not this one —
-    // recorded here and surfaced on the pull request rather than absorbed
-    // silently, because the numbers below going green is exactly what would
-    // otherwise hide it.
-    expect(rows(left)).toBe(6);
+    // ⚠️ 2026-08-26 (MOTIR-3629): ELEVEN to TWELVE, and the next "look again" —
+    // the one that broke the old invariant rather than merely moving its numbers.
+    // This is NOT a key that became grantable by a new tool asserting it; it is a
+    // key SPLIT OUT of one that was already grantable. `work_item:archive` takes
+    // the reversible half of `work_item:delete` (the two archive tools and the
+    // two `/api/v1` archive operations move onto it), so the **work_item** group
+    // grows from two to three and both halves stay grantable.
+    //
+    // The groups are now 4·3·1·1·3 = 12, and the boundaries a non-breaking split
+    // can use give 4/8, 7/5 or 8/4. The best is **7/5**, so the columns are
+    // 7 and 5 and the `<= 1` balance the asset was drawn to is no longer
+    // REACHABLE — see the restated invariant above. That is a real, visible
+    // consequence for the modal and it is pinned here rather than absorbed.
+    //
+    // ⚠️ THE ASSET IS NOW FIVE ROWS BEHIND AND VISIBLY LOPSIDED. The note above
+    // asked for a re-measure "when the set next grows", and it has now grown four
+    // times since MOTIR-2578 measured it — this time changing the SHAPE, not only
+    // the height. That is a DESIGN card, not this one; it is recorded here and
+    // surfaced on the pull request, because the numbers below going green is
+    // exactly what would otherwise hide it.
+    expect(rows(left)).toBe(7);
     expect(rows(right)).toBe(5);
   });
 

@@ -108,7 +108,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
       },
       {
         kind: 'prose',
-        text: 'A token GRANTS permissions — the same `resource:action` names the Roles & permissions screen shows: `project:browse` for every read in this guide, `work_item:edit` to create or change work items, `comment:add` to comment, `sprint:manage` for sprint lifecycle and membership, `work_item:delete` to archive or delete, and `ai:plan` for a planning submit that spends your AI credits. Grant the narrowest set that does the job — a grant narrows your own role and never widens it, so a token cannot do something you could not.',
+        text: 'A token GRANTS permissions — the same `resource:action` names the Roles & permissions screen shows: `project:browse` for every read in this guide, `work_item:edit` to create or change work items, `comment:add` to comment, `sprint:manage` for sprint lifecycle and membership, `work_item:archive` to archive or restore, `work_item:delete` for the irreversible subtree delete, and `ai:plan` for a planning submit that spends your AI credits. Grant the narrowest set that does the job — a grant narrows your own role and never widens it, so a token cannot do something you could not.',
       },
       {
         kind: 'callout',
