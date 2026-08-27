@@ -1,0 +1,251 @@
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+
+// MOTIR-3652 — the matcher was a COMMENT asking future authors to remember, and
+// thirteen of sixteen segments were never added.
+//
+// `proxy.ts`'s own words: "as new authed routes are added in later Subtasks
+// they get appended to this list". They were not. Measured at
+// `motir-core` `origin/main` `d4072154c`, `app/(authed)/` holds SIXTEEN
+// top-level segments and `config.matcher` listed THREE — `/dashboard`,
+// `/settings`, `/invite`.
+//
+// That was never a security hole: the real gate is `app/(authed)/layout.tsx`'s
+// `getSession()` redirect, which has always run for all sixteen. What the
+// missing entries cost was the cheap optimistic bounce — and, once MOTIR-3652
+// landed the `x-current-path` header, the header itself, which is absent for
+// any path the matcher does not cover. A gate that lives in a layout cannot
+// learn which page was asked for, so without the forward every person stopped
+// for 2FA enrolment would afterwards be dumped somewhere they were not going
+// (MOTIR-3648).
+//
+// So the comment is replaced by a MEASUREMENT: enumerate the segments from the
+// filesystem and fail when one has no entry. A rule with no guard is a comment,
+// and this file exists because that was demonstrated rather than argued.
+//
+// ── The one deliberate exclusion ────────────────────────────────────────────
+// `/admin` must have NO entry, and that is asserted here as intent rather than
+// left to read as another oversight. `docs/decisions/platform-staff-auth.md` §2
+// (MOTIR-2896): the proxy's redirect is VISIBLY DIFFERENT from an unknown
+// path's 404, so bouncing an anonymous request to `/sign-in?next=/admin` proves
+// the route exists — exactly what the admin area's 404-not-403 posture prevents.
+
+const ROOT = process.cwd();
+const APP = join(ROOT, 'app');
+
+/**
+ * The route groups whose pages are SIGNED-IN surfaces. `(auth)` and `(public)`
+ * are anonymous by design; `(admin)` is excluded on purpose and is asserted
+ * separately below.
+ */
+const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)', '(planning)'] as const;
+
+/** True when this directory, or anything under it, serves a page. */
+function servesAPage(dir: string): boolean {
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) {
+      if (servesAPage(p)) return true;
+    } else if (entry === 'page.tsx' || entry === 'page.ts') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The top-level URL segments a route group serves. A route group (`(x)`) adds
+ * no URL segment, and a `_private` folder serves nothing, so both are skipped —
+ * the first is recursed into, the second ignored.
+ */
+function topLevelSegments(group: string): string[] {
+  const base = join(APP, group);
+  const out: string[] = [];
+  for (const entry of readdirSync(base)) {
+    const p = join(base, entry);
+    if (!statSync(p).isDirectory()) continue;
+    if (entry.startsWith('_')) continue;
+    if (entry.startsWith('(') && entry.endsWith(')')) {
+      // A nested route group contributes ITS children's segments, not its own.
+      out.push(...topLevelSegments(join(group, entry)));
+      continue;
+    }
+    if (servesAPage(p)) out.push(entry);
+  }
+  return [...new Set(out)].sort();
+}
+
+/** `'/items/:path*'` → `'items'`. */
+function segmentOf(matcherEntry: string): string {
+  return matcherEntry.replace(/^\//, '').split('/')[0] ?? '';
+}
+
+describe('proxy config.matcher', () => {
+  it('covers every top-level segment of every signed-in route group', async () => {
+    const { config } = await import('@/proxy');
+    const covered = new Set(config.matcher.map(segmentOf));
+
+    const missing = SIGNED_IN_GROUPS.flatMap((group) =>
+      topLevelSegments(group)
+        .filter((segment) => !covered.has(segment))
+        .map((segment) => `app/${group}/${segment} → add '/${segment}/:path*' to config.matcher`),
+    ).sort();
+
+    expect(missing).toEqual([]);
+  });
+
+  it('lists nothing the signed-in route groups do not serve', async () => {
+    // The other direction of the same rule. An entry for a path no group serves
+    // is either a segment that has since been deleted or a typo, and both make
+    // the list above look more complete than it is.
+    const { config } = await import('@/proxy');
+    const served = new Set(SIGNED_IN_GROUPS.flatMap(topLevelSegments));
+    const stray = config.matcher.map(segmentOf).filter((segment) => !served.has(segment));
+
+    expect(stray).toEqual([]);
+  });
+
+  it('excludes /admin — the 404-not-403 posture, `platform-staff-auth.md` §2', async () => {
+    // NOT an oversight, and asserted so that the next reader of the list does
+    // not "fix" it. A redirect to `/sign-in?next=/admin` proves the route
+    // exists; `app/(admin)/layout.tsx` must answer the anonymous request with
+    // the ordinary 404 instead.
+    const { config } = await import('@/proxy');
+    expect(config.matcher.map(segmentOf)).not.toContain('admin');
+    // …and the reason must stay in the file, or the exclusion decays into a gap
+    // indistinguishable from the one this suite exists to catch.
+    const source = await import('node:fs').then(({ readFileSync }) =>
+      readFileSync(join(ROOT, 'proxy.ts'), 'utf8'),
+    );
+    expect(source).toContain('platform-staff-auth.md');
+    expect(source).toContain('404-not-403');
+  });
+
+  it('the sixteen (authed) segments are the ones measured, not a copied list', () => {
+    // A regression guard on the ENUMERATION, not on the matcher: if this number
+    // moves, a segment was added or removed and the first test above is the one
+    // that should have failed. Kept because the card's own measurement is the
+    // thing a future reader will want to re-derive.
+    expect(topLevelSegments('(authed)')).toEqual([
+      'backlog',
+      'boards',
+      'code-health',
+      'dashboard',
+      'direction',
+      'filters',
+      'home',
+      'invite',
+      'items',
+      'plans',
+      'ready',
+      'reports',
+      'roadmap',
+      'settings',
+      'sprints',
+      'triage',
+    ]);
+  });
+});
+
+// ── The proxy's own behaviour ───────────────────────────────────────────────
+// `getSessionCookie` is the only thing standing between the two branches, so it
+// is the only thing stubbed. Everything else is the real `NextRequest` /
+// `NextResponse` pair.
+
+const cookiePresent = vi.hoisted(() => ({ value: false }));
+vi.mock('better-auth/cookies', () => ({
+  getSessionCookie: () => (cookiePresent.value ? 'a-session-cookie' : null),
+}));
+
+/**
+ * The headers Next will hand the downstream render.
+ *
+ * `NextResponse.next({ request: { headers } })` does not mutate anything a test
+ * can observe directly — it encodes the override onto the RESPONSE as
+ * `x-middleware-override-headers` (the names) plus one
+ * `x-middleware-request-<name>` per value, which the framework unpacks before
+ * rendering. Reading it back through that encoding is what makes this an
+ * assertion about the forwarded REQUEST rather than about a response header.
+ */
+function forwardedHeaders(res: Response): Headers {
+  const out = new Headers();
+  const names = res.headers.get('x-middleware-override-headers');
+  if (!names) return out;
+  for (const name of names.split(',').map((n) => n.trim())) {
+    const value = res.headers.get(`x-middleware-request-${name}`);
+    if (value !== null) out.set(name, value);
+  }
+  return out;
+}
+
+describe('proxy()', () => {
+  it('bounces an unauthenticated request to a NEWLY covered segment', async () => {
+    // `/items` is the case: it was not in the matcher before MOTIR-3652, so
+    // this request used to reach the framework and be turned away deeper in.
+    cookiePresent.value = false;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+
+    const res = proxy(new NextRequest('https://app.motir.co/items'));
+
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get('location')!);
+    expect(location.pathname).toBe('/sign-in');
+    expect(location.searchParams.get('next')).toBe('/items');
+  });
+
+  it('forwards x-current-path with the path AND the search string', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
+
+    const res = proxy(new NextRequest('https://app.motir.co/items?status=open&assignee=me'));
+
+    expect(forwardedHeaders(res).get(CURRENT_PATH_HEADER)).toBe('/items?status=open&assignee=me');
+  });
+
+  it('OVERWRITES a client-supplied x-current-path rather than honouring it', async () => {
+    // The header is forgeable, and a consumer that redirects to it would be an
+    // open-redirect if the proxy passed a client value through. It does not.
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
+
+    const res = proxy(
+      new NextRequest('https://app.motir.co/roadmap', {
+        headers: { [CURRENT_PATH_HEADER]: 'https://evil.example/phish' },
+      }),
+    );
+
+    expect(forwardedHeaders(res).get(CURRENT_PATH_HEADER)).toBe('/roadmap');
+  });
+
+  it('sets the header on the forwarded REQUEST only, never on the response', async () => {
+    // A response header would join the cache key and change revalidation
+    // behaviour for every covered route. The override encoding above is a
+    // request-side channel; the response must not carry the header itself.
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
+
+    const res = proxy(new NextRequest('https://app.motir.co/dashboard'));
+
+    expect(res.headers.get(CURRENT_PATH_HEADER)).toBeNull();
+    expect(res.headers.get('cache-control')).toBeNull();
+  });
+
+  it('preserves the incoming headers it is not overriding', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+
+    const res = proxy(
+      new NextRequest('https://app.motir.co/home', {
+        headers: { 'accept-language': 'zh-CN' },
+      }),
+    );
+
+    expect(forwardedHeaders(res).get('accept-language')).toBe('zh-CN');
+  });
+});
