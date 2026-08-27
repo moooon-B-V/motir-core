@@ -212,10 +212,27 @@
  *   grant is NOT widened. See
  *   `docs/decisions/link-materializes-the-checkouts.md` §2 and §7.
  *
+ * - `1.21.0` — MOTIR-3230 widens the `subsumption` dispatch advisory to OPEN pull
+ *   requests. The check read the mirror for MERGED rows only, and a pull request
+ *   is merged for the rest of time and open for about an hour — so it was
+ *   available for the whole period in which the answer no longer changes anything
+ *   and blind for the one window in which it would. The two hits carry OPPOSITE
+ *   remedies (*read the diff and close the card* vs *somebody is editing this
+ *   file, go and coordinate*), so they are separable on the wire: a new required
+ *   `state` field, `'merged' | 'open'`, and a new `likely-in-flight` severity.
+ *
+ *   Additive, and the shape is chosen to keep it that way. `mergedAt` is NOT
+ *   relaxed to nullable — that would RETYPE a declared field, which §8 forbids —
+ *   so the variant is SPLIT: the merged payload is byte-identical to the shipped
+ *   one plus `state: 'merged'` (§8's allowed new field on an existing shape), and
+ *   the open payload, carrying `state: 'open'` and `mergedAt: null`, is a shape no
+ *   consumer has ever received and so can break none. `severity` was already
+ *   open-ended and every client is required to tolerate unknown members of it.
+ *
  *   ⚠️ THIS NUMBER IS A SERIALIZED RESOURCE. Every in-flight additive pull
  *   request claims the next MINOR, so read `V1_CONTRACT_VERSION` on
  *   `origin/main` before merging and RENUMBER if a sibling has taken it since —
  *   the entry names the OPERATION rather than a position precisely so that stays
  *   one line (the 1.14.0 → 1.17.0 note above is the same process working).
  */
-export const V1_CONTRACT_VERSION = '1.20.0';
+export const V1_CONTRACT_VERSION = '1.21.0';

@@ -45,6 +45,13 @@ function userRow(extra: Record<string, unknown> = {}) {
     // double as the proof that it does not reach the wire. `null` would have
     // satisfied the type and proved nothing.
     platformRole: 'superadmin' as PlatformRole | null,
+    // SUSPENSION STATE (MOTIR-1167), set on purpose for the same reason as
+    // `platformRole` above: `suspendedReason` is written by a platform operator
+    // FOR other operators — "suspected payment fraud" is not a sentence to hand
+    // an API client — so a fixture carrying a real one makes the assertions
+    // below double as the proof that it does not reach the wire.
+    suspendedAt: new Date('2026-02-02T00:00:00.000Z') as Date | null,
+    suspendedReason: 'suspected payment fraud' as string | null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     ...extra,
@@ -96,6 +103,10 @@ describe('presentMe', () => {
     expect(Object.keys(payload.user).sort()).toEqual(['email', 'id', 'name']);
     expect(JSON.stringify(payload)).not.toContain('000-00-0000');
     expect(JSON.stringify(payload)).not.toContain('internalRiskScore');
+    // The two REAL columns the fixture carries at their most sensitive values
+    // (MOTIR-1167 / MOTIR-2896) — a real added column, not a synthetic one.
+    expect(JSON.stringify(payload)).not.toContain('suspected payment fraud');
+    expect(JSON.stringify(payload)).not.toContain('superadmin');
   });
 
   // The mapper's OUTPUT is what the published document promises, so it must

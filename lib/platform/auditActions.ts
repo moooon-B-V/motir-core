@@ -35,6 +35,42 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * user reads without a member per tier.
    */
   'estate.read': { reason: 'never' },
+  /**
+   * The day-1 system-health glance was read (MOTIR-1167, design Panel 8).
+   *
+   * Its own member rather than `estate.read`, because it reads no tenant row at
+   * all — the six signals come from the job ledger, the dead-letter set and the
+   * deployment's own configuration. A trail that called this "a read of the
+   * estate" would answer "which tenants did this operator look at?" with a page
+   * view that looked at none.
+   */
+  'health.read': { reason: 'never' },
+  /**
+   * One account was opened in the operator drill-down (MOTIR-1167, design
+   * Panel 9) — the read the design's `--el-info` banner tells the operator, in
+   * the surface itself, is being recorded.
+   */
+  'user.read': { reason: 'never' },
+  /**
+   * A password-reset link was sent to an account's own address at an operator's
+   * request. The FIRST `required`-reason member (ADR §7): a write, and one whose
+   * whole justification lives outside Motir — somebody wrote in and said they
+   * could not get back into their account.
+   *
+   * It does not set a password and it does not read one: it triggers the shipped
+   * `requestPasswordReset` flow, so the link goes to the account holder and the
+   * operator never holds a credential.
+   */
+  'user.password_reset_sent': { reason: 'required' },
+  /** An account was suspended — every session revoked, no new one issuable. */
+  'user.suspend': { reason: 'required' },
+  /**
+   * A suspension was lifted. `required` like its twin, and for a reason worth
+   * saying out loud: the trail has to answer "why is this account open again?"
+   * as readably as it answers why it was closed, and an unsuspend with no
+   * reason is the half of the pair somebody would be tempted to leave blank.
+   */
+  'user.unsuspend': { reason: 'required' },
 } as const satisfies Record<string, { reason: PlatformAuditReasonPolicy }>;
 
 /**
@@ -44,13 +80,13 @@ export const PLATFORM_AUDIT_ACTIONS = {
  * nullable and the rule lives here rather than in the schema. `required` for
  * every WRITE, per the ADR's §7 table.
  *
- * ⚠️ NO ACTION IN THIS BUILD IS `required`, and that is a statement about
- * ALLOCATION rather than about the rule. MOTIR-2896 ships no write against a
- * tenant; the first `required` members are MOTIR-1167's `send password reset`
- * and `suspend / unsuspend an account`, each of which the design puts behind a
- * confirm dialog with a mandatory reason. The enforcement is shipped now, with
- * the mechanism it guards, so that card adds a row to this table and inherits
- * the check rather than re-deriving it.
+ * ⚠️ THE FIRST `required` MEMBERS ARRIVED WITH MOTIR-1167, exactly as MOTIR-2896
+ * predicted here: `user.password_reset_sent`, `user.suspend` and
+ * `user.unsuspend`, each of which the design puts behind a confirm dialog with a
+ * mandatory reason. The enforcement shipped with the mechanism it guards, one
+ * card early, so this card added three rows to the table above and inherited the
+ * check rather than re-deriving it — which is the whole argument for building a
+ * rule's unexercised arm alongside the rule.
  */
 export type PlatformAuditReasonPolicy = 'never' | 'required';
 
@@ -80,11 +116,9 @@ export function reasonPolicyFor(action: PlatformAuditAction): PlatformAuditReaso
  * The rule itself, as a pure function of (policy, reason).
  *
  * Split out from the action lookup deliberately, so BOTH arms are reachable by
- * a test. No action in this build carries `required` — that arrives with
- * MOTIR-1167's two writes — so a rule expressed only over
- * `PLATFORM_AUDIT_ACTIONS` would ship with its load-bearing half unexecuted,
- * and the first card to add a `required` action would be the first to find out
- * whether it works.
+ * a test. It was written when no action carried `required`, so that the rule's
+ * load-bearing half was not shipped unexecuted; MOTIR-1167's three writes are
+ * now the first callers to take that arm through the action lookup.
  *
  * A blank / whitespace-only reason does NOT satisfy `required`: the design puts
  * the reason behind a confirm dialog precisely so somebody has to type one, and

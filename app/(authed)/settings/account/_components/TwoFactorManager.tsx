@@ -4,8 +4,10 @@ import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
+  ArrowUp,
   Check,
   Copy,
+  Fingerprint,
   Download,
   Info,
   KeyRound,
@@ -23,17 +25,33 @@ import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { twoFactor } from '@/lib/auth/client';
 import type { TrustedDeviceDTO, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
+import { hasPasskeyMethod, withPasskeyMethod } from './twoFactorMethods';
 
 // The account Security pane's interactive half (Story 8.11 · Subtask
 // MOTIR-1220), built to `design/settings/two-factor.mock.html`.
 //
-// ── WHY THIS IS A CLIENT ISLAND THAT OWNS ITS OWN STATUS ──────────────────
-// CLAUDE.md's page-state-after-mutation contract, case 3. This component seeds
-// `useState(initialStatus)` from a server read, so `router.refresh()` CANNOT
-// reach it — the initializer runs once at mount and re-rendered server props are
-// ignored. Every mutation here therefore updates the island explicitly, from the
-// RESPONSE it just received, and nothing calls `router.refresh()`. There is no
-// second surface on this page for a refresh to be needed by.
+// ── WHY THIS IS A CLIENT ISLAND, AND WHY IT NO LONGER OWNS ITS STATUS ─────
+// CLAUDE.md's page-state-after-mutation contract, case 3. The status is seeded
+// from a server read at mount, so `router.refresh()` CANNOT reach it — the
+// initializer runs once and re-rendered server props are ignored. Every mutation
+// therefore updates the island explicitly, from the RESPONSE it just received,
+// and nothing calls `router.refresh()`.
+//
+// ⚠️ WHAT CHANGED (MOTIR-3612): this comment used to end *"There is no second
+// surface on this page for a refresh to be needed by."* There is now. MOTIR-3611
+// makes `'passkey'` a member of `TwoFactorStatusDTO.methods`, so the passkey
+// COUNT decides two things rendered below — the read-only `Passkey` row in the
+// methods card, and the hero's callout — while the thing that CHANGES that count
+// is `PasskeyManager`, a sibling island. So `status` is now CONTROLLED: the owner
+// is `AccountSecurityPanes`, which passes it down with `onStatusChange` and
+// re-derives the method set when the passkey list moves. Two components each
+// holding their own copy of that fact is the defect the lift prevents.
+//
+// ⚠️ AND THE LOCAL REBUILDS BELOW MUST NOT DROP `'passkey'`. `disable` and
+// `confirmEnrolment` both write a whole new status object, and both predate
+// passkeys — left alone they would erase a registered passkey from the method
+// set until the next reload. Both now go through `withPasskeyMethod`, which is
+// why that helper is a module rather than an inline spread.
 //
 // ── THE STEP-UP, AND WHY IT IS A GATE RATHER THAN A FIELD ─────────────────
 // Three actions are password-gated by Better-Auth — enable, generate-backup-codes
@@ -53,7 +71,12 @@ type Method = TwoFactorStatusDTO['methods'][number];
 type Gated = 'enable' | 'regenerate' | 'disable';
 
 interface Props {
-  initialStatus: TwoFactorStatusDTO;
+  /** CONTROLLED — the owner is `AccountSecurityPanes`; see the header. */
+  status: TwoFactorStatusDTO;
+  /** Every write this island used to make against its own `useState`. */
+  onStatusChange: (
+    next: TwoFactorStatusDTO | ((current: TwoFactorStatusDTO) => TwoFactorStatusDTO),
+  ) => void;
   email: string;
   hasPassword: boolean;
   backupCodeCount: number;
@@ -70,10 +93,21 @@ interface Props {
   trustDeviceDays: number;
   /** The browsers this reader told Motir to stop asking (MOTIR-1221). */
   initialTrustedDevices: TrustedDeviceDTO[];
+  /**
+   * The passkeys card, rendered BETWEEN the two-factor state card and the
+   * methods list — where `design/settings/passkeys.mock.html` puts it.
+   *
+   * A slot rather than a JSX sibling because both of those cards are rendered
+   * HERE, and splitting this component in half to fit one card between its two
+   * halves is a bigger change to a shipped surface than the story needs. It is
+   * optional so a test can render this island alone.
+   */
+  passkeySection?: React.ReactNode;
 }
 
 export function TwoFactorManager({
-  initialStatus,
+  status,
+  onStatusChange: setStatus,
   email,
   hasPassword,
   backupCodeCount,
@@ -81,10 +115,14 @@ export function TwoFactorManager({
   totpPeriodSeconds,
   trustDeviceDays,
   initialTrustedDevices,
+  passkeySection,
 }: Props) {
   const t = useTranslations('settings.account.twoFactor');
+  // The hero's callout and the methods card's passkey row are passkey copy, so
+  // they live under `settings.account.passkeys.*` with the rest of it rather than
+  // being duplicated into this namespace.
+  const tPasskeys = useTranslations('settings.account.passkeys');
 
-  const [status, setStatus] = useState<TwoFactorStatusDTO>(initialStatus);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -174,13 +212,22 @@ export function TwoFactorManager({
       }
       const res = await twoFactor.disable({ password: pw ?? '' });
       if (res.error) throw new Error(res.error.message ?? 'disable failed');
-      setStatus({
-        enabled: false,
-        methods: [],
-        primaryMethod: null,
-        backupCodesRemaining: 0,
-        backupCodesTotal: backupCodeCount,
-      });
+      // ⚠️ `withPasskeyMethod`, not a bare `methods: []`. Turning two-factor OFF
+      // says nothing about a registered passkey — the plugin never touches
+      // `user.twoFactorEnabled` and a passkey counts on its own — so erasing it
+      // here would report a genuinely multi-factor account as having nothing.
+      setStatus((current) =>
+        withPasskeyMethod(
+          {
+            enabled: false,
+            methods: [],
+            primaryMethod: null,
+            backupCodesRemaining: 0,
+            backupCodesTotal: backupCodeCount,
+          },
+          hasPasskeyMethod(current),
+        ),
+      );
       setGating(null);
     } catch {
       // One message for all three gated actions, deliberately: the only failure
@@ -206,13 +253,20 @@ export function TwoFactorManager({
       setPendingCodes(null);
       setAcknowledged(false);
       setConfirmCode('');
-      setStatus({
-        enabled: true,
-        methods: ['totp', 'email'],
-        primaryMethod: 'totp',
-        backupCodesRemaining: backupCodeCount,
-        backupCodesTotal: backupCodeCount,
-      });
+      // Same reason as `disable` above: a rebuild that names the challenge
+      // methods must not drop a passkey the account already holds.
+      setStatus((current) =>
+        withPasskeyMethod(
+          {
+            enabled: true,
+            methods: ['totp', 'email'],
+            primaryMethod: 'totp',
+            backupCodesRemaining: backupCodeCount,
+            backupCodesTotal: backupCodeCount,
+          },
+          hasPasskeyMethod(current),
+        ),
+      );
     } catch {
       setError(t('errors.wrongCode'));
     } finally {
@@ -231,12 +285,15 @@ export function TwoFactorManager({
   return (
     <div className="flex flex-col gap-6">
       {status.enabled ? (
-        <MethodsCard
-          status={status}
-          email={email}
-          otpPeriodMinutes={otpPeriodMinutes}
-          onSetUp={() => request('enable')}
-        />
+        <>
+          {passkeySection}
+          <MethodsCard
+            status={status}
+            email={email}
+            otpPeriodMinutes={otpPeriodMinutes}
+            onSetUp={() => request('enable')}
+          />
+        </>
       ) : (
         <>
           <Card>
@@ -255,7 +312,20 @@ export function TwoFactorManager({
                 {t('off.cta')}
               </Button>
             </div>
+            {/* ⚠️ THE ONE CHANGE THIS STORY ASKS OF THE SHIPPED HERO
+                (`design/settings/design-notes.md` § "The amendment this design
+                asks of the SHIPPED hero"). With a passkey registered, "Two-factor
+                authentication is off" sits directly above a card explaining the
+                reader already HAS two factors, and a reader who notices is right
+                to be confused. Everything else about the hero is unchanged: same
+                title, same body, same button. */}
+            {hasPasskeyMethod(status) ? (
+              <div className="px-5 pb-5">
+                <Callout tone="info">{tPasskeys('hero.passkeyCounts')}</Callout>
+              </div>
+            ) : null}
           </Card>
+          {passkeySection}
           <MethodsCard
             status={status}
             email={email}
@@ -585,8 +655,10 @@ function MethodsCard({
   onSetUp: () => void;
 }) {
   const t = useTranslations('settings.account.twoFactor');
+  const tPasskeys = useTranslations('settings.account.passkeys');
   const on = status.enabled;
   const hasTotp = status.methods.includes('totp' as Method);
+  const hasPasskey = hasPasskeyMethod(status);
 
   return (
     <Card
@@ -654,6 +726,32 @@ function MethodsCard({
             </span>
           }
         />
+        {/* ⚠️ READ-ONLY, and present whenever the account HOLDS a passkey —
+            including with two-factor OFF, because `TwoFactorStatusDTO.methods`
+            adds `'passkey'` on the count alone (MOTIR-3611). A list that omitted
+            a method the account really has would be lying by omission; a list
+            that offered controls for it would contradict the card above, which
+            is why the control here is a sentence rather than a button. */}
+        {hasPasskey ? (
+          <MethodRow
+            icon={<Fingerprint className="h-[18px] w-[18px]" aria-hidden />}
+            active
+            name={tPasskeys('method.name')}
+            badge={
+              <Pill severity="success">
+                <Check className="h-3 w-3" aria-hidden />
+                {tPasskeys('method.badge')}
+              </Pill>
+            }
+            desc={tPasskeys('method.desc')}
+            control={
+              <span className="inline-flex items-center gap-1.5 font-sans text-xs text-(--el-text-secondary)">
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                {tPasskeys('method.managedAbove')}
+              </span>
+            }
+          />
+        ) : null}
         {on ? null : (
           <MethodRow
             icon={<KeyRound className="h-[18px] w-[18px]" aria-hidden />}

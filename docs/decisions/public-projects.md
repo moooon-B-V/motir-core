@@ -417,6 +417,11 @@ portal pattern is built around.
 - `docs/decisions/triage-model.md` — the submission-IS-a-`work_item`-in-
   `triage` model the public submit reuses, and the member-vs-anonymous
   attribution split §6 places 6.12 on (the authenticated branch).
+- `docs/decisions/public-follow-and-changelog.md` — Story 8.9: the PUSH half of
+  this surface (a derived changelog tab, an anonymous Atom feed, and the
+  `public_follow` row), which extends the §4 public PROJECTION with a
+  time-ordered stream and RETIRES the external `links.changelog` row §2's
+  sidebar renders today.
 - `lib/services/workItemsService.ts` — the write authority submit / upvote /
   comment route through; `moveWorkItem` / `updateStatus` / `createWorkItem`.
 - `lib/workflows/defaultWorkflow.ts` — the status keys/categories the public

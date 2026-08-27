@@ -11,7 +11,7 @@ import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActions
 // list. Replaces the old bare "Edit" link — "Edit details" lives inside the menu.
 //
 // On an ARCHIVED item's detail page (Story 2.9 · Subtask 2.9.11) the menu is in
-// `archived` mode: the canEdit row is Restore, and Delete… opens the archived
+// `archived` mode: the canArchive row is Restore, and Delete… opens the archived
 // confirm. A detail Restore does NOT leave — it `router.refresh()`es in place so
 // the now-active item stays on screen and the archived banner (2.9.6) clears,
 // matching the banner's own Restore page-state. Delete still navigates away.
@@ -20,6 +20,7 @@ export function WorkItemDetailActions({
   identifier,
   title,
   canEdit,
+  canArchive,
   canDelete,
   archived = false,
   activeSprintId = null,
@@ -30,8 +31,13 @@ export function WorkItemDetailActions({
   identifier: string;
   title: string;
   canEdit: boolean;
-  /** `work_item:delete` — Archive and Delete (MOTIR-2473 renamed this from
-   *  `canManage`, which carried `project:administer`). */
+  /** `work_item:archive` — Archive / Restore, and the delete dialog's "Archive
+   *  instead" escape-hatch (MOTIR-3629 split it out of `canDelete`, which had
+   *  hidden the row from every member). */
+  canArchive: boolean;
+  /** `work_item:delete` — the Delete row (MOTIR-2473 renamed this from
+   *  `canManage`, which carried `project:administer`; MOTIR-3629 took Archive
+   *  off it). */
   canDelete: boolean;
   /** The item is archived — put the menu in Restore/archived-delete mode. */
   archived?: boolean;
@@ -55,6 +61,7 @@ export function WorkItemDetailActions({
       identifier={identifier}
       title={title}
       canEdit={canEdit}
+      canArchive={canArchive}
       canDelete={canDelete}
       archived={archived}
       activeSprintId={activeSprintId}

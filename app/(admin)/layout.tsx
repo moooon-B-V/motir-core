@@ -69,6 +69,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         navOverview: t('nav.overview'),
         navUsage: t('nav.usage'),
         navTenants: t('nav.tenants'),
+        navUsers: t('nav.users'),
         navMonitoring: t('nav.monitoring'),
         navGovernance: t('nav.governance'),
         staffMarkTitle: t('topBar.staffMark'),
@@ -78,7 +79,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         exitToApp: t('shell.exitToApp'),
         soonUsage: t('nav.soonUsage'),
         soonTenants: t('nav.soonTenants'),
-        soonMonitoring: t('nav.soonMonitoring'),
         soonGovernance: t('nav.soonGovernance'),
       }}
     >

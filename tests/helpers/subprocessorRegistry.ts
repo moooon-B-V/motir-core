@@ -105,6 +105,19 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   'cursor.com': 'documentation link shown to the user',
   'modelcontextprotocol.io': 'documentation link shown to the user',
 
+  // Operator CONSOLE links, rendered by `lib/services/platformHealthService.ts`
+  // for a human to click through to a vendor's own dashboard. The server never
+  // requests them.
+  //
+  // ⚠️ Each of these vendors IS real, and excusing the console host does NOT
+  // excuse the vendor — that is the distinction the whole file exists for. Neon
+  // and Sentry are disclosed on the page; Inngest is in LEAVING_BEFORE_LAUNCH.
+  // What is excused here is the DASHBOARD hostname, which is not where any data
+  // of ours goes; their API paths are covered by their own entries.
+  'app.inngest.com': "operator link to Inngest's dashboard; never requested by the server",
+  'console.neon.tech': "operator link to Neon's console; never requested by the server",
+  'sentry.io': "operator link to Sentry's issue list; never requested by the server",
+
   // A vocabulary namespace, not an endpoint.
   'schema.org': 'JSON-LD vocabulary namespace; never requested',
 };

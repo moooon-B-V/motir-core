@@ -18,6 +18,8 @@ import { rateLimitSweep } from './definitions/rateLimitSweep';
 import { codeGraphOffboardSweep } from './definitions/codeGraphOffboardSweep';
 import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
 import { filterSubscriptionDeliver } from './definitions/filterSubscriptionDeliver';
+import { publicFollowDigestTick } from './definitions/publicFollowDigestTick';
+import { publicFollowDigestDeliver } from './definitions/publicFollowDigestDeliver';
 import {
   automationEngineOnCreated,
   automationEngineOnFieldChanged,
@@ -64,6 +66,8 @@ export const jobFunctions = [
   codeGraphOffboardSweep,
   filterSubscriptionTick,
   filterSubscriptionDeliver,
+  publicFollowDigestTick,
+  publicFollowDigestDeliver,
   automationEngineOnCreated,
   automationEngineOnFieldChanged,
   automationEngineOnTransitioned,

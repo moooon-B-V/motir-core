@@ -235,6 +235,18 @@ describe('RLS coverage across the public schema', () => {
       // table are symmetric-encrypted before insert. Restated in the table's
       // migration header and its `schema.prisma` doc comment.
       two_factor: 'per-user 2FA secrets, read pre-session on the login challenge',
+      // Registered WebAuthn credentials (MOTIR-3610). Same two reasons as
+      // `two_factor`, and both are stronger here. There is no tenant
+      // discriminator — a passkey belongs to a PERSON and a DEVICE, so one user
+      // holds several across every workspace they are in. And it is read even
+      // earlier in the request's life: a passkey REPLACES the password rather
+      // than following it, so `/passkey/generate-authenticate-options` runs
+      // before the password step, with no session and no bound GUC — a policy
+      // reading `app.workspace_id` would hide the row from its only legitimate
+      // reader. Nothing in the table is a secret either: the private key never
+      // leaves the authenticator. Restated in the table's migration header and
+      // its `schema.prisma` doc comment.
+      passkey: 'per-user WebAuthn credentials, read pre-session on the sign-in ceremony',
       // User-scoped preference rows: keyed to the USER, who spans workspaces.
       notification_preference: 'per-user preference, deliberately cross-workspace',
       user_appearance_preference: 'per-user preference, deliberately cross-workspace',

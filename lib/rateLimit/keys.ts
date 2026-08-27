@@ -38,6 +38,7 @@ export type RateLimitScope =
   | 'auth:password-reset'
   | 'public-write'
   | 'public-submit'
+  | 'public-follow'
   | 'ai:chat'
   | 'ai:generate'
   | 'ai:internal'

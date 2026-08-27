@@ -10,6 +10,7 @@ import {
   type WorkItemType,
 } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { PUBLIC_NOT_SHIPPED_DONE_KEY } from '@/lib/publicProjects/shippedStatus';
 import type { BuiltInFilterFieldId, FilterAst, FilterCondition } from '@/lib/filters/ast';
 import {
   resolveFilterAst,
@@ -457,6 +458,57 @@ export interface PublicWorkItemTreeRow {
   priority: WorkItemPriority;
   publicChildrenHidden: boolean;
   hasChildren: boolean;
+}
+
+/**
+ * One row of the PUBLIC CHANGELOG (Story 8.9 · Subtask 8.9.3 ·
+ * `docs/decisions/public-follow-and-changelog.md` §3) — a work item that
+ * entered a `done`-category status, dated by that transition.
+ *
+ * The column set is deliberately the public-safe one
+ * {@link PublicWorkItemTreeRow} already projects (no assignee, no estimate, no
+ * story points, no reporter, no sprint), plus the derived `shippedAt` and the
+ * ancestor epic the entry's chip renders. The public boundary stays STRUCTURAL
+ * — a column the read never SELECTs cannot be leaked by a mapper.
+ */
+export interface PublicChangelogRow {
+  id: string;
+  kind: WorkItemKind;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  priority: WorkItemPriority;
+  /** The item's MOST RECENT transition into a `done`-category status. */
+  shippedAt: Date;
+  /** The ancestor epic, for the entry's chip — null when there is none. */
+  epicIdentifier: string | null;
+  epicTitle: string | null;
+  /**
+   * The item's body, and ONLY when the caller asked for it
+   * (`options.withDescription`) — the FEED does, the page does not.
+   *
+   * The page's projection stays minimal on purpose: the public boundary here is
+   * structural, and a column the read never SELECTs cannot be leaked by a
+   * mapper. A feed reader, though, shows the body rather than a bare title, so
+   * the one consumer that needs it asks for it. This exposes no new class of
+   * data — `PublicWorkItemDetailDto` already publishes `descriptionMd` on the
+   * public item page; it is the same public field through a second door.
+   */
+  descriptionMd?: string | null;
+}
+
+/**
+ * The `(shippedAt, key)` seek-after position a changelog page reads after
+ * (Subtask 8.9.3). `shippedAt` is the leading sort key and `key` the tiebreak —
+ * `changedAt` alone is NOT a total order (two revisions in the same millisecond
+ * tie, and an unbroken tie makes both the rendered order and cursor paging
+ * non-deterministic, so a page boundary landing mid-tie skips or repeats a row —
+ * PRODECT_FINDINGS #38, the same reasoning `listByWorkItem` records).
+ */
+export interface PublicChangelogCursor {
+  shippedAt: Date;
+  key: number;
 }
 
 /**
@@ -3214,6 +3266,164 @@ export const workItemRepository = {
           AND ${parentPred}
         ORDER BY w."key" ASC
         LIMIT ${page.take + 1} OFFSET ${page.offset}`;
+  },
+
+  /**
+   * The PUBLIC CHANGELOG page (Story 8.9 · Subtask 8.9.3) — the project's
+   * shipped items, newest first, cursor-paged. ONE bounded `$queryRaw`; no
+   * per-row round trip (finding #57).
+   *
+   * WHAT "SHIPPED" MEANS HERE IS NOT A NEW DEFINITION — it is the existing one
+   * with the existing public correction applied. The `shipped` CTE reuses the
+   * done-transition predicate the four report aggregates in
+   * `workItemRevisionRepository` share — join `workflow_status` on the revision
+   * diff's `from`/`to` keys, take a `done`-category `to` from a non-done `from`
+   * — so the public stream and the internal reports cannot disagree about a
+   * status change. `aggregateResolutionTimeByBucket`'s own note says why: *"so
+   * every report agrees on 'done'"*.
+   *
+   * ⚠️ AND `cancelled` IS A `done`-CATEGORY STATUS (`defaultWorkflow.ts`), so
+   * "category = done" alone would announce cancelled work as shipped — a false
+   * public claim, and one a feed reader keeps. The reports are right to count
+   * it: they measure RESOLUTION, and a "won't do" is resolved. A changelog
+   * makes a SHIPPED statement, so it excludes it — which is not a new judgement
+   * either. The public ROADMAP's Done column has excluded the same key since
+   * 6.12.7 (*"a cancelled item is sealed-not-shipped"*), and both surfaces now
+   * read the ONE literal in `lib/publicProjects/shippedStatus.ts`.
+   *
+   * So "shipped" here is `category = 'done' AND key <> 'cancelled'`, applied to
+   * all THREE status joins: an item that moves `cancelled → done` has genuinely
+   * shipped and must appear, which it only does if `cancelled` is not-shipped on
+   * the `from` side too.
+   *
+   * `shippedAt` is `MAX(changedAt)` — the item's MOST RECENT into-done
+   * transition, a deliberate divergence from `aggregateAverageAgeByBucket`,
+   * which takes the FIRST. The two answer different questions: age-to-resolution
+   * asks *how long did this take*, so the first resolution is the honest one; a
+   * time-ordered feed asks *what shipped, when*, and an item reopened and
+   * re-shipped last week shipped last week. Filing it under a date the readers
+   * have already scrolled past is the same as not publishing it.
+   *
+   * AND THE ITEM MUST STILL BE DONE. `MAX` over into-done transitions is blind
+   * to a later move OUT of done, so the `cs` join re-tests the item's CURRENT
+   * status against the same `category = 'done'`. An item that was reopened
+   * therefore leaves the changelog and re-enters, higher, when it ships again
+   * (ADR §2). An item CREATED at a done status has no status revision at all —
+   * the importer's authoritative set writes none, as
+   * `workItemRevisionRepository.findLatestStatusChange` documents — so it is
+   * absent, which is what keeps an imported backlog of closed issues from
+   * flooding a project's first changelog.
+   *
+   * FOUR EXCLUSIONS, not three. `excludeIds` is the 6.14 private-epic
+   * descendant set, `triagedAt IS NULL` drops submissions that are not planned
+   * work, and `archivedAt IS NULL` is the usual gate. The FOURTH has no helper
+   * and is specific to this read: **a private epic's OWN row is excluded**.
+   * `findPublicHiddenDescendantIds` returns descendants only — deliberately,
+   * because in the TREE the private epic's row stays visible as the "this epic
+   * is not public" placeholder. That is right for a tree and wrong for a
+   * stream: a changelog entry asserts that a specific thing shipped, and there
+   * is no such thing as a placeholder entry. Without this predicate a private
+   * epic reaching `done` would publish its title — the one field 6.14 leaves
+   * visible — into a feed, permanently.
+   *
+   * The epic chip walks UP at most three PK lookups (`p1`/`p2`/`p3`): the tree
+   * caps at four levels (epic → story → task → subtask) and an epic is always a
+   * root, so a bounded chain of LEFT JOINs answers it without a recursive CTE.
+   * A row whose own kind is `epic` carries no chip — it would name itself.
+   *
+   * Fetches `take + 1` so the caller derives `hasMore` without a COUNT, the
+   * convention {@link findPublicProjectTreeLevel} sets. Read-only cross-org
+   * path → `db` singleton, with the explicit `workspaceId` + `projectId` gate
+   * that means a row can never cross tenants (finding #26 — RLS is inert under
+   * the dev/CI superuser).
+   */
+  async findPublicChangelogEntries(
+    projectId: string,
+    workspaceId: string,
+    options: { take: number; cursor?: PublicChangelogCursor; withDescription?: boolean },
+    excludeIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<PublicChangelogRow[]> {
+    const client = tx ?? db;
+    // Projected only for the feed (see `PublicChangelogRow.descriptionMd`).
+    const descriptionSql = options.withDescription
+      ? Prisma.sql`w."descriptionMd" AS "descriptionMd",`
+      : Prisma.empty;
+    const cursorPred = options.cursor
+      ? Prisma.sql`AND (
+            s."shipped_at" < ${options.cursor.shippedAt}
+            OR (s."shipped_at" = ${options.cursor.shippedAt} AND w."key" < ${options.cursor.key})
+          )`
+      : Prisma.empty;
+    // "Shipped" = a done-category status that is not the sealed-not-shipped one.
+    const notShipped = PUBLIC_NOT_SHIPPED_DONE_KEY;
+
+    return client.$queryRaw<PublicChangelogRow[]>`
+      WITH shipped AS (
+        SELECT r."workItemId" AS "work_item_id",
+               MAX(r."changedAt") AS "shipped_at"
+          FROM "work_item_revision" r
+          JOIN "work_item" iw
+            ON iw."id" = r."workItemId"
+           AND iw."projectId" = ${projectId}
+           AND iw."workspaceId" = ${workspaceId}
+          LEFT JOIN "workflow_status" fs
+            ON fs."project_id" = iw."projectId"
+           AND fs."key" = (r."diff" -> 'status' ->> 'from')
+          JOIN "workflow_status" ts
+            ON ts."project_id" = iw."projectId"
+           AND ts."key" = (r."diff" -> 'status' ->> 'to')
+         WHERE r."changeKind" = 'updated'
+           AND r."diff" -> 'status' IS NOT NULL
+           AND ts."category" = 'done'
+           AND ts."key" <> ${notShipped}
+           AND (
+             fs."category" IS NULL
+             OR fs."category" <> 'done'
+             OR fs."key" = ${notShipped}
+           )
+         GROUP BY r."workItemId"
+      )
+      SELECT w."id",
+             ${descriptionSql}
+             w."kind"::text     AS "kind",
+             w."key",
+             w."identifier",
+             w."title",
+             w."status",
+             w."priority"::text AS "priority",
+             s."shipped_at"     AS "shippedAt",
+             CASE
+               WHEN w."kind"::text = 'epic'  THEN NULL
+               WHEN p1."kind"::text = 'epic' THEN p1."identifier"
+               WHEN p2."kind"::text = 'epic' THEN p2."identifier"
+               WHEN p3."kind"::text = 'epic' THEN p3."identifier"
+             END                AS "epicIdentifier",
+             CASE
+               WHEN w."kind"::text = 'epic'  THEN NULL
+               WHEN p1."kind"::text = 'epic' THEN p1."title"
+               WHEN p2."kind"::text = 'epic' THEN p2."title"
+               WHEN p3."kind"::text = 'epic' THEN p3."title"
+             END                AS "epicTitle"
+        FROM shipped s
+        JOIN "work_item" w ON w."id" = s."work_item_id"
+        JOIN "workflow_status" cs
+          ON cs."project_id" = w."projectId"
+         AND cs."key" = w."status"
+         AND cs."category" = 'done'
+         AND cs."key" <> ${notShipped}
+        LEFT JOIN "work_item" p1 ON p1."id" = w."parentId"
+        LEFT JOIN "work_item" p2 ON p2."id" = p1."parentId"
+        LEFT JOIN "work_item" p3 ON p3."id" = p2."parentId"
+       WHERE w."projectId" = ${projectId}
+         AND w."workspaceId" = ${workspaceId}
+         AND w."archivedAt" IS NULL
+         AND ${notInTriageSql('w')}
+         AND ${notExcludedSql('w', excludeIds)}
+         AND NOT (w."kind"::text = 'epic' AND w."publicChildrenHidden" = true)
+         ${cursorPred}
+       ORDER BY s."shipped_at" DESC, w."key" DESC
+       LIMIT ${options.take + 1}`;
   },
 
   /**

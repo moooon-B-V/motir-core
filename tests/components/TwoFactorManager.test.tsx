@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
@@ -53,20 +54,57 @@ const ON: TwoFactorStatusDTO = {
   backupCodesTotal: 10,
 };
 
-function render(
-  status: TwoFactorStatusDTO,
-  overrides: Partial<{ hasPassword: boolean; devices: TrustedDeviceDTO[] }> = {},
-) {
-  return renderWithIntl(
+/**
+ * A minimal state OWNER, standing in for `AccountSecurityPanes`.
+ *
+ * ⚠️ `status` is CONTROLLED as of MOTIR-3612 — this island stopped owning it
+ * when the passkeys card became a second surface reading the same method set.
+ * The harness holds it so every assertion that drives a mutation (disable,
+ * confirm-enrolment) still observes the island re-render, which a bare
+ * `status={FIXED}` prop would silently stop doing.
+ */
+function Harness({
+  initial,
+  hasPassword,
+  devices,
+  passkeySection,
+}: {
+  initial: TwoFactorStatusDTO;
+  hasPassword: boolean;
+  devices: TrustedDeviceDTO[];
+  passkeySection?: React.ReactNode;
+}) {
+  const [status, setStatus] = useState(initial);
+  return (
     <TwoFactorManager
-      initialStatus={status}
+      status={status}
+      onStatusChange={setStatus}
       email="ada@example.com"
-      hasPassword={overrides.hasPassword ?? true}
-      initialTrustedDevices={overrides.devices ?? []}
+      hasPassword={hasPassword}
+      initialTrustedDevices={devices}
       backupCodeCount={10}
       otpPeriodMinutes={3}
       totpPeriodSeconds={30}
       trustDeviceDays={30}
+      passkeySection={passkeySection}
+    />
+  );
+}
+
+function render(
+  status: TwoFactorStatusDTO,
+  overrides: Partial<{
+    hasPassword: boolean;
+    devices: TrustedDeviceDTO[];
+    passkeySection: React.ReactNode;
+  }> = {},
+) {
+  return renderWithIntl(
+    <Harness
+      initial={status}
+      hasPassword={overrides.hasPassword ?? true}
+      devices={overrides.devices ?? []}
+      passkeySection={overrides.passkeySection}
     />,
   );
 }

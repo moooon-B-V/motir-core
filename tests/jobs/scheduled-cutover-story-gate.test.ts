@@ -10,6 +10,7 @@ import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { engineScheduledJobs, type EngineJobDefinition } from '@/lib/jobs/engine/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
+import { CATCH_UP_POLICY_NAMES, type CatchUpPolicy } from '@/lib/jobs/catchUp';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -291,16 +292,36 @@ describe('§2b a SCHEDULED run that throws reaches the DLQ and is replayable', (
 describe('§2c the declared disposition reaches the tick', () => {
   it('each of the declared policies produces the row set it names', async () => {
     // The declaration (MOTIR-3470) and the reader (MOTIR-3471) are two cards. This
-    // is the seam between them, asserted for one job of EACH policy the fourteen
-    // actually declare — read off the registry, so a policy that stops being used
-    // (or starts) changes what this covers rather than silently not.
+    // is the seam between them, asserted for EACH policy in the vocabulary.
+    //
+    // ⚠️ IT USED TO EXERCISE ONLY THE POLICIES THE REGISTRY HAPPENED TO DECLARE,
+    // guarded by `expect(declared.size).toBeGreaterThan(1)` so that a narrowing
+    // was noticed rather than silent. It was noticed: MOTIR-3314 clustered the
+    // crons, which made `skip`'s rationale false for the one job that held it
+    // (that rationale was "the next fire is at most 60 seconds away"), so all
+    // fourteen are now `latest` and the set collapsed to one.
+    //
+    // The tripwire did its job, and the answer is not to keep a disposition alive
+    // to satisfy it. This seam belongs to the ENGINE, not to the product's current
+    // opinion about which sweeps want which policy — the loop body already builds
+    // a SYNTHETIC definition per policy, so it never needed a real job carrying
+    // one. Reading the vocabulary instead makes the coverage strictly larger: it
+    // now exercises `all`, which no job has ever declared (§11.5 keeps it for the
+    // class it names) and which this test consequently never ran.
+    //
+    // What is still read off the registry is the direction that can actually rot:
+    // every disposition a real job declares must be one the engine has a branch
+    // for.
     const declared = new Set(engineScheduledJobs().map((d) => d.catchUp));
-    expect(declared.size).toBeGreaterThan(1);
+    for (const policy of declared) expect(CATCH_UP_POLICY_NAMES).toContain(policy);
+
+    const policies: CatchUpPolicy[] = [...CATCH_UP_POLICY_NAMES];
+    expect(policies).toHaveLength(3);
 
     const T0 = new Date(Date.UTC(2026, 7, 25, 12, 0, 0));
     const T3 = new Date(Date.UTC(2026, 7, 25, 12, 3, 0));
 
-    for (const policy of declared) {
+    for (const policy of policies) {
       await truncateJobRuns();
       const jobId = 'system.attachment-gc';
       routeToEngine(jobId);

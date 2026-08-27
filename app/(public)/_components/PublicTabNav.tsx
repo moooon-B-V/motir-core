@@ -1,17 +1,18 @@
 import Link from 'next/link';
-import { BookOpen, Columns3, List, ListTree, Route } from 'lucide-react';
+import { BookOpen, Columns3, List, ListTree, Rocket, Route } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import { cn } from '@/lib/utils/cn';
 import { PublicSubmitRequest } from './PublicSubmitRequest';
 
 // The public read-only sub-bar nav (Story 6.12 · Subtask 6.12.4 · design Panel 2
-// `.seg`). Overview / Board / Work items / Roadmap as REAL anchor tabs (link-
+// `.seg`; extended by Story 8.9 · 8.9.4 with Changelog). Overview / Board / Work
+// items / Tree / Roadmap / Changelog as REAL anchor tabs (link-
 // based, not the client Segmented control, so the public nav is crawlable and
 // each tab is a distinct indexable URL). Styled to match the shipped Segmented
 // (`--el-surface` track, raised active option). Plus the "Submit a request"
 // control. Server component; colour + shape via --el-* / element-semantic tokens.
 
-export type PublicTab = 'overview' | 'board' | 'items' | 'tree' | 'roadmap';
+export type PublicTab = 'overview' | 'board' | 'items' | 'tree' | 'roadmap' | 'changelog';
 
 export async function PublicTabNav({
   identifier,
@@ -52,6 +53,15 @@ export async function PublicTabNav({
       href: `${base}/roadmap`,
       label: t('tabRoadmap'),
       icon: <Route className="h-3.5 w-3.5" />,
+    },
+    // Changelog sits AFTER Roadmap (Story 8.9 · design Panel A, door 1): the two
+    // answer adjacent questions — what is coming, and what shipped — so a reader
+    // who has just scanned the roadmap finds the other half next to it.
+    {
+      key: 'changelog',
+      href: `${base}/changelog`,
+      label: t('tabChangelog'),
+      icon: <Rocket className="h-3.5 w-3.5" />,
     },
   ];
   return (

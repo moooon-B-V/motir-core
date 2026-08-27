@@ -6,10 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
-import {
-  captureMergedPullRequestFiles,
-  githubWebhookService,
-} from '@/lib/services/githubWebhookService';
+import { capturePullRequestFiles, githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
 import { MAX_CAPTURED_PR_PATHS } from '@/lib/github/pullRequestFiles';
@@ -195,9 +192,25 @@ describe('the merge capture writes the row (MOTIR-2922)', () => {
     expect(calls.some((u) => u.includes('/pulls/11/files'))).toBe(true);
   });
 
-  it('a delivery for an OPEN pull request stores NEITHER, and never reads the host', async () => {
+  // ⚠️ AMENDED ON THE RECORD (MOTIR-3230). This asserted the opposite — that an
+  // open delivery stores NEITHER and never reads the host — and its comment gave
+  // the reason: *"the capture must not even ASK, or every open and every
+  // synchronize delivery would spend a rate-limited request each."*
+  //
+  // That reasoning is engaged with rather than overridden, and HALF OF IT IS
+  // FALSE: `synchronize` has never been in `HANDLED_PR_ACTIONS` — not in the
+  // handler's first commit and not since — so the expensive half of the stated
+  // cost, one request per PUSH, has never been on the table. The real cost is one
+  // file listing per pull request OPENED or REOPENED.
+  //
+  // And the other half of the trade was not stated at all: without this capture an
+  // open pull request's `changedPaths` is empty, so the subsumption check cannot
+  // find it however its query is widened — which made that check blind for exactly
+  // the window in which somebody is still working. One request per pull request
+  // buys the only window in which the finding can change what anybody does.
+  it('a delivery for an OPEN pull request STORES the paths, with a null merge instant', async () => {
     const s = await makeScenario('open-capture@example.com');
-    const { calls } = stubGithub({ files: ['should-never-be-read.ts'] });
+    const { calls } = stubGithub({ files: ['lib/services/workflowsService.ts'] });
 
     await githubWebhookService.handleEvent(
       'pull_request',
@@ -206,10 +219,25 @@ describe('the merge capture writes the row (MOTIR-2922)', () => {
 
     const row = await prRow(11);
     expect(row!.state).toBe('open');
-    expect(row!.changedPaths).toEqual([]);
+    expect(row!.changedPaths).toEqual(['lib/services/workflowsService.ts']);
+    // The instant is what still separates the two arms — an open row has none.
     expect(row!.mergedAt).toBeNull();
-    // Not merely "no paths stored" — the capture must not even ASK, or every open
-    // and every synchronize delivery would spend a rate-limited request each.
+    expect(calls.some((u) => u.includes('/pulls/11/files'))).toBe(true);
+  });
+
+  it('a `synchronize` delivery is still ignored — the cost stays bounded per PULL REQUEST', async () => {
+    // The bound the amendment above rests on, asserted rather than assumed: if
+    // `synchronize` were ever handled, this capture WOULD become one request per
+    // push and the original comment's objection would become correct.
+    const s = await makeScenario('sync-ignored@example.com');
+    const { calls } = stubGithub({ files: ['should-never-be-read.ts'] });
+
+    const result = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'synchronize', identifier: s.item.identifier }),
+    );
+
+    expect(result).toMatchObject({ outcome: 'ignored_action' });
     expect(calls.some((u) => u.includes('/files'))).toBe(false);
   });
 
@@ -348,7 +376,7 @@ describe('the capture survives the races the handler cannot stage', () => {
     await makeScenario('capture-missing-row@example.com');
     stubGithub({ files: ['a.ts'] });
 
-    await expect(captureMergedPullRequestFiles(body(), normalized(4242))).resolves.toBeUndefined();
+    await expect(capturePullRequestFiles(body(), normalized(4242))).resolves.toBeUndefined();
 
     expect(await prRow(4242)).toBeNull();
   });
@@ -360,9 +388,7 @@ describe('the capture survives the races the handler cannot stage', () => {
     await makeScenario('capture-write-throws@example.com');
     stubGithub({ files: ['a.ts'] });
 
-    await expect(
-      captureMergedPullRequestFiles(body(), normalized(2 ** 40)),
-    ).resolves.toBeUndefined();
+    await expect(capturePullRequestFiles(body(), normalized(2 ** 40))).resolves.toBeUndefined();
   });
 });
 
@@ -511,7 +537,7 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
   });
 });
 
-describe('findMergedTouchingPaths — the single read the subsumption check consumes', () => {
+describe('findTouchingPaths — the single read the subsumption check consumes', () => {
   /** Seed one PR row directly: these cases are about the QUERY, so they are set
    *  up as data rather than driven through six webhook deliveries. */
   async function seedPr(
@@ -547,13 +573,7 @@ describe('findMergedTouchingPaths — the single read the subsumption check cons
     exclude: string | null,
   ) {
     return withWorkspaceContext(s.ctx, (tx) =>
-      githubPullRequestRepository.findMergedTouchingPaths(
-        s.workspace.id,
-        paths,
-        since,
-        exclude,
-        tx,
-      ),
+      githubPullRequestRepository.findTouchingPaths(s.workspace.id, paths, since, exclude, tx),
     );
   }
 
@@ -600,9 +620,53 @@ describe('findMergedTouchingPaths — the single read the subsumption check cons
     expect(found).toEqual([]);
   });
 
-  it('omits an OPEN row even when its paths intersect', async () => {
+  // ⚠️ THIS ASSERTION IS INVERTED FROM ITS ORIGINAL, DELIBERATELY (MOTIR-3230).
+  // It read `omits an OPEN row even when its paths intersect` and asserted `[]`,
+  // which was a correct statement of MOTIR-2922's merge-only scope. Returning the
+  // open row IS this card's deliverable — a merged-only read is available for the
+  // whole period in which the answer no longer changes anything, and blind for the
+  // one window in which it would — so the guarantee is amended on the record here
+  // rather than quietly deleted.
+  it('RETURNS an open row whose paths intersect — the window a merged-only read misses', async () => {
     const s = await makeScenario('accessor-open@example.com');
-    await seedPr(s.repo.id, 104, { state: 'open', merged: false });
+    await seedPr(s.repo.id, 104, { state: 'open', merged: false, mergedAt: null });
+
+    const found = await query(
+      s,
+      ['lib/services/workflowsService.ts'],
+      new Date('2026-08-12T00:00:00Z'),
+      null,
+    );
+
+    expect(found.map((r) => r.number)).toEqual([104]);
+    expect(found[0]!.merged).toBe(false);
+    expect(found[0]!.mergedAt).toBeNull();
+  });
+
+  it('returns an open row filed BEFORE `since` — the interval clause is the merged arm alone', async () => {
+    // A pull request opened before this card was filed and still open is not old
+    // evidence; it is a colleague with the file open right now. Applying the merged
+    // arm's ordering clause to it would re-create exactly the blindness this card
+    // exists to remove.
+    const s = await makeScenario('accessor-open-old@example.com');
+    await seedPr(s.repo.id, 109, { state: 'open', merged: false, mergedAt: null });
+
+    const found = await query(
+      s,
+      ['lib/services/workflowsService.ts'],
+      new Date('2030-01-01T00:00:00Z'),
+      null,
+    );
+
+    expect(found.map((r) => r.number)).toEqual([109]);
+  });
+
+  it('omits a CLOSED-UNMERGED row — abandoned work is neither shipped nor in flight', async () => {
+    // The open arm is keyed on `state: 'open'` AND `merged: false`, so a pull
+    // request somebody closed without merging matches neither arm. It is the one
+    // row for which both dispositions would be wrong.
+    const s = await makeScenario('accessor-abandoned@example.com');
+    await seedPr(s.repo.id, 110, { state: 'closed', merged: false, mergedAt: null });
 
     const found = await query(
       s,
@@ -612,6 +676,23 @@ describe('findMergedTouchingPaths — the single read the subsumption check cons
     );
 
     expect(found).toEqual([]);
+  });
+
+  it('returns BOTH arms together, distinguishable by their own columns', async () => {
+    const s = await makeScenario('accessor-both@example.com');
+    await seedPr(s.repo.id, 111, {});
+    await seedPr(s.repo.id, 112, { state: 'open', merged: false, mergedAt: null });
+
+    const found = await query(
+      s,
+      ['lib/services/workflowsService.ts'],
+      new Date('2026-08-12T00:00:00Z'),
+      null,
+    );
+
+    expect(found.map((r) => r.number).sort()).toEqual([111, 112]);
+    expect(found.find((r) => r.number === 111)!.mergedAt).not.toBeNull();
+    expect(found.find((r) => r.number === 112)!.mergedAt).toBeNull();
   });
 
   it('omits the row linked to `excludeWorkItemId`, and KEEPS an unlinked one', async () => {

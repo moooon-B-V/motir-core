@@ -193,6 +193,26 @@ MOTIR-1924's meter cannot be silently skipped by a path that tears down and retu
 1. **No `fly` types, imports or ids above `lib/orchestrator/fly/`.** The webhook handler
    (MOTIR-1920), the gate (MOTIR-1922), the provisioner (MOTIR-1921) and the meter
    (MOTIR-1924) see `ContainerHandle` and `ContainerUsage` only.
+
+   > **⚠️ The rule's SUBJECT is this port; the guard's REACH is all of `lib/`, and the two
+   > are not the same thing.** `tests/ciFleet/orchestratorPortBoundary.test.ts` scans the
+   > SOURCE of `lib/`, `app/` and `components/` — deliberately wider than the port, because
+   > a boundary guard narrowed to the directory it protects is one you evade by moving a
+   > file, and half the ways a provider leaks (an API host, an env var, a status string) are
+   > not imports a module-graph check would see.
+   >
+   > So the guard catches code that has nothing to do with containers, and TWO exceptions
+   > are registered in it, each scoped to one file AND one pattern. `ciRunnerBootService`
+   > reads the fleet's image and region through `flyFleetConfig()` for a provider-neutral
+   > `ContainerSpec` — a leak of the config accessor, not of a Fly type. And
+   > **`lib/deployment/identity.ts` (MOTIR-1167)** answers _"where is this WEB PROCESS
+   > running?"_ for the operator console's hosting card, whose acceptance criterion is a
+   > link-out to the app's own dashboard. That file boots no container, tears none down,
+   > meters nothing and imports nothing from `lib/orchestrator/`; it is outside this port's
+   > subject and inside its guard's reach, which is exactly what a registered exception is
+   > for. Neither exemption widens the port, and a leak of a different SHAPE in either file
+   > still fails.
+
 2. **A `fake` adapter ships alongside the Fly one**, in the same PR as MOTIR-1921. It is
    what MOTIR-1927's Vitest gate drives — the boot / teardown / no-reuse / label-scoping
    guards are assertions about the PORT's contract, not about Fly.
@@ -277,11 +297,22 @@ Composed from the published numbers rather than asserted:
 
 **What STARTS the clock, and what keeps it honest (MOTIR-1996).** The boot is dispatched by
 the `workflow_job` webhook itself, in the same request that records the intent — the first
-row of the table is a synchronous hop, not a scheduled one. The minute-granularity
-`system.ci-runner-provision-sweep` is the **recovery** trigger only: it re-drives an intent
-whose hot dispatch was dropped, and it is the retry loop a **deferred** intent waits in. A
-fleet whose primary trigger were the cron would spend up to 60 s of a 30 s budget before the
-gate was consulted, so "the sweep found it" is a fallback path, never the measured one.
+row of the table is a synchronous hop, not a scheduled one. `system.ci-runner-provision-sweep`
+is the **recovery** trigger only: it re-drives an intent whose hot dispatch was dropped. A
+fleet whose primary trigger were the cron would spend the whole budget before the gate was
+consulted, so "the sweep found it" is a fallback path, never the measured one.
+
+**Two corrections to the sentence above, both made in the code before they were made here.**
+_"and it is the retry loop a **deferred** intent waits in"_ — **false since MOTIR-2852**: a
+deferred intent is dispatched by the admission WAKE the moment its project's slot is
+released (`ciRunnerBootService.dispatchNextPendingForProject`, called from the one funnel
+every terminal transition goes through). A slot freeing is an event this service already
+observes; rediscovering it on a timer was the poll. And _"minute-granularity"_ — **false
+since MOTIR-3314**: the sweep runs at `0,30 * * * *`, clustered with every other `system.*`
+job so the database can suspend (`docs/decisions/application-hosting.md` §21). **Neither
+touches this SLO**, because the budget was already defined over the webhook path and this
+section already said the sweep is never the measured one — which is exactly why the drift
+survived two changes: nothing that reads this table depends on the clause that went stale.
 
 **What the SLO does and does not cover — state this or it is unmeasurable.** The budget
 applies to a job the admission gate **ADMITTED**. A job the gate **DEFERRED** (project at

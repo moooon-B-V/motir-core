@@ -968,6 +968,10 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  what made sure nobody had to remember.)
   // MOTIR-2653 CREATED `app/(authed)/home/page.tsx`, so its forward-looking row
   // is gone — deleted by the card that built the file, in the same commit.
+  // (Story 8.9's two rows lived here for one commit and deleted themselves the
+  //  moment 8.9.1's decision record joined this branch — which is what their own
+  //  `why` said would happen, enforced by the tight test below rather than by
+  //  anyone remembering.)
 ];
 
 describe('a design asset cites source paths that still exist', () => {

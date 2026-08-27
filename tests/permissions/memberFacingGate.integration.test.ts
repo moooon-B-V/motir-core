@@ -194,6 +194,12 @@ describe('every member-facing key answers through ONE resolution, the same way',
     );
   });
 
+  // ⚠️ THE PROBE MOVED (MOTIR-3629), and the key under test did not — the same
+  // correction MOTIR-3188 made two rows down, for the same reason. This asserted
+  // on `archiveWorkItem`, which now asserts `work_item:archive`, so keeping it
+  // would have turned this row into coverage of a DIFFERENT key while its name
+  // still said `work_item:delete`. `deleteWorkItem` IS the cascade the row is
+  // about, and it is what a member must lose.
   it('work_item:delete — admin passes, MEMBER keeps the edit and loses the cascade', async () => {
     const s = await buildScenario('delete');
     const item = await workItemsService.createWorkItem(
@@ -205,9 +211,33 @@ describe('every member-facing key answers through ONE resolution, the same way',
       workItemsService.updateWorkItem(item.id, { title: 'Renamed' }, s.memberCtx),
     ).resolves.toBeTruthy();
     await expectKeyRefusal(
-      workItemsService.archiveWorkItem(item.id, s.memberCtx),
+      workItemsService.deleteWorkItem(item.id, s.memberCtx),
       'work_item:delete',
     );
+  });
+
+  it('work_item:archive — a MEMBER archives and restores, and still cannot delete', async () => {
+    // MOTIR-3629, and the row the split exists to make expressible. Under one
+    // key this actor could do neither, and the product still offered them the
+    // Archive affordance.
+    const s = await buildScenario('archive');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.projectId, title: 'Tidied away', kind: 'task' },
+      s.adminCtx,
+    );
+    await expect(workItemsService.archiveWorkItem(item.id, s.memberCtx)).resolves.toBeTruthy();
+    await expect(workItemsService.unarchiveWorkItem(item.id, s.memberCtx)).resolves.toBeTruthy();
+    await expectKeyRefusal(
+      workItemsService.deleteWorkItem(item.id, s.memberCtx),
+      'work_item:delete',
+    );
+    // A VIEWER gets neither — the reversible half is still a removal.
+    await expectKeyRefusal(
+      workItemsService.archiveWorkItem(item.id, s.viewerCtx),
+      'work_item:archive',
+    );
+    // …and an admin, who holds only `work_item:delete` of the two by name,
+    // archives anyway: the implication is what carries it (ADR §10).
     await expect(workItemsService.archiveWorkItem(item.id, s.adminCtx)).resolves.toBeTruthy();
   });
 

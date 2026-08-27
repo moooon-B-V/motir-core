@@ -111,7 +111,9 @@ async function seedMerge(
   opts: {
     number: number;
     changedPaths: string[];
-    mergedAt?: Date;
+    /** `undefined` takes the default merge instant; an explicit `null` is the
+     *  pre-capture row, and the OPEN arm's rows (MOTIR-3230). */
+    mergedAt?: Date | null;
     workItemId?: string | null;
     title?: string | null;
     merged?: boolean;
@@ -126,7 +128,7 @@ async function seedMerge(
       merged: opts.merged ?? true,
       headRef: `subtask/MOTIR-${opts.number}`,
       title: opts.title === undefined ? 'Bind the READ surface for motir_app' : opts.title,
-      mergedAt: opts.mergedAt ?? SWEEP_MERGED,
+      mergedAt: opts.mergedAt === undefined ? SWEEP_MERGED : opts.mergedAt,
       changedPaths: opts.changedPaths,
       workItemId: opts.workItemId ?? null,
     },
@@ -178,6 +180,7 @@ describe('the retro-check — criterion 4, on the real incidents', () => {
         path: 'lib/services/workflowsService.ts',
         pullRequest: 'moooon-B-V/motir-core#2059',
         pullRequestTitle: 'Bind the READ surface for motir_app',
+        state: 'merged',
         mergedAt: SWEEP_MERGED.toISOString(),
       },
     ]);
@@ -241,7 +244,13 @@ describe('the three clauses of the rule, one negative case each', () => {
     expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
   });
 
-  it('an OPEN pull request touching the same path does not cover it', async () => {
+  // ⚠️ AMENDED ON THE RECORD, NOT DELETED (MOTIR-3230). This read `an OPEN pull
+  // request touching the same path does not cover it` and asserted `[]`, which was
+  // a correct statement of MOTIR-2903's merged-only scope. Reporting the open hit
+  // — under its OWN severity and disposition — is this card's whole deliverable,
+  // so the guarantee is restated rather than removed, and the arm it now describes
+  // is covered in full by `the OPEN arm` block at the end of this file.
+  it('an OPEN pull request touching the same path now covers it, as the IN-FLIGHT arm', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
     const repo = await connectRepo(fx);
     const card = await makeCard(fx, 'A card', MOTIR_2757_BODY);
@@ -252,7 +261,12 @@ describe('the three clauses of the rule, one negative case each', () => {
       state: 'open',
     });
 
-    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
+    // Note the row is deliberately INCONSISTENT — open, unmerged, and carrying a
+    // merge instant from the helper's default. The arm is keyed on `merged`, so it
+    // is read as in flight and the stale instant is dropped rather than reported.
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toMatchObject([
+      { severity: 'likely-in-flight', state: 'open', mergedAt: null },
+    ]);
   });
 
   it('a merge in ANOTHER repo does not cover a card that PINS its own', async () => {
@@ -610,6 +624,203 @@ describe('the other three surfaces render it — never as a bare reference', () 
     expect(text).toContain('moooon-B-V/motir-core#2059');
     expect(text).toContain('may already be in the repository');
     expect(text).toContain('still VALID');
+    expect(text).not.toContain('undefined');
+  });
+});
+
+// ── THE OPEN ARM (MOTIR-3230) ────────────────────────────────────────────────
+//
+// The defect this pins is the SAME shape one window earlier. MOTIR-3218 was filed
+// at 10:33 against a file that motir-core#2200 had been OPEN against since 09:45 —
+// 48 minutes — naming the same cause and shipping the same remedy. It merged at
+// 11:09, and the advisory that would have stopped the duplicate only started
+// returning anything at that moment, to the session that had already claimed the
+// card. A pull request is merged for the rest of time and open for about an hour,
+// so a merged-only check speaks for the whole period in which the answer no longer
+// matters and is silent in the one hour it would have changed something.
+describe('the OPEN arm — a pull request touching the path RIGHT NOW', () => {
+  it('FIRES on an open pull request, with the in-flight severity and a null instant', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card naming the swept path', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 2200,
+      state: 'open',
+      merged: false,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+      title: 'Inject the resolver into every main() call',
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([
+      {
+        kind: 'subsumption',
+        item: card.identifier,
+        severity: 'likely-in-flight',
+        path: 'lib/services/workflowsService.ts',
+        pullRequest: 'moooon-B-V/motir-core#2200',
+        pullRequestTitle: 'Inject the resolver into every main() call',
+        state: 'open',
+        mergedAt: null,
+      },
+    ]);
+    // The standing invariant: this is a heuristic and it never gates.
+    const readiness = await workItemsService.getReadiness(card.id, fx.ctx);
+    expect(readiness.ready).toBe(true);
+  });
+
+  it('FIRES on a pull request opened BEFORE the card — the interval clause is the merged arm alone', async () => {
+    // The merged arm drops anything that landed before the card was filed, because
+    // that is the substrate the card was written against. Applying the same clause
+    // to an open pull request would re-create the exact blindness this closes: a
+    // colleague who started yesterday and has not finished is the most relevant
+    // hit there is, not the least.
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card filed after they started', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 2201,
+      state: 'open',
+      merged: false,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+    // Backdate the pull request's own row to well before the card's `createdAt`.
+    await adminDb.githubPullRequest.updateMany({
+      where: { repoId: repo.id, number: 2201 },
+      data: { createdAt: new Date('2026-08-01T00:00:00Z') },
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toMatchObject([
+      { severity: 'likely-in-flight', state: 'open' },
+    ]);
+  });
+
+  it('prefers the OPEN hit when both arms cover one path — its remedy dominates', async () => {
+    // *Stop and coordinate* is right whether or not something also merged; *read
+    // the merged diff* is wrong if somebody is editing the file right now. The
+    // accessor cannot express this (an open row has no instant to sort on), so the
+    // index sorts the two arms itself and this pins that it did.
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card on a busy path', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 2059,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+    await seedMerge(repo.id, {
+      number: 2200,
+      state: 'open',
+      merged: false,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toMatchObject([
+      { state: 'open', pullRequest: 'moooon-B-V/motir-core#2200', mergedAt: null },
+    ]);
+  });
+
+  it('the MERGED arm is unchanged — same finding, now carrying `state`', async () => {
+    // Asserted alongside the new arm rather than trusted: the widening is only
+    // safe if the behaviour it widens is byte-identical apart from the new field.
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card the sweep covered', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 2059,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toMatchObject([
+      {
+        severity: 'likely-already-shipped',
+        state: 'merged',
+        mergedAt: SWEEP_MERGED.toISOString(),
+      },
+    ]);
+  });
+
+  it('a CLOSED-UNMERGED pull request fires NEITHER arm', async () => {
+    // Abandoned work is not shipped and is not in flight, so both remedies would
+    // be wrong. The open arm is keyed on `state` AND `merged` for exactly this row.
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card nobody is working on', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 2202,
+      state: 'closed',
+      merged: false,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
+  });
+
+  it("the card's OWN open pull request never covers it", async () => {
+    // A card whose branch is open is doing its work, not having it done for it —
+    // the exclusion that already held for the merged arm, asserted for the new one
+    // because it is the arm on which a card's own in-flight PR is the common case.
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card being built right now', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 2203,
+      state: 'open',
+      merged: false,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+      workItemId: card.id,
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
+  });
+
+  it('a pre-capture MERGED row is never mis-read as in flight', async () => {
+    // Keyed on `merged` rather than on `mergedAt` being null, because the two agree
+    // for every row the webhook writes and disagree for exactly this one: a
+    // pre-path-capture merge, which is closed, merged, and carries no instant.
+    // Reading the open arm off the instant would present it as work in flight.
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const card = await makeCard(fx, 'A card over a legacy row', MOTIR_2757_BODY);
+    await seedMerge(repo.id, {
+      number: 1000,
+      state: 'closed',
+      merged: true,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+
+    expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
+  });
+
+  it('the MCP text renders the two arms as SEPARATE advisories', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'A story' },
+      fx.ctx,
+    );
+    const card = await makeCard(fx, 'A card on a busy path', MOTIR_2757_BODY);
+    await workItemsService.updateWorkItem(card.id, { parentId: parent.id }, fx.ctx);
+    await seedMerge(repo.id, {
+      number: 2200,
+      state: 'open',
+      merged: false,
+      mergedAt: null,
+      changedPaths: ['lib/services/workflowsService.ts'],
+    });
+
+    const result = await runValidateWorkItem({ key: parent.identifier }, fx.ctx);
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
+    expect(text).toContain('OPEN pull request is changing right');
+    expect(text).toContain('(OPEN, not merged)');
+    // The merged wording must NOT be used for an unmerged pull request — a reader
+    // told "may already be in the repository" here takes the opposite action.
+    expect(text).not.toContain('may already be in the repository');
+    expect(text).not.toContain('merged null');
     expect(text).not.toContain('undefined');
   });
 });

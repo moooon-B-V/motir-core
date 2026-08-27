@@ -371,9 +371,13 @@
       "label": "编辑工作项",
       "description": "创建、更新、分配和移动工作项，并在面板上流转其状态。"
     },
+    "work_item_archive": {
+      "label": "归档工作项",
+      "description": "归档工作项，之后可恢复。仅影响该工作项，其下级保持不变。"
+    },
     "work_item_delete": {
       "label": "删除工作项",
-      "description": "归档或删除工作项及其下级内容。"
+      "description": "永久删除工作项及其下级内容，无法撤销。"
     },
     "work_item_triage": {
       "label": "处理收件箱",
@@ -767,6 +771,23 @@
       "view": "管理自动化规则",
       "fallback": "或将此链接复制到浏览器：",
       "reason": "你收到此邮件是因为你是该自动化规则的所有者。"
+    },
+    "followConfirm": {
+      "subject": "确认订阅 {project}",
+      "preview": "一键订阅 {project} 的发布动态",
+      "lede": "你申请了解 {project} 的发布动态。确认此邮箱后，我们每周会发送一封简短的汇总邮件——仅此而已。",
+      "confirm": "确认订阅",
+      "what": "每周一封，周一发送。没有发布内容的那一周不会发送，且每封邮件都带有一键退订链接。",
+      "fallback": "或将此链接粘贴到浏览器中打开：",
+      "ignore": "此链接 24 小时后失效。如果这不是你申请的，请忽略此邮件——我们不会向此邮箱发送任何内容，并会在一周内将其删除。"
+    },
+    "followDigest": {
+      "subject": "{project} 本周发布了 {count} 项内容",
+      "preview": "{project} 本周的发布内容",
+      "lede": "{project} 本周发布了 {count} 项内容：",
+      "viewAll": "查看完整更新日志",
+      "unsubscribe": "退订",
+      "why": "你收到这封邮件是因为你在 Motir 上关注了该项目。点击上方链接即可停止接收。"
     }
   },
   "auth": {
@@ -782,6 +803,7 @@
     "googleSignInIncomplete": "Google登录未完成。请重试，或改用邮箱登录。",
     "googleSignUpIncomplete": "Google注册未完成。请重试，或改用邮箱注册。",
     "wrongPassword": "密码不正确。请重试，或重置密码。",
+    "accountSuspended": "该账号已被停用。如果你认为这是误操作，请联系客服。",
     "emailAddress": "邮箱地址",
     "signingInAs": "正在以 {email} 登录",
     "useDifferentEmail": "换个邮箱",
@@ -888,7 +910,13 @@
         "generic": "出了点问题，请重试。"
       }
     },
-    "couldntSendResetLink": "我们暂时无法发送重置邮件，请稍后重试。"
+    "couldntSendResetLink": "我们暂时无法发送重置邮件，请稍后重试。",
+    "passkey": {
+      "signIn": "用通行密钥登录",
+      "waiting": "正在等待你的浏览器…",
+      "noMatch": "本设备上没有与 Motir 账户匹配的通行密钥。请先用邮箱和密码登录，然后在账户设置中添加一把通行密钥。",
+      "challengeExpired": "这一步花的时间太久，我们已重新开始。请再试一次。"
+    }
   },
   "shell": {
     "nav": {
@@ -2435,6 +2463,57 @@
           "wrongCode": "验证码不匹配。请检查手机时间是否设为自动获取，然后输入应用显示的下一个验证码。",
           "wrongPassword": "密码不正确。",
           "generic": "出了点问题，请重试。"
+        }
+      },
+      "passkeys": {
+        "title": "通行密钥",
+        "subtitle": "用指纹、面容或设备 PIN 登录 —— 无需输入任何内容，也无从被钓取。",
+        "add": "添加通行密钥",
+        "empty": {
+          "title": "还没有通行密钥",
+          "body": "通行密钥是一把由你的设备保管、并通过指纹、面容或 PIN 解锁的钥匙。全程无需输入，因此没有可被钓取、复用或泄露的东西 —— 而解锁本身就证明了是你，所以一次触碰已经是双重验证。",
+          "promise": "你的笔记本、手机或安全密钥都可以保管一把。Motir 永远看不到它。"
+        },
+        "registering": {
+          "title": "正在等待你的浏览器…",
+          "body": "浏览器正在请你用指纹、面容或设备 PIN 确认。Motir 看不到其中任何一项 —— 只知道你的设备说了「是」。"
+        },
+        "row": {
+          "unnamed": "未命名的通行密钥",
+          "synced": "已同步",
+          "singleDevice": "仅限本设备",
+          "added": "添加于 {date}",
+          "rename": "重命名",
+          "remove": "移除"
+        },
+        "rename": {
+          "title": "重命名这把通行密钥",
+          "desc": "名称只给你自己看 —— 它是你在列表中区分两把通行密钥的方式。",
+          "label": "名称",
+          "helper": "最多 {max} 个字符。",
+          "cancel": "取消",
+          "save": "保存"
+        },
+        "remove": {
+          "title": "移除「{name}」？",
+          "desc": "这把通行密钥会立即对 Motir 失效。密钥本身不会被改动 —— 你之后可以重新注册它。",
+          "lastWarning": "这是你最后一把通行密钥。移除后，你将回到使用密码登录。",
+          "keep": "保留",
+          "confirm": "移除通行密钥"
+        },
+        "errors": {
+          "previouslyRegistered": "本设备已经为 Motir 保存了一把通行密钥。用它登录，或从另一台设备添加一把。",
+          "challengeExpired": "这一步超过了 {minutes, plural, other {# 分钟}}，我们已重新开始。请再添加一次 —— 只需片刻。",
+          "generic": "没能完成。请重试，或从另一台设备添加通行密钥。"
+        },
+        "method": {
+          "name": "通行密钥",
+          "badge": "本身即双重验证",
+          "desc": "解锁通行密钥需要你的指纹、面容或设备 PIN，因此一步就是两重因素。它替代密码让你登录，而不是跟在密码之后。",
+          "managedAbove": "在上方管理"
+        },
+        "hero": {
+          "passkeyCounts": "你的通行密钥已经算作第二重因素。验证器应用则为设备不在身边的日子多留一条退路。"
         }
       }
     },
@@ -4601,7 +4680,51 @@
     "editGuardTitle": "放弃未保存的改动？",
     "editGuardBody": "你修改了标语、标签或概览，但尚未保存。现在离开将放弃这些改动。",
     "editGuardKeepEditing": "继续编辑",
-    "editGuardDiscard": "放弃"
+    "editGuardDiscard": "放弃",
+    "tabChangelog": "更新日志",
+    "changelogTitle": "已发布内容",
+    "changelogLede": "该项目已发布的全部内容，最新在前——直接来自任务看板，因此永不过时。",
+    "changelogEmptyTitle": "尚未发布任何内容",
+    "changelogEmptyBody": "当该项目的工作项被标记为完成后，会自动显示在这里。",
+    "changelogErrorTitle": "无法加载更多",
+    "changelogErrorBody": "读取更新日志时出错，请稍后重试。",
+    "changelogLoadMore": "加载更多",
+    "changelogLoading": "加载中…",
+    "changelogShippedOn": "发布于 {date}",
+    "changelogMetaDescription": "{name} 已发布的全部内容，最新在前——根据项目自身的工作项生成的公开更新日志。",
+    "linkChangelogNative": "更新日志",
+    "follow": "关注",
+    "following": "已关注",
+    "unfollow": "取消关注",
+    "followerCount": "{count, plural, =0 {暂无关注者} other {# 位关注者}}",
+    "subscribe": "订阅",
+    "subscribeTitle": "关注开发进展",
+    "subscribeLede": "{project} 公开开发。选择你希望的接收方式——随时可以更改。",
+    "tierAccount": "你的账户",
+    "tierEmail": "通过邮件",
+    "tierAccountSignedOut": "使用 Motir 账户",
+    "tierFeed": "任意订阅器",
+    "followingAs": "已关注此项目",
+    "digestOptIn": "每周向我发送已发布内容的汇总邮件",
+    "digestHint": "每周一封，周一发送。没有发布内容的那一周不会发送。",
+    "emailPlaceholder": "you@example.com",
+    "emailHint": "每周一封汇总邮件。我们会先发送一封确认邮件——无需注册账户。",
+    "emailInvalid": "这似乎不是一个有效的邮箱地址。",
+    "signInAndFollow": "登录并关注",
+    "signInHint": "用你的账户关注此项目，并跳过确认步骤。",
+    "feedHint": "无需账户——我们不会知道你订阅了。",
+    "copyFeed": "复制",
+    "copiedFeed": "已复制",
+    "confirmSentTitle": "请查收邮件",
+    "confirmSentBody": "我们已向 {email} 发送确认邮件。点击其中的链接即可完成订阅——在此之前我们不会再发送任何邮件。",
+    "followFailed": "操作失败，请稍后重试。",
+    "confirmedTitle": "订阅成功",
+    "confirmedBody": "你将每周收到 {project} 已发布内容的汇总邮件。每封邮件都带有一键退订链接。",
+    "confirmInvalidTitle": "该链接已失效",
+    "confirmInvalidBody": "确认链接 24 小时后失效，且仅可使用一次。请重新订阅，我们会发送新的链接。",
+    "unsubscribedTitle": "已退订",
+    "unsubscribedBody": "我们不会再向你发送该项目的邮件。更新日志和订阅源不受影响——它们本来就不需要知道你是谁。",
+    "backToProject": "返回项目"
   },
   "workItemActions": {
     "menuTrigger": "更多操作",
@@ -6542,11 +6665,11 @@
       "overview": "总览",
       "usage": "用量与成本",
       "tenants": "租户",
+      "users": "用户",
       "monitoring": "监控",
       "governance": "治理",
       "soonUsage": "10.1",
       "soonTenants": "10.1",
-      "soonMonitoring": "10.2",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -6560,6 +6683,197 @@
       "subtitle": "一眼看清全部租户——Motir托管了多少组织、工作区、项目和用户，以及各租户最近发生了什么。只读；租户治理在治理工具中。",
       "pendingTitle": "租户数据尚未接入",
       "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一张卡片交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
+    },
+    "users": {
+      "breadcrumb": "平台·用户",
+      "breadcrumbAria": "账号",
+      "title": "查找账号",
+      "subtitle": "按邮箱地址或姓名搜索 Motir 托管的所有账号。打开一个账号属于跨租户读取，会记入审计日志。组织、工作区和项目暂时无法搜索——那属于跨租户读取层，由另一张卡片交付。",
+      "searchLabel": "邮箱地址或姓名",
+      "searchPlaceholder": "ada@example.com",
+      "searchSubmit": "搜索",
+      "tooShort": "请至少输入 {n} 个字符——更短的查询是在列出账号，而不是找到某一个。",
+      "idleTitle": "尚未搜索",
+      "idleDescription": "把工单里的邮箱地址粘贴进来。每一次搜索都会记在你的运维账号名下。",
+      "noneTitle": "没有匹配的账号",
+      "noneDescription": "没有匹配“{query}”的结果。检查拼写，或改用姓名搜索——用户常常用注册邮箱之外的地址来联系我们。",
+      "resultsTitle": "匹配的账号",
+      "resultsCount": "找到 {n} 个",
+      "capped": "只显示前 {n} 个。请缩小搜索范围，而不是翻页——这个界面不是用来浏览账号列表的。",
+      "suspended": "已停用",
+      "active": "正常",
+      "emailUnverified": "邮箱未验证",
+      "twoFactor": "已开启两步验证",
+      "platformStanding": "平台员工 · {role}",
+      "crumbPlatform": "平台",
+      "crumbUsers": "用户",
+      "auditBanner": "你正以平台员工身份查看 {name} 的账号。这次跨租户读取已记入审计日志，归属于 {operator}。",
+      "suspendedSince": "该账号于 {at} 被停用。",
+      "suspendedReason": "记录在案的原因：{reason}",
+      "noReasonRecorded": "未填写",
+      "facts": {
+        "title": "账号",
+        "created": "注册于",
+        "sessions": "在线会话",
+        "sessionCount": "{n}",
+        "emailVerified": "邮箱已验证",
+        "yes": "是",
+        "no": "否"
+      },
+      "action": {
+        "sendReset": "发送密码重置",
+        "suspend": "停用账号",
+        "unsuspend": "解除停用",
+        "resetSent": "密码重置链接已发送",
+        "suspended": "账号已停用",
+        "unsuspended": "已解除停用",
+        "failedTitle": "操作没有生效",
+        "error": {
+          "REASON_REQUIRED": "必须填写原因——几个月后审计记录能不能读懂，全靠它。",
+          "NOT_FOUND": "该账号已不存在。请重新加载页面。",
+          "ALREADY_IN_STATE": "你输入的时候，别人改动了这个账号。请重新加载并确认后再操作。",
+          "NOT_PERMITTED": "你的运维账号没有执行该操作的权限。",
+          "FAILED": "出了问题，什么都没有改动。该故障已记录。"
+        },
+        "readOnlyNotice": "你的运维账号可以查看，但不能操作。发送密码重置或停用账号需要 operator 等级。"
+      },
+      "confirm": {
+        "reasonLabel": "原因——必填，将写入审计日志",
+        "reasonHint": "之后查看该账号的任何运维人员都会看到；{name} 如果询问，也会被告知。",
+        "cancel": "取消",
+        "reset": {
+          "title": "给 {name} 发送密码重置？",
+          "body": "重置链接会发到他们自己的邮箱，一小时后失效。你看不到链接，也不会替他们设置密码——密码由他们自己选。在他们使用链接之前，原密码仍然有效，已登录的会话也不受影响。",
+          "confirm": "发送链接"
+        },
+        "suspend": {
+          "title": "停用 {name}？",
+          "body": "他们会立即从所有会话中登出，并且无法重新登录。他们的工作区、项目和工作项不受影响，另一位平台运维人员可以解除停用。",
+          "confirm": "停用该账号"
+        },
+        "unsuspend": {
+          "title": "解除 {name} 的停用？",
+          "body": "他们从下一次尝试起就能重新登录。这不会替他们登录，也不会恢复此前被吊销的会话——需要他们自己登录。",
+          "confirm": "解除停用"
+        }
+      },
+      "log": {
+        "title": "运维操作",
+        "subtitle": "该账号上的每一次运维写操作，最新的在前。只追加，不修改。",
+        "scope": "本账号",
+        "empty": "还没有运维人员对该账号做过写操作。",
+        "foot": "显示 {n} 条操作",
+        "colWhen": "时间",
+        "colAction": "操作",
+        "colOperator": "操作人",
+        "colReason": "原因",
+        "operatorRole": "平台 {role}",
+        "action": {
+          "user.password_reset_sent": "已发送密码重置",
+          "user.suspend": "已停用",
+          "user.unsuspend": "已解除停用"
+        }
+      }
+    },
+    "monitoring": {
+      "breadcrumb": "平台·监控",
+      "title": "系统健康",
+      "subtitle": "机器还在转吗？六个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。更深入的分服务商看板属于故事 10.2。",
+      "state": {
+        "healthy": "正常",
+        "degraded": "降级",
+        "unreachable": "读不到"
+      },
+      "signal": {
+        "database": {
+          "title": "数据库",
+          "value": "可达 · {ms} 毫秒",
+          "detail": "Postgres · {region}，与应用同机房。",
+          "unreachable": {
+            "unreachable": "无响应"
+          },
+          "unreachableDetail": {
+            "unreachable": "数据库没有响应 ping。这不是延迟为零——什么都没测到。"
+          },
+          "linkOut": "Neon 控制台"
+        },
+        "hosting": {
+          "title": "托管",
+          "value": "由 {region} 响应",
+          "detail": "Fly 应用 {app} · 机器 {machineId}。这是正在为你服务的机器；机器总数请看 Fly 控制台，分服务商看板属于故事 10.2。",
+          "unreachable": {
+            "notManaged": "非托管环境"
+          },
+          "unreachableDetail": {
+            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。"
+          },
+          "linkOut": "Fly 控制台"
+        },
+        "schedules": {
+          "title": "定时任务",
+          "value": "{total} 个定时任务中有 {overdue} 个逾期",
+          "detail": "来自每日健康检查的调度探针——已经不再触发的定时任务。下方列出。",
+          "unreachable": {
+            "probeFailed": "无响应"
+          },
+          "unreachableDetail": {
+            "probeFailed": "调度探针没有响应。这不是逾期数为零——什么都没检查。"
+          },
+          "linkOut": "Inngest 函数"
+        },
+        "failedJobs": {
+          "title": "失败任务",
+          "value": "24 小时内 {count} 条进入死信",
+          "detail": "重试用尽后失败且尚未重放。重放在各自工作区的任务看板中进行。",
+          "unreachable": {
+            "probeFailed": "无响应"
+          },
+          "unreachableDetail": {
+            "probeFailed": "死信集合没有响应。这不是计数为零——什么都没数到。"
+          },
+          "linkOut": "Inngest 运行"
+        },
+        "errors": {
+          "title": "错误",
+          "value": "无读数",
+          "detail": "—",
+          "unreachable": {
+            "noReadCredential": "读不到 Sentry",
+            "notConfigured": "错误上报未开启"
+          },
+          "unreachableDetail": {
+            "noReadCredential": "错误确实在上报，但本控制台没有可用于读回计数的 Sentry API 凭据。这不是错误数为零。凭据和分服务商看板随故事 10.2 一起交付。",
+            "notConfigured": "此构建没有配置 Sentry DSN，因此不会向任何地方上报。这不是错误数为零——自托管实例出现这种情况是正常的。"
+          },
+          "linkOut": "Sentry 问题"
+        },
+        "lastHealthCheck": {
+          "title": "最近一次健康检查",
+          "value": "运行于 {ranAt}",
+          "detail": "状态 {status}。检查调度、运行器镜像、索引器镜像。每天只跑一次且不重试，因此漏跑会表现为这里的时间戳变旧。",
+          "unreachable": {
+            "probeFailed": "无响应",
+            "never": "从未运行"
+          },
+          "unreachableDetail": {
+            "probeFailed": "任务台账没有响应。这不是说该检查从未运行过。",
+            "never": "台账中没有任何一次每日健康检查的记录。要么这个部署还没到过 09:00，要么该调度没有注册——而后者正是这个检查本身要发现的故障。"
+          },
+          "linkOut": "任务运行"
+        }
+      },
+      "overdue": {
+        "title": "逾期的定时任务",
+        "subtitle": "连续错过一次以上触发的定时任务，最近漏跑的排在前面。",
+        "count": "{n} 个逾期",
+        "empty": "每个定时任务都在上一个触发点之后运行过。",
+        "foot": "显示 {total} 个逾期中的 {n} 个 · 已检查 {checked} 个调度",
+        "colJob": "任务",
+        "colCron": "Cron",
+        "colLastFired": "上次触发",
+        "colExpected": "应触发于",
+        "never": "从未"
+      }
     }
   }
 }

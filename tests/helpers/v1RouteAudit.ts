@@ -123,20 +123,29 @@ export function auditV1RouteSource(file: string, source: string): RouteViolation
       detail: 'a v1 route reaches deleteWorkItem — the irreversible subtree delete is not exposed',
     });
   }
-  // ⚠️ `work_item:delete` now covers ARCHIVE as well as delete (ADR §3), and v1
-  // DOES expose the two archive operations. So the rule can no longer key on the
-  // permission alone: it admits the archive/restore paths by name and fails any
-  // OTHER route that declares the irreversible key — which is exactly the
-  // property the old `declares-delete-scope` rule protected (no cascade delete
-  // over v1), stated against a vocabulary where one key serves two operations.
-  const ARCHIVE_PATHS = ['/work-items/[key]/archive/', '/work-items/[key]/restore/'];
-  const isArchiveRoute = ARCHIVE_PATHS.some((p) => file.replaceAll('\\', '/').includes(p));
-  if (!isArchiveRoute && /permission\s*:\s*['"]work_item:delete['"]/.test(source)) {
+  // ⚠️ THE PATH EXCEPTION IS GONE (MOTIR-3629), and its absence is the point.
+  // This rule used to read:
+  //
+  //   `work_item:delete` now covers ARCHIVE as well as delete (ADR §3), and v1
+  //   DOES expose the two archive operations. So the rule can no longer key on
+  //   the permission alone: it admits the archive/restore paths by name …
+  //
+  //   const ARCHIVE_PATHS = ['/work-items/[key]/archive/', '/work-items/[key]/restore/'];
+  //
+  // A path ALLOW-LIST standing in for a permission is a missing vocabulary item
+  // announcing itself: v1 exposes archive and not delete, the permission could
+  // not say so, and the audit spelled the difference with filenames instead. With
+  // `work_item:archive` in the catalog the two operations declare their own key,
+  // and this rule keys on the permission again with NO carve-out — which is the
+  // machine-checkable proof that the vocabulary now says what the product means.
+  // A new v1 route that reaches archive gets the property for free; one that
+  // declares `work_item:delete` fails here, wherever it lives.
+  if (/permission\s*:\s*['"]work_item:delete['"]/.test(source)) {
     violations.push({
       file,
       rule: 'declares-unexposed-permission',
       detail:
-        'a v1 route outside archive/restore declares work_item:delete — the irreversible cascade v1 does not expose',
+        'a v1 route declares work_item:delete — the irreversible cascade v1 does not expose (archive/restore declare work_item:archive)',
     });
   }
 

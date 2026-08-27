@@ -31,18 +31,25 @@ describe('the coverage gate resolves every pattern it names', () => {
   //
   // `reportableFiles()` resolves the whole `coverage.include` set against the
   // tree and is memoised at module scope, so every case below is a cache hit —
-  // but the FIRST case pays it, and `vitest.config.ts`'s `testTimeout` is 15 s,
-  // sized for a database test rather than a whole-tree glob. Under `vitest run
-  // --coverage` the v8 provider instruments every module the resolution touches,
-  // and on a CI runner with three shards competing for the box that first case
-  // times out while passing locally — a failure that reads as a broken guard
-  // rather than a slow one (MOTIR-2815; the same shape `tests/rls/
-  // test-call-site-guard.test.ts` and `test-singleton-statement-guard.test.ts`
-  // hit, and the same remedy they took).
+  // but the FIRST case pays it, and it is a whole-tree filesystem answer: 483
+  // files, ~0.8 s on a quiet box.
   //
-  // Hoisting it here does not weaken an assertion: every `expect` below is
-  // unchanged and still fails on a pattern that reaches no file. It moves the
-  // cost to the one place that can honestly carry a budget.
+  // ⚠️ THAT HOIST WAS NOT ENOUGH, and this comment used to say it was. It moved
+  // the cost to a hook with a 60 s budget while the file still ran inside the
+  // sharded, coverage-instrumented Vitest job — and the case still timed out on
+  // `Vitest (1/3)` at 15 s on 2026-08-26 (#2297, 15 691 ms against the 15 000 ms
+  // budget), the third sighting in four days, with zero assertion failures. A
+  // budget derived from a quiet-box measurement cannot cover a contention
+  // multiplier that has been observed above 14x (MOTIR-3144), so the fix was to
+  // leave the contention: MOTIR-3497 moved this file into the `Structural
+  // guards` lane, where it runs with no database, no `--coverage` and one
+  // worker.
+  //
+  // The hoist STAYS anyway, and not as a leftover. One case paying the whole
+  // scan while its siblings pay nothing is a budget that describes no case
+  // honestly, in any lane; and it is what makes the 60 s here mean the SCAN
+  // rather than an assertion about it. It weakens nothing — every `expect`
+  // below is unchanged and still fails on a pattern that reaches no file.
   beforeAll(async () => {
     await reportableFiles();
   }, 60_000);

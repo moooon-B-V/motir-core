@@ -876,6 +876,202 @@ into a dialog — not a new primitive.
 
 ---
 
+## Follow the build — the public changelog + Follow / subscribe (Story 8.9 · gate 8.9.2) — `public-changelog.mock.html`
+
+The PUSH half of this area. `public-projects.mock.html` stays the source of truth
+for every PULL surface (Overview / board / items / tree / roadmap / submit /
+request detail / settings); this asset adds the surfaces that let a visitor
+**leave with something** — a page, a feed, a follow.
+
+**It draws a model it does not decide.** Every behaviour below is fixed by
+`docs/decisions/public-follow-and-changelog.md` (Subtask 8.9.1), and this asset
+cites it rather than re-deciding. Where the two ever disagree, the ADR wins and
+the asset is the drift to fix.
+
+### Why it exists
+
+The public project has **no PUSH affordance at all**: no changelog, no follow, no
+feed, no digest. The tell is in the shipped sidebar — `PublicOverviewSidebar`
+renders a `links.changelog` row pointing at an **external** URL a project admin
+typed in, so Motir currently sends its public visitors to read somebody else's
+changelog. Story 8.10 (the build-in-public launch) routes through 8.9 because the
+launch act is _"follow along"_, and there is presently nothing to follow.
+
+### Panels (review EACH — mistake #31)
+
+| panel | what it draws                                                                                                                                                                                                                                              | consumed by                      |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **A** | **THE ENTRANCE — three doors**, each drawn as real UI inside its real parent and numbered to its note: (1) the **Changelog tab** in the public sub-bar, (2) the **sidebar Links row**, before → after, and (3) the **Follow button** in the public top bar | doors 1–2: 8.9.4 · door 3: 8.9.5 |
+| **B** | the **changelog page**, populated — date-grouped entries, the epic chip, follower count, Load more                                                                                                                                                         | 8.9.4                            |
+| **C** | the **subscribe popover**, signed-in (C1) and signed-out (C2) — all three follower tiers in one surface                                                                                                                                                    | 8.9.5, 8.9.6                     |
+| **D** | **follow states** — rest / followed / hover-to-unfollow, the signed-out path, the "check your inbox" state, the unsubscribe landing                                                                                                                        | 8.9.5, 8.9.7                     |
+| **E** | **states** — nothing shipped yet, loading, error, and the self-hosted build with no email backend                                                                                                                                                          | 8.9.4, 8.9.7                     |
+
+### The access path is DRAWN, and there are THREE doors
+
+Panel A is the answer to _"how do I get to this page?"_, and it answers it as
+pixels rather than prose. Each door is haloed with an accent ring and carries a
+numbered badge matching the note underneath it.
+
+1. **The Changelog TAB** — sixth in the public sub-bar, **after Roadmap**. The two
+   answer adjacent questions (_what is coming_ / _what shipped_), so they sit
+   together. Route `/p/<identifier>/changelog`.
+2. **The sidebar Links row** — the external `links.changelog` row is **REPLACED,
+   not joined**, and loses its `↗` glyph because the destination no longer leaves
+   the site. A project that never set the external URL **gains** the row for the
+   first time, because the native changelog always exists — which also makes the
+   whole Links card unconditional, where it used to disappear for a project that
+   had authored no links at all.
+   (**Owner corrected 2026-08-27:** built by **8.9.4**, not 8.9.5. This asset
+   first attributed it to 8.9.5 because the row sits beside the Follow control in
+   the drawing; 8.9.4's card owns `PublicOverviewSidebar` and says so in its own
+   acceptance criteria. The card is the authority on scope, not the panel
+   layout.)
+3. **The Follow button** — in the public top bar, to the **LEFT of Sign in**. It
+   is the project's affordance rather than the account's, so it leads the account
+   CTAs instead of hiding behind them, and it is present for a signed-out viewer
+   (Panel D2 draws what pressing it does).
+
+Drawing only the tab would have left 8.9.5 to invent the other two.
+
+> **⚠️ THE TAB ROW HERE IS THE SHIPPED FIVE, NOT THE SIBLING ASSET'S FOUR.**
+> `public-projects.mock.html` predates the public TREE tab and draws Overview /
+> Board / Work items / Roadmap. `PublicTabNav.tsx` ships **five** — Overview,
+> Board, Work items, Tree, Roadmap. This asset mirrors the shipped component and
+> adds Changelog as the sixth. Build the tab row from THIS asset, or from the
+> component; the older mock's row is stale.
+
+### What a changelog entry is (§2–§3 of the ADR)
+
+An entry is **derived** from a work item entering a shipped status, dated by that
+transition. Three consequences the UI must respect:
+
+- **Nothing is authored**, so there is no draft, no publish button, no per-entry
+  edit and no "no entries written yet" state. The empty state (E1) means the
+  project **has not shipped anything yet**, which is a true and useful statement.
+- An item that is **reopened leaves** the stream and returns, higher, when it
+  ships again. A reader will legitimately see it twice, months apart.
+- A **cancelled** item never appears, although its status category is `done`.
+  _Resolved_ and _shipped_ are different statements (ADR AMENDMENT 2).
+
+The entry carries `identifier`, `title`, the kind glyph, the **ancestor-epic
+chip**, and the shipped date. It deliberately carries **no** assignee, estimate,
+story points, reporter, sprint — and **no work `type`**, which is internal
+planning vocabulary (`work-item-type-taxonomy.md`), not something a public reader
+needs.
+
+**Grouping:** by DAY, newest first, 20 per page, `Load more` appended. A day
+heading is a label plus a rule, not a card, so the entries stay the only objects.
+
+### Three follower tiers, one popover (§1)
+
+Panel C is the only surface where all three are visible at once, and the count is
+the point: a single "Subscribe" control would collapse a real distinction.
+
+| tier           | affordance                                          | stores                                    |
+| -------------- | --------------------------------------------------- | ----------------------------------------- |
+| **Anonymous**  | the RSS row + **Copy**                              | **nothing at all**                        |
+| **Account**    | the Follow button's state, plus the digest checkbox | a `public_follow` row                     |
+| **Email-only** | the address field + Subscribe                       | a row, unconfirmed until the link is used |
+
+**Signed out, the EMAIL field comes first** and the account route second. The
+visitor arrived from a link and has no Motir account; asking them to make one
+before they may hear about the thing they just decided they were interested in
+inverts the funnel the page exists to feed. The account route is offered with the
+one honest advantage it has — no confirmation step. This is the single place
+Motir deviates from Canny (which requires an account); the ADR's Context carries
+the justification.
+
+**D3 is the state most easily got wrong.** An email-only follow is **not
+following** until the confirmation link is used, so the affordance says _"Check
+your inbox"_ and explicitly promises no further mail until then. Showing success
+here would be a lie the person only discovers by never receiving a digest.
+
+### States, and one whole affordance removed (E4)
+
+E1 (nothing shipped yet) is the state a brand-new public project **opens in**, so
+it is designed rather than defaulted, and it carries the Follow CTA — the moment a
+first-time visitor is most likely to subscribe is before there is anything to
+read.
+
+**E4 is not a disabled control.** Where the deployment configured no
+transactional-email backend, the two email tiers are **absent** and the popover
+collapses to the feed — the same shape the DSN-unset monitoring path takes. A
+greyed-out checkbox with a tooltip would advertise a capability the operator
+cannot enable from that page. RSS and the changelog never depend on email, which
+is the whole cloud-vs-self-host split for this story.
+
+### What is deliberately NOT drawn
+
+- **No private-epic placeholder.** In the TREE, a private epic's own row stays
+  visible as a "this epic is not public" placeholder (6.14). A stream has no
+  placeholder entry, so a private epic is simply **absent** from the changelog —
+  its row included. Its absence here is a decision (ADR §6), not an omission.
+- **No per-entry comment / upvote.** Those belong to a public REQUEST
+  (`public-item-detail.mock.html`); a changelog entry is an announcement.
+- **No cadence picker.** One cadence, weekly (ADR §4) — a per-follower schedule is
+  a preference surface nobody asked for.
+
+### Primitives composed (no hand-rolling)
+
+`Button`, `Pill`, `SectionLabel` (the sidebar + popover section labels), `Card`
+(the entry row + the side cards), `Popover` (subscribe), `Input` (the address
+field), `EmptyState` / `ErrorState` / skeleton, the `IssueTypeIcon` kind hue
+(`--el-type-*`), and the shipped public chrome (top bar / banner / sub-bar /
+Links sidebar) reused verbatim from `public-projects.mock.html`.
+
+> **⚠️ THE MOCK'S CLASS NAMES ARE NOT THE PRIMITIVES' PROP VALUES — build from
+> this table, not from the CSS** (corrected 2026-08-27, while 8.9.4 built the
+> page against the real components):
+>
+> | in the mock                                              | the shipped prop                                                                                                                                                                                 |
+> | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | `.btn-primary`                                           | `<Button variant="primary">`                                                                                                                                                                     |
+> | `.btn-outline`                                           | `<Button variant="secondary">` — there is **no** `outline` variant                                                                                                                               |
+> | `.btn-ghost`                                             | `<Button variant="ghost">`                                                                                                                                                                       |
+> | `.pill-lav` / `.pill-mint` / `.pill-sky` (the epic chip) | `<Pill tone="neutral">` — `Pill`'s `tone` set is `neutral` / `private` / `archived`; the tinted classes are the MOCK's palette, and the shipped chip for a non-semantic label is the neutral one |
+>
+> The mock's classes come from `public-projects.mock.html`, which predates the
+> `@motir/design-system` extraction. Where the two disagree, the PACKAGE wins —
+> a mock is a layout floor, and a prop value it does not have is not a layout.
+
+### Copy index (8.9.4–8.9.7 wire these to i18n; en shown)
+
+| key                                 | en                                                                                                                                                                         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tabChangelog`                      | Changelog                                                                                                                                                                  |
+| `changelogTitle`                    | What shipped                                                                                                                                                               |
+| `changelogLede`                     | Everything {project} has shipped, newest first — straight from the tracker, so it is never out of date. Follow to get a weekly summary, or subscribe with any feed reader. |
+| `changelogEmptyTitle`               | Nothing shipped yet                                                                                                                                                        |
+| `changelogEmptyBody`                | When work items on this project are marked done, they'll appear here automatically. Follow now and you'll hear about the first one.                                        |
+| `changelogErrorTitle`               | We couldn't load the changelog                                                                                                                                             |
+| `changelogErrorBody`                | The feed is still available if you'd rather not wait.                                                                                                                      |
+| `loadMore`                          | Load more                                                                                                                                                                  |
+| `followerCount`                     | {count} followers                                                                                                                                                          |
+| `follow` / `following` / `unfollow` | Follow / Following / Unfollow                                                                                                                                              |
+| `subscribe`                         | Subscribe                                                                                                                                                                  |
+| `subscribeTitle`                    | Follow the build                                                                                                                                                           |
+| `subscribeLede`                     | {project} ships in public. Pick how you want to hear about it — you can change this any time.                                                                              |
+| `tierAccount`                       | Your account                                                                                                                                                               |
+| `tierEmail`                         | By email                                                                                                                                                                   |
+| `tierAccountSignedOut`              | With a Motir account                                                                                                                                                       |
+| `tierFeed`                          | Any feed reader                                                                                                                                                            |
+| `followingAs`                       | Following as {email}                                                                                                                                                       |
+| `digestOptIn`                       | Email me a weekly summary of what shipped                                                                                                                                  |
+| `digestHint`                        | One email a week, on Monday. Weeks with nothing shipped send nothing.                                                                                                      |
+| `emailHint`                         | A weekly summary. We'll send one confirmation email first — no account needed.                                                                                             |
+| `signInAndFollow`                   | Sign in and follow                                                                                                                                                         |
+| `signInHint`                        | Follows this project from your account, and skips the confirmation step.                                                                                                   |
+| `feedHint`                          | No account needed — we never learn you subscribed.                                                                                                                         |
+| `copy`                              | Copy                                                                                                                                                                       |
+| `confirmSentTitle`                  | Check your inbox                                                                                                                                                           |
+| `confirmSentBody`                   | We sent a confirmation to {email}. Follow the link in it and you're subscribed — until then we won't email you again.                                                      |
+| `unsubscribedTitle`                 | You're unsubscribed                                                                                                                                                        |
+| `unsubscribedBody`                  | One click, no sign-in, and it works in a mail found years later. The changelog and the feed are unaffected — they never needed you to be anybody.                          |
+
+Every `en` key owes a `zh` sibling at implementation time (the catalog parity
+gate); the zh register is the locked one this area already uses.
+
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
 | Element                                    | Token                                                                                                                        |

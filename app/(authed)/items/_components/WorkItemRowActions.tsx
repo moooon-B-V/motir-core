@@ -10,9 +10,13 @@ import type { IssueRowData } from './issueRows';
 export function WorkItemRowActions({ row }: { row: IssueRowData }) {
   // MOTIR-2473 — the ⋯ menu's rows split across two keys, not one boolean:
   // Edit / Expand / Re-plan / Add-to-sprint are `work_item:edit`; Archive and
-  // Delete are `work_item:delete` (`workItemsService` :2179 / :2267).
+  // Delete were both `work_item:delete`.
+  // MOTIR-3629 — and they are THREE keys now, because those last two were never
+  // one operation: Archive/Restore assert `work_item:archive` (reversible, one
+  // row) and Delete asserts `work_item:delete` (irreversible, the whole subtree).
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
+  const canArchive = can('work_item:archive');
   const canDelete = can('work_item:delete');
   const notifyIssuesChanged = useNotifyIssuesChanged();
   const [edits, setEdits] = useState<{ kind: 'expand' | 'replan'; itemKey: string } | null>(null);
@@ -35,6 +39,7 @@ export function WorkItemRowActions({ row }: { row: IssueRowData }) {
           identifier={row.identifier}
           title={row.title}
           canEdit={canEdit}
+          canArchive={canArchive}
           canDelete={canDelete}
           planEdits={{
             kind: row.kind,

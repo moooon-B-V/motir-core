@@ -61,4 +61,24 @@ export const jobRunDlqRepository = {
   async countActiveByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.jobRunDlq.count({ where: { workspaceId, replayedAt: null } });
   },
+
+  /**
+   * Count of ACTIVE dead-letter entries across EVERY workspace, optionally only
+   * those that failed since a moment — the operator console's "Failed jobs"
+   * signal (MOTIR-1167, design Panel 8's 24-hour figure).
+   *
+   * No workspace filter, so the caller MUST supply a `withSystemContext` tx —
+   * the same requirement, for the same reason, as `jobRunRepository.listAll`:
+   * that is the only RLS branch admitting the untenanted `workspace_id IS NULL`
+   * rows every `system.*` job writes, and a system job dead-lettering is exactly
+   * the case this signal exists to show.
+   *
+   * `replayedAt: null` is the same predicate the per-workspace badge uses:
+   * entries an operator has already retried are not still asking for attention.
+   */
+  async countActiveSince(since: Date | null, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.jobRunDlq.count({
+      where: { replayedAt: null, ...(since ? { lastFailedAt: { gte: since } } : {}) },
+    });
+  },
 };

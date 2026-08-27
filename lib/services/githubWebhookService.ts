@@ -364,10 +364,29 @@ export const githubWebhookService = {
     // paths went uncaptured, and only one of those two is recoverable by a later
     // read of the host.
     //
-    // Gated on the MERGE, not on the sync's outcome: the paths are a fact about
-    // the repository, so they are worth capturing even when the delivery resolved
-    // no work item (a PR linked by hand later is then already carrying them).
-    if (cr.merged) await captureMergedPullRequestFiles(body, cr);
+    // Gated on NEITHER the merge nor the sync's outcome (MOTIR-3230, widening
+    // MOTIR-2922's merge-only capture): the paths are a fact about the repository,
+    // so they are worth capturing even when the delivery resolved no work item (a
+    // PR linked by hand later is then already carrying them) — and, the reason this
+    // widened, even when the pull request is still OPEN.
+    //
+    // ⚠️ A MERGED-ONLY CAPTURE MAKES THE SUBSUMPTION CHECK STRUCTURALLY BLIND IN
+    // THE ONE WINDOW IT MATTERS. That check reads `changedPaths`, so a row with an
+    // empty array is invisible to it however the query is widened — an open pull
+    // request could not be found by a path search because nothing had ever written
+    // its paths down. Widening the query without this is a no-op, which is why the
+    // two land together.
+    //
+    // ⚠️ AND THE COST IS BOUNDED BY `HANDLED_PR_ACTIONS`, which is what makes this
+    // affordable: `opened` · `reopened` · `closed` — three deliveries per pull
+    // request, not one per push, because `synchronize` is not handled. So this adds
+    // at most ONE file listing per pull request opened. The honest limitation, since
+    // nothing else states it: the open-time capture is a SNAPSHOT, refreshed only at
+    // merge, so a path added by a later push is not visible until the merge
+    // delivery. For the question the open arm answers — *is somebody working here
+    // right now* — an opening snapshot is the right granularity, and a partial
+    // answer during the window beats a complete one after it.
+    await capturePullRequestFiles(body, cr);
 
     return result;
   },
@@ -635,9 +654,14 @@ async function reconcileInstallation(
 }
 
 /**
- * Capture a MERGED pull request's changed paths + merge instant onto its mirror
- * row (MOTIR-2922) — the substrate a subsumption check needs, and the one the
- * mirror has never carried.
+ * Capture a pull request's changed paths + merge instant onto its mirror row
+ * (MOTIR-2922, widened to OPEN pull requests by MOTIR-3230) — the substrate a
+ * subsumption check needs, and the one the mirror has never carried.
+ *
+ * `readMergedAt` already returns `Date | null` and `MergeCaptureInput.mergedAt`
+ * already accepts it, so the open case needs no new shape: an open pull request
+ * simply records its paths with a null merge instant, which is exactly what
+ * distinguishes the two arms downstream. Nothing about the merged path changes.
  *
  * ⚠️ EVERY failure here is swallowed. This runs after the status sync's
  * transaction has committed, so by `notes.html` #39 (PROD-443) it may not
@@ -668,7 +692,7 @@ async function reconcileInstallation(
  * at all means calling this directly. (Same reasoning `changeRequestStatusSync`
  * records for exporting `resolveChangeRequestWorkItem`.)
  */
-export async function captureMergedPullRequestFiles(
+export async function capturePullRequestFiles(
   body: Record<string, unknown>,
   cr: NormalizedChangeRequest,
 ): Promise<void> {
@@ -709,7 +733,7 @@ export async function captureMergedPullRequestFiles(
     } catch (err) {
       console.error(
         `[githubWebhookService] changed-path capture failed for ${repo.owner}/${repo.name}` +
-          `#${cr.number}; the merge is recorded with no paths:`,
+          `#${cr.number}; the pull request is recorded with no paths:`,
         err,
       );
     }
@@ -732,7 +756,7 @@ export async function captureMergedPullRequestFiles(
       if (touched === 0) {
         console.warn(
           `[githubWebhookService] no ${repo.owner}/${repo.name}#${cr.number} row to stamp; ` +
-            `the merge capture was dropped`,
+            `the path capture was dropped`,
         );
       }
     });

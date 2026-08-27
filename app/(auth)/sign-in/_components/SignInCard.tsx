@@ -17,6 +17,7 @@ import {
   IdeaCarried,
 } from '../../_components/AuthShell';
 import { GoogleButton } from '../../_components/GoogleButton';
+import { PasskeySignInButton } from '../../_components/PasskeySignInButton';
 import { TwoFactorChallenge } from './TwoFactorChallenge';
 import {
   TWO_FACTOR_OTP_PERIOD_MINUTES,
@@ -206,8 +207,10 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
       // race meant it was already coin-flipping on whichever navigation won.
       const result = await signIn.email({ email, password, callbackURL });
       if (result?.error) {
-        // Unified error message — no enumeration. Mockup 07's exact copy.
-        setPasswordError(t('wrongPassword'));
+        // Unified error message — no enumeration — EXCEPT for a suspended
+        // account, which is raised only after the credential verified. See
+        // `signInErrorKey`.
+        setPasswordError(t(signInErrorKey(result.error)));
         setSubmitting(false);
         return;
       }
@@ -274,8 +277,14 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
 
       {step === 'email' ? (
         <form onSubmit={onContinueEmail} className="flex flex-col gap-5" noValidate>
-          {/* Google button first per the AC: tab order = Google → email → continue. */}
+          {/* Google button first per the AC: tab order = Google → passkey →
+              email → continue. The passkey control sits directly under it and
+              ABOVE the rule (`design/auth/passkey-sign-in.mock.html`, panel 2):
+              everything above the rule signs you in without typing anything,
+              everything below it is the email path. Below the rule it would read
+              as an alternative to the email FIELD, which it is not. */}
           <GoogleButton callbackURL={callbackURL} onError={setPageError} />
+          <PasskeySignInButton callbackURL={callbackURL} onError={setPageError} />
           <OrDivider />
           <Input
             type="email"
@@ -405,4 +414,29 @@ function FooterLink({
       </Link>
     </p>
   );
+}
+
+/**
+ * Which message a failed credential sign-in shows (MOTIR-1167).
+ *
+ * ⚠️ THE DEFAULT IS UNIFIED ON PURPOSE, AND THE ONE BRANCH DOES NOT WEAKEN IT.
+ * Every other failure collapses to the same "that password isn't right" copy so
+ * the form enumerates nothing — an attacker must not learn from it whether an
+ * address has an account. `ACCOUNT_SUSPENDED` is safe to distinguish because of
+ * WHEN it is raised: the guard hangs off `session.create`, which runs only after
+ * the credential has already verified, so the code reaches nobody who has not
+ * just proved they own the account. There is nothing left to enumerate.
+ *
+ * And saying it is not a nicety. Without this branch the refusal renders as
+ * "that password isn't right", which is FALSE — the password was right — so the
+ * person resets a working password, gets in nowhere, and the suspension an
+ * operator applied is invisible to the only person it happened to. Measured on
+ * a live render before this branch existed.
+ *
+ * The operator's REASON is deliberately not here: it is written for other
+ * operators, and `lib/auth/accountSuspension.ts` carries that argument.
+ */
+function signInErrorKey(error: unknown): 'accountSuspended' | 'wrongPassword' {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return code === 'ACCOUNT_SUSPENDED' ? 'accountSuspended' : 'wrongPassword';
 }

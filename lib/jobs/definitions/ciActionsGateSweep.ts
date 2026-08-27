@@ -33,7 +33,15 @@ import { defineJob } from '../defineJob';
 // derived-predicate read, so a re-run recomputes the same answer and re-issues at
 // most the calls that had not landed.
 
-/** Every hour, on the half hour — clear of the other `system.*` schedules. */
+/** Every hour, on the half hour. Hourly is what the RESUME half's 24 h GitHub
+ *  deadline needs bounded; :30 is a clustered minute.
+ *
+ *  ⚠️ VALUE UNCHANGED, RATIONALE CORRECTED (MOTIR-3314). It read "clear of the
+ *  other `system.*` schedules", which is the exact sentence the clustering
+ *  inverts: on a compute that suspends when idle, being clear of the others is
+ *  what holds the database awake. This job happened to already sit on a clustered
+ *  minute (`lib/jobs/schedules.ts`), so it needed no re-timing — only a reason
+ *  that is still true. */
 export const CI_ACTIONS_GATE_SWEEP_CRON = '30 * * * *';
 
 export const ciActionsGateSweep = defineJob(

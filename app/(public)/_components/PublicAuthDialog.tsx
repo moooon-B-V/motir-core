@@ -144,7 +144,10 @@ function AuthForm({
     try {
       const result = await signIn.email({ email, password, callbackURL });
       if (result?.error) {
-        setPasswordError(t('wrongPassword'));
+        // Unified error message — no enumeration — EXCEPT for a suspended
+        // account, which is raised only after the credential verified. See
+        // `signInErrorKey`.
+        setPasswordError(t(signInErrorKey(result.error)));
         setSubmitting(false);
         return;
       }
@@ -369,4 +372,29 @@ function CrossLink({
       </button>
     </p>
   );
+}
+
+/**
+ * Which message a failed credential sign-in shows (MOTIR-1167).
+ *
+ * ⚠️ THE DEFAULT IS UNIFIED ON PURPOSE, AND THE ONE BRANCH DOES NOT WEAKEN IT.
+ * Every other failure collapses to the same "that password isn't right" copy so
+ * the form enumerates nothing — an attacker must not learn from it whether an
+ * address has an account. `ACCOUNT_SUSPENDED` is safe to distinguish because of
+ * WHEN it is raised: the guard hangs off `session.create`, which runs only after
+ * the credential has already verified, so the code reaches nobody who has not
+ * just proved they own the account. There is nothing left to enumerate.
+ *
+ * And saying it is not a nicety. Without this branch the refusal renders as
+ * "that password isn't right", which is FALSE — the password was right — so the
+ * person resets a working password, gets in nowhere, and the suspension an
+ * operator applied is invisible to the only person it happened to. Measured on
+ * a live render before this branch existed.
+ *
+ * The operator's REASON is deliberately not here: it is written for other
+ * operators, and `lib/auth/accountSuspension.ts` carries that argument.
+ */
+function signInErrorKey(error: unknown): 'accountSuspended' | 'wrongPassword' {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return code === 'ACCOUNT_SUSPENDED' ? 'accountSuspended' : 'wrongPassword';
 }

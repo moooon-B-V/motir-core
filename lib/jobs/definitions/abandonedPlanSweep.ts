@@ -28,16 +28,21 @@ import { defineJob } from '../defineJob';
 // Bounded per run (`ABANDONED_PLAN_SWEEP_BATCH_SIZE`).
 
 /**
- * Hourly at :10 — ten minutes before `autoPlanCadenceTick` (`20 * * * *`).
+ * Hourly at :00 — thirty minutes before `autoPlanCadenceTick` (`30 * * * *`).
  *
- * The ORDER is the reason for the number. This sweep's only consumer is the
- * cadence gate, so reconciling at :10 means a plan freed this hour unpauses that
- * project's planning in the SAME hour's tick rather than the next one. Hourly is
- * the right grain for the same reason the cadence tick is: what it unblocks moves
- * on a human timescale, and the cost of a pass that finds nothing is one indexed
- * read.
+ * The ORDER is the reason for the number, and it is UNCHANGED (MOTIR-3314). This
+ * sweep's only consumer is the cadence gate, so reconciling before it means a
+ * plan freed this hour unpauses that project's planning in the SAME hour's tick
+ * rather than the next one. Hourly is the right grain for the same reason the
+ * cadence tick is: what it unblocks moves on a human timescale, and the cost of a
+ * pass that finds nothing is one indexed read.
+ *
+ * WHAT THE RE-TIMING GAVE UP: nothing. The pair moved :10/:20 → :00/:30, which
+ * preserves the ordering and WIDENS the sweep→tick lead from ten minutes to
+ * thirty. What it bought is two shared wake-minutes instead of two private ones
+ * (`lib/jobs/schedules.ts`, the cluster invariant).
  */
-export const ABANDONED_PLAN_SWEEP_CRON = '10 * * * *';
+export const ABANDONED_PLAN_SWEEP_CRON = '0 * * * *';
 
 export const abandonedPlanSweep = defineJob(
   {

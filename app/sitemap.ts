@@ -58,7 +58,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 0.8,
     });
-    for (const tab of ['board', 'items', 'roadmap']) {
+    // Every public tab is a distinct indexable URL. `tree` (6.14.10) and
+    // `changelog` (8.9.4) were both missing from this list — `changelog` because
+    // it did not exist, `tree` as an oversight when that tab shipped. Both are a
+    // crawlable public surface, so both belong here.
+    for (const tab of ['board', 'items', 'tree', 'roadmap', 'changelog']) {
       entries.push({
         url: `${base}/${tab}`,
         lastModified: project.updatedAt,

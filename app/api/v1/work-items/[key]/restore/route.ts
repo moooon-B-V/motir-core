@@ -20,15 +20,25 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // first cut, `work_items:delete` is off by default in `DEFAULT_TOKEN_SCOPES`,
 // and exposing it later is additive under §8 while withdrawing it could not be.
 //
-// ⚠️ ITS OWN SCOPE, distinct from `work_items:write`: a token that may EDIT an
-// item may not therefore REMOVE it. And scopes NARROW, never widen — the service
-// still gates on `assertCanEdit`, so a `work_items:archive` token held by
-// someone without project edit rights is refused all the same.
+// ⚠️ ITS OWN PERMISSION, distinct from `work_item:edit`: a token that may EDIT
+// an item may not therefore REMOVE it. And a grant NARROWS, never widens — the
+// service asserts the same key, so a `work_item:archive` token held by someone
+// whose role withholds it is refused all the same.
+//
+// ⚠️ THE KEY IS `work_item:archive` (MOTIR-3629), and this route is why it
+// exists. The header above says archiving does NOT cascade and IS reversible;
+// the key it used to declare was `work_item:delete`, named for the operation
+// that is neither. `/api/v1` deliberately exposes archive and not delete, and
+// under one key that could only be expressed by the route AUDIT admitting these
+// two paths by NAME (`tests/helpers/v1RouteAudit.ts`) — a path allow-list
+// standing in for a permission. That exception is deleted with this change, and
+// the audit keys on the permission again: any v1 route declaring
+// `work_item:delete` is now a violation with no carve-out.
 //
 // IDEMPOTENT: the service raises no already-archived error, it simply re-stamps.
 // Said here rather than inventing a conflict status the service does not produce.
 export const POST = withV1Route<{ key: string }>(
-  { permission: 'work_item:delete' },
+  { permission: 'work_item:archive' },
   async (ctx) => {
     const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
