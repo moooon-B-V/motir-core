@@ -91,6 +91,29 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * saves proportionally more. Re-measure from the first green CI run that
  * includes it; expect something between the two.
  *
+ * ⚠️ `follow-the-build-flow.spec.ts` (MOTIR-1117) carries the LOCAL provenance
+ * too — and it is the ONE entry here measured from a SINGLE passing run rather
+ * than three, which is said plainly rather than dressed up as the usual method.
+ *
+ * Measured on 2026-08-27 against a production build, on its own port (3411) and
+ * its own database: **3.3 s**, on a cold server, `1 passed (2.2m)` including
+ * harness startup. Two earlier runs are NOT readings — both failed on defects in
+ * the spec itself (an illegal `todo → done` seed transition, then an assertion
+ * that raced the followed button's hover label), so their 1.3 s and 33.5 s
+ * measure a crash and a 30-second locator timeout, not the journey.
+ *
+ * Only one clean reading was taken because the harness rebuilds the whole app
+ * per invocation (~8-10 min) and the box was running several parallel sessions
+ * at load ~4; a second and third would have measured contention as much as the
+ * spec. 3.3 s is also the FASTEST entry in this table, which is plausible for
+ * what it does — two sign-ups and six navigations against an already-compiled
+ * production build, with no drag, no chart and no at-scale seed — but a single
+ * sample on a loaded box is the weakest provenance in this file.
+ *
+ * **Re-measure from the first green CI run that includes it**, and expect a
+ * higher number: the local readings above run at or below their CI cost, never
+ * above it, and under-estimating is the direction that unbalances a bin-packer.
+ *
  * ⚠️ `two-factor.spec.ts` (MOTIR-1223) carries the LOCAL provenance too, and the
  * guard caught it with no entry before it ever reached CI — which is this file
  * working as designed: the spec passed locally and would have been assigned to no
@@ -321,6 +344,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'epic6-journey.spec.ts': 12.7,
   'estimation.spec.ts': 12.9,
   'filter-builder.spec.ts': 20.0,
+  'follow-the-build-flow.spec.ts': 3.3,
   'github.spec.ts': 7.1,
   'gitlab.spec.ts': 4.9,
   'home.spec.ts': 8.0,
