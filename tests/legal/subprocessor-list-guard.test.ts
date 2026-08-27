@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   INVISIBLE_TO_THIS_GUARD,
+  LEAVING_BEFORE_LAUNCH,
   NOT_A_VENDOR_HOST,
   VENDOR_SIGNATURES,
 } from '../helpers/subprocessorRegistry';
@@ -31,6 +32,19 @@ import {
 // instruction — "this page is amended in the same change" — and the change
 // belonged to a different card, so nobody read it. A method section cannot fire
 // when somebody else's pull request changes the answer. A test can.
+//
+// ── ⚠️ THE PAGE STATES THE LAUNCH SET, AND SO DOES THIS GUARD ───────────────
+// Motir is not generally available, so nothing is receiving customer data today
+// and the page's earlier live/pending split sorted every row into one bucket.
+// The page now states the vendor set AS AT GENERAL AVAILABILITY, and every
+// assertion below reads "will receive at launch" where it once read "receives".
+//
+// This is the difference between a guard that protects the page and one that
+// corrupts it. `inngest` is still imported and is deliberately NOT on the page,
+// because it will not exist at launch; a guard keyed to today's manifest would
+// fail until somebody put a departing vendor back onto a published legal
+// document. LEAVING_BEFORE_LAUNCH holds those, and the assertion below keeps
+// them OFF the page rather than on it.
 //
 // ── ⚠️ WHAT THIS GUARD CAN AND CANNOT SEE ───────────────────────────────────
 // It checks the REPOSITORY half of the page and nothing else:
@@ -77,7 +91,7 @@ const ROOT = join(__dirname, '..', '..');
 const PAGE = join(ROOT, 'content', 'legal', 'subprocessors.md');
 const SCAN_ROOTS = ['lib', 'app'];
 
-/** Sections whose rows name a vendor that IS receiving data today. */
+/** Sections whose rows name a vendor that will receive data at general availability. */
 const LIVE_SECTIONS = [
   'Core subprocessors',
   'Sign-in',
@@ -85,9 +99,8 @@ const LIVE_SECTIONS = [
   'AI features',
   'Optional integrations',
   'Corporate correspondence',
+  'Payments',
 ];
-/** The one section whose rows name a vendor that is NOT receiving data. */
-const NOT_YET_SECTION = 'Not yet subprocessors';
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir).sort()) {
@@ -148,7 +161,6 @@ const INSTALLED = new Set([
 const HOSTS = hostsInTree();
 const BY_SECTION = vendorsBySection();
 const LIVE = vendorsIn(LIVE_SECTIONS, BY_SECTION);
-const NOT_YET = vendorsIn([NOT_YET_SECTION], BY_SECTION);
 
 /** The evidence that makes a vendor live, or an empty array. */
 function evidenceFor(sig: (typeof VENDOR_SIGNATURES)[number]): string[] {
@@ -164,7 +176,6 @@ describe('the subprocessor list agrees with the repository (MOTIR-3631)', () => 
     // totality test dies quietly.
     expect(HOSTS.size).toBeGreaterThanOrEqual(20);
     expect(LIVE.size).toBeGreaterThanOrEqual(8);
-    expect(BY_SECTION.has(`${NOT_YET_SECTION} — planned, and receiving nothing today`)).toBe(true);
     for (const prefix of LIVE_SECTIONS) {
       expect(
         [...BY_SECTION.keys()].some((s) => s.startsWith(prefix)),
@@ -173,28 +184,38 @@ describe('the subprocessor list agrees with the repository (MOTIR-3631)', () => 
     }
   });
 
-  it('lists every vendor the repository proves is receiving data', () => {
+  it('lists every vendor the repository proves will receive data at launch', () => {
     const missing = VENDOR_SIGNATURES.filter((s) => evidenceFor(s).length > 0)
       .filter((s) => !LIVE.has(s.vendor))
       .map((s) => `${s.vendor} (${evidenceFor(s).join(', ')})`);
 
     expect(
       missing,
-      `these vendors have live evidence in the repository but no row in a live section of ` +
-        `content/legal/subprocessors.md. Add the row, or move it out of "${NOT_YET_SECTION}".`,
+      `these vendors have live evidence in the repository but no row in ` +
+        `content/legal/subprocessors.md. Add the row — or, if the vendor is on its way out ` +
+        `before general availability, record it in LEAVING_BEFORE_LAUNCH with the card that ` +
+        `removes it and delete its VendorSignature.`,
     ).toEqual([]);
   });
 
   it('does not list a vendor the repository shows is receiving nothing', () => {
+    // A vendor this guard has ALREADY declared it cannot see is exempt. Stripe is
+    // the case that named the rule: its signature is real and its `api.stripe.com`
+    // mapping still has to exist for the host-accounting test below, but the SDK
+    // and every billing route live in motir-ai, so `evidenceFor` is empty here and
+    // always will be. Without this filter the guard would call a TRUE row false —
+    // and the remedy a reader would reach for is deleting an accurate disclosure
+    // from a published legal page, which is the worst outcome this file can cause.
     const overclaimed = VENDOR_SIGNATURES.filter((s) => evidenceFor(s).length === 0)
       .filter((s) => LIVE.has(s.vendor))
+      .filter((s) => !(s.vendor in INVISIBLE_TO_THIS_GUARD))
       .map((s) => s.vendor);
 
     expect(
       overclaimed,
       `these vendors sit in a live section but nothing in the repository reaches them. ` +
-        `Naming a company that receives no data is a false statement — move them to ` +
-        `"${NOT_YET_SECTION}", or add their signature if the evidence changed shape.`,
+        `Naming a company that receives no data is a false statement — remove the row, or ` +
+        `adjust its signature if the evidence changed shape.`,
     ).toEqual([]);
   });
 
@@ -239,8 +260,22 @@ describe('the subprocessor list agrees with the repository (MOTIR-3631)', () => 
     ).toEqual([]);
   });
 
-  it('never lists a vendor as both live and not-yet', () => {
-    const both = [...LIVE].filter((v) => NOT_YET.has(v)).sort();
-    expect(both, 'a vendor cannot be receiving data and receiving nothing').toEqual([]);
+  it('keeps a departing vendor OFF the page', () => {
+    // The inverse of every other assertion here, and the one that lets the page
+    // describe launch rather than this afternoon. A vendor on its way out is
+    // absent by decision, and the decision is named in LEAVING_BEFORE_LAUNCH
+    // with the card that removes it — so the omission is attributable rather
+    // than something that just happened to nobody's account.
+    const resurrected = Object.keys(LEAVING_BEFORE_LAUNCH)
+      .filter((v) => LIVE.has(v))
+      .sort();
+
+    expect(
+      resurrected,
+      `these vendors are recorded as leaving before general availability, yet they appear ` +
+        `in a live section of the page. Either the retirement was abandoned — in which case ` +
+        `remove the LEAVING_BEFORE_LAUNCH entry and add a VendorSignature — or the row was ` +
+        `added by mistake and states something that will not be true at launch.`,
+    ).toEqual([]);
   });
 });

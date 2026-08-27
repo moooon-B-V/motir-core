@@ -8,6 +8,21 @@
 // ⚠️ THE PAGE IS THE SOURCE OF TRUTH FOR WHAT WE DISCLOSE. This file is the
 // source of truth for WHAT COUNTS AS EVIDENCE. When they disagree the guard
 // fails and a person decides which was wrong — the guard never edits the page.
+//
+// ── ⚠️ THE PAGE DESCRIBES LAUNCH, NOT TODAY ─────────────────────────────────
+// Motir is not generally available, so no vendor is receiving customer data
+// today and a live/pending split on the page would sort every row into the same
+// bucket. The page therefore states the vendor set AS AT GENERAL AVAILABILITY,
+// and this registry has to be read the same way: a signature means "this vendor
+// will receive data at launch", not "this import exists right now".
+//
+// The consequence that bites is `inngest`, which is still a dependency in
+// `package.json` and is NOT on the page, because it is being replaced by an
+// in-product Postgres queue and will not exist at launch. A signature for it
+// would force a vendor onto a published legal page purely because a
+// mid-migration import had not been deleted yet — the guard demanding a false
+// statement. Departing vendors belong in LEAVING_BEFORE_LAUNCH below, which
+// keeps the omission deliberate and attributable instead of silent.
 
 /** A vendor, and the repository facts that prove it receives data. */
 export interface VendorSignature {
@@ -35,7 +50,6 @@ export interface VendorSignature {
 export const VENDOR_SIGNATURES: readonly VendorSignature[] = [
   { vendor: 'Fly.io', hosts: ['fly.io', 'api.machines.dev'] },
   { vendor: 'Tigris', packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'] },
-  { vendor: 'Inngest', packages: ['inngest'] },
   { vendor: 'Resend', hosts: ['api.resend.com'] },
   { vendor: 'Sentry', packages: ['@sentry/nextjs'] },
   { vendor: 'Google', hosts: ['accounts.google.com', 'oauth2.googleapis.com'] },
@@ -103,10 +117,22 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
  * guard can read, so their rows are held by the human re-run of the page's own
  * method section and by nothing else.
  */
+export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, string>> = {
+  Inngest:
+    'still imported in package.json; replaced by an in-product Postgres queue ' +
+    '(MOTIR-3413) and the SDK deleted by MOTIR-3418, both before general availability',
+};
+
 export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {
   Neon: 'reached over the Postgres wire protocol via DATABASE_URL, not an HTTPS host or an SDK',
   'motir-ai': 'reached at MOTIR_AI_URL, a deployment secret rather than a literal in the tree',
   OpenAI: 'reached THROUGH the gateway; motir-core never names it',
   Brave: 'reached THROUGH the gateway; motir-core never names it',
+  DeepSeek:
+    'reached THROUGH the gateway; motir-core names only the model IDS ' +
+    '(lib/projectAiSettings/plannerModels.ts), never a host or an SDK',
   'Spaceship (Spacemail)': 'a mailbox, with no code path at all',
+  Stripe:
+    'the `stripe` SDK and the checkout, portal, subscription, seat-sync and webhook ' +
+    'routes are all in motir-ai; motir-core holds only the E2E billing mock',
 };
