@@ -15,6 +15,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  ShieldCheck,
   Sparkles,
   SunMoon,
   Users,
@@ -320,6 +321,17 @@ export function AppCommandPalette({
         ),
     });
   }
+  // Org SECURITY — the require-2FA policy (Story MOTIR-1215 · MOTIR-3646). Not
+  // gated on `hasProject`: the pane is ORG-scoped, so it is reachable whatever
+  // project is active, and the org menu's own row is the other door onto it.
+  // Not gated on the workspace-tier reveal either — an organization exists at
+  // every count, unlike the workspace settings home above.
+  navActions.push({
+    id: 'nav-org-security',
+    label: t('commandPalette.goToOrgSecurity'),
+    icon: <ShieldCheck />,
+    onSelect: () => go('/settings/organization/security'),
+  });
   groups.push({ heading: t('commandPalette.navigationHeading'), actions: navActions });
 
   // Project settings — per-section deep links generated FROM the settings-nav

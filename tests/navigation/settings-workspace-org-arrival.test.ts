@@ -19,9 +19,15 @@ const ROWS = [
   { row: 12, rel: `${S}/workspace/gitlab/page.tsx`, width: null },
   { row: 13, rel: `${S}/organization/page.tsx`, width: '45rem' },
   { row: 14, rel: `${S}/organization/billing/page.tsx`, width: '64rem' },
+  // Story MOTIR-1215 · MOTIR-3646 — the org Security pane. Not one of the four
+  // pages MOTIR-3448 measured; it JOINS their contract, because a new
+  // `settings/**` route owes the same arrival and the same boundary rule the
+  // moment it exists rather than the next time somebody audits the family.
+  // 45rem matches `organization/page.tsx`: one centred card, same column.
+  { row: 15, rel: `${S}/organization/security/page.tsx`, width: '45rem' },
 ] as const;
 
-describe('all four mount the shared frame (MOTIR-3448)', () => {
+describe('every settings pane mounts the shared frame (MOTIR-3448; MOTIR-3646 joins)', () => {
   it.each(ROWS)(
     'row $row · $rel mounts SettingsPaneFrame and draws no frame of its own',
     ({ rel }) => {

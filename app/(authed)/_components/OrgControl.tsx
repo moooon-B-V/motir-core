@@ -4,7 +4,16 @@ import { useState, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
-import { Check, ChevronDown, Coins, CreditCard, Plus, Settings, Users } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Coins,
+  CreditCard,
+  Plus,
+  Settings,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { Modal } from '@/components/ui/Modal';
@@ -110,6 +119,18 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
               <MenuLink href="/settings/organization" onNavigate={() => setOpen(false)}>
                 <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
                 {t('menu.settings')}
+              </MenuLink>
+            </li>
+            <li>
+              {/* Security — the org's require-2FA policy (Story MOTIR-1215 ·
+                  MOTIR-3646, design/org-admin/security-policy panel 1). Directly
+                  under Settings, where the design puts it: it is a
+                  settings-shaped destination, and keeping it above Members holds
+                  the two account-level concerns together. A route with no door
+                  is not shipped. */}
+              <MenuLink href="/settings/organization/security" onNavigate={() => setOpen(false)}>
+                <ShieldCheck className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                {t('menu.security')}
               </MenuLink>
             </li>
             <li>

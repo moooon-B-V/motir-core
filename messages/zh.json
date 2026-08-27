@@ -609,7 +609,8 @@
       "projectGone": "该项目已不存在。",
       "noProjectForParent": "选择父级前请先选择或创建一个项目。",
       "unknownIssueType": "未知的工作项类型。",
-      "couldNotLink": "无法关联所选工作项。"
+      "couldNotLink": "无法关联所选工作项。",
+      "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -1045,7 +1046,8 @@
       "current": "当前",
       "goToBacklog": "前往待办列表",
       "goToFilters": "前往筛选器",
-      "aiHeading": "AI"
+      "aiHeading": "AI",
+      "goToOrgSecurity": "前往组织安全设置"
     },
     "shortcuts": {
       "title": "键盘快捷键",
@@ -4293,7 +4295,8 @@
       "switchOrg": "切换组织",
       "createOrg": "创建组织",
       "workspacesCount": "{count} 个工作区",
-      "usage": "用量与费用"
+      "usage": "用量与费用",
+      "security": "安全"
     },
     "settings": {
       "title": "组织设置",
@@ -4401,6 +4404,21 @@
       "loading": "正在加载成员…",
       "noActiveOrgTitle": "无组织",
       "noActiveOrgDescription": "你还不属于任何组织。"
+    },
+    "security": {
+      "title": "安全",
+      "subtitleOrg": "{org} 中所有成员的登录要求。",
+      "cardTitle": "要求两步验证",
+      "cardBodyOrg": "该组织的所有成员登录时都需要第二重验证。不会有人被登出，也不会有人被移除——下次打开 Motir 时，系统会请对方设置一次，任意一种方式均可：通行密钥、验证器应用或邮件验证码。",
+      "stateOff": "未要求",
+      "stateOnOrg": "{org} 的所有成员均需启用",
+      "lockedBy": "由 {org} 要求",
+      "lockedNoteAbove": "{org} 要求所有成员启用两步验证，因此这里无法关闭。{org} 的所有者或管理员可在组织的安全设置中更改。",
+      "lockedNoteBoth": "该工作区要求两步验证，{org} 也同样要求。关闭组织的要求后，该工作区自身的要求仍然保留。",
+      "savedToast": "安全策略已保存",
+      "saveErrorTitle": "无法保存安全策略",
+      "refusedTitle": "你没有权限访问",
+      "refusedDescription": "只有 {tier} 的所有者或管理员才能更改其安全设置。如需变更，请联系他们。"
     }
   },
   "triage": {

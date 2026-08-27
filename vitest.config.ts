@@ -280,6 +280,22 @@ export default defineConfig({
         'lib/settings/projectSettingsNav.ts',
         'lib/settings/projectNavAccess.ts',
         'app/**/_components/ProjectAccessProvider.tsx',
+
+        // Story MOTIR-1215 · Subtask MOTIR-3646 — the require-2FA control and
+        // its Server Action. MEASURED at 100/100/100/100 each before being
+        // pinned below, the sequence this block follows everywhere.
+        //
+        // ⚠️ THE PAGE ITSELF IS NOT HERE, and that is the family's stated gap
+        // rather than an omission: no `app/**/page.tsx` has ever entered this
+        // report (an async Server Component would have to be awaited to be
+        // covered, and this repo has no RSC render harness). Its behaviour is
+        // asserted structurally in `tests/navigation/settings-workspace-org-arrival.test.ts`
+        // and by the route SMOKE in `tests/components/org-security-pane.test.tsx`.
+        //
+        // The COMPONENT is the piece worth gating: MOTIR-3647 mounts this same
+        // file at the workspace tier, so a regression here breaks two surfaces.
+        'app/**/_components/RequireTwoFactorCard.tsx',
+        'app/**/organization/security/actions.ts',
         // ⚠️ `_guard.tsx` is REPORT-ONLY (below `thresholds`), and the reason is
         // worth stating rather than quietly omitting: MOTIR-2476 measured it at
         // 50% lines, and the uncovered half is `guardSettingsPage`'s body — one
@@ -1510,6 +1526,20 @@ export default defineConfig({
         // Story MOTIR-3440 · Subtask MOTIR-3449 — the two arrival primitives,
         // MEASURED at 100/100/100/100 each before being pinned (see `include`).
         'components/ui/PageSkeleton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-1215 · Subtask MOTIR-3646 — both measured at 100 on all
+        // four axes on this branch before pinning.
+        'app/**/_components/RequireTwoFactorCard.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/organization/security/actions.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -609,7 +609,8 @@
       "projectGone": "That project no longer exists.",
       "noProjectForParent": "Pick or create a project before choosing a parent.",
       "unknownIssueType": "Unknown work item type.",
-      "couldNotLink": "Could not link the selected work items."
+      "couldNotLink": "Could not link the selected work items.",
+      "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -1045,7 +1046,8 @@
       "current": "Current",
       "goToBacklog": "Go to Backlog",
       "goToFilters": "Go to Filters",
-      "aiHeading": "AI"
+      "aiHeading": "AI",
+      "goToOrgSecurity": "Go to organization security"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
@@ -4293,7 +4295,8 @@
       "switchOrg": "Switch organization",
       "createOrg": "Create organization",
       "workspacesCount": "{count, plural, one {# workspace} other {# workspaces}}",
-      "usage": "Usage & cost"
+      "usage": "Usage & cost",
+      "security": "Security"
     },
     "settings": {
       "title": "Organization settings",
@@ -4401,6 +4404,21 @@
       "loading": "Loading members…",
       "noActiveOrgTitle": "No organization",
       "noActiveOrgDescription": "You don’t belong to an organization yet."
+    },
+    "security": {
+      "title": "Security",
+      "subtitleOrg": "Sign-in requirements for everyone in {org}.",
+      "cardTitle": "Require two-factor authentication",
+      "cardBodyOrg": "Everyone in this organization signs in with a second factor. Nobody is signed out and nobody is removed — the next time a person opens Motir they are asked to set one up, and any method counts: a passkey, an authenticator app or email codes.",
+      "stateOff": "Not required",
+      "stateOnOrg": "Required for every member of {org}",
+      "lockedBy": "Required by {org}",
+      "lockedNoteAbove": "{org} requires two-factor authentication for every member, so it cannot be switched off here. An owner or admin of {org} can change it in the organization’s Security settings.",
+      "lockedNoteBoth": "This workspace requires two-factor authentication, and so does {org}. Turning off the organization’s requirement will leave this workspace’s own requirement in place.",
+      "savedToast": "Security policy saved",
+      "saveErrorTitle": "Couldn’t save the security policy",
+      "refusedTitle": "You don’t have access to this",
+      "refusedDescription": "Only an owner or an admin of {tier} can change its security settings. Ask one of them if this needs to change."
     }
   },
   "triage": {
