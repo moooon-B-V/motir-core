@@ -1,0 +1,1501 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The require-2FA policy control — org &amp; workspace Security (Story 8.13 ·
+      8.13.1)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the REQUIRE-2FA POLICY CONTROL — Story 8.13
+      (MOTIR-1215), subtask 8.13.1 (MOTIR-3642).
+
+      This is the ADMIN-FACING half of 2FA enforcement: the control as an org
+      owner/admin meets it, as a workspace owner/admin meets it, and as a
+      workspace admin meets it when the ORG has already mandated it and the
+      switch is locked. The MEMBER-facing half — the forced-enrolment screen —
+      is 8.13.2's (MOTIR-3643) and is not drawn here.
+
+      IT COMPOSES TWO SHIPPED SURFACES; IT DOES NOT REDRAW EITHER.
+        • design/workspaces/settings.pen + settings.png own the workspace
+          settings page.
+        • design/org-admin/org-admin.mock.html owns the org settings home, and
+          panel 5d owns the refusal treatment this asset reuses.
+      What is new here is ONE card, its two access paths, and the LOCKED state
+      the precedence model is only visible in.
+
+      BUILT FROM THE SHIPPED COMPONENTS, NOT FROM A MEMORY OF THEM. The classes
+      below mirror what `components/ui/Card`, `Switch`, `Pill`, `Button`,
+      `EmptyState` and `components/settings/SettingsPaneFrame` actually render
+      today, read out of their sources on this branch. Two of them have MOVED
+      since design/org-admin/org-admin.mock.html was drawn, and this asset
+      follows the code rather than its predecessor:
+        • Card no longer has a bordered header strip. It is one padded box
+          (`p-(--spacing-card-padding)`) whose header slot is a plain block with
+          `mb-(--spacing-md)`, on `--el-card`.
+        • Switch is 36x20 with a 14px knob and takes its checked fill from
+          `--el-switch-on` (NOT `--el-accent`) and its knob from
+          `--el-switch-knob`.
+      The token block is the current `@motir/design-system/theme.css` layer,
+      light values plus the `[data-theme='dark']` overrides.
+
+      THE TIER FOLD-IN IS THE PART MOST LIKELY TO BE MISSED, AND IT DECIDES THE
+      LAYOUT. MOTIR-3502 shipped progressive disclosure
+      (docs/decisions/organization-tier.md 6d): below two workspaces
+      /settings/workspace 404s and its sections are hosted on
+      /settings/organization by WorkspaceFoldInSection — "a MOUNT, not a
+      rewrite". So the workspace control has TWO homes, and panel 7 draws the
+      second one. A design that drew only /settings/workspace/security would
+      describe a surface most organizations cannot reach.
+
+      Covers (multi-panel — review EACH):
+        (1) ACCESS PATH A — the org menu, with its new Security row
+        (2) ACCESS PATH B — the settings rail, with its new Security row, and
+            the SAME rail below the reveal threshold where the row is absent
+        (3) OFF — nobody is required
+        (4) ON, set at this tier
+        (5) LOCKED ON, mandated ABOVE — the workspace control when the org
+            already requires it
+        (6) ON HERE AND ABOVE — set locally, then mandated by the org too
+        (7) THE FOLD-IN — the workspace Security section hosted on
+            /settings/organization for a single-workspace org
+        (8) REFUSED — a plain org member / a workspace member or viewer
+        (9) ARRIVAL — the in-page SettingsPaneFrame this pane renders while its
+            body streams
+        (10) DARK — the whole set again, tokens flipped
+
+      See design-notes.md for the per-element primitive + copy + --el-* role
+      spec, and for the Planning flags.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --spacing-sm: 12px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --focus-ring-color: var(--color-primary);
+      }
+
+      [data-theme='dark'] {
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+
+        /* The --el-* layer is RE-DECLARED here on purpose. A custom property is
+           substituted at the element it is DECLARED on, so an --el-* declared only
+           on :root computes against :root's --color-* and a descendant that flips
+           --color-* inherits the ALREADY-RESOLVED light value. Re-declaring the
+           layer is what makes a nested dark panel actually dark — and it is why
+           this board can show light and dark side by side in ONE export. */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+        line-height: 1.55;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .panel-note {
+        max-width: 1100px;
+        margin: 0 auto 10px;
+        padding-left: 2px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+      }
+      @media (max-width: 860px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ── The settings pane wrapper — app/(authed)/settings/**'s own column ── */
+      .pane {
+        padding: 28px 28px 32px;
+      }
+      .pane-col {
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        max-width: 45rem;
+      }
+      .pane-head h1 {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .pane-head p {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin: 4px 0 0;
+        max-width: 62ch;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .section-head h2 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .section-head p {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 4px 0 0;
+      }
+
+      /* ── Card (components/ui/Card) — ONE padded box, header slot + mb ────── */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card-head {
+        margin-bottom: var(--spacing-md);
+      }
+      .card-head h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head p {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+        margin: 4px 0 0;
+      }
+      .card-foot {
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .row .state {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .row .state.on {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+
+      /* ── Switch (components/ui/Switch) — 36x20, 14px knob ────────────────── */
+      .switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 20px;
+        width: 36px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        padding: 0;
+      }
+      .switch .knob {
+        display: inline-block;
+        height: 14px;
+        width: 14px;
+        border-radius: 9999px;
+        background: var(--el-switch-knob);
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+      }
+      .switch.on {
+        border-color: var(--el-switch-on);
+        background: var(--el-switch-on);
+      }
+      .switch.on .knob {
+        transform: translateX(18px);
+      }
+      .switch.locked {
+        opacity: 0.5;
+      }
+
+      /* ── Pill (components/ui/Pill) — hue in the TINT background ──────────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.25;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-locked {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── Button (components/ui/Button) ───────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── TopNav stub — hosts the org control (app/(authed)/_components) ──── */
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-family: var(--font-serif);
+        font-size: 15px;
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .ctx-sep {
+        color: var(--el-text-faint);
+        font-size: 15px;
+      }
+      .ws-chip {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Popover menu (components/ui/Popover) ────────────────────────────── */
+      .menu {
+        position: relative;
+        margin: 6px 0 0 20px;
+        width: 288px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .opt.new {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .opt svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .opt.new svg {
+        color: var(--el-text-strong);
+      }
+      .new-tag {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-strong);
+      }
+
+      /* ── Sidebar rail (components/ui/Sidebar rows) ───────────────────────── */
+      .rail {
+        width: 240px;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        padding: 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-height: 300px;
+      }
+      .rail-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 10px 6px;
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .rail-row.active {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .rail-row.new {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .rail-note {
+        margin: 12px 8px 0;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .split {
+        display: flex;
+      }
+      .split .body {
+        flex: 1;
+        min-width: 0;
+      }
+
+      /* ── EmptyState (components/ui/EmptyState) — a Card, centred ─────────── */
+      .empty {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 48px;
+        width: 48px;
+        margin-bottom: var(--spacing-md);
+        color: var(--el-icon-muted);
+      }
+      .empty .glyph svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .empty p {
+        margin: var(--spacing-sm) 0 0;
+        font-size: 14px;
+        color: var(--el-text-subtitle);
+        max-width: 60ch;
+      }
+
+      /* ── SettingsPaneFrame (components/settings/SettingsPaneFrame) ───────── */
+      .frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .frame .frame-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .frame .blk {
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .frame .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .frame .rows > div {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .locked-note {
+        margin-top: var(--spacing-md);
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .dark-wrap {
+        background: var(--el-page-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>Require two-factor authentication — the admin control</h1>
+      <p>
+        Story 8.13 (MOTIR-1215) · Subtask 8.13.1 (MOTIR-3642). The same card renders at both tenancy
+        tiers. An organization sets a FLOOR; a workspace may raise it and can never lower it — so
+        the workspace control is <strong>locked on</strong>, and says who locked it, whenever the
+        organization already requires a second factor. Nobody is signed out, nobody is removed and
+        no email is sent: enforcement happens at the person's next request.
+      </p>
+    </div>
+
+    <!-- ════════════════ 1 · ACCESS PATH A — the org menu ════════════════ -->
+    <div class="panel-label">1 · Access path A — the org menu gains a Security row</div>
+    <div class="panel-note">
+      The door for the ORG pane. <code>OrgControl.tsx</code> renders Settings · Members · Usage
+      &amp; cost · Billing &amp; plans (cloud only) · New workspace. <strong>Security</strong> joins
+      directly under Settings — it is a settings-shaped destination, and putting it above Members
+      keeps the two account-level concerns adjacent.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topnav">
+          <button class="trigger" type="button" aria-label="Organization menu">
+            <span>Acme</span>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          <span class="ctx-sep" aria-hidden="true">›</span>
+          <span class="ws-chip">Engineering</span>
+        </div>
+        <div class="menu" role="menu" aria-label="Organization menu">
+          <div class="opt" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+            Settings
+          </div>
+          <div class="opt new" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            Security
+            <span class="new-tag">new</span>
+          </div>
+          <div class="opt" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            </svg>
+            Members
+          </div>
+          <div class="opt" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="6" />
+              <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+            </svg>
+            Usage &amp; cost
+          </div>
+          <div class="opt" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect width="20" height="14" x="2" y="5" rx="2" />
+              <path d="M2 10h20" />
+            </svg>
+            Billing &amp; plans
+          </div>
+          <div class="opt" role="menuitem">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
+            New workspace
+          </div>
+        </div>
+        <div style="height: 24px"></div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 2 · ACCESS PATH B — the settings rail ════════════════ -->
+    <div class="panel-label">
+      2 · Access path B — the settings rail, above and below the reveal threshold
+    </div>
+    <div class="panel-note">
+      The door for the WORKSPACE pane. <code>SidebarNav.tsx</code>'s bottom section carries Settings
+      · Job runs · Git · Docs; <strong>Security</strong> joins it. ⚠️ The row is present only ABOVE
+      the workspace-tier reveal threshold. Below it <code>/settings/workspace/security</code> does
+      not exist, so a row here would point at a 404 — the control is reached by scrolling the org
+      settings home instead (panel 7). This is the one place this asset departs from Job runs and
+      Git, which are workspace-SCOPED but not workspace-NAMED and so are never hidden.
+    </div>
+    <div class="panel grid-2">
+      <div class="stage split">
+        <div class="rail" aria-label="Sidebar (2+ workspaces)">
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect width="7" height="9" x="3" y="3" rx="1" />
+              <rect width="7" height="5" x="14" y="3" rx="1" />
+              <rect width="7" height="9" x="14" y="12" rx="1" />
+              <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+            >Board
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M8 6h13" />
+              <path d="M8 12h13" />
+              <path d="M8 18h13" />
+              <path d="M3 6h.01" />
+              <path d="M3 12h.01" />
+              <path d="M3 18h.01" /></svg
+            >Backlog
+          </div>
+          <div class="rail-sep"></div>
+          <div class="rail-row active">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              /></svg
+            >Settings
+          </div>
+          <div class="rail-row new">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
+            >Security
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m3 17 2 2 4-4" />
+              <path d="m3 7 2 2 4-4" />
+              <path d="M13 6h8" />
+              <path d="M13 12h8" />
+              <path d="M13 18h8" /></svg
+            >Job runs
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="6" x2="6" y1="3" y2="15" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" /></svg
+            >Git
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg
+            >Docs
+          </div>
+          <div class="rail-note">
+            2+ workspaces — the tier is revealed, so the row is present and lands on
+            <code>/settings/workspace/security</code>.
+          </div>
+        </div>
+        <div class="body"></div>
+      </div>
+      <div class="stage split">
+        <div class="rail" aria-label="Sidebar (single workspace)">
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect width="7" height="9" x="3" y="3" rx="1" />
+              <rect width="7" height="5" x="14" y="3" rx="1" />
+              <rect width="7" height="9" x="14" y="12" rx="1" />
+              <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+            >Board
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M8 6h13" />
+              <path d="M8 12h13" />
+              <path d="M8 18h13" />
+              <path d="M3 6h.01" />
+              <path d="M3 12h.01" />
+              <path d="M3 18h.01" /></svg
+            >Backlog
+          </div>
+          <div class="rail-sep"></div>
+          <div class="rail-row active">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              /></svg
+            >Settings
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m3 17 2 2 4-4" />
+              <path d="m3 7 2 2 4-4" />
+              <path d="M13 6h8" />
+              <path d="M13 12h8" />
+              <path d="M13 18h8" /></svg
+            >Job runs
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="6" x2="6" y1="3" y2="15" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" /></svg
+            >Git
+          </div>
+          <div class="rail-row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg
+            >Docs
+          </div>
+          <div class="rail-note">
+            One workspace — NO Security row. Settings points at <code>/settings/organization</code>,
+            whose fold-in hosts the control (panel 7).
+          </div>
+        </div>
+        <div class="body"></div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 3 · OFF ════════════════ -->
+    <div class="panel-label">3 · Off — nobody is required</div>
+    <div class="panel-note">
+      The org Security pane at <code>/settings/organization/security</code>, resting state. The body
+      copy is where the reassurance lives: an admin about to change everyone's sign-in is owed the
+      consequences before the click, not after it.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Acme.</p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>
+                    Everyone in this organization signs in with a second factor. Nobody is signed
+                    out and nobody is removed — the next time a person opens Motir they are asked to
+                    set one up, and any method counts: a passkey, an authenticator app or email
+                    codes.
+                  </p>
+                </div>
+                <div class="row">
+                  <span class="state">Not required</span>
+                  <button
+                    class="switch"
+                    type="button"
+                    role="switch"
+                    aria-checked="false"
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 4 · ON, SET HERE ════════════════ -->
+    <div class="panel-label">4 · On, set at this tier</div>
+    <div class="panel-note">
+      The switch stays operable — the org is the top tier, so nobody can be overriding it. The state
+      label carries the meaning, so the state is never conveyed by colour alone.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Acme.</p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>
+                    Everyone in this organization signs in with a second factor. Nobody is signed
+                    out and nobody is removed — the next time a person opens Motir they are asked to
+                    set one up, and any method counts: a passkey, an authenticator app or email
+                    codes.
+                  </p>
+                </div>
+                <div class="row">
+                  <span class="state on">Required for every member of Acme</span>
+                  <button
+                    class="switch on"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 5 · LOCKED ON, MANDATED ABOVE ════════════════ -->
+    <div class="panel-label">
+      5 · Locked on, mandated above — the WORKSPACE control when the org already requires it
+    </div>
+    <div class="panel-note">
+      ⚠️ The state the whole precedence model is visible in, and the one an implementer will
+      otherwise improvise. The switch is <strong>disabled, not absent</strong>: a missing control
+      tells a workspace admin nothing, and a live one that silently does nothing is worse. The
+      indicator names the ORGANISATION — a person denied a switch is owed the name of whoever holds
+      it — and it is a <code>Pill</code> on <code>--el-tint-sky</code>, NOT
+      <code>--el-danger</code>: nothing has gone wrong, something was decided elsewhere.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Engineering.</p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>
+                    Additionally require a second factor for everyone in this workspace. Your
+                    organization's setting applies on top of this one and cannot be lowered here.
+                  </p>
+                </div>
+                <div class="row">
+                  <span class="pill pill-locked">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    Required by Acme
+                  </span>
+                  <button
+                    class="switch on locked"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    disabled
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <p class="locked-note">
+                  Acme requires two-factor authentication for every member, so it cannot be switched
+                  off for this workspace. An owner or admin of Acme can change it in the
+                  organization's Security settings.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 6 · ON HERE AND ABOVE ════════════════ -->
+    <div class="panel-label">
+      6 · On here AND above — set locally, then mandated by the organization too
+    </div>
+    <div class="panel-note">
+      The two facts are stored separately (MOTIR-3644 keeps two columns, never their OR), so the
+      copy says BOTH. Without this panel an implementer collapses this state into panel 5, and
+      switching the org policy off would then silently drop a requirement a workspace admin chose.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Engineering.</p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>
+                    Additionally require a second factor for everyone in this workspace. Your
+                    organization's setting applies on top of this one and cannot be lowered here.
+                  </p>
+                </div>
+                <div class="row">
+                  <span class="pill pill-locked">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    Required by Acme
+                  </span>
+                  <button
+                    class="switch on locked"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    disabled
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <p class="locked-note">
+                  This workspace requires two-factor authentication, and so does Acme. Turning off
+                  the organization's requirement will leave this workspace's own requirement in
+                  place.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 7 · THE FOLD-IN ════════════════ -->
+    <div class="panel-label">
+      7 · The fold-in — the workspace Security section hosted on /settings/organization
+    </div>
+    <div class="panel-note">
+      A single-workspace organization, where <code>/settings/workspace</code> 404s. The same card,
+      rendered by <code>WorkspaceFoldInSection</code> below the org-scoped cards in the same
+      <code>stack</code> grammar it already uses for Name / Members / Danger zone. It is a
+      <strong>MOUNT, not a rewrite</strong>: this is the identical component, not a second drawing
+      of it. Note both cards are present — the ORG one above (operable) and the WORKSPACE one below
+      (locked, because the org above it is on).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Settings</h1>
+              <p>Manage Acme and the workspace inside it.</p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>Everyone in this organization signs in with a second factor.</p>
+                </div>
+                <div class="row">
+                  <span class="state on">Required for every member of Acme</span>
+                  <button
+                    class="switch on"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Require two-factor authentication for Acme"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="section-head">
+                <h2>Workspace</h2>
+                <p>Settings for Engineering, the only workspace in Acme.</p>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>Additionally require a second factor for everyone in this workspace.</p>
+                </div>
+                <div class="row">
+                  <span class="pill pill-locked">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    Required by Acme
+                  </span>
+                  <button
+                    class="switch on locked"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    disabled
+                    aria-label="Require two-factor authentication for Engineering"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 8 · REFUSED ════════════════ -->
+    <div class="panel-label">8 · Refused — a plain org member, or a workspace member / viewer</div>
+    <div class="panel-note">
+      Composes the refusal panel <code>design/org-admin/org-admin.mock.html</code> already draws
+      (panel 5d) — <code>EmptyState</code> with a lock glyph — rather than inventing a second one.
+      The pane header still renders: the refusal replaces the CARD, not the page, exactly as
+      <code>app/(authed)/settings/organization/page.tsx</code> gates per section rather than per
+      page.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Acme.</p>
+            </div>
+            <div class="stack">
+              <div class="empty">
+                <span class="glyph" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect width="18" height="11" x="3" y="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </span>
+                <h2>You don't have access to this</h2>
+                <p>
+                  Only an owner or an admin of Acme can change its security settings. Ask one of
+                  them if this needs to change.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 9 · ARRIVAL ════════════════ -->
+    <div class="panel-label">9 · Arrival — the in-page frame while the pane body streams</div>
+    <div class="panel-note">
+      <code>SettingsPaneFrame</code>, rendered as the fallback of an in-page
+      <code>&lt;Suspense&gt;</code> placed AFTER the pane's own gate — the frame every
+      <code>settings/**</code> route already uses. The real header is painted ABOVE the boundary, so
+      it is on screen immediately and no placeholder covers it. ⚠️ Do NOT add a
+      <code>loading.tsx</code>: this pane's sibling routes decide existence, and a route-level
+      boundary fixes the status at 200.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Acme.</p>
+            </div>
+            <div class="frame" aria-busy="true" aria-label="Loading">
+              <div class="frame-top">
+                <div class="blk" style="height: 16px; width: 128px"></div>
+                <div
+                  class="blk"
+                  style="height: 28px; width: 96px; border-radius: var(--radius-btn)"
+                ></div>
+              </div>
+              <div class="rows">
+                <div>
+                  <div class="blk" style="height: 32px; width: 32px"></div>
+                  <div class="blk" style="height: 14px; width: 40%"></div>
+                </div>
+                <div>
+                  <div class="blk" style="height: 32px; width: 32px"></div>
+                  <div class="blk" style="height: 14px; width: 48%"></div>
+                </div>
+                <div>
+                  <div class="blk" style="height: 32px; width: 32px"></div>
+                  <div class="blk" style="height: 14px; width: 56%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ 10 · DARK ════════════════ -->
+    <div class="panel-label">10 · Dark — the same three states, tokens flipped</div>
+    <div class="panel-note">
+      Every element takes its colour from a <code>--el-*</code> token, so dark is a token swap and
+      not a second drawing. The lock <code>Pill</code>'s tint carries the hue in the BACKGROUND with
+      <code>--el-text-strong</code> ink, which is what keeps it AA in both themes.
+    </div>
+    <div class="panel">
+      <div class="stage dark-wrap" data-theme="dark">
+        <div class="pane">
+          <div class="pane-col">
+            <div class="pane-head">
+              <h1>Security</h1>
+              <p>Sign-in requirements for everyone in Acme.</p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>Everyone in this organization signs in with a second factor.</p>
+                </div>
+                <div class="row">
+                  <span class="state">Not required</span>
+                  <button
+                    class="switch"
+                    type="button"
+                    role="switch"
+                    aria-checked="false"
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>Everyone in this organization signs in with a second factor.</p>
+                </div>
+                <div class="row">
+                  <span class="state on">Required for every member of Acme</span>
+                  <button
+                    class="switch on"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <h3>Require two-factor authentication</h3>
+                  <p>Additionally require a second factor for everyone in this workspace.</p>
+                </div>
+                <div class="row">
+                  <span class="pill pill-locked">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    Required by Acme
+                  </span>
+                  <button
+                    class="switch on locked"
+                    type="button"
+                    role="switch"
+                    aria-checked="true"
+                    disabled
+                    aria-label="Require two-factor authentication"
+                  >
+                    <span class="knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
