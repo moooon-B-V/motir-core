@@ -95,6 +95,19 @@ export const accountRepository = {
   },
 
   /**
+   * How many `account` rows a user holds — their credential row plus every OAuth
+   * provider linkage. The erasure preview's "how you sign in" count
+   * (MOTIR-3699).
+   *
+   * No `tx`, and no RLS to bind: `account` is a Better-Auth-owned table with row
+   * level security DISABLED (the same posture `passkey` and `two_factor` have),
+   * so the singleton is the whole story here and a context would bind nothing.
+   */
+  async countByUserId(userId: string): Promise<number> {
+    return db.account.count({ where: { userId } });
+  },
+
+  /**
    * Locking read of the credential Account's id + password hash, for the
    * change-password flow's verify-then-update. Uses `SELECT ... FOR UPDATE`
    * so two concurrent password changes serialize on the row instead of one

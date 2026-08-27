@@ -5,6 +5,7 @@ import {
   Prisma,
   type User,
 } from '@/generated/prisma/client';
+import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 
 // A membership row joined with the slice of its user the cross-workspace member
 // roster (6.10.5) renders. Kept here (not in the service) because the join shape
@@ -98,6 +99,58 @@ export const organizationMembershipRepository = {
    */
   async countByOrg(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.organizationMembership.count({ where: { organizationId } });
+  },
+
+  /**
+   * The organizations a user is an OWNER of, ordered by membership.createdAt asc
+   * (the same order {@link findOrganizationsByUser} uses, so the erasure
+   * preview's blocking organization is deterministic when a reader owns more
+   * than one).
+   *
+   * Used by the account-erasure impact preview (MOTIR-3699): only an OWNER can
+   * trip `assertNotLastOwner`, so this is the candidate set the block is
+   * computed over — a non-owner membership cannot drop the owner count and needs
+   * no per-org read at all.
+   *
+   * `tx` REQUIRED, for the reason {@link findOrganizationsByUser} spells out: the
+   * `org_membership_visible_active_or_own` policy admits the caller's OWN rows
+   * off `app.user_id`, which only a bound transaction supplies. Unbound it
+   * returns an EMPTY ARRAY and raises nothing — which the preview would render
+   * as "nothing blocks you".
+   */
+  async findOwnedOrganizationsByUser(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization[]> {
+    const rows = await tx.organizationMembership.findMany({
+      where: { userId, role: ORGANIZATION_ROLE.owner },
+      orderBy: { createdAt: 'asc' },
+      include: { organization: true },
+    });
+    return rows.map((r) => r.organization);
+  },
+
+  /**
+   * Count of OWNER memberships in an organization, taking NO lock — the read
+   * half of the same condition {@link countOwnersByOrgForUpdate} guards a write
+   * with.
+   *
+   * ⚠️ THE TWO ARE NOT INTERCHANGEABLE, AND THAT IS THE POINT (MOTIR-3699). The
+   * locking variant exists because a guard that COUNTS and then WRITES must
+   * serialize its racers. The account-erasure preview writes nothing and decides
+   * nothing — it renders whether the reader would be refused — so locking every
+   * owner row of every organization they own, on a screen the pane paints at
+   * rest, would be a write-shaped cost for a read. Reach for the locking one the
+   * moment a decision is derived from the count.
+   *
+   * `tx` REQUIRED: `organization_membership`'s policy admits the ACTIVE org's
+   * rows off `app.organization_id`, so counting the OTHER owners needs an
+   * `withOrgContext` binding. Unbound, this returns the caller's own row only.
+   */
+  async countOwnersByOrg(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.organizationMembership.count({
+      where: { organizationId, role: ORGANIZATION_ROLE.owner },
+    });
   },
 
   /**

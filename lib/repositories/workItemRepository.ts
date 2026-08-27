@@ -887,6 +887,51 @@ export const workItemRepository = {
   },
 
   /**
+   * How many work items a workspace holds, ARCHIVED AND TRIAGED ONES INCLUDED —
+   * the erasure impact preview's "the work inside them" number (MOTIR-3699),
+   * read per sole-membership workspace.
+   *
+   * ⚠️ THE ABSENT FILTERS ARE THE DECISION. Every neighbouring read in this file
+   * excludes `archivedAt` / `triagedAt` rows because it is answering "what is
+   * live?". This one answers "what does deletion REACH?", and deleting the
+   * workspace takes archived and untriaged rows with it. The ledger sits under
+   * *"this cannot be undone"*, so a number that quietly omitted rows would be
+   * understating a loss on the one screen that exists to state it.
+   *
+   * `tx` REQUIRED: `work_item_active_workspace` gates on `app.workspace_id`.
+   */
+  async countByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workItem.count({ where: { workspaceId } });
+  },
+
+  /**
+   * How many of a workspace's work items carry this user's ATTRIBUTION — they
+   * reported it, or they are assigned it (MOTIR-3699). The erasure preview's
+   * `anonymised` number for a SHARED workspace: the item stays with its project,
+   * the attribution goes.
+   *
+   * ⚠️ ONE ROW COUNTS ONCE. An item a user both reported AND is assigned is one
+   * row losing one attribution pair, and the design's ledger renders ONE number
+   * for it — so the predicate is an `OR` over one `count`, never the sum of two
+   * counts.
+   *
+   * Unfiltered by `archivedAt` / `triagedAt` for the same reason
+   * {@link countByWorkspace} is: erasure reaches the attribution on every row
+   * that carries it, whether or not the row is live.
+   *
+   * `tx` REQUIRED — same policy as above.
+   */
+  async countByReporterOrAssigneeInWorkspace(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.workItem.count({
+      where: { workspaceId, OR: [{ reporterId: userId }, { assigneeId: userId }] },
+    });
+  },
+
+  /**
    * How many items the My work read would return — the tab's count badge
    * (Subtask MOTIR-2653). Same predicate as
    * {@link findByAssigneeOrReporterInWorkspace} MINUS the keyset, so the number

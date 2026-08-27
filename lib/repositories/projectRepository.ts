@@ -245,6 +245,25 @@ export const projectRepository = {
   },
 
   /**
+   * How many projects a workspace holds, ARCHIVED ONES INCLUDED — the erasure
+   * impact preview's "the work inside them" number (MOTIR-3699), read per
+   * sole-membership workspace.
+   *
+   * ⚠️ ARCHIVED ROWS COUNT, deliberately. Every other project read in this file
+   * filters `archivedAt: null`, because a board or a picker is asking what the
+   * reader can WORK on. This one is asking what deletion REACHES, and deleting
+   * the workspace takes the archived projects with it — a ledger that omitted
+   * them would understate the loss on the one screen where understating it
+   * matters.
+   *
+   * `tx` REQUIRED: `project_active_workspace` gates on `app.workspace_id`, so an
+   * unbound count answers zero for every workspace and raises nothing.
+   */
+  async countByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.project.count({ where: { workspaceId } });
+  },
+
+  /**
    * Count projects across an organization (§4.2 cap, 8.1.11) — every project in
    * every workspace of the org, joined `project → workspace`. Takes `tx` so the
    * count + the guarded create run in one transaction, serialized by the org row

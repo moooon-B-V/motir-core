@@ -73,6 +73,20 @@ export const apiTokenRepository = {
     });
   },
 
+  /** How many LIVE tokens a user holds — the erasure preview's count
+   * (MOTIR-3699), which needs the number and never the rows.
+   *
+   * ⚠️ THE `revokedAt: null` PREDICATE IS {@link findByUser}'S, and it is copied
+   * rather than dropped for the reason that method's own comment gives: during a
+   * rolling release the old image still stamps `revoked_at` instead of deleting,
+   * so a count without it would tell a reader they are about to lose tokens they
+   * already revoked. The count and the list must answer the same question.
+   *
+   * `tx` REQUIRED: `api_token_owner_or_system` reads `app.user_id`. */
+  async countByUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.apiToken.count({ where: { userId, revokedAt: null } });
+  },
+
   /** The verify lookup — an equality probe on the unique `token_hash` index
    * (constant work regardless of token validity). Runs under
    * `withSystemContext` (pre-auth, no user context yet). */
