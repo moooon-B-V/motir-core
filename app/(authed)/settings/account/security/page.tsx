@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { twoFactorService } from '@/lib/services/twoFactorService';
+import { passkeyService } from '@/lib/services/passkeyService';
 import { usersService } from '@/lib/services/usersService';
 import {
   TWO_FACTOR_BACKUP_CODE_COUNT,
@@ -9,15 +10,23 @@ import {
   TWO_FACTOR_TOTP_PERIOD_SECONDS,
   TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
 } from '@/lib/auth/twoFactorConfig';
-import { TwoFactorManager } from '../_components/TwoFactorManager';
+import { AccountSecurityPanes } from '../_components/AccountSecurityPanes';
 
 // The Security pane of the account-settings area (Story 8.11 · Subtask
 // MOTIR-1220) — the `Security › Two-factor authentication` surface, built to
 // `design/settings/two-factor.mock.html` + its `design-notes.md` section.
 //
-// A server component (the gate + the initial reads); `TwoFactorManager` is the
-// client island that owns enrolment, the recovery-code set, and the disable
-// flow. That split is the tokens pane's, one door over.
+// A server component (the gate + the initial reads); `AccountSecurityPanes` is
+// the client owner below it, holding the two islands this pane renders —
+// `TwoFactorManager` (enrolment, recovery codes, the disable flow) and
+// `PasskeyManager` (Story 8.12 · MOTIR-3612). That split is the tokens pane's,
+// one door over.
+//
+// ⚠️ THE STATE IS SHARED, and that is why there is an owner rather than two
+// islands rendered side by side: the passkey COUNT decides whether `'passkey'` is
+// in `TwoFactorStatusDTO.methods` (MOTIR-3611), which `TwoFactorManager` renders
+// in two places while `PasskeyManager` is what changes it. See
+// `AccountSecurityPanes`'s header.
 //
 // ⚠️ NO `loading.tsx`, and this page adds none — `app/(authed)` is a route group
 // containing existence-deciding routes (CLAUDE.md). It does not stream: both
@@ -44,10 +53,13 @@ export default async function AccountSecurityPage() {
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('settings.account.twoFactor');
-  const [status, passwordCapability, trustedDevices] = await Promise.all([
+  const [status, passwordCapability, trustedDevices, passkeys] = await Promise.all([
     twoFactorService.getStatus(session.user.id),
     usersService.getPasswordCapability(session.user.id),
     twoFactorService.listTrustedDevices(session.user.id),
+    // ONE added promise, not a second round of awaits: the pane still pays for
+    // one round trip's worth of latency rather than two (MOTIR-3612).
+    passkeyService.listForUser(session.user.id),
   ]);
 
   return (
@@ -57,8 +69,9 @@ export default async function AccountSecurityPage() {
         <p className="font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
       </header>
 
-      <TwoFactorManager
+      <AccountSecurityPanes
         initialStatus={status}
+        initialPasskeys={passkeys}
         email={session.user.email}
         hasPassword={passwordCapability.hasPassword}
         initialTrustedDevices={trustedDevices}

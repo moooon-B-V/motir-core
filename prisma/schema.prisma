@@ -251,6 +251,14 @@ model User {
   // (the apiTokens / deviceCodes pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
   twoFactor                   TwoFactor[]
+  // Back-relation for Passkey (Story MOTIR-1214 · Subtask MOTIR-3610) — the
+  // Better-Auth `passkey` plugin's per-credential rows. A LIST: a person
+  // registers one passkey per device (laptop, phone, hardware key), and telling
+  // them apart is what `Passkey.name` is for. Cascade: WebAuthn credentials are
+  // personal auth substrate, they die with the user (the `twoFactor` /
+  // `deviceCodes` / `apiTokens` pattern). Modelled on both sides per the
+  // FK-`@relation` rule so `migrate dev` reports no drift.
+  passkeys                    Passkey[]
   // Forward relation for the GLOBAL last-active project pointer (Subtask
   // 8.8.27). SetNull on the FK: archiving/deleting the named project clears the
   // pointer, never blocks the delete (the `WorkspaceMembership.activeProject`
@@ -537,6 +545,93 @@ model TwoFactor {
   @@index([secret])
   @@index([userId])
   @@map("two_factor")
+}
+
+/// One registered WebAuthn credential — a passkey (Story MOTIR-1214 · Subtask
+/// MOTIR-3610). Better-Auth's `@better-auth/passkey` plugin owns this table
+/// outright: every read and write goes through its adapter (`src/schema.ts`), so
+/// the PRISMA FIELD NAMES ARE FIXED — the adapter addresses `db.passkey` and
+/// passes these exact camelCase keys (`ctx.context.adapter.findMany({ model:
+/// "passkey", where: [{ field: "userId", … }] })`). Renaming one breaks passkeys
+/// at RUNTIME with no typecheck error, exactly the trap `DeviceCode`'s docstring
+/// records. The COLUMN names are ours and are snake-cased via `@map`, following
+/// `TwoFactor`; only the Prisma-side names are load-bearing. Motir adds no column
+/// of its own here, so the whole model is the plugin's.
+///
+/// A PASSKEY IS A PRIMARY CREDENTIAL, NOT A SECOND FACTOR IN THE 2FA SENSE, even
+/// though it satisfies a require-2FA policy. It is registered with
+/// `authenticatorSelection.userVerification: 'required'` (`lib/auth/index.ts`),
+/// so producing an assertion means the authenticator proved the human unlocked it
+/// — possession plus inherence in one gesture, which is multi-factor on its own
+/// (NIST SP 800-63B). `verifyPasskeyAuthentication` therefore mints a session
+/// DIRECTLY and never routes through `TwoFactor`'s challenge.
+///
+/// NO CHALLENGE TABLE. The WebAuthn challenge lives in a cookie the plugin mints
+/// (`advanced.webAuthnChallengeCookie`, 300 seconds) — there is nothing here to
+/// store, expire or sweep, which is why this model has no `expiresAt` and no
+/// pending state.
+///
+/// WHAT IS IN THE OPAQUE COLUMNS. `publicKey` is the credential's PUBLIC half and
+/// `credentialID` is its identifier: neither is a secret, and a database dump
+/// yields nothing that can authenticate. The private half never leaves the user's
+/// device — that is the whole point of the credential. `counter` is the
+/// authenticator's signature counter (clone detection); `deviceType` is
+/// SimpleWebAuthn's `singleDevice` / `multiDevice` (the pane renders these as
+/// "This device only" / "Synced"); `backedUp` is whether the platform syncs it.
+///
+/// TENANCY — identity-scoped, NOT workspace-scoped, so it carries NO RLS: the
+/// `two_factor` / `verification` / `email_change_request` / `device_code`
+/// precedent rather than the workspace-RLS table contract. The row has no
+/// workspace to be discriminated by (a passkey is a property of the person, not
+/// of a tenant), and it is read PRE-AUTH — `generatePasskeyAuthenticationOptions`
+/// and `verifyPasskeyAuthentication` run BEFORE any session exists, so there is no
+/// `app.workspace_id` GUC for a policy to gate on and a policy here would hide the
+/// row from its only legitimate reader. Authorization is the WebAuthn assertion,
+/// not row visibility.
+model Passkey {
+  id String @id @default(cuid())
+
+  /// The human-readable label the owner gave this credential ("MacBook",
+  /// "YubiKey"). Optional in the plugin's schema — registration may supply none —
+  /// and it exists so two rows in the list are tellable apart. Length is bounded
+  /// by `PASSKEY_NAME_MAX_LENGTH` in `lib/auth/passkeyConfig.ts`, which is OURS:
+  /// the plugin enforces no limit.
+  name         String?
+  /// The credential's PUBLIC key, base64url-encoded by the plugin. Not a secret.
+  publicKey    String  @map("public_key")
+  /// The owner. INDEXED (the plugin's own schema declares `index: true`) and
+  /// deliberately NOT `@unique` — a person is expected to hold several passkeys,
+  /// one per device. Cascade: personal auth substrate, it dies with the user.
+  userId       String  @map("user_id")
+  /// The authenticator's identifier for this credential, base64url-encoded.
+  /// INDEXED because the plugin's schema declares it — the authentication path
+  /// looks a row up by it. NOT `@unique`, matching the plugin: a uniqueness
+  /// violation would surface as a raw P2002 thrown inside the plugin, where no
+  /// typed error can catch it, and the duplicate case already has a typed answer
+  /// (`PREVIOUSLY_REGISTERED`).
+  credentialID String  @map("credential_id")
+  /// The authenticator's signature counter. WebAuthn's clone-detection signal:
+  /// the plugin rewrites it on every successful assertion.
+  counter      Int
+  /// SimpleWebAuthn's `CredentialDeviceType` — `singleDevice` or `multiDevice`.
+  deviceType   String  @map("device_type")
+  /// Whether the platform backs this credential up (an iCloud/Google-synced
+  /// passkey is `true`; a hardware key is `false`).
+  backedUp     Boolean @map("backed_up")
+  /// The transports the authenticator advertised (`internal`, `usb`, `hybrid`, …),
+  /// stored as the plugin stores them: one joined string, not a list.
+  transports   String?
+  /// The authenticator's model identifier, when it reports one. Optional — many
+  /// platform authenticators send all-zeroes or omit it.
+  aaguid       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([credentialID])
+  @@map("passkey")
 }
 
 /// One in-flight device-authorization grant for `motir login` (RFC 8628, Story

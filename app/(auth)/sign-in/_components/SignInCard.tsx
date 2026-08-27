@@ -17,6 +17,7 @@ import {
   IdeaCarried,
 } from '../../_components/AuthShell';
 import { GoogleButton } from '../../_components/GoogleButton';
+import { PasskeySignInButton } from '../../_components/PasskeySignInButton';
 import { TwoFactorChallenge } from './TwoFactorChallenge';
 import {
   TWO_FACTOR_OTP_PERIOD_MINUTES,
@@ -274,8 +275,14 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
 
       {step === 'email' ? (
         <form onSubmit={onContinueEmail} className="flex flex-col gap-5" noValidate>
-          {/* Google button first per the AC: tab order = Google → email → continue. */}
+          {/* Google button first per the AC: tab order = Google → passkey →
+              email → continue. The passkey control sits directly under it and
+              ABOVE the rule (`design/auth/passkey-sign-in.mock.html`, panel 2):
+              everything above the rule signs you in without typing anything,
+              everything below it is the email path. Below the rule it would read
+              as an alternative to the email FIELD, which it is not. */}
           <GoogleButton callbackURL={callbackURL} onError={setPageError} />
+          <PasskeySignInButton callbackURL={callbackURL} onError={setPageError} />
           <OrDivider />
           <Input
             type="email"

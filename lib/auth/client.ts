@@ -1,5 +1,6 @@
 import { createAuthClient } from 'better-auth/react';
 import { twoFactorClient } from 'better-auth/client/plugins';
+import { passkeyClient } from '@better-auth/passkey/client';
 
 // Browser-safe Better-Auth client. Pair with lib/auth/index.ts which is the
 // server instance — that file imports next/headers + Prisma and CANNOT be
@@ -32,7 +33,23 @@ export const authClient = createAuthClient({
   // No `redirect` / `twoFactorPage` option: the challenge is rendered inline by
   // the sign-in surface rather than at a route of its own, so the caller
   // branches on the response. MOTIR-1221 owns that screen.
-  plugins: [twoFactorClient()],
+  //
+  // ── passkey ────────────────────────────────────────────────────────────────
+  //
+  // passkeyClient (Story MOTIR-1214 · Subtask MOTIR-3610) is the browser half of
+  // the server's `passkey` plugin. It types `authClient.passkey.*` (addPasskey /
+  // listUserPasskeys / updatePasskey / deletePasskey) for the Security pane's
+  // passkeys section (MOTIR-3612) and `authClient.signIn.passkey` for the sign-in
+  // affordance (MOTIR-3613).
+  //
+  // It must be registered HERE for the same reason `twoFactorClient` is, plus one
+  // of its own: the two ceremonies are not fetches, they are calls into
+  // `navigator.credentials` with the browser's own consent sheet in the middle,
+  // and the plugin owns that choreography (options → `startRegistration` /
+  // `startAuthentication` → verify). A surface that reached for the endpoints
+  // through a plain client would have to re-implement it, and get the
+  // ArrayBuffer/base64url encoding right by hand.
+  plugins: [twoFactorClient(), passkeyClient()],
 });
 
 export const { signIn, signOut, signUp, useSession } = authClient;
@@ -43,3 +60,11 @@ export const { signIn, signOut, signUp, useSession } = authClient;
  * than reaching into `authClient` for it.
  */
 export const twoFactor = authClient.twoFactor;
+
+/**
+ * The passkey client namespace — add / list / rename / remove a credential.
+ * Re-exported alongside `twoFactor` so a surface imports one name rather than
+ * reaching into `authClient` for it. (The SIGN-IN half is
+ * `authClient.signIn.passkey`, which rides the `signIn` export above.)
+ */
+export const passkey = authClient.passkey;
