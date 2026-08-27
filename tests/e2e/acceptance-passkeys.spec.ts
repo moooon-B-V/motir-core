@@ -61,7 +61,16 @@ test('register a passkey, then sign in with no password at all', async ({
   page,
   chapter,
   beat,
+  acceptanceStory,
 }) => {
+  // ⚠️ WITHOUT THIS THE CLIP HAS NOWHERE TO GO. The uploader reads the
+  // `acceptance-story.json` sidecar this writes as its top-precedence target;
+  // the story key in the header above is prose, and the uploader reads the
+  // fixture, not the prose. `tests/e2e-acceptance-lane-membership.test.ts`
+  // fails the whole lane over its absence — a spec that can never publish a
+  // receipt is in the receipt lane for no reason it can serve.
+  acceptanceStory('MOTIR-1214');
+
   const authenticator = await addVirtualAuthenticator(page.context(), page);
 
   try {
