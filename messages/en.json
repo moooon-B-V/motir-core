@@ -6778,9 +6778,11 @@
         "colReason": "Reason",
         "operatorRole": "Platform {role}",
         "action": {
-          "user.password_reset_sent": "Password reset sent",
-          "user.suspend": "Suspended",
-          "user.unsuspend": "Suspension lifted"
+          "user": {
+            "password_reset_sent": "Password reset sent",
+            "suspend": "Suspended",
+            "unsuspend": "Suspension lifted"
+          }
         }
       }
     },
