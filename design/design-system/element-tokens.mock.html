@@ -136,6 +136,107 @@
         --el-station-tier-feasibility: var(--color-tint-mint);
         --el-station-tier-validation: var(--color-tint-peach);
       }
+      /* ── Mock-only nested-theme re-emit (the two-factor.mock.html / appearance.mock.html
+         pattern; MOTIR-3592) ─────────────────────────────────────────────────
+         The Tier-3 --el-* tokens are declared on :root as var(--color-*), and a
+         custom property's var() is substituted where it is DECLARED — so a nested
+         [data-theme='dark'] flips the Tier-0 --color-* under it while every --el-*
+         keeps the LIGHT value it computed at :root and merely inherits down. This
+         board puts data-theme on a nested element so one page can show both themes,
+         so it has to re-emit the Tier-3 block scoped to the attribute. Same
+         right-hand sides, no new token. In the real app data-theme sits on <html>,
+         so :root IS the themed element and none of this is needed — the shipped
+         design system spells the same fix [data-appearance-scope]
+         (packages/design-system/theme.css, MOTIR-2077).
+
+         ⚠️ PLACED BEFORE the [data-theme='dark'] block, not after it. Both
+         selectors have the same specificity, so the later one wins: appended at the
+         END of the sheet this block would clobber the concrete-hex --el-* the dark
+         block declares for dark only. Sitting here it still beats :root on any
+         element carrying data-theme, and the dark block still beats it. (var()
+         resolution is order-independent — it reads the element's computed
+         --color-*, whichever rule set it.) ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-surface: var(--color-surface);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-surface-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-notif-mentioned: var(--color-accent);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-accent);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-input-border: var(--color-hairline-strong);
+        --el-count-text: var(--color-slate);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-board-column-accent: var(--color-primary);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-active: var(--color-primary);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-border);
+        --el-canvas-edge-committed: var(--color-hairline-strong);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+      }
       /* ── Tier-1 dark overrides (the subset globals.css flips) ── */
       [data-theme='dark'] {
         --color-background: #0f0f0f;
