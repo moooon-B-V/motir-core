@@ -304,7 +304,41 @@ export const codeGraphIndexAdmissionService = {
           throw new Error('the fleet admission lock could not be taken');
         }
 
-        // ── 0 · IS THIS WORK ALREADY BEING DONE, AND BY WHOM? (MOTIR-2160) ────
+        // ── 0a · REAP THE EXPIRED SLOTS, UNDER THE LOCK (MOTIR-3684) ──────────
+        // ⚠️ THE TTL IS NOT A SAFETY NET UNTIL SOMETHING ACTS ON IT, AND UNTIL
+        // THIS LINE NOTHING DID. `fleetCeilingService.sweepExpired` existed and
+        // had NO CALLER anywhere in the repository, so an unreleased slot sat in
+        // the table for ever — one row for `moooon-B-V/motir-meta` was still
+        // there twenty days after its run ended.
+        //
+        // That was survivable while the repository's own claim held: *"the count
+        // already ignores these rows, so this changes no decision"*. Both counts
+        // below DO ignore them (`expiresAt: { gt: now }`). **Step 0b does not** —
+        // it reads the row by its key and decides on its mere EXISTENCE — so the
+        // claim stopped being true the moment MOTIR-2160 added that read, and
+        // nobody noticed because expiry and existence agree until a slot leaks.
+        //
+        // MEASURED CONSEQUENCE (2026-08-27): a leaked row for
+        // `<project>:moooon-B-V/motir-core`, expired 19 hours earlier, refused
+        // every `system.code-graph-refresh` of that repo with
+        // `repo_index_in_flight` — 60 attempts over ~1.7 hours per run, nine runs
+        // that day, a 100% failure rate, and a code graph that silently stopped
+        // tracking the repository while the fleet sat at ZERO live containers.
+        // The refusal was never a cap: `index_cap`, `workspace_index_cap` and
+        // `fleet_ceiling` all read the live counts and all had room.
+        //
+        // ⚠️ THE REAP GOES HERE, NOT ON A SCHEDULE, and the placement is the
+        // point. Under `FLEET_ADMISSION_SCOPE` every admission in the system is
+        // serialized, so a row deleted here cannot be one another admission is
+        // deciding on; and this is the one code path that a starved repo is
+        // guaranteed to reach, so recovery needs no operator, no cron and no
+        // deploy of its own. It changes no COUNT — by construction, since both
+        // counts already excluded exactly these rows — which is what makes it
+        // safe to do fleet-wide rather than for this ref alone: the debris of any
+        // workload's crashed dispatcher is capacity nothing is holding.
+        await slots.deleteExpired(now, tx);
+
+        // ── 0b · IS THIS WORK ALREADY BEING DONE, AND BY WHOM? (MOTIR-2160) ───
         // A slot held by THIS run is not a new container, so it is not judged
         // against any cap — see the verdict's own comment. A slot held by ANOTHER
         // run is a live container doing this exact work, and the caller must WAIT
