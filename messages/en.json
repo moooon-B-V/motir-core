@@ -610,7 +610,8 @@
       "noProjectForParent": "Pick or create a project before choosing a parent.",
       "unknownIssueType": "Unknown work item type.",
       "couldNotLink": "Could not link the selected work items.",
-      "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings."
+      "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
+      "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -938,7 +939,8 @@
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
-      "resumeOnboardingInProgress": "Resume onboarding, in progress"
+      "resumeOnboardingInProgress": "Resume onboarding, in progress",
+      "security": "Security"
     },
     "topNav": {
       "global": "Global",
@@ -1047,7 +1049,8 @@
       "goToBacklog": "Go to Backlog",
       "goToFilters": "Go to Filters",
       "aiHeading": "AI",
-      "goToOrgSecurity": "Go to organization security"
+      "goToOrgSecurity": "Go to organization security",
+      "goToWorkspaceSecurity": "Go to workspace security"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
@@ -1659,7 +1662,11 @@
         "description": "Create a workspace from the switcher in the top-left to get started."
       },
       "title": "Workspace settings",
-      "subtitle": "Manage your workspace name, members, and lifecycle."
+      "subtitle": "Manage your workspace name, members, and lifecycle.",
+      "security": {
+        "title": "Security",
+        "subtitle": "Sign-in requirements for everyone in {workspace}."
+      }
     },
     "name": {
       "renamedToast": "Workspace renamed",
@@ -4417,7 +4424,9 @@
       "lockedNoteBoth": "This workspace requires two-factor authentication, and so does {org}. Turning off the organization’s requirement will leave this workspace’s own requirement in place.",
       "savedToast": "Security policy saved",
       "saveErrorTitle": "Couldn’t save the security policy",
-      "readOnlyNote": "Only an owner or an admin of {tier} can change this."
+      "readOnlyNote": "Only an owner or an admin of {tier} can change this.",
+      "cardBodyWorkspace": "Additionally require a second factor for everyone in this workspace. Your organization’s setting applies on top of this one and cannot be lowered here.",
+      "stateOnWorkspace": "Required for every member of {workspace}"
     }
   },
   "triage": {

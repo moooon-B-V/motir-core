@@ -1,8 +1,13 @@
 import { getTranslations } from 'next-intl/server';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
+import { isWorkspaceManager } from '@/lib/projects/roles';
 import { NameCard } from '../../workspace/_components/NameCard';
 import { MembersCard } from '../../workspace/_components/MembersCard';
 import { DangerZoneCard } from '../../workspace/_components/DangerZoneCard';
+import { setWorkspaceRequireTwoFactorAction } from '../../workspace/security/actions';
+import { RequireTwoFactorCard } from './RequireTwoFactorCard';
 
 // §6d's SETTINGS COLLAPSE (MOTIR-3502 · design/org-admin panel 2). Below the
 // workspace-tier reveal threshold there is no `/settings/workspace` area — it
@@ -33,9 +38,19 @@ export async function WorkspaceFoldInSection({
 }) {
   const t = await getTranslations('orgAdmin');
 
-  const [workspace, members] = await Promise.all([
+  // `allSettledOrThrow`, never a bare `Promise.all`: every arm opens a
+  // transaction, so a rejection on one must not leave the others running
+  // unobserved (MOTIR-3066). The two arms MOTIR-3647 added are what make this a
+  // four-arm wave; the pair before it predates the rule and moves with it.
+  const [workspace, members, policy, role] = await allSettledOrThrow([
     workspacesService.getWorkspaceSummary(workspaceId, actorUserId),
     workspacesService.listMembers(workspaceId, actorUserId),
+    // Story MOTIR-1215 · MOTIR-3647 — the workspace require-2FA control's SECOND
+    // home. Below the reveal threshold `/settings/workspace/security` 404s, so
+    // this is the only place a single-workspace org can reach it, which is the
+    // common case rather than the edge one.
+    twoFactorPolicyService.getWorkspacePolicy(workspaceId, actorUserId),
+    workspacesService.getMemberRole(actorUserId, workspaceId),
   ]);
   // The caller resolved this workspace from the actor's OWN membership list, so
   // a null here means it went away between the two reads. Nothing to host.
@@ -59,6 +74,24 @@ export async function WorkspaceFoldInSection({
         workspaceName={workspace.name}
         members={members}
         currentUserId={actorUserId}
+      />
+
+      {/* ⚠️ RELOCATING A SURFACE PRESERVES ITS GATE, AND THIS SECTION DOES NOT
+          CARRY THIS ONE. This host renders for ANY member of the workspace —
+          MOTIR-3519 moved the org refusal down to the org-scoped cards precisely
+          so a plain org member could still reach **Leave workspace**. The
+          require-2FA control is not that kind of section: it is a workspace
+          MANAGER control, so it resolves `isWorkspaceManager` for itself and a
+          `member` / `viewer` sees it READ-ONLY. A control that inherited its
+          host's gate is how a viewer ends up able to change a security policy. */}
+      <RequireTwoFactorCard
+        requiresTwoFactor={policy.requiresTwoFactor}
+        lockedBy={policy.lockedByOrganization ? policy.organizationName : null}
+        description={t('security.cardBodyWorkspace')}
+        stateOnLabel={t('security.stateOnWorkspace', { workspace: workspace.name })}
+        canManage={isWorkspaceManager(role)}
+        tierName={workspace.name}
+        onSave={setWorkspaceRequireTwoFactorAction}
       />
 
       <DangerZoneCard workspaceName={workspace.name} isLastMember={members.length <= 1} />

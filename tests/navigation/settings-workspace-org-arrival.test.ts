@@ -25,6 +25,9 @@ const ROWS = [
   // moment it exists rather than the next time somebody audits the family.
   // 45rem matches `organization/page.tsx`: one centred card, same column.
   { row: 15, rel: `${S}/organization/security/page.tsx`, width: '45rem' },
+  // Story MOTIR-1215 · MOTIR-3647 — the workspace Security pane. 42rem matches
+  // `workspace/page.tsx`, the area it belongs to.
+  { row: 16, rel: `${S}/workspace/security/page.tsx`, width: '42rem' },
 ] as const;
 
 describe('every settings pane mounts the shared frame (MOTIR-3448; MOTIR-3646 joins)', () => {

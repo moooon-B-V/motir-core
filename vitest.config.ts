@@ -296,6 +296,11 @@ export default defineConfig({
         // file at the workspace tier, so a regression here breaks two surfaces.
         'app/**/_components/RequireTwoFactorCard.tsx',
         'app/**/organization/security/actions.ts',
+        // Story MOTIR-1215 · Subtask MOTIR-3647 — the workspace tier's action and
+        // the fold-in that gained the control's SECOND home. Measured at
+        // 100/100/100/100 apiece before pinning.
+        'app/**/workspace/security/actions.ts',
+        'app/**/_components/WorkspaceFoldInSection.tsx',
         // ⚠️ `_guard.tsx` is REPORT-ONLY (below `thresholds`), and the reason is
         // worth stating rather than quietly omitting: MOTIR-2476 measured it at
         // 50% lines, and the uncovered half is `guardSettingsPage`'s body — one
@@ -1540,6 +1545,18 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/organization/security/actions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/workspace/security/actions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/WorkspaceFoldInSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

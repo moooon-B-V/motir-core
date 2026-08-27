@@ -18,6 +18,7 @@ import {
   ListChecks,
   Map,
   Settings,
+  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
@@ -414,9 +415,29 @@ export function SidebarNav({
               // row reads current.
               active:
                 isActive(pathname, '/settings') &&
+                !isActive(pathname, '/settings/workspace/security') &&
                 !isActive(pathname, '/settings/workspace/jobs') &&
                 !isActive(pathname, '/settings/workspace/github') &&
                 !isActive(pathname, '/settings/workspace/gitlab'),
+            },
+          ]
+        : []),
+      // Workspace Security (Story MOTIR-1215 · MOTIR-3647) — the require-2FA
+      // policy for this workspace.
+      //
+      // ⚠️ GATED ON THE TIER REVEAL, WHICH THE TWO ROWS BELOW ARE NOT — and the
+      // difference is the rule, not an inconsistency. Job runs and Git are
+      // workspace-SCOPED but not workspace-NAMED, so §6 leaves them alone. This
+      // pane is workspace-NAMED and `notFound()`s below the threshold, so a row
+      // here would point at a 404. Below it the control is reached by scrolling
+      // `/settings/organization`, where `WorkspaceFoldInSection` hosts it.
+      ...(workspaceTierRevealed
+        ? [
+            {
+              icon: <ShieldCheck />,
+              label: t('nav.security'),
+              href: '/settings/workspace/security',
+              active: isActive(pathname, '/settings/workspace/security'),
             },
           ]
         : []),

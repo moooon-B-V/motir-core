@@ -610,7 +610,8 @@
       "noProjectForParent": "选择父级前请先选择或创建一个项目。",
       "unknownIssueType": "未知的工作项类型。",
       "couldNotLink": "无法关联所选工作项。",
-      "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。"
+      "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。",
+      "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -938,7 +939,8 @@
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
-      "resumeOnboardingInProgress": "继续引导，进行中"
+      "resumeOnboardingInProgress": "继续引导，进行中",
+      "security": "安全"
     },
     "topNav": {
       "global": "全局",
@@ -1047,7 +1049,8 @@
       "goToBacklog": "前往待办列表",
       "goToFilters": "前往筛选器",
       "aiHeading": "AI",
-      "goToOrgSecurity": "前往组织安全设置"
+      "goToOrgSecurity": "前往组织安全设置",
+      "goToWorkspaceSecurity": "前往工作区安全设置"
     },
     "shortcuts": {
       "title": "键盘快捷键",
@@ -1659,7 +1662,11 @@
         "description": "从左上角的切换器创建一个工作区即可开始。"
       },
       "title": "工作区设置",
-      "subtitle": "管理工作区名称、成员和生命周期。"
+      "subtitle": "管理工作区名称、成员和生命周期。",
+      "security": {
+        "title": "安全",
+        "subtitle": "{workspace} 中所有成员的登录要求。"
+      }
     },
     "name": {
       "renamedToast": "工作区已重命名",
@@ -4417,7 +4424,9 @@
       "lockedNoteBoth": "该工作区要求两步验证，{org} 也同样要求。关闭组织的要求后，该工作区自身的要求仍然保留。",
       "savedToast": "安全策略已保存",
       "saveErrorTitle": "无法保存安全策略",
-      "readOnlyNote": "只有 {tier} 的所有者或管理员才能更改此设置。"
+      "readOnlyNote": "只有 {tier} 的所有者或管理员才能更改此设置。",
+      "cardBodyWorkspace": "在此工作区额外要求第二重验证。组织的设置在此之上仍然适用，且无法在这里降低。",
+      "stateOnWorkspace": "{workspace} 的所有成员均需启用"
     }
   },
   "triage": {

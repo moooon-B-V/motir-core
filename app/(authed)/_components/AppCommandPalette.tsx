@@ -332,6 +332,19 @@ export function AppCommandPalette({
     icon: <ShieldCheck />,
     onSelect: () => go('/settings/organization/security'),
   });
+  // The WORKSPACE half (MOTIR-3647), under the SAME condition as its rail row:
+  // below the tier-reveal threshold `/settings/workspace/security` 404s, so an
+  // entry here would offer a dead address. The control is still reachable at
+  // that count — through the org-settings fold-in, which the entry above lands
+  // beside.
+  if (isWorkspaceTierRevealed(workspaces.length)) {
+    navActions.push({
+      id: 'nav-workspace-security',
+      label: t('commandPalette.goToWorkspaceSecurity'),
+      icon: <ShieldCheck />,
+      onSelect: () => go('/settings/workspace/security'),
+    });
+  }
   groups.push({ heading: t('commandPalette.navigationHeading'), actions: navActions });
 
   // Project settings — per-section deep links generated FROM the settings-nav
