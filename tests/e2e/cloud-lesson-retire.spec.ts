@@ -5,6 +5,7 @@ import path from 'node:path';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedLessonLibrary, type LessonLibrarySeed } from './_helpers/lesson-library-seed';
+import { openAiPlanningSettings } from './_helpers/ai-planning-settings';
 
 // Story MOTIR-3330 — retiring a lesson, end to end (Subtask MOTIR-3348).
 //
@@ -70,22 +71,20 @@ function writeLessons(): void {
   );
 }
 
-// ⚠️ SCOPED TO THE RAIL, unlike the sibling spec's. For a reader whose role
-// reaches few settings areas, `/settings/project` ALSO renders an "AI planning"
-// call-to-action in `#main`, so an unscoped lookup matches two links and fails
-// strict mode — on the one actor this spec exists to exercise, and on no other.
-const railEntry = (page: Page) =>
-  page.getByLabel('Project settings').getByRole('link', { name: 'AI planning' });
+// ⚠️ THE RAIL-SCOPED LOOKUP THIS SPEC INVENTED IS NOW THE SHARED ONE. For a
+// reader whose role reaches few settings areas, `/settings/project` ALSO renders
+// an "AI planning" call-to-action in `#main`, so an unscoped lookup matches two
+// links and fails strict mode — on the one actor this spec exists to exercise,
+// and on no other. MOTIR-3692 moved that scoping into
+// `_helpers/ai-planning-settings.ts` along with the walk itself, so the three
+// sibling cloud specs that had NOT found it inherit the fix.
 const doorLink = (page: Page) => page.getByTestId('lesson-library-link');
 const rowFor = (page: Page, text: string) =>
   page.getByTestId('lesson-row').filter({ hasText: text });
 
 /** Reach the library the way a person does — by clicking, from settings. */
 async function openLibrary(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await expect(railEntry(page)).toBeVisible();
-  await railEntry(page).click();
-  await expect(page.getByRole('heading', { name: 'AI planning' })).toBeVisible();
+  await openAiPlanningSettings(page);
   await doorLink(page).click();
   await expect(page).toHaveURL(/\/settings\/project\/ai-planning\/lessons$/);
   await expect(page.getByRole('heading', { name: 'What Motir has learned' })).toBeVisible();
