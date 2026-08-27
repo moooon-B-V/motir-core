@@ -97,6 +97,18 @@
   cross-reference is updated. **NO new toggle, NO new `workflow_transition` row, and no
   per-kind rule anywhere in either direction.**
 
+- **Amended:** 2026-08-27 (Task MOTIR-2974, the FIDELITY half split out of MOTIR-2902) —
+  **an IMPORTED parent's status is DERIVED, not CSV-authoritative; the price is that the
+  import PREVIEW says so before the run.** A new **§3c** records the decision, its reason
+  and the rejected alternative. The importer is an INGRESS like every other (§1), so
+  nothing about derivation changes: no per-path exemption, **no new toggle, no new
+  `workflow_transition` row, no change to `setImportedStatus` and no change to the
+  ladder.** What is added is a **disclosure** — one more per-row warning in the dry-run
+  plan (`lib/import/engine/importDerivedStatus.ts`, surfaced by the preview's existing
+  warning pill), so the user learns before Confirm that a parent row's status column does
+  not govern that row. `tests/e2e/import.spec.ts` asserts the derived outcome **because
+  it is decided here**, not merely because it is what shipped.
+
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing facts
 > pinned in explicit tables so every downstream subtask implements against one
 > authoritative source (the convention `work-item-type-taxonomy.md` set).
@@ -478,6 +490,85 @@ the change-request status sync reports `open_children` and leaves the item where
 the CI-green promotion treats it as SKIPPABLE, per-card, exactly like a workflow with no
 legal edge; the MCP maps it to a self-correctable tool error naming the open children;
 the v1 transitions route answers 422 with its own code.
+
+### 3c. An IMPORTED parent's status is DERIVED — and the PREVIEW says so _(added 2026-08-27)_
+
+§3a settles that **every edit to the child set** recomputes. A bulk import is the
+largest such edit the product can make, and it arrives carrying its own answer: a CSV has
+a `status` column, and the Map step tells the user it is mapping that column onto a Motir
+workflow status. **For a row that becomes a PARENT, the mapped value does not govern the
+row.** The shipped sequence is create → `setImportedStatus` (pin the mapped value) →
+`work-item/derivation.requested` → recompute (MOTIR-2892, MOTIR-2902), so the parent
+lands wherever its imported children put it. Fixture, from `tests/e2e/import.spec.ts`:
+the CSV says `Checkout epic` is **To Do** and its child `Payment subtask` is **In
+Progress**; after the import the parent reads **In Progress**.
+
+**Decision: DERIVED. The status column is authoritative for the ROW; it is not
+authoritative for the row's RELATIONSHIP TO ITS CHILDREN.** For a leaf the mapped value
+is the final value. For a parent it is a starting value the recompute then reads the
+child set over — exactly as it does for a parent a person set by hand.
+
+**The reason, in one line:** the importer is an INGRESS, and §1 is explicit that
+derivation rides the shared `work-item/*` events "so they cover **every** ingress (board,
+MCP, CLI, webhook) without a single ingress knowing they exist." A CSV row is not a
+privileged writer.
+
+Three things follow that are worth stating, because each one is a place a reader
+reasonably expects the opposite:
+
+- **The supplied value is not discarded — it is applied, and recorded.**
+  `setImportedStatus` writes it through `applyStatusTransition` and `recordRevision`
+  keeps it, so the file's value is in the item's history. What happens next is the
+  product's own rule moving a parent, not the importer dropping a column.
+- **The alternative is not stable even on its own terms.** "The CSV's parent value wins"
+  holds only until the next child-set edit — adding one subtask the next morning
+  recomputes the parent anyway. It is a fidelity guarantee the product cannot keep past
+  the first edit, so buying it at the cost below buys an hour of consistency.
+- **It is the one moment an inconsistent tree would be created at scale.** An import is
+  precisely where "unstarted work above started work" would be minted a thousand rows at
+  a time — the state MOTIR-2888 exists to remove.
+
+**Rejected — CSV-authoritative for parents** (suppress the recompute for import-created
+items, or re-pin the mapped value after it). It needs a per-PATH exemption, and §3 says
+**no work item is exempt**; the one exemption ever shipped in this ADR was per-KIND, and
+the 2026-08-21 amendment deleted it for exactly this reason. Beyond the posture, the
+carve-out would have to name its own end — a parent stays "import-authoritative" until
+what? — and every answer is a second, weaker derivation rule living beside the first.
+_(Recorded so a future reader with the same fidelity instinct starts from this rationale
+rather than re-deriving it. If the CSV's parent value must ever win, that is a statement
+about what the IMPORTER means by its status column and belongs in the importer's mapping
+contract — not a hole here.)_
+
+**The price, and it is owed: the PREVIEW discloses it BEFORE the run.** The complaint
+this decision answers is not that derivation is wrong; it is that a screen which says it
+is _mapping your columns_ then quietly does something else to some of them. So the
+dry-run plan marks every row that will be a parent once the import has run — either
+because another row in the same import names it as its parent, or because the item it
+matched already has children. The mark is `markDerivedParentStatuses`
+(`lib/import/engine/importDerivedStatus.ts`), applied in `importService.preview`, and it
+reaches the user as one more warning pill in the per-row warnings the preview already
+renders (`design/import/design-notes.md` § Preview — the `status → default` pill's
+pattern; **no UI change**).
+
+Three properties of the mark, each a decision:
+
+- **It names the MECHANISM, not a predicted value.** Predicting the derived status means
+  running §3's rung matching and stepping-stone walk over a child set that does not exist
+  yet, against the project's own workflow. A preview that names a status the run then
+  does not produce is worse than one that names none.
+- **It is about the row's SHAPE, so it is always true.** A parent whose mapped status
+  already equals the derived one is still a row whose status is governed by its children.
+  Marking it is not a false positive; the disclosure is _the file does not govern this
+  row_, not _this row will change_.
+- **It is gated on `autoRollupParentStatus`.** With the toggle off nothing is derived, so
+  nothing is disclosed — the same gate §3a puts on every other trigger.
+
+**Preview-only, deliberately.** The engine's `classifyIssue` is shared by the preview and
+the run so the two can never diverge on CREATE/UPDATE/SKIP; this annotation is a
+whole-set post-pass at the service tier (the resolve path is streamed one issue at a
+time and cannot see whether another row names this one as its parent), and it is a
+disclosure rather than a plan verdict. The run's per-item progress carries the resolver's
+warnings unchanged.
 
 ### 4. The DOWNWARD cascade (parent → children)
 

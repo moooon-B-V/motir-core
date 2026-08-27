@@ -23,6 +23,9 @@ import type { ImportConnectionConfig, ImportDiscoverResult, ImportDto } from '@/
 import { toImportDto } from '@/lib/mappers/importMappers';
 import type { ImportMapping, ImportPlanRow } from '@/lib/import/engine/types';
 import { importEngineService } from '@/lib/import/engine/importEngineService';
+import { markDerivedParentStatuses } from '@/lib/import/engine/importDerivedStatus';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   importPersistService,
   type ImportRunProgress,
@@ -190,6 +193,40 @@ export const importService = {
     )) {
       rows.push(row);
       counts[row.plan] += 1;
+    }
+
+    // ── The derived-parent-status disclosure (Task MOTIR-2974) ────────────
+    //
+    // A parent's status is a function of its CHILDREN, not of the file's status
+    // column (`docs/decisions/status-derivation.md`, amended 2026-08-27). Say so
+    // HERE, in the dry run, rather than leaving it to be discovered after the
+    // write. This is the first tier holding the whole plan — the resolve path is
+    // streamed per issue and cannot see whether some OTHER row names this one as
+    // its parent — so the annotation is a post-pass, not a resolver rule.
+    //
+    // Both reads are BOUND (`withWorkspaceServiceContext`), the same tier
+    // `parentStatusRollupService` binds its own `findStatusAutomation` at:
+    // unbound, `project` and `work_item` answer for no tenant.
+    const derivation = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const automation = await projectRepository.findStatusAutomation(imp.projectId, tx);
+      if (!automation?.autoRollupParentStatus) return null;
+      // Only the rows that MATCHED an existing item can already have children;
+      // an empty list short-circuits in the repository.
+      const matchedIds = rows
+        .map((r) => r.existingWorkItemId)
+        .filter((id): id is string => id !== null);
+      const children = await workItemRepository.findChildrenForItems(
+        matchedIds,
+        ctx.workspaceId,
+        tx,
+      );
+      return { existingParentIds: new Set(children.map((c) => c.parentId)) };
+    });
+    if (derivation) {
+      markDerivedParentStatuses(rows, {
+        autoRollupParentStatus: true,
+        existingParentIds: derivation.existingParentIds,
+      });
     }
 
     // Resolve the human-facing source ref OUTSIDE the transaction (it may hit the
