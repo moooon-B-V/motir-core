@@ -80,6 +80,7 @@ const MIGRATED_TO_ENGINE = [
   'system.code-graph-offboard-sweep',
   'system.daily-health-check',
   'system.filter-subscription-tick',
+  'system.job-run-reap',
   'system.migrate-onboarding-sweep',
   'system.plan-target-lock-sweep',
   'system.public-follow-digest-tick',

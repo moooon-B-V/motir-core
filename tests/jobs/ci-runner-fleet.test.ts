@@ -468,6 +468,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       functionId: 'system.ci-runner-boot',
       eventName: 'system.ci-runner-boot',
       eventId: 'evt-empty',
+      lane: 'inngest',
       attempt: 0,
     });
     expect(started).toBeNull();
@@ -480,6 +481,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       functionId: 'system.ci-runner-boot',
       eventName: 'system.ci-runner-boot',
       eventId: 'evt-null',
+      lane: 'inngest',
       attempt: 0,
     });
     expect(untenanted).not.toBeNull();

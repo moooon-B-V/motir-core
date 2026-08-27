@@ -19,7 +19,7 @@ import { JobsDashboard, type JobsTab } from './_components/JobsDashboard';
 // JobsDashboard. All reads are workspace-scoped in the service (the system tab
 // is gated to a PLATFORM_ADMIN_EMAIL operator both here and in the service).
 
-const VALID_STATUSES: JobRunStatus[] = ['running', 'succeeded', 'failed'];
+const VALID_STATUSES: JobRunStatus[] = ['running', 'succeeded', 'failed', 'abandoned'];
 
 function parseStatus(raw: string | undefined): JobRunStatus | undefined {
   return raw && (VALID_STATUSES as string[]).includes(raw) ? (raw as JobRunStatus) : undefined;

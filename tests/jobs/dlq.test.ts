@@ -61,6 +61,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-terminal-1',
+      lane: 'inngest',
       attempt: 0,
       idempotencyKey: 'dlq-key-1',
     });
@@ -68,6 +69,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
     const dto = await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'evt-terminal-1',
+      lane: 'inngest',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'deliberate boom' },
@@ -119,12 +121,14 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-terminal-ws',
+      lane: 'inngest',
       attempt: 0,
       idempotencyKey: 'dlq-key-ws',
     });
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'evt-terminal-ws',
+      lane: 'inngest',
       eventName: 'email.send',
       workspaceId: workspace.id,
       failure: { message: 'tenant boom' },
@@ -145,6 +149,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'orphan-evt',
+      lane: 'inngest',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'orphan boom' },
@@ -215,12 +220,14 @@ describe('replayDLQ', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: `evt-${idempotencyKey}`,
+      lane: 'inngest',
       attempt: 0,
       idempotencyKey,
     });
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: `evt-${idempotencyKey}`,
+      lane: 'inngest',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'boom' },

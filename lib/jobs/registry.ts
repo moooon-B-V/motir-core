@@ -46,6 +46,7 @@ import { migrateOnboardingSweep } from './definitions/migrateOnboardingSweep';
 import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 import { planTargetLockSweep } from './definitions/planTargetLockSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
+import { jobRunReap } from './definitions/jobRunReap';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
 // Subtask 1.6.2). Adding a new job = define it under `definitions/` and add it
@@ -92,4 +93,5 @@ export const jobFunctions = [
   workItemEmbeddingRequested,
   planTargetLockSweep,
   abandonedPlanSweep,
+  jobRunReap,
 ];

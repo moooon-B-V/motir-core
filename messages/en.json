@@ -2246,7 +2246,8 @@
         "all": "All",
         "succeeded": "Succeeded",
         "failed": "Failed",
-        "running": "Running"
+        "running": "Running",
+        "abandoned": "Abandoned"
       },
       "runsTableCaption": "Background job runs",
       "col": {

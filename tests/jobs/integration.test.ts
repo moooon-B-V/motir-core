@@ -145,12 +145,14 @@ describe('DLQ replay ↔ idempotency window (finding #40)', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-replay-window',
+      lane: 'inngest',
       attempt: 0,
       idempotencyKey: 'window-key',
     });
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'evt-replay-window',
+      lane: 'inngest',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'transient boom' },

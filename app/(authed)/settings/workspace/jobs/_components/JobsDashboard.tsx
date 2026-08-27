@@ -32,7 +32,13 @@ export type JobsTab = 'runs' | 'dlq' | 'system';
 
 const BASE = '/settings/workspace/jobs';
 
-const STATUS_FILTER_VALUES: (JobRunStatus | 'all')[] = ['all', 'succeeded', 'failed', 'running'];
+const STATUS_FILTER_VALUES: (JobRunStatus | 'all')[] = [
+  'all',
+  'succeeded',
+  'failed',
+  'abandoned',
+  'running',
+];
 
 export interface JobsDashboardProps {
   activeTab: JobsTab;
@@ -68,9 +74,20 @@ function formatDuration(ms: number | null): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function statusSeverity(status: JobRunStatus): 'success' | 'danger' | 'info' {
+/**
+ * ⚠️ `abandoned` IS NOT `danger`, AND NOT `info` EITHER (Bug MOTIR-3683).
+ *
+ * It is the run nothing ever came back from — no handler threw, so there is no
+ * error to show, and nobody is working on it, so `info` (which is what `running`
+ * wears) would restate the exact reassurance this state exists to withdraw. A
+ * ledger showed a job that died 25 days earlier as in-flight, and that is how a
+ * daily failure went unnoticed for three weeks. `warning` is the honest tone: it
+ * says something is wrong AND that nobody knows what.
+ */
+function statusSeverity(status: JobRunStatus): 'success' | 'danger' | 'warning' | 'info' {
   if (status === 'succeeded') return 'success';
   if (status === 'failed') return 'danger';
+  if (status === 'abandoned') return 'warning';
   return 'info';
 }
 
@@ -262,6 +279,15 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
                   : '—'}
               </Td>
               <Td className="font-mono text-xs">{run.functionId}</Td>
+              {/* ⚠️ NO `lane` COLUMN HERE, DELIBERATELY (MOTIR-3683). The lane is
+                  on the ledger row and on `JobRunDTO`, which is what the criterion
+                  asked for and what the migration's audits read. Putting it in
+                  THIS table would be a new COLUMN on a surface that has a design
+                  asset — and `design/jobs/design-notes.md` exists precisely
+                  because adding one column to this table was judged to need one
+                  ("a column cannot be built against a mockup that does not
+                  exist"). Surfacing the lane is its own design card, not a
+                  side-effect of a bug fix. */}
               <Td className="font-mono text-xs">{run.eventName}</Td>
               <Td className="text-right tabular-nums">{run.attempt}</Td>
               <Td className="whitespace-nowrap">{formatDateTime(run.startedAt, locale)}</Td>
