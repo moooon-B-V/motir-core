@@ -72,6 +72,7 @@ import { JOB_ENGINE_JOBS_ENV, JOB_ENGINE_JOBS_FILE_ENV, routedJobIds } from './c
  * of the reconciliation below is that the two halves are now compared.
  */
 export const MIGRATED_TO_ENGINE = [
+  'account/data-export.requested',
   'automation-engine/commented',
   'automation-engine/created',
   'automation-engine/field.changed',
@@ -98,6 +99,7 @@ export const MIGRATED_TO_ENGINE = [
   'system.ci-runner-provision-sweep',
   'system.ci-runner-reap',
   'system.code-graph-offboard-sweep',
+  'system.data-export-expiry-sweep',
   'system.daily-health-check',
   'system.filter-subscription-tick',
   'system.job-run-reap',

@@ -91,6 +91,36 @@ export const dataExportRequestRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * Every `ready` archive whose retention window has run out — the expiry
+   * sweep's read (Story 8.4 · MOTIR-3701). Both columns are the model's
+   * `[status, expiresAt]` index, which exists for this query.
+   *
+   * `ready` ONLY, deliberately. A `failed` or already-`expired` row has no blob
+   * to delete, and a `preparing` one has no `expiresAt` yet — widening this to
+   * "past expiry" would sweep rows whose build is still running the moment a
+   * null date sorted early.
+   *
+   * Cross-tenant: the sweep runs under `withSystemContext`, which the table's
+   * policy arms for exactly this reader.
+   */
+  async listExpirable(
+    input: { now: Date; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<DataExportRequest, 'id' | 'userId' | 'blobPathname'>>> {
+    return tx.dataExportRequest.findMany({
+      where: { status: 'ready', expiresAt: { lte: input.now } },
+      select: { id: true, userId: true, blobPathname: true },
+      orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+      take: input.take,
+    });
+  },
+
+  /** One request by id — the build job's read of the row it was handed. */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<DataExportRequest | null> {
+    return tx.dataExportRequest.findUnique({ where: { id } });
+  },
+
   /** Record a build's outcome (ready + its blob, failed + its reason, expired).
    *  Write → `tx` required. Keyed by `id` — the caller has just locked it. */
   async update(

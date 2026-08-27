@@ -285,6 +285,37 @@ export interface BlobHead {
  * (the upload actually happened) and to read its real metadata, never trusting
  * the values a caller reports. Returns null when the object is absent.
  */
+/**
+ * Read a private object's BYTES by its key (Story 8.4 · MOTIR-3701). Returns
+ * null when the object is absent.
+ *
+ * Every other private-content reader mints a presigned URL and lets the
+ * BROWSER fetch it — which is right for a download, and wrong for the one
+ * caller that is not a browser. The personal-data export packages a reader's
+ * uploaded files INTO an archive on the server, so it needs the bytes in
+ * process; going out through a presigned URL would have the server fetch its
+ * own storage over HTTP to get something it can already address.
+ *
+ * ⚠️ THIS IS THE ONE FUNCTION HERE THAT MOVES PRIVATE BYTES WITH NO
+ * AUTHORIZATION OF ITS OWN. `signedDownloadUrl` is reached through the
+ * authenticated content route, which checks the caller against the item; this
+ * takes a key and returns the object. Every caller therefore owes its own
+ * access check BEFORE it gets here — the export's is that the `attachment` row
+ * naming this key was read under the exporting user's own RLS context, so the
+ * database has already answered "may this person read this file?".
+ */
+export async function getPrivateBlobBytes(pathname: string): Promise<Buffer | null> {
+  try {
+    const result = await s3Client().send(
+      new GetObjectCommand({ Bucket: privateBucket(), Key: pathname }),
+    );
+    if (!result.Body) return null;
+    return Buffer.from(await result.Body.transformToByteArray());
+  } catch {
+    return null;
+  }
+}
+
 export async function headPrivateBlob(pathname: string): Promise<BlobHead | null> {
   try {
     const result = await s3Client().send(
