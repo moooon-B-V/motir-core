@@ -640,19 +640,44 @@ export function installFakeGh(binDir: string): FakeGh {
   mkdirSync(binDir, { recursive: true });
   const logPath = join(binDir, 'gh-log.jsonl');
   const script = join(binDir, 'gh');
+  const statePath = join(binDir, 'gh-prs.json');
   writeFileSync(
     script,
     `#!/usr/bin/env node
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(logPath)}, JSON.stringify({ args, cwd: process.cwd() }) + '\\n');
-// \`gh pr list --head <branch> …\` → nothing open yet (exit 0, empty stdout).
-if (args[0] === 'pr' && args[1] === 'list') process.exit(0);
-if (args[0] === 'pr' && args[1] === 'create') {
-  const head = args[args.indexOf('--head') + 1] ?? 'branch';
-  process.stdout.write('https://github.test/motir/pull/1?head=' + head + '\\n');
+// ⚠️ THIS FAKE REMEMBERS (MOTIR-3681). \`motir auto\` now opens each repository's
+// pull request at its FIRST implemented card and calls \`openSessionPr\` again on
+// every card after it — which lists before creating, so the real \`gh\` answers
+// with the pull request that already exists. A fake whose \`pr list\` always
+// printed nothing made the CLI create one per card, and every assertion counting
+// them was measuring the fake's amnesia.
+//
+// Keyed by CWD + head, never head alone: a multi-repository run uses ONE branch
+// name in EVERY checkout, and the real \`gh\` answers per repository because it
+// runs in one.
+const stateFile = ${JSON.stringify(statePath)};
+const readState = () => { try { return JSON.parse(readFileSync(stateFile, 'utf8')); } catch { return {}; } };
+const keyOf = () => process.cwd() + '\\u0000' + (args[args.indexOf('--head') + 1] ?? '');
+if (args[0] === 'pr' && args[1] === 'list') {
+  const url = readState()[keyOf()]?.url;
+  if (url) process.stdout.write(url + '\\n');
   process.exit(0);
 }
+if (args[0] === 'pr' && args[1] === 'create') {
+  const state = readState();
+  const head = args[args.indexOf('--head') + 1] ?? 'branch';
+  const url = 'https://github.test/motir/pull/1?head=' + head;
+  state[keyOf()] = { url, branch: head };
+  writeFileSync(stateFile, JSON.stringify(state));
+  process.stdout.write(url + '\\n');
+  process.exit(0);
+}
+// \`gh pr edit <branch> --title … --body …\` — the close-out rewriting what the
+// early open could not know. Recorded like every other call; \`pullRequests()\`
+// folds it over the create so an assertion reads the FINAL text.
+if (args[0] === 'pr' && args[1] === 'edit') process.exit(0);
 process.stderr.write('fake gh: unsupported command ' + args.join(' ') + '\\n');
 process.exit(1);
 `,
@@ -670,16 +695,43 @@ process.exit(1);
 
   return {
     invocations,
-    pullRequests: () =>
-      invocations()
-        .filter((call) => call.args[0] === 'pr' && call.args[1] === 'create')
-        .map((call) => ({
-          head: valueOf(call.args, '--head'),
-          base: valueOf(call.args, '--base'),
-          title: valueOf(call.args, '--title'),
-          body: valueOf(call.args, '--body'),
-          cwd: call.cwd,
-        })),
+    /**
+     * One entry per pull request CREATED, carrying the LATEST title and body —
+     * a later `gh pr edit` on the same branch is folded over the create
+     * (MOTIR-3681).
+     *
+     * ⚠️ Folding is what keeps these assertions about what a REVIEWER sees. The
+     * pull request is opened at the first implemented card, so its created title
+     * and body describe one card; the close-out rewrites both from the whole
+     * run. Reading only the create would assert the thin early text and call the
+     * finished one a regression.
+     */
+    pullRequests: () => {
+      const byBranch = new Map<
+        string,
+        { head: string; base: string; title: string; body: string; cwd: string }
+      >();
+      for (const call of invocations()) {
+        if (call.args[0] !== 'pr') continue;
+        if (call.args[1] === 'create') {
+          byBranch.set(`${call.cwd}\u0000${valueOf(call.args, '--head')}`, {
+            head: valueOf(call.args, '--head'),
+            base: valueOf(call.args, '--base'),
+            title: valueOf(call.args, '--title'),
+            body: valueOf(call.args, '--body'),
+            cwd: call.cwd,
+          });
+        } else if (call.args[1] === 'edit') {
+          // `gh pr edit <branch> --title … --body …`
+          const existing = byBranch.get(`${call.cwd}\u0000${call.args[2] ?? ''}`);
+          if (existing) {
+            existing.title = valueOf(call.args, '--title');
+            existing.body = valueOf(call.args, '--body');
+          }
+        }
+      }
+      return [...byBranch.values()];
+    },
   };
 }
 

@@ -167,6 +167,26 @@ function gitRunner(
   /** The working directory each command ran in — the only evidence that says
    *  WHICH repository a git command touched (MOTIR-3135). */
   const cwds: string[] = [];
+  /**
+   * The pull requests this fake `gh` has been asked to create, keyed by
+   * `cwd + --head` — so `gh pr list` ANSWERS WITH THEM, the way the real one does.
+   *
+   * ⚠️ Modelling that is load-bearing rather than fidelity for its own sake
+   * (MOTIR-3681). `openSessionPr` lists before it creates, and `motir auto` now
+   * calls it after every card that lands so the pull request exists from the
+   * first implemented one. A stub whose `pr list` always answers EMPTY makes the
+   * second call create a second pull request — which the real `gh` would never
+   * do — and every assertion counting `gh pr create` would then be measuring the
+   * stub's amnesia rather than the CLI's behaviour.
+   *
+   * ⚠️ AND THE KEY IS `cwd + head`, NOT head — a multi-repository run uses ONE
+   * branch name in EVERY checkout, and the real `gh` answers per repository
+   * because it runs in one. Keyed by branch name alone, the second repository's
+   * `pr list` finds the FIRST repository's pull request and the CLI is wrongly
+   * told it already has one. That is the same mistake the delivery link's own ADR
+   * rejects one layer down: a branch name is not an identifier.
+   */
+  const opened = new Map<string, string>();
   const run: CommandRunner = (bin, args, cwd) => {
     log.push(`${bin} ${args.join(' ')}`);
     cwds.push(cwd);
@@ -174,8 +194,12 @@ function gitRunner(
     if (custom) return custom;
     if (bin === 'git' && args[0] === 'rev-parse') return { exitCode: 1, stdout: '', stderr: '' };
     if (bin === 'git' && args[0] === 'rev-list') return { exitCode: 0, stdout: '2', stderr: '' };
-    if (bin === 'gh' && args[1] === 'create') {
-      return { exitCode: 0, stdout: 'https://github.test/pull/1', stderr: '' };
+    if (bin === 'gh' && (args[1] === 'list' || args[1] === 'create')) {
+      const key = `${cwd}\u0000${args[args.indexOf('--head') + 1] ?? ''}`;
+      if (args[1] === 'list') return { exitCode: 0, stdout: opened.get(key) ?? '', stderr: '' };
+      const url = `https://github.test/pull/${opened.size + 1}`;
+      opened.set(key, url);
+      return { exitCode: 0, stdout: url, stderr: '' };
     }
     return { exitCode: 0, stdout: '', stderr: '' };
   };
@@ -273,6 +297,75 @@ describe('motir auto — a whole run through the real session', () => {
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     expect(git.log.some((cmd) => cmd.includes('pr merge'))).toBe(false);
     expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  // ── MOTIR-3681 — THE PULL REQUEST OPENS AT THE FIRST IMPLEMENTED CARD ─────
+  //
+  // It used to open at the close-out, after every card. That makes CI's verdict
+  // arrive only once the run is over, which is too late for anything to act on:
+  // MOTIR-3685's watch-and-fix loop needs a verdict while there is still a run to
+  // change. What these pin is the ORDER, not the count — a test that only counted
+  // `gh pr create` would pass just as happily with the old end-of-run open.
+  it('opens the pull request AFTER THE FIRST card, not after the last', async () => {
+    scriptPlan();
+    /** One ordered log of both kinds of event, which is the only way to see WHEN. */
+    const events: string[] = [];
+    const git = gitRunner((bin, args) => {
+      if (bin === 'gh' && args[1] === 'create') events.push('pr-create');
+      return undefined;
+    });
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async ({ prompt }) => {
+          events.push(`agent:${prompt}`);
+          return { exitCode: 0, signal: null, model: 'claude-opus-5' };
+        },
+      },
+    );
+
+    // The create sits BETWEEN the two agents — after the first card landed and
+    // before the second one started.
+    expect(events).toEqual(['agent:PROMPT PROD-1', 'pr-create', 'agent:PROMPT PROD-2']);
+    // And still exactly ONE pull request: `openSessionPr` lists before it
+    // creates, so the second card finds the same one. The idempotence is the
+    // helper's, and the fake `gh` above models it.
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
+  });
+
+  it('the trigger is IMPLEMENTED, not ATTEMPTED — a failed first card opens nothing', async () => {
+    scriptPlan();
+    const events: string[] = [];
+    const git = gitRunner((bin, args) => {
+      if (bin === 'gh' && args[1] === 'create') events.push('pr-create');
+      return undefined;
+    });
+
+    // The first agent dies; the second succeeds. `--keep-going` so the loop
+    // reaches the second at all.
+    let runs = 0;
+    await autoCommand(
+      { ...AGENT, keepGoing: true },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async ({ prompt }) => {
+          events.push(`agent:${prompt}`);
+          return { exitCode: (runs += 1) === 1 ? 9 : 0, signal: null, model: null };
+        },
+      },
+    );
+
+    // Nothing opened after the FAILED card — it left nothing to review. The
+    // distinction is the one most likely to be got wrong, because "the first
+    // card" reads as "the first attempt".
+    expect(events.indexOf('pr-create')).toBeGreaterThan(events.indexOf('agent:PROMPT PROD-2'));
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
   });
 
   it('runs on its OWN clock and its OWN agent launcher when nothing is injected', async () => {

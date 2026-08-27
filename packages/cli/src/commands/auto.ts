@@ -53,6 +53,7 @@ import {
   workReachedRemote,
   GitError,
   openSessionPr,
+  updateSessionPr,
   pushSessionBranchIfAhead,
   runIdFromDate,
   sessionBranchCommits,
@@ -304,6 +305,9 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
     // unattended drain that asked per item would spend a request on a constant.
     const ownerId = await resolveOwnerId(session.client);
     const summary = await runAutoLoop({
+      // `motir auto` is the lane that opens each repository's pull request at its
+      // first implemented card (MOTIR-3681). See `LoopInput.openPrEagerly`.
+      openPrEagerly: true,
       session,
       opts,
       kinds,
@@ -326,6 +330,17 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
 }
 
 export interface LoopInput {
+  /**
+   * Open each repository's pull request at its FIRST implemented card, rather
+   * than only at the close-out (Story MOTIR-3655 · MOTIR-3681).
+   *
+   * ⚠️ OPT-IN, and only `motir auto` opts in. The SCOPED run shares this loop and
+   * can finish under a HOLD (Bug MOTIR-3268 — a parent must not claim to be built
+   * while a child of its own is not), which is computed at close-out from state
+   * the loop does not have mid-iteration. Opening eagerly there would open the
+   * very pull request the hold withholds.
+   */
+  openPrEagerly?: boolean;
   session: ProjectSession;
   opts: AutoOptions;
   kinds: string[] | undefined;
@@ -347,8 +362,20 @@ export interface LoopInput {
  *  scripted client + agent, which is the only way the "re-queries every
  *  iteration" property can actually be asserted. */
 export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
-  const { session, opts, kinds, max, agent, runId, branch, run, clock, runAgentFn, ownerId } =
-    input;
+  const {
+    session,
+    opts,
+    kinds,
+    max,
+    agent,
+    runId,
+    branch,
+    run,
+    clock,
+    runAgentFn,
+    ownerId,
+    openPrEagerly = false,
+  } = input;
   const { client, serverUrl, projectKey } = session;
 
   if (opts.reset) {
@@ -549,6 +576,34 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       }
       const record = outcome.record;
       records.push(record);
+
+      // MOTIR-3681 — OPEN THE PULL REQUEST AT THE FIRST IMPLEMENTED CARD, per
+      // repository, rather than at the end of the run.
+      //
+      // The trigger is IMPLEMENTED, not ATTEMPTED: an agent that failed before
+      // integrating leaves nothing to review, so `landedWork` is the gate and the
+      // next successful card in that repository opens it instead. `openSessionPr`
+      // lists before it creates, so every later iteration finds the same pull
+      // request and this is a no-op — the idempotence is the helper's, not a flag
+      // kept here.
+      //
+      // The body written now describes only what has landed so far. The close-out
+      // still runs at the end and REWRITES it from every record, so a reviewer
+      // reads the whole run (see `closeOutRepo`).
+      //
+      // ⚠️ GATED ON THE LANE, and the gate is not decoration. The SCOPED run
+      // (`motir run <parent>`, `commands/dispatch.ts`) shares this loop and can
+      // finish under a HOLD — `closeOutRepos(summary, run, hold)`, Bug
+      // MOTIR-3268: a parent must not claim to be built while a child of its own
+      // is not. That hold is computed at close-out, from state this loop does not
+      // have mid-iteration, so an eager open here would open exactly the pull
+      // request the hold exists to withhold. `motir auto` has no such hold and is
+      // the only lane that opts in.
+      if (openPrEagerly && landedWork(record)) {
+        for (const session of repo ?? []) {
+          ensureRepoPullRequest(session, runId, run);
+        }
+      }
 
       // ⚠️ A REFUSED CARD STOPS THE RUN, and `--keep-going` does not override it
       // (MOTIR-3018). That flag says "one agent failing is not a reason to
@@ -924,6 +979,52 @@ export async function transitionToImplemented(
  * three. This is the loop's only human gate: main has none of this work until
  * somebody merges these.
  */
+/**
+ * Make sure THIS repository's session pull request exists, mid-run
+ * (Story MOTIR-3655 · MOTIR-3681).
+ *
+ * Called after every card that LANDS, so the first implemented card in each
+ * repository opens that repository's pull request and every card after it finds
+ * the same one. `openSessionPr` lists before creating, so the repeat is a cheap
+ * no-op and the run holds no "have I opened it?" state of its own — which is
+ * what makes a resumed or re-invoked run safe.
+ *
+ * ⚠️ A FAILURE HERE IS REPORTED AND SWALLOWED. The agent's work is already
+ * committed and pushed; refusing to continue the loop because `gh` was missing
+ * would abandon the cards still queued behind a tooling gap. The close-out at
+ * the end tries again and reports properly.
+ */
+function ensureRepoPullRequest(session: RepoSession, runId: string, run: CommandRunner): void {
+  try {
+    if (!sessionBranchHasCommits(session.cwd, session.branch, run)) return;
+    const result = openSessionPr(
+      session.cwd,
+      {
+        branch: session.branch,
+        title: sessionPrTitle(runId, []),
+        // Deliberately thin: what has landed at THIS moment, and a sentence
+        // saying the close-out completes it. Rewritten in full at the end.
+        body:
+          `Opened by \`motir auto\` (run \`${runId}\`) at this repository's first implemented ` +
+          `card, so its checks run against the work as it lands rather than only at the end.\n\n` +
+          `Carried so far: ${session.keys.length > 0 ? session.keys.join(', ') : '—'}\n\n` +
+          `_This body is rewritten with the full run when the loop finishes._`,
+      },
+      run,
+    );
+    if (result.outcome === 'opened' && result.url) {
+      info(`Opened ${result.url} for ${session.branch}.`);
+    } else if (result.outcome === 'failed' && result.message) {
+      info(result.message);
+    }
+  } catch (err) {
+    info(
+      `Could not open ${session.branch}'s pull request yet: ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export function closeOutRepos(
   summary: AutoSummary,
   run: CommandRunner,
@@ -996,11 +1097,38 @@ function closeOutRepo(
       },
       run,
     );
+    // MOTIR-3681 — the pull request was opened mid-run, at this repository's
+    // first implemented card, with a body describing only what had landed then.
+    // `existing` is now the ORDINARY outcome rather than a resumed-run edge, so
+    // the full body is written here. A refresh failure is reported and does not
+    // change the outcome: the work is reviewable either way.
+    let refreshMessage: string | undefined;
+    if (result.outcome === 'existing') {
+      const refreshed = updateSessionPr(
+        repo.cwd,
+        repo.branch,
+        {
+          // BOTH, because the title counts cards: one written at the first
+          // implemented card names one card for ever.
+          title: sessionPrTitle(summary.runId, carried),
+          body: renderSessionPrBody(
+            summary.runId,
+            repo.branch,
+            mine,
+            sessionBranchCommits(repo.cwd, repo.branch, run),
+          ),
+        },
+        run,
+      );
+      if (!refreshed.ok) refreshMessage = refreshed.message;
+    }
     return {
       ...base,
       url: result.url,
       outcome: result.outcome,
-      ...(result.message ? { message: result.message } : {}),
+      ...(result.message || refreshMessage
+        ? { message: result.message ?? refreshMessage ?? '' }
+        : {}),
     };
   } catch (err) {
     return {
