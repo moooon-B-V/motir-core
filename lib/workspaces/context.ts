@@ -214,6 +214,69 @@ export async function bindWorkspaceContext(
 }
 
 /**
+ * Run `fn` with the PROJECT narrowing lifted, on a transaction that is already
+ * bound to one — then rebind it. The workspace gate is untouched throughout, so
+ * this WIDENS from one project to the workspace and never past it.
+ *
+ * ⚠️ THE POLICY THIS EXISTS FOR (MOTIR-3581). `work_item` carries two axes: the
+ * PERMISSIVE `work_item_active_workspace` gate on `app.workspace_id`, and the
+ * RESTRICTIVE `work_item_project_narrow` FOR SELECT policy
+ * (`prisma/migrations/20260601074342_add_work_item_rls/migration.sql`):
+ *
+ *     coalesce(current_setting('app.project_id', true), '') = ''
+ *     OR "projectId" = current_setting('app.project_id', true)
+ *
+ * `withWorkspaceContext` always binds `app.project_id`, so a read issued inside
+ * one of its transactions cannot see a work item in ANOTHER PROJECT of the same
+ * workspace — even when the question being asked is workspace-scoped by
+ * definition. That is the right default for a page read and the wrong one for a
+ * TENANCY question ("does this id name a work item in this workspace?"), and the
+ * gap is not theoretical: a cross-project `blocked_by` is a supported edge
+ * (`link_work_items`: "targets may be in another project in the same
+ * workspace"; `work_item_link` carries NO project narrowing, deliberately), and
+ * `plansService.approvePlan` rejected every plan proposing one because its
+ * in-transaction gate pass could not see the blocker its pre-transaction pass
+ * had just resolved.
+ *
+ * ⚠️ IT IS NOT A SECURITY WIDENING, and the distinction is the whole licence for
+ * this helper. The project GUC is a VIEW narrowing, opt-in by
+ * `withWorkspaceContext`'s caller; the tenancy boundary is `app.workspace_id`,
+ * which stays bound. A read reached through here is still confined to one
+ * workspace by RLS, and its repository method filters on `workspaceId`
+ * explicitly as well (`workItemRepository.findByIdsInWorkspace`). Do NOT reach
+ * for it to escape a workspace, an organization, or a permission check — none of
+ * those is expressible here.
+ *
+ * ⚠️ NARROW IT TO THE STATEMENTS THAT NEED IT. Every read issued inside `fn`
+ * loses the narrowing, so `fn` holds the tenancy-scoped statements and nothing
+ * else — never a whole transaction body, and never `materialize`-style writes,
+ * which the workspace policy governs but which a reader of this call would then
+ * have to re-derive the scope of.
+ *
+ * `set_config(..., true)` is transaction-LOCAL both times, so a rollback discards
+ * the rebinding along with everything else — which is why the restore is best
+ * effort: if `fn` threw a SQL error the transaction is already aborted and the
+ * rebinding cannot run, and there is nothing left for it to protect.
+ */
+export async function withProjectNarrowingSuspended<T>(
+  tx: Prisma.TransactionClient,
+  boundProjectId: string | null | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  await tx.$executeRaw`SELECT set_config('app.project_id', '', true)`;
+  try {
+    return await fn();
+  } finally {
+    await tx.$executeRaw`SELECT set_config('app.project_id', ${boundProjectId ?? ''}, true)`.catch(
+      () => {
+        // The transaction is aborted; the GUC dies with it. Swallowing here keeps
+        // the ORIGINAL failure as the one the caller sees.
+      },
+    );
+  }
+}
+
+/**
  * Opens a Prisma transaction binding ONLY the `app.workspace_id` GUC (no
  * `app.user_id`, no `app.system_admin`), then invokes `fn` with the transaction
  * client. This is the workspace-tier analogue of

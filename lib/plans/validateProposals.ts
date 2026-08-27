@@ -57,6 +57,12 @@ export interface LiveWorkItemState {
   id: string;
   kind: string;
   status: string;
+  /**
+   * The project the live row sits in. Read by the PARENT-tenancy check only —
+   * a `blocked_by` ref deliberately does NOT consult it, because a cross-project
+   * dependency edge is supported (MOTIR-3581).
+   */
+  projectId: string;
 }
 
 export interface ValidatePlanProposalsInput {
@@ -74,6 +80,12 @@ export interface ValidatePlanProposalsInput {
    * `cancelled` is terminal too.
    */
   terminalStatusKeys: ReadonlySet<string>;
+  /**
+   * The project the PLAN belongs to — the project every card it materializes is
+   * created in. Read by the parent-tenancy check (step 3b), which is the only
+   * question in this gate whose answer depends on WHERE a live row sits.
+   */
+  planProjectId: string;
 }
 
 /** The proposed kind of an `add`, defaulted the way `materialize` defaults it. */
@@ -310,7 +322,7 @@ function effectiveParentKind(
  * therefore cannot move earlier than the CLOSE.
  */
 export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
-  const { items, liveById, terminalStatusKeys } = input;
+  const { items, liveById, terminalStatusKeys, planProjectId } = input;
 
   const adds = items.filter((i) => i.op === 'add');
   const addsById = new Map(adds.map((a) => [a.id, a]));
@@ -345,6 +357,49 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
         );
       }
       throw err;
+    }
+  }
+
+  // 3b. PARENT TENANCY — a `parentRef` naming a live work item in ANOTHER
+  //     project is refused HERE, with the real reason, rather than by the
+  //     `WI_PARENT_CROSS_PROJECT` trigger halfway through `materialize`.
+  //
+  //     ⚠️ THIS IS NOT THE CROSS-PROJECT RULE — a `blocked_by` ref is checked by
+  //     step 2 and NOTHING ELSE, and that asymmetry is the product's, not this
+  //     gate's (MOTIR-3581):
+  //
+  //       * A DEPENDENCY is workspace-scoped BY DESIGN. `work_item_link` carries
+  //         the workspace gate and deliberately no project narrowing ("cross-project
+  //         links inside one workspace are a v1 use case" —
+  //         `20260601074342_add_work_item_rls`), `link_work_items` promises it in
+  //         its own contract, and `planValidityService` treats a cross-project
+  //         blocker as a first-class case. A shared platform project gating an
+  //         application's work is the ordinary shape.
+  //       * PARENTAGE is same-project BY INVARIANT, on three enforcing layers:
+  //         `workItemsService` throws `CrossProjectParentError` on create and on
+  //         both re-parent paths, the `work_item` parent-tenancy trigger raises
+  //         `WI_PARENT_CROSS_PROJECT` (`20260817160000_work_item_parent_tenancy`),
+  //         and `move_to_parent` refuses it. A plan cannot be the one door that
+  //         admits it.
+  //
+  //     So the two refs are treated differently because they ARE different, and
+  //     the message says which is which — the failure this whole card is about was
+  //     a refusal whose stated reason the caller could observe to be false.
+  for (const item of adds) {
+    const ref = item.parentRef;
+    if (!ref || isTempRef(ref)) continue;
+    // Resolution is guaranteed by `assertRefsResolvable`.
+    const parent = liveById.get(ref)!;
+    if (parent.projectId !== planProjectId) {
+      throw new PlanGrammarError(
+        'illegal_parent',
+        item.id,
+        `Proposal ${item.id}'s parentRef "${ref}" names a work item in a DIFFERENT project of this workspace. ` +
+          `A work item's parent must live in the same project (a cross-project parent is refused by ` +
+          `workItemsService and by the work_item parent-tenancy trigger). A cross-project ` +
+          `blocked_by edge IS supported — if this is a dependency rather than a placement, move the ref to ` +
+          `blockedByRefs.`,
+      );
     }
   }
 

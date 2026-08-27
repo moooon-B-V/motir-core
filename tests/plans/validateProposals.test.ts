@@ -24,9 +24,13 @@ import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 
 const REAL_PARENT = 'wi_parent';
 const REAL_TARGET = 'wi_target';
+/** The project the PLAN is in — every live row defaults to it. */
+const PLAN_PROJECT = 'proj_plan';
+/** A SIBLING project in the same workspace (MOTIR-3581). */
+const OTHER_PROJECT = 'proj_other';
 
 function live(overrides: Partial<LiveWorkItemState> & { id: string }): LiveWorkItemState {
-  return { kind: 'story', status: 'todo', ...overrides };
+  return { kind: 'story', status: 'todo', projectId: PLAN_PROJECT, ...overrides };
 }
 
 function liveMap(...items: LiveWorkItemState[]): Map<string, LiveWorkItemState> {
@@ -65,12 +69,14 @@ function validate(
   opts: {
     liveById?: Map<string, LiveWorkItemState>;
     terminalStatusKeys?: Set<string>;
+    planProjectId?: string;
   } = {},
 ): void {
   validatePlanProposals({
     items,
     liveById: opts.liveById ?? liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET })),
     terminalStatusKeys: opts.terminalStatusKeys ?? new Set(['done', 'cancelled']),
+    planProjectId: opts.planProjectId ?? PLAN_PROJECT,
   });
 }
 
@@ -189,6 +195,83 @@ describe('validatePlanProposals — the kind-parent grammar', () => {
 
   it('does not gate a modify on the grammar — a patch cannot re-parent or re-kind', () => {
     expect(() => validate([modify('m1', { patch: { blockedByAdd: [] } })])).not.toThrow();
+  });
+});
+
+describe('validatePlanProposals — cross-project refs (MOTIR-3581)', () => {
+  // The product supports a cross-PROJECT dependency and forbids a cross-project
+  // PARENT, and the two are asserted TOGETHER because the bug was that one
+  // mechanism — a project-narrowed read — silently applied the parent rule to
+  // dependencies. A test for either one alone passes with that bug present.
+  const CROSS = 'wi_cross_project';
+  const crossLive = liveMap(
+    live({ id: REAL_PARENT }),
+    live({ id: REAL_TARGET }),
+    // A `story`, so `story -> task` is a LEGAL pair and the kind-parent grammar
+    // (step 3) has nothing to say — the only thing wrong with it as a parent is
+    // the project. A `task` here passes the parent case for the WRONG reason.
+    live({ id: CROSS, projectId: OTHER_PROJECT, kind: 'story' }),
+  );
+
+  it("ACCEPTS an add's blockedByRefs naming a work item in another project of the workspace", () => {
+    expect(() =>
+      validate([add('p1', { blockedByRefs: [CROSS] })], { liveById: crossLive }),
+    ).not.toThrow();
+  });
+
+  it("ACCEPTS a modify's patch.blockedByAdd naming a cross-project work item", () => {
+    expect(() =>
+      validate([modify('m1', { patch: { blockedByAdd: [CROSS] } })], { liveById: crossLive }),
+    ).not.toThrow();
+  });
+
+  it("ACCEPTS a modify's patch.blockedByRemove naming a cross-project work item", () => {
+    expect(() =>
+      validate([modify('m1', { patch: { blockedByRemove: [CROSS] } })], { liveById: crossLive }),
+    ).not.toThrow();
+  });
+
+  it('REFUSES a parentRef naming a cross-project work item, as an illegal PLACEMENT', () => {
+    try {
+      validate([add('p1', { parentRef: CROSS })], { liveById: crossLive });
+      expect.unreachable('a cross-project parentRef must be rejected');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+    }
+  });
+
+  it('says WHY, and does not repeat the false "no work item in this workspace" claim', () => {
+    // The expensive half of the original defect was the MESSAGE: it asserted
+    // something the caller could observe to be false. Whatever the refusal is, it
+    // may not send the reader looking for a missing row.
+    try {
+      validate([add('p1', { parentRef: CROSS })], { liveById: crossLive });
+      expect.unreachable('a cross-project parentRef must be rejected');
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).not.toContain('names no work item in this workspace');
+      expect(message).toContain('DIFFERENT project');
+      expect(message).toContain('blockedByRefs');
+    }
+  });
+
+  it('still refuses a ref that resolves to NOTHING — with `dangling`, unchanged', () => {
+    try {
+      validate([add('p1', { blockedByRefs: ['wi_nowhere'] })], { liveById: crossLive });
+      expect.unreachable('a ref resolving to nothing must still be rejected');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('dangling');
+    }
+  });
+
+  it('leaves a SAME-project parentRef alone (the check is tenancy, not a new grammar rule)', () => {
+    expect(() =>
+      validate([add('p1', { proposedFields: { kind: 'task' }, parentRef: REAL_PARENT })], {
+        liveById: crossLive,
+      }),
+    ).not.toThrow();
   });
 });
 
