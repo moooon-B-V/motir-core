@@ -1,5 +1,6 @@
 import { type Organization, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { bindOrganizationContext } from '@/lib/organizations/context';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 // Organization repository — single Prisma operations on the `organization`
@@ -75,10 +76,39 @@ export const organizationRepository = {
    * insert (a warm-pool TOCTOU overage — CLAUDE.md § lock-before-read-derived).
    * Locking the single org row serializes every create under the org: the second
    * racer blocks until the first commits, then re-counts and correctly sees the
-   * limit. Returns whether the row exists (false → the org was deleted/hidden).
+   * limit. Returns whether a row was actually LOCKED — `false` means the caller
+   * is NOT serialized and must refuse rather than proceed (see
+   * `entitlementsService`'s `lockOrgRowOrRefuse`).
    * `tx` REQUIRED — a row lock lives only for its transaction.
+   *
+   * ⚠️ THE BINDING ON THE FIRST LINE IS LOAD-BEARING — WITHOUT IT THIS LOCKED
+   * NOTHING, SILENTLY (MOTIR-3710). Postgres applies the UPDATE policy's `USING`
+   * clause to a `SELECT … FOR UPDATE`, because locking a row for update implies
+   * update permission — and a row that fails it is FILTERED OUT rather than
+   * refused. `organization`'s only UPDATE policy is `organization_mutate_active`
+   * (`id = current_setting('app.organization_id', true)`), so from a context that
+   * does not bind that GUC — `withWorkspaceContext`, which binds user / workspace
+   * / project and nothing else, and which is what every §4 count-cap runs inside —
+   * this statement matched ZERO rows, locked nothing, and let every racer through
+   * together. Measured before the fix: `{ locked: false, visibleOrgRows: 1 }`. The
+   * row was READABLE the whole time (`organization_membership_visible` admits it),
+   * which is exactly why the guard read as working.
+   *
+   * The bind lives HERE rather than at the three call sites because a method whose
+   * entire job is "lock THIS org row" cannot do it without the GUC that admits the
+   * row, and a lock that silently no-ops is a trap in proportion to how inviting
+   * its name is — the same argument `findByIdInTx` above makes (MOTIR-2775). It is
+   * ADDITIVE and transaction-local, and it admits exactly the one org row named
+   * here and nothing else (`withOrgServiceWriteContext`'s note in
+   * `lib/organizations/context.ts` is the reasoning).
+   *
+   * SECURITY: `id` must be a TRUSTED, server-resolved organization id — every
+   * caller resolves it UP from the workspace row, or has already bound the same id
+   * itself — never raw request input. Same constraint `bindOrganizationContext`
+   * documents.
    */
   async lockByIdForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    await bindOrganizationContext(tx, id);
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "organization" WHERE "id" = ${id} FOR UPDATE
     `;

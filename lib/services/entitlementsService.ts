@@ -2,7 +2,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { entitlementsFor, pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
-import { EntitlementExceededError } from '@/lib/billing/errors';
+import { CapLockUnavailableError, EntitlementExceededError } from '@/lib/billing/errors';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -28,6 +28,18 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // blocks until the first commits, re-counts, and correctly sees the limit. The
 // caller MUST run the assert INSIDE the same transaction as the create it guards.
 //
+// ⚠️ AND THE LOCK'S RESULT IS READ — `lockOrgRowOrRefuse`, NOT a bare call
+// (MOTIR-3710). The paragraph above described a contract this file did not
+// enforce: `lockByIdForUpdate` matched ZERO rows under `withWorkspaceContext`
+// (the `organization` UPDATE policy reads `app.organization_id`, which that
+// context never bound), returned `false` to say exactly that, and NOBODY READ
+// IT. Every racer fell through together and the guard degraded to a plain
+// read-then-write — while every signal reported success: this comment, a
+// dedicated real-concurrency test, three RLS scanners. Two things changed and
+// BOTH are load-bearing: the repository now binds the GUC that admits the row,
+// and every cap here REFUSES when the lock matched nothing. A cap that cannot
+// serialize is not a cap.
+//
 // ── How an org's tier is resolved ──────────────────────────────────────────
 // `pmTierForOrg` resolves from the org's full cap context: the META org
 // (`Organization.isMeta` — moooon B.V.) short-circuits to the internal `meta`
@@ -36,6 +48,27 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // anything else is `free`. A missing/hidden org collapses to `free` (safe
 // default: caps apply). Resolving here means every cap below — and any future
 // cap — honours the meta exemption through this one chokepoint.
+
+/**
+ * Take the org-row lock the count caps serialize on, and REFUSE if it matched
+ * nothing (MOTIR-3710). `lockByIdForUpdate` has always returned whether it
+ * locked a row; this is the caller that reads it.
+ *
+ * `false` means one of two things and neither is survivable for a cap: the org
+ * row is gone, or this transaction's context cannot be admitted to lock it. In
+ * both, the `count → compare → create` below would run UNSERIALIZED, which is a
+ * revenue control failing open with no error, no log line and no metric. Throw
+ * instead — a 500 on one create is a bad minute; a free org quietly past its
+ * ceiling is a bad quarter nobody measures.
+ */
+async function lockOrgRowOrRefuse(
+  organizationId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (!(await organizationRepository.lockByIdForUpdate(organizationId, tx))) {
+    throw new CapLockUnavailableError(organizationId);
+  }
+}
 
 async function tierForOrgInTx(
   organizationId: string,
@@ -73,7 +106,7 @@ export const entitlementsService = {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     if (!isCloudBilling()) return;
-    await organizationRepository.lockByIdForUpdate(organizationId, tx);
+    await lockOrgRowOrRefuse(organizationId, tx);
     const { maxWorkItems } = entitlementsFor(await tierForOrgInTx(organizationId, tx));
     if (maxWorkItems === null) return;
     const current = await workItemRepository.countByOrganization(organizationId, tx);
@@ -88,7 +121,7 @@ export const entitlementsService = {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     if (!isCloudBilling()) return;
-    await organizationRepository.lockByIdForUpdate(organizationId, tx);
+    await lockOrgRowOrRefuse(organizationId, tx);
     const { maxProjects } = entitlementsFor(await tierForOrgInTx(organizationId, tx));
     if (maxProjects === null) return;
     const current = await projectRepository.countByOrganization(organizationId, tx);
@@ -103,7 +136,7 @@ export const entitlementsService = {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     if (!isCloudBilling()) return;
-    await organizationRepository.lockByIdForUpdate(organizationId, tx);
+    await lockOrgRowOrRefuse(organizationId, tx);
     const { maxWorkspaces } = entitlementsFor(await tierForOrgInTx(organizationId, tx));
     if (maxWorkspaces === null) return;
     const current = await workspaceRepository.countByOrganization(organizationId, tx);

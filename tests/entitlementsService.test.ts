@@ -18,10 +18,11 @@ const { entitlementsService } = await import('@/lib/services/entitlementsService
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { workItemRepository } = await import('@/lib/repositories/workItemRepository');
+const { organizationRepository } = await import('@/lib/repositories/organizationRepository');
 const { makeWorkItemFixture, createTestUser, nextTestPosition } = await import('./fixtures');
 const { keyForAppend } = await import('@/lib/workItems/positioning');
 const { truncateAuthTables } = await import('./helpers/db');
-const { EntitlementExceededError } = await import('@/lib/billing/errors');
+const { CapLockUnavailableError, EntitlementExceededError } = await import('@/lib/billing/errors');
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -50,6 +51,53 @@ async function setTier(organizationId: string, sub: ScaledTrackerSubscription): 
 function reasonLabel(reason: unknown): string {
   if (reason instanceof Error) return `${reason.name}: ${reason.message.slice(0, 120)}`;
   return String(reason);
+}
+
+/**
+ * A RENDEZVOUS for `parties` transactions (MOTIR-3710). Every caller blocks
+ * until the last one arrives, then all are released together.
+ *
+ * ⚠️ THIS IS WHAT MAKES THE RACE BELOW A RACE. `Promise.allSettled` on its own
+ * does NOT overlap two interactive transactions: the first reaches its count,
+ * its create AND its COMMIT before the second counts, so the second legitimately
+ * sees the limit and rejects — with or without a lock. The test then passes on a
+ * guard that does nothing, which is precisely what happened here for months.
+ * Arriving on the FIRST line inside `withWorkspaceContext` means both
+ * transactions are open and GUC-bound before either can touch the cap.
+ *
+ * The deadline is not a fallback that weakens the overlap — it REJECTS, so a run
+ * where the second transaction never arrived says so instead of hanging until
+ * Vitest's timeout and leaving a reader to guess which world they are in (the
+ * same reason MOTIR-3707 put a census on the assertions below). It is under
+ * Prisma's 5 000 ms interactive-transaction budget on purpose.
+ */
+function rendezvous(parties: number, deadlineMs = 3_000): () => Promise<void> {
+  let arrived = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return async () => {
+    if (++arrived === parties) release();
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new Error(
+              `rendezvous: only ${arrived}/${parties} transactions arrived within ${deadlineMs}ms ` +
+                '— the race did not overlap, so it proves nothing about the lock',
+            ),
+          ),
+        deadlineMs,
+      );
+    });
+    try {
+      await Promise.race([gate, deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 }
 
 /** Flag the org as the META org (moooon B.V.) — the `meta` tier, every cap lifted. */
@@ -207,18 +255,21 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
   // 250th item and the other is rejected — never a 251-item overage (the
   // warm-pool TOCTOU a count-then-write with no lock would allow).
   //
-  // ⚠️ AND THE RACE IS WEAKER THAN ITS NAME (MOTIR-3707, measured — see MOTIR-3710).
-  // `Promise.allSettled` on its own does NOT overlap the two attempts: the first
-  // reaches its count, its create AND its COMMIT before the second counts, so the
-  // second legitimately sees 250 and rejects — with or without the lock. Deleting
-  // `lockByIdForUpdate` from `assertWithinWorkItemCap` leaves this test GREEN.
-  // Forcing the overlap (a barrier holding both transactions open past their GUC
-  // binding) makes it report finalCount=251 on UNMODIFIED product code, because
-  // `SELECT … FOR UPDATE` on `organization` matches zero rows under
+  // ⚠️ THE RACE USED TO BE WEAKER THAN ITS NAME — MOTIR-3707 measured it,
+  // MOTIR-3710 fixed both halves. `Promise.allSettled` on its own does NOT
+  // overlap the two attempts: the first reaches its count, its create AND its
+  // COMMIT before the second counts, so the second legitimately saw 250 and
+  // rejected — with or without the lock. Deleting `lockByIdForUpdate` from
+  // `assertWithinWorkItemCap` left this test GREEN. It is the `rendezvous`
+  // barrier below that makes the two transactions actually overlap, and it is
+  // the barrier that makes this test able to fail: on UNMODIFIED product code it
+  // reported `finalCount=251, fulfilled=2, rejected=0`, because
+  // `SELECT … FOR UPDATE` on `organization` matched zero rows under
   // `withWorkspaceContext` — the UPDATE policy `organization_mutate_active` reads
-  // `app.organization_id`, which that context never binds. That is a product
-  // defect with its own card; strengthening this race belongs to it, not here,
-  // because landing the barrier before the fix turns `main` red.
+  // `app.organization_id`, which that context never bound.
+  //
+  // ⚠️ SO DO NOT REMOVE THE BARRIER TO "SIMPLIFY" THIS TEST. Without it the test
+  // passes on a guard that does nothing, and the passing looks identical.
   //
   // ⚠️ THE ASSERTION ORDER IS LOAD-BEARING (MOTIR-3707) — do not reorder it back.
   // `fulfilled.length === 2` is produced by TWO different worlds and the split
@@ -256,8 +307,15 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     // The concurrency probe runs at production altitude too: `createWorkItem` opens
     // withWorkspaceContext and does the cap-assert + the create inside it, so the
     // FOR-UPDATE serialization under test is the one production actually gets.
+    // ⚠️ THE BARRIER IS THE INSTRUMENT (MOTIR-3710). Arriving on the FIRST line
+    // inside the context means neither transaction can count, create or COMMIT
+    // until both are open and GUC-bound — which is the overlap `Promise.allSettled`
+    // alone never produced. Measured on this file before the fix, with the barrier
+    // and UNMODIFIED product code: finalCount=251, fulfilled=2, rejected=0.
+    const arrive = rendezvous(2);
     const attempt = (key: number) =>
       withWorkspaceContext(fx.ctx, async (tx) => {
+        await arrive();
         await entitlementsService.assertWithinWorkItemCap(orgId, tx);
         await workItemRepository.create(
           {
@@ -294,6 +352,98 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     expect((rejected[0] as PromiseRejectedResult).reason, census).toBeInstanceOf(
       EntitlementExceededError,
     );
+  });
+});
+
+describe('entitlementsService — the org-row lock every count cap serializes on (MOTIR-3710)', () => {
+  // The lock was INERT: `SELECT … FOR UPDATE` on `organization` matched zero rows
+  // under `withWorkspaceContext`, so it serialized nobody, and the boolean that
+  // said so was thrown away at all three call sites. These are the two halves of
+  // the fix, asserted where a future reader will find them.
+
+  it('LOCKS the org row inside withWorkspaceContext — the probe returns true', async () => {
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+
+    // The probe MOTIR-3710 was filed on, re-run. The two readings taken BEFORE
+    // the lock are what make its `false` legible rather than mysterious: the org
+    // row was READABLE the whole time (`organization_membership_visible` admits
+    // it on `app.user_id`) while `app.organization_id` — the GUC the UPDATE
+    // policy `organization_mutate_active` reads, and the one a `FOR UPDATE` is
+    // therefore filtered by — was unbound. Readable and not lockable.
+    const probe = await withWorkspaceContext(fx.ctx, async (tx) => {
+      const [before] = await tx.$queryRaw<
+        Array<{ ws: string | null; org: string | null; role: string }>
+      >`
+        SELECT current_setting('app.workspace_id', true) AS ws,
+               current_setting('app.organization_id', true) AS org,
+               current_user::text AS role
+      `;
+      const [visible] = await tx.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*) AS n FROM "organization" WHERE "id" = ${orgId}
+      `;
+      const locked = await organizationRepository.lockByIdForUpdate(orgId, tx);
+      const [after] = await tx.$queryRaw<Array<{ org: string | null }>>`
+        SELECT current_setting('app.organization_id', true) AS org
+      `;
+      return {
+        locked,
+        visibleOrgRows: Number(visible!.n),
+        workspaceGuc: before!.ws,
+        orgGucBeforeLock: before!.org ?? null,
+        orgGucAfterLock: after!.org ?? null,
+        role: before!.role,
+      };
+    });
+
+    const census = `probe: ${JSON.stringify(probe)}`;
+
+    // The headline, and the whole card: `locked: false` here is a §4 cap
+    // enforcing nothing while every other signal reads green.
+    expect(probe.locked, `${census} — false means the FOR UPDATE matched no row`).toBe(true);
+    // The two readings that say WHY, so a regression names its own cause.
+    expect(probe.visibleOrgRows, `${census} — the row is admitted for READ`).toBe(1);
+    expect(probe.orgGucBeforeLock ?? '', `${census} — withWorkspaceContext binds no org GUC`).toBe(
+      '',
+    );
+    expect(probe.orgGucAfterLock, `${census} — lockByIdForUpdate binds it itself`).toBe(orgId);
+    expect(probe.workspaceGuc, census).toBe(fx.workspaceId);
+  });
+
+  // ⚠️ ALL THREE CAPS, because the defect was never specific to the work-item
+  // one — `assertWithinProjectCap` and `assertWithinWorkspaceCap` open with the
+  // identical two lines. A test that covered only the headline cap would leave
+  // the other two able to regress silently, which is exactly the shape of the
+  // bug being fixed.
+  const CAPS = [
+    'assertWithinWorkItemCap',
+    'assertWithinProjectCap',
+    'assertWithinWorkspaceCap',
+  ] as const;
+
+  it.each(CAPS)('%s REFUSES when the org-row lock matches no row', async (method) => {
+    const fx = await makeWorkItemFixture();
+
+    // An org id that resolves to no row is the cheapest way to drive
+    // `lockByIdForUpdate` to `false` without breaking RLS: the lock matches
+    // nothing, so the cap cannot serialize and must refuse rather than fall
+    // through to an unguarded count → compare → create.
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService[method]('org_does_not_exist', tx)),
+    ).rejects.toBeInstanceOf(CapLockUnavailableError);
+  });
+
+  it('is still INERT off-cloud — the refusal never fires on a self-hosted build', async () => {
+    // The refusal sits BEHIND the `isCloudBilling()` early return, so a
+    // self-hosted (GPL-3.0) build cannot be 500ed by a cap it does not have.
+    delete process.env['MOTIR_CLOUD'];
+    const fx = await makeWorkItemFixture();
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) =>
+        entitlementsService.assertWithinWorkItemCap('org_does_not_exist', tx),
+      ),
+    ).resolves.toBeUndefined();
   });
 });
 
