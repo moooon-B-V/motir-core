@@ -207,12 +207,19 @@ function JsonBlock({ value }: { value: unknown }) {
 }
 
 // ── Tables ──────────────────────────────────────────────────────────────────
+// The ink is `--el-text-secondary`, not `--el-text-muted` (MOTIR-3523). Both
+// `RunsTable` and `DlqTable` paint their `<thead>` `bg-(--el-surface)`, and
+// muted on that tint measures 4.17:1 — under the 4.5:1 these 12px semibold
+// labels owe. Secondary is 6.24:1 there, and is the ink whose contract is AA on
+// EVERY surface (`theme.css`), so it holds in both themes and all ten palettes.
+// Keep them together: an ink chosen for a tint the caller paints is only
+// correct while the caller still paints it.
 function Th({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <th
       scope="col"
       className={cn(
-        'px-3 py-2 text-left font-sans text-xs font-semibold text-(--el-text-muted)',
+        'px-3 py-2 text-left font-sans text-xs font-semibold text-(--el-text-secondary)',
         className,
       )}
     >

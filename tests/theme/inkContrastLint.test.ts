@@ -49,6 +49,30 @@ import {
 // construction, so a green muted arm means "no muted ink over a tint a single
 // file could prove", never "no muted ink over a tint".
 //
+// ⚠️ CORRECTED (MOTIR-3523) — "WITHIN ONE FILE" WAS NEVER THE BOUNDARY, AND
+// STATING IT AS ONE HID A DEFECT FOR THE WHOLE LIFE OF A FILE. The walk stops at
+// the root of the COMPONENT the ink is written in, which is a tighter fence than
+// the file: a file that writes the ink in a local `Th` and paints the tint on
+// the `<thead>` that USES it abstains, though both halves are in one file and
+// one AST. The operator jobs dashboard was exactly that shape — eight column
+// labels at 4.17:1, this lint green over that file since it was written.
+//
+// The distinction matters because the two boundaries have different remedies.
+// The CROSS-MODULE one really does need the import graph. The SAME-FILE one
+// needs a second walk over this AST, which `scanSource`'s `resolveUseSites`
+// option now performs and `inkContrastScan.test.ts` proves on fixtures. It is
+// OFF here, deliberately: it reports 8 further sites across 6 files, and this
+// repo has twice paid for pointing a widened ink arm at the tree in the change
+// that built it (MOTIR-2496 — two such PRs merged 37 seconds apart and their
+// composition turned `main` red). A card sweeps that population and turns this
+// on, the way MOTIR-2475 and MOTIR-2477 did for the arms already here.
+//
+// The general lesson is the one worth carrying past this arm: a guard's stated
+// boundary is a claim about the guard, and it decays exactly like any other
+// claim in a comment. This one read as wider than it was, so every reader who
+// checked it concluded correctly that their site was out of reach — including
+// the reviews that looked straight at the failing header.
+//
 // Two narrower edges of the same boundary, for whoever widens this later:
 //   • A CONDITIONAL background (`selected && 'bg-(--el-surface-soft)'`) reads as
 //     tinted for every branch, because the surface lookup matches the className
@@ -64,8 +88,10 @@ import {
 //     (MOTIR-2497). Over-reporting a conditional TINT stays the safe way to be
 //     wrong; under-reporting a conditional WHITE is not.
 // Widening the surface resolution across module boundaries needs the import
-// graph, not this walk. (MOTIR-2489 is the open card on the scanner's element
-// resolution; it is a different axis from this one.)
+// graph, not this walk — the CROSS-MODULE half of it does. The SAME-FILE half
+// does not, and is the correction above. (MOTIR-2489 was the card on the
+// scanner's element resolution — a different axis from this one, and closed
+// since; a citation of it as "the open card" is stale.)
 
 const REPO = process.cwd();
 
