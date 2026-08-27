@@ -9,6 +9,13 @@ import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
+  deliverySetShortfall,
+  hasDeliverySetShortfall,
+  EMPTY_DELIVERY_SHORTFALL,
+  type DeliverySetShortfall,
+} from '@/lib/workItems/deliverySet';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
   repoSetShortfall,
@@ -113,6 +120,7 @@ export type ChangeRequestSyncResult = {
     | 'transitioned'
     | 'session_closed' // a merged SESSION-branch delivery — every card on the branch closed (MOTIR-3007)
     | 'noop'
+    | 'deferred_incomplete_delivery_set' // a pull request DELIVERING this item has not landed — item stays In Review (MOTIR-3659)
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
     | 'deferred_non_default_base' // a merge into a NON-default base — the work never reached the trunk, item stays In Review (MOTIR-1873)
     | 'deferred_incomplete_repo_set' // a repository the item CARRIES has no merge on its default branch — item stays In Review (MOTIR-2729)
@@ -314,6 +322,28 @@ export async function syncChangeRequestStatus(
     // this card a session merge closed NOTHING, so the gates were never reached
     // on this path at all. The branch-scoped gate above (a merge that never
     // landed on the trunk) DOES still run, and holds the whole close-out.
+    // MOTIR-3659 — the item completes only when EVERY pull request DELIVERING it
+    // has merged onto its own repository's default branch. Read from the delivery
+    // link table, which is the one association the ADR settles on, inside THIS
+    // transaction and under the row lock taken above so concurrent redeliveries
+    // serialize on it exactly as the other gates do.
+    //
+    // ⚠️ It ABSTAINS on an empty set, which is what keeps every card that predates
+    // this table byte-identical: no links, no shortfall, no hold. Almost every
+    // card in the tree is that case.
+    const deliveryShortfall =
+      lifecycle === 'done' && !mergedIntoNonDefaultBase && !sessionBranch && workItem !== null
+        ? deliverySetShortfall(
+            (await workItemDeliveryRepository.listByWorkItem(workItem.id, tx)).map((d) => ({
+              repoLabel: `${d.repo.owner}/${d.repo.name}`,
+              number: d.pullRequest.number,
+              merged: d.pullRequest.merged,
+              baseRef: d.pullRequest.baseRef,
+              defaultBranch: d.repo.defaultBranch,
+            })),
+          )
+        : EMPTY_DELIVERY_SHORTFALL;
+
     const hasOtherOpenLinkedPr =
       lifecycle === 'done' && !mergedIntoNonDefaultBase && !sessionBranch && workItem !== null
         ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
@@ -366,6 +396,7 @@ export async function syncChangeRequestStatus(
       // merge event, and GitHub redelivers events freely.
       mergeAlreadyRecorded: existingPr?.state === 'closed' && existingPr.merged === true,
       hasOtherOpenLinkedPr,
+      deliveryShortfall,
       shortfall,
       actorUserId: authorBoundUserId ?? owner?.userId ?? null,
       ownerUserId: owner?.userId ?? null,
@@ -432,6 +463,52 @@ export async function syncChangeRequestStatus(
       outcome: 'access_denied',
       ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
     };
+
+  // MOTIR-3659 — a merge that leaves any pull request DELIVERING this item
+  // unlanded holds the item In Review. THIRD, ahead of the two gates below, because
+  // it is the most specific answer available: a card that carries delivery links
+  // should be decided by its links rather than fall through to a proxy for them.
+  //
+  // It abstains on a card with no links, so the two gates below are still the only
+  // protection every card that predates this table has — which is nearly all of
+  // them — and neither is weakened.
+  if (
+    lifecycle === 'done' &&
+    resolved.workItemId &&
+    hasDeliverySetShortfall(resolved.deliveryShortfall)
+  ) {
+    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
+    // per merge (the same `mergeAlreadyRecorded` read taken under the row lock) and
+    // best-effort — a failed note must not turn a correct hold into a 500 the host
+    // redelivers forever.
+    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
+      try {
+        await commentsService.addComment(
+          resolved.workItemId,
+          {
+            bodyMd: incompleteDeliverySetCommentBody({
+              noun: changeRequestNoun(resolved.provider),
+              number: cr.number,
+              shortfall: resolved.deliveryShortfall,
+            }),
+          },
+          { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+        );
+      } catch (err) {
+        console.error('[changeRequestStatusSync] delivery-set note failed; item still held', {
+          workItemId: resolved.workItemId,
+          number: cr.number,
+          outstanding: resolved.deliveryShortfall.outstanding,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
+    return {
+      event: 'pull_request',
+      outcome: 'deferred_incomplete_delivery_set',
+      workItemId: resolved.workItemId,
+    };
+  }
 
   // A merged change request that is NOT the item's last open linked one leaves the
   // item In Review — a cross-repo (two-PR) card completes only when its LAST linked
@@ -705,6 +782,57 @@ function missingArtifactEvidenceCommentBody(args: { noun: string; number: number
  *  by the unknown-base arm and the note told its reader something plainly false
  *  about their own card. The gate is about EVERY repository, never about more than
  *  one — the set of size one is not an edge case here, it is the common case. */
+/** The incomplete-DELIVERY-SET note (MOTIR-3659) — posted on the item when a merge
+ *  lands while another pull request DELIVERING that item has not.
+ *
+ *  Sibling of the repository-set note below, and deliberately distinguishable from
+ *  it: that one names REPOSITORIES the card promised, this one names PULL REQUESTS
+ *  that exist. A reader who cannot tell which gate held their card cannot tell
+ *  whether to go and merge something or to fix the card's repository set.
+ *
+ *  Like both of its siblings it describes what did NOT happen rather than asserting
+ *  a status: the sync leaves the item exactly where it was. */
+function incompleteDeliverySetCommentBody(args: {
+  noun: string;
+  number: number;
+  shortfall: DeliverySetShortfall;
+}): string {
+  const list = (names: string[]) => names.map((n) => `\`${n}\``).join(', ');
+  const lines: string[] = [
+    `⚠️ **Merged, but this item is not complete** — ${args.noun} ` +
+      `#${args.number} merged, and another ${args.noun} delivering this item has not, ` +
+      `so its status is left unchanged.`,
+  ];
+  if (args.shortfall.outstanding.length > 0) {
+    lines.push(
+      `Still open: ${list(args.shortfall.outstanding)} — ` +
+        `${args.shortfall.outstanding.length === 1 ? 'it has' : 'they have'} not merged yet.`,
+    );
+  }
+  if (args.shortfall.strandedBase.length > 0) {
+    lines.push(
+      `Merged, but not onto the trunk: ${list(args.shortfall.strandedBase)} — ` +
+        `${args.shortfall.strandedBase.length === 1 ? 'it' : 'they'} landed on a base other ` +
+        `than that repository's own default branch, so the work has not reached it. Merging ` +
+        `that base forward is what completes this item.`,
+    );
+  }
+  if (args.shortfall.unknownBase.length > 0) {
+    lines.push(
+      `No record of which branch the merge landed on for ${list(args.shortfall.unknownBase)} — ` +
+        `Motir mirrored ${args.shortfall.unknownBase.length === 1 ? 'it' : 'them'} before it began ` +
+        `recording base branches, so it cannot tell whether the work reached the trunk. An ` +
+        `operator can repair this without a new merge — \`pnpm db:backfill:pr-base-ref\` reads ` +
+        `the base back from the provider and re-runs this decision.`,
+    );
+  }
+  lines.push(
+    `The item completes when every ${args.noun} that delivers it has merged onto its own ` +
+      `repository's default branch. If one of them does not in fact deliver this item, unlink it.`,
+  );
+  return lines.join('\n\n');
+}
+
 function incompleteRepoSetCommentBody(args: {
   noun: string;
   number: number;

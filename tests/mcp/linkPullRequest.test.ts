@@ -708,8 +708,8 @@ describe('block 7 — the DELIVERY LINK, written beside the FK', () => {
     expect(set).toHaveLength(1);
     // The repository is on the ROW, so the completion gate can compare this
     // member's merge against ITS default branch without a join per member.
-    expect(set[0].repoId).toBe(s.repoRowId);
-    expect(set[0].pullRequest.number).toBe(11);
+    expect(set[0]?.repoId).toBe(s.repoRowId);
+    expect(set[0]?.pullRequest.number).toBe(11);
   });
 
   it('a SECOND pull request for the same card ADDS a member — the shape the story exists for', async () => {
@@ -805,7 +805,7 @@ describe('block 7 — the DELIVERY LINK, written beside the FK', () => {
 
     const set = await deliveries(s, item.id);
     expect(set).toHaveLength(1);
-    expect(set[0].pullRequest.number).toBe(52);
+    expect(set[0]?.pullRequest.number).toBe(52);
 
     // The legacy column is DELIBERATELY untouched: its readers have not moved
     // yet, and clearing it would take a delivery's status sync away from a card
