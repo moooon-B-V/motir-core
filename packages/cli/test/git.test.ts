@@ -323,6 +323,31 @@ describe('updateSessionPr — the close-out completes what the early open could 
     expect(log).toEqual(['gh pr edit motir/auto-1 --title ACME-1 — 2 work items --body all of it']);
   });
 
+  it('names whatever `gh` said — stderr, else stdout, else the bare exit code', () => {
+    // Three fallbacks, because a `gh` that fails silently on one stream is not a
+    // reason to report nothing. The last arm is the one a reader meets when the
+    // binary dies without a word, and it is the only place the exit code shows.
+    const onStderr = updateSessionPr('/r', 'b', { title: 't', body: 'x' }, () => ({
+      exitCode: 1,
+      stdout: 'ignored',
+      stderr: 'said on stderr',
+    })).message;
+    const onStdout = updateSessionPr('/r', 'b', { title: 't', body: 'x' }, () => ({
+      exitCode: 1,
+      stdout: 'said on stdout',
+      stderr: '',
+    })).message;
+    const onCodeOnly = updateSessionPr('/r', 'b', { title: 't', body: 'x' }, () => ({
+      exitCode: 7,
+      stdout: '',
+      stderr: '',
+    })).message;
+
+    expect(onStderr).toContain('said on stderr');
+    expect(onStdout).toContain('said on stdout');
+    expect(onCodeOnly).toContain('gh exited 7');
+  });
+
   it('REPORTS a failure and never throws — stale text must not abort the summary', () => {
     // By the time this runs the work is integrated, pushed and reviewable. A
     // missing `gh` is a far smaller problem than a summary that dies, which is

@@ -368,6 +368,64 @@ describe('motir auto — a whole run through the real session', () => {
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
   });
 
+  it('a `gh` that CANNOT open the pull request mid-run is reported, and the loop carries on', async () => {
+    scriptPlan();
+    const events: string[] = [];
+    // `gh pr create` refuses. The agents' work is already committed and pushed,
+    // so refusing to continue would abandon the cards still queued behind a
+    // tooling gap — the close-out tries again at the end and reports properly.
+    const git = gitRunner((bin, args) => {
+      if (bin === 'gh' && args[1] === 'create') {
+        events.push('pr-create-refused');
+        return { exitCode: 1, stdout: '', stderr: 'gh: could not create' };
+      }
+      return undefined;
+    });
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async ({ prompt }) => {
+          events.push(`agent:${prompt}`);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    // Both cards still ran — the refusal did not halt the loop.
+    expect(events.filter((e) => e.startsWith('agent:'))).toHaveLength(2);
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('a `gh pr edit` that fails leaves the run reported, not aborted', async () => {
+    scriptPlan();
+    // The pull request opened at card one; the close-out then cannot rewrite its
+    // title and body. A stale title is a far smaller problem than a summary that
+    // dies after the work is already pushed and reviewable.
+    const git = gitRunner((bin, args) =>
+      bin === 'gh' && args[1] === 'edit'
+        ? { exitCode: 1, stdout: '', stderr: 'gh: edit refused' }
+        : undefined,
+    );
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    // It was attempted, and the run still finished clean.
+    expect(git.log.some((cmd) => cmd.includes('pr edit'))).toBe(true);
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
   it('runs on its OWN clock and its OWN agent launcher when nothing is injected', async () => {
     scriptPlan();
     const git = gitRunner();

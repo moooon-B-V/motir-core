@@ -969,16 +969,6 @@ export async function transitionToImplemented(
   }
 }
 
-// ── the end-of-run close-out ────────────────────────────────────────────────
-
-/**
- * Push each touched session branch and open ONE pull request per repo.
- *
- * Runs on EVERY exit path — drained, `--max`, a halt, Ctrl-C — because a run
- * that integrated three items and then hit a failure must not abandon those
- * three. This is the loop's only human gate: main has none of this work until
- * somebody merges these.
- */
 /**
  * Make sure THIS repository's session pull request exists, mid-run
  * (Story MOTIR-3655 · MOTIR-3681).
@@ -1025,6 +1015,16 @@ function ensureRepoPullRequest(session: RepoSession, runId: string, run: Command
   }
 }
 
+// ── the end-of-run close-out ────────────────────────────────────────────────
+
+/**
+ * Push each touched session branch and open ONE pull request per repo.
+ *
+ * Runs on EVERY exit path — drained, `--max`, a halt, Ctrl-C — because a run
+ * that integrated three items and then hit a failure must not abandon those
+ * three. This is the loop's only human gate: main has none of this work until
+ * somebody merges these.
+ */
 export function closeOutRepos(
   summary: AutoSummary,
   run: CommandRunner,
