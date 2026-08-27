@@ -890,6 +890,40 @@ export interface WorkItemDetail {
      * publishes and all this needs to be. */
     blockedByAncestor: { identifier: string; title: string } | null;
   };
+  /**
+   * The card's DELIVERY SET (MOTIR-3697's `deliveries`) — every pull request
+   * delivering it, with the ONE CI verdict.
+   *
+   * This is the only route the CLI has to `derivePrCiState`. Shelling to
+   * `gh pr checks` would be a SECOND verdict, computed from different inputs by
+   * different rules, drifting from the pill a person reads on the same card —
+   * which is what MOTIR-3685's watch loop exists not to do.
+   *
+   * OPTIONAL on the view model, `ci` typed as an open `string | null`, for the
+   * reason the activity types above are loose: the CLI is published on its own
+   * release train and routinely meets a Motir OLDER than itself (no field at
+   * all) or NEWER (a `ci` value this build has never heard of). Absent reads as
+   * "this server cannot tell me", which the watch loop treats as nothing to
+   * watch rather than as a failure.
+   */
+  deliveries?: WorkItemDelivery[];
+}
+
+/** One member of a card's delivery set, narrowed to what the CLI renders and
+ *  what the watch loop decides on. */
+export interface WorkItemDelivery {
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  /** `open` | `merged` | `closed` — open-typed, per the note above. */
+  state: string;
+  /** `passing` | `failing` | `running`, or null for a pull request with no CI
+   *  recorded. Absence of CI is not a state and is certainly not a pass. */
+  ci: string | null;
+  baseRef: string | null;
+  defaultBranch: string;
 }
 
 // ── the ACTIVITY stream (MOTIR-1999's tool · MOTIR-2000's consumer) ──────────

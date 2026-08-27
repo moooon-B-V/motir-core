@@ -129,6 +129,13 @@ function planScripts(): { v1: V1Script } {
         }),
       };
     },
+    // The card, read back — by the leg's replan check (MOTIR-3018) and by the CI
+    // WATCH the run makes once there is nothing left to pick up (MOTIR-3685).
+    // `v1Detail` carries `deliveries: []`, so these runs see nothing to watch,
+    // which is the behaviour a project with no CI mirror has.
+    'GET /api/v1/work-items/{key}': (req) => ({
+      body: v1Detail(String(req.params['key']), { status: 'implemented' }),
+    }),
     'POST /api/v1/work-items/{key}/transitions': (req) => {
       const key = String(req.params['key']);
       const status = String((req.body as { status: string }).status);
@@ -831,5 +838,122 @@ describe('motir auto — a card that ships in more than one repository (MOTIR-31
       ),
     ).toEqual(new Set([branch]));
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
+  });
+});
+
+// ── `motir auto` WATCHES ONLY AT THE END (Story MOTIR-3655 · MOTIR-3685) ─────
+//
+// The lane's whole difference from `motir batch`: `auto`'s pull requests are for
+// EVERY card in the run, so they are not finished until the run is. It keeps
+// picking work up and watches once there is nothing left to pick up — it does
+// NOT gate between cards, and asserting that is the point of this block.
+
+/** One delivery in the shape v1 publishes it (MOTIR-3697). */
+function ciDelivery(ci: string, repo = 'moooon/motir-core', number = 1): Record<string, unknown> {
+  return {
+    repo,
+    number,
+    title: 'a change',
+    url: `https://github.com/${repo}/pull/${number}`,
+    state: 'open',
+    ci,
+    baseRef: 'main',
+    defaultBranch: 'main',
+  };
+}
+
+describe('motir auto — the end-of-run CI watch', () => {
+  it('does NOT gate between cards — every card is dispatched before the first watch', async () => {
+    scriptPlan();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': (req) => ({
+        body: v1Detail(String(req.params['key']), {
+          status: 'implemented',
+          deliveries: [ciDelivery('failing')],
+        }),
+      }),
+    });
+    const git = gitRunner();
+
+    const order: string[] = [];
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date('2026-08-27T10:00:00.000Z'),
+        clock: () => 0,
+        wait: async () => {},
+        runAgentFn: async ({ prompt }) => {
+          order.push(prompt.startsWith('# Make the build pass') ? 'FIX' : prompt);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    // EVERY dispatch comes before EVERY fix. A lane that gated between cards
+    // would interleave them, which is what `motir batch` does and this does not.
+    const firstFix = order.indexOf('FIX');
+    expect(firstFix).toBeGreaterThan(-1);
+    expect(order.slice(0, firstFix).every((p) => !p.startsWith('# Make'))).toBe(true);
+    expect(order.slice(firstFix).every((p) => p === 'FIX')).toBe(true);
+  });
+
+  it('exits NON-ZERO when it gave up on a red build, even though every card was built', async () => {
+    // The cards sit at `implemented` either way — a script wrapping `motir auto`
+    // can only tell "built and green" from "built and still red" by the code.
+    scriptPlan();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': (req) => ({
+        body: v1Detail(String(req.params['key']), {
+          status: 'implemented',
+          deliveries: [ciDelivery('failing')],
+        }),
+      }),
+    });
+    const git = gitRunner();
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date('2026-08-27T10:00:00.000Z'),
+        clock: () => 0,
+        wait: async () => {},
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('exits 0 and dispatches no fix when every build is green', async () => {
+    scriptPlan();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': (req) => ({
+        body: v1Detail(String(req.params['key']), {
+          status: 'implemented',
+          deliveries: [ciDelivery('passing')],
+        }),
+      }),
+    });
+    const git = gitRunner();
+
+    const prompts: string[] = [];
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date('2026-08-27T10:00:00.000Z'),
+        clock: () => 0,
+        wait: async () => {},
+        runAgentFn: async ({ prompt }) => {
+          prompts.push(prompt);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    expect(prompts.filter((p) => p.startsWith('# Make the build pass'))).toHaveLength(0);
+    expect(process.exitCode ?? 0).toBe(0);
   });
 });

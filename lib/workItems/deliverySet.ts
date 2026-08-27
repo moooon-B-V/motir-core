@@ -184,3 +184,36 @@ export function amendRepoDeliveryWithSet(
     return { ...row, state };
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The PROMOTION's predicate (Story MOTIR-3655 · MOTIR-3685)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Is a card's whole delivery set GREEN — the question `implemented → in_review`
+ * turns on (design decision recorded on MOTIR-3685, 2026-08-27).
+ *
+ * ── What changed, and why it is a change rather than an addition ───────────
+ * `ciPromotion` shipped promoting *every card the pull request delivers* the
+ * moment THAT pull request went green. Correct while a card had exactly one
+ * pull request, and wrong the first time it has two: a card delivered by
+ * `motir-core#1` (green) and `motir-ai#2` (red) was announced reviewable on half
+ * its evidence. **One green and one red leaves the card at `implemented`.**
+ *
+ * ── Two properties, and the second is the one that is easy to lose ────────
+ *   1. EVERY member must be `passing`. A `running` member is not a failure and
+ *      not a pass — the loop is waiting for a verdict, not receiving one — so it
+ *      withholds exactly as a red one does.
+ *   2. **An EMPTY set is NOT green.** `[].every(...)` is vacuously true, and a
+ *      card with no pull request at all would promote itself to In Review on no
+ *      evidence whatever. Absence of CI is not a state (`derivePrCiState` returns
+ *      null for it) and it is certainly not a pass.
+ *
+ * A card with exactly ONE pull request gets the same answer it always did:
+ * over a set of one, "every" and "some" agree. That is what makes this safe for
+ * the overwhelming majority of cards, and it is asserted rather than assumed.
+ */
+export function deliverySetIsGreen(states: readonly (string | null)[]): boolean {
+  if (states.length === 0) return false;
+  return states.every((state) => state === 'passing');
+}

@@ -554,3 +554,151 @@ describe('a row that is GONE by the time the promotion runs', () => {
     await expect(promoteIfCiAlreadyGreen('no-such-work-item', s.ctx)).resolves.toBe(false);
   });
 });
+
+// ── ALL GREEN PROMOTES (Story MOTIR-3655 · MOTIR-3685) ───────────────────────
+//
+// `ciPromotion` shipped promoting every card a pull request delivers the moment
+// THAT pull request went green — correct while a card had one pull request, and
+// wrong the first time it has two. A card delivered by a green pull request and
+// a red one was announced reviewable on half its evidence.
+//
+// This is a CHANGE to shipped behaviour, so the unchanged case is asserted as
+// carefully as the changed one: over a set of ONE, "every" and "some" agree, and
+// almost every card in the tree is that case.
+
+/** Record a SECOND pull request as delivering `workItemId` — the many-to-many
+ *  link the singular column cannot express (MOTIR-3657's table). */
+async function alsoDelivers(
+  s: Awaited<ReturnType<typeof makeScenario>>,
+  workItemId: string,
+  prNumber: number,
+) {
+  const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: prNumber } });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: s.workspace.id,
+      workItemId,
+      githubPullRequestId: pr.id,
+      repoId: pr.repoId,
+    },
+  });
+  return pr;
+}
+
+describe('a card reaches In Review only when EVERY pull request delivering it is green', () => {
+  it('one green and one RED leaves it at implemented', async () => {
+    const s = await makeScenario('allgreen-red@example.com');
+    const card = await cardWithPr(s, 'spans two pull requests', 41);
+    await openPr('subtask/ACME-1-second', 42);
+    await alsoDelivers(s, card.id, 42);
+
+    await ci({ conclusion: 'failure', headSha: 'sha-red', prNumbers: [42] });
+    await ci({ conclusion: 'success', headSha: 'sha-green', prNumbers: [41] });
+
+    // The green one WOKE the promotion; it did not decide it.
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+
+  it('one green and one still RUNNING leaves it at implemented', async () => {
+    // `running` is not a failure and not a pass — the loop is waiting for a
+    // verdict, not receiving one — so it withholds exactly as a red does.
+    const s = await makeScenario('allgreen-running@example.com');
+    const card = await cardWithPr(s, 'one still building', 43);
+    await openPr('subtask/ACME-1-second', 44);
+    await alsoDelivers(s, card.id, 44);
+
+    await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-pending', prNumbers: [44] });
+    await ci({ conclusion: 'success', headSha: 'sha-green', prNumbers: [43] });
+
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+
+  it('BOTH green promotes it', async () => {
+    const s = await makeScenario('allgreen-both@example.com');
+    const card = await cardWithPr(s, 'both landed', 45);
+    await openPr('subtask/ACME-1-second', 46);
+    await alsoDelivers(s, card.id, 46);
+
+    await ci({ conclusion: 'success', headSha: 'sha-a', prNumbers: [45] });
+    await ci({ conclusion: 'success', headSha: 'sha-b', prNumbers: [46] });
+
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('the LATCH still works — the SECOND pull request going green later promotes it', async () => {
+    // The property the latch exists for, now over a set: the first green arrives
+    // and correctly does nothing, and the card is promoted by the last one
+    // rather than being stranded at implemented for ever.
+    const s = await makeScenario('allgreen-latch@example.com');
+    const card = await cardWithPr(s, 'the second one lands later', 47);
+    await openPr('subtask/ACME-1-second', 48);
+    await alsoDelivers(s, card.id, 48);
+
+    await ci({ conclusion: 'success', headSha: 'sha-first', prNumbers: [47] });
+    expect(await statusOf(card.id)).toBe('implemented');
+
+    await ci({ conclusion: 'success', headSha: 'sha-second', prNumbers: [48] });
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a RED that goes green on a re-push promotes it — the fixing loop’s own case', async () => {
+    // MOTIR-3685's watch-and-fix loop pushes a fix, and the newer sha's green
+    // must outrank the older sha's red. That is `derivePrCiState`'s latest-sha
+    // rule, reached through the set.
+    const s = await makeScenario('allgreen-refix@example.com');
+    const card = await cardWithPr(s, 'fixed on the second try', 49);
+    await openPr('subtask/ACME-1-second', 50);
+    await alsoDelivers(s, card.id, 50);
+
+    await ci({ conclusion: 'success', headSha: 'sha-ok', prNumbers: [49] });
+    await ci({ conclusion: 'failure', headSha: 'sha-bad', prNumbers: [50] });
+    expect(await statusOf(card.id)).toBe('implemented');
+
+    await ci({ conclusion: 'success', headSha: 'sha-fixed', prNumbers: [50] });
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a SINGLE-pull-request card is unchanged — every and some agree over a set of one', async () => {
+    // The case nearly every card in the tree is. An all-green rule that
+    // perturbed it would have made the product worse to fix a rarity.
+    const s = await makeScenario('allgreen-single@example.com');
+    const card = await cardWithPr(s, 'the ordinary card', 51);
+
+    await ci({ conclusion: 'success', headSha: 'sha-only', prNumbers: [51] });
+
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a card with NO pull request at all is never promoted — an empty set is not green', async () => {
+    // `[].every(...)` is vacuously true, so the empty case has to be refused
+    // explicitly or a card with no evidence whatever promotes itself.
+    const s = await makeScenario('allgreen-none@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'no pull request' },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+
+    expect(await promoteIfCiAlreadyGreen(item.id, s.ctx)).toBe(false);
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  it('BOTH EDGES agree — the arrival edge withholds on the same set edge 1 withholds on', async () => {
+    // The latch only works if the two edges ask the same question. If one
+    // counted ANY and the other EVERY, a card would be reviewable or not
+    // depending on which edge happened to fire.
+    const s = await makeScenario('allgreen-edges@example.com');
+    const card = await cardWithPr(s, 'arrives after a partial green', 52);
+    await openPr('subtask/ACME-1-second', 53);
+    await alsoDelivers(s, card.id, 53);
+
+    await ci({ conclusion: 'success', headSha: 'sha-a', prNumbers: [52] });
+    await ci({ conclusion: 'failure', headSha: 'sha-b', prNumbers: [53] });
+
+    // Drive the ARRIVAL edge directly, which is the one a run's own transition
+    // fires. It must reach the same verdict.
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(false);
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+});

@@ -28,6 +28,7 @@ import {
 } from '../dispatch.js';
 import { execCommand, type CommandRunner } from '../git.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
+import { runCiWatchPhase } from '../ciWatch.js';
 import {
   batchExitCode,
   classifySnapshotItem,
@@ -97,6 +98,11 @@ export interface BatchDeps {
    *  FLAG surface (`optionRegistrationAudit` holds every field there to a
    *  registered option). */
   run?: CommandRunner;
+  /** The CI watch's inter-poll wait (MOTIR-3685) — injected so a test does not
+   *  spend real seconds proving a pending verdict costs no attempt. */
+  wait?: () => Promise<void>;
+  /** The CI watch's POLL bound (MOTIR-3685), distinct from the five-fix cap. */
+  maxCiPolls?: number;
   /**
    * THE BETWEEN-ITERATION SEAM (Story MOTIR-3655 · MOTIR-3695, for MOTIR-3685).
    *
@@ -120,7 +126,7 @@ export interface BatchDeps {
    *
    * Absent in production today — the drain runs exactly as it did.
    */
-  afterCard?: (record: BatchRecord) => Promise<'continue' | 'stop'>;
+  afterCard?: (record: BatchRecord, context: { cwd: string }) => Promise<'continue' | 'stop'>;
 }
 
 type ResolvedAgent = NonNullable<ReturnType<typeof resolveAgent>>;
@@ -225,7 +231,51 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
       clock: deps.clock ?? Date.now,
       runAgentFn: deps.runAgentFn ?? runAgent,
       run: deps.run ?? execCommand,
-      ...(deps.afterCard ? { afterCard: deps.afterCard } : {}),
+      // ── THE CI GATE BETWEEN CARDS (Story MOTIR-3655 · MOTIR-3685) ────────
+      //
+      // This is what makes `motir batch` different from `motir auto`: batch's
+      // pull requests are for ONE card, so the next card must not be started
+      // while the one just finished is red. `auto`'s are for every card at once
+      // and it watches only when there is nothing left to pick up.
+      //
+      // An injected gate WINS — a test drives the seam directly rather than
+      // through a real CI verdict.
+      afterCard:
+        deps.afterCard ??
+        (async (record, context) => {
+          // Nothing to watch on a card that did not get built.
+          if (record.outcome !== 'implemented') return 'continue';
+          const watch = await runCiWatchPhase({
+            client: session.client,
+            key: record.key,
+            title: record.title ?? null,
+            agent: agent.parsed,
+            cwd: context.cwd,
+            report: (line) => info(line),
+            ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+            ...(deps.wait ? { wait: deps.wait } : {}),
+            ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
+          });
+          if (watch.kind === 'green' || watch.kind === 'nothing') return 'continue';
+
+          // ── `--keep-going` decides what happens AFTER the sixth red ───────
+          //
+          // The five-fix loop always runs; the flag only chooses what follows.
+          // That keeps its shipped meaning intact — *one bad card should not end
+          // the whole drain* — rather than inventing a second halt condition it
+          // cannot reach. A CI give-up is the same shape as a failed agent: this
+          // one card did not work out.
+          //
+          // ⚠️ NO EXCLUDE ENTRY IS WRITTEN, and the asymmetry with a failed
+          // agent is deliberate rather than an oversight. A failed agent is
+          // excluded because its card is left in a PICKABLE state and a later
+          // `motir batch` would re-attempt it. A CI give-up leaves the card at
+          // `implemented`, which is not in the ready set at all — `planSnapshot`
+          // is built from `listReadyForDispatch` — so an exclude entry could
+          // never match anything and would be a local opinion about a card the
+          // server already holds back.
+          return opts.keepGoing ? 'continue' : 'stop';
+        }),
       ownerId,
     });
     info('');
@@ -249,7 +299,7 @@ export interface BatchInput {
   /** The git runner the MOTIR-3004 push check asks; defaults to the real one. */
   run?: CommandRunner;
   /** The between-iteration gate — see {@link BatchDeps.afterCard}. */
-  afterCard?: (record: BatchRecord) => Promise<'continue' | 'stop'>;
+  afterCard?: (record: BatchRecord, context: { cwd: string }) => Promise<'continue' | 'stop'>;
 }
 
 /** Snapshot, print, drain. Exported so the whole command can be driven against
@@ -361,7 +411,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
       // runs AFTER the exclude bookkeeping, so a gate that stops the drain
       // leaves the card's own record exactly as it would have been, and BEFORE
       // the next dispatch, which is the whole point.
-      if (afterCard && (await afterCard(outcome.record)) === 'stop') {
+      if (afterCard && (await afterCard(outcome.record, { cwd: outcome.cwd })) === 'stop') {
         stopReason = 'gated';
         stopIndex = index + 1;
         break;
@@ -493,8 +543,11 @@ interface DispatchOneInput {
 }
 
 type DispatchOneResult =
-  | { kind: 'record'; record: BatchRecord }
-  | { kind: 'skipped'; skip: SnapshotSkip };
+  /** `cwd` rides the RESULT rather than the record: the between-iteration gate
+   *  needs the checkout CI is red on, and `BatchRecord` is the reporting shape
+   *  the summary renders — widening it would put a filesystem path in a
+   *  transcript that has no use for one. */
+  { kind: 'record'; record: BatchRecord; cwd: string } | { kind: 'skipped'; skip: SnapshotSkip };
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
@@ -611,6 +664,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     info(`${entry.key}: agent exited ${verdict.exitCode} — left In Progress, nothing reverted.`);
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: {
         ...base,
         outcome: 'failed',
@@ -635,6 +689,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     info(renderNothingPushed(entry.key, dispatch));
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: { ...base, outcome: 'failed', detail: 'nothing reached the remote' },
     };
   }
@@ -651,6 +706,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     info(`Hint: ${suspect.hint}`);
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: { ...base, outcome: 'failed', detail: 'bootstrap checkout missing' },
     };
   }
@@ -668,6 +724,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     info(`${entry.key}: ${refusal}`);
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: { ...base, outcome: 'failed', detail: 'container has open children' },
     };
   }
@@ -684,5 +741,5 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     implementationModel: verdict.model,
   });
   info(`${entry.key}: Implemented via its own pull request — CI decides when it is reviewable.`);
-  return { kind: 'record', record: { ...base, outcome: 'implemented' } };
+  return { kind: 'record', record: { ...base, outcome: 'implemented' }, cwd: target.cwd };
 }

@@ -33,6 +33,13 @@ export default defineConfig({
         // The client core, the command modules, and the pure decision layers.
         'src/agentProfiles.ts': { branches: 90, functions: 90, lines: 90 },
         'src/agentRun.ts': { branches: 90, functions: 90, lines: 90 },
+        // The CI watch (MOTIR-3685) and the shared dispatch leg (MOTIR-3695) —
+        // both are DECISION layers a lane delegates to, which is exactly what
+        // this file's header means by "a weak module hiding behind a strong
+        // one": the branch that decides whether a run gave up is not allowed to
+        // be the untested one.
+        'src/ciWatch.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/dispatchLeg.ts': { branches: 90, functions: 90, lines: 90 },
         'src/autoLoop.ts': { branches: 90, functions: 90, lines: 90 },
         'src/batchPlan.ts': { branches: 90, functions: 90, lines: 90 },
         'src/browser.ts': { branches: 90, functions: 90, lines: 90 },

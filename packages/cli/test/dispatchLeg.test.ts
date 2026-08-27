@@ -91,10 +91,10 @@ async function leg(
     },
     run:
       over.run ??
-      ((bin: string, args: string[]) => {
+      (((bin: string, args: string[], cwd: string) => {
         if (args[0] === 'ls-remote') order.push('push-check');
-        return git(over.pushed ?? true)(bin, args);
-      }),
+        return git(over.pushed ?? true)(bin, args, cwd);
+      }) satisfies CommandRunner),
   };
   return { order, verdict: await runDispatchLeg(input) };
 }

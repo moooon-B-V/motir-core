@@ -1,5 +1,8 @@
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
 import { derivePrCiState } from '@/lib/github/prCiState';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { deliverySetIsGreen } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
@@ -74,6 +77,52 @@ const SOURCE_STATUS = 'implemented';
 const TARGET_STATUS = 'in_review';
 
 /**
+ * IS EVERY PULL REQUEST DELIVERING THIS CARD GREEN? (Story MOTIR-3655 ·
+ * MOTIR-3685.)
+ *
+ * ── ONE function, called by BOTH edges ────────────────────────────────────
+ * The latch only works if the two edges ask the same question of the same set.
+ * Edge 1 fires because a pull request reported; edge 2 fires because a card
+ * arrived at `implemented`. If one counted ANY and the other counted EVERY, a
+ * card would be reviewable or not depending on which edge happened to run — and
+ * nobody could tell which answer was the wrong one.
+ *
+ * ── The set is a UNION, deliberately, for the length of the EXPAND window ──
+ * `work_item_delivery` holds rows the singular link column structurally cannot
+ * (a `motir auto` pull request delivering twelve cards), and the column holds
+ * rows the table has not been told about (`historicalPullRequestBackfillService`
+ * resolves a card by parsing the title and writes only the column). Neither is
+ * complete on its own today, and this is the ONE place where dropping a member
+ * is dangerous in the direction that matters: a missed red pull request promotes
+ * a card that is not reviewable. Deduplicated on the pull request's own id, so a
+ * row recorded on both sides is counted once. The union collapses when
+ * MOTIR-3672 retires the parse.
+ *
+ * The verdict per member is `derivePrCiState` — the SAME function the
+ * Development pill shows and MOTIR-3697's `deliveries` field publishes, at the
+ * latest recorded sha. A second opinion here would drift from what a person
+ * reads on the card it is deciding about.
+ */
+async function everyDeliveryIsGreen(
+  item: { id: string; sessionBranch: string | null },
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const [deliveries, linked, onBranch] = await Promise.all([
+    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    githubPullRequestRepository.listByWorkItemWithContext(item.id, tx),
+    item.sessionBranch
+      ? githubPullRequestRepository.listByHeadRefWithChecks(item.sessionBranch, tx)
+      : Promise.resolve([]),
+  ]);
+
+  const byId = new Map<string, { checkRuns: GithubCheckRun[] }>();
+  for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
+  for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
+
+  return deliverySetIsGreen([...byId.values()].map((pr) => derivePrCiState(pr.checkRuns)));
+}
+
+/**
  * EDGE 1 — CI has just reported a terminal verdict for one change request.
  *
  * Promotes every card that change request delivers and that currently sits at
@@ -112,7 +161,22 @@ export async function promoteDeliveredCardsOnGreen(args: {
     });
     // Only the cards at `implemented`. A sibling a human moved back to In
     // Progress to rework must not be yanked forward by a green run.
-    return set.items.filter((item) => item.status === SOURCE_STATUS).map((item) => item.id);
+    const atImplemented = set.items.filter((item) => item.status === SOURCE_STATUS);
+
+    // ⚠️ AND ONLY THE ONES WHOSE WHOLE SET IS GREEN (MOTIR-3685). This pull
+    // request going green is what WOKE the promotion; it is not what decides it.
+    // A card this pull request delivers may also be delivered by another that is
+    // red or still running, and announcing it reviewable on half its evidence is
+    // the defect. Evaluated per card, because the answer genuinely differs
+    // between two cards the same pull request delivers.
+    const green: string[] = [];
+    for (const item of atImplemented) {
+      // `set.items` carries no `sessionBranch`, and the legacy branch join needs
+      // it — so the row is re-read rather than guessed at.
+      const row = await workItemRepository.findById(item.id, tx);
+      if (row && (await everyDeliveryIsGreen(row, tx))) green.push(item.id);
+    }
+    return green;
   });
 
   return promoteEach(targets, { userId: args.actorUserId, workspaceId: args.workspaceId });
@@ -140,15 +204,11 @@ export async function promoteIfCiAlreadyGreen(
     // and this running, the card may have moved again.
     if (!item || item.status !== SOURCE_STATUS) return false;
 
-    // The card's change requests, by whichever join it has: the link column for
-    // an own-pull-request card, the session branch for a card integrated onto a
-    // run's branch (whose pull request names no card at all).
-    const linked = await githubPullRequestRepository.listByWorkItemWithContext(item.id, tx);
-    const onBranch = item.sessionBranch
-      ? await githubPullRequestRepository.listByHeadRefWithChecks(item.sessionBranch, tx)
-      : [];
-    const candidates = [...linked, ...onBranch];
-    return candidates.some((pr) => derivePrCiState(pr.checkRuns) === 'passing');
+    // ⚠️ EVERY pull request delivering it, not ANY (MOTIR-3685) — and the SAME
+    // function edge 1 asks, so the latch cannot answer two ways depending on
+    // which edge happened to fire. This is what makes the LAST pull request's
+    // green promote a card whose earlier ones went green hours ago.
+    return everyDeliveryIsGreen(item, tx);
   });
 
   if (!shouldPromote) return false;

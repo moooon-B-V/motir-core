@@ -62,6 +62,7 @@ import {
   type CommandRunner,
 } from '../git.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
+import { runCiWatchPhase } from '../ciWatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
@@ -119,6 +120,11 @@ export interface AutoDeps {
   run?: CommandRunner;
   now?: () => Date;
   clock?: () => number;
+  /** The CI watch's inter-poll wait (MOTIR-3685) — injected so a test does not
+   *  spend real seconds proving a pending verdict costs no attempt. */
+  wait?: () => Promise<void>;
+  /** The CI watch's POLL bound (MOTIR-3685), distinct from the five-fix cap. */
+  maxCiPolls?: number;
   /** The agent launcher. Injected by the tests so the loop can be driven with a
    *  scripted agent — the fixture the acceptance criteria are written against. */
   runAgentFn?: typeof runAgent;
@@ -322,10 +328,30 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       ...(deps.sleep ? { sleep: deps.sleep } : {}),
     });
     closeOutRepos(summary, run);
+
+    // ── THE CI WATCH (Story MOTIR-3655 · MOTIR-3685) ────────────────────────
+    //
+    // `motir auto` does NOT gate between cards: its pull requests are for the
+    // whole run, so they are not finished until the run is. It keeps picking up
+    // work and watches HERE — after the close-out, when there is no card left to
+    // pick up and every pull request is open.
+    //
+    // The watch is per CARD, because the delivery set is a property of the card
+    // and a run's cards can be red and green independently. The fixing agent
+    // stands in the repository session that card was integrated in — a run
+    // spanning three repositories has three branches, and a fix must be
+    // committed to the one CI is red on.
+    const watched = await watchRunCi(summary, session, agent, opts, deps);
+
     info('');
     info(renderAutoSummary(summary));
     info(renderFindingsPolicy(opts));
-    process.exitCode = autoExitCode(summary);
+    const exit = autoExitCode(summary);
+    // ⚠️ A give-up must be OBVIOUS, including when the run otherwise succeeded:
+    // the cards sit at `implemented` either way, and a script wrapping
+    // `motir auto` can only tell "built and green" from "built and still red"
+    // by the exit code.
+    process.exitCode = exit !== 0 ? exit : watched ? 0 : 1;
   });
 }
 
@@ -1013,6 +1039,60 @@ function ensureRepoPullRequest(session: RepoSession, runId: string, run: Command
         `${err instanceof Error ? err.message : String(err)}`,
     );
   }
+}
+
+/**
+ * WATCH every card this run landed, fixing each red (Story MOTIR-3655 ·
+ * MOTIR-3685). Returns whether every one of them ended green.
+ *
+ * ── Per CARD, and the cwd is the card's OWN repository ────────────────────
+ * A `motir auto` run spanning three repositories opens three pull requests off
+ * three branches — `sessionLineageWorkflow` builds each worktree from that
+ * card's `targetRepo` and branches off `origin/<sessionBranch>` IN that
+ * repository. So a fix has to be committed in the checkout CI is red on, not in
+ * whichever one happened to be first.
+ *
+ * ── The budget is PER CARD here, and that is the honest reading ───────────
+ * The five is "five fixing attempts against this card's build". A run of twelve
+ * cards is twelve independent builds; sharing one budget across them would let
+ * the first card's flakes deny the twelfth any attempt at all.
+ *
+ * A card whose repository session cannot be found is watched with no fixing
+ * agent rather than skipped: the verdict is still worth reporting, and a run
+ * that quietly declined to look is worse than one that looked and could not act.
+ */
+async function watchRunCi(
+  summary: AutoSummary,
+  session: ProjectSession,
+  agent: ResolvedAgent,
+  opts: AutoOptions,
+  deps: AutoDeps,
+): Promise<boolean> {
+  const landed = summary.records.filter(landedWork);
+  if (landed.length === 0) return true;
+
+  let allGreen = true;
+  for (const record of landed) {
+    const repo = summary.repos.find((r) => r.keys.includes(record.key));
+    const outcome = await runCiWatchPhase({
+      client: session.client,
+      key: record.key,
+      title: record.title,
+      agent: agent.parsed,
+      cwd: repo?.cwd ?? process.cwd(),
+      report: (line) => info(line),
+      ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+      ...(deps.wait ? { wait: deps.wait } : {}),
+      ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
+    });
+    if (outcome.kind === 'gave_up' || outcome.kind === 'fix_failed') allGreen = false;
+  }
+  // `opts` is read for nothing here ON PURPOSE, and the absence is the decision:
+  // `--keep-going` is a DRAIN flag — it says whether one bad card ends the run —
+  // and `motir auto` has no next card to start by the time this runs. Gating the
+  // watch on it would give the flag a second, unrelated meaning in one lane.
+  void opts;
+  return allGreen;
 }
 
 // ── the end-of-run close-out ────────────────────────────────────────────────

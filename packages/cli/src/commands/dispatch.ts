@@ -10,6 +10,7 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
+import { runCiWatchPhase } from '../ciWatch.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, runIdFromDate, sessionBranchName, type CommandRunner } from '../git.js';
 import {
@@ -129,6 +130,12 @@ export interface DeliveryDeps {
   clock?: () => number;
   /** The run id, so a driven drain gets a deterministic session branch. */
   now?: () => Date;
+  /** The CI watch's inter-poll wait (MOTIR-3685), so a test does not spend real
+   *  seconds proving that a pending verdict does not consume the fix budget. */
+  wait?: () => Promise<void>;
+  /** The CI watch's POLL bound (MOTIR-3685) — distinct from the five-fix cap;
+   *  a test uses it to pin the never-reports case in one call rather than 240. */
+  maxCiPolls?: number;
 }
 
 /**
@@ -430,6 +437,28 @@ async function deliver(input: DeliverInput): Promise<void> {
     info(suspect.message);
     info(`Hint: ${suspect.hint}`);
   }
+
+  // ── THE CI WATCH (Story MOTIR-3655 · MOTIR-3685) ──────────────────────────
+  //
+  // `motir run` has no next card, so it simply watches its own until CI speaks:
+  // green ends the run, red dispatches a fixing iteration, and the sixth red
+  // gives up non-zero. A red check does NOT move the card — `implemented` is
+  // exactly right for code that is committed and whose build has not spoken.
+  const watch = await runCiWatchPhase({
+    client,
+    key,
+    title,
+    agent: agent.parsed,
+    cwd: target.cwd,
+    report: (line) => info(line),
+    ...(deps.wait ? { wait: deps.wait } : {}),
+    ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+    ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
+  });
+  // ⚠️ NON-ZERO on a give-up, and it must be obvious it gave up rather than
+  // succeeded: the card is at `implemented` either way, and a script wrapping
+  // `motir run` can only tell the two apart by the exit code.
+  if (watch.kind === 'gave_up' || watch.kind === 'fix_failed') process.exitCode = 1;
 }
 
 /**
