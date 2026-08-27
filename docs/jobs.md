@@ -966,19 +966,25 @@ event-triggered jobs"_, _"the 14 SCHEDULED jobs"_ — and every count was correc
 the day it was taken. Nothing noticed the counts and the codebase coming apart;
 two of the three were found by hand while fixing the first.
 
-So `tests/jobs/every-job-declares-its-lane.test.ts` (#2348) holds a **census** —
-two checked-in lists, `MIGRATED_TO_ENGINE` and `DELIBERATELY_ON_INNGEST`, that
-between them name **every** registered job — and asserts it is TOTAL over the
-engine registry in both directions. A job cannot then join the codebase without
-someone stating its lane: the build fails, by name, on the pull request that adds
-it. `DELIBERATELY_ON_INNGEST` going EMPTY is the condition MOTIR-3418
-(_"Retire Inngest"_) is premised on, and the honest way to check that premise.
+So **`lib/jobs/engine/census.ts`** holds a **census** — two checked-in lists,
+`MIGRATED_TO_ENGINE` and `DELIBERATELY_ON_INNGEST`, that between them name
+**every** registered job — and `tests/jobs/every-job-declares-its-lane.test.ts`
+(#2348) asserts it is TOTAL over the engine registry in both directions. A job
+cannot then join the codebase without someone stating its lane: the build fails,
+by name, on the pull request that adds it. `DELIBERATELY_ON_INNGEST` going EMPTY
+is the condition MOTIR-3418 (_"Retire Inngest"_) is premised on, and the honest
+way to check that premise.
 
-**⚠️ THE CENSUS IS A DECLARATION; THE SECRET IS THE DEPLOYMENT — keep them equal
-by hand.** No test can read production, and none should: CI would go red for an
-operator action taken minutes earlier and green when somebody changed production
-rather than the code. So changing a job's lane is TWO edits plus a read-back, and
-doing one without the other is a drift nothing catches:
+(The lists lived INSIDE that test file until MOTIR-3716. They moved into shipped
+code for one reason: a constant a test owns cannot be read by the running
+process, so nothing could ever compare it to the secret. See the next section.)
+
+**⚠️ THE CENSUS IS A DECLARATION; THE SECRET IS THE DEPLOYMENT.** No test can
+read production, and none should: CI would go red for an operator action taken
+minutes earlier and green when somebody changed production rather than the code.
+So changing a job's lane is TWO edits plus a read-back, and doing one without the
+other is a drift — **now reported, no longer silent; see _What reports the drift_
+below**:
 
 ```bash
 # 1. the declaration — move the id between the two lists, and ship it.
@@ -995,6 +1001,69 @@ compare-and-swap. Two sessions appending an id each will lose one of them — on
 first had already written, leaving a duplicate. That one was harmless
 (`parseRoutedJobIds` builds a `Set`), and a LOST id would not have been. Read the
 value immediately before you write, write once, and read it back.
+
+### What reports the drift, and what an operator does when it fires (MOTIR-3716)
+
+For a long stretch the paragraph above ended at _"keep them equal by hand"_,
+which is a way of saying nothing kept them equal. **Four jobs drifted in ~34
+hours** — `system.public-follow-digest-tick` (MOTIR-3682),
+`plan-drift/transitioned` + `public-follow/digest` (MOTIR-3688) and
+`system.job-run-reap` (MOTIR-3709) — each found by a person running `comm` by
+hand against a value read from inside a machine, at roughly half an hour a time.
+MOTIR-3709 is the one that proves the census alone cannot close this: its author
+DID declare the lane in the pull request that added the job, because the build
+made them, and the job was still on the wrong lane the next morning.
+
+**`reconcileLanes()` (`lib/jobs/engine/census.ts`) now computes the two-way
+difference** between the declared engine set and `routedJobIds()`, and reports
+both directions separately:
+
+| direction                | what it means                                                                                                                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **declared, not routed** | the job runs on **Inngest** while a reviewed file says it runs on the engine. The silent one: the scheduler gives it no timer, `defineJob`'s Inngest guard does NOT skip it, so it runs daily and apparently fine. All four measured instances were this direction. |
+| **routed, not declared** | **production is ahead of review** — a typo in the secret, an id whose job was renamed or deleted, or a lane change nobody shipped. Reported separately because a one-way check reproduces this very defect, mirrored.                                               |
+
+**It is read in two places, and only one of them is loud:**
+
+- **The WORKER, once at start-up** (`scripts/worker.ts` →
+  `logLaneReconciliation()`). WARNs and continues. It **cannot** fail start-up,
+  and that is deliberate: the deploy window in which the code is ahead of the
+  secret is REQUIRED (the image trap above — deploy first, route second), and a
+  boot gate would turn every routine release into an outage. The worker is the
+  process that would silently stop running a drifted job, so it is the cheapest
+  place to say so.
+- **`system.daily-health-check`, daily at 09:00.** A non-empty difference throws
+  `JobLaneDriftError`, which **dead-letters the run** — so the drift appears as a
+  row on `/settings/workspace/jobs` → DLQ, whose detail panel renders the
+  message. A difference that has survived until the next morning is not a deploy
+  window. The verdict is recorded on the `job_run` result on a GREEN tick too, so
+  `in_sync` reads as an assertion rather than as the absence of noise.
+
+**Two quiet verdicts, kept apart on purpose.** `not_applicable` means the
+test-only file override (`MOTIR_POSTGRES_JOB_IDS_FILE`) is armed, so there is no
+deployment to compare against — the whole E2E lane. `not_cut_over` means the
+secret names nothing at all: every job on Inngest, the switch's safety default,
+and a legitimate steady state for an install that never started the migration.
+It is quiet — dead-lettering daily over a migration somebody chose not to run
+would teach an operator the row is noise — but it is its own NAMED verdict,
+because an unconfigured deployment reading as "nothing to check" is the exact
+shape this reconciliation exists to end.
+
+**⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES.** The message names every id and which
+direction it is in. Then, in order:
+
+1. **Confirm the job is in the RUNNING IMAGE** — the `fly ssh console` grep two
+   sections up. A freshly-merged job that has not deployed yet is
+   declared-but-not-routed and routing it would route it NOWHERE; wait for the
+   deploy.
+2. **Declared-but-not-routed, and deployed** → add the id to the secret, with the
+   read-modify-write discipline stated above (read the value immediately before
+   you write, write once, read it back).
+3. **Routed-but-not-declared** → decide which side is right. Ship the declaration
+   if the routing was intended; remove the id from the secret if it was a typo or
+   names a job that no longer exists.
+4. **Re-read the secret from inside a machine** and confirm the next daily tick
+   goes green — or trigger the health check and read its result.
 
 **How to confirm a job actually moved.** Two tables, both for that job id:
 

@@ -11,6 +11,22 @@
  * is the right driver). It adds no process, no machine and no environment
  * variable — routing is still `MOTIR_POSTGRES_JOB_IDS`.
  *
+ * As of MOTIR-3716 it also REPORTS the lane reconciliation once, at start-up —
+ * the checked-in declaration (`lib/jobs/engine/census.ts`) against the live
+ * `MOTIR_POSTGRES_JOB_IDS`. This process is the one that would silently stop
+ * running a drifted job, so it is the cheapest place to say so, and it says so
+ * AFTER the registry import below for the ordinary reason: the declaration is
+ * only meaningful beside the set of jobs this image actually knows.
+ *
+ * ⚠️ IT WARNS AND CONTINUES — it does not refuse to start, and that is not
+ * timidity. The deploy window in which the code is ahead of the secret is
+ * REQUIRED: `fly secrets set` restarts the machines on the CURRENT release, so
+ * routing an id whose job is not in the running image routes it nowhere, and
+ * deploy-then-route is the only correct order (`docs/jobs.md`'s image trap). A
+ * boot gate here would turn every routine release into an outage. The LOUD
+ * surface is `system.daily-health-check`, a whole day later, by which time a
+ * difference is no longer a deploy window.
+ *
  * ⚠️ AND IT IS THE SECOND, LOUDER REASON THE REGISTRY IMPORT BELOW IS LOAD-BEARING.
  * `JobScheduler.start()` REFUSES an empty registry rather than scheduling nothing
  * in silence, so deleting that import now fails the process at start-up with a
@@ -43,6 +59,7 @@ import { JobWorker } from '@/lib/jobs/engine/worker';
 import { JobScheduler } from '@/lib/jobs/engine/scheduler';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
+import { logLaneReconciliation } from '@/lib/jobs/engine/census';
 // Side-effect import: evaluates all 24 definition modules so `defineJob` has
 // registered every job. See the warning above — this is not an unused import.
 import '@/lib/jobs/registry';
@@ -125,6 +142,12 @@ async function main(): Promise<void> {
     );
     return event?.data ?? {};
   };
+
+  // The LANE REPORT (MOTIR-3716). Before the loop, so it is at the top of the
+  // log a person opens when a job "stopped running", and never fatal — see the
+  // header. `logLaneReconciliation` cannot throw; it is a set difference over a
+  // module constant and one environment variable.
+  logLaneReconciliation();
 
   // Armed BEFORE the worker starts, so an empty registry refuses at start-up
   // rather than after the first claim — `main`'s catch turns the throw into a
