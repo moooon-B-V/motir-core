@@ -17,6 +17,7 @@ import {
   LayoutList,
   ListChecks,
   Map,
+  Scale,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -457,6 +458,20 @@ export function SidebarNav({
         icon: <BookOpen />,
         label: t('nav.docs'),
         href: '/docs',
+      },
+      {
+        // The legal set (MOTIR-1134). Same shape as the `/docs` row above and
+        // for the same reasons: a `(public)` route reached from the authed
+        // shell, so it takes no `active` arm — this rail is never on screen at
+        // `/legal` and `pathname` can never match.
+        //
+        // It sits HERE rather than in a footer because the authed shell has no
+        // footer to put it in. The card asked for one "where appropriate", and
+        // inventing a footer for three links would be a surface the design does
+        // not draw; this bottom section already carries the non-product doors.
+        icon: <Scale />,
+        label: t('nav.legal'),
+        href: '/legal',
       },
     ],
   });

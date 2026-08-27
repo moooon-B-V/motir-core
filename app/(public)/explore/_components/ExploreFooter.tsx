@@ -98,6 +98,33 @@ export async function ExploreFooter({
           <li>{t('footCompanyBlog')}</li>
           <li>{t('footCompanyOpenSource')}</li>
           <li>{t('footCompanyContact')}</li>
+          {/*
+            The legal set (MOTIR-1134), added to THIS column rather than to a
+            new one. `design/project-square/` shows four footer columns and no
+            legal affordance anywhere, so a fifth column or a bottom bar would
+            be an element the design does not depict. Adding rows to a list the
+            design already draws is not.
+
+            Two documents by name because they are the two a person looks for
+            in a footer, then one row into `/legal` for the other five — seven
+            links here would make Company the longest column in the footer and
+            bury About and Contact under a wall of policy.
+          */}
+          <li>
+            <Link href="/legal/privacy" className="hover:text-(--el-link)">
+              {t('footCompanyPrivacy')}
+            </Link>
+          </li>
+          <li>
+            <Link href="/legal/terms" className="hover:text-(--el-link)">
+              {t('footCompanyTerms')}
+            </Link>
+          </li>
+          <li>
+            <Link href="/legal" className="hover:text-(--el-link)">
+              {t('footCompanyLegal')}
+            </Link>
+          </li>
         </ul>
       </div>
     </footer>

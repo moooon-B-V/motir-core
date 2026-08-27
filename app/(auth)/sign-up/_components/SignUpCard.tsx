@@ -60,6 +60,7 @@ function SignUpShell() {
 
 function SignUpForm() {
   const t = useTranslations('auth');
+  const tLegal = useTranslations('legal');
   const router = useRouter();
   const searchParams = useSearchParams();
   // The post-auth landing: `/home`, the SAME destination sign-in defaults to
@@ -251,6 +252,33 @@ function SignUpForm() {
           </Button>
 
           <FooterLink prompt={t('alreadyHaveAccount')} linkText={t('logIn')} href="/sign-in" />
+
+          {/*
+            The legal line (MOTIR-1134). GDPR Art. 13 owes transparency AT
+            COLLECTION, and this form is where collection begins — so the
+            Privacy Policy has to be reachable from HERE, not only from a footer
+            on a page the person may never have visited.
+
+            ⚠️ This is a LINK, not an acceptance control. Nothing here records
+            consent, and the copy deliberately does not claim it does.
+            MOTIR-1135 owns capturing acceptance and turns this line into the
+            statement that agreeing is what the button does. Wording it that way
+            now would assert a record we are not yet keeping.
+          */}
+          <p className="font-sans text-[13px] text-(--el-text-secondary)">
+            {tLegal.rich('signUpNotice', {
+              terms: (chunks) => (
+                <Link href="/legal/terms" className="text-(--el-link) hover:underline">
+                  {chunks}
+                </Link>
+              ),
+              privacy: (chunks) => (
+                <Link href="/legal/privacy" className="text-(--el-link) hover:underline">
+                  {chunks}
+                </Link>
+              ),
+            })}
+          </p>
         </form>
       )}
     </AuthShell>

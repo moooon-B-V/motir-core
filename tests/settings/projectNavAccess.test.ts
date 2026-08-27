@@ -87,26 +87,49 @@ describe('the map is TOTAL over both surfaces', () => {
     // a map entry would be a claim nothing enforces. It is the first footer row
     // not under `/settings/`, which is the only reason it is named here rather
     // than swept up by the prefix skip below.
-    const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace', '/docs']);
+    //
+    // `/legal` (MOTIR-1134) is exempt for exactly the reasons `/docs` is, and the
+    // two now stand or fall together: same ungated footer group, same `(public)`
+    // route group, readable with no session at all. A project permission cannot
+    // sensibly gate the Privacy Policy — GDPR Art. 13 owes it to a person who has
+    // not signed up yet — so a map entry would be a claim nothing enforces, and
+    // one that would be WRONG if anything did.
+    const exempt = new Set([
+      '/onboarding',
+      '/settings/project',
+      '/settings/workspace',
+      '/docs',
+      '/legal',
+    ]);
     for (const href of hrefsIn(SIDEBAR)) {
       if (exempt.has(href) || href.startsWith('/settings/')) continue;
       expect(known.has(href), `SidebarNav offers ${href}, which the map does not carry`).toBe(true);
     }
   });
 
-  it('the exempt `/docs` row sits in the UNGATED footer group, not the gated primary one', () => {
+  it('the exempt PUBLIC rows sit in the UNGATED footer group, not the gated primary one', () => {
     // The exemption above is only sound while the row is outside the gate. Move
     // it into `primaryItems` and `canOfferNavDestination` answers false for an
     // href the map does not carry — the row would vanish for EVERY actor. That
     // is the right failure direction for a project surface and exactly the wrong
     // one for public documentation, so pin the section rather than trusting the
     // exemption to stay true.
+    //
+    // ⚠️ `/legal` is checked here for a reason beyond symmetry. A Privacy Policy
+    // that disappears from the shell for some actors is worse than one never
+    // linked: the obligation to make it reachable does not vary by role, and a
+    // silent per-actor hole is the kind nobody reports.
     const bottom = SIDEBAR.indexOf("id: 'bottom'");
-    expect(bottom, "the footer section marker moved — re-check /docs's group").toBeGreaterThan(-1);
-    expect(SIDEBAR.indexOf("href: '/docs'"), '/docs left the ungated footer group').toBeGreaterThan(
-      bottom,
+    expect(bottom, 'the footer section marker moved — re-check the public rows').toBeGreaterThan(
+      -1,
     );
-    expect(canOfferNavDestination('/docs', ADMIN)).toBe(false);
+    for (const href of ['/docs', '/legal']) {
+      expect(
+        SIDEBAR.indexOf(`href: '${href}'`),
+        `${href} left the ungated footer group`,
+      ).toBeGreaterThan(bottom);
+      expect(canOfferNavDestination(href, ADMIN)).toBe(false);
+    }
   });
 
   it('every palette navigation goes through offerNav or an explicit requirement', () => {

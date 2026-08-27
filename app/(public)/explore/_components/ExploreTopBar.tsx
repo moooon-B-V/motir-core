@@ -26,7 +26,17 @@ import { buttonVariants } from '@/components/ui/Button';
 
 export async function ExploreTopBar({
   current = 'explore',
-}: { current?: 'explore' | 'docs' } = {}) {
+}: {
+  /**
+   * Which nav item is the page being read. `'legal'` (MOTIR-1134) matches
+   * NEITHER resolving item on purpose: the legal pages are reached from the
+   * footer and from sign-up, not from this bar, so marking `Explore` as
+   * `aria-current` there would tell a screen reader the wrong thing. Without
+   * this arm the default would do exactly that, because the default is
+   * `'explore'`.
+   */
+  current?: 'explore' | 'docs' | 'legal';
+} = {}) {
   const t = await getTranslations('projectSquare');
   const navItems = [
     { key: 'navProduct', label: t('navProduct') },

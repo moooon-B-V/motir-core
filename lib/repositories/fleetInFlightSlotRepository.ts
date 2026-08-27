@@ -195,12 +195,25 @@ export const fleetInFlightSlotRepository = {
   },
 
   /**
-   * Drop every slot whose safety net has expired — housekeeping, not the release
-   * path.
+   * Drop every slot whose safety net has expired — the RECOVERY path, not the
+   * release path.
    *
-   * The count already ignores these rows, so this changes no decision; it exists
-   * so the table does not accumulate the debris of crashed dispatchers, and so
-   * an operator reading it sees the live fleet rather than a graveyard.
+   * ⚠️ IT USED TO SAY *"the count already ignores these rows, so this changes no
+   * decision"*, AND THAT SENTENCE WENT FALSE WITHOUT ANYTHING EDITING IT
+   * (MOTIR-3684). It was a true statement about the two COUNTS — both still
+   * filter `expiresAt > now` — and it was written when counting was the only
+   * thing this table decided. MOTIR-2160 then added a read that decides on a
+   * row's mere EXISTENCE ({@link findByRef}, in
+   * `codeGraphIndexAdmissionService.admit`), and from that commit an expired row
+   * refused every future admission for its `(workload, ref)` — permanently,
+   * because nothing called this method. Measured: one repository's code-graph
+   * refresh at a 100% failure rate for a day behind a row that had expired 19
+   * hours earlier, and another that had been dead for twenty.
+   *
+   * So: a comment asserting an invariant about a table is a claim the NEXT
+   * reader of that table can falsify without touching the comment. What keeps
+   * this one honest now is the caller — `admit` reaps under the fleet admission
+   * lock before it reads — not the sentence.
    */
   async deleteExpired(now: Date, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.fleetInFlightSlot.deleteMany({

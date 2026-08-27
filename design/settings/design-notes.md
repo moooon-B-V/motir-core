@@ -1775,3 +1775,395 @@ and the design cites them rather than deciding them:
   there is no mark for "nowhere else" that would not be inventing a claim.
 - No Tier-0 `--color-*` outside the token block; no raw `rounded-*` / `p-*` /
   `h-*` on any control's own box.
+
+---
+
+# Data & privacy — `account-data.mock.html`
+
+**Story 8.4 (MOTIR-657) · Subtask MOTIR-3680.** The account-settings
+`Data › Data & privacy` pane: export your data, and delete your account.
+**Gates MOTIR-1136** (data-subject-request handling), which was halted at the
+design gate by the `motir run MOTIR-657` parent run rather than improvising an
+irreversible surface.
+
+**The pane is not a new idea — it is a promise already published.**
+`content/legal/privacy.md` §7 says, in the product's own approved words:
+_"In your account settings you can export your personal data and request deletion
+of your account, without asking anyone."_ That sentence is counsel-reviewed and
+live. This asset draws the surface it describes, and its whole job is to answer
+the three questions the code card cannot answer for itself: what an export **is**
+and how the reader receives it, what deletion does to things the reader does
+**not solely own**, and whether it is **immediate**.
+
+## Grounded in shipped reality (rung 2 — what was verified, and where)
+
+| the design assumes                                                    | verified against                                                                                                                                                                      |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the area shell, rail, identity header, grouped nav, Card pane grammar | `account-settings.mock.html` / `two-factor.mock.html`, copied 1:1 — not redrawn                                                                                                       |
+| neither surface exists yet, so this is a genuinely new door           | `lib/settings/accountSettingsNav.ts` — six entries (profile · language · notifications · appearance · twoFactor · apiTokens), three groups. Neither export nor deletion is among them |
+| a new route owes the registry a matching entry                        | `tests/settings/accountSettingsNav.test.ts` — the route↔registry totality assertion, which a new pane satisfies by shipping its entry and its route together                          |
+| the danger-zone treatment is not invented here                        | `app/(authed)/settings/workspace/_components/DangerZoneCard.tsx` — `border-2 border-(--el-danger)`, a `--el-danger` header, `Button variant="danger"`, type-to-confirm in a `Modal`   |
+| a confirm dialog caps at 90vh and scrolls its body                    | `packages/design-system/src/components/ui/Modal.tsx` — `flex max-h-[90vh] flex-col overflow-hidden`; `Modal.Body` is `flex min-h-0 flex-1 overflow-y-auto`, so head and footer pin    |
+| a private file is delivered by a short-lived presigned URL            | `lib/blob/uploader.ts` `signedDownloadUrl` — `ttlSeconds = 300`, a fresh presign per request; `docs/decisions/attachment-access-control.md` §5 pins the same 300 s                    |
+| deletion is blocked by the ORG owner guard, not by a workspace role   | `lib/services/organizationsService.ts` `assertNotLastOwner` → `LastOrgOwnerError`                                                                                                     |
+| a sole workspace member cannot LEAVE, but any member may DELETE       | `lib/services/workspacesService.ts` `removeMemberInTx` → `LastMemberError` (count ≤ 1); `deleteWorkspace` asserts membership only, never a role                                       |
+| 30 days, anonymised contributions, seven-year billing records         | `content/legal/privacy.md` §6 and §7 — the retention table and the rights section, both approved copy                                                                                 |
+| a reachable window is a grace period and an unreachable one is not    | `docs/decisions/code-graph-index-fleet.md` §14.3, and `lib/codeGraph/offboarding.ts`'s `isImmediate` / `CODE_GRAPH_RETENTION_WINDOW_DAYS = 30`                                        |
+
+## The ACCESS PATH — a FOURTH rail group, ordered LAST
+
+The pane is reached one way and one way only: **`Data › Data & privacy`** in the
+account-settings rail, drawn ACTIVE in panels 1, 4, 5 and 6.
+
+```ts
+// ACCOUNT_SETTINGS_NAV_GROUP_ORDER gains a fourth member, at the END:
+['general', 'preferences', 'security', 'data']
+
+{ id: 'data', group: 'data', href: '/settings/account/data',
+  icon: Database, labelKey: 'data' }
+```
+
+**Why a new group rather than an entry appended to `general`.** The rail renders
+groups in array order, so an entry appended to `general` lands **second overall**,
+directly beneath Profile — an irreversible account action three rows above the
+language picker. Every mirror product puts account deletion at the BOTTOM of
+account settings, and a fourth group ordered last is the only shape in this
+registry that puts it there. It costs one member on a typed union and one i18n
+key.
+
+**Why ONE pane for both surfaces rather than two entries.** They are the same
+right, exercised two ways, and the Privacy Policy already names a single place
+(_"in your account settings"_). Splitting them would put the export behind one
+door and the deletion behind another, and a reader who came to leave should meet
+the export on the way out — which panel 5 makes literal.
+
+## Panels
+
+| #   | what it draws                                                                                         |
+| --- | ----------------------------------------------------------------------------------------------------- |
+| 1   | **At rest** — the two cards, and the rail row that is the door                                        |
+| 2   | **The export** — preparing · ready · failed, and what the reader actually receives                    |
+| 3   | **The confirmation** — the deleted / anonymised / kept ledger, at its real 90vh ceiling, both scrolls |
+| 4   | **BLOCKED** — sole owner of a shared organization, with the way out drawn on the pane                 |
+| 5   | **Scheduled** — the 30-day grace period, and the two places it can be cancelled                       |
+| 6   | **Dark parity** — the pane at rest                                                                    |
+
+## DECISION 1 — what the export IS, which right it serves, and in what format
+
+**It serves BOTH Article 15 (access) and Article 20 (portability), and it can only
+do that because of the format.** Art. 20 is the demanding one: it is satisfied
+only by _"a structured, commonly used and machine-readable format"_. A PDF or an
+HTML page would answer Art. 15 alone and quietly fail the other. So:
+
+- **`motir-export-<date>.zip`**, holding **JSON** for every record and the
+  **original uploaded files** under `files/`, which the JSON references by path.
+- The pane says which right it serves in the reader's words, not in article
+  numbers: _"This is your right of access and your right to portability — one
+  file serves both."_ The article numbers belong in the Privacy Policy, which
+  already carries them; a settings pane that cites statute at a reader is
+  performing compliance rather than doing it.
+
+**Scope**: the user's own account and profile, plus the workspaces they are a
+member of, **as far as their access reaches**. That last clause is load-bearing
+and is drawn in the copy: an export is not a privilege escalation, and a member
+of a shared workspace does not get a copy of things they cannot already read.
+
+## DECISION 2 — how it is DELIVERED, and why the email does not carry the file
+
+**The file is handed over in this pane. The email only says it is ready.**
+
+This is measured, not stylistic. A private object is served through an
+authenticated route that 302-redirects to a presigned URL minted per request with
+a **300-second** TTL (`signedDownloadUrl` in `lib/blob/uploader.ts`;
+`docs/decisions/attachment-access-control.md` §5 pins the same number). **A URL
+that dies in five minutes cannot be emailed to a human being** — it would be
+expired before most people open their inbox. Any design that mails the link is a
+design the storage layer cannot implement.
+
+So the shape is: request → background build → **email notification** → the reader
+returns to this pane → **Download** mints a fresh 300 s URL on the click. Panel 2
+draws the consequence as copy the reader can act on: _"Each Download makes a
+fresh, private link that expires after five minutes."_ The built file is kept
+**seven days**, which is what makes returning to the pane a real instruction
+rather than a race.
+
+**Art. 12(3) allows one month, extendable by two, and the copy says one month
+rather than promising minutes.** The mechanism is a background job and will
+usually finish in minutes, but the promise is the legal one; a surface that
+promises instant owes instant. Panel 2's failed state routes to
+`privacy@motir.co` for exactly the case where the automated path cannot deliver
+inside that window.
+
+## DECISION 3 — what deletion MEANS for what the reader does not solely own
+
+**This is the decision the card exists to make, and most of it was already made —
+in the Privacy Policy, which is approved, published, and binding.** The
+confirmation is therefore a LEDGER with three groups, and each group's membership
+follows from a source rather than from taste.
+
+### Deleted — what is yours alone
+
+Your profile, credentials, passkeys, two-factor enrolment and API tokens; and
+**every workspace where you are the only member**, with the projects and work
+items inside them.
+
+**Why whole workspaces go with the account, and why that is a CHOICE rather than
+a block.** `removeMemberInTx` throws `LastMemberError` when the membership count
+is ≤ 1 — the last member of a workspace cannot LEAVE it. But `deleteWorkspace`
+asserts membership only and checks no role, so that same person may delete it
+outright. A sole-membership workspace therefore has exactly two futures: it goes
+with the account, or the reader invites somebody to it first. **The ledger names
+the workspaces and states the escape** (_"To keep one, invite somebody to it
+first"_) instead of discovering it at submit.
+
+### Anonymised, not deleted — what is part of someone else's project
+
+Comments the reader wrote in projects other people share, and work items they
+reported or were assigned there. **The name is removed; the row stays.**
+
+**The Privacy Policy already decided this**, §6: _"If you posted a request or a
+comment on someone else's public project, deleting your account does not simply
+erase it, because it is part of a conversation others took part in. We anonymise
+your contributions — your name is removed — rather than deleting the thread around
+them."_
+
+**This design extends that from comments to work-item attribution, and says so
+rather than assuming it.** The policy's sentence names contributions to a public
+project; a work item reported inside a shared workspace is the same shape — a
+row the team depends on, carrying a person's name — and the same answer follows:
+the item belongs to the project, the attribution belongs to the person, so the
+attribution goes and the item stays. Deleting a colleague's backlog because its
+reporter closed their account is not erasure, it is data loss for a third party.
+**The Privacy Policy's §6 wording is narrower than this behaviour and should be
+widened to match when it is next revised** — flagged here rather than quietly
+relied upon, because the copy is counsel-approved and this asset does not get to
+amend it. The pane's own copy stays inside what §6 already says.
+
+### Kept — what erasure does not reach
+
+Invoices and tax records, for as long as Dutch tax and accounting law requires
+(§6: _"generally seven years"_); and data still present in a backup, until the
+backup rotates (§6: _"Data present only in a backup is not restored to active
+use"_).
+
+**Article 17 erasure is not absolute, and a confirmation that implies otherwise is
+a false statement on a consent surface.** The ledger names the exception in the
+reader's words — _"Erasure does not reach a record we are obliged to hold"_ —
+rather than burying it or omitting it. This is the one place where saying less
+would have been the more dangerous choice.
+
+## DECISION 4 — a 30-day grace period, because here the window is REACHABLE
+
+**Deletion schedules; it does not fire.** The account closes immediately — the
+reader is signed out and the account stops being usable by anyone else — and the
+erasure runs 30 days later. Signing in before then cancels it.
+
+**The product already holds the doctrine that decides this.**
+`docs/decisions/code-graph-index-fleet.md` §14.3 gives a workspace hard-delete
+**no** window, and states why: _"A grace period the user cannot reach is not a
+grace period."_ A workspace delete cascades away every surface a user could undo
+into, so a window there would only extend retention.
+
+**An account deletion is the mirror case: signing in IS a surface to undo into.**
+The reader's own credentials are the undo affordance, and they survive until the
+erasure runs. So the same doctrine that refuses a window there requires one here —
+and the number is not invented: `content/legal/privacy.md` §6 already promises
+_"we erase or anonymise within 30 days"_, and
+`CODE_GRAPH_RETENTION_WINDOW_DAYS = 30` is the constant the product already
+interpolates into user-facing copy for exactly this reason (_"so the promise and
+the behaviour cannot drift"_). **The 30-day window IS the published promise, read
+as the deadline it is** — the erasure runs at day 30, which is within 30 days.
+The build card must interpolate a constant, never retype the number.
+
+**And a grace period is only reachable if the reader can find it.** Panel 5
+therefore draws **two** doors: this pane, and an **app-wide banner on every page**
+carrying the date and a `Cancel deletion` action. A reader who changes their mind
+on day nine will not think to navigate to Settings › Data & privacy to do it, and
+a window they cannot find is the same as no window — which is the §14.3 test,
+applied to its own mirror case.
+
+## DECISION 5 — the BLOCKED case is the ORGANIZATION, and it is drawn at rest
+
+**The card asked for the sole-admin-workspace case. The shipped code says the
+blocking tier is the organization, and the measurement changes the design.**
+
+| tier         | guard                                                        | effect on account deletion                        |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------- |
+| organization | `assertNotLastOwner` → `LastOrgOwnerError` (owner count ≤ 1) | **HARD BLOCK.** The membership cannot be removed  |
+| workspace    | `removeMemberInTx` → `LastMemberError` (member count ≤ 1)    | **NOT a block** — a choice, handled in the ledger |
+
+An organization is where billing and cross-workspace administration live, and the
+guard exists so an org can never drop to zero owners. A reader who is the only
+owner of an org that other people belong to genuinely cannot be removed from it,
+and no confirmation copy can talk its way past that.
+
+**So the block is rendered on the pane at rest, with the Delete button disabled
+and the way out drawn beside it** — the organization named, its member count
+shown, and a control that goes straight to `Organization › Members` where the
+owner role is handed over. The reader never types an email address into a form
+that was always going to refuse. **A blocked state discovered at submit is a
+design defect, not an error message**, and it is the specific failure this card
+named.
+
+## What this design does NOT decide, and who owns it
+
+- **Account deletion is a FIFTH offboarding trigger, and §14.3 enumerates four.**
+  `docs/decisions/code-graph-index-fleet.md` §14.3's table has
+  `repo_disconnected` · `connection_disconnected` · `project_archived` ·
+  `workspace_deleted`, and `CodeGraphOffboardReason` in
+  `lib/codeGraph/offboarding.ts` is that same closed set. An account deletion that
+  cascades a workspace away must feed the offboarding queue, or the derived code
+  graphs become the unreferenced orphans §14 exists to prevent. **If the erasure
+  reaches workspaces by calling `workspacesService.deleteWorkspace`, the existing
+  `workspace_deleted` arm already fires and nothing is owed**; if it deletes rows
+  by another path, a new reason is. **This is a build-time obligation on
+  MOTIR-1136, recorded on that card as a comment, not left as a parenthetical
+  here.**
+- **The impact COUNTS are a backend read, and they are the second capability this
+  surface needs.** The ledger renders _"2 workspaces · 12 projects · 1,483 work
+  items · 214 comments · 96 work items"_, and a destructive flow always has two
+  distinct backend capabilities — the **preview/impact read** and the
+  **do-the-action write**. MOTIR-1136 owns both; the numbers are not decoration
+  and the preview is not free.
+- **The export's contents are a schema question**, not a layout one. This asset
+  fixes the format (JSON + files in a zip) and the scope rule (as far as the
+  reader's access reaches); which tables are in it is MOTIR-1136's to enumerate.
+
+## Token / a11y rules honoured
+
+- **Colour via `--el-*` only.** No Tier-0 `--color-*`, no raw hex, no `rgb()`.
+  Verified mechanically: the render sweep reports **0** inline styles carrying a
+  hex or `rgb()` value.
+- **AA measured across every text node, in BOTH themes — 0 failures.** Not
+  eyeballed; the sweep is reproduced below. Two failures were found and fixed:
+  - **`.me .em` (the rail's email) was `--el-text-muted` at 4.17:1** on
+    `--el-sidebar-bg` — the documented sidebar trap. Raised to
+    `--el-text-secondary`. ⚠️ **Six sibling assets in this folder carry the
+    original** (`account-settings` · `profile` · `two-factor` · `passkeys` ·
+    `appearance` · `token-scopes`); that is a pre-existing defect filed as its own
+    bug, deliberately **not** half-fixed here.
+  - **`--el-danger` as the danger-card heading is 4.51:1 in light and 4.25:1 in
+    dark** — it clears AA for normal text in one theme and misses it in the other,
+    and the base dark block does not flip `--color-destructive`. So the heading is
+    `--el-danger` in light and drops to `--el-text` in dark, and **the danger
+    signal is carried by the 2 px border and the trash glyph**, which need only
+    the 3:1 graphics bar and clear it at 4.25.
+- **`--el-danger-text` appears exactly once, on the solid danger button**, where
+  it sits ON the `--el-danger` fill. That is the only pairing the token is correct
+  for; as ink on a surface it renders white-on-white.
+- **The destructive entry is the shipped solid `Button variant="danger"`**, not a
+  ghost with red label text — which also removes the dark-theme AA problem a red
+  label would have carried.
+- **State is never colour alone**: every pill carries a glyph, the blocked state
+  carries an "Action needed" pill AND a warn callout AND a disabled control.
+- **The dark panel carries `data-appearance-scope` beside `data-theme="dark"`**
+  and declares `color` ON the panel — without both, `--el-*` is not re-emitted on
+  the subtree and headings that only inherit their ink render near-black on
+  near-black.
+
+## The confirm dialog is drawn at its REAL ceiling, not expanded to fit
+
+`contentVariants` caps a modal at `max-h-[90vh]`, `Modal.Body` scrolls, and the
+head and footer are pinned by the flex column rather than by a bespoke sticky
+rule. **On the 1366×768 laptop floor that is 691 px**, and the ledger does not
+fit — so panel 3 draws it **cut off at the fold**, twice: as it opens, and
+scrolled to the end. Raising the cap to show every row at once would draw a
+dialog the product cannot render.
+
+**That cut is a property worth keeping, not a problem to design away.** The
+type-to-confirm field sits at the BOTTOM of the scroll, so the confirm button
+cannot be reached without travelling past the facts — the exact discipline a
+destructive confirmation wants, and the reason a pinned footer is safe here where
+it would not be on a full-page approval screen. `size="lg"` (32 rem) rather than
+the shipped delete modal's `md`: the ledger needs the width, and the next size up
+is the 58 rem peek surface, which is not a confirmation dialog.
+
+## Primitives composed (no hand-rolling)
+
+`Card` (+ the danger variant's border/header treatment) · `Button`
+(primary / secondary / ghost / **danger**, `btn-sm`) · `Modal` + `Modal.Body` +
+`Modal.Footer` · `Input` / `FormField` (label + helper) · `Pill`
+(mint / sky / peach / rose) · the callout (info / warn / danger) · `SidebarNav` +
+`SidebarSection` rows · the `.srow` settings-row grammar from the shipped Language
+and Profile panes. Icons are lucide, and the seven this pane adds
+(`database` · `users` · `message-square` · `receipt` · `square-kanban` ·
+`building-2` · `hourglass` · `user-x`) are emitted from `lucide-react`'s own
+`__iconNode` rather than drawn by hand.
+
+## i18n
+
+One namespace, `settings.account.data.*`: `nav` · `title` · `subtitle` ·
+`export.{title,subtitle,cta,what.*,format,window,preparing,ready,failed,download,expiry,retention}` ·
+`delete.{title,subtitle,cta}` ·
+`delete.confirm.{title,body,typeLabel,helper,button}` ·
+`delete.ledger.{deleted,anonymised,kept}` + one key per row ·
+`delete.grace.{title,body,cancel,daysLeft}` ·
+`delete.blocked.{title,body,orgRow,manageMembers,disabledReason}` ·
+`banner.{scheduled,cancel}` · `mailbox`. Every `en` key needs its `zh` twin
+(`tests/i18n-catalog.test.ts`).
+
+## Build dependency (for MOTIR-1136)
+
+1. **Registry + route together.** Add `'data'` to
+   `ACCOUNT_SETTINGS_NAV_GROUP_ORDER` and the entry above to
+   `ACCOUNT_SETTINGS_NAV`, and land `app/(authed)/settings/account/data/page.tsx`
+   in the same commit — that keeps `tests/settings/accountSettingsNav.test.ts`
+   green by construction, the same move 7.8.3, 7.3.58 and 8.11 each made.
+2. **Two backend capabilities, not one**: the **impact preview** read that
+   produces the ledger's counts, and the **schedule / cancel** write. Plus the
+   export request, its background build, and the notification.
+3. **Interpolate the window**, never retype `30`.
+4. **The block is `assertNotLastOwner`'s answer, read BEFORE rendering the
+   button** — the pane asks whether deletion is possible and renders panel 4's
+   state when it is not; it does not call delete and catch `LastOrgOwnerError`.
+5. **The erasure is a scheduled sweep**, and the offboarding obligation above is
+   part of it.
+
+## How the render was produced
+
+Reproduced inline rather than cited by path — the harness is a throwaway that
+does not survive the commit, and a design asset naming a file that does not exist
+sends the next reader looking for nothing.
+
+The token block, the dark block and the 29 shared icon defs are **extracted from
+`two-factor.mock.html`**, never retyped; the eight added icons are generated from
+`lucide-react`'s `__iconNode`:
+
+```py
+# ⚠️ collapse whitespace BEFORE matching: lucide wraps a long `d` across lines,
+# and a single-line regex silently DROPS those nodes — which renders a plausible
+# but wrong glyph (the hourglass came out as two horizontal strokes).
+body = re.sub(r'\s+', ' ', iconNodeBlock)
+re.findall(r'\[ ?"([a-z]+)", \{ (.*?) \} ?\]', body)
+```
+
+Every generated icon was then checked against its source by node count
+(`key: "` occurrences in the `.mjs` versus emitted elements in the `<g>`), and
+every `href="#i-*"` in the finished mock was checked to resolve to a def —
+a referenced-but-undefined icon renders an empty box and is invisible in review.
+
+The PNG is exported with the repo's own
+`node scripts/render-design-mock.mjs --width 1200`, run **after**
+`prettier --write` (prettier reformats the markup, so a PNG rendered from the
+pre-format source is not an export of what lands).
+
+The AA sweep walks every element holding a text node, resolves the nearest opaque
+ancestor background, computes the WCAG ratio and compares it against 4.5:1
+(3:1 for large text), once with `data-theme="light"` and once with
+`data-theme="dark"` on the root — excluding the panel that is authored dark, so
+each pass measures the theme under test.
+
+## GIVES / TAKES
+
+**GIVES** — to **MOTIR-1136**: the rail entry and route, the ledger's three groups
+and their sources, the delivery mechanism and its 300 s constraint, the 30-day
+schedule-and-cancel model, the blocked-state read, and the offboarding obligation.
+
+**TAKES** — from `account-settings.mock.html` (the area shell), `two-factor.mock.html`
+(the token block, the icon defs, the settings-row and modal grammar), the shipped
+`DangerZoneCard` (the danger-zone treatment and type-to-confirm), and
+`content/legal/privacy.md` (every retention and anonymisation promise the copy
+makes).
+
+**TAKES NOTHING FROM, AND GIVES NOTHING TO, `design/epic-privacy/`** — that area
+is Story 6.14's public-project privacy filter and is unrelated despite the name.

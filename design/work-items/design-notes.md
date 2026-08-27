@@ -23,6 +23,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Child panel — List ↔ Graph**                    | **`child-panel-graph.mock.html`** + `child-panel-graph.png`                 | The Children section gains a `List` ↔ `Graph` view switcher; Graph mounts the shipped roadmap canvas **rooted at this item**, bounded in a 28rem block. COMPOSES `design/roadmap/` (node cards, edges, legend, ready highlight, breadcrumb, quick-view) — nothing there is redrawn. Five panels light + dark: the door · Graph · drilled · loading / empty-level / graph-unavailable · leaf-renders-nothing. Resolves the height, every canvas opt-in, the crumb root label, and the no-local-preference rule. Story MOTIR-2284 · MOTIR-2285 (design). Gates MOTIR-2287 + MOTIR-2288. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`                         | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. BOTH the note and the frame MEASURED at 32rem with their own scroll in both axes — the note's bound is MOTIR-3510's amendment, and it renders through `MarkdownView` (`wmde-markdown motir-prose`). Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design), amended by MOTIR-3510. Gates MOTIR-2670. See below.                                                                                                                                                                                                       |
 | **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`                       | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. **REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038):** every repository is now a LINK to the project's `project_repository` row, carrying its ROLE and — when it is not established — its establish STATE. TEN panels: the door · held · delivered · unrecorded branch · **the five delivery states** · **the destination** · one repo · none · **a `proposed` row** · editing. Story MOTIR-2725 · MOTIR-2413 (design), redrawn by MOTIR-3038. Gates MOTIR-2415 / MOTIR-3042; inherited by MOTIR-2414. See below.              |
+| **The DELIVERY SET on the detail page**           | **`delivery-set.mock.html`** + `delivery-set.png`                           | The pull requests that DELIVER a card, many-to-many (MOTIR-3655). EXTENDS `repository-set.mock.html` and re-decides nothing it settled: the rail's glyph gains a truer PREDICATE (delivered = every delivery in that repository landed, not any linked pull request), and the caption's SUBJECT becomes whatever is outstanding — a repository, an open pull request, or one merged onto a base that is not its trunk. FOUR panels: the one-repository/two-pull-request card today's vocabulary reads as DELIVERED while the gate holds it · both merged · merged but not onto trunk · one delivery, unchanged. The ONE new element is a `Not on trunk` pill. Story MOTIR-3655 · MOTIR-3691 (design). Gates MOTIR-3660. See below.                                                                                                                                                                                                                                                                        |
 | **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                   |
 | **The item page at ARRIVAL / STREAMING**          | **`detail-arrival.mock.html`** + `detail-arrival.png`                       | What the page shows between the URL and the item: the page's OWN pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card) — mounted as an in-page `<Suspense>` AFTER the gate, never as a `loading.tsx` (MOTIR-3492) — and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design), amended by MOTIR-3492. Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                              |
 
@@ -4815,6 +4816,100 @@ gate). A string not in this table is a finding against this card, not a decision
   untouched.
 - Storage, dispatch and the completion rule — `docs/decisions/work-item-repository-set.md`
   (MOTIR-2726). This design READS them.
+
+---
+
+## ⭐ The DELIVERY SET on the work-item DETAIL page (Story MOTIR-3655 · MOTIR-3691 — `delivery-set.mock.html`)
+
+**Asset:** `delivery-set.mock.html` + `delivery-set.png` (4 panels: 1 the case today's vocabulary
+gets wrong · 2 both merged · 3 merged but not onto trunk · 4 one delivery, unchanged).
+**Gates:** MOTIR-3660 (the read surface), which may not start before this is approved.
+**EXTENDS** `repository-set.mock.html` above — same rail, same Development grammar, same three
+glyphs. It re-decides nothing that asset settled.
+
+### Why it exists — a case the shipped vocabulary answers WRONGLY
+
+MOTIR-3655 gives a card a DELIVERY SET: the pull requests that deliver it, many-to-many, and
+`deferred_incomplete_delivery_set` holds the card until every one has merged onto its own
+repository's default branch. The shipped vocabulary is **repository-keyed** throughout — one rail
+row per repository, a caption counting repositories that _"disappears entirely on a one-element
+set"_, a dashed Development row per repository with no pull request.
+
+**A card with TWO pull requests in ONE repository, one merged and one open**, therefore reads:
+glyph `Delivered` (truthfully — a linked pull request did merge onto that repository's trunk) and
+**no caption at all** (the repository set has one element). The gate is holding the card.
+
+**The surface would assert delivered on a card that is not.** That is the failure MOTIR-3655 was
+filed about, one layer up, and it is why MOTIR-3660 stopped rather than drawing it.
+
+### The answer — TWO changes, and nothing else moves
+
+**CHANGE 1 — the glyph's PREDICATE, not the glyph.** A repository row is `Delivered` when **every
+pull request delivering this card in that repository** has merged onto that repository's default
+branch. Today it is `Delivered` when _any_ linked pull request has. Same rows, same three glyphs,
+same colours, one truer question — so nothing a reader has learned is invalidated.
+
+| State     | Glyph                  | Colour            | Means (AMENDED)                                                               |
+| --------- | ---------------------- | ----------------- | ----------------------------------------------------------------------------- |
+| Delivered | `circle-check`         | `--el-success`    | EVERY delivery of this card in this repository merged onto its default branch |
+| Awaiting  | `circle-dashed`        | `--el-icon-muted` | at least one has not — including "no pull request at all", as before          |
+| Unknown   | `circle-question-mark` | `--el-warning`    | a merged delivery whose base branch Motir never recorded                      |
+
+**CHANGE 2 — the caption's SUBJECT.** ONE line, never two, and its subject is whatever is
+outstanding. This is the answer to _"do two `N of M delivered` captions coexist?"_ — **they do
+not**, because two counts answering different questions on one surface is what a reader misreads.
+
+| What is outstanding                             | The caption                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------- |
+| nothing                                         | absent (unchanged — today's rule, now over deliveries as well)                  |
+| a REPOSITORY with no delivery at all            | `1 of 2 delivered. {repo} is outstanding.` (unchanged — today's line)           |
+| a DELIVERY that has not merged                  | `1 of 2 deliveries merged. {owner/name}#{n} is still open.`                     |
+| a DELIVERY merged onto a base that is not trunk | `1 of 2 deliveries merged onto their trunk. {owner/name}#{n} landed on {base}.` |
+
+**The words are the gate's own** (`incompleteDeliverySetCommentBody`). A card whose comment says
+_"Still open: `moooon/motir-ai#2`"_ and whose rail says something else in different words is two
+vocabularies for one fact.
+
+### The ONE new element — a `Not on trunk` pill
+
+A delivery that MERGED but onto a side branch has no pill today, so it renders exactly like one
+that delivered. Panel 3 gives it `dsPillWarning` + `circle-question-mark` + **"Not on trunk"**,
+beside the existing `Merged` pill rather than replacing it — both facts are true and the reader
+needs both. The row's meta line carries `· into {base}` so the branch that swallowed it is named
+without opening the pull request.
+
+### What does NOT change, and is drawn so the claim is checkable
+
+**Panel 4 is the single-delivery card**, which is the overwhelming majority of cards in the tree.
+The new predicate gives the same answer over a set of one, and the caption is absent because
+nothing is outstanding. An asset that improves the two-delivery card and perturbs the other ten
+thousand has made the product worse, so the unchanged case is DRAWN rather than asserted.
+
+Also unchanged: the dashed _"No pull request yet"_ row (a repository the card carries with no
+delivery — still repository-keyed, still correct, because a repository with nothing has no delivery
+row to name); the `EmptyState`; the role and `primary` pills; the destination panel; the editing
+panel.
+
+### The surface split is PRESERVED
+
+The rail says WHERE and WHETHER; the Development section says WHICH pull request. The delivery set
+is the first thing that is **both**, and the split still holds: the rail's glyph and caption answer
+_is this finished, and if not what is missing_ in one glance, and the Development section enumerates
+the pull requests with their own state. Putting the delivery set only in Development would mean
+scrolling the main column to learn whether a card is done; putting the enumeration in the rail would
+rebuild a section that already exists, in 288px.
+
+### Tokens
+
+| Element                      | Token                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| Delivered glyph              | `--el-success`                                                              |
+| Awaiting glyph               | `--el-icon-muted`                                                           |
+| Unknown glyph                | `--el-warning`                                                              |
+| Rail caption                 | `--el-text-muted` on the card surface (unchanged from the sibling)          |
+| Development explanatory line | `--el-text-secondary` — it sits under rows on `--el-surface`                |
+| `Not on trunk` pill          | `dsPillWarning`                                                             |
+| Row border / fill            | `--el-border` / `--el-surface`, `--radius-control`, `--spacing-control-x/y` |
 
 ---
 

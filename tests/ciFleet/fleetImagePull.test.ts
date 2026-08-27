@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  challengeScheme,
   parseBearerChallenge,
   parseImageReference,
   probeImagePull,
@@ -175,6 +176,16 @@ describe('parseBearerChallenge — the WWW-Authenticate dance', () => {
     });
   });
 
+  it('names the SCHEME separately, which is what tells a Basic registry from a broken Bearer one', () => {
+    // ⚠️ THE DISTINCTION MOTIR-3606 ADDED. `parseBearerChallenge` returns null
+    // for BOTH — and the probe used to read that one null as a refusal.
+    expect(challengeScheme(GHCR_CHALLENGE)).toBe('bearer');
+    expect(challengeScheme('Basic realm="flyio-registry.fly.dev"')).toBe('basic');
+    expect(challengeScheme('Negotiate')).toBe('negotiate');
+    expect(challengeScheme(null)).toBeNull();
+    expect(challengeScheme('')).toBeNull();
+  });
+
   it('is null for a missing header, a non-Bearer scheme, or a Bearer with no realm', () => {
     expect(parseBearerChallenge(null)).toBeNull();
     expect(parseBearerChallenge('Basic realm="x"')).toBeNull();
@@ -238,16 +249,143 @@ describe('probeImagePull — the question Fly asks at machine-create, asked earl
     expect(urls.filter((u) => u.includes('/manifests/'))).toHaveLength(1);
   });
 
-  it('a registry that demands auth with NO bearer challenge is `unauthorized`, not a crash', async () => {
+  it('a registry that demands auth with NO bearer challenge is `unauthenticatable` — NOT `unauthorized`', async () => {
+    // ⚠️ CORRECTED (MOTIR-3606). This assertion used to read `unauthorized`, and
+    // that single word is the defect: it turns "I could not ask" into "the
+    // registry said no", which is a claim about the IMAGE made from a fact about
+    // the PROBE. Downstream, `unauthorized` is the loud arm — so a registry this
+    // probe simply does not speak became a dead-lettered health check every
+    // morning for 23 days.
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => json(401, {})),
     );
     await expect(probeImagePull(PRIVATE_IMAGE)).resolves.toMatchObject({
+      pullable: null,
+      reason: 'unauthenticatable',
+      detail: expect.stringContaining('no credential is configured'),
+    });
+  });
+
+  it('a BASIC challenge with no credential is `unauthenticatable`, and names the scheme', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json(401, {}, { 'www-authenticate': 'Basic realm="flyio-registry.fly.dev"' }),
+      ),
+    );
+    await expect(probeImagePull(PRIVATE_IMAGE)).resolves.toMatchObject({
+      pullable: null,
+      reason: 'unauthenticatable',
+      detail: expect.stringContaining('`basic`'),
+    });
+  });
+
+  it('a BASIC challenge WITH a credential is retried authenticated, and resolves', async () => {
+    const fetchSpy = vi.fn(async (_url: string, init?: RequestInit): Promise<Response> => {
+      const auth = (init?.headers as Record<string, string> | undefined)?.['authorization'];
+      return auth
+        ? json(200, {}, { 'docker-content-digest': 'sha256:authenticated' })
+        : json(401, {}, { 'www-authenticate': 'Basic realm="flyio-registry.fly.dev"' });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(
+      probeImagePull(PRIVATE_IMAGE, () => ({ username: 'x', password: 'fly_token' })),
+    ).resolves.toMatchObject({ pullable: true, digest: 'sha256:authenticated' });
+
+    // The header is real HTTP Basic, not a Bearer wearing the name — a registry
+    // that got the wrong scheme would 401 and the verdict would flip.
+    const sent = (fetchSpy.mock.calls[1]?.[1]?.headers as Record<string, string>)['authorization'];
+    expect(sent).toBe(`Basic ${Buffer.from('x:fly_token', 'utf8').toString('base64')}`);
+  });
+
+  it('a BASIC registry that 404s the AUTHENTICATED read is `absent` — the collected mirror', async () => {
+    // The verdict the anonymous probe could never reach, and the only one worth
+    // being loud about on `registry.fly.io`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit): Promise<Response> => {
+        const auth = (init?.headers as Record<string, string> | undefined)?.['authorization'];
+        return auth
+          ? json(404, { errors: [{ code: 'MANIFEST_UNKNOWN' }] })
+          : json(401, {}, { 'www-authenticate': 'Basic realm="flyio-registry.fly.dev"' });
+      }),
+    );
+    await expect(
+      probeImagePull(PRIVATE_IMAGE, () => ({ username: 'x', password: 'fly_token' })),
+    ).resolves.toMatchObject({ pullable: false, reason: 'absent' });
+  });
+
+  it('a BASIC registry that refuses the SUPPLIED credential blames the credential, not the image', async () => {
+    // Two different fixes, so two different sentences: an expired or wrong-org
+    // token sends an operator to the registry's visibility page for nothing.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json(401, {}, { 'www-authenticate': 'Basic realm="flyio-registry.fly.dev"' }),
+      ),
+    );
+    await expect(
+      probeImagePull(PRIVATE_IMAGE, () => ({ username: 'x', password: 'stale' })),
+    ).resolves.toMatchObject({
       pullable: false,
       reason: 'unauthorized',
-      detail: expect.stringContaining('no bearer challenge'),
+      detail: expect.stringContaining('OWN registry credential'),
     });
+  });
+
+  it('a resolver that THROWS is read as "no credential", not as a crash', async () => {
+    // ⚠️ THE PROBE NEVER THROWS, and a resolver is caller code — so the guarantee
+    // has to be enforced where it is declared. This repository's configuration
+    // accessors throw on an unwired deployment BY DESIGN (`flyFleetConfig()` and
+    // its siblings), which makes a throwing resolver the ordinary case on a
+    // self-hosted build rather than an exotic one. A `try` in each resolver would
+    // be the same code per registry, and the first one written without it would
+    // take down a health check instead of returning a verdict.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json(401, {}, { 'www-authenticate': 'Basic realm="flyio-registry.fly.dev"' }),
+      ),
+    );
+    await expect(
+      probeImagePull(PRIVATE_IMAGE, () => {
+        throw new Error('set FLY_FLEET_API_TOKEN, FLY_FLEET_APP and MOTIR_RUNNER_IMAGE');
+      }),
+    ).resolves.toMatchObject({ pullable: null, reason: 'unauthenticatable' });
+  });
+
+  it('a resolver returning `undefined` is read as "no credential" too', async () => {
+    // The resolver's type admits `undefined` because a lookup that misses is the
+    // natural shape of "not this registry"; a `?? null` at the call site is what
+    // keeps that from becoming an `Authorization: Basic undefined`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json(401, {}, { 'www-authenticate': 'Basic realm="flyio-registry.fly.dev"' }),
+      ),
+    );
+    await expect(probeImagePull(PRIVATE_IMAGE, () => undefined)).resolves.toMatchObject({
+      pullable: null,
+      reason: 'unauthenticatable',
+    });
+  });
+
+  it('a BEARER registry is NEVER offered the credential — a private image stays private', async () => {
+    // ⚠️ THE GUARD ON THE FIX. A credential resolver must not turn "this GHCR
+    // image is private" into a green preflight: Fly's machine-create has no
+    // field to hand that credential over, so anonymous really is the question
+    // there. The resolver is consulted only for a challenge the anonymous dance
+    // cannot answer.
+    const resolver = vi.fn(() => ({ username: 'x', password: 'should-not-be-used' }));
+    vi.stubGlobal('fetch', vi.fn(ghcrLike([])));
+
+    await expect(probeImagePull(PRIVATE_IMAGE, resolver)).resolves.toMatchObject({
+      pullable: false,
+      reason: 'unauthorized',
+    });
+    expect(resolver).not.toHaveBeenCalled();
   });
 
   it('a token endpoint that answers 200 with NO token is still `unauthorized`', async () => {
@@ -552,10 +690,34 @@ describe('verifyFleetBootable — §7: the predicate `isFlyFleetConfigured()` de
 const INDEXER_IMAGE =
   'registry.fly.io/motir-ci-fleet/motir-indexer@sha256:9f2c1ab4de77c0138a6d5e4b2f0c9a7318e4d6b5c2019fae83d7c4b6e5109a2d';
 
-/** The Fly registry's challenge, scoped to the INDEXER repository — so a probe
- *  that asked about the runner instead would be visibly asking the wrong one. */
-const FLY_CHALLENGE =
-  'Bearer realm="https://registry.fly.io/token",service="registry.fly.io",scope="repository:motir-ci-fleet/motir-indexer:pull"';
+/**
+ * ⚠️ CORRECTED (MOTIR-3606). THIS CONSTANT WAS THE BUG, AND IT WAS A FIXTURE
+ * RATHER THAN A LINE OF SHIPPED CODE.
+ *
+ * It used to read
+ * `Bearer realm="https://registry.fly.io/token",service="registry.fly.io",scope="…"`
+ * — a Fly registry that speaks the GHCR dialect. **No such registry exists.**
+ * Measured against the live one on 2026-08-27, three requests, verbatim:
+ *
+ *   registry.fly.io · the production indexer digest  → 401 · `Basic realm="flyio-registry.fly.dev"`
+ *   registry.fly.io · a repository that DOES NOT EXIST → 401 · BYTE-IDENTICAL
+ *   registry.fly.io · the same digest, `Authorization: Basic` with the org token
+ *                                                     → **200** · `docker-content-digest: sha256:0b4d2747…`
+ *
+ * So the shipped probe — which understands only a Bearer challenge — could never
+ * return anything but `unpullable` for a Fly-mirrored image, and could never
+ * distinguish an intact mirror from a garbage-collected one, which is the single
+ * fault §5's second constraint says this preflight exists to catch. Production
+ * dead-lettered `system.daily-health-check` every morning from 2026-08-04 to
+ * 2026-08-26 on an image that was intact the entire time.
+ *
+ * **Every test in this file was green throughout**, because this fixture
+ * described a registry nobody had asked. That is the whole lesson of the card:
+ * a fixture is a CLAIM about the wire, and a claim nobody measured is not
+ * evidence — least of all for a probe whose only value is being right about a
+ * registry it can no longer reach in a unit test.
+ */
+const FLY_BASIC_CHALLENGE = 'Basic realm="flyio-registry.fly.dev"';
 
 describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and each needs its own preflight', () => {
   /** A cloud deployment wired for CI. `indexerImage` omitted = indexing not
@@ -568,22 +730,28 @@ describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and 
     vi.stubEnv('MOTIR_INDEXER_IMAGE', indexerImage ?? '');
   }
 
-  /** A registry that serves the manifest to a bearer, and hands out an anonymous
-   *  token only for the repositories named. Mirrors `ghcrLike`, over the Fly
-   *  challenge the indexer's mirror actually returns. */
-  function flyLike(publicRepos: string[]) {
+  /**
+   * `registry.fly.io` as it actually behaves — the corrected fixture.
+   *
+   * Basic, never Bearer. No `/token` endpoint at all: an anonymous caller gets a
+   * 401 and nothing else, whether or not the repository exists. A caller
+   * presenting `Authorization: Basic` is served the manifest for a repository in
+   * `presentRepos` and gets a 404 for one that has been collected — which is the
+   * DISTINCTION the old fixture could not express, because anonymously the two
+   * are the same 401.
+   */
+  function flyLike(presentRepos: string[]) {
     return vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
       const url = new URL(String(rawUrl));
-      if (url.pathname === '/token') {
-        const scope = url.searchParams.get('scope') ?? '';
-        return publicRepos.some((repo) => scope.includes(repo))
-          ? json(200, { token: 'anon-pull-token' })
-          : json(401, { errors: [{ code: 'UNAUTHORIZED', message: 'authentication required' }] });
-      }
+      const repository = /^\/v2\/(.+)\/manifests\//.exec(url.pathname)?.[1] ?? '';
       const auth = (init?.headers as Record<string, string> | undefined)?.['authorization'];
-      return auth
+      if (!auth) return json(401, {}, { 'www-authenticate': FLY_BASIC_CHALLENGE });
+      if (!auth.startsWith('Basic ')) {
+        return json(401, {}, { 'www-authenticate': FLY_BASIC_CHALLENGE });
+      }
+      return presentRepos.includes(repository)
         ? json(200, {}, { 'docker-content-digest': 'sha256:9f2c1ab4' })
-        : json(401, {}, { 'www-authenticate': FLY_CHALLENGE });
+        : json(404, { errors: [{ code: 'MANIFEST_UNKNOWN' }] });
     });
   }
 
@@ -610,16 +778,13 @@ describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and 
 
   it('answers `unpullable` naming the INDEXER reference — §5.2 GC is the likeliest cause', async () => {
     // The garbage-collected mirror, caught. `absent` is exactly what a registry
-    // says about a digest it has cleaned up.
+    // says about a digest it has cleaned up — and it says it ONLY to a caller it
+    // has authenticated. This is the assertion the pre-MOTIR-3606 probe could
+    // not make honestly: anonymously, a collected mirror and an intact one are
+    // the same 401.
     stubIndexEnv(INDEXER_IMAGE);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (rawUrl: string): Promise<Response> => {
-        const url = new URL(String(rawUrl));
-        if (url.pathname === '/token') return json(200, { token: 'anon-pull-token' });
-        return json(404, { errors: [{ code: 'MANIFEST_UNKNOWN' }] });
-      }),
-    );
+    const fetchSpy = flyLike([]); // the repository is gone
+    vi.stubGlobal('fetch', fetchSpy);
 
     const verdict = await verifyIndexFleetBootable();
 
@@ -630,6 +795,52 @@ describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and 
     expect((verdict as { reference: string }).reference).not.toBe(PUBLIC_IMAGE);
     expect((verdict as { detail: string }).detail).toContain('registry.fly.io');
     expect((verdict as { detail: string }).detail).toContain('absent');
+    // The verdict came from an AUTHENTICATED read. Without the credential there
+    // is no 404 to see, so there is no `absent` to report.
+    const auths = fetchSpy.mock.calls.map(
+      (c) => (c[1]?.headers as Record<string, string> | undefined)?.['authorization'],
+    );
+    expect(auths.some((a) => a?.startsWith('Basic '))).toBe(true);
+  });
+
+  it('is BOOTABLE against the real Basic-auth registry — the 23-day false alarm, gone', async () => {
+    // ⚠️ THE REGRESSION THIS CARD EXISTS FOR (MOTIR-3606). With the corrected
+    // fixture and the shipped probe as it stood on 2026-08-26, this call
+    // returned `unpullable` — every night, for 23 nights, about an image that
+    // was serving 200s to anyone holding the org token the whole time.
+    stubIndexEnv(INDEXER_IMAGE);
+    vi.stubGlobal('fetch', flyLike(['motir-ci-fleet/motir-indexer']));
+
+    await expect(verifyIndexFleetBootable()).resolves.toEqual({
+      verdict: 'bootable',
+      reference: INDEXER_IMAGE,
+      digest: 'sha256:9f2c1ab4',
+    });
+  });
+
+  it('is INDETERMINATE, not `unpullable`, when the fleet credential cannot be read', async () => {
+    // The credential resolver reads `flyFleetConfig()`, which throws on a
+    // deployment missing the fleet's token — and a probe with no credential for a
+    // Basic registry knows NOTHING about the image. Saying so is the only honest
+    // verdict, and it is deliberately not loud: an operator paged about an image
+    // the probe never asked about is the false alarm that trains them to ignore
+    // the row.
+    //
+    // `MOTIR_INDEXER_IMAGE` alone is not enough to reach the probe at all
+    // (`indexFleetConfig()` demands the fleet too), so the token is stubbed
+    // present for config and the resolver is starved by pointing the image at a
+    // registry it has no credential for.
+    stubIndexEnv('registry.example.invalid/motir/indexer@sha256:' + 'a'.repeat(64));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(401, {}, { 'www-authenticate': FLY_BASIC_CHALLENGE })),
+    );
+
+    const verdict = await verifyIndexFleetBootable();
+
+    expect(verdict.verdict).toBe('indeterminate');
+    expect((verdict as { detail: string }).detail).toContain('basic');
+    expect((verdict as { detail: string }).detail).toContain('no credential is configured');
   });
 
   it('answers `indeterminate` — NOT `unpullable` — when the registry cannot be reached', async () => {
@@ -664,8 +875,11 @@ describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and 
     expect(verdict.verdict).toBe('not_applicable');
     expect(fetchSpy).not.toHaveBeenCalled();
     // And the RUNNER path on the very same deployment is unaffected — the two
-    // verdicts are independent, which is the whole point of splitting them.
-    vi.stubGlobal('fetch', flyLike([]));
+    // verdicts are independent, which is the whole point of splitting them. It
+    // is probed with the GHCR fixture, because the runner's image IS on GHCR;
+    // pointing the Fly fixture at it would assert the wrong wire shape, which is
+    // the mistake MOTIR-3606 was made of.
+    vi.stubGlobal('fetch', vi.fn(ghcrLike([])));
     await expect(verifyFleetBootable()).resolves.toMatchObject({ verdict: 'unpullable' });
   });
 

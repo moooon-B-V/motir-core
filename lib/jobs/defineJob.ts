@@ -10,6 +10,7 @@ import { parseIdempotencyTemplate } from './engine/idempotency';
 import { parseDebounce, type DebounceOption } from './engine/debounce';
 import { routedToEngine } from './engine/cutover';
 import { jobRunsService } from '@/lib/services/jobRunsService';
+import { alertTerminalJobFailure } from '@/lib/monitoring/jobFailureAlert';
 import type { JobEventName } from './types';
 import type { JobRunFailure } from '@/lib/dto/jobs';
 import type { Prisma } from '@/generated/prisma/client';
@@ -394,6 +395,19 @@ export function defineJob<N extends JobEventName>(
     // contract — see `ledgerCorrelationId`. On a cron both sides key on the run
     // id, because the failure payload's nested event carries no id at all.
     const eventId = ledgerCorrelationId(cron !== undefined, original.id, args.event.data.run_id);
+    // ⚠️ OUTSIDE the `step.run`, and for the reason this whole hook exists
+    // (MOTIR-3606). A step is memoized and re-scheduled by the executor; the
+    // alert is a synchronous, best-effort notification that must fire on the one
+    // pass through this handler, not be replayed or deferred. It cannot throw,
+    // so it cannot cost the dead-letter write its own turn.
+    alertTerminalJobFailure({
+      functionId: id,
+      eventName,
+      workspaceId: payload.workspaceId ?? null,
+      attempts: maxRetries + 1,
+      engine: 'inngest',
+      error: args.error,
+    });
     await args.step.run('job-run:dead-letter', () =>
       jobRunsService.recordTerminalFailure({
         functionId: id,

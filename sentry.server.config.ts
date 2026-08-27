@@ -11,29 +11,18 @@
 // asserts it, because "we tried it once and nothing happened" is not a
 // property — it is an anecdote.
 import * as Sentry from '@sentry/nextjs';
-import {
-  MONITORING_TRACES_SAMPLE_RATE,
-  serverMonitoringEnvironment,
-  serverSentryDsn,
-} from '@/lib/monitoring/config';
-import { dropExpectedDomainErrors } from '@/lib/monitoring/expectedDomainErrors';
+import { serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 
-const dsn = serverSentryDsn();
-
-if (dsn) {
-  Sentry.init({
-    dsn,
-    environment: serverMonitoringEnvironment(),
-    tracesSampleRate: MONITORING_TRACES_SAMPLE_RATE,
-    // Expected typed domain 4xx are the product refusing on purpose, not
-    // faults — see the module this comes from for why the discriminator is the
-    // shipped status map and not an error-shape heuristic.
-    beforeSend: dropExpectedDomainErrors,
-    // No request bodies, no headers, no cookies, no IP. An error report is a
-    // subset of what the database already holds ONLY if we keep it that way,
-    // and `sendDefaultPii` is the switch that decides. MOTIR-1161's transfer
-    // basis (DPF + SCCs) was recorded for error payloads, not for session
-    // cookies.
-    sendDefaultPii: false,
-  });
-}
+// ⚠️ THE OPTIONS MOVED, THE GATE DID NOT (MOTIR-3606). `serverSentryInitOptions()`
+// returns null when there is no DSN, so this file still calls `init` exactly
+// when it used to and never otherwise — which is what
+// `tests/monitoring/sentry-init-gate.test.ts` asserts. What changed is that a
+// SECOND Node process now needs the same options: the job WORKER
+// (`scripts/worker.ts`) is a plain Node bundle that never runs
+// `instrumentation.ts`, so every scheduled job in production was failing with no
+// error monitoring behind it at all. Two Node runtimes reading one options
+// builder is not the shared helper the gate test's header declines — that one is
+// about the EDGE runtime, which resolves `@sentry/nextjs` to a different build
+// and genuinely cannot share this.
+const options = serverSentryInitOptions();
+if (options) Sentry.init(options);
