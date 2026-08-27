@@ -396,9 +396,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   link_pull_request: {
     summary:
       'Declare which work item a pull request belongs to — call it right after opening one. It ' +
-      'MOVES the link rather than adding one, and works before any webhook delivery has arrived.',
+      'writes both the singular link a card carries, which MOVES, and a delivery row, which ADDS — ' +
+      'and works before any webhook delivery has arrived.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'f64db8a521b8',
+    // Re-pinned for MOTIR-3721: the description said a pull request "cannot point at two"
+    // work items, which the delivery table falsified when MOTIR-3658 shipped the dual write.
+    descriptionFingerprint: '438b537d98d0',
   },
   get_work_item: {
     // Re-pinned for MOTIR-3096, summary UNCHANGED and deliberately so: the tool

@@ -1151,22 +1151,33 @@ only thing available and is a reasonable one. What changed is which mechanism is
 **primary**: the link is a stored fact and the sync prefers it, so a merge moves
 the card whether or not any title ever named it.
 
-⚠️ **It MOVES the link; it does not add one.** A work item's pull-request link is
-a **single FK** (`github_pull_request.work_item_id`), so a second call naming a
-DIFFERENT work item takes the link off the first — the result's `movedFrom`
-names it, so a caller cannot read a move as an addition. Two pull requests may
-point at one work item; one pull request cannot point at two.
+⚠️ **It writes TWO links, and they behave differently.** The link a work item
+**carries** is a single FK (`github_pull_request.work_item_id`), so a second call
+naming a DIFFERENT work item takes the link off the first — the result's
+`movedFrom` names it, so a caller cannot read a move as an addition. The same
+call ALSO inserts a row in `work_item_delivery`, a join table recording every
+`(work item, pull request)` pair, which one pull request may fill for **several**
+work items — the direction the FK cannot express, and the one a `motir auto` or
+parent run actually produces. The Development panel lists the union of both.
 
-> **⚠️ That last clause is a property of the FK, and it is being retired**
-> (Story MOTIR-3655, ADR `docs/decisions/work-item-delivery-links.md`). The call
-> now ALSO writes a row in `work_item_delivery`, a join table that records every
-> `(work item, pull request)` pair — so one pull request delivering several cards
-> is already recorded, which is what a `motir auto` run actually does. The
-> paragraph above still describes what a CALLER observes, because the completion
-> gate and the status sync still read the FK; **MOTIR-3659 moves those readers to
-> the table, and it is the card that rewrites this paragraph and the tool's own
-> description to say ADDS.** Until then the two are written together and only the
-> column is read.
+⚠️ **The completion gate and the status sync still read the SINGULAR link**, so
+the FK is the one that decides today. That has a consequence worth stating
+plainly, because getting it wrong is silent:
+
+> **ONE pull request delivering a parent and its children is linked to the
+> PARENT, once.** Link the children instead and each call walks the link off the
+> last; the merge closes only whichever card it happened to end on, and every
+> sibling is stranded at `implemented`. The merge cascades DOWN from the parent
+> on its own (`childStatusCascadeService`). The `movedFrom` in the FIRST call's
+> result — naming the parent — is the tell that this has started.
+
+**MOTIR-3721** moves `countOtherOpenByWorkItem`,
+`listCompletionFactsByWorkItem` and `findBySessionBranch` onto the delivery
+table and drops the two scalars; the paragraph above is what changes when it
+lands. (It supersedes an earlier note here naming MOTIR-3659 as that owner —
+MOTIR-3659 shipped the delivery-set gate but deliberately left the readers on
+the column, so that the question had one source while both were written. See
+ADR `docs/decisions/work-item-delivery-links.md` Q2.)
 
 ⚠️ **It works BEFORE any webhook delivery** — that is the case it exists for. The
 detail page's "+ Link pull request" picker can only choose a pull request Motir
