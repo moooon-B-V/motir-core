@@ -1,0 +1,3513 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Motir Account › Data &amp; privacy (Story 8.4 · MOTIR-3680) — data export ·
+      account deletion
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the account-settings `Data & privacy` pane —
+      Story 8.4 (MOTIR-657), subtask MOTIR-3680. GATES MOTIR-1136 (the
+      data-subject-request handling the Privacy Policy already promises).
+
+      GROUNDED IN SHIPPED REALITY (verified, rung 2 — see design-notes.md
+      "Data & privacy" §, which carries the per-claim table):
+        • Area shell (rail + identity header + grouped nav + Card panes) is
+          copied 1:1 from two-factor.mock.html / account-settings.mock.html. The
+          rail gains a FOURTH group, `data`, ordered LAST — that row is the
+          access path and the only door to this pane.
+        • The DANGER ZONE treatment (2px --el-danger border, --el-danger heading,
+          type-to-confirm modal) is the SHIPPED
+          app/(authed)/settings/workspace/_components/DangerZoneCard.tsx, mirrored
+          rather than reinvented.
+        • THE EXPORT IS DELIVERED IN THIS PANE, NOT BY EMAIL, because a private
+          object is served through an authenticated route that 302s to a
+          presigned URL minted per request with a 300 s TTL
+          (`signedDownloadUrl`, lib/blob/uploader.ts; docs/decisions/
+          attachment-access-control.md §5). A five-minute URL cannot be emailed.
+        • THE LEDGER'S THREE GROUPS ARE THE PRIVACY POLICY'S OWN DECISIONS.
+          content/legal/privacy.md §6 already says public contributions are
+          ANONYMISED rather than deleted, that billing records are kept ~7 years
+          under Dutch law, and that erasure happens within 30 days. The
+          confirmation copy states those, and promises nothing past them.
+        • THE BLOCK IS THE ORG, NOT THE WORKSPACE. `assertNotLastOwner`
+          (lib/services/organizationsService.ts) refuses to remove or demote the
+          last org OWNER; `removeMemberInTx` only stops the last workspace MEMBER
+          from LEAVING, and any member may delete a workspace. So a sole org
+          owner is BLOCKED (panel 4, with the way out drawn) and sole workspace
+          membership is a CHOICE listed in the ledger (panel 3).
+        • THE GRACE PERIOD follows the product's own doctrine:
+          docs/decisions/code-graph-index-fleet.md §14.3 — "a grace period the
+          user cannot reach is not a grace period". Signing in IS a reachable
+          undo, so the window is real; hence the app-wide banner in panel 5.
+
+      Colour via --el-* only (never Tier-0 --color-*); shape via element-semantic
+      tokens (--radius-*/--spacing-*/--height-*/--shadow-*), never raw
+      rounded-*/p-*/h-*. Token block, dark block and icon defs copied 1:1 from
+      two-factor.mock.html; the seven extra icons are emitted from
+      lucide-react's own __iconNode rather than drawn by hand.
+
+      Panels:
+        1 The pane at rest — the two cards, and the rail row that is the door
+        2 The export — preparing · ready · failed, and what the reader receives
+        3 The deletion confirmation — the deleted / anonymised / kept ledger
+        4 BLOCKED — sole owner of a shared organization, with the way out drawn
+        5 Scheduled — the 30-day grace period, and the two places it is cancelled
+        6 Dark parity — the pane at rest
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ════════════════════════════════════════════════════════════════════
+         Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from
+         account-settings.mock.html (app/globals.css, light).
+         ════════════════════════════════════════════════════════════════════ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans-source: 'Inter';
+        --font-serif-source: 'Source Serif 4';
+        --font-mono-source: 'JetBrains Mono';
+        --font-sans:
+          var(--font-sans-source), ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, sans-serif;
+        --font-serif: var(--font-serif-source), Georgia, serif;
+        --font-mono: var(--font-mono-source), ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+
+        --spacing-sm: 8px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        /* Tier 3 — element tokens (components consume ONLY these) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — the review page only) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 92ch;
+        line-height: 1.5;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        max-width: 1080px;
+        line-height: 1.5;
+      }
+      .panel-label b {
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ── account-settings AREA shell (copied from account-settings.mock.html) ── */
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .shell {
+        display: flex;
+        min-height: 640px;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .me .av {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .me .meta {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .me .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .me .em {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .nav-row.soon {
+        cursor: default;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon:hover {
+        background: transparent;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon .ni {
+        color: var(--el-text-faint);
+      }
+      .soon-chip {
+        margin-left: auto;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+      }
+
+      /* content + cards */
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        margin-bottom: 20px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+        max-width: 82ch;
+        line-height: 1.55;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: 680px;
+      }
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        max-width: 54ch;
+        line-height: 1.5;
+      }
+      .card-body {
+        padding: 4px var(--spacing-card-padding) 8px;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic-sm {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── Settings row grammar (label/desc left, control right) ───────────── */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow.tall {
+        align-items: center;
+      }
+      .srow .sl {
+        min-width: 0;
+      }
+      .srow .sl .name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .sl .desc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+        line-height: 1.45;
+        max-width: 46ch;
+      }
+      .srow .sc {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .srow .sc .val {
+        font-size: 14px;
+        color: var(--el-text);
+      }
+
+      /* value + inline edit field */
+      .editfield {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        min-width: 240px;
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .input.focused {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .input.err {
+        border-color: var(--el-danger);
+      }
+      .input input,
+      .input .ival {
+        flex: 1;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .input .eye {
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .input .eye svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+
+      /* avatar block (Avatar.tsx — circular; image OR initials) */
+      .avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text-inverted);
+        background: var(--el-text);
+        overflow: hidden;
+      }
+      .avatar.photo {
+        background: radial-gradient(120% 120% at 30% 25%, #ffd9a8 0%, #f48fb1 42%, #7b6ce5 100%);
+      }
+      .avatar.lg {
+        width: 64px;
+        height: 64px;
+      }
+
+      /* ── Buttons (Button.tsx) ────────────────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        font-size: 12.5px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .btn-danger-ghost {
+        background: transparent;
+        color: var(--el-danger);
+      }
+      .btn-danger-ghost:hover {
+        background: var(--el-tint-rose);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      .btn .spin {
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        border: 2px solid color-mix(in srgb, var(--el-accent-text) 45%, transparent);
+        border-top-color: var(--el-accent-text);
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Pill (Pill.tsx) — tinted bg + AA --el-text-strong (finding #35) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-warn {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-warn svg {
+        color: var(--el-warning);
+      }
+      .pill-mint {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-mint svg {
+        color: var(--el-success);
+      }
+
+      /* callout (inline notice — same as account-settings.mock.html) */
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .callout .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-info);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .callout.warn {
+        background: var(--el-tint-peach);
+      }
+      .callout.warn .ic {
+        color: var(--el-warning);
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+      }
+      .callout.danger .ic {
+        color: var(--el-danger);
+      }
+
+      /* field-level error text + box (FormField error variants) */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .field .helper {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .field .err-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--el-danger);
+      }
+      .field .err-text svg {
+        width: 13px;
+        height: 13px;
+      }
+      .err-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: var(--el-tint-rose);
+        border-radius: var(--radius-input);
+        padding: 9px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        line-height: 1.45;
+      }
+      .err-box svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+
+      /* ── Modal (Modal.tsx — Radix Dialog panel + overlay) ────────────────── */
+      .mstage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 40px 16px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .overlay-tint {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: var(--radius-card);
+      }
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal-desc {
+        margin: 4px 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .modal-head {
+        margin-bottom: var(--spacing-md);
+        padding-right: 28px;
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+      }
+      .modal-close svg {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .modal-foot {
+        margin-top: 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .modal .input {
+        min-width: 0;
+        width: 100%;
+      }
+
+      /* ── Toast (Toast.tsx — success variant) ─────────────────────────────── */
+      .toast {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 340px;
+        max-width: calc(100% - 32px);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .toast.info {
+        border-color: var(--el-info);
+      }
+      .toast .t-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast.info .t-ic {
+        color: var(--el-info);
+      }
+      .toast .t-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast .t-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .toast .t-desc {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.4;
+      }
+      .toast .t-close {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .toast .t-close svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── Skeleton (loading) ──────────────────────────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-badge);
+        height: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .sk.av {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+      }
+      .sk::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          color-mix(in srgb, var(--el-page-bg) 60%, transparent),
+          transparent
+        );
+        animation: shimmer 1.3s infinite;
+      }
+      @keyframes shimmer {
+        to {
+          transform: translateX(100%);
+        }
+      }
+
+      /* Five tokens the profile mock's block does not carry, copied 1:1 from
+         packages/design-system/theme.css (lines 231-233, 2835, 2842-2843) —
+         needed because this asset also draws the `(auth)` frame and a focus
+         ring. Same values, same Tier-0 sources; nothing invented. */
+      :root {
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         2FA-specific vocabulary (Story 8.11 · MOTIR-1216). Everything above is
+         copied 1:1 from profile.mock.html / account-settings.mock.html; only
+         the blocks below are new, and each names the shipped primitive it is a
+         mock of.
+         ════════════════════════════════════════════════════════════════════ */
+
+      /* Switch (components/ui/Switch.tsx) — copied from account-settings.mock.html */
+      .sw {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        cursor: pointer;
+      }
+      .sw .kn {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+      }
+      .sw.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .sw.on .kn {
+        transform: translateX(16px);
+        background: var(--el-accent-text);
+      }
+      .sw.dis {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      /* A METHOD row — a `.srow` carrying a leading status glyph. The glyph is
+         the row's state at a glance; the Pill beside the name carries it in
+         words, because a colour is not a label. */
+      .mrow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .mrow:last-child {
+        border-bottom: 0;
+      }
+      .mrow .mi {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .mrow .mi svg {
+        width: 18px;
+        height: 18px;
+      }
+      .mrow.is-on .mi {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .mrow .ml {
+        flex: 1;
+        min-width: 0;
+      }
+      .mrow .ml .name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .mrow .ml .desc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        line-height: 1.45;
+        max-width: 52ch;
+      }
+      .mrow .mc {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* The recovery-code counter — a big number the reader can read from the
+         other side of the room, because "2 of 10 left" is the sentence this
+         card exists to say. */
+      .counter {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+      }
+      .counter .n {
+        font-family: var(--font-mono);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .counter .of {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .counter.low .n {
+        color: var(--el-warning);
+      }
+      .counter.none .n {
+        color: var(--el-danger);
+      }
+
+      /* The shown-once code grid (RecoveryCodes) — mono, two columns, tabular. */
+      .codes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 16px 18px;
+      }
+      .codes code {
+        font-family: var(--font-mono);
+        font-size: 13.5px;
+        letter-spacing: 0.02em;
+        color: var(--el-text);
+      }
+      .codes code.used {
+        color: var(--el-text-faint);
+        text-decoration: line-through;
+      }
+
+      /* The TOTP enrol pairing block — QR beside the manual key, because a
+         desktop authenticator cannot scan a screen it is running on. */
+      .pair {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .qr {
+        flex: none;
+        width: 148px;
+        height: 148px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        padding: 10px;
+      }
+      .qr svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        shape-rendering: crispEdges;
+      }
+      .pair .pside {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .keyrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 9px 10px 9px 12px;
+      }
+      .keyrow code {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .icon-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* The 6-digit code field — one box per digit is the mirror-product shape
+         (GitHub / Google / Atlassian all use it) and it is what makes a paste of
+         "314159" land one character per box. */
+      .otp {
+        display: flex;
+        gap: 8px;
+      }
+      .otp .d {
+        width: 46px;
+        height: 54px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .otp .d.empty {
+        color: var(--el-text-faint);
+      }
+      .otp .d.caret {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .otp.err .d {
+        border-color: var(--el-danger);
+      }
+
+      /* A trusted-device row (the "don't ask again" grants, revocable). */
+      .drow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .drow:last-child {
+        border-bottom: 0;
+      }
+      .drow .di {
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .drow .di svg {
+        width: 17px;
+        height: 17px;
+      }
+      .drow .dl {
+        flex: 1;
+        min-width: 0;
+      }
+      .drow .dn {
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .drow .dm {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+
+      /* An empty-state block — the pane before anything is enrolled. */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+        padding: 26px 24px 30px;
+      }
+      .empty .eic {
+        width: 44px;
+        height: 44px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .empty .eic svg {
+        width: 21px;
+        height: 21px;
+      }
+      .empty h4 {
+        margin: 2px 0 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+      }
+
+      /* The step rail inside the enrol modal (1 → 2), so the reader knows how
+         much is left before they commit to scanning anything. */
+      .steps {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .steps .s {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .steps .s .num {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .steps .s.now .num {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .steps .s.now {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .steps .bar {
+        flex: 1;
+        height: 1px;
+        background: var(--el-border);
+      }
+
+      /* A checkbox row (components/ui/Checkbox.tsx) — the trust-this-device
+         opt-in. */
+      .cbrow {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .cbrow .cb {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+      }
+      .cbrow .cb svg {
+        width: 12px;
+        height: 12px;
+      }
+      .cbrow .cb.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbrow .cbl {
+        font-size: 13.5px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .cbrow .cbh {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── The (auth) route-group frame, for the challenge panels ──────────── */
+      .authwash {
+        background: var(--el-auth-wash);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 36px 24px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        position: relative;
+      }
+      .authcard {
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 36px 40px;
+      }
+      .ac-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 26px;
+        color: var(--el-text);
+      }
+      .ac-brand .wm {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .ac-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+      .ac-head h1 {
+        font-family: var(--font-serif);
+        font-size: 32px;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .ac-head p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .ac-body {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .ac-foot {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .altbtn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 11px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        background: transparent;
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .altbtn:hover {
+        background: var(--el-surface);
+      }
+      .altbtn svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .altbtn .sub {
+        display: block;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+      .as-user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        padding: 0 var(--spacing-input-x);
+      }
+      .as-user svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .as-user span {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Pill, lavender tone — the PRIMARY-method marker. A different tint slot
+         from the mint "On" and the peach "Lower security" so the three chips on
+         one card are distinguishable without reading them (CLAUDE.md: reach for
+         a different --el-tint-*, never a new hue). */
+      .pill-lav {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-sky {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill-danger svg {
+        color: var(--el-danger);
+      }
+
+      /* ── Mock-only nested-theme re-emit (the appearance.mock.html fix) ─────
+         The Tier-3 --el-* tokens are declared on :root as var(--color-*), and a
+         custom property's var() is substituted where it is DECLARED — so a
+         nested [data-theme='dark'] flips the Tier-0 --color-* under it while
+         every --el-* keeps the LIGHT value it computed at :root and inherits
+         down unchanged. This board puts data-theme on a nested .stage so one
+         page can show both themes, so it has to re-emit the Tier-3 block scoped
+         to the attribute. Same right-hand sides, no new token.
+
+         ⚠️ MEASURED, not assumed, and it is why this block exists at all:
+         profile.mock.html's "Dark parity" panel does NOT render dark —
+         getComputedStyle on its dark .stage returns --el-page-bg: #ffffff. In
+         the real app data-theme sits on <html>, so none of this is needed there.
+         ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      /* ══════════════════════════════════════════════════════════════════
+         ADDITIONS for the Data & privacy pane (MOTIR-3680). Everything above
+         is copied 1:1 from two-factor.mock.html / profile.mock.html. Colour
+         via --el-* only; shape via the element-semantic tokens.
+         ══════════════════════════════════════════════════════════════════ */
+
+      /* The danger zone — the SHIPPED treatment, mirrored from
+         app/(authed)/settings/workspace/_components/DangerZoneCard.tsx:
+         `className="border-2 border-(--el-danger)"` + a header in --el-danger.
+         --el-danger as a heading colour is legal (it is the hue, not
+         --el-danger-text, which is ink FOR a danger fill and renders
+         white-on-white on a surface). */
+      .card.danger {
+        border: 2px solid var(--el-danger);
+      }
+      .card.danger .card-head h3 {
+        color: var(--el-danger);
+      }
+      /* ⚠️ --el-danger AS TEXT is 4.51:1 on the light page and 4.25:1 on the
+         dark one — it clears AA for normal text in light and MISSES it in dark,
+         and the base dark block does not flip --color-destructive. So the
+         heading drops to --el-text in dark (17.4:1) and the danger signal is
+         carried by the 2px border and the trash glyph, which need only the 3:1
+         graphics bar and clear it at 4.25. Measured, both themes, in the sweep
+         reproduced in design-notes.md — not eyeballed. */
+      [data-theme='dark'] .card.danger .card-head h3 {
+        color: var(--el-text);
+      }
+
+      /* the delivered export file */
+      .filerow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+      }
+      .filerow .fi {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .filerow .fi svg {
+        width: 17px;
+        height: 17px;
+      }
+      .filerow .fn,
+      .filerow .fs,
+      .sched .st,
+      .sched .sd,
+      .blockrow .bn,
+      .blockrow .bd {
+        display: block;
+      }
+      .filerow .fm {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .filerow .fn {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .filerow .fs {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .filerow.pending .fi {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
+      .filerow.failed .fi {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+
+      /* the impact ledger — deleted / anonymised / kept */
+      .ledger {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .igrp {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        overflow: hidden;
+      }
+      .igrp .ih {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .igrp .ih .why {
+        margin-left: auto;
+        font-weight: 400;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .irow {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+      }
+      .irow + .irow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .irow .ii {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-xs);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .irow .ii svg {
+        width: 13px;
+        height: 13px;
+      }
+      .irow .il {
+        min-width: 0;
+        flex: 1;
+      }
+      .irow .il {
+        display: flex;
+        flex-direction: column;
+      }
+      .irow .it {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .irow .idesc {
+        display: block;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        margin-top: 2px;
+      }
+      .irow .ic-n {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        padding-top: 2px;
+      }
+
+      /* the scheduled-deletion state */
+      .sched {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: var(--spacing-card-padding);
+      }
+      .sched .si {
+        flex: none;
+        width: 38px;
+        height: 38px;
+        border-radius: 9999px;
+        background: var(--el-tint-peach);
+        color: var(--el-warning);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .sched .si svg {
+        width: 19px;
+        height: 19px;
+      }
+      .sched .sm {
+        flex: 1;
+        min-width: 0;
+      }
+      .sched .st {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .sched .sd {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 3px;
+        line-height: 1.5;
+      }
+      .daysleft {
+        font-family: var(--font-mono);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+
+      /* the app-wide banner — the grace period has to be reachable from
+         outside this pane, or it is not a grace period the reader can use */
+      .appbanner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 16px;
+        background: var(--el-tint-peach);
+        border-bottom: 1px solid var(--el-border);
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+      }
+      .appbanner svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      .appbanner .ab-cta {
+        margin-left: auto;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+
+      /* a blocked row inside the danger card — the way OUT, drawn */
+      .blockrow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+      }
+      .blockrow .bi {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-xs);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .blockrow .bi svg {
+        width: 15px;
+        height: 15px;
+      }
+      .blockrow .bl {
+        flex: 1;
+        min-width: 0;
+      }
+      .blockrow .bn {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .blockrow .bd {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* a compact definition line under a card head */
+      .factline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        padding: 0 var(--spacing-card-padding) var(--spacing-card-padding);
+      }
+      .factline .f {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .factline .f b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* the SHIPPED danger button — Button variant="danger" is
+         `bg-(--el-danger) text-(--el-danger-text)`, and --el-danger-text is
+         legal here precisely because it sits ON the danger fill. That pairing
+         is the only place the token is correct (it is white on a surface). */
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+        border-color: var(--el-danger);
+      }
+
+      /* The confirm dialog at its REAL shipped ceiling, not expanded to fit.
+         `contentVariants` is `flex max-h-[90vh] flex-col overflow-hidden`, and
+         `Modal.Body` is `flex min-h-0 flex-1 flex-col overflow-y-auto` — so the
+         body scrolls and the head and footer are pinned by the flex column, not
+         by a bespoke sticky rule. 691px is 90vh of the 768px laptop floor;
+         32rem is the shipped `size="lg"` width. Drawing it any taller would
+         show a dialog the product cannot render. */
+      .modal.confirm {
+        max-width: 32rem;
+        height: 691px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .modal.confirm .modal-head {
+        padding: var(--spacing-card-padding) var(--spacing-card-padding) 0;
+        margin-bottom: var(--spacing-md);
+      }
+      .modal.confirm .modal-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 var(--spacing-card-padding) var(--spacing-card-padding);
+      }
+      .modal.confirm .modal-foot {
+        margin-top: 0;
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .scroll-hint {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.03em;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+        text-align: center;
+      }
+      .modal-body.at-end {
+        justify-content: flex-end;
+      }
+
+      /* ⚠️ AA FIX, and it departs from the shell this asset otherwise copies
+         1:1. `.me .em` is --el-text-muted (#787671) in every sibling settings
+         asset, which measures 4.17:1 on --el-sidebar-bg (#f6f5f4) and misses
+         the 4.5:1 bar for 11px text. --el-text-secondary clears it at ~6.2:1.
+         The six siblings that carry the original are a pre-existing defect
+         filed as its own bug, NOT silently half-fixed here. */
+      .me .em {
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>Account › Data &amp; privacy — export your data · delete your account</h1>
+      <p>
+        Story 8.4 (MOTIR-657) · MOTIR-3680. The self-service surface the Privacy Policy already
+        promises:
+        <b
+          >&ldquo;In your account settings you can export your personal data and request deletion of
+          your account, without asking anyone.&rdquo;</b
+        >
+        This asset draws the pane that sentence describes, and answers the three questions the code
+        card cannot answer for itself — what an export IS and how the reader receives it, what
+        deletion does to things the reader does not solely own, and whether it is immediate. Six
+        panels: at rest · export states · the confirmation ledger · blocked · scheduled · dark.
+        <b>Gates MOTIR-1136.</b>
+      </p>
+    </div>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
+          />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-camera"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
+          />
+          <circle cx="12" cy="13" r="3" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-alert-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+        <g
+          id="i-google"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v8" />
+          <path d="M8 12h8" />
+        </g>
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <g
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-smartphone"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+          <path d="M12 18h.01" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-download"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M12 15V3" />
+        </g>
+        <g
+          id="i-refresh"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-alert-triangle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-monitor"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="3" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-wave"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 12c2.5-6 5-6 7.5 0s5 6 7.5 0" />
+          <path d="M2 17c2.5-6 5-6 7.5 0s5 6 7.5 0" />
+        </g>
+        <g
+          id="i-database"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+          <path d="M3 12A9 3 0 0 0 21 12" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </g>
+        <g
+          id="i-message-square"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+          />
+        </g>
+        <g
+          id="i-receipt"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 17V7" />
+          <path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8" />
+          <path
+            d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+          />
+        </g>
+        <g
+          id="i-square-kanban"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M8 7v7" />
+          <path d="M12 7v4" />
+          <path d="M16 7v9" />
+        </g>
+        <g
+          id="i-building-2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 12h4" />
+          <path d="M10 8h4" />
+          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+          <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+          <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+        </g>
+        <g
+          id="i-hourglass"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 22h14" />
+          <path d="M5 2h14" />
+          <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+          <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+        </g>
+        <g
+          id="i-user-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line />
+          <line />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ═══ PANEL 1 — the pane at rest, and THE DOOR ════════════════════════ -->
+    <div class="panel-label">
+      PANEL 1 · <b>/settings/account/data — the pane at rest, and the access path.</b> The rail
+      gains a FOURTH group, <b>Data</b>, holding one entry — drawn active here, and it is the only
+      door to this surface. It is last on purpose: an irreversible account action does not belong
+      second in a list under Profile. Two cards, in the order a reader should meet them — the one
+      that gives you a copy, then the one that ends the account.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"
+                  ><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span
+                >
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
+                  ><span class="nl">Two-factor authentication</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+              <!-- THE ACCESS PATH. A FOURTH group, ordered LAST, holding one new
+                   entry. `ACCOUNT_SETTINGS_NAV_GROUP_ORDER` renders the groups in
+                   array order, so appending `data` puts this row at the BOTTOM of
+                   the rail — where every mirror product puts the irreversible
+                   account action, and where an entry appended to `general` could
+                   not have gone (it would land second overall, directly under
+                   Profile). This row is the only door to the pane. -->
+              <div class="grp">
+                <div class="grp-label">Data</div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg></span
+                  ><span class="nl">Data &amp; privacy</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Data &amp; privacy</h2>
+              <p class="sub">
+                Take a copy of your data, or close your account for good. Both are yours to do here,
+                without asking anyone.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Export your data</h3>
+                    <p class="hsub">
+                      A copy of everything in your account, in a format you can read and load
+                      somewhere else. This is your right of access and your right to portability —
+                      one file serves both.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Your profile and account</div>
+                      <div class="desc">
+                        Name, email, avatar, language and appearance preferences, sign-in methods,
+                        the sessions and API tokens you hold (their names and scopes — never their
+                        secrets).
+                      </div>
+                    </div>
+                    <div class="sc"><span class="val">JSON</span></div>
+                  </div>
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Your workspaces and projects</div>
+                      <div class="desc">
+                        Every workspace you are a member of, with its projects, work items,
+                        comments, sprints, boards and saved filters — as far as your access reaches.
+                      </div>
+                    </div>
+                    <div class="sc"><span class="val">JSON</span></div>
+                  </div>
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Your files</div>
+                      <div class="desc">
+                        Attachments and images you uploaded, under their original names, in a
+                        <code>files/</code> folder the JSON points into.
+                      </div>
+                    </div>
+                    <div class="sc"><span class="val">as uploaded</span></div>
+                  </div>
+                </div>
+                <div class="factline">
+                  <span class="f"
+                    >Format <b>JSON + your files, in one .zip</b> — structured, commonly used and
+                    machine-readable, which is what lets one export answer both rights</span
+                  >
+                  <span class="f">Answered within <b>one month</b>, usually within minutes</span>
+                </div>
+                <div class="card-body" style="border-top: 1px solid var(--el-border-soft)">
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Request an export</div>
+                      <div class="desc">
+                        Motir builds the file in the background and emails you when it is ready.
+                      </div>
+                    </div>
+                    <div class="sc">
+                      <button class="btn btn-secondary btn-sm">
+                        <svg viewBox="0 0 24 24"><use href="#i-download" /></svg>Request export
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card danger">
+                <div class="card-head">
+                  <div>
+                    <h3>Delete your account</h3>
+                    <p class="hsub">
+                      Closing your account starts a 30-day countdown. Until it runs out you can sign
+                      in and stop it; after that the erasure cannot be undone.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Delete account</div>
+                      <div class="desc">
+                        Motir will show you exactly what is deleted, what is anonymised and what it
+                        has to keep, before you confirm.
+                      </div>
+                    </div>
+                    <div class="sc">
+                      <button class="btn btn-danger btn-sm">
+                        <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Delete account
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="callout">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-mail" /></svg
+                ></span>
+                <p>
+                  This pane is not the only route. Anything the product cannot do for you — a
+                  correction, a restriction, an objection, or a question about any of it — goes to
+                  <b>privacy@motir.co</b>, which the Privacy Policy publishes and a person answers.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 2 — the export's four states ══════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 2 · <b>The export, all four states.</b> Requested → preparing → ready → failed, drawn as
+      the card body changes. The <b>ready</b> state is the one the card asked for: what the reader
+      RECEIVES is a file in this pane, not a spinner and not a link in an email. The reason is
+      measured, not stylistic — a private object is served through the authenticated content route,
+      which 302s to a presigned URL minted per request with a <b>300 s</b> TTL
+      (<code>signedDownloadUrl</code>, <code>lib/blob/uploader.ts</code>). A URL that dies in five
+      minutes cannot be emailed to somebody, so
+      <b>the email carries the news and this pane carries the file.</b>
+    </div>
+    <div class="panel">
+      <div class="pair">
+        <div class="pside">
+          <div class="stage" style="padding: 20px; background: var(--el-page-bg)">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Export your data</h3>
+                  <p class="hsub">Preparing — started 2 minutes ago.</p>
+                </div>
+                <span class="pill pill-sky"
+                  ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>In progress</span
+                >
+              </div>
+              <div class="card-body">
+                <div class="filerow pending">
+                  <span class="fi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-hourglass" /></svg
+                  ></span>
+                  <span class="fm">
+                    <span class="fn">motir-export-2026-08-27.zip</span>
+                    <span class="fs"
+                      >Collecting 12 projects and 1,483 work items. We&rsquo;ll email
+                      zhuyue@motir.co when it&rsquo;s ready — you can close this page.</span
+                    >
+                  </span>
+                  <button class="btn btn-secondary btn-sm" disabled>Request export</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pside">
+          <div class="stage" style="padding: 20px; background: var(--el-page-bg)">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Export your data</h3>
+                  <p class="hsub">Ready — built 12 minutes ago.</p>
+                </div>
+                <span class="pill pill-mint"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Ready</span
+                >
+              </div>
+              <div class="card-body">
+                <div class="filerow">
+                  <span class="fi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-download" /></svg
+                  ></span>
+                  <span class="fm">
+                    <span class="fn">motir-export-2026-08-27.zip</span>
+                    <span class="fs">18.4 MB · JSON + 213 files · available until 3 September</span>
+                  </span>
+                  <button class="btn btn-primary btn-sm">
+                    <svg viewBox="0 0 24 24"><use href="#i-download" /></svg>Download
+                  </button>
+                </div>
+                <div class="callout" style="margin-top: 12px">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                  ></span>
+                  <p>
+                    Each Download makes a fresh, private link that expires after five minutes, so
+                    the file cannot be shared by forwarding a URL. Request it again any time — the
+                    copy above is kept for seven days.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="height: 18px"></div>
+      <div class="stage" style="padding: 20px; background: var(--el-page-bg)">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Export your data</h3>
+              <p class="hsub">Something went wrong while building your export.</p>
+            </div>
+            <span class="pill pill-danger"
+              ><svg viewBox="0 0 24 24"><use href="#i-alert-circle" /></svg>Failed</span
+            >
+          </div>
+          <div class="card-body">
+            <div class="filerow failed">
+              <span class="fi"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert-circle" /></svg
+              ></span>
+              <span class="fm">
+                <span class="fn">motir-export-2026-08-27.zip</span>
+                <span class="fs"
+                  >Stopped after 4 minutes. Nothing was sent, and nothing in your account changed.
+                  Try again, or write to privacy@motir.co and a person will build it for you.</span
+                >
+              </span>
+              <button class="btn btn-secondary btn-sm">
+                <svg viewBox="0 0 24 24"><use href="#i-refresh" /></svg>Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 3 — the confirmation, and the ledger ══════════════════════ -->
+    <div class="panel-label">
+      PANEL 3 · <b>The confirmation — the decision this card exists to make.</b> The dialog is a
+      LEDGER before it is a confirm box: three groups, each with the reason it belongs there.
+      <b>Deleted</b> is what you solely own. <b>Anonymised</b> is the case the Privacy Policy has
+      already decided — a contribution to someone else&rsquo;s conversation is not yours alone to
+      erase, so your name goes and the thread stays. <b>Kept</b> is the part a confirmation must
+      never promise away: invoices outlive an erasure because Dutch tax law requires them to. Drawn
+      at the shipped ceiling — <code>max-h-[90vh]</code> (<b>691 px</b> on the 1366&times;768
+      floor), <code>size="lg"</code>, <code>Modal.Body</code> scrolling with the head and footer
+      pinned by the flex column — so the ledger is CUT OFF at the fold on the left, which is what
+      the product actually renders. That cut is a feature: the type-to-confirm field sits at the
+      BOTTOM of the scroll, so the button cannot be reached without travelling past the facts.
+    </div>
+    <div class="panel">
+      <div class="pair">
+        <div class="pside">
+          <p class="scroll-hint">AS IT OPENS — the ledger continues below the fold</p>
+          <div class="mstage" style="padding: 18px 12px">
+            <div class="overlay-tint"></div>
+            <div class="modal confirm" role="dialog" aria-labelledby="del-t">
+              <button class="modal-close" aria-label="Close">
+                <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+              </button>
+              <div class="modal-head">
+                <div style="display: flex; align-items: flex-start; gap: 12px">
+                  <span
+                    style="
+                      flex: none;
+                      width: 36px;
+                      height: 36px;
+                      border-radius: 9999px;
+                      background: var(--el-tint-rose);
+                      color: var(--el-danger);
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                    "
+                    ><svg viewBox="0 0 24 24" style="width: 18px; height: 18px">
+                      <use href="#i-alert-triangle" /></svg
+                  ></span>
+                  <div>
+                    <h2 class="modal-title">Delete your Motir account?</h2>
+                    <p class="modal-desc">
+                      Exactly what happens to everything attached to zhuyue@motir.co. Some of it
+                      belongs to other people; some of it Motir is required to keep.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-body">
+                <div class="ledger">
+                  <div class="igrp">
+                    <div class="ih">
+                      <svg
+                        viewBox="0 0 24 24"
+                        style="width: 14px; height: 14px; color: var(--el-danger)"
+                      >
+                        <use href="#i-trash" />
+                      </svg>
+                      Deleted
+                      <span class="why">Yours alone</span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Your profile and how you sign in</span>
+                        <span class="idesc"
+                          >Name, email, avatar, preferences, passkeys, two-factor, API tokens.</span
+                        >
+                      </span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Workspaces where you are the only member</span>
+                        <span class="idesc"
+                          >Personal · moooon labs. Nobody else can open these, so they go with you.
+                          To keep one, invite somebody to it first.</span
+                        >
+                      </span>
+                      <span class="ic-n">2</span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-square-kanban" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">The work inside them</span>
+                        <span class="idesc">12 projects, with their attachments and history.</span>
+                      </span>
+                      <span class="ic-n">1,483</span>
+                    </div>
+                  </div>
+                  <div class="igrp">
+                    <div class="ih">
+                      <svg
+                        viewBox="0 0 24 24"
+                        style="width: 14px; height: 14px; color: var(--el-info)"
+                      >
+                        <use href="#i-user-x" />
+                      </svg>
+                      Anonymised, not deleted
+                      <span class="why">Part of someone else&rsquo;s project</span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-message-square" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Comments in projects other people share</span>
+                        <span class="idesc"
+                          >Your name comes off; the comment stays, because it is part of a
+                          conversation others took part in.</span
+                        >
+                      </span>
+                      <span class="ic-n">214</span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-square-kanban" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Work items you reported or were assigned there</span>
+                        <span class="idesc"
+                          >The item stays with its project; the attribution goes.</span
+                        >
+                      </span>
+                      <span class="ic-n">96</span>
+                    </div>
+                  </div>
+                  <div class="igrp">
+                    <div class="ih">
+                      <svg
+                        viewBox="0 0 24 24"
+                        style="width: 14px; height: 14px; color: var(--el-warning)"
+                      >
+                        <use href="#i-receipt" />
+                      </svg>
+                      Kept
+                      <span class="why">Required by law</span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-receipt" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Invoices and tax records</span>
+                        <span class="idesc"
+                          >For as long as Dutch tax law requires — generally seven years. Erasure
+                          does not reach a record we are obliged to hold.</span
+                        >
+                      </span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Backups, until they rotate</span>
+                        <span class="idesc"
+                          >Overwritten on their own schedule, and never restored to active
+                          use.</span
+                        >
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="callout warn">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                  ></span>
+                  <p>
+                    <b>Nothing is erased today.</b> Your account closes now and is erased on
+                    <b>26 September 2026</b>. Sign in before then and the deletion is cancelled.
+                  </p>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger" disabled>Delete my account</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pside">
+          <p class="scroll-hint">SCROLLED TO THE END — the same dialog, the confirm in reach</p>
+          <div class="mstage" style="padding: 18px 12px">
+            <div class="overlay-tint"></div>
+            <div class="modal confirm" role="dialog" aria-labelledby="del-t2">
+              <button class="modal-close" aria-label="Close">
+                <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+              </button>
+              <div class="modal-head">
+                <div style="display: flex; align-items: flex-start; gap: 12px">
+                  <span
+                    style="
+                      flex: none;
+                      width: 36px;
+                      height: 36px;
+                      border-radius: 9999px;
+                      background: var(--el-tint-rose);
+                      color: var(--el-danger);
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                    "
+                    ><svg viewBox="0 0 24 24" style="width: 18px; height: 18px">
+                      <use href="#i-alert-triangle" /></svg
+                  ></span>
+                  <div>
+                    <h2 class="modal-title">Delete your Motir account?</h2>
+                    <p class="modal-desc">
+                      Exactly what happens to everything attached to zhuyue@motir.co. Some of it
+                      belongs to other people; some of it Motir is required to keep.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-body at-end">
+                <div class="ledger">
+                  <div class="igrp">
+                    <div class="ih">
+                      <svg
+                        viewBox="0 0 24 24"
+                        style="width: 14px; height: 14px; color: var(--el-warning)"
+                      >
+                        <use href="#i-receipt" />
+                      </svg>
+                      Kept
+                      <span class="why">Required by law</span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-receipt" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Invoices and tax records</span>
+                        <span class="idesc"
+                          >For as long as Dutch tax law requires — generally seven years. Erasure
+                          does not reach a record we are obliged to hold.</span
+                        >
+                      </span>
+                    </div>
+                    <div class="irow">
+                      <span class="ii"
+                        ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg
+                      ></span>
+                      <span class="il">
+                        <span class="it">Backups, until they rotate</span>
+                        <span class="idesc"
+                          >Overwritten on their own schedule, and never restored to active
+                          use.</span
+                        >
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="callout warn">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                  ></span>
+                  <p>
+                    <b>Nothing is erased today.</b> Your account closes now and is erased on
+                    <b>26 September 2026</b>. Sign in before then and the deletion is cancelled.
+                  </p>
+                </div>
+                <div class="field">
+                  <label for="del-c">Type <b>zhuyue@motir.co</b> to confirm</label>
+                  <div class="input"><span class="ival">zhuyue@motir.co</span></div>
+                  <span class="helper"
+                    >Your email address is your account&rsquo;s name — typing it is the last check
+                    that this is the account you meant.</span
+                  >
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Delete my account</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 4 — the BLOCKED case, drawn at rest ═══════════════════════ -->
+    <div class="panel-label">
+      PANEL 4 · <b>Blocked — and the block is drawn on the pane, never raised at submit.</b> The
+      card asked for &ldquo;the sole-admin workspace&rdquo; case; the shipped code says the blocking
+      tier is the <b>organization</b>, not the workspace, and the measurement changes the design.
+      <code>assertNotLastOwner</code> refuses to remove or demote the last <b>org owner</b>, so a
+      sole owner of an org with other members genuinely cannot be deleted — that is the hard block,
+      and the way out is <b>make someone else an owner</b>. A workspace behaves differently:
+      <code>LastMemberError</code> only stops the last MEMBER from LEAVING, and any member may
+      delete the workspace outright, so sole-membership is a <i>choice</i> shown in the ledger
+      (panel 3), not a blocker. Two different mechanisms, two different treatments — and the button
+      is disabled with the reason beside it, so the reader never types an email address into a form
+      that was always going to refuse.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"
+                  ><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span
+                >
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
+                  ><span class="nl">Two-factor authentication</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+              <!-- THE ACCESS PATH. A FOURTH group, ordered LAST, holding one new
+                   entry. `ACCOUNT_SETTINGS_NAV_GROUP_ORDER` renders the groups in
+                   array order, so appending `data` puts this row at the BOTTOM of
+                   the rail — where every mirror product puts the irreversible
+                   account action, and where an entry appended to `general` could
+                   not have gone (it would land second overall, directly under
+                   Profile). This row is the only door to the pane. -->
+              <div class="grp">
+                <div class="grp-label">Data</div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg></span
+                  ><span class="nl">Data &amp; privacy</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Data &amp; privacy</h2>
+              <p class="sub">
+                Take a copy of your data, or close your account for good. Both are yours to do here,
+                without asking anyone.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card danger">
+                <div class="card-head">
+                  <div>
+                    <h3>Delete your account</h3>
+                    <p class="hsub">
+                      One thing has to be handed over first. Motir will not quietly leave an
+                      organization without an owner, and it will not delete one out from under the
+                      people in it.
+                    </p>
+                  </div>
+                  <span class="pill pill-warn"
+                    ><svg viewBox="0 0 24 24"><use href="#i-alert-triangle" /></svg>Action
+                    needed</span
+                  >
+                </div>
+                <div class="card-body">
+                  <div class="callout warn">
+                    <span class="ic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-alert-triangle" /></svg
+                    ></span>
+                    <p>
+                      <b>You are the only owner of an organization that other people belong to.</b>
+                      Give someone else the owner role and this page unblocks itself — you do not
+                      need to ask anyone at Motir.
+                    </p>
+                  </div>
+                  <div style="height: 12px"></div>
+                  <div class="blockrow">
+                    <span class="bi"
+                      ><svg viewBox="0 0 24 24"><use href="#i-building-2" /></svg
+                    ></span>
+                    <span class="bl">
+                      <span class="bn">moooon</span>
+                      <span class="bd">6 members · you are the only owner</span>
+                    </span>
+                    <button class="btn btn-secondary btn-sm">Organization &rsaquo; Members</button>
+                  </div>
+                  <div style="height: 14px"></div>
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Delete account</div>
+                      <div class="desc">
+                        Available once every organization you own has another owner.
+                      </div>
+                    </div>
+                    <div class="sc">
+                      <button class="btn btn-danger btn-sm" disabled>
+                        <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Delete account
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="callout">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                ></span>
+                <p>
+                  Workspaces are <b>not</b> a block. You are the only member of two of them, so they
+                  cannot be left behind — they are deleted with your account, and the confirmation
+                  lists them. To keep one, invite somebody to it first.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 5 — scheduled, and reachable ══════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 5 · <b>Scheduled — the grace period, and where it is cancelled.</b> The product already
+      holds the doctrine this state is built on:
+      <code>docs/decisions/code-graph-index-fleet.md</code> §14.3 says
+      <i>&ldquo;a grace period the user cannot reach is not a grace period&rdquo;</i>, and gives a
+      workspace delete none for exactly that reason. An account delete is the opposite case —
+      signing in IS a surface to undo into — so the window is real and the design has to make it
+      <b>reachable</b>. Hence two doors: this pane, and an app-wide banner on every page, because a
+      reader who changes their mind will not think to come back to Settings › Data &amp; privacy to
+      do it.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="appbanner">
+          <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+          Your account is scheduled for deletion on 26 September 2026. Everything still works until
+          then.
+          <span class="ab-cta">Cancel deletion</span>
+        </div>
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"
+                  ><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span
+                >
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
+                  ><span class="nl">Two-factor authentication</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+              <!-- THE ACCESS PATH. A FOURTH group, ordered LAST, holding one new
+                   entry. `ACCOUNT_SETTINGS_NAV_GROUP_ORDER` renders the groups in
+                   array order, so appending `data` puts this row at the BOTTOM of
+                   the rail — where every mirror product puts the irreversible
+                   account action, and where an entry appended to `general` could
+                   not have gone (it would land second overall, directly under
+                   Profile). This row is the only door to the pane. -->
+              <div class="grp">
+                <div class="grp-label">Data</div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg></span
+                  ><span class="nl">Data &amp; privacy</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Data &amp; privacy</h2>
+              <p class="sub">
+                Take a copy of your data, or close your account for good. Both are yours to do here,
+                without asking anyone.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="sched">
+                  <span class="si"
+                    ><svg viewBox="0 0 24 24"><use href="#i-hourglass" /></svg
+                  ></span>
+                  <span class="sm">
+                    <span class="st">Your account will be erased on 26 September 2026</span>
+                    <span class="sd"
+                      ><span class="daysleft">30 days left</span>. Until then nothing has changed:
+                      you are signed in, your workspaces are open, and your team sees no difference.
+                      Cancel and the countdown stops — there is no penalty and no second
+                      confirmation.</span
+                    >
+                  </span>
+                  <button class="btn btn-secondary btn-sm">Cancel deletion</button>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Export your data</h3>
+                    <p class="hsub">
+                      Still available, and worth doing now — after 26 September there is nothing
+                      left to export.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Request an export</div>
+                      <div class="desc">
+                        Motir builds the file in the background and emails you when it is ready.
+                      </div>
+                    </div>
+                    <div class="sc">
+                      <button class="btn btn-secondary btn-sm">
+                        <svg viewBox="0 0 24 24"><use href="#i-download" /></svg>Request export
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 6 — dark parity ═══════════════════════════════════════════ -->
+    <div class="panel-label">
+      PANEL 6 · <b>Dark parity.</b> The same pane at rest under <code>data-theme="dark"</code>, with
+      <code>data-appearance-scope</code> beside it so the Tier-3 <code>--el-*</code> layer is
+      re-emitted on the subtree and <code>color</code> declared ON the panel rather than inherited —
+      both are required or the headings render near-black on near-black.
+      <b>--el-danger as heading ink is the one thing to check here:</b> it measures 4.25:1 on the
+      dark page, which clears the 3:1 graphics bar but not the 4.5:1 text bar — so the danger signal
+      on this card is carried by the 2 px <b>border</b> and the trash <b>glyph</b>, and the card
+      heading is a normal <code>--el-text</code> in dark. Light keeps the red heading, where it
+      measures 4.51:1.
+    </div>
+    <div class="panel">
+      <div class="stage" data-theme="dark" data-appearance-scope style="color: var(--el-text)">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"
+                  ><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span
+                >
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
+                  ><span class="nl">Two-factor authentication</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+              <!-- THE ACCESS PATH. A FOURTH group, ordered LAST, holding one new
+                   entry. `ACCOUNT_SETTINGS_NAV_GROUP_ORDER` renders the groups in
+                   array order, so appending `data` puts this row at the BOTTOM of
+                   the rail — where every mirror product puts the irreversible
+                   account action, and where an entry appended to `general` could
+                   not have gone (it would land second overall, directly under
+                   Profile). This row is the only door to the pane. -->
+              <div class="grp">
+                <div class="grp-label">Data</div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg></span
+                  ><span class="nl">Data &amp; privacy</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Data &amp; privacy</h2>
+              <p class="sub">
+                Take a copy of your data, or close your account for good. Both are yours to do here,
+                without asking anyone.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Export your data</h3>
+                    <p class="hsub">Ready — built 12 minutes ago.</p>
+                  </div>
+                  <span class="pill pill-mint"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Ready</span
+                  >
+                </div>
+                <div class="card-body">
+                  <div class="filerow">
+                    <span class="fi"
+                      ><svg viewBox="0 0 24 24"><use href="#i-download" /></svg
+                    ></span>
+                    <span class="fm">
+                      <span class="fn">motir-export-2026-08-27.zip</span>
+                      <span class="fs"
+                        >18.4 MB · JSON + 213 files · available until 3 September</span
+                      >
+                    </span>
+                    <button class="btn btn-primary btn-sm">
+                      <svg viewBox="0 0 24 24"><use href="#i-download" /></svg>Download
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card danger">
+                <div class="card-head">
+                  <div>
+                    <h3>Delete your account</h3>
+                    <p class="hsub">
+                      Closing your account starts a 30-day countdown. Until it runs out you can sign
+                      in and stop it; after that the erasure cannot be undone.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Delete account</div>
+                      <div class="desc">
+                        Motir will show you exactly what is deleted, what is anonymised and what it
+                        has to keep, before you confirm.
+                      </div>
+                    </div>
+                    <div class="sc">
+                      <button class="btn btn-danger btn-sm">
+                        <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Delete account
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
