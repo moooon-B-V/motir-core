@@ -1,6 +1,45 @@
 # May one pull request complete more than one work item?
 
-**Status:** accepted · **Date:** 2026-08-26 · **Card:** MOTIR-3527 (story MOTIR-3525)
+**Status:** ⚠️ **SUPERSEDED** by [`work-item-delivery-links.md`](./work-item-delivery-links.md)
+(MOTIR-3656, story MOTIR-3655, 2026-08-27) · **Originally accepted:** 2026-08-26 ·
+**Card:** MOTIR-3527 (story MOTIR-3525)
+
+> ## ⚠️ SUPERSEDED — Q1, Q3 and Q4 were REVERSED
+>
+> **The answer is now a join table**, `WorkItemDelivery(workItemId,
+githubPullRequestId, repoId, workspaceId)`, many-to-many, retiring BOTH
+> `work_item.session_branch` and `github_pull_request.work_item_id`. Read
+> [`work-item-delivery-links.md`](./work-item-delivery-links.md) for the decision;
+> its **Superseding MOTIR-3527** section argues the reversal against this file
+> point by point.
+>
+> **Two premises below are false**, and neither is considered here:
+>
+> 1. _"Many cards, one pull request is already expressible"_ via `session_branch`
+>    — expressible only in that the CARDS close. The pull request itself keeps
+>    `work_item_id: null`, so a `motir auto` pull request appears on **no card's
+>    Development rail**.
+> 2. **A branch name is treated as an identifier throughout, and it is not.**
+>    `findBySessionBranch` matches `where: { sessionBranch, workspaceId }` —
+>    workspace-scoped — while the runbook reuses ONE branch name across every
+>    repository a card touches. The two-repositories-one-branch-name case is never
+>    examined, and it is the exact case MOTIR-3655 was filed for.
+>
+> **And the _Consequences_ section below names the defect that reversed this**, in
+> its own words: _"link the second pull request BEFORE the first one merges, or
+> the first merge closes the card."_ That residual hazard is MOTIR-3655's subject,
+> and `deferred_incomplete_delivery_set` replaces the ordering discipline with a
+> gate.
+>
+> **What SURVIVES and is carried forward unchanged:** the link is a per-card ACT
+> and never an inference from a diff (which is why `link_pull_request` stays
+> single-key and the title parse is retired by MOTIR-3672); and **Q2 stands
+> entirely** — there is ONE kind of link, it is a completion claim, and there is no
+> `contributes-to` relation. The successor has no relation column.
+>
+> **The text below is preserved as written.** Nothing in it is edited, because a
+> superseded decision that has been quietly corrected cannot be audited against the
+> one that replaced it.
 
 > **On the file name.** `docs/decisions/` is slug-named, not numbered — forty-eight
 > files, none carrying an ordinal — so this takes the next free SLUG, checked
