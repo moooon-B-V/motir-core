@@ -256,8 +256,18 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     expect(archivedItem.archivedAt, 'the archive actually landed').not.toBeNull();
     // …and it is REVERSIBLE by the same actor, which is the property the key is
     // named for and the reason a member may hold it.
-    const restored = await page.request.post(`/api/work-items/${t.itemId}/restore`, { data: {} });
+    //
+    // ⚠️ THE INTERNAL RESTORE IS `DELETE …/archive`, NOT `POST …/restore`. The
+    // `/restore` PATH is the `/api/v1` shape (`app/api/v1/work-items/[key]/restore`);
+    // the internal API puts both directions on ONE route — POST archives, DELETE
+    // unarchives (`app/api/work-items/[id]/archive/route.ts`, and
+    // `permission-inventory.md`'s row says `DELETE/POST` for exactly this
+    // reason). A `POST …/restore` here is a 404 from a route that does not
+    // exist, which reads as a permission failure and is not one.
+    const restored = await page.request.delete(`/api/work-items/${t.itemId}/archive`);
     expect(restored.status(), 'work_item:archive — and restores').toBeLessThan(300);
+    const restoredItem = await db.workItem.findUniqueOrThrow({ where: { id: t.itemId } });
+    expect(restoredItem.archivedAt, 'the restore actually landed').toBeNull();
 
     // 2 · The keys the decision record takes from them, each asserted on its
     // AUTHORITATIVE POST-CONDITION rather than on a status alone.

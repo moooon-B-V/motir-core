@@ -220,7 +220,37 @@ test('@smoke Story 2.8: admin deletes a subtree from detail → cascade gone, an
   await expect(page.getByText('Doomed story', { exact: true })).toHaveCount(0);
 });
 
-test('Story 2.8: a non-admin member sees Archive but NOT Delete (the manage gate)', async ({
+// ⚠️ AMENDED BY MOTIR-3629, and this is a BEHAVIOUR CHANGE rather than a test
+// repair — read it before "fixing" it back.
+//
+// The title was "a non-admin member sees Archive but NOT Delete (the manage
+// gate)", and line 245 asserted the Archive row VISIBLE for this actor, on the
+// reasoning its own comment gave: "the reversible Archive (canEdit on `open`)".
+// That reasoning was right about the AFFORDANCE and wrong about the product:
+// the row was drawn on `work_item:edit`, and `archiveWorkItem` asserted
+// `work_item:delete`, which this actor does not hold. **The button 403'd on
+// click.** The spec was pinning the presence of a broken control.
+//
+// MOTIR-3629 splits the key so the affordance can tell the truth, and the truth
+// for THIS actor is that the row goes away. Note who they are: `seed()` gives
+// them a WORKSPACE membership and no `ProjectMembership`, so they resolve
+// through `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS` — the "workspace member with
+// no project membership" of `member-facing-permissions.md` §2, not a project
+// member. A project MEMBER does gain `work_item:archive` and keeps this row;
+// `tests/e2e/member-facing-permissions.spec.ts` asserts that, and
+// `tests/e2e/archive-flow.spec.ts` covers the editor's archive → restore round
+// trip unchanged.
+//
+// The exclusion is argued in `docs/decisions/token-permissions.md` §10(c). The
+// short form: §2 keeps this set to acts that are not acts of ownership, and
+// taking a row out of every active view for the whole team is one — reversible
+// or not. The load-bearing constraint is `levelGrants`, which names only
+// `work_item:edit` / `comment:add` / `attachment:create`: putting archive in the
+// implicit set WITHOUT a branch there would leave an outsider on a `limited`
+// project able to archive while unable to edit, which is worse than either
+// answer. A branch there is a per-level policy change `lib/permissions/resolve.ts`
+// reserves for its own card, and this card asked about ROLES.
+test('Story 2.8: a non-project-member sees neither Archive nor Delete (MOTIR-3629)', async ({
   page,
 }) => {
   const s = await seed(page);
@@ -238,10 +268,16 @@ test('Story 2.8: a non-admin member sees Archive but NOT Delete (the manage gate
   await page.getByRole('button', { name: `Actions for ${s.epic.identifier}` }).click();
   const menu = page.getByRole('menu', { name: `Actions for ${s.epic.identifier}` });
 
-  // Delete is the project-admin MANAGE capability — a plain member never sees the
-  // row (hidden, not shown-disabled). The reversible Archive (canEdit on `open`)
-  // and Copy link remain available.
+  // Delete is `work_item:delete` — a plain member never sees the row (hidden, not
+  // shown-disabled), and that half is unchanged.
   await expect(menu.getByRole('menuitem', { name: /^Delete/ })).toHaveCount(0);
-  await expect(menu.getByRole('menuitem', { name: 'Archive' })).toBeVisible();
+  // Archive is `work_item:archive` now, which the implicit workspace-member grant
+  // does not carry — so the row is ABSENT rather than present-and-403ing. Same
+  // treatment as Delete: hidden, never shown-disabled.
+  await expect(menu.getByRole('menuitem', { name: 'Archive' })).toHaveCount(0);
+  // …while everything `work_item:edit` actually buys them is untouched. This is
+  // what makes the removal above a NARROWING of one affordance and not a
+  // regression in what an outsider on an `open` project can do.
+  await expect(menu.getByRole('menuitem', { name: 'Edit details' })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
 });

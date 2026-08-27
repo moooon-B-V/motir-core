@@ -226,6 +226,19 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
  * stranger to the project making the board's contents disappear is an act of
  * ownership even though it is reversible. Editing a field they can already read
  * is not the same act, which is why `work_item:edit` is here and this is not.
+ *
+ * ⚠️ IT IS A REAL LOSS FOR THAT ACTOR, and `levelGrants` is why the alternative
+ * is worse rather than merely different. The shipped ⋯ menu drew them an Archive
+ * row on `work_item:edit` while `archiveWorkItem` refused it on
+ * `work_item:delete`, so the control was on screen and 403'd —
+ * `tests/e2e/work-item-delete.spec.ts` asserted its presence, and MOTIR-3629
+ * inverts that assertion on the record. Adding the key HERE without also naming
+ * it in `levelGrants` (`lib/permissions/resolve.ts`) would leave an outsider on a
+ * `limited` project able to archive while unable to edit, because that function
+ * names only `work_item:edit` / `comment:add` / `attachment:create` and every
+ * other key takes the default arm. Adding the branch is a per-level policy change
+ * that file reserves for its own card. Full argument:
+ * `docs/decisions/token-permissions.md` §10(c).
  */
 export const IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS: ReadonlySet<PermissionKey> =
   new Set<PermissionKey>([

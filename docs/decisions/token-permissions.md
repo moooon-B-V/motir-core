@@ -479,6 +479,33 @@ read-only actor removes nothing), and neither does the implicit workspace-member
 grant: taking a row out of every active view for the whole team is an act of
 ownership on a project nobody put you on, reversible or not.
 
+**⚠️ The implicit-grant exclusion is the one that COSTS something, so its
+argument is written out rather than assumed.** That actor — a workspace member
+with no `ProjectMembership`, on an `open` project — holds `work_item:edit`, and
+the shipped ⋯ menu drew them an Archive row on that key while the service refused
+it on `work_item:delete`. So they are LOSING a control that was on screen (and
+403ing) rather than one that worked, and `tests/e2e/work-item-delete.spec.ts` was
+asserting its presence with a reasoned comment. Three things decide it:
+
+- **§2's rule is about acts of OWNERSHIP, and archiving is one.** Editing a field
+  changes a card; archiving takes it out of every active view for the whole team.
+- **`levelGrants` is the load-bearing constraint, and it is what makes the
+  alternative worse.** It names only `work_item:edit` / `comment:add` /
+  `attachment:create`; every other key takes the default arm. So putting
+  `work_item:archive` in the implicit set _without_ a branch there would leave an
+  outsider on a `limited` project able to ARCHIVE while unable to EDIT — a state
+  neither answer wants. Adding that branch is a per-level policy change
+  `lib/permissions/resolve.ts` explicitly reserves for a card that argues for it,
+  and `tests/permissions/accessParity.test.ts` proves the current no-branch
+  property over the whole 64-row space.
+- **This card asked about ROLES.** It named `member`, and the implicit grant is
+  not a role. Narrowing is the reversible direction for a permission change; a
+  later card that wants an outsider to archive on an `open` project can add the
+  key AND the `levelGrants` branch together, which is the only coherent way to add
+  it.
+
+Recorded here rather than left to be re-derived from an absent test assertion.
+
 **(d) The device grant is NOT widened.** `CLI_TOKEN_GRANT` covers exactly what the
 CLI CALLS, and the CLI calls neither archive tool. The workflow that wants archive
 routinely — the re-plan procedure's _archive the superseded nodes_ — runs under a
