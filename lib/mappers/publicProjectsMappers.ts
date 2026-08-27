@@ -302,5 +302,8 @@ export function toPublicChangelogEntryDto(row: PublicChangelogRow): PublicChange
       row.epicIdentifier && row.epicTitle
         ? { identifier: row.epicIdentifier, title: row.epicTitle }
         : null,
+    // Only when the read projected it — `undefined` keeps the key off the page's
+    // JSON entirely rather than shipping an explicit null nobody reads.
+    ...(row.descriptionMd === undefined ? {} : { descriptionMd: row.descriptionMd }),
   };
 }

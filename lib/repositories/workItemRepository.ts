@@ -484,6 +484,18 @@ export interface PublicChangelogRow {
   /** The ancestor epic, for the entry's chip — null when there is none. */
   epicIdentifier: string | null;
   epicTitle: string | null;
+  /**
+   * The item's body, and ONLY when the caller asked for it
+   * (`options.withDescription`) — the FEED does, the page does not.
+   *
+   * The page's projection stays minimal on purpose: the public boundary here is
+   * structural, and a column the read never SELECTs cannot be leaked by a
+   * mapper. A feed reader, though, shows the body rather than a bare title, so
+   * the one consumer that needs it asks for it. This exposes no new class of
+   * data — `PublicWorkItemDetailDto` already publishes `descriptionMd` on the
+   * public item page; it is the same public field through a second door.
+   */
+  descriptionMd?: string | null;
 }
 
 /**
@@ -3328,11 +3340,15 @@ export const workItemRepository = {
   async findPublicChangelogEntries(
     projectId: string,
     workspaceId: string,
-    options: { take: number; cursor?: PublicChangelogCursor },
+    options: { take: number; cursor?: PublicChangelogCursor; withDescription?: boolean },
     excludeIds: readonly string[],
     tx?: Prisma.TransactionClient,
   ): Promise<PublicChangelogRow[]> {
     const client = tx ?? db;
+    // Projected only for the feed (see `PublicChangelogRow.descriptionMd`).
+    const descriptionSql = options.withDescription
+      ? Prisma.sql`w."descriptionMd" AS "descriptionMd",`
+      : Prisma.empty;
     const cursorPred = options.cursor
       ? Prisma.sql`AND (
             s."shipped_at" < ${options.cursor.shippedAt}
@@ -3369,6 +3385,7 @@ export const workItemRepository = {
          GROUP BY r."workItemId"
       )
       SELECT w."id",
+             ${descriptionSql}
              w."kind"::text     AS "kind",
              w."key",
              w."identifier",

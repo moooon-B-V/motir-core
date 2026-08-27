@@ -280,6 +280,15 @@ export interface PublicChangelogEntryDto {
   shippedAt: string;
   /** The ancestor epic's chip, or null when the entry has no epic ancestor. */
   epic: { identifier: string; title: string } | null;
+  /**
+   * The item's body — present ONLY on the FEED read, absent on the page's.
+   *
+   * A feed reader shows a body rather than a bare title, so the one consumer
+   * that needs it asks for it and the page's projection stays minimal. It is
+   * the same public field the public item page already publishes, through a
+   * second door — not a new exposure.
+   */
+  descriptionMd?: string | null;
 }
 
 /**

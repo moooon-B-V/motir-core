@@ -54,7 +54,14 @@ export async function generateMetadata({
   return {
     title,
     description,
-    alternates: { canonical: url },
+    alternates: {
+      canonical: url,
+      // Feed AUTODISCOVERY (Subtask 8.9.6): the `<link rel="alternate"
+      // type="application/atom+xml">` a browser extension or a reader's
+      // "subscribe to this page" looks for. Without it a person has to know the
+      // URL, which defeats the point of the anonymous tier.
+      types: { 'application/atom+xml': [{ url: `${url}.xml`, title }] },
+    },
     openGraph: { type: 'website', title, description, url, siteName: 'Motir' },
     twitter: { card: 'summary_large_image', title, description },
   };

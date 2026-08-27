@@ -56,6 +56,7 @@ import type {
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   PublicBoardDto,
+  PublicChangelogEntryDto,
   PublicChangelogPageDto,
   PublicDuplicateMatchesDto,
   PublicProjectOverviewDto,
@@ -119,6 +120,13 @@ const PUBLIC_WORK_ITEMS_PAGE_SIZE = 30;
  * with a date heading, not a row in a scan.
  */
 const PUBLIC_CHANGELOG_PAGE_SIZE = 20;
+/**
+ * How many entries the Atom FEED carries (Story 8.9 · Subtask 8.9.6 · ADR §5).
+ * Larger than a page and NOT paginated: feed readers do not page, and a feed
+ * that grows without bound is one that eventually times out. A reader who wants
+ * the whole history follows `<link rel="alternate">` to the page.
+ */
+const PUBLIC_CHANGELOG_FEED_SIZE = 50;
 
 /**
  * The public TREE level page size (Subtask 6.14.10) — how many siblings one lazy
@@ -657,6 +665,40 @@ export const publicProjectsService = {
         hasMore && last
           ? encodeChangelogCursor({ shippedAt: last.shippedAt.toISOString(), key: last.key })
           : null,
+    };
+  },
+
+  /**
+   * The changelog as a FEED (Story 8.9 · Subtask 8.9.6) — the anonymous tier.
+   *
+   * Composes the SAME read as `getChangelog`, which is what makes the feed's
+   * privacy behaviour identical to the page's by construction rather than by a
+   * second set of filters: one exclusion set, one shipped-status definition, one
+   * private-epic-row predicate. The two differ in exactly two ways, both from
+   * ADR §5 — the feed takes 50 entries in one shot rather than a page of 20,
+   * and it asks for each item's body, because a feed reader shows one.
+   */
+  async getChangelogFeed(
+    identifier: string,
+    actorUserId: string | null,
+  ): Promise<{
+    project: { identifier: string; name: string };
+    entries: PublicChangelogEntryDto[];
+  }> {
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+    const hiddenIds = await resolveHiddenIds(project, isMember);
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findPublicChangelogEntries(
+        project.id,
+        project.workspaceId,
+        { take: PUBLIC_CHANGELOG_FEED_SIZE, withDescription: true },
+        hiddenIds,
+        tx,
+      ),
+    );
+    return {
+      project: { identifier: project.identifier, name: project.name },
+      entries: rows.map(toPublicChangelogEntryDto),
     };
   },
 
