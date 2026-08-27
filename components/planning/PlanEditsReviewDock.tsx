@@ -219,10 +219,10 @@ function ProposalRow({ item }: { item: PlanReviewItemDto }) {
         >
           {item.title}
         </span>
-        <span className="text-xs text-(--el-text-muted)">{secondary}</span>
+        <span className="text-xs text-(--el-text-secondary)">{secondary}</span>
       </div>
       {item.identifier ? (
-        <span className="shrink-0 text-xs text-(--el-text-muted)">{item.identifier}</span>
+        <span className="shrink-0 text-xs text-(--el-text-secondary)">{item.identifier}</span>
       ) : null}
     </div>
   );

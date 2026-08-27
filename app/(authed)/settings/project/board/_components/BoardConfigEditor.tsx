@@ -784,7 +784,7 @@ function ColumnBody({
   return (
     <div className="flex flex-1 flex-col gap-2 px-2.5 py-3">
       {column.statuses.length === 0 ? (
-        <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-2.5 py-4 text-center text-xs text-(--el-text-muted)">
+        <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-2.5 py-4 text-center text-xs text-(--el-text-secondary)">
           {t('board.columnEmpty')}
         </p>
       ) : (
@@ -882,7 +882,20 @@ function AddStatusMenu({
             {t('board.addStatusMenuCap')}
           </span>
           {unmapped.length === 0 ? (
-            <p className="px-2 py-2.5 text-center text-[12.5px] text-(--el-text-muted)">
+            /*
+             * MOTIR-3711. The ink lint reports this line as muted-on-a-tint,
+             * inheriting `bg-(--el-surface)` from where `AddStatusMenu` is USED
+             * — inside the column `<section>`. That inheritance is wrong here:
+             * this `<p>` renders inside `Popover.Content`, which paints
+             * `bg-(--el-page-bg)` (the safe white) in ANOTHER module, so the
+             * one-hop use-site walk cannot see the surface that actually wins.
+             * Taken as written anyway: `--el-text-secondary` is 6.18-6.80:1 on
+             * all four surfaces in both themes, so it is right whichever this
+             * lands on, and over-reporting a tint is the guard's documented
+             * safe direction. Nothing here is a reason to teach the walk about
+             * portals.
+             */
+            <p className="px-2 py-2.5 text-center text-[12.5px] text-(--el-text-secondary)">
               {t('board.addStatusMenuEmpty')}
             </p>
           ) : (

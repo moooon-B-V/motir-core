@@ -44,37 +44,41 @@ import {
 // verdict is a property of the ink AND the background under it.
 //
 // ⚠️ SO THIS ARM'S GREEN IS NARROWER THAN THE FAINT ARM'S, and the difference is
-// structural, not a backlog item. `nearestSurface` walks up the JSX tree WITHIN
-// ONE FILE. An element whose background is painted by a `<Card>`, a
+// structural, not a backlog item. The remaining boundary is the CROSS-MODULE one
+// and nothing else: an element whose background is painted by a `<Card>`, a
 // `<Popover.Content>` or a layout in ANOTHER module reads as "no surface found
 // here" and the rule ABSTAINS — it does not rule the site safe, it declines to
-// rule at all. Cross-component surface inheritance is out of reach by
-// construction, so a green muted arm means "no muted ink over a tint a single
-// file could prove", never "no muted ink over a tint".
+// rule at all. Resolving that needs the import graph, which this walk does not
+// build. So a green muted arm means "no muted ink over a tint THIS MODULE can
+// prove", never "no muted ink over a tint".
 //
-// ⚠️ CORRECTED (MOTIR-3523) — "WITHIN ONE FILE" WAS NEVER THE BOUNDARY, AND
-// STATING IT AS ONE HID A DEFECT FOR THE WHOLE LIFE OF A FILE. The walk stops at
-// the root of the COMPONENT the ink is written in, which is a tighter fence than
-// the file: a file that writes the ink in a local `Th` and paints the tint on
-// the `<thead>` that USES it abstains, though both halves are in one file and
-// one AST. The operator jobs dashboard was exactly that shape — eight column
-// labels at 4.17:1, this lint green over that file since it was written.
+// ── How that boundary got to be the only one (MOTIR-3523 · MOTIR-3711) ──────
+// HISTORY, not a live caveat. This note used to draw the fence at the FILE and
+// the walk actually stopped one step short of it, at the root of the COMPONENT
+// the ink is written in: a file writing the ink in a local `Th` and painting the
+// tint on the `<thead>` that USES it abstained, with both halves in one AST.
+// Sixteen sites lived in the gap between the two fences — eight column labels at
+// 4.17:1 on the operator jobs dashboard (MOTIR-3523), and eight more across the
+// swimlane board, the filters directory, billing, the board-config editor and
+// both planning review surfaces (MOTIR-3711) — every one of them under a green
+// lint, and every reader who checked the note concluded correctly that their
+// site was out of reach.
 //
-// The distinction matters because the two boundaries have different remedies.
-// The CROSS-MODULE one really does need the import graph. The SAME-FILE one
-// needs a second walk over this AST, which `scanSource`'s `resolveUseSites`
-// option now performs and `inkContrastScan.test.ts` proves on fixtures. It is
-// OFF here, deliberately: it reports 8 further sites across 6 files, and this
-// repo has twice paid for pointing a widened ink arm at the tree in the change
-// that built it (MOTIR-2496 — two such PRs merged 37 seconds apart and their
-// composition turned `main` red). A card sweeps that population and turns this
-// on, the way MOTIR-2475 and MOTIR-2477 did for the arms already here.
+// MOTIR-3523 built the second walk (`surfacesAtUseSites`) and left it behind an
+// opt-in flag; MOTIR-3711 swept the eight sites it reported and removed the flag
+// in the same change. The split existed only to keep the sweep and the switch in
+// one pull request, which is the ordering this repo has twice paid for getting
+// wrong (MOTIR-2496 — two widened-ink PRs merged 37 seconds apart, each green on
+// its own base, their composition red). There is no longer a switch: `scanSource`
+// resolves use sites unconditionally, and `inkContrastScan.test.ts` pins what it
+// still declines to resolve — an exported component with no local use site, and a
+// nested helper, where the innermost enclosing function decides.
 //
 // The general lesson is the one worth carrying past this arm: a guard's stated
 // boundary is a claim about the guard, and it decays exactly like any other
-// claim in a comment. This one read as wider than it was, so every reader who
-// checked it concluded correctly that their site was out of reach — including
-// the reviews that looked straight at the failing header.
+// claim in a comment. This one read as wider than it was for the whole life of a
+// file — including through the reviews that looked straight at the failing
+// header.
 //
 // Two narrower edges of the same boundary, for whoever widens this later:
 //   • A CONDITIONAL background (`selected && 'bg-(--el-surface-soft)'`) reads as
@@ -90,11 +94,17 @@ import {
 //     other, and clearing the ink on that basis would be a false NEGATIVE
 //     (MOTIR-2497). Over-reporting a conditional TINT stays the safe way to be
 //     wrong; under-reporting a conditional WHITE is not.
+//   • A USE-SITE surface is taken from the caller in THIS module, one hop, and a
+//     use site whose own surface is unresolved is not chased through a second
+//     component. Where the caller hands the element to a PORTAL that repaints
+//     the surface elsewhere — `Popover.Content` is `bg-(--el-page-bg)` — the hop
+//     reports the caller's tint and is over-reporting again, on the safe side.
+//     `BoardConfigEditor.tsx`'s add-status menu is the standing instance and
+//     says so at the line (MOTIR-3711).
 // Widening the surface resolution across module boundaries needs the import
-// graph, not this walk — the CROSS-MODULE half of it does. The SAME-FILE half
-// does not, and is the correction above. (MOTIR-2489 was the card on the
-// scanner's element resolution — a different axis from this one, and closed
-// since; a citation of it as "the open card" is stale.)
+// graph, not this walk. (MOTIR-2489 was the card on the scanner's element
+// resolution — a different axis from this one, and closed since; a citation of
+// it as "the open card" is stale.)
 
 const REPO = process.cwd();
 
@@ -337,8 +347,10 @@ describe('ink-contrast lint — --el-text-faint carries no active informational 
 describe('ink-contrast lint — --el-text-muted carries no text over a TINTED surface', () => {
   it('leaves no muted violation the scanner can resolve a surface for', () => {
     // Derived over the scanned set, never compared to a frozen count: the sweep
-    // that made this pass measured 130 defects across 75 files, and writing 130
-    // down here would turn every new file into a reason to edit the assertion.
+    // that made this pass measured 130 defects across 75 files, and the one that
+    // widened it to use-site surfaces 8 more across 6 (MOTIR-3711). Writing
+    // either number down here would turn every new file into a reason to edit
+    // the assertion.
     //
     // Read the name of this test literally. It is "no violation the scanner can
     // resolve a surface for", not "no violation" — the abstention documented at
