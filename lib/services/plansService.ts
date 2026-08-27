@@ -12,7 +12,11 @@ import {
   classifyBlockerReadiness,
   type BlockerReadinessState,
 } from '@/lib/workItems/blockerReadiness';
-import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import {
+  withProjectNarrowingSuspended,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import {
   planRevisionsService,
   type PlanRevisionAgentActor,
@@ -482,6 +486,7 @@ async function runPersistGate(
   items: PlanItem[],
   ctx: ServiceContext,
   terminalStatusKeys: ReadonlySet<string>,
+  planProjectId: string,
   tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const nodes = items.map(toProposalNode);
@@ -489,6 +494,14 @@ async function runPersistGate(
   // the approve transaction opens. Unbound, every referenced work item read as
   // absent and the gate rejected the plan with `PlanRefGraphError` for parents
   // that exist.
+  //
+  // ⚠️ WHEN A `tx` IS GIVEN IT MUST HAVE THE PROJECT NARROWING LIFTED, and the
+  // caller that passes one does that (`assertProposalsPersistable`). This read
+  // asks a WORKSPACE question — "does this id name a work item in this
+  // workspace?" — and `withWorkspaceContext` binds `app.project_id`, which
+  // `work_item_project_narrow` reads. See MOTIR-3581 and the suspension's own
+  // comment; without it the two passes of this one gate disagree about what
+  // exists, and the stricter one decides.
   const referenced = collectReferencedWorkItemIds(nodes);
   const rows = tx
     ? await workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, tx)
@@ -496,9 +509,9 @@ async function runPersistGate(
         workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, t),
       );
   const liveById = new Map<string, LiveWorkItemState>(
-    rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status }]),
+    rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status, projectId: r.projectId }]),
   );
-  validatePlanProposals({ items: nodes, liveById, terminalStatusKeys });
+  validatePlanProposals({ items: nodes, liveById, terminalStatusKeys, planProjectId });
 }
 
 /**
@@ -509,11 +522,31 @@ async function runPersistGate(
  * are taken in a stable id order so two approves touching the same items queue
  * instead of deadlocking. Runs BEFORE `materialize` writes anything, so a
  * rejection leaves the tree byte-identical.
+ *
+ * ⚠️ THE LOCKS AND THE READ RUN WITH THE PROJECT NARROWING SUSPENDED (MOTIR-3581),
+ * and the two must move together. `withWorkspaceContext` binds `app.project_id`
+ * and `work_item_project_narrow` is a RESTRICTIVE FOR SELECT policy, so a
+ * cross-project row is invisible to BOTH the `SELECT … FOR UPDATE` and the
+ * resolution read — the lock returns no row and RAISES NOTHING, and the ref then
+ * resolves to nothing. Approve therefore refused every plan carrying a legal
+ * cross-project `blocked_by` with `dangling`, saying the ref "names no work item
+ * in this workspace" while the item sat one project over.
+ *
+ * ⚠️ AND THE FIX IS DELIBERATELY *NOT* "carry pass 1's resolved map in here".
+ * That reads as the smaller change and it is the wrong one: `liveById` is what
+ * step 4 takes the DONE-WORK IMMUTABILITY verdict from, and that verdict is the
+ * entire reason this pass exists under the row locks (`notes.html` #35). Reusing
+ * a pre-transaction snapshot would move it back outside them — re-opening the
+ * race `PlanTargetImmutableError` was added to close — to fix a visibility bug
+ * that has nothing to do with staleness. The narrowing is what was wrong, so the
+ * narrowing is what is lifted: this pass still reads FRESH state, under the
+ * locks, and now simply sees the same workspace pass 1 does.
  */
 async function assertProposalsPersistable(
   items: PlanItem[],
   ctx: ServiceContext,
   terminalStatusKeys: ReadonlySet<string>,
+  planProjectId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
   const targetIds = [
@@ -521,8 +554,10 @@ async function assertProposalsPersistable(
       items.filter((i) => i.op !== 'add' && i.workItemId != null).map((i) => i.workItemId!),
     ),
   ].sort();
-  for (const id of targetIds) await workItemRepository.lockById(id, tx);
-  await runPersistGate(items, ctx, terminalStatusKeys, tx);
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    for (const id of targetIds) await workItemRepository.lockById(id, tx);
+    await runPersistGate(items, ctx, terminalStatusKeys, planProjectId, tx);
+  });
 }
 
 // ── The proposed REPO PIN, resolved before the transaction (MOTIR-1884) ───────
@@ -2127,7 +2162,7 @@ export const plansService = {
     ]);
 
     try {
-      await runPersistGate(items, ctx, terminalStatusKeys);
+      await runPersistGate(items, ctx, terminalStatusKeys, plan.projectId);
       return [];
     } catch (err) {
       if (
@@ -2208,7 +2243,7 @@ export const plansService = {
     const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planItemRepository.findByPlan(planId, tx),
     );
-    await runPersistGate(preItems, ctx, terminalStatusKeys);
+    await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
 
     const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -2832,7 +2867,7 @@ export const plansService = {
       const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         planItemRepository.findByPlan(planId, tx),
       );
-      await runPersistGate(preItems, ctx, terminalStatusKeys);
+      await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
 
       // The proposed repo PINS (MOTIR-1884), normalized + validated against this
       // PROJECT's repository set. Out here because the domain read opens its own
@@ -2936,7 +2971,13 @@ export const plansService = {
             // THE GATE, under the plan lock + the targets' row locks, on the FRESH
             // proposal set — nothing has been written yet, so a rejection here rolls
             // back a transaction that touched no work-item row.
-            await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, tx);
+            await assertProposalsPersistable(
+              proposals,
+              ctx,
+              terminalStatusKeys,
+              plan.projectId,
+              tx,
+            );
             const touchedWorkItemIds = await materialize(
               proposals,
               fresh,
