@@ -1,5 +1,9 @@
-import type { Organization, Workspace } from '@/generated/prisma/client';
-import type { ErasureBlockingOrganizationDTO, ErasureWorkspaceDTO } from '@/lib/dto/accountErasure';
+import type { AccountDeletionRequest, Organization, Workspace } from '@/generated/prisma/client';
+import type {
+  AccountDeletionRequestDTO,
+  ErasureBlockingOrganizationDTO,
+  ErasureWorkspaceDTO,
+} from '@/lib/dto/accountErasure';
 
 // Prisma → DTO conversion for the account-erasure impact preview (Story 8.4 ·
 // Subtask MOTIR-3699).
@@ -28,4 +32,25 @@ export function toBlockingOrganizationDTO(
   memberCount: number,
 ): ErasureBlockingOrganizationDTO {
   return { id: organization.id, name: organization.name, memberCount };
+}
+
+/**
+ * One account-deletion request → the shape the pane and the banner render
+ * (Story 8.4 · Subtask MOTIR-3700).
+ *
+ * Drops `completedAt` and the audit columns deliberately: a reader looking at
+ * this row is either waiting out a window or has just cancelled one, and
+ * `completedAt` is the sweep's bookkeeping (MOTIR-3702). Nothing on the surface
+ * renders it, so nothing in the DTO carries it.
+ */
+export function toAccountDeletionRequestDTO(
+  request: AccountDeletionRequest,
+): AccountDeletionRequestDTO {
+  return {
+    id: request.id,
+    status: request.status,
+    requestedAt: request.requestedAt.toISOString(),
+    erasureDueAt: request.erasureDueAt.toISOString(),
+    cancelledAt: request.cancelledAt?.toISOString() ?? null,
+  };
 }

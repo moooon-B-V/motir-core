@@ -114,6 +114,62 @@ export const accountDeletionRequestRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * This user's MOST RECENT request whatever its status, LOCKED `FOR UPDATE` —
+   * the read the CANCEL path derives from (MOTIR-3700).
+   *
+   * ⚠️ WHY A SECOND LOCKING READ, AND WHY ITS PREDICATE IS `user_id` ALONE.
+   * {@link findOpenByUserIdForUpdate} filters on `status = 'scheduled'`, and
+   * under READ COMMITTED a `SELECT … FOR UPDATE` that WAITS on a concurrent
+   * writer re-evaluates its WHERE against the row version that writer left
+   * behind. So when two cancels race, the loser's status filter no longer
+   * matches the row it just waited for and the statement returns ZERO rows —
+   * *"you have nothing scheduled"*, which is indistinguishable from a reader
+   * who never asked, and which is exactly the sentence a cancel must not
+   * produce for somebody whose erasure has already COMPLETED.
+   *
+   * `user_id` is immutable, so this predicate cannot be falsified by the winner:
+   * the loser is handed the row WITH its new status and can say which of the
+   * three terminal answers applies. That is the whole reason the cancel path
+   * does not reuse the open-only read.
+   *
+   * `ORDER BY "requested_at" DESC, "id" DESC` picks the newest deterministically
+   * (`id` breaks a same-millisecond tie), and `LIMIT 1` keeps the lock to the one
+   * row the caller is about to write. History rows below it are nobody's to
+   * serialise on — a `cancelled` request is terminal and never moves again.
+   *
+   * `tx` REQUIRED: a row lock lives only for its transaction.
+   */
+  async findLatestByUserIdForUpdate(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    id: string;
+    status: AccountDeletionRequest['status'];
+    erasureDueAt: Date;
+    requestedAt: Date;
+  } | null> {
+    const rows = await tx.$queryRaw<
+      Array<{
+        id: string;
+        status: AccountDeletionRequest['status'];
+        erasureDueAt: Date;
+        requestedAt: Date;
+      }>
+    >`
+      SELECT "id",
+             "status",
+             "erasure_due_at" AS "erasureDueAt",
+             "requested_at"   AS "requestedAt"
+        FROM "account_deletion_request"
+       WHERE "user_id" = ${userId}
+       ORDER BY "requested_at" DESC, "id" DESC
+       LIMIT 1
+       FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
   /** Move one request to a terminal state (cancelled / completed). Write → `tx`
    *  required. Keyed by `id` — the caller has just locked that row. */
   async update(
