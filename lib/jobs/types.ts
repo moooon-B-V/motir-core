@@ -432,6 +432,7 @@ export interface JobEventDataMap {
    *  the ones whose producer is gone, so a dead generation can no longer pause a
    *  project's auto-plan cadence for good. Cross-tenant by design. */
   'system.abandoned-plan-sweep': SystemScheduledData;
+  'system.job-run-reap': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;

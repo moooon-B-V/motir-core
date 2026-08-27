@@ -43,6 +43,7 @@ async function seedFailedRun(workspaceId: string): Promise<void> {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'e2e-evt-failed',
+      lane: 'inngest',
       attempt: 0,
       status: 'failed',
       finishedAt: new Date(),

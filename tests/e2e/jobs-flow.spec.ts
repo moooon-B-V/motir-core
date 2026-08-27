@@ -246,6 +246,7 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
         functionId: 'email.send',
         eventName: 'email.send',
         eventId: `iso-evt-${i}`,
+        lane: 'inngest',
         attempt: 0,
         status: 'succeeded',
         finishedAt: new Date(),

@@ -2,7 +2,16 @@
 // operator dashboard (1.6.5) and any future API render — never the raw Prisma
 // `JobRun` model. Dates cross the boundary as ISO strings.
 
-export type JobRunStatus = 'running' | 'succeeded' | 'failed';
+export type JobRunStatus = 'running' | 'succeeded' | 'failed' | 'abandoned';
+
+/**
+ * WHICH ENGINE ran a job (Bug MOTIR-3683). Declared by the writer on every
+ * ledger row, so an audit never has to infer it from `eventId`'s format — an id
+ * matching neither the engine's cuid nor Inngest's ULID used to be counted as
+ * NEITHER lane, which made a whole class of row invisible to exactly the queries
+ * the Inngest migration is verified with.
+ */
+export type JobRunLane = 'inngest' | 'engine';
 
 /** A serialized failure captured when a job run ends in `failed`. */
 export interface JobRunFailure {
@@ -40,6 +49,8 @@ export interface JobRunDTO {
   functionId: string;
   eventName: string;
   eventId: string;
+  /** Which engine ran it — recorded, never inferred from `eventId`'s shape. */
+  lane: JobRunLane;
   attempt: number;
   status: JobRunStatus;
   startedAt: string;

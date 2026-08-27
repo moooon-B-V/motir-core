@@ -5,6 +5,7 @@ import type {
   JobRunDTO,
   JobRunDlqDTO,
   JobRunFailure,
+  JobRunLane,
   JobRunStatus,
 } from '@/lib/dto/jobs';
 
@@ -39,6 +40,7 @@ export function toJobRunDTO(run: JobRun, delivery: EmailDelivery | null = null):
     functionId: run.functionId,
     eventName: run.eventName,
     eventId: run.eventId,
+    lane: run.lane as JobRunLane,
     attempt: run.attempt,
     status: run.status as JobRunStatus,
     startedAt: run.startedAt.toISOString(),

@@ -3003,13 +3003,22 @@ enum SprintState {
 // success — what lets a run's summary (e.g. the attachment-GC's scanned/
 // deleted/failed counts) live on the ledger row itself, not only in Inngest.
 model JobRun {
-  id             String       @id @default(cuid())
-  workspaceId    String?      @map("workspace_id")
-  functionId     String       @map("function_id")
-  eventName      String       @map("event_name")
-  eventId        String       @map("event_id")
-  attempt        Int
-  status         JobRunStatus
+  id          String      @id @default(cuid())
+  workspaceId String?     @map("workspace_id")
+  functionId  String      @map("function_id")
+  eventName   String      @map("event_name")
+  eventId     String      @map("event_id")
+  /// WHICH ENGINE RAN THIS (Bug MOTIR-3683) — declared by the writer, never
+  /// inferred. Both lanes write this one ledger, and the lane used to be read
+  /// out of `event_id`'s FORMAT (a cuid meant the engine, a ULID meant Inngest).
+  /// That inference has a hole: an `event_id` matching neither pattern is
+  /// counted as neither lane, so it is invisible to every audit the Inngest
+  /// migration is verified with — and 30 such rows existed, written by the very
+  /// defect this column is part of fixing. A row's lane is a fact its writer
+  /// knows for certain; this is where it says so.
+  lane        JobRunLane
+  attempt     Int
+  status      JobRunStatus
   startedAt      DateTime     @default(now()) @map("started_at")
   finishedAt     DateTime?    @map("finished_at")
   durationMs     Int?         @map("duration_ms")
@@ -3026,6 +3035,10 @@ model JobRun {
   @@index([workspaceId, status, startedAt(sort: Desc)])
   @@index([eventId])
   @@index([idempotencyKey])
+  // The ABANDONED-RUN REAP's discovery read (MOTIR-3683): the oldest rows still
+  // `running`. Status-first, because `running` is a tiny minority of the table
+  // (29 of ~203 000 when the defect was measured).
+  @@index([status, startedAt])
   @@map("job_run")
 }
 
@@ -3071,8 +3084,24 @@ enum JobRunStatus {
   running
   succeeded
   failed
+  /// THE RUN NOBODY WILL EVER FINISH (Bug MOTIR-3683). A `running` row is only
+  /// honest while something is still holding it; once nothing is, `running` is
+  /// the most reassuring possible way to render a dead run, and an operator
+  /// scrolls past it. This is the terminal state the reap writes instead — a
+  /// DISTINCT member rather than `failed`, because "the handler threw" and
+  /// "nothing ever came back" are different facts and only one of them has a
+  /// stack trace to show.
+  abandoned
 
   @@map("job_run_status")
+}
+
+/// Which engine executed a run (Bug MOTIR-3683). See `JobRun.lane`.
+enum JobRunLane {
+  inngest
+  engine
+
+  @@map("job_run_lane")
 }
 
 // ───────────────────────────────────────────────────────────────────────────

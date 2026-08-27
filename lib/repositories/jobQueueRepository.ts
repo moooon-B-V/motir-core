@@ -438,6 +438,38 @@ export const jobQueueRepository = {
   },
 
   /** Count runs in a state — an operator/read surface and the tests' assertion handle. */
+  /**
+   * IS THERE STILL A LIVE QUEUE ROW BEHIND THIS LEDGER ROW? (Bug MOTIR-3683)
+   *
+   * The abandoned-run reap's liveness test. A ledger row and a queue row are
+   * joined by what `ledgerIdentity` derives: `event_id` when the run carries one,
+   * the queue row's own `id` when it does not (a cron fire). So one `eventRef`
+   * has to be matched against BOTH columns — that is the same disjunction the
+   * identity function is, read backwards.
+   *
+   * `pending` and `running` are the live states: a run sleeping at a `step.sleep`
+   * or waiting out a retry backoff is `pending` with a future `run_at`, and its
+   * ledger row is legitimately still `running`. Reaping that would close a run
+   * that is about to resume.
+   *
+   * Returns 0 for every INNGEST-lane row — those never had a queue row — which is
+   * correct rather than a gap: for that lane elapsed time is the only signal that
+   * exists, which is exactly why the reap's threshold is generous.
+   */
+  async countLiveForEventRef(
+    jobId: string,
+    eventRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.jobQueueRun.count({
+      where: {
+        jobId,
+        state: { in: ['pending', 'running'] },
+        OR: [{ eventId: eventRef }, { id: eventRef }],
+      },
+    });
+  },
+
   async countByState(state: JobRunState, tx: Prisma.TransactionClient): Promise<number> {
     return tx.jobQueueRun.count({ where: { state } });
   },

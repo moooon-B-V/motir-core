@@ -236,6 +236,54 @@ export type JobScheduleAndCatchUp =
       catchUp?: undefined;
     };
 
+/**
+ * ⚠️ THE LEDGER'S CORRELATION KEY — the whole of Bug MOTIR-3683 is in this
+ * function, so read it before changing either call site.
+ *
+ * `recordTerminalFailure` correlates a failure back to its `running` row by
+ * `(functionId, eventId)`. The run handler and `onFailure` are SEPARATE Inngest
+ * invocations that each derive that key themselves, so the two derivations must
+ * agree — and for a CRON job they did not.
+ *
+ * WHAT THE PRODUCTION LEDGER SHOWED (measured 2026-08-27, `system.daily-health-
+ * check` among four jobs): 29 rows stranded at `running`, the oldest for 25 days,
+ * each paired ~36 s later with a `failed` row for the same function whose
+ * `event_id` was the **EMPTY STRING** — matching neither the engine's cuid nor
+ * Inngest's ULID, so invisible to every lane audit this migration is verified
+ * with. One logical run, two rows, neither true on its own.
+ *
+ * TWO THINGS WERE WRONG, and fixing only the second would not have been enough:
+ *
+ *  1. **A cron's failure payload carries NO event id.** Inngest nests the
+ *     original event under `event.data.event`, and for a scheduled trigger its
+ *     `id` arrives as `''`. The run handler meanwhile had a real id to use
+ *     (`event.id`, a ULID). So the two sides were keyed on different things by
+ *     construction — no fallback can reconcile them, because the value one side
+ *     has simply does not reach the other.
+ *
+ *     **Hence `runId` for a cron, on BOTH sides.** `ctx.runId` in the handler and
+ *     `event.data.run_id` in `onFailure` are the same run's id, which is the only
+ *     identifier both invocations demonstrably hold. It costs nothing: a
+ *     scheduled run has no meaningful triggering event anyway — which is why
+ *     `eventName` is already the synthesized `scheduled.{id}` rather than a real
+ *     event name.
+ *
+ *  2. **`??` treats `''` as present.** Even on the event-triggered path, where
+ *     `original.id` IS populated (931 correlated `failed` rows say so), a nullish
+ *     fallback answers a narrower question than the caller is asking: not "is
+ *     this field set" but "is there an id here at all". An empty id is not an id.
+ *     `||` is the honest test, and it is what keeps a `''` from ever again
+ *     becoming a key that matches nothing.
+ */
+function ledgerCorrelationId(
+  isScheduled: boolean,
+  eventId: string | undefined | null,
+  runId: string,
+): string {
+  if (isScheduled) return runId;
+  return eventId || runId;
+}
+
 /** Serialize an unknown thrown value into the JobRunFailure wire shape. */
 function serializeFailure(err: unknown): JobRunFailure {
   if (err instanceof Error) {
@@ -342,13 +390,15 @@ export function defineJob<N extends JobEventName>(
     const original = args.event.data.event;
     const payload = (original.data ?? {}) as { workspaceId?: string | null };
     const eventName = cron !== undefined ? `scheduled.${id}` : (original.name ?? triggerEvent);
-    // Mirror the main handler's eventId logic so correlation lines up: prefer the
-    // event id, fall back to the run id (cron / harness events carry no id).
-    const eventId = original.id ?? args.event.data.run_id;
+    // The SAME derivation the run handler makes, which is the entire correlation
+    // contract — see `ledgerCorrelationId`. On a cron both sides key on the run
+    // id, because the failure payload's nested event carries no id at all.
+    const eventId = ledgerCorrelationId(cron !== undefined, original.id, args.event.data.run_id);
     await args.step.run('job-run:dead-letter', () =>
       jobRunsService.recordTerminalFailure({
         functionId: id,
         eventId,
+        lane: 'inngest',
         eventName,
         workspaceId: payload.workspaceId ?? null,
         failure: serializeFailure(args.error),
@@ -432,9 +482,9 @@ export function defineJob<N extends JobEventName>(
     // it an internal scheduled-timer event — so synthesize `scheduled.{id}` for
     // the ledger, making scheduled runs uniform with event-triggered ones.
     const eventName = cron !== undefined ? `scheduled.${id}` : event.name;
-    // The triggering event's id correlates the run to its event; fall back to
-    // the runId when the event carries no id (cron / test-harness events).
-    const eventId = event.id ?? ctx.runId;
+    // The triggering event's id correlates the run to its event; a SCHEDULED run
+    // keys on the run id instead, on both sides — see `ledgerCorrelationId`.
+    const eventId = ledgerCorrelationId(cron !== undefined, event.id, ctx.runId);
 
     const jobRun = await step.run('job-run:start', () =>
       jobRunsService.recordStart({
@@ -442,6 +492,9 @@ export function defineJob<N extends JobEventName>(
         functionId: id,
         eventName,
         eventId,
+        // This wrapper IS the Inngest lane — the engine writes its own rows from
+        // `lib/jobs/engine/ledger.ts`. Declared, never inferred (MOTIR-3683).
+        lane: 'inngest',
         attempt: ctx.attempt,
         idempotencyKey,
       }),
