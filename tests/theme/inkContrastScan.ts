@@ -62,21 +62,82 @@ import ts from 'typescript';
 // `--el-page-bg` one to report a tint further up. `SAFE_SURFACE_TOKENS` below
 // carries both, and `inkContrastLint.test.ts` derives that list from
 // `theme.css` so a third alias of the same colour cannot reopen it silently.
+//
+// ── …and the TINTED half had the same hole, for longer (MOTIR-3693) ─────────
+// MOTIR-2497 derived the SAFE list from the token table and left the TINTED one
+// a hand-written enumeration of three names — which is the same modelling error
+// on the arm where it fails SILENTLY. A missing safe alias over-reports and gets
+// argued with; a missing TINTED alias reports nothing at all, and an incomplete
+// enumeration's failure mode is a PASS.
+//
+// `--el-sidebar-bg` is `var(--color-surface)`, the identical `#f6f5f4` as
+// `--el-surface`, and it was not on the list: 242 sub-AA pairs across 18 design
+// assets and one component were invisible to BOTH guards for as long as the rail
+// has existed. Twelve more `--el-*` names resolve to one of the three measured
+// tints and were equally unmeasured.
+//
+// So the list below is now TOTAL over the token table rather than over the three
+// names somebody remembered, `TINTED_SURFACE_VALUES` states what "tinted" means
+// as a COLOUR, and `inkContrastLint.test.ts` reads both back from `theme.css` in
+// both directions. `inkContrastMockScan` imports the list rather than restating
+// it, so the two arms cannot disagree about which surfaces are tinted any more
+// than they can about which are white.
 
 /** The two inks under measurement, as they appear in an arbitrary-value class. */
 export const FAINT_CLASS = 'text-(--el-text-faint)';
 export const MUTED_CLASS = 'text-(--el-text-muted)';
 
 /**
+ * What "a tinted surface" IS, as a colour rather than as a name: the three
+ * `--color-*` fills MOTIR-2455 measured `--el-text-muted` at 4.12–4.34:1 on.
+ * Every `--el-*` that resolves to one of them paints the same pixels and so
+ * takes the same verdict, whatever it is called.
+ *
+ * This is the fact `TINTED_SURFACE_TOKENS` below is derived from, and the thing
+ * `inkContrastLint.test.ts` reads back out of `theme.css`. Adding a value here
+ * without re-measuring the ink on it is the one edit that would make the guard
+ * wrong rather than merely narrow.
+ */
+export const TINTED_SURFACE_VALUES: readonly string[] = [
+  'var(--color-surface)',
+  'var(--color-surface-soft)',
+  'var(--color-muted)',
+];
+
+/**
  * Backgrounds that are NOT the white page/card, on which `--el-text-muted`
  * drops below 4.5:1 (MOTIR-2455's measured table). The safe ones are
  * `SAFE_SURFACE_TOKENS` below and are deliberately absent.
+ *
+ * TOTAL over the token table, not over the surfaces anyone thought of: every
+ * `--el-*` in `theme.css` whose every declaration is one of
+ * `TINTED_SURFACE_VALUES` appears here, and `inkContrastLint.test.ts` fails if
+ * one stops doing so in either direction (MOTIR-3693). Membership is NOT
+ * filtered by whether the tree currently paints with the token — unlike the safe
+ * set below, where narrowness is the conservative direction. Here it is the
+ * opposite: an over-listed tint over-REPORTS, which this file already documents
+ * as the safe way to be wrong, while an under-listed one is a silent pass.
  */
-const TINTED_SURFACE_CLASSES = [
-  'bg-(--el-surface)',
-  'bg-(--el-surface-soft)',
-  'bg-(--el-muted)',
-] as const;
+export const TINTED_SURFACE_TOKENS: readonly string[] = [
+  '--el-archived-pill-bg',
+  '--el-card-icon-bg',
+  '--el-chart-plot',
+  '--el-chat-bubble-ai',
+  '--el-chip-bg',
+  '--el-code-bg',
+  '--el-count-bg',
+  '--el-input-disabled-bg',
+  '--el-input-readonly-bg',
+  '--el-muted',
+  '--el-option-active-bg',
+  '--el-sidebar-bg',
+  '--el-surface',
+  '--el-surface-soft',
+  '--el-switch-knob',
+  '--el-tabnav-track',
+];
+
+const TINTED_SURFACE_CLASSES = TINTED_SURFACE_TOKENS.map((token) => `bg-(${token})`);
 
 /**
  * The `--el-*` backgrounds that ARE the white page/card, where `--el-text-muted`
@@ -97,8 +158,24 @@ const TINTED_SURFACE_CLASSES = [
  * reads them back against `theme.css`: any `--el-*` used as a background that
  * also resolves to `--color-background` has to appear here, so a THIRD spelling
  * cannot reopen this hole quietly.
+ *
+ * A third spelling then did, and the derivation could not see it (MOTIR-3693):
+ * `--el-sidebar-item-bg-active` is declared across three lines, so the
+ * single-line regex that reads the token table captured
+ * `var(\n    --color-background\n  )` and compared it — unequal — to
+ * `var(--color-background)`. The check that was supposed to make the list total
+ * was itself matching on a SPELLING. The derivation now collapses whitespace
+ * before comparing, and this token is the row that proves it: the docs
+ * catalogue and the app sidebar both paint active rows with it, inside a rail
+ * the walk would otherwise have reported as the tint.
  */
-export const SAFE_SURFACE_TOKENS: readonly string[] = ['--el-card', '--el-page-bg'];
+export const SAFE_SURFACE_VALUES: readonly string[] = ['var(--color-background)'];
+
+export const SAFE_SURFACE_TOKENS: readonly string[] = [
+  '--el-card',
+  '--el-page-bg',
+  '--el-sidebar-item-bg-active',
+];
 
 const SAFE_SURFACE_CLASSES = SAFE_SURFACE_TOKENS.map((token) => `bg-(${token})`);
 
