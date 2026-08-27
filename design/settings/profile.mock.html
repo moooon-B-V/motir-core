@@ -178,6 +178,64 @@
         --el-sidebar-item-bg-hover: #eeede9;
         --el-sidebar-item-bg-active: var(--color-background);
       }
+      /* ── Mock-only nested-theme re-emit (the two-factor.mock.html / appearance.mock.html
+         pattern; MOTIR-3592) ─────────────────────────────────────────────────
+         The Tier-3 --el-* tokens are declared on :root as var(--color-*), and a
+         custom property's var() is substituted where it is DECLARED — so a nested
+         [data-theme='dark'] flips the Tier-0 --color-* under it while every --el-*
+         keeps the LIGHT value it computed at :root and merely inherits down. This
+         board puts data-theme on a nested element so one page can show both themes,
+         so it has to re-emit the Tier-3 block scoped to the attribute. Same
+         right-hand sides, no new token. In the real app data-theme sits on <html>,
+         so :root IS the themed element and none of this is needed — the shipped
+         design system spells the same fix [data-appearance-scope]
+         (packages/design-system/theme.css, MOTIR-2077).
+
+         ⚠️ PLACED BEFORE the [data-theme='dark'] block, not after it. Both
+         selectors have the same specificity, so the later one wins: appended at the
+         END of the sheet this block would clobber the concrete-hex --el-* the dark
+         block declares for dark only. Sitting here it still beats :root on any
+         element carrying data-theme, and the dark block still beats it. (var()
+         resolution is order-independent — it reads the element's computed
+         --color-*, whichever rule set it.) ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
       [data-theme='dark'] {
         color-scheme: dark;
         --color-background: #0f0f0f;
