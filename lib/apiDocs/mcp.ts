@@ -401,7 +401,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     // Re-pinned for MOTIR-3721: the description said a pull request "cannot point at two"
     // work items, which the delivery table falsified when MOTIR-3658 shipped the dual write.
-    descriptionFingerprint: '438b537d98d0',
+    descriptionFingerprint: '50b2e82bc56d',
   },
   get_work_item: {
     // Re-pinned for MOTIR-3096, summary UNCHANGED and deliberately so: the tool

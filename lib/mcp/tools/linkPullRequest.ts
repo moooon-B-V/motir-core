@@ -263,7 +263,7 @@ export function registerLinkPullRequest(
         'moment; nothing else does. The link is what the completion gate and the status sync ' +
         'read, so a merge moves the card whether or not any title ever named it. ' +
         '⚠️ IT WRITES TWO LINKS AND THEY BEHAVE DIFFERENTLY. The link a work item CARRIES is ' +
-        'SINGULAR, so calling this again naming a DIFFERENT work item takes it off the first one ' +
+        'SINGULAR, so calling this again naming a DIFFERENT work item MOVES it off the first one ' +
         '— the result says which item it was moved from. The call ALSO records the (work item, ' +
         'pull request) pair in a delivery table, and THAT one pull request may fill for several ' +
         'work items; it is what the item page’s Development panel lists. ' +
