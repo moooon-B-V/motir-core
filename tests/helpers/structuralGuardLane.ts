@@ -100,6 +100,37 @@ export const STRUCTURAL_GUARD_SPECS = [
   // which is precisely the profile this lane exists to keep out of the sharded
   // database job.
   'tests/legal/subprocessor-list-guard.test.ts',
+  // ── the 2FA-enforcement guards (Story MOTIR-1215 · MOTIR-3649) ────────────
+  // Four at once, and they were DERIVED rather than remembered — which is the
+  // whole argument for a mechanical membership predicate. Each walks the tree
+  // (`app/`, `app/api/`, `lib/`) through the shared sweeps in
+  // `tests/helpers/twoFactorGuardSweeps.ts`, so extracting those sweeps is what
+  // made them visible to this list at all: before MOTIR-3649 each guard walked
+  // `process.cwd()` inline, and nothing derived it.
+  //
+  // Their cost profile is the lane's exactly — no database, no render, one
+  // whole-tree filesystem answer — and `two-factor-api-gate` is the heaviest of
+  // the four, reading every file under `app/api/**` (199 authenticating ones)
+  // with comments stripped. `proxy-matcher` also drives `proxy()` itself, which
+  // needs `next/server` and nothing else.
+  //
+  // ⚠️ `twoFactorHasSecondFactor` carries the predicate's EQUIVALENCE tests
+  // beside its one-implementation walk. Those are pure input-space maths over
+  // `hasSecondFactor` × `toTwoFactorStatusDTO`, so they move happily with it —
+  // but note that means this lane, not the sharded run, is where the story's
+  // central predicate is asserted.
+  'tests/api/two-factor-api-gate.test.ts',
+  'tests/navigation/two-factor-gate-coverage.test.ts',
+  'tests/navigation/proxy-matcher.test.ts',
+  //
+  // ⚠️ `twoFactorPredicateOneImplementation` was SPLIT OUT of
+  // `tests/twoFactorHasSecondFactor.test.ts` to get here. That file also holds
+  // the predicate's EQUIVALENCE tests, which import the real `hasSecondFactor`
+  // and the real mapper — and the lane's purity rule refuses a member reaching
+  // `@/lib`, because a member must carry no coverage into the merged report. One
+  // file could satisfy the whole-tree rule or the purity rule, never both, so
+  // the walk moved and the equivalence tests stayed in the sharded run.
+  'tests/twoFactorPredicateOneImplementation.test.ts',
 ] as const;
 
 /**

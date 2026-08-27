@@ -1,6 +1,11 @@
-import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  segmentOf,
+  strayProxyEntries,
+  topLevelSegments as segmentsOf,
+  uncoveredProxySegments,
+} from '../helpers/twoFactorGuardSweeps';
 
 // MOTIR-3652 — the matcher was a COMMENT asking future authors to remember, and
 // thirteen of sixteen segments were never added.
@@ -41,56 +46,23 @@ const APP = join(ROOT, 'app');
  */
 const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)', '(planning)'] as const;
 
-/** True when this directory, or anything under it, serves a page. */
-function servesAPage(dir: string): boolean {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) {
-      if (servesAPage(p)) return true;
-    } else if (entry === 'page.tsx' || entry === 'page.ts') {
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
- * The top-level URL segments a route group serves. A route group (`(x)`) adds
- * no URL segment, and a `_private` folder serves nothing, so both are skipped —
- * the first is recursed into, the second ignored.
+ * ⚠️ THE SWEEPS LIVE IN `tests/helpers/twoFactorGuardSweeps.ts`, taking the app
+ * directory as a parameter, so this guard can be WATCHED FAILING over a
+ * synthetic tree — `tests/integration/twoFactorEnforcementStoryGate.test.ts`
+ * builds one whose group serves a segment the matcher never lists (MOTIR-3649).
+ * A guard nobody has watched go red is indistinguishable from one that never
+ * runs, and this file exists because that was demonstrated rather than argued.
  */
-function topLevelSegments(group: string): string[] {
-  const base = join(APP, group);
-  const out: string[] = [];
-  for (const entry of readdirSync(base)) {
-    const p = join(base, entry);
-    if (!statSync(p).isDirectory()) continue;
-    if (entry.startsWith('_')) continue;
-    if (entry.startsWith('(') && entry.endsWith(')')) {
-      // A nested route group contributes ITS children's segments, not its own.
-      out.push(...topLevelSegments(join(group, entry)));
-      continue;
-    }
-    if (servesAPage(p)) out.push(entry);
-  }
-  return [...new Set(out)].sort();
-}
-
-/** `'/items/:path*'` → `'items'`. */
-function segmentOf(matcherEntry: string): string {
-  return matcherEntry.replace(/^\//, '').split('/')[0] ?? '';
-}
+const topLevelSegments = (group: string): string[] => segmentsOf(APP, group);
 
 describe('proxy config.matcher', () => {
   it('covers every top-level segment of every signed-in route group', async () => {
     const { config } = await import('@/proxy');
-    const covered = new Set(config.matcher.map(segmentOf));
 
-    const missing = SIGNED_IN_GROUPS.flatMap((group) =>
-      topLevelSegments(group)
-        .filter((segment) => !covered.has(segment))
-        .map((segment) => `app/${group}/${segment} → add '/${segment}/:path*' to config.matcher`),
-    ).sort();
+    const missing = uncoveredProxySegments(APP, SIGNED_IN_GROUPS, config.matcher).map(
+      (segment) => `app/**/${segment} → add '/${segment}/:path*' to config.matcher`,
+    );
 
     expect(missing).toEqual([]);
   });
@@ -100,10 +72,8 @@ describe('proxy config.matcher', () => {
     // is either a segment that has since been deleted or a typo, and both make
     // the list above look more complete than it is.
     const { config } = await import('@/proxy');
-    const served = new Set(SIGNED_IN_GROUPS.flatMap(topLevelSegments));
-    const stray = config.matcher.map(segmentOf).filter((segment) => !served.has(segment));
 
-    expect(stray).toEqual([]);
+    expect(strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher)).toEqual([]);
   });
 
   it('excludes /admin — the 404-not-403 posture, `platform-staff-auth.md` §2', async () => {

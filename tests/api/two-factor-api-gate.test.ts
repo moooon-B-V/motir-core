@@ -1,6 +1,15 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  apiAuthFiles,
+  callsGate,
+  declaringFiles,
+  SESSION_DOORS as DOORS,
+  stripComments,
+  ungatedApiFiles,
+  walkSources as walk,
+} from '../helpers/twoFactorGuardSweeps';
 
 // Story MOTIR-1215 · Subtask MOTIR-3653 — the API half of 2FA enforcement, and
 // the file that keeps route N+1 from quietly reopening the hole.
@@ -22,17 +31,6 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 const API = join(ROOT, 'app', 'api');
-
-/** The three authentication doors, as they appear in a route's own source. */
-const DOORS = ['getSession', 'getWorkspaceContext', 'getActiveProject'] as const;
-
-/** The gate's entry points. A file referencing any of them is gated. */
-const GATES = [
-  'requireCompliantSession',
-  'requireCompliantWorkspaceContext',
-  'refuseIfNonCompliant',
-  'resolveTwoFactorHold',
-] as const;
 
 /**
  * The files under `app/api/**` that read a session and do NOT gate — each with
@@ -90,62 +88,20 @@ const EXEMPT: { file: string; why: string }[] = [
 ];
 
 /** Source with comments stripped — a mention in prose is not a call. */
-function code(abs: string): string {
-  return readFileSync(abs, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^[ \t]*\/\/.*$/gm, '');
-}
-
-function walk(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else if (p.endsWith('.ts') || p.endsWith('.tsx')) out.push(p);
-  }
-  return out;
-}
-
-interface ApiFile {
-  rel: string;
-  /** Direct reads of a door in THIS file's own source. */
-  reads: number;
-  gated: boolean;
-}
+const code = (abs: string): string => stripComments(readFileSync(abs, 'utf8'));
 
 /**
- * ⚠️ COUNT THE CALL, NOT THE IMPORT PATH. Every gated file imports from
- * `@/lib/auth/requireCompliantSession`, so a bare `includes('requireCompliantSession')`
- * matches the module PATH of all four entry points and reports every one of them
- * as adopted. The call site is what proves the gate runs.
+ * Every file under `app/api/**` that AUTHENTICATES — either by reading one of
+ * the three doors itself, or by calling a gate entry point that reads one for
+ * it. The sweep lives in `tests/helpers/twoFactorGuardSweeps.ts`, taking the
+ * directory as a parameter, so this guard can be WATCHED FAILING over a
+ * synthetic tree (`tests/integration/twoFactorEnforcementStoryGate.test.ts`).
  */
-const callsGate = (src: string): boolean => GATES.some((g) => src.includes(`${g}(`));
-
-/**
- * Every file under `app/api/**` that AUTHENTICATES — either by reading a door
- * itself, or by calling a gate entry point that reads one for it.
- *
- * ⚠️ BOTH ARMS ARE NEEDED, and the second is the subtle one: once a route folds
- * its preamble into `requireCompliantSession()`, the words `getSession` and
- * `getWorkspaceContext` leave its source entirely. An enumeration by door alone
- * would then see 76 files instead of 246 — it would be counting the RESIDUE of
- * the sweep and calling it the API.
- */
-const AUTHENTICATING: ApiFile[] = walk(API)
-  .map((abs) => {
-    const src = code(abs);
-    const reads = DOORS.reduce(
-      (n, door) => n + (src.match(new RegExp(`await ${door}\\(\\)`, 'g')) ?? []).length,
-      0,
-    );
-    return { rel: relative(ROOT, abs).split(sep).join('/'), reads, gated: callsGate(src) };
-  })
-  .filter((f) => f.reads > 0 || f.gated)
-  .sort((a, b) => a.rel.localeCompare(b.rel));
+const AUTHENTICATING = apiAuthFiles(ROOT, API);
 
 describe('every session-reading route under app/api is gated or exempt with a reason', () => {
   it('⚠️ no ungated route — the guard the card exists for', () => {
-    const exempt = new Set(EXEMPT.map((e) => e.file));
-    const ungated = AUTHENTICATING.filter((f) => !f.gated && !exempt.has(f.rel)).map(
+    const ungated = ungatedApiFiles(ROOT, API, new Set(EXEMPT.map((e) => e.file))).map(
       (f) =>
         `${f.rel} — reads a session ${f.reads}× and does not gate. Use requireCompliantSession / requireCompliantWorkspaceContext, or refuseIfNonCompliant after this route's own refusal, or add it to EXEMPT with a reason.`,
     );
@@ -231,11 +187,7 @@ describe('⚠️ app/api/auth/** needs no exemption — it reads no session at a
 
 describe('ONE verdict, one predicate — there is no second implementation', () => {
   const libFiles = walk(join(ROOT, 'lib'));
-
-  const declaring = (needle: string): string[] =>
-    libFiles
-      .filter((abs) => new RegExp(`(function|const) ${needle}\\b`).test(code(abs)))
-      .map((abs) => relative(ROOT, abs).split(sep).join('/'));
+  const declaring = (needle: string): string[] => declaringFiles(join(ROOT, 'lib'), ROOT, needle);
 
   it('`hasSecondFactor` — the compliance predicate — is declared once', () => {
     expect(declaring('hasSecondFactor')).toEqual(['lib/twoFactor/hasSecondFactor.ts']);
@@ -243,6 +195,12 @@ describe('ONE verdict, one predicate — there is no second implementation', () 
 
   it('`resolveTwoFactorHold` — the API verdict — is declared once', () => {
     expect(declaring('resolveTwoFactorHold')).toEqual(['lib/auth/requireCompliantSession.ts']);
+  });
+
+  it("`requireCompliantWorkspaceContext` — the second door's gate — is declared once", () => {
+    expect(declaring('requireCompliantWorkspaceContext')).toEqual([
+      'lib/auth/requireCompliantSession.ts',
+    ]);
   });
 
   it('every gate entry point routes through it rather than re-deciding', () => {

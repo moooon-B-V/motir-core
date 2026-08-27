@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { hasSecondFactor } from '@/lib/twoFactor/hasSecondFactor';
 import { toTwoFactorStatusDTO } from '@/lib/mappers/twoFactorMappers';
@@ -88,119 +86,13 @@ describe('hasSecondFactor', () => {
   });
 });
 
-// ── There is exactly ONE implementation ─────────────────────────────────────
-// The predicate's whole value is that the gate and the pane cannot disagree,
-// which survives only while nobody writes a second copy. `twoFactorEnabled` is
-// the column a second copy would have to read, so the grep is over that name —
-// and it is asserted TIGHT in both directions, so the allowlist cannot rot into
-// a mute button: an unlisted reader fails, and a listed one that has gone away
-// fails too.
-
-/**
- * Every `.ts` under `lib/` whose source contains `needle`, repo-relative and
- * sorted.
- *
- * A filesystem walk rather than `git grep`, deliberately: `git grep` reads the
- * INDEX, so a file this very card added is invisible to it until it is staged —
- * and a guard that cannot see the newest file is a guard that passes for the
- * wrong reason. (It cost two red runs here before the cause was obvious.)
- */
-function libFilesWhere(predicate: (source: string) => boolean): string[] {
-  const root = process.cwd();
-  const out: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir)) {
-      const p = join(dir, entry);
-      if (statSync(p).isDirectory()) walk(p);
-      else if (entry.endsWith('.ts') && predicate(readFileSync(p, 'utf8')))
-        out.push(relative(root, p).split(sep).join('/'));
-    }
-  };
-  walk(join(root, 'lib'));
-  return out.sort();
-}
-
-const libFilesContaining = (needle: string): string[] =>
-  libFilesWhere((source) => source.includes(needle));
-
-const libFilesMatching = (pattern: RegExp): string[] =>
-  libFilesWhere((source) => pattern.test(source));
-
-const KNOWN_READERS: { file: string; why: string }[] = [
-  {
-    file: 'lib/twoFactor/hasSecondFactor.ts',
-    why: 'THE predicate. Names the column in its own documentation; the function itself takes it as an input.',
-  },
-  {
-    file: 'lib/services/twoFactorService.ts',
-    why: "Reads the column ONCE and hands it to `toTwoFactorStatusDTO` — the Security pane's path. It derives no verdict of its own.",
-  },
-  {
-    file: 'lib/repositories/twoFactorPolicyRepository.ts',
-    why: 'Selects the column in the hot-path query and hands it to the mapper. Derives no verdict.',
-  },
-  {
-    file: 'lib/mappers/twoFactorMappers.ts',
-    why: 'Builds `methods`; the prose contract this predicate was extracted from lives in its comment.',
-  },
-  {
-    file: 'lib/dto/twoFactor.ts',
-    why: 'Where the `methods.length > 0` contract is WRITTEN. Documentation only.',
-  },
-  {
-    file: 'lib/dto/twoFactorPolicy.ts',
-    why: 'One documentation line warning that a passkey counts even with the column false. No code reads it.',
-  },
-  {
-    file: 'lib/auth/twoFactorGate.ts',
-    why: 'One documentation line (MOTIR-3648) stating that compliance is `methods.length > 0` and NOT this column — the gate names it only to say it does not use it.',
-  },
-  {
-    file: 'lib/dto/platform.ts',
-    why: "A DISPLAY field on the platform-admin user DTO — 'does this account have 2FA on', shown as a pill. Not a compliance verdict.",
-  },
-  {
-    file: 'lib/mappers/platformMappers.ts',
-    why: 'Copies that display field off the row. No derivation.',
-  },
-  {
-    file: 'lib/repositories/userRepository.ts',
-    why: 'The WRITE — `setTwoFactorEnabled`. The column has to be set somewhere.',
-  },
-  {
-    file: 'lib/auth/index.ts',
-    why: 'Better-Auth wiring comments describing which plugin owns the column.',
-  },
-];
-
-describe('the second-factor predicate has exactly one implementation', () => {
-  it('no file outside the allowlist reads `twoFactorEnabled`', () => {
-    const found = libFilesContaining('twoFactorEnabled');
-
-    const allowed = new Set(KNOWN_READERS.map((r) => r.file));
-    expect(found.filter((f) => !allowed.has(f))).toEqual([]);
-    // Tight the other way: a listed file that no longer reads the column is a
-    // stale exemption, and the list must shrink when the tree does.
-    expect(KNOWN_READERS.map((r) => r.file).filter((f) => !found.includes(f))).toEqual([]);
-  });
-
-  it('exactly two modules DERIVE anything from a passkey count, and they are the pair asserted equivalent above', () => {
-    // The statement that actually matters. Naming `passkeyCount` is cheap —
-    // every file that passes it along does — so the guard is over a COMPARISON,
-    // which is what a second copy of the verdict would have to write.
-    //
-    // TWO, not one, and the second is not a defect: `toTwoFactorStatusDTO`
-    // derives `methods` for the Security pane and the predicate derives the
-    // boolean for the gate. They are two answers to different questions that
-    // must agree, which is exactly what the equivalence block above measures. A
-    // THIRD would have nothing holding it to either.
-    expect(readFileSync('lib/twoFactor/hasSecondFactor.ts', 'utf8')).toContain(
-      'input.enabled || input.passkeyCount >= 1',
-    );
-
-    expect(libFilesMatching(/passkeyCount\s*(?:>=|>|<|!==|===)/)).toEqual([
-      'lib/mappers/twoFactorMappers.ts',
-      'lib/twoFactor/hasSecondFactor.ts',
-    ]);
-  });
-});
+// ⚠️ THE ONE-IMPLEMENTATION HALF LIVES IN
+// `tests/twoFactorPredicateOneImplementation.test.ts` (Story MOTIR-1215 ·
+// MOTIR-3649), and the split is structural rather than cosmetic. That half is a
+// whole-tree walk of `lib/`, which belongs in the STRUCTURAL-GUARD LANE
+// (`vitest.guards.config.ts`): no database, no coverage instrumentation, one
+// filesystem answer. This half imports the real `hasSecondFactor` and the real
+// mapper, so it must stay in the sharded run and carry its coverage — and the
+// lane's own purity guard, `tests/ci-structural-guards-lane.test.ts`, refuses a
+// member that reaches `@/lib`. Keeping them in one file meant one of the two
+// rules had to be broken.

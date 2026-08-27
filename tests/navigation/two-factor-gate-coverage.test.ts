@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { declaringFiles, stripComments, ungatedRouteGroups } from '../helpers/twoFactorGuardSweeps';
 
 // Story MOTIR-1215 · Subtask MOTIR-3648 — the gate is ONE helper with FOUR call
 // sites, and four copies of the same three lines is how one route group quietly
@@ -17,26 +18,7 @@ const APP = join(ROOT, 'app');
 const HELPER = 'assertTwoFactorCompliance';
 
 /** Source with comments stripped — a mention in prose is not a call. */
-const code = (rel: string): string =>
-  readFileSync(join(ROOT, rel), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^[ \t]*\/\/.*$/gm, '');
-
-/** Every `app/(group)/layout.tsx` — the choke point each group's pages share. */
-function routeGroupLayouts(): string[] {
-  return readdirSync(APP)
-    .filter((entry) => entry.startsWith('(') && entry.endsWith(')'))
-    .filter((group) => {
-      const p = join(APP, group, 'layout.tsx');
-      try {
-        return statSync(p).isFile();
-      } catch {
-        return false;
-      }
-    })
-    .map((group) => `app/${group}/layout.tsx`)
-    .sort();
-}
+const code = (rel: string): string => stripComments(readFileSync(join(ROOT, rel), 'utf8'));
 
 /**
  * The groups that do NOT gate, each with the reason.
@@ -69,11 +51,15 @@ function layoutSource(group: string): string | null {
 
 describe('the 2FA enforcement gate covers every signed-in route group', () => {
   it('every route-group layout either CALLS the helper or is exempt with a reason', () => {
-    const exempt = new Set(EXEMPT.map((e) => e.group));
-    const ungated = routeGroupLayouts()
-      .filter((rel) => !code(rel).includes(HELPER))
-      .filter((rel) => !exempt.has(rel.split('/')[1]!))
-      .map((rel) => `${rel} — call ${HELPER}(userId) after the session read, or add it to EXEMPT`);
+    // ⚠️ The SWEEP lives in `tests/helpers/twoFactorGuardSweeps.ts`, taking the
+    // app directory as a parameter, so this guard can be WATCHED FAILING over a
+    // synthetic tree — `tests/integration/twoFactorEnforcementStoryGate.test.ts`
+    // builds one with an ungated group in it. The exemption list, its reasons
+    // and the both-directions assertions stay here.
+    const ungated = ungatedRouteGroups(APP, new Set(EXEMPT.map((e) => e.group))).map(
+      (group) =>
+        `app/${group}/layout.tsx — call ${HELPER}(userId) after the session read, or add it to EXEMPT`,
+    );
 
     expect(ungated).toEqual([]);
   });
@@ -112,18 +98,7 @@ describe('the 2FA enforcement gate covers every signed-in route group', () => {
   });
 
   it('the helper is declared in exactly ONE module', () => {
-    const found: string[] = [];
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const p = join(dir, entry);
-        if (statSync(p).isDirectory()) walk(p);
-        else if (entry.endsWith('.ts') && readFileSync(p, 'utf8').includes(`function ${HELPER}`))
-          found.push(p);
-      }
-    };
-    walk(join(ROOT, 'lib'));
-    expect(found).toHaveLength(1);
-    expect(found[0]!.endsWith('lib/auth/twoFactorGate.ts')).toBe(true);
+    expect(declaringFiles(join(ROOT, 'lib'), ROOT, HELPER)).toEqual(['lib/auth/twoFactorGate.ts']);
   });
 });
 

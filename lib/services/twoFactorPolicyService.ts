@@ -134,6 +134,14 @@ export const twoFactorPolicyService = {
       if (!access) throw new NotAMemberError(actorUserId, workspaceId);
 
       const workspace = await workspaceRepository.findByIdInTx(workspaceId, tx);
+      /* v8 ignore next 2 -- UNREACHABLE, and the invariant that forbids it is
+         asserted rather than asserted-about: `resolveWorkspaceAccess` above
+         admits only through a `workspace_membership` row, and a membership
+         cannot outlive its workspace because the FK cascades. The test is
+         `tests/integration/twoFactorEnforcementStoryGate.test.ts` →
+         "⚠️ a workspace_membership cannot outlive its workspace — the FK
+         cascades", which deletes a workspace and watches the membership go with
+         it. An ignore with no test to cite hides the gap instead of closing it. */
       if (!workspace) throw new NotAMemberError(actorUserId, workspaceId);
 
       const org = await organizationRepository.findByIdInTx(workspace.organizationId, tx);
