@@ -94,11 +94,29 @@ describe('the four control states', () => {
     expect(screen.queryByText(/so it cannot be switched off here/)).toBeNull();
   });
 
-  it('REFUSED — the refusal panel replaces the card, and names the tier', () => {
-    renderCard({ canManage: false, tierName: 'Acme' });
-    expect(screen.queryByRole('switch')).toBeNull();
-    expect(screen.getByText('You don’t have access to this')).toBeTruthy();
-    expect(screen.getByText(/Only an owner or an admin of Acme/)).toBeTruthy();
+  it('READ-ONLY — the switch is present and disabled, never absent (MOTIR-3647)', () => {
+    // ⚠️ NOT a refusal, and the difference is the point. A refusal is a decision
+    // about the SURFACE and belongs to the route — the org pane refuses a
+    // non-admin whole. This control is reached by ANY workspace member through
+    // `WorkspaceFoldInSection`, which renders for every member so a plain one can
+    // still reach Leave workspace (MOTIR-3519). Hiding the setting there tells
+    // them nothing about why they are being asked to enrol; making it operable
+    // lets a `viewer` change a security policy.
+    renderCard({ requiresTwoFactor: true, canManage: false, tierName: 'Engineering' });
+    const sw = screen.getByRole('switch');
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    expect(sw.getAttribute('disabled')).not.toBeNull();
+    expect(
+      screen.getByText('Only an owner or an admin of Engineering can change this.'),
+    ).toBeTruthy();
+  });
+
+  it('READ-ONLY **and** LOCKED shows the lock, not the read-only note', () => {
+    // Two reasons the switch cannot move; the reader is owed the one that
+    // explains the POLICY, not the one that explains their own role.
+    renderCard({ requiresTwoFactor: false, canManage: false, lockedBy: 'Acme' });
+    expect(screen.getByText('Required by Acme')).toBeTruthy();
+    expect(screen.queryByText(/can change this\./)).toBeNull();
   });
 });
 
@@ -185,6 +203,14 @@ describe('saving', () => {
   it('a locked switch cannot be saved at all', () => {
     const onSave = vi.fn(async () => ({ ok: true }));
     renderCard({ requiresTwoFactor: false, lockedBy: 'Acme', onSave });
+
+    fireEvent.click(screen.getByRole('switch'));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('a READ-ONLY switch cannot be saved either', () => {
+    const onSave = vi.fn(async () => ({ ok: true }));
+    renderCard({ requiresTwoFactor: false, canManage: false, onSave });
 
     fireEvent.click(screen.getByRole('switch'));
     expect(onSave).not.toHaveBeenCalled();

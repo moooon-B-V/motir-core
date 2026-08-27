@@ -4417,8 +4417,7 @@
       "lockedNoteBoth": "该工作区要求两步验证，{org} 也同样要求。关闭组织的要求后，该工作区自身的要求仍然保留。",
       "savedToast": "安全策略已保存",
       "saveErrorTitle": "无法保存安全策略",
-      "refusedTitle": "你没有权限访问",
-      "refusedDescription": "只有 {tier} 的所有者或管理员才能更改其安全设置。如需变更，请联系他们。"
+      "readOnlyNote": "只有 {tier} 的所有者或管理员才能更改此设置。"
     }
   },
   "triage": {

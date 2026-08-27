@@ -6,7 +6,6 @@ import { Lock } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
 import { Pill } from '@/components/ui/Pill';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 
 // The require-2FA control (Story MOTIR-1215 · Subtask MOTIR-3646), built to
@@ -55,15 +54,24 @@ export interface RequireTwoFactorCardProps {
   /** The label shown beside the switch when the requirement is ON at this tier. */
   stateOnLabel: string;
   /**
-   * Whether the actor may operate the control. `false` renders the refusal
-   * panel instead of the card (the design's panel 8).
+   * Whether the actor may OPERATE the control. `false` renders it READ-ONLY —
+   * the switch shows the current value and is `disabled` — never absent and
+   * never a refusal panel.
    *
-   * The ORG pane never renders `false` — it refuses the whole pane the way its
-   * sibling org panes do — but the workspace control can be reached by a plain
-   * member through the fold-in, so the state is the component's to own.
+   * ⚠️ READ-ONLY IS NOT REFUSAL, and the distinction is load-bearing (MOTIR-3647).
+   * A refusal is a decision about the SURFACE and belongs to the route: the org
+   * pane refuses a non-admin whole, the way `members/` and `usage/` do. This
+   * control is instead reached by any workspace member through
+   * `WorkspaceFoldInSection`, which renders for every member so that a plain one
+   * can still reach **Leave workspace** (MOTIR-3519). Hiding the setting there
+   * would tell a member nothing about why they are being asked to enrol; making
+   * it operable would let a `viewer` change a security policy. Read-only is the
+   * third thing, and it is the right one.
+   *
+   * The ORG pane never passes `false` — its route has already refused by then.
    */
   canManage: boolean;
-  /** The name of the tier being refused, interpolated into the refusal copy. */
+  /** The tier's own name, for any copy that has to say whose setting this is. */
   tierName: string;
   /** The absolute write. Resolved by the caller to its own tier's action. */
   onSave: (next: boolean) => Promise<RequireTwoFactorSaveResult>;
@@ -91,16 +99,6 @@ export function RequireTwoFactorCard({
     setEnabled(requiresTwoFactor);
   }, [requiresTwoFactor]);
 
-  if (!canManage) {
-    return (
-      <EmptyState
-        icon={<Lock className="h-12 w-12" aria-hidden />}
-        title={t('refusedTitle')}
-        description={t('refusedDescription', { tier: tierName })}
-      />
-    );
-  }
-
   function save(next: boolean) {
     setEnabled(next); // optimistic — the AcceptanceVideoCard shape
     startTransition(async () => {
@@ -115,6 +113,11 @@ export function RequireTwoFactorCard({
   }
 
   const locked = lockedBy !== null;
+  // Both reasons the switch cannot be operated, kept apart because they say
+  // different things to the reader: `locked` means a HIGHER TIER decided this,
+  // and gets the Pill plus the explanation; `!canManage` means YOU may not
+  // change it, and gets a quiet read-only note.
+  const inoperable = locked || !canManage;
 
   return (
     <Card
@@ -152,7 +155,7 @@ export function RequireTwoFactorCard({
           onCheckedChange={save}
           // ⚠️ `disabled`, NOT absent. A missing control tells an admin nothing,
           // and a live one that silently does nothing is worse than both.
-          disabled={locked || isPending}
+          disabled={inoperable || isPending}
           aria-label={t('cardTitle')}
         />
       </div>
@@ -161,6 +164,11 @@ export function RequireTwoFactorCard({
           {requiresTwoFactor
             ? t('lockedNoteBoth', { org: lockedBy })
             : t('lockedNoteAbove', { org: lockedBy })}
+        </p>
+      ) : null}
+      {!canManage && !locked ? (
+        <p className="text-(--el-text-secondary) mt-(--spacing-md) font-sans text-sm">
+          {t('readOnlyNote', { tier: tierName })}
         </p>
       ) : null}
     </Card>

@@ -4417,8 +4417,7 @@
       "lockedNoteBoth": "This workspace requires two-factor authentication, and so does {org}. Turning off the organization’s requirement will leave this workspace’s own requirement in place.",
       "savedToast": "Security policy saved",
       "saveErrorTitle": "Couldn’t save the security policy",
-      "refusedTitle": "You don’t have access to this",
-      "refusedDescription": "Only an owner or an admin of {tier} can change its security settings. Ask one of them if this needs to change."
+      "readOnlyNote": "Only an owner or an admin of {tier} can change this."
     }
   },
   "triage": {
