@@ -117,10 +117,26 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
  * guard can read, so their rows are held by the human re-run of the page's own
  * method section and by nothing else.
  */
-export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, string>> = {
-  Inngest:
-    'still imported in package.json; replaced by an in-product Postgres queue ' +
-    '(MOTIR-3413) and the SDK deleted by MOTIR-3418, both before general availability',
+export interface DepartingVendor {
+  /** Why it is absent from the page, and which card removes it. */
+  readonly reason: string;
+  /**
+   * The dependencies whose PRESENCE is the reason this entry still exists. When
+   * the last one goes the vendor is simply gone, the entry has nothing left to
+   * explain, and the guard says so rather than letting it rot — the same
+   * treatment `NOT_A_VENDOR_HOST` gets, and for the same reason: an exclusion
+   * nobody can check is indistinguishable from one nobody should trust.
+   */
+  readonly packages: readonly string[];
+}
+
+export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, DepartingVendor>> = {
+  Inngest: {
+    reason:
+      'replaced by an in-product Postgres queue (MOTIR-3413); the SDK is deleted by ' +
+      'MOTIR-3418, both before general availability',
+    packages: ['inngest'],
+  },
 };
 
 export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {

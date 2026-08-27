@@ -278,4 +278,23 @@ describe('the subprocessor list agrees with the repository (MOTIR-3631)', () => 
         `added by mistake and states something that will not be true at launch.`,
     ).toEqual([]);
   });
+
+  it("retires a departing vendor's entry once it has actually gone", () => {
+    // The entry above is what keeps Inngest off the page. The moment MOTIR-3418
+    // deletes the SDK the vendor is gone outright, the entry explains an absence
+    // nobody would otherwise wonder about, and a future reader would take it as
+    // evidence of a migration still in flight. It has to expire on its own.
+    const departed = Object.entries(LEAVING_BEFORE_LAUNCH)
+      .filter(([, d]) => d.packages.every((p) => !INSTALLED.has(p)))
+      .map(([vendor]) => vendor)
+      .sort();
+
+    expect(
+      departed,
+      `these vendors have finished leaving — none of the dependencies naming them is ` +
+        `installed any more. Delete their LEAVING_BEFORE_LAUNCH entries: the vendor is ` +
+        `simply not a subprocessor now, and an entry explaining why it is absent outlives ` +
+        `the question it answers.`,
+    ).toEqual([]);
+  });
 });
