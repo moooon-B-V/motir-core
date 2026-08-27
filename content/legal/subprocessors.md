@@ -83,38 +83,52 @@ Email-and-password sign-in reaches no third party.
 | ------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- | ---------------------- |
 | **Plausible** (Plausible Insights OÜ) | Aggregate product analytics | Page-level usage events. **Cookieless**, and it does not identify individual users | EU (Estonia / Germany) |
 
-## AI features — only when you use them
+## AI features — the model you choose
 
-Motir's AI planning features send the text you provide to **motir-ai**, moooon B.V.'s
-own gateway, which forwards it to an upstream model provider. **If you never use an AI
+Motir's AI features — planning, and the hosted agents that carry out the work — send
+the text you provide to a **model provider you select**. **If you never use an AI
 feature, no prompt data leaves the core service.**
 
-| Subprocessor                                                       | Purpose                                                               | Data reached                                                            | Location                    |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------- |
-| **motir-ai** (moooon B.V.)                                         | Our own AI gateway — routing, metering, and the planning intelligence | Prompts, plan text, and the work-item content you ask it to reason over | Fly.io, region `iad`, USA   |
-| **OpenAI** (OpenAI, L.L.C.)                                        | A planner model, and the embedding model behind search                | The prompt text, and the content sent for embedding                     | USA                         |
-| **Anthropic** (Anthropic PBC)                                      | A planner model (Claude)                                              | The prompt text, and the work-item content sent with it                 | USA                         |
-| **Alibaba Cloud** (Alibaba Cloud Computing Ltd.)                   | A planner model (Qwen), served from Model Studio                      | The prompt text, and the work-item content sent with it                 | **Frankfurt, Germany (EU)** |
-| **Zhipu AI** (Beijing Zhipu Huazhang Technology Co., Ltd.)         | A planner model (GLM)                                                 | The prompt text, and the work-item content sent with it                 | People's Republic of China  |
-| **Moonshot AI** (Beijing Moonshot Technology Co., Ltd.)            | A planner model (Kimi)                                                | The prompt text, and the work-item content sent with it                 | People's Republic of China  |
-| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | A planner model                                                       | The prompt text, and the work-item content sent with it                 | People's Republic of China  |
-| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning request needs one                         | The search query, which is derived from what you asked                  | USA                         |
+**moooon B.V. operates its own relay between the two, and it is NOT a subprocessor.**
+`motir-ai` and `motir-gateway` are our own services, run by the same legal entity that
+operates Motir. A subprocessor is a _third party_ a processor engages; these are us,
+and listing them here would pad this page with our own server names while telling you
+nothing about who else can see your data. What they run **on** is a different question
+and a real one: they are hosted by **Fly.io**, which is a subprocessor and is listed
+under _Core subprocessors_ above.
 
-**The upstream set was read from the gateway on 2026-08-26 and RE-READ on
-2026-08-27**, not inferred from the code. motir-ai does not call a model provider
-directly: it posts to moooon B.V.'s own **gateway** over an OpenAI-compatible
-interface, and the gateway is a multi-provider relay whose enabled upstream
-_channels_ live in its own administration rather than in source. The table above
-lists the model provider that serves customer content. A separate per-call
-upstream, the **Brave Search API**, serves web search when a planning request needs
-one; the gateway's per-call-unit path prices exactly one unit, `search.brave`, so
-Brave is the whole of that path.
+So the chain is `Motir → our gateway → the provider you chose`, and the only rows below
+are that last hop.
 
-**Only providers with a recorded transfer basis may serve this traffic.** That is
-decided in `docs/decisions/ai-upstream-transfer-basis.md`, which enumerates every
-enabled upstream, records its basis, and requires the gateway to enforce the
-constraint rather than merely state it. Each provider above has its own row in
-_Transfer bases_ below.
+| Subprocessor                                                       | Purpose                                                   | Data reached                                            | Location                    |
+| ------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------- | --------------------------- |
+| **OpenAI** (OpenAI, L.L.C.)                                        | A selectable model, and the embedding model behind search | The prompt text, and the content sent for embedding     | USA                         |
+| **Anthropic** (Anthropic PBC)                                      | A selectable model (Claude)                               | The prompt text, and the work-item content sent with it | USA                         |
+| **Alibaba Cloud** (Alibaba Cloud Computing Ltd.)                   | A selectable model (Qwen), served from Model Studio       | The prompt text, and the work-item content sent with it | **Frankfurt, Germany (EU)** |
+| **Zhipu AI** (Beijing Zhipu Huazhang Technology Co., Ltd.)         | A selectable model (GLM)                                  | The prompt text, and the work-item content sent with it | People's Republic of China  |
+| **Moonshot AI** (Beijing Moonshot Technology Co., Ltd.)            | A selectable model (Kimi)                                 | The prompt text, and the work-item content sent with it | People's Republic of China  |
+| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | A planner model                                           | The prompt text, and the work-item content sent with it | People's Republic of China  |
+| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning request needs one             | The search query, which is derived from what you asked  | USA                         |
+
+**The set was read from the gateway's own administration on 2026-08-26 and RE-READ
+on 2026-08-27**, not inferred from source. Our gateway is a multi-provider relay
+whose enabled upstream _channels_ live in its own database rather than in a
+repository, which is why the read has to happen against the running service — see
+_How this list is compiled_ below. **Brave** is the one non-model upstream: it
+serves web search when a request needs one, and the gateway's per-call-unit path
+prices exactly one unit, `search.brave`, so Brave is the whole of that path.
+
+**⚠️ This table names the providers that may serve you, not a fixed assignment.**
+Which one answers a given request depends on the model selected for that project —
+and, once hosted agents ship, on the model selected for the agent, which need not
+be the same one. A provider is listed here if it **can** receive your content,
+because that is the question a subprocessor list exists to answer. The transfer
+position of each is what differs, and it is set out next.
+
+**Only providers with a recorded transfer basis may serve EU traffic**, and that is
+enforced at the gateway — a residency group a no-basis upstream cannot enter —
+rather than by convention. `docs/decisions/ai-upstream-transfer-basis.md` carries
+the decision. Each provider above has its own row in _Transfer bases_ below.
 
 ### The model providers fall into three tiers, and the difference is the paperwork
 

@@ -141,7 +141,6 @@ export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, DepartingVendor>> = 
 
 export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {
   Neon: 'reached over the Postgres wire protocol via DATABASE_URL, not an HTTPS host or an SDK',
-  'motir-ai': 'reached at MOTIR_AI_URL, a deployment secret rather than a literal in the tree',
   OpenAI: 'reached THROUGH the gateway; motir-core never names it',
   Brave: 'reached THROUGH the gateway; motir-core never names it',
   DeepSeek:
