@@ -11,6 +11,11 @@
 - **Supersedes / superseded by:** none. **Retires** the
   `nextjs-prisma-vercel-starter-with-design` prototype (see §3.1 — it is superseded
   by this package, not adopted as a consumer).
+- **Amended by:** [`brand-asset-distribution.md`](./brand-asset-distribution.md)
+  (MOTIR-3724, 2026-08-27) — this ADR is **silent** about Motir's own brand assets,
+  because the brand mark did not exist when it was accepted (MOTIR-1150 landed five
+  weeks later). That ADR adds the test §1's import rule cannot make and this one
+  never contemplated: **who INSTALLS the package**. Read the two together.
 - **Builds on:** the three-axis design system shipped by Story 7.3 (Colour /
   Style / Type on `<html>` via `data-theme` + `data-palette` + `data-style` +
   `data-type`), the `@motir/cli` workspace-package precedent (`packages/cli`,
@@ -74,6 +79,15 @@ and (c) the classname helper `cn`. A file that imports **any Motir domain module
 `@/components/issues/*`) or **app-infra** (`@/lib/i18n/locales`, `@/lib/shortcuts`,
 `@/lib/blob/allowlist`, the app's session/router) **stays in motir-core**. This
 rule was validated against the actual import graph (see the audit in §Evidence).
+
+> **⚠️ THE IMPORT RULE IS NECESSARY AND NOT SUFFICIENT — a second test runs BEFORE
+> it** ([`brand-asset-distribution.md`](./brand-asset-distribution.md), MOTIR-3724).
+> An artifact that IDENTIFIES Motir — the wave band, the wordmark, the lockup, an app
+> icon, an OG template — stays out of this package however clean its imports are,
+> because this package's declared consumers (§Context) build products that are not
+> Motir. `components/brand/BrandMark.tsx` passes the rule above cleanly and is
+> excluded anyway; it ships as `@motir/brand`. The rule below is unchanged — a file
+> that FAILS it still stays in motir-core.
 
 **IN the package:**
 
