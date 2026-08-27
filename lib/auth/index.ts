@@ -12,6 +12,7 @@ import { sendAuthEmail } from '@/lib/auth/authMail';
 import { assertAccountNotSuspended } from '@/lib/auth/accountSuspension';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
+import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import {
@@ -278,6 +279,43 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
+          // ⚠️ THE LEGAL ACCEPTANCE IS RECORDED FIRST, AND IN ITS OWN
+          // try/catch (Story 8.4 · Subtask MOTIR-1135).
+          //
+          // WHY HERE. This hook is the ONE seam both account-creating paths pass
+          // through — email/password sign-up AND Google new-user sign-up — and
+          // the Google path is the one that matters: `Continue with Google` sits
+          // on the sign-up card's identity step and creates an account outright,
+          // so nothing on the form's submit path ever runs for it. A capture
+          // wired into the form would have recorded nothing for every Google
+          // account, silently. (It is also why the notice itself now renders at
+          // the card FOOT rather than inside the password step — same defect,
+          // same fix, `design/auth/design-notes.md`.)
+          //
+          // WHY IT IS SAFE THAT THIS IS POST-COMMIT AND BEST-EFFORT. The comment
+          // above records that better-auth runs `create.after` AFTER the
+          // user-insert transaction commits, so a throw here cannot roll the user
+          // back and would only 500 an otherwise-successful signup. The
+          // acceptance therefore inherits the same self-healing arm the default
+          // workspace does, and it has a better one: if this write is lost, the
+          // re-consent gate finds no acceptance on the reader's very next
+          // signed-in page load, holds them at the interstitial, and records it
+          // there. A missed row degrades to one extra screen, never to a person
+          // bound by terms with nothing on record.
+          //
+          // ⚠️ ITS OWN try/catch, not a shared one — the two writes are
+          // independent, and a tenancy-provisioning failure must not take the
+          // legal record with it (nor the reverse).
+          try {
+            await legalAcceptanceService.recordAcceptance(user.id);
+          } catch (err) {
+            console.error(
+              `[auth] legal-acceptance record failed for user ${user.id}; ` +
+                `the re-consent gate will ask on the next signed-in page load.`,
+              err,
+            );
+          }
+
           try {
             // Story 6.10.4 — auto-provision the new account's tenancy: an
             // organization (an org of one / OPC) + a default workspace + the

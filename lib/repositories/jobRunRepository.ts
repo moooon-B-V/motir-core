@@ -10,21 +10,28 @@ export const jobRunRepository = {
   },
 
   /**
-   * Find the still-`running` row for a given (function, event), newest first.
-   * This is how the TERMINAL-FAILURE path (1.6.6) correlates the failure back
-   * to the `running` row that `recordStart` wrote: the failure is reported by
-   * Inngest's `onFailure` handler — a SEPARATE invocation from the run that
-   * created the row — which carries the original event but not the row id. The
-   * `@@index([eventId])` exists precisely for this lookup. Read inside the
-   * failure transaction, so it takes `tx`.
+   * Find the UNSETTLED row for a given (function, event), newest first. This is
+   * how the TERMINAL-FAILURE path (1.6.6) correlates the failure back to the row
+   * that `recordStart` wrote: the failure is reported by Inngest's `onFailure`
+   * handler — a SEPARATE invocation from the run that created the row — which
+   * carries the original event but not the row id. The `@@index([eventId])`
+   * exists precisely for this lookup. Read inside the failure transaction, so it
+   * takes `tx`.
+   *
+   * ⚠️ `abandoned` COUNTS AS UNSETTLED (Bug MOTIR-3683), and it is why this is no
+   * longer called `findRunningByEventId`. The reap closes a row nothing appears
+   * to be holding; a terminal failure arriving afterwards is the run turning out
+   * to have been held after all, and it knows something the reap only guessed —
+   * the error. Correlating onto that row REPLACES the guess. Excluding it would
+   * write a SECOND row instead, which is the exact defect this bug is about.
    */
-  async findRunningByEventId(
+  async findUnsettledByEventId(
     eventId: string,
     functionId: string,
     tx: Prisma.TransactionClient,
   ): Promise<JobRun | null> {
     return tx.jobRun.findFirst({
-      where: { eventId, functionId, status: 'running' },
+      where: { eventId, functionId, status: { in: ['running', 'abandoned'] } },
       orderBy: { startedAt: 'desc' },
     });
   },
@@ -43,6 +50,56 @@ export const jobRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<JobRun> {
     return tx.jobRun.create({ data });
+  },
+
+  /**
+   * THE ABANDONED-RUN DISCOVERY READ (Bug MOTIR-3683) — rows still `running`
+   * that started before `startedBefore`, oldest first.
+   *
+   * ⚠️ IT DELIBERATELY DOES NOT ASK WHETHER THE RUN IS ALIVE, and the caller
+   * does. A ledger row carries no link to the queue row that would answer that:
+   * the correlation is `(function_id, event_id)` against `job_queue`, which is
+   * the service's join to make. Keeping it out of here keeps this a single-op
+   * repository method (the 4-layer contract) and keeps the liveness rule — the
+   * part that decides whether a long run is working or dead — readable in one
+   * place instead of buried in a `where`.
+   *
+   * Bounded by `limit` so a first pass over a long-neglected ledger drains in
+   * several sweeps rather than holding one transaction across the whole backlog.
+   */
+  async findStaleRunning(
+    startedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun[]> {
+    return tx.jobRun.findMany({
+      where: { status: 'running', startedAt: { lt: startedBefore } },
+      orderBy: { startedAt: 'asc' },
+      take: limit,
+    });
+  },
+
+  /**
+   * Flip one stranded row to `abandoned` — GUARDED ON IT STILL BEING `running`.
+   *
+   * The guard is the whole point: the sweep reads its candidates in one
+   * transaction and writes them in another, and in between a worker that was
+   * merely slow can settle the very run being reaped. `updateMany` with the
+   * status in the `where` makes that a no-op returning `count: 0` instead of a
+   * write that overwrites a real terminal state with `abandoned` — losing the
+   * failure the operator actually needed to see.
+   */
+  async markAbandonedIfRunning(
+    id: string,
+    finishedAt: Date,
+    failure: Prisma.InputJsonValue,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const res = await tx.jobRun.updateMany({
+      where: { id, status: 'running' },
+      data: { status: 'abandoned', finishedAt, failure },
+    });
+    return res.count;
   },
 
   /** Patch a run on completion (status / finishedAt / durationMs / failure). */

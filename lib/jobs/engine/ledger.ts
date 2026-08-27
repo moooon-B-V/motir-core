@@ -66,6 +66,15 @@ import type { JobContext } from '../defineJob';
  * back to the `running` row by `(functionId, eventId)`: derive it differently on
  * the two paths and the failure writes a second row instead of flipping the
  * first.
+ *
+ * ⚠️ THAT SENTENCE DESCRIBED A REAL DEFECT ON THE OTHER LANE, not a hypothetical
+ * one (Bug MOTIR-3683). Inngest derived it twice, in two functions, and the two
+ * disagreed on cron runs — 29 stranded `running` rows and 30 failure rows keyed
+ * on `''`. THIS lane is structurally safe for a reason worth naming: the value is
+ * computed ONCE, here, from the `JobQueueRun` row, and both the start path and
+ * the terminal-failure path call this same function on that same row. There is no
+ * second derivation to drift. Keep it that way — a caller that computes its own
+ * `eventId` re-opens the bug.
  */
 export function ledgerIdentity(run: JobQueueRun): {
   functionId: string;
@@ -75,7 +84,14 @@ export function ledgerIdentity(run: JobQueueRun): {
 } {
   return {
     functionId: run.jobId,
-    eventId: run.eventId ?? run.id,
+    // `||`, not `??` (Bug MOTIR-3683). The nullish test asks whether the column
+    // is set; the question here is whether there is an ID, and an empty string is
+    // not one. On the Inngest lane that exact distinction stranded 29 runs at
+    // `running` and wrote 30 unattributable failure rows. This lane derives the
+    // value ONCE per run and both paths call this function, so it cannot diverge
+    // the way that one did — but a `''` would still key the correlation on a
+    // value every other run of the same job also carries.
+    eventId: run.eventId || run.id,
     eventName: run.eventName,
     workspaceId: run.workspaceId,
   };
@@ -102,6 +118,10 @@ export async function executeWithLedger(run: JobQueueRun, eventData: unknown): P
       functionId: identity.functionId,
       eventName: identity.eventName,
       eventId: identity.eventId,
+      // The lane, DECLARED (MOTIR-3683) — this file is the engine's half of the
+      // ledger, so the answer is a fact rather than something to infer from the
+      // shape of the id above.
+      lane: 'engine',
       attempt: ctx.attempt,
       idempotencyKey: (eventData as { idempotencyKey?: string } | null)?.idempotencyKey ?? null,
     }),
@@ -152,6 +172,7 @@ export async function recordEngineTerminalFailure(
   await jobRunsService.recordTerminalFailure({
     functionId: identity.functionId,
     eventId: identity.eventId,
+    lane: 'engine',
     eventName: identity.eventName,
     workspaceId: identity.workspaceId,
     failure: serializeFailure(error),

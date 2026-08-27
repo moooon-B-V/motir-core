@@ -38,6 +38,7 @@ async function recordScheduledRun(functionId: string, startedAt: Date): Promise<
       // check groups on.
       eventName: `scheduled.${functionId}`,
       eventId: `evt-${functionId}-${startedAt.getTime()}`,
+      lane: 'inngest',
       attempt: 0,
       status: 'succeeded',
       startedAt,
@@ -183,6 +184,7 @@ describe('jobScheduleHealthService.check', () => {
         functionId: 'system.ci-actions-gate-sweep',
         eventName: 'system.ci-actions-gate-sweep',
         eventId: 'evt-replay',
+        lane: 'inngest',
         attempt: 0,
         status: 'succeeded',
         startedAt: new Date('2026-08-01T22:00:00Z'),

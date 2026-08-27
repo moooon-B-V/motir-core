@@ -6234,6 +6234,27 @@ async function computeSubtreeProseAdvisories(
     ).map((r) => [r.id, r]),
   );
 
+  // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625): the TYPES behind
+  // every `blocked_by` edge in this subtree, so a member that has already lifted
+  // its design into a sibling is not reported for still naming it.
+  //
+  // A separate, LEANER read than the bodies above rather than a widening of it:
+  // the blockers are a DIFFERENT set (an edge routinely points OUT of the
+  // subtree, which is the whole point of the finishability walk) and this
+  // question needs one nullable column per row, not a body. It short-circuits to
+  // `[]` on a subtree with no edges at all.
+  const blockerTypes = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTypesByIds(
+          [...new Set(edges.map((e) => e.blockerId))],
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((r) => [r.id, r.type]),
+  );
+
   const subjects = notDone.map((member) => {
     const exemptIds = new Set<string>([member.id, ...rootAncestorIds]);
     // Up the in-subtree chain. `membersById` is finite and acyclic (a tree), and
@@ -6269,6 +6290,13 @@ async function computeSubtreeProseAdvisories(
       storyPoints: row?.storyPoints ?? null,
       estimateMinutes: row?.estimateMinutes ?? null,
       hasChildren: row?.hasChildren ?? false,
+      // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625), off the SAME
+      // edge set the exempt walk above consumes — an edge whose target row is
+      // missing (deleted between the two reads) reads as untyped, which is the
+      // value that emits, not one that silently suppresses.
+      hasDesignBlocker: [...(blockedByMember.get(member.id) ?? [])].some(
+        (blockerId) => blockerTypes.get(blockerId) === 'design',
+      ),
     };
   });
 

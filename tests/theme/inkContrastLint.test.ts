@@ -6,6 +6,9 @@ import {
   FAINT_CLASS,
   MUTED_CLASS,
   SAFE_SURFACE_TOKENS,
+  SAFE_SURFACE_VALUES,
+  TINTED_SURFACE_TOKENS,
+  TINTED_SURFACE_VALUES,
   formatFinding,
   scanSource,
   violations,
@@ -49,6 +52,30 @@ import {
 // construction, so a green muted arm means "no muted ink over a tint a single
 // file could prove", never "no muted ink over a tint".
 //
+// ⚠️ CORRECTED (MOTIR-3523) — "WITHIN ONE FILE" WAS NEVER THE BOUNDARY, AND
+// STATING IT AS ONE HID A DEFECT FOR THE WHOLE LIFE OF A FILE. The walk stops at
+// the root of the COMPONENT the ink is written in, which is a tighter fence than
+// the file: a file that writes the ink in a local `Th` and paints the tint on
+// the `<thead>` that USES it abstains, though both halves are in one file and
+// one AST. The operator jobs dashboard was exactly that shape — eight column
+// labels at 4.17:1, this lint green over that file since it was written.
+//
+// The distinction matters because the two boundaries have different remedies.
+// The CROSS-MODULE one really does need the import graph. The SAME-FILE one
+// needs a second walk over this AST, which `scanSource`'s `resolveUseSites`
+// option now performs and `inkContrastScan.test.ts` proves on fixtures. It is
+// OFF here, deliberately: it reports 8 further sites across 6 files, and this
+// repo has twice paid for pointing a widened ink arm at the tree in the change
+// that built it (MOTIR-2496 — two such PRs merged 37 seconds apart and their
+// composition turned `main` red). A card sweeps that population and turns this
+// on, the way MOTIR-2475 and MOTIR-2477 did for the arms already here.
+//
+// The general lesson is the one worth carrying past this arm: a guard's stated
+// boundary is a claim about the guard, and it decays exactly like any other
+// claim in a comment. This one read as wider than it was, so every reader who
+// checked it concluded correctly that their site was out of reach — including
+// the reviews that looked straight at the failing header.
+//
 // Two narrower edges of the same boundary, for whoever widens this later:
 //   • A CONDITIONAL background (`selected && 'bg-(--el-surface-soft)'`) reads as
 //     tinted for every branch, because the surface lookup matches the className
@@ -64,8 +91,10 @@ import {
 //     (MOTIR-2497). Over-reporting a conditional TINT stays the safe way to be
 //     wrong; under-reporting a conditional WHITE is not.
 // Widening the surface resolution across module boundaries needs the import
-// graph, not this walk. (MOTIR-2489 is the open card on the scanner's element
-// resolution; it is a different axis from this one.)
+// graph, not this walk — the CROSS-MODULE half of it does. The SAME-FILE half
+// does not, and is the correction above. (MOTIR-2489 was the card on the
+// scanner's element resolution — a different axis from this one, and closed
+// since; a citation of it as "the open card" is stale.)
 
 const REPO = process.cwd();
 
@@ -150,6 +179,27 @@ describe('ink-contrast lint — the scanned set is the set that was searched', (
   });
 });
 
+const THEME_CSS = readFileSync(join(REPO, 'packages/design-system/theme.css'), 'utf8');
+
+/**
+ * Every `--el-*: <value>;` declaration in the token layer, name → values,
+ * with ALL WHITESPACE COLLAPSED OUT of the value.
+ *
+ * ⚠️ The collapse is load-bearing, and it was missing (MOTIR-3693). Prettier
+ * wraps a long declaration, so `--el-sidebar-item-bg-active` is written across
+ * three lines and this map used to record it as
+ * `var(\n    --color-background\n  )` — which is not the string
+ * `var(--color-background)`, so the token never joined `WHITE_TOKENS` and the
+ * check below could not report it missing. A derivation written to stop a list
+ * being a list of SPELLINGS was matching on a spelling itself.
+ */
+const DECLARED = new Map<string, Set<string>>();
+for (const [, name, value] of THEME_CSS.matchAll(/(--el-[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+  const values = DECLARED.get(name!) ?? new Set<string>();
+  values.add(value!.replace(/\s+/g, ''));
+  DECLARED.set(name!, values);
+}
+
 describe('ink-contrast lint — the SAFE surface set is derived from the token table', () => {
   // MOTIR-2497. The muted arm's verdict is "is this background the white
   // page/card?", and the scanner answers it from a LIST OF TOKEN NAMES. That
@@ -167,19 +217,9 @@ describe('ink-contrast lint — the SAFE surface set is derived from the token t
   // stylesheet rather than a `bg-(--el-…)` class. The scanner never opens a
   // `.css` file (see the JSX-only premise at the top of `inkContrastScan.ts`),
   // so a token used only there is outside both the guard and this derivation.
-  const THEME_CSS = readFileSync(join(REPO, 'packages/design-system/theme.css'), 'utf8');
-
-  /** Every `--el-*: <value>;` declaration in the token layer, name → values. */
-  const DECLARED = new Map<string, Set<string>>();
-  for (const [, name, value] of THEME_CSS.matchAll(/(--el-[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
-    const values = DECLARED.get(name!) ?? new Set<string>();
-    values.add(value!.trim());
-    DECLARED.set(name!, values);
-  }
-
   /** The `--el-*` names that resolve to the untinted page white. */
   const WHITE_TOKENS = [...DECLARED]
-    .filter(([, values]) => values.size === 1 && values.has('var(--color-background)'))
+    .filter(([, values]) => values.size === 1 && SAFE_SURFACE_VALUES.includes([...values][0]!))
     .map(([name]) => name);
 
   /** …of those, the ones the tree actually uses AS A BACKGROUND. */
@@ -212,6 +252,65 @@ describe('ink-contrast lint — the SAFE surface set is derived from the token t
       SAFE_SURFACE_TOKENS.filter((token) => !WHITE_TOKENS.includes(token)).join(', '),
       'These are treated as the safe white surface by `inkContrastScan.ts` but are no longer ' +
         'declared `var(--color-background)` in `theme.css`. Re-measure the pair before ' +
+        'deciding which side to change.',
+    ).toBe('');
+  });
+});
+
+describe('ink-contrast lint — the TINTED surface set is derived from the token table', () => {
+  // MOTIR-3693, and the exact counterpart of the describe above — written three
+  // months later because the two halves of one question were modelled
+  // differently. MOTIR-2497 derived the SAFE list from `theme.css` and left the
+  // TINTED one three hand-written names, on the arm where being wrong is
+  // SILENT: a missing safe alias over-reports and someone argues with it, a
+  // missing tinted alias reports nothing and reads as a clean tree.
+  //
+  // `--el-sidebar-bg` is `var(--color-surface)` — the identical `#f6f5f4` as
+  // `--el-surface` — and was on neither guard's list. Every ink on the rail was
+  // unmeasured: 242 sub-AA pairs across 18 design assets, plus the docs
+  // catalogue's empty state, for as long as the rail has existed. Twelve more
+  // `--el-*` names resolve to one of the three measured tints and were equally
+  // invisible.
+  //
+  // The membership rule differs from the safe set's ON PURPOSE. That one is
+  // filtered to tokens the tree actually paints with, because listing a
+  // surface as safe CLEARS ink and narrowness is the conservative direction.
+  // Here it inverts: listing a tint REPORTS, over-reporting is what this guard
+  // already calls the safe way to be wrong, and a usage filter would mean a
+  // token becomes measured only once somebody paints with it — i.e. exactly one
+  // asset too late. So the list is total over the token table, unconditionally.
+  const TINTED_TOKENS = [...DECLARED]
+    .filter(([, values]) => [...values].every((value) => TINTED_SURFACE_VALUES.includes(value)))
+    .map(([name]) => name);
+
+  it('reads a real token table — the tinted declarations are there to be checked', () => {
+    // The counterpart to notes.html #195, as above: a regex that matched
+    // nothing would make both assertions below vacuously true, which is the
+    // failure mode this whole describe exists to remove.
+    expect(TINTED_TOKENS.length).toBeGreaterThan(3);
+    expect(TINTED_TOKENS).toContain('--el-surface');
+  });
+
+  it('names every --el-* that resolves to one of the measured tints', () => {
+    expect(
+      TINTED_TOKENS.filter((token) => !TINTED_SURFACE_TOKENS.includes(token)).join(', '),
+      'These `--el-*` tokens resolve to one of `TINTED_SURFACE_VALUES` — the three fills ' +
+        'MOTIR-2455 measured `--el-text-muted` at 4.12–4.34:1 on — so text on them fails AA ' +
+        'exactly as it does on `--el-surface`. Add each to `TINTED_SURFACE_TOKENS` in ' +
+        '`inkContrastScan.ts` (both guards read it from there), or the surface walk will ' +
+        'resolve a background it has no verdict for and report nothing (MOTIR-3693).',
+    ).toBe('');
+  });
+
+  it('holds nothing in the tinted set that has stopped being one of those fills', () => {
+    // The other direction, and the one that catches a RETARGET: a token moved
+    // onto the page white would otherwise keep failing ink that now clears on
+    // it — a false positive whose cheapest fix is to swap the token for its
+    // twin, which changes no pixels and leaves a colour chosen for a parser.
+    expect(
+      TINTED_SURFACE_TOKENS.filter((token) => !TINTED_TOKENS.includes(token)).join(', '),
+      'These are treated as a tinted surface by `inkContrastScan.ts` but no longer resolve ' +
+        'to one of `TINTED_SURFACE_VALUES` in `theme.css`. Re-measure the pair before ' +
         'deciding which side to change.',
     ).toBe('');
   });

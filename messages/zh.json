@@ -2248,7 +2248,8 @@
         "all": "全部",
         "succeeded": "成功",
         "failed": "失败",
-        "running": "运行中"
+        "running": "运行中",
+        "abandoned": "已放弃"
       },
       "runsTableCaption": "后台任务运行",
       "col": {
@@ -6777,9 +6778,11 @@
         "colReason": "原因",
         "operatorRole": "平台 {role}",
         "action": {
-          "user.password_reset_sent": "已发送密码重置",
-          "user.suspend": "已停用",
-          "user.unsuspend": "已解除停用"
+          "user": {
+            "password_reset_sent": "已发送密码重置",
+            "suspend": "已停用",
+            "unsuspend": "已解除停用"
+          }
         }
       }
     },
@@ -6895,6 +6898,33 @@
     "indexTitle": "法律条款",
     "indexIntro": "moooon B.V. 就 Motir 云服务发布的全部内容 — 你所同意的条款、我们如何处理你的数据，以及还有谁会接触到它。若你自行部署 Motir，则你是自己的数据控制者，这些文件描述的是我们的服务，而非你的。",
     "indexContact": "如对以上内容有疑问：legal@motir.co",
-    "signUpNotice": "创建账户即表示你同意我们的<terms>服务条款</terms>与<privacy>隐私政策</privacy>。"
+    "signUpNotice": "创建Motir账户即表示你同意我们的<terms>服务条款</terms>与<privacy>隐私政策</privacy>。",
+    "reconsent": {
+      "takesEffect": "{date} 起生效",
+      "notYetEffective": "尚未生效",
+      "signedOutChip": "已退出登录",
+      "headlineOne": "我们更新了{document}",
+      "headlineMany": "我们更新了 {count} 份文件",
+      "body": "我们不会把你的沉默当作对重大变更的同意，因此想请你读一下改动的内容并确认。没有任何内容被删除，你的项目和工作区不受影响，订阅也没有变化。",
+      "versionDelta": "{from} → {to}",
+      "versionNew": "新增 — 版本 {version}",
+      "readNewVersion": "阅读新版本 →",
+      "agreeOne": "同意并继续",
+      "agreeTwo": "同意两份并继续",
+      "agreeMany": "同意全部并继续",
+      "agreeing": "正在记录你的同意…",
+      "agreeFailed": "暂时没能记录下来，请再试一次。",
+      "notNow": "暂不 — 退出登录",
+      "signingOut": "正在退出…",
+      "askAgain": "下次登录时我们会再问一次。或者<decline>告诉我们你不接受</decline>。",
+      "deferredHeadline": "没关系 — 你可以慢慢来",
+      "deferredBody": "你已退出登录，什么都没有改变。下次登录时我们会再问一次，你随时可以阅读新版条款。",
+      "deferredReadLink": "无需登录即可阅读 →",
+      "deferredPrimary": "返回登录",
+      "declineHeadline": "如果你不接受，可以注销账户",
+      "declineBody": "根据服务条款，如果你不接受重大变更，可以终止协议，并取回已预付但未使用部分的费用。这一点依然有效 — 在你做出选择之前，本页面不会执行任何操作。",
+      "declineFoot": "更想和真人聊聊？写信到 <contact>legal@motir.co</contact>，我们会回复你。",
+      "back": "← 返回"
+    }
   }
 }

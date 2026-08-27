@@ -31,6 +31,7 @@ import { migrateOnboardingService } from '@/lib/services/migrateOnboardingServic
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
+import { jobRunsService } from '@/lib/services/jobRunsService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -77,6 +78,9 @@ export const jobServices = {
   workItemEmbeddings: workItemEmbeddingsService,
   planTargetLock: planTargetLockService,
   abandonedPlan: abandonedPlanService,
+  // The ledger itself is a job's subject exactly once: the abandoned-run reap
+  // (MOTIR-3683), which closes rows no completion write will ever reach.
+  jobRuns: jobRunsService,
 };
 
 export type JobServices = typeof jobServices;

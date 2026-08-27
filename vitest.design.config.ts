@@ -79,6 +79,14 @@ export default defineConfig({
       // PR editing either is therefore the thing most likely to break it, and
       // would otherwise skip the root config that runs it.
       'tests/theme/orb-glyph-contrast.test.ts',
+      // `design-dark-parity` (MOTIR-3592) is the only spec in the tree that asks a
+      // CSS engine what a nested `[data-theme="dark"]` element in a mock actually
+      // COMPUTED, rather than what its stylesheet says. It reads every
+      // `*.mock.html` and nothing else, so a design PR is both the only thing
+      // that can break it and the only thing that can fix it. It runs on
+      // happy-dom, already a devDependency — no browser, so the lane stays in the
+      // cost class this config's header promises.
+      'tests/design-dark-parity.test.ts',
     ],
   },
   resolve: {

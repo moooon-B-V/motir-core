@@ -973,6 +973,68 @@ describe('selfBlockingDesignCriteria — a card that is its OWN design blocker (
     expect(selfBlockingDesignCriteria(consumesOnly)).toBeNull();
   });
 
+  it('says nothing when a design card SPECS THE EXPORT of its own mocks — MOTIR-3609', () => {
+    // HOLE 2 (MOTIR-3625). The exclusion below is per-CRITERION, so it only ever
+    // protected a criterion that named an asset PATH. MOTIR-3609's last criterion
+    // is the PNG-export spec FOR THE ASSETS ITS FIRST CRITERION CREATES, and it
+    // names no path at all — so `namesDesignAsset` was false while `page` +
+    // `rendered` made `namesRenderedSurface` true, and the design card was
+    // reported against itself: `{ design: 1, surface: 10 }`.
+    //
+    // The criteria are quoted from that card, trimmed to the two that decide it
+    // plus one that must not become the surface criterion in their place.
+    const exportSpec = [
+      '## Acceptance criteria',
+      '',
+      '- `design/settings/passkeys.mock.html`, `design/settings/passkeys.png`,',
+      '  `design/auth/passkey-sign-in.mock.html` and `design/auth/passkey-sign-in.png` all',
+      '  exist and are committed — four new files, two same-basename pairs.',
+      '- Every panel listed under Surface A and Surface B above is present in its mock,',
+      '  including the dark-parity panel.',
+      '- Each `.png` is a full-page export of its own mock rendered with the installed',
+      '  Playwright chromium at `deviceScaleFactor: 2`, viewport width ~1200, light theme.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(exportSpec)).toBeNull();
+  });
+
+  it('does not let a bare `.png` MANUFACTURE a design criterion — the widening stops at the artefact', () => {
+    // The cost the widening above must not pay. `.png` is an upload format and an
+    // avatar's as much as a design export, so reading it as a design deliverable
+    // would invent a design criterion on a card that has none — and an invented
+    // design criterion plus any ordinary render criterion is a NEW false
+    // positive, in the same family this change exists to remove. Nothing here
+    // names a mock, an artboard or a design asset, so nothing here is a design
+    // criterion and the card is silent.
+    const uploads = [
+      '## Acceptance criteria',
+      '',
+      '1. the avatar upload accepts `.png` and `.jpg` under 2 MB',
+      '2. the profile panel shows the new avatar without a reload',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(uploads)).toBeNull();
+  });
+
+  it('STILL fires when a card draws a mock AND builds the surface — the arm that must survive', () => {
+    // The regression guard on both holes at once. Widening what counts as a
+    // design criterion is one edit away from *"a card that produces an asset
+    // anywhere has no surface criterion"*, which reads well and would mean the
+    // check can never fire again — the design criterion is BY CONSTRUCTION a
+    // criterion that names an asset. Here criterion 1 draws the mock and
+    // criterion 3 builds a component path against it, on one card.
+    const bothHalves = [
+      '## Acceptance criteria',
+      '',
+      '1. `design/settings/passkeys.mock.html` and its same-basename `.png` are added',
+      '2. the service returns the enrolled credentials',
+      '3. `app/(authed)/settings/account/_components/PasskeyManager.tsx` renders the rows',
+      '   the drawing decides',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(bothHalves)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 3,
+    });
+  });
+
   it('reports the FIRST criterion of each role when several qualify', () => {
     const many = [
       '## Acceptance criteria',

@@ -695,6 +695,7 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: `evt-${repoRef}`,
+        lane: 'inngest',
         attempt: 0,
         status: 'succeeded',
         output: { indexed: true, repoRef, projectsIndexed: 1 },

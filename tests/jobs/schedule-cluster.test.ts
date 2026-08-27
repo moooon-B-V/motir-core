@@ -129,7 +129,13 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // the record too rather than silently leaving §21 describing a schedule that
     // no longer exists. Not a second copy of the invariant: the invariant is a
     // floor any clustered shape could satisfy, and this is THIS shape.
-    expect(jobSchedules().length).toBe(15);
+    //
+    // ⚠️ THE COUNT MOVES AS JOBS ARRIVE; THE SHAPE IS WHAT §21 PINS. Bumping this
+    // number is the expected maintenance for a new `system.*` cron — what must
+    // NOT move is everything below it. 16 since `system.job-run-reap`
+    // (MOTIR-3683), whose first draft picked `10 4 * * *` and was stopped by the
+    // minute assertion above, exactly as §21 predicts a fifteenth job would be.
+    expect(jobSchedules().length).toBe(16);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

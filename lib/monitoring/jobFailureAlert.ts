@@ -1,5 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 
+import type { JobRunLane } from '@/lib/dto/jobs';
+
 // A TERMINALLY FAILED JOB REACHES A PERSON (MOTIR-3606) — the delivery half of
 // the background-job failure surface.
 //
@@ -45,8 +47,17 @@ export interface TerminalJobFailureAlert {
   readonly workspaceId: string | null;
   /** Total attempts made before the retry budget was spent, including the first. */
   readonly attempts: number;
-  /** Which runtime executed it — the two lanes fail for different reasons. */
-  readonly engine: 'engine' | 'inngest';
+  /**
+   * Which runtime executed it — the two lanes fail for different reasons.
+   *
+   * ⚠️ TYPED AS `JobRunLane`, NOT AS ITS OWN UNION (MOTIR-3683). This alert and
+   * the `job_run.lane` column landed within an hour of each other and were two
+   * spellings of one axis; a second definition is how the two would eventually
+   * disagree about what a lane is. Same values, one type — the FIELD keeps its
+   * own name because `engine` reads correctly beside `job_engine` on the Sentry
+   * tag, and a rename would churn a surface an on-call person already knows.
+   */
+  readonly engine: JobRunLane;
   /** The final thrown value, unserialized, so Sentry gets a real stack. */
   readonly error: unknown;
 }

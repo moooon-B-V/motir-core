@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { createTranslator } from 'next-intl';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { locales } from '@/lib/i18n/locales';
+import { PLATFORM_AUDIT_ACTION_KEYS, reasonPolicyFor } from '@/lib/platform/auditActions';
 
 // Collect EVERY key path that appears more than once at the same object level in
 // the RAW catalog text. `import … from '*.json'` (and `JSON.parse`) silently keep
@@ -155,5 +157,79 @@ describe('zh glossary (locked terms)', () => {
       leaks.map(([path]) => path),
       `banned work-item 问题 (use 工作项) at: ${leaks.map(([p]) => p).join(', ')}`,
     ).toEqual([]);
+  });
+});
+
+// A key whose NAME contains a `.` is not a naming preference — it is an
+// UNRESOLVABLE key. next-intl reserves `.` for nesting, so it walks
+// `platformAdmin.users.log.action.user.suspend` as six segments and never finds
+// the five-segment literal the catalog actually holds; it also refuses such keys
+// outright at provider construction (`INVALID_KEY`). The parity check above is
+// structurally blind to this: `flatten` joins segments with `.`, so a literal
+// `"user.suspend"` and a nested `user: { suspend }` flatten to the SAME path —
+// both locales carried the same broken key, parity held, and the surface
+// rendered raw key paths (MOTIR-3686, shipped by MOTIR-1167).
+describe('catalog keys are resolvable (no `.` inside a key name)', () => {
+  it.each(['en', 'zh'])('%s.json has no key containing a `.`', (locale) => {
+    const messages = (locale === 'en' ? en : zh) as Record<string, unknown>;
+    const dotted: string[] = [];
+    const walk = (node: Record<string, unknown>, path: string[]) => {
+      for (const [key, value] of Object.entries(node)) {
+        if (key.includes('.')) dotted.push([...path, key].join(' → '));
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          walk(value as Record<string, unknown>, [...path, key]);
+        }
+      }
+    };
+    walk(messages, []);
+    expect(
+      dotted,
+      `keys containing "." in ${locale}.json (next-intl reads "." as nesting, so these never resolve): ${dotted.join(', ')}`,
+    ).toEqual([]);
+  });
+});
+
+// The specific consequence the rule above prevents, asserted at the call site
+// that suffers it. `/admin/users/[userId]` renders each audit row as
+// `t(`users.log.action.${row.action}`)`, and `platformSupportService` filters
+// that log to the OPERATOR WRITES — `reasonPolicyFor(action) === 'required'`.
+// So the population that must carry a label is exactly the `required` members of
+// `PLATFORM_AUDIT_ACTIONS`, and it GROWS: Story 10.3's governance actions each
+// add one. Deriving the expected set from the vocabulary rather than listing it
+// here is what makes a fourth support action unable to ship unlabelled.
+describe('platform support-action labels resolve for every operator write', () => {
+  const operatorWrites = PLATFORM_AUDIT_ACTION_KEYS.filter(
+    (action) => reasonPolicyFor(action) === 'required',
+  );
+
+  it('has at least one operator write to check (the derivation is not vacuous)', () => {
+    expect(operatorWrites.length).toBeGreaterThan(0);
+  });
+
+  it.each(['en', 'zh'])('%s labels every operator write in the support log', (locale) => {
+    const messages = (locale === 'en' ? en : zh) as Record<string, unknown>;
+    const errors: string[] = [];
+    const t = createTranslator({
+      locale,
+      messages: messages as Parameters<typeof createTranslator>[0]['messages'],
+      namespace: 'platformAdmin',
+      onError: (error) => errors.push(`${error.code}: ${error.message}`),
+      getMessageFallback: ({ key }) => `MISSING:${key}`,
+    });
+
+    // The two locale JSONs have different inferred types, so `messages` is
+    // widened to a plain record above and next-intl can no longer type the key.
+    // The lookup itself is byte-for-byte the page's: `users.log.action.` + the
+    // raw action value, dots and all.
+    const translate = t as unknown as (key: string) => string;
+    const unresolved = operatorWrites.filter((action) =>
+      translate(`users.log.action.${action}`).startsWith('MISSING:'),
+    );
+
+    expect(
+      unresolved,
+      `${locale}.json has no resolvable label for: ${unresolved.join(', ')} (add it under platformAdmin.users.log.action, nested so the lookup path matches)`,
+    ).toEqual([]);
+    expect(errors, `next-intl rejected the catalog: ${errors.join(' | ')}`).toEqual([]);
   });
 });

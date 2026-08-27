@@ -5,6 +5,8 @@ import path from 'node:path';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedLessonLibrary, type LessonLibrarySeed } from './_helpers/lesson-library-seed';
+import { openAiPlanningSettings } from './_helpers/ai-planning-settings';
+import { expectSettledVisible } from './_helpers/settle';
 
 // Story MOTIR-3329 — the lesson library, end to end (Subtask MOTIR-3340).
 //
@@ -102,13 +104,16 @@ const railEntry = (page: Page) => page.getByRole('link', { name: 'AI planning' }
 const doorCard = (page: Page) => page.getByTestId('lesson-library-card');
 const doorLink = (page: Page) => page.getByTestId('lesson-library-link');
 
-/** Reach AI-planning settings the way a person does — by clicking. */
-async function openAiPlanning(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await expect(railEntry(page)).toBeVisible();
-  await railEntry(page).click();
-  await expect(page.getByRole('heading', { name: 'AI planning' })).toBeVisible();
-}
+// Reaching AI-planning settings the way a person does — by clicking — is
+// `_helpers/ai-planning-settings.ts`'s `openAiPlanningSettings`, imported above.
+// This spec kept its own third variant of that walk until MOTIR-3692; the
+// shared one additionally SETTLES the panel's count, which is what stops the
+// transient double-subtree strict-mode violation taking the whole
+// `billing-cloud` leg down.
+//
+// `railEntry` above stays local and UNSCOPED on purpose: the member's step
+// asserts it resolves to ZERO, and unscoped is the stronger claim there — no
+// such link anywhere on the page, rail or `#main`.
 
 let seed: LessonLibrarySeed;
 
@@ -126,10 +131,10 @@ test('an admin reaches the lessons from settings and reads one in full', async (
   await signIn(page, seed.adminEmail, seed.password);
 
   // 1 · Project settings → AI planning, by clicking.
-  await openAiPlanning(page);
+  await openAiPlanningSettings(page);
 
   // 2 · The DOOR is on the page they are already on.
-  await expect(doorCard(page)).toBeVisible();
+  await expectSettledVisible(doorCard(page));
   await expect(doorCard(page).getByText('What Motir has learned')).toBeVisible();
   // The preview shows takeaways, and the link quotes the LIBRARY total (12) —
   // not the three rows beside it.
@@ -184,7 +189,7 @@ test('the two not-applied states are told apart on the row', async ({ page }) =>
   // one the clock aged out. Both are RETURNED — the point of the surface is what
   // the planner has stopped saying — and each says WHICH in words.
   await signIn(page, seed.adminEmail, seed.password);
-  await openAiPlanning(page);
+  await openAiPlanningSettings(page);
   await doorLink(page).click();
 
   const aged = page.getByTestId('lesson-row').filter({ hasText: AGED_TAKEAWAY });
@@ -212,10 +217,10 @@ test('a project with no lessons gets the designed empty screen, not a blank pane
 }) => {
   writeEmptyLibrary();
   await signIn(page, seed.adminEmail, seed.password);
-  await openAiPlanning(page);
+  await openAiPlanningSettings(page);
 
   // The door is still there — it is how you learn what this is.
-  await expect(doorCard(page)).toBeVisible();
+  await expectSettledVisible(doorCard(page));
   await doorLink(page).click();
 
   await expect(page.getByText("Motir hasn't learned anything here yet")).toBeVisible();

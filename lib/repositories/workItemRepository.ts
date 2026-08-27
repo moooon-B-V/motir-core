@@ -2181,6 +2181,33 @@ export const workItemRepository = {
   },
 
   /**
+   * The WORK TYPE of many work items by id, within one workspace — the leanest
+   * possible read, for the SELF-BLOCKING-DESIGN advisory's edge half
+   * (MOTIR-3625): *does this card carry a `blocked_by` edge to a `type: design`
+   * item?*
+   *
+   * Deliberately NOT {@link findDescriptionsByIds}. That one is keyed to the
+   * cards being SCANNED and drags every body, both sizing columns and a child
+   * count with it; the blockers are a different, often larger set and this
+   * question needs one nullable string per row. Workspace-scoped like its
+   * neighbour so a cross-tenant id simply does not come back, read-only path →
+   * `db` singleton, and an empty input short-circuits so we never issue a
+   * degenerate `IN ()`.
+   */
+  async findTypesByIds(
+    ids: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; type: string | null }>> {
+    if (ids.length === 0) return [];
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: { id: { in: ids }, workspaceId },
+      select: { id: true, type: true },
+    });
+  },
+
+  /**
    * Per-kind count of the LIVE (non-archived) DESCENDANTS of a subtree, in ONE
    * round-trip via a recursive CTE (Story 2.9 · Subtask 2.9.9). The root is
    * EXCLUDED (`depth > 1`) and only rows with `archivedAt IS NULL` are counted,

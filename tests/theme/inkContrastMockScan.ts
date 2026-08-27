@@ -1,4 +1,4 @@
-import { SAFE_SURFACE_TOKENS } from './inkContrastScan';
+import { SAFE_SURFACE_TOKENS, TINTED_SURFACE_TOKENS } from './inkContrastScan';
 
 // The DESIGN-ASSET arm of the ink-contrast guard (MOTIR-3014, MOTIR-3054).
 //
@@ -92,16 +92,19 @@ export const FAINT_TOKEN = '--el-text-faint';
 /**
  * The backgrounds on which `--el-text-muted` drops below 4.5:1 — CLAUDE.md's
  * measured table (MOTIR-2455): 4.17 / 4.12 / 4.34 against 4.54 on the white
- * page/card. The safe ones are `SAFE_SURFACE_TOKENS`, imported from the code
- * scanner so the two arms cannot disagree about which token is the page white.
+ * page/card.
+ *
+ * BOTH lists are imported from the code scanner now (MOTIR-3693). The safe one
+ * always was, for the stated reason — so the two arms cannot disagree about
+ * which token is the page white — and the tinted one was a second copy of the
+ * same kind of fact, carrying three names while `theme.css` declared sixteen
+ * `--el-*` that resolve to one of those three fills. `--el-sidebar-bg` is the
+ * one that mattered: an alias of `--el-surface`, painting the identical
+ * `#f6f5f4`, measured by neither guard, carrying 242 sub-AA pairs across 18
+ * assets. Two copies of a list is how one of them goes stale; the list is now
+ * derived from the token table and asserted total there.
  */
-export const TINTED_SURFACE_TOKENS: readonly string[] = [
-  '--el-surface',
-  '--el-surface-soft',
-  '--el-muted',
-];
-
-export { SAFE_SURFACE_TOKENS };
+export { SAFE_SURFACE_TOKENS, TINTED_SURFACE_TOKENS };
 
 export interface MockFinding {
   file: string;

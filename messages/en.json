@@ -2248,7 +2248,8 @@
         "all": "All",
         "succeeded": "Succeeded",
         "failed": "Failed",
-        "running": "Running"
+        "running": "Running",
+        "abandoned": "Abandoned"
       },
       "runsTableCaption": "Background job runs",
       "col": {
@@ -6781,9 +6782,11 @@
         "colReason": "Reason",
         "operatorRole": "Platform {role}",
         "action": {
-          "user.password_reset_sent": "Password reset sent",
-          "user.suspend": "Suspended",
-          "user.unsuspend": "Suspension lifted"
+          "user": {
+            "password_reset_sent": "Password reset sent",
+            "suspend": "Suspended",
+            "unsuspend": "Suspension lifted"
+          }
         }
       }
     },
@@ -6899,6 +6902,33 @@
     "indexTitle": "Legal",
     "indexIntro": "Everything moooon B.V. publishes about the hosted Motir service — what you agree to, what we do with your data, and who else it reaches. If you run Motir yourself, you are your own controller and these describe our service, not yours.",
     "indexContact": "Questions about any of these: legal@motir.co",
-    "signUpNotice": "By creating an account you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>."
+    "signUpNotice": "By creating a Motir account you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "reconsent": {
+      "takesEffect": "Takes effect {date}",
+      "notYetEffective": "Not yet in effect",
+      "signedOutChip": "Signed out",
+      "headlineOne": "We've updated our {document}",
+      "headlineMany": "We've updated {count} of our documents",
+      "body": "We won't treat carrying on in silence as agreement, so we're asking you to read what changed and say yes. Nothing has been deleted, your projects and workspaces are untouched, and your subscription has not changed.",
+      "versionDelta": "{from} → {to}",
+      "versionNew": "New — version {version}",
+      "readNewVersion": "Read the new version →",
+      "agreeOne": "Agree and continue",
+      "agreeTwo": "Agree to both and continue",
+      "agreeMany": "Agree to all and continue",
+      "agreeing": "Recording your agreement…",
+      "agreeFailed": "We couldn't record that just now. Please try again.",
+      "notNow": "Not now — sign out",
+      "signingOut": "Signing out…",
+      "askAgain": "We'll ask again the next time you sign in. Or <decline>tell us you don't accept</decline>.",
+      "deferredHeadline": "No problem — take your time",
+      "deferredBody": "You've been signed out and nothing has changed. We'll ask again the next time you sign in, and you can read the new Terms whenever you like.",
+      "deferredReadLink": "Read it without signing in →",
+      "deferredPrimary": "Back to sign in",
+      "declineHeadline": "If you don't accept, you can close your account",
+      "declineBody": "Your Terms say that if you don't accept a material change you may end your agreement and get back the unused part of anything you've prepaid. That's still true — and nothing happens on this screen until you choose it.",
+      "declineFoot": "Would rather talk to a person about it? Write to <contact>legal@motir.co</contact> and we'll answer.",
+      "back": "← Back"
+    }
   }
 }
