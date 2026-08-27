@@ -11,6 +11,7 @@ import { JiraOAuthExchangeError } from '@/lib/import/jira/errors';
 import { PlaneOAuthExchangeError } from '@/lib/import/plane/errors';
 import type { ImportConnectionConfig } from '@/lib/dto/import';
 import type { ImportMapping } from '@/lib/import/engine/types';
+import { DERIVED_PARENT_STATUS_WARNING } from '@/lib/import/engine/importDerivedStatus';
 import {
   ImportConnectionConfigError,
   ImportNotFoundError,
@@ -146,6 +147,65 @@ describe('importService', () => {
     const after = await importService.getImport(draft.id, fx.ctx);
     expect(after.status).toBe('previewed');
     expect(after.mapping).toMatchObject({ statusToKey: { open: 'todo', done: 'done' } });
+  });
+
+  // ── The derived-parent-status disclosure (MOTIR-2974 · status-derivation §3c)
+  //
+  // The DECISION is that an imported parent's status is derived, not
+  // CSV-authoritative; the price is that the dry run says so before the write.
+  // These two cover the SERVICE wiring — the whole-set post-pass, the toggle
+  // read and the existing-children read. The pure rule itself (which rows
+  // qualify, and why) is `tests/import/importDerivedStatus.test.ts`.
+
+  it('preview MARKS a row that another row parents to — the file no longer governs its status', async () => {
+    const fx = await makeWorkItemFixture();
+    const draft = await importService.createDraft(
+      { projectId: fx.projectId, source: 'csv' },
+      fx.ctx,
+    );
+    const conn = csvConnection(
+      'ACME-1,Parent,Task,Open,,,,,',
+      'ACME-2,Child,Bug,Done,,,,ACME-1,',
+      'ACME-3,Leaf,Task,Open,,,,,',
+    );
+
+    const result = await importService.preview(
+      draft.id,
+      { mapping: CSV_MAPPING, connection: conn },
+      fx.ctx,
+    );
+
+    const marked = result.rows
+      .filter((r) => r.warnings.includes(DERIVED_PARENT_STATUS_WARNING))
+      .map((r) => r.externalId);
+    expect(marked).toEqual(['ACME-1']);
+    // Still a pure dry run — the disclosure writes nothing.
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+  });
+
+  it('preview marks NOTHING when the project has autoRollupParentStatus off', async () => {
+    const fx = await makeWorkItemFixture();
+    // §3a's toggle gates every derivation trigger; with it off no parent's
+    // status is derived, so there is nothing to disclose.
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { autoRollupParentStatus: false },
+    });
+    const draft = await importService.createDraft(
+      { projectId: fx.projectId, source: 'csv' },
+      fx.ctx,
+    );
+    const conn = csvConnection('ACME-1,Parent,Task,Open,,,,,', 'ACME-2,Child,Bug,Done,,,,ACME-1,');
+
+    const result = await importService.preview(
+      draft.id,
+      { mapping: CSV_MAPPING, connection: conn },
+      fx.ctx,
+    );
+
+    expect(result.rows.every((r) => !r.warnings.includes(DERIVED_PARENT_STATUS_WARNING))).toBe(
+      true,
+    );
   });
 
   it('run wires the connector into the persist engine — CSV rows become work items end-to-end', async () => {

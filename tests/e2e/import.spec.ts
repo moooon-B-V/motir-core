@@ -160,6 +160,17 @@ test.describe('issue importer — CSV path (7.16.9)', () => {
     await expect(page.getByText('UPDATE', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Checkout epic')).toBeVisible();
 
+    // The DERIVED-PARENT disclosure (MOTIR-2974 · status-derivation ADR §3c).
+    // `ACME-2` parents to `ACME-1`, so `Checkout epic` will be a parent and its
+    // status column stops governing it. §3c's price for deciding that the
+    // derived value WINS is that the preview says so BEFORE Confirm rather than
+    // leaving it to be discovered after the write — so the mark is asserted
+    // here, on the dry run, not only on the outcome below. Exactly one row
+    // qualifies: the three leaves are untouched.
+    await expect(
+      page.getByText("status is derived from this issue's children", { exact: false }),
+    ).toHaveCount(1);
+
     await confirmAndRun(page, 4, seed.projectName);
 
     // The user lands on the backlog and sees the imported work items. The
@@ -183,14 +194,27 @@ test.describe('issue importer — CSV path (7.16.9)', () => {
     // kind ← type; status ← workflow status (QA → the mapped In Review); priority;
     // assignee ← matched member email; labels; parent ← the parent column.
     expect(epic!.kind).toBe('story');
-    // ⚠️ The CSV says `todo` for this row, and the imported item IS created at
-    // `todo` — but it is a PARENT, and a parent's status is DERIVED from its
-    // children (Story MOTIR-2888). "Payment subtask" imports as its
-    // `in_progress` child, so the recompute lifts the parent to `in_progress`
-    // and the imported tree ends up internally consistent rather than claiming
-    // unstarted work above started work. Polled, because derivation is
-    // asynchronous — the import's own response is not the last write the tree
-    // receives.
+    // ⚠️ THE CSV SAYS `todo` FOR THIS ROW AND THE PARENT ENDS UP `in_progress`,
+    // AND THAT IS A DECIDED OUTCOME — not merely what happened to ship.
+    // `docs/decisions/status-derivation.md` §3c (MOTIR-2974) settles that an
+    // imported parent's status is DERIVED, not CSV-authoritative: the status
+    // column is authoritative for the ROW, never for the row's relationship to
+    // its children. The mapped value IS applied and recorded (`setImportedStatus`
+    // writes it with a revision); the recompute then reads the child set, exactly
+    // as it would for a parent a person set by hand, because §1 makes derivation
+    // ride every ingress. "Payment subtask" imports as its `in_progress` child,
+    // so the parent lifts to `in_progress` and the tree never claims unstarted
+    // work above started work. The rejected alternative — CSV-authoritative for
+    // parents — is recorded in §3c: it needs a per-path exemption §3 forbids, and
+    // it would not survive the next child-set edit anyway.
+    //
+    // ⚠️ SO THIS ASSERTION IS LOAD-BEARING: a change that made the CSV's parent
+    // value win would be a change to §3c, not a fix to this test. The preview
+    // assertion above is the other half of that decision — the user is told
+    // before the run.
+    //
+    // Polled, because derivation is asynchronous — the import's own response is
+    // not the last write the tree receives.
     await expect
       .poll(async () => (await itemByTitle(seed.projectId, 'Checkout epic'))!.status, {
         timeout: 15_000,
