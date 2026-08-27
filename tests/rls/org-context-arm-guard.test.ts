@@ -87,6 +87,21 @@ const DELIBERATELY_ORG_ONLY: Record<string, Verdict> = {};
  *   machine cannot see it.
  */
 const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why: string }> = {
+  'lib/repositories/organizationRepository.ts#lockByIdForUpdate': {
+    tables: ['organization'],
+    source: 'scan',
+    why:
+      'THE DEFECT MOTIR-3710 FIXED, and the one entry in this sweep that is not a READ. ' +
+      'The `SELECT "id" FROM "organization" … FOR UPDATE` that every §4 count cap serializes ' +
+      'on matched ZERO rows from `withWorkspaceContext`: Postgres applies the UPDATE policy ' +
+      'USING clause to a `FOR UPDATE`, `organization_mutate_active` reads app.organization_id, ' +
+      'and that context binds user / workspace / project only — so the lock filtered out ' +
+      'silently while `organization_membership_visible` kept the row READABLE. The method now ' +
+      'binds the GUC itself, which is why it is a call site here at all. The arm asserted ' +
+      'below is `organization_active`; the UPDATE arm the lock needs is not a SELECT policy ' +
+      'and so is out of `armedTables` reach — the probe in ' +
+      '`tests/entitlementsService.test.ts` is what re-measures THAT, on every run.',
+  },
   'lib/services/billingPropagationService.ts#setScaledTrackerState': {
     tables: ['organization'],
     source: 'scan',

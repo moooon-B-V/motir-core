@@ -112,3 +112,27 @@ export class EntitlementExceededError extends Error {
     this.name = 'EntitlementExceededError';
   }
 }
+
+/**
+ * A §4 count cap could not take the org-row lock it serializes on
+ * (`organizationRepository.lockByIdForUpdate` returned `false`), so the
+ * `count → compare → create` guard would run UNSERIALIZED — two concurrent
+ * creates could both observe `count = limit - 1` and both insert (MOTIR-3710).
+ *
+ * A cap that cannot serialize must REFUSE, not admit: the alternative is a
+ * revenue control failing open with no error, no log line and no metric, which
+ * is exactly how this shipped for months. Not a user error and not an upgrade
+ * prompt — it is a server-side invariant failure, so it carries no
+ * `entitlement` and maps to **500**. Reaching it means either the org row
+ * vanished mid-transaction or the calling context cannot admit the lock.
+ */
+export class CapLockUnavailableError extends Error {
+  readonly code = 'CAP_LOCK_UNAVAILABLE' as const;
+  constructor(readonly organizationId: string) {
+    super(
+      `Could not lock organization ${organizationId} for update; ` +
+        'the scale cap cannot be enforced without serialization.',
+    );
+    this.name = 'CapLockUnavailableError';
+  }
+}
