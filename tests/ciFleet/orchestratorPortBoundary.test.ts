@@ -57,21 +57,57 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
 ];
 
 /**
- * The ONE sanctioned exception, and it is worth naming rather than hiding.
+ * The TWO sanctioned exceptions, worth naming rather than hiding.
  *
- * `ciRunnerBootService` reads the fleet's IMAGE and REGION through
- * `flyFleetConfig()` to fill a provider-neutral `ContainerSpec`. Those two values
- * are deployment configuration that has to come from somewhere, and today the
- * only deployment is Fly's. It is a leak of the CONFIG accessor, not of a Fly
- * type: no `FlyMachine`, no machine id, no API call. When a second adapter lands,
- * the fix is a `defaultSpecDefaults()` on the port — which is a five-line change
- * precisely because this is the only place to change.
+ * Each is scoped to ONE file AND ONE tell, so the exemption covers the line it
+ * was argued for and nothing else: a second kind of leak in an excused file
+ * still fails. That is the property that keeps this list from becoming the place
+ * violations go to be forgotten.
+ *
+ * 1. `ciRunnerBootService` reads the fleet's IMAGE and REGION through
+ *    `flyFleetConfig()` to fill a provider-neutral `ContainerSpec`. Those two
+ *    values are deployment configuration that has to come from somewhere, and
+ *    today the only deployment is Fly's. It is a leak of the CONFIG accessor,
+ *    not of a Fly type: no `FlyMachine`, no machine id, no API call. When a
+ *    second adapter lands, the fix is a `defaultSpecDefaults()` on the port —
+ *    which is a five-line change precisely because this is the only place to
+ *    change.
+ *
+ * 2. `lib/deployment/identity.ts` answers "where is THIS PROCESS running?" for
+ *    the operator console's hosting card (MOTIR-1167), whose acceptance
+ *    criterion is a link-out to the app's own dashboard — and a link nobody can
+ *    construct is not a link.
+ *
+ *    ⚠️ IT IS A DIFFERENT KIND OF EXCEPTION FROM THE FIRST, and the difference
+ *    is the reason it is admitted rather than refused. This rule's SUBJECT is
+ *    the CI-runner orchestrator PORT — that a second container provider is "a
+ *    new file under `adapters/` plus one branch in the selector". That file is
+ *    not part of that port: it boots no container, tears none down, meters
+ *    nothing, and imports nothing from `lib/orchestrator/`. It is about the WEB
+ *    PROCESS, which the fleet has no opinion about.
+ *
+ *    The rule's REACH is nevertheless all of `lib/`, deliberately and correctly
+ *    — a boundary guard narrowed to the directory it protects is one you evade
+ *    by moving a file. So the answer is a REGISTERED exception in the shape the
+ *    first one takes: one file, one narrow tell naming the three variables it
+ *    was argued for, and the provider knowledge concentrated where a second
+ *    deployment target is one more branch.
+ *
+ *    The tell deliberately does NOT match `FLY_*` in general. A future
+ *    `FLY_API_TOKEN` read in that file — the thing that would turn a passive
+ *    identity accessor into a Fly API client — fails this guard, which is the
+ *    whole point of scoping an exemption to a pattern instead of to a path.
  */
 const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
   {
     file: join('lib', 'services', 'ciRunnerBootService.ts'),
     tell: /\bflyFleetConfig\b/,
     why: 'reads the deployment image/region for a provider-neutral ContainerSpec',
+  },
+  {
+    file: join('lib', 'deployment', 'identity.ts'),
+    tell: /\bFLY_(APP_NAME|REGION|MACHINE_ID)\b/,
+    why: "answers where the WEB PROCESS runs, for the console's hosting card — not the fleet's port",
   },
 ];
 

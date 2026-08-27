@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { deploymentIdentity } from '@/lib/deployment/identity';
 import type {
   PlatformHealthDTO,
   PlatformOverdueScheduleDTO,
@@ -170,39 +171,33 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
 }
 
 /**
- * Where the app is running, read from what the PLATFORM injects.
+ * Where the app is running.
  *
- * ⚠️ THE DESIGN DRAWS A MACHINE COUNT AND THIS DELIBERATELY DOES NOT REPORT ONE.
- * `machine_count` is a reading of Fly's API, and this deployment has no runtime
- * credential that can take it: `FLY_FLEET_API_TOKEN` is scoped to the CI fleet's
- * OWN organization, which `production-service-stack.md` §7.5 requires to be
- * separate from motir-core's, so it cannot see this app. The one place the count
- * IS asserted is `ci.yml`'s deploy step, with a token that exists only there.
+ * ⚠️ THE PROVIDER KNOWLEDGE IS NOT HERE, AND MUST NOT COME BACK.
+ * `docs/decisions/ci-runner-fleet.md` §4 rule 1 keeps `lib/` provider-agnostic,
+ * and `tests/ciFleet/orchestratorPortBoundary.test.ts` enforces it by scanning
+ * SOURCE — so this service reads a neutral `DeploymentIdentity` and names no
+ * platform, no environment variable and no dashboard host. The one file allowed
+ * to know is `lib/deployment/identity.ts`, which carries the whole argument
+ * including why a machine COUNT is not among the things it answers.
  *
- * The alternative — reading `fly.toml` and rendering what it PROMISES — is the
- * mistake this codebase has already paid for once: motir-ai's `fly.toml`
- * promised load spilling onto fresh machines while production ran ONE machine
- * for weeks, because *"Fly Proxy autostop/autostart never creates or destroys
- * Machines for you"*. A config file is a claim about a deployment, not a reading
- * of it, and a health board that renders the claim as the reading is worse than
- * one that renders nothing.
- *
- * So the card reports the identity of the machine ANSWERING — which is a genuine
- * reading of the platform, taken from inside it — and links out to the Fly
- * dashboard, where the count lives. The count arrives with Story 10.2, which is
- * the story that provisions a monitoring credential.
+ * (This service failed that guard on its first push, with three raw `FLY_*`
+ * reads inline. The guard was right and the fix is the accessor, not an
+ * exemption for a service.)
  */
 function hostingSignal(): PlatformSignalDTO {
-  const app = process.env['FLY_APP_NAME']?.trim();
-  const region = process.env['FLY_REGION']?.trim();
-  const machineId = process.env['FLY_MACHINE_ID']?.trim();
-  if (!app) return unreachable('hosting', 'notManaged', null);
+  const deployment = deploymentIdentity();
+  if (!deployment.app) return unreachable('hosting', 'notManaged', null);
 
   return {
     id: 'hosting',
     state: 'healthy',
-    values: { app, region: region ?? '—', machineId: machineId ?? '—' },
-    linkOut: `https://fly.io/apps/${app}`,
+    values: {
+      app: deployment.app,
+      region: deployment.region ?? '—',
+      machineId: deployment.instanceId ?? '—',
+    },
+    linkOut: deployment.dashboardUrl,
   };
 }
 
