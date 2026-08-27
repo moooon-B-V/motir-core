@@ -32,6 +32,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.26.0
         version: 1.26.0(zod@3.25.76)
+      '@motir/brand':
+        specifier: workspace:*
+        version: link:packages/brand
       '@motir/design-system':
         specifier: workspace:*
         version: link:packages/design-system
@@ -256,6 +259,31 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.7)(happy-dom@20.9.0)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.50.0)(tsx@4.22.3)(yaml@2.9.0))
 
+  packages/brand:
+    dependencies:
+      react:
+        specifier: ^19
+        version: 19.2.4
+    devDependencies:
+      '@motir/design-system':
+        specifier: workspace:*
+        version: link:../design-system
+      '@types/node':
+        specifier: ^22.19.19
+        version: 22.19.19
+      '@types/react':
+        specifier: ^19
+        version: 19.2.15
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(@swc/core@1.15.40)(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.7)(happy-dom@20.9.0)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(tsx@4.22.3)(yaml@2.9.0))
+
   packages/cli:
     dependencies:
       commander:
@@ -276,7 +304,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.7
-        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.7)(happy-dom@20.9.0)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(tsx@4.22.3)(yaml@2.9.0))
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.7)(happy-dom@20.9.0)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.50.0)(tsx@4.22.3)(yaml@2.9.0))
 
   packages/design-system:
     dependencies:
