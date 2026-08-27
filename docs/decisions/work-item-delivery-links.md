@@ -26,7 +26,7 @@ many-to-many, carrying the repository.**
 model WorkItemDelivery {
   workItemId          String
   githubPullRequestId String
-  repoId              String   // a real column, not a join away
+  repoId              String   // FK -> GithubRepo; a real column, not a join away
   workspaceId         String   // denormalised, own RLS policies
 
   @@unique([workItemId, githubPullRequestId])
