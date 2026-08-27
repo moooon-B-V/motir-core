@@ -5,6 +5,8 @@ import path from 'node:path';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedLessonLibrary, type LessonLibrarySeed } from './_helpers/lesson-library-seed';
+import { openAiPlanningSettings } from './_helpers/ai-planning-settings';
+import { expectSettledVisible } from './_helpers/settle';
 
 // Story MOTIR-3331 — "Record planning mistakes", end to end (Subtask MOTIR-3353).
 //
@@ -108,12 +110,9 @@ async function pinWorkspace(page: Page, seed: LessonLibrarySeed): Promise<void> 
     ]);
 }
 
-/** Reach AI-planning settings BY CLICKING, never by typing the URL. */
-async function openAiPlanningSettings(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await page.getByRole('link', { name: 'AI planning' }).click();
-  await expect(page.getByRole('heading', { name: 'AI planning', level: 1 })).toBeVisible();
-}
+// Reaching AI-planning settings BY CLICKING, never by typing the URL, is
+// `_helpers/ai-planning-settings.ts`'s `openAiPlanningSettings`, imported above
+// — one copy for every spec that walks this door (MOTIR-3692).
 
 const recordSwitch = (page: Page) => page.getByRole('switch', { name: 'Record planning mistakes' });
 
@@ -161,8 +160,11 @@ test('the setting reads ON by default, explains itself, and switching it off sto
 
   // The explanation is the deliverable, so the walk READS it. All five points,
   // including the one most likely to be dropped for being unflattering.
+  // SETTLED, not merely visible: this is the assertion that lost the race in
+  // MOTIR-3692 — a strict `toBeVisible()` here THROWS on the transient second
+  // segment subtree instead of retrying it, so the retry fails identically.
   const explanation = page.getByTestId('ai-planning-record-mistakes-explanation');
-  await expect(explanation).toBeVisible();
+  await expectSettledVisible(explanation);
   await expect(explanation).toContainText('the correction itself');
   await expect(explanation).toContainText('never shared with any other');
   await expect(explanation).toContainText('the same mistake is less likely twice');

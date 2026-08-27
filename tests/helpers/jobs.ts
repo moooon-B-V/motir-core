@@ -142,6 +142,7 @@ export async function seedHealthyJobSchedules(): Promise<void> {
         functionId,
         eventName: `scheduled.${functionId}`,
         eventId: `seed-${functionId}`,
+        lane: 'inngest',
         attempt: 0,
         status: 'succeeded',
         startedAt,

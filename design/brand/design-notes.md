@@ -497,10 +497,23 @@ to resolve one against.
   that was already here read the `src` and asserted what it DREW — the path data, the fill — which is
   why it stayed green throughout. Assert what a `src` IS, not only what it depicts.
 
-**On panel 7e of `brand-mark.mock.html`:** the mock embeds its mark as a data URI because a mock is a
-self-contained HTML page a browser renders — that is the correct choice _there_ and carries no
-implication for the shipped email. (Its panel also still draws the **lattice**, the mark set aside in
-§1, rather than the wave band; that is a stale-artwork defect of the asset, tracked separately.)
+**On panel 7e of `brand-mark.mock.html` (corrected 2026-08-27, MOTIR-3508):** the panel drew the
+**lattice** — the mark §1 records as chosen and then set aside — as a third, inline copy of that
+artwork in a `data:` URI, while every other panel in the asset drew the approved wave band. So the
+one file this section calls the layout source of truth depicted the rejected mark in the one slot a
+person who has not signed up yet meets it. It now draws `<use href="#mark-a" />`, the mock's own
+wave-band symbol, at 20 px with `role="img" aria-label="Motir"`, like every sibling panel.
+
+Two things that reference decides, and neither is a statement about email. **The transport is a
+property of the BOARD:** a mock is one self-contained HTML page a browser renders, so a symbol
+reference is available there and a mail client's constraints do not apply — the shipped rule is the
+absolute `https://` raster above, unchanged. **And the reference is what keeps the panel honest:** an
+inline copy of the artwork is a second place the mark lives, which is exactly how this one went stale
+without anything noticing. `tests/brand/waveBand.test.ts` now asserts it — the mock's `#mark-a` path
+matches `WAVE_BAND_PATH` byte for byte, no mark in the asset is drawn by an inline copy, and the
+lattice geometry appears exactly once, inside the `#mark-lattice` symbol §1's alternatives board
+draws from. That last one is deliberately narrow: §1 is _supposed_ to draw the lattice, and a guard
+reading "the lattice appears nowhere" would delete the record this asset exists to keep.
 
 ---
 

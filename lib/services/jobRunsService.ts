@@ -1,9 +1,10 @@
 import { Prisma } from '@/generated/prisma/client';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
+import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { toJobRunDTO } from '@/lib/mappers/jobMappers';
 import { withSystemContext } from '@/lib/workspaces/context';
-import type { JobRunDTO, JobRunFailure } from '@/lib/dto/jobs';
+import type { JobRunDTO, JobRunFailure, JobRunLane } from '@/lib/dto/jobs';
 
 // Business logic for the job_run ledger (Story 1.6 · Subtask 1.6.2, extended in
 // 1.6.4, failure path reworked in 1.6.6). Owns the transactions. `defineJob`'s
@@ -27,6 +28,14 @@ export interface RecordStartInput {
   functionId: string;
   eventName: string;
   eventId: string;
+  /**
+   * WHICH ENGINE is writing this row (Bug MOTIR-3683). Required, with no default,
+   * so a third writer cannot acquire a lane by accident: the two that exist —
+   * `defineJob`'s Inngest handler and `lib/jobs/engine/ledger.ts` — each know
+   * their own answer with certainty, and nothing downstream should be guessing it
+   * from `eventId`'s shape.
+   */
+  lane: JobRunLane;
   attempt: number;
   idempotencyKey?: string | null;
 }
@@ -68,6 +77,8 @@ export interface TerminalFailureInput {
   functionId: string;
   /** The triggering event's id — correlates back to the `running` row. */
   eventId: string;
+  /** The lane, for the row this may have to CREATE when correlation misses. */
+  lane: JobRunLane;
   /** Ledger event name (the synthetic `scheduled.{id}` for cron jobs). */
   eventName: string;
   /** Tenancy of the run (a real workspace, or null for system/cross-workspace). */
@@ -79,6 +90,29 @@ export interface TerminalFailureInput {
   /** Total attempts made before exhaustion (including the first). */
   attempts: number;
 }
+
+/**
+ * How long a ledger row may say `running` before the reap will close it, when
+ * nothing else is holding it (Bug MOTIR-3683).
+ *
+ * Six hours, and the number is a floor rather than a preference: on the INNGEST
+ * lane there is no queue row to consult, so this threshold is the ENTIRE test,
+ * and the longest legitimately-long run observed on this ledger
+ * (`system.code-graph-refresh`, five attempts) spanned about two. Closing a live
+ * run is the worse error of the two available, so the margin goes that way.
+ * ENGINE rows are protected by the queue-liveness veto regardless of age.
+ */
+export const JOB_RUN_ABANDON_AFTER_MS = 6 * 60 * 60 * 1000;
+
+/** How many stranded rows one sweep closes. A backlog drains over several passes. */
+export const JOB_RUN_REAP_BATCH_SIZE = 200;
+
+/**
+ * The `failure.code` an abandoned row carries, so the operator surface — and any
+ * audit — can tell "nothing ever came back" from "the handler threw". The two
+ * are different facts and only one of them has a stack trace.
+ */
+export const JOB_RUN_ABANDONED_CODE = 'job_run_abandoned';
 
 export const jobRunsService = {
   /**
@@ -97,6 +131,7 @@ export const jobRunsService = {
             functionId: input.functionId,
             eventName: input.eventName,
             eventId: input.eventId,
+            lane: input.lane,
             attempt: input.attempt,
             status: 'running',
             idempotencyKey: input.idempotencyKey ?? null,
@@ -177,7 +212,7 @@ export const jobRunsService = {
     const failureJson = input.failure as unknown as Prisma.InputJsonObject;
     try {
       const run = await withSystemContext(async (tx) => {
-        const existing = await jobRunRepository.findRunningByEventId(
+        const existing = await jobRunRepository.findUnsettledByEventId(
           input.eventId,
           input.functionId,
           tx,
@@ -201,6 +236,7 @@ export const jobRunsService = {
                 functionId: input.functionId,
                 eventName: input.eventName,
                 eventId: input.eventId,
+                lane: input.lane,
                 attempt: input.attempts - 1, // zero-indexed final attempt
                 status: 'failed',
                 finishedAt,
@@ -237,5 +273,73 @@ export const jobRunsService = {
       if (isVanishedRunError(err)) return null;
       throw err;
     }
+  },
+
+  /**
+   * THE ABANDONED-RUN REAP (Bug MOTIR-3683) — close every ledger row that is
+   * still `running` with nothing left to finish it.
+   *
+   * ⚠️ IT IS NOT A FIX FOR THE CAUSE, and stating that is the point of having it.
+   * The cause measured on this ledger was one lane deriving `event_id` two
+   * different ways, and that is repaired where it happened. This is the standing
+   * answer to the CLASS: a completion write is a write, and a write can always be
+   * lost — the process is SIGKILLed, the machine is replaced, a lane is
+   * misconfigured, a future engine grows a path nobody has thought of yet. Every
+   * one of those leaves a row saying `running` for ever, and `running` is the
+   * most reassuring possible rendering of a dead run. A ledger whose integrity
+   * depends on no write ever being lost has no integrity to depend on.
+   *
+   * TWO SIGNALS, and only one of them exists on both lanes:
+   *
+   *   1. **A live queue row** — decisive, and available for ENGINE rows only. A
+   *      run sleeping at a `step.sleep` or waiting out a retry backoff is
+   *      `pending` with a future `run_at`, and its ledger row is legitimately
+   *      still `running`. Reaping that would close a run about to resume, so a
+   *      live queue row vetoes the reap outright, however old the row is.
+   *   2. **Elapsed time** — the only signal an INNGEST row has, because that lane
+   *      writes no queue row at all. Hence a threshold set generously (six hours,
+   *      against a longest observed legitimate run of about two) rather than
+   *      tightly: on that lane the threshold is the whole test, and closing a
+   *      live run is a worse error than closing a dead one late.
+   *
+   * `durationMs` is deliberately left NULL. The row's `finished_at` is when the
+   * reap NOTICED, not when the run stopped, and a duration computed from it would
+   * be a number nobody measured — which is the genre of thing this whole bug is
+   * about.
+   */
+  async reapAbandoned(
+    opts: { now?: Date; olderThanMs?: number; limit?: number } = {},
+  ): Promise<{ scanned: number; abandoned: number; stillLive: number }> {
+    const now = opts.now ?? new Date();
+    const olderThanMs = opts.olderThanMs ?? JOB_RUN_ABANDON_AFTER_MS;
+    const limit = opts.limit ?? JOB_RUN_REAP_BATCH_SIZE;
+    const startedBefore = new Date(now.getTime() - olderThanMs);
+
+    return withSystemContext(async (tx) => {
+      const candidates = await jobRunRepository.findStaleRunning(startedBefore, limit, tx);
+      let abandoned = 0;
+      let stillLive = 0;
+      for (const run of candidates) {
+        const live = await jobQueueRepository.countLiveForEventRef(run.functionId, run.eventId, tx);
+        if (live > 0) {
+          stillLive += 1;
+          continue;
+        }
+        // Guarded on the row still being `running` — a worker that was merely
+        // slow may have settled it between the read above and this write, and
+        // overwriting a real terminal state with `abandoned` would destroy the
+        // one record an operator needs.
+        abandoned += await jobRunRepository.markAbandonedIfRunning(
+          run.id,
+          now,
+          {
+            message: `Abandoned after ${Math.round(olderThanMs / 60_000)} minutes with no completion write and no live queue run.`,
+            code: JOB_RUN_ABANDONED_CODE,
+          },
+          tx,
+        );
+      }
+      return { scanned: candidates.length, abandoned, stillLive };
+    });
   },
 };

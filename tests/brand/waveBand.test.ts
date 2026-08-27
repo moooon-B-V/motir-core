@@ -173,3 +173,80 @@ describe('the email mark (§7e · MOTIR-3505)', () => {
     expect(buf.readUInt32BE(20)).toBe(EMAIL_MARK_CANVAS_PX);
   });
 });
+
+// MOTIR-3508 — the guard that keeps the design ASSET drawing the approved mark.
+//
+// The describes above pin the shipped constant to `design/brand/wave-band-24.svg`.
+// Nothing pinned the MOCK, and `design/brand/brand-mark.mock.html` is what
+// `design-notes.md` calls the layout source of truth for every slot the mark
+// occupies — so it is the file an implementer opens. Its panel 7e (the
+// transactional-email frame) drew the LATTICE, the candidate §1 records as
+// "chosen and then set aside", as a third inline copy of that artwork in a
+// `data:` URI, while every other panel drew the wave band. It shipped that way
+// from the asset's first commit.
+//
+// Nothing caught it because nothing reads a mock's ARTWORK:
+// `design-asset-addresses` rules on the addresses an asset cites,
+// `design-ink-contrast` on its inks, `design-three-file-set` on the presence of
+// the three files. This block is the missing axis, and it is deliberately narrow
+// — §1's alternatives board is SUPPOSED to draw the lattice, so a guard reading
+// "the lattice appears nowhere" would delete the record the asset exists to keep.
+describe('the brand mock draws the approved mark (MOTIR-3508)', () => {
+  const MOCK = 'brand-mark.mock.html';
+
+  /** `<defs>` … `</defs>` — the one block in the mock that may hold path data. */
+  function defsBlock(mock: string): string {
+    const open = mock.indexOf('<defs>');
+    const close = mock.indexOf('</defs>');
+    expect(open, 'the mock declares a <defs> sprite').toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(open);
+    return mock.slice(open, close);
+  }
+
+  it("the mock's own #mark-a symbol carries WAVE_BAND_PATH, byte for byte", () => {
+    // The mock is a self-contained document, so its symbol is a COPY of the
+    // shipped path by construction. A copy is only true until someone tidies it,
+    // and 110 bytes of coordinates render something plausible when they are
+    // wrong — the same argument the wave-band-24.svg pin above is made from.
+    const symbol = designAsset(MOCK).match(/<g id="mark-a">\s*<path\s+d="([^"]+)"/);
+    expect(symbol, 'the mock declares a #mark-a symbol with one <path d="…">').not.toBeNull();
+    expect(symbol![1]).toBe(WAVE_BAND_PATH);
+  });
+
+  it('draws every mark by <use> reference — no inline artwork outside the <defs>', () => {
+    // This is the property that failed, stated as itself. Panel 7e carried its
+    // own copy of a glyph in an <img src="data:image/svg+xml,…">, so a change to
+    // the mark could not reach it and no reviewer would see the difference in a
+    // 6500-line file. Every mark in the asset now resolves through a symbol, and
+    // the symbols are the only place path data lives.
+    const mock = designAsset(MOCK);
+    const defs = defsBlock(mock);
+    expect(mock).not.toMatch(/data:image\//);
+
+    // `<path` followed by whitespace is the ELEMENT; the file's header comment
+    // also mentions a bare `<path>` in prose, which is not one.
+    const total = mock.match(/<path\s/g)?.length ?? 0;
+    const inDefs = defs.match(/<path\s/g)?.length ?? 0;
+    expect(total, 'the mock draws paths at all').toBeGreaterThan(0);
+    expect(inDefs, 'every <path> element belongs to the <defs> sprite').toBe(total);
+  });
+
+  it('draws the set-aside LATTICE exactly once — in §1s own symbol, on the record', () => {
+    // The narrow half, and the one that needs saying: §1 keeps the rejected
+    // candidates precisely so the decision stays legible, and MOTIR-1140's
+    // approval is only readable beside what it turned down. So the lattice is
+    // not forbidden — a SECOND copy of it is, because that is a copy nobody
+    // approved and nobody re-reads.
+    const mock = designAsset(MOCK);
+    const LATTICE_OUTER = 'M12 3.6L20.4 12L12 20.4L3.6 12Z';
+    // Counted as a plain SUBSTRING, not through a regex built by escaping the
+    // literal: path data is punctuation-dense, so hand-escaping it is a
+    // sanitizer to get wrong (`js/incomplete-sanitization` says so), and there
+    // is nothing here a regex would buy.
+    expect(mock.split(LATTICE_OUTER).length - 1).toBe(1);
+
+    const symbol = mock.match(/<g id="mark-lattice">[\s\S]*?\n {8}<\/g>/);
+    expect(symbol, 'the mock declares a #mark-lattice symbol').not.toBeNull();
+    expect(symbol![0]).toContain(LATTICE_OUTER);
+  });
+});

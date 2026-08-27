@@ -972,6 +972,12 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  moment 8.9.1's decision record joined this branch — which is what their own
   //  `why` said would happen, enforced by the tight test below rather than by
   //  anyone remembering.)
+  // ── Forward-looking: the asset PROPOSES the file (MOTIR-3680) ─────────────
+  {
+    file: 'design/settings/design-notes.md',
+    path: 'app/(authed)/settings/account/data/page.tsx',
+    why: "Forward-looking: the Data & privacy pane's route, which MOTIR-1136 creates. The design STOPPER merges ahead of its code branch, so the asset legitimately names a file that is not on `main` yet — and naming it exactly is the point, because landing that route in the same commit as the `ACCOUNT_SETTINGS_NAV` entry is what keeps `tests/settings/accountSettingsNav.test.ts`'s route↔registry totality green by construction. DELETE THIS ROW with the commit that creates the file: once it resolves the citation is real again, and `carries no KNOWN_PATHS entry that has stopped applying` will fail until the row is gone.",
+  },
 ];
 
 describe('a design asset cites source paths that still exist', () => {

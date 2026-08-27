@@ -35,6 +35,7 @@ describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTI
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-vanished-success',
+      lane: 'inngest',
       attempt: 0,
     });
 
@@ -69,6 +70,7 @@ describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTI
     const result = await jobRunsService.recordTerminalFailure({
       functionId: 'watcher.notify',
       eventId: 'evt-vanished-failure',
+      lane: 'inngest',
       eventName: 'work-item/comment.created',
       workspaceId,
       failure: { message: 'stranded after teardown' },
@@ -102,6 +104,7 @@ describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTI
       functionId: 'watcher.notify',
       eventName: 'work-item/comment.created',
       eventId: 'evt-vanished-start',
+      lane: 'inngest',
       attempt: 0,
     });
     expect(result).toBeNull();

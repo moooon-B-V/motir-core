@@ -2263,7 +2263,8 @@
         "all": "全部",
         "succeeded": "成功",
         "failed": "失败",
-        "running": "运行中"
+        "running": "运行中",
+        "abandoned": "已放弃"
       },
       "runsTableCaption": "后台任务运行",
       "col": {

@@ -4502,6 +4502,11 @@
         width: 20px;
         height: 20px;
         display: block;
+        /* The one literal the mark takes, and §7e's documented reason for it:
+           email has no reliable dark-mode signal, so the colour must NOT flip
+           with the board's theme the way an --el-* token would. Same hue the
+           shipped raster bakes in (BRAND_ACCENT_HEX, components/brand/waveBand.ts). */
+        color: #5645d4;
       }
       .email-brand span {
         color: #6b7280;
@@ -6317,11 +6322,16 @@
       <div class="frame frame-email">
         <div class="email">
           <div class="email-brand">
-            <img
+            <svg
               class="email-mark"
-              alt="Motir"
-              src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20'%3E%3Cg fill='none' stroke='%235645d4' stroke-width='2.5' stroke-linejoin='round'%3E%3Cpath d='M12 3.6L20.4 12L12 20.4L3.6 12Z'/%3E%3Cpath d='M12 7.8L16.2 12L12 16.2L7.8 12Z'/%3E%3C/g%3E%3Cg fill='%235645d4'%3E%3Ccircle cx='12' cy='3.6' r='1.9'/%3E%3Ccircle cx='20.4' cy='12' r='1.9'/%3E%3Ccircle cx='12' cy='20.4' r='1.9'/%3E%3Ccircle cx='3.6' cy='12' r='1.9'/%3E%3C/g%3E%3C/svg%3E"
-            />
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              role="img"
+              aria-label="Motir"
+            >
+              <use href="#mark-a" />
+            </svg>
             <span>Motir</span>
           </div>
           <p class="email-h">You've been invited to moooon</p>
@@ -6334,14 +6344,32 @@
       <ul class="finding-list">
         <li>
           <b
-            >A PNG or a data-URI SVG, never an inline <code>&lt;svg&gt;</code> element and never a
-            CSS variable.</b
+            >A PNG at an absolute <code>https://</code> URL — never a <code>data:</code> URI, never
+            SVG in any transport, and never a CSS variable.</b
           >
-          Outlook's Word renderer drops inline SVG entirely; Gmail strips
-          <code>&lt;style&gt;</code>. So the email mark is an <code>&lt;img&gt;</code> with a
-          literal #5645d4 stroke and explicit <code>width</code>/<code>height</code> attributes —
-          and it needs <code>alt="Motir"</code>, because ~40% of clients block images by default and
-          the alt text is then the entire header.
+          Amended 2026-08-25 (MOTIR-3505): this panel used to say "a PNG <i>or</i> a data-URI SVG",
+          and <code>EmailLayout</code> took the second option, so the header rendered in no mail
+          client at all. Gmail rewrites every image through its proxy and drops what it cannot
+          <i>fetch</i>, which a <code>data:</code> source gives it nothing to do; and SVG renders in
+          email in none of Gmail, Outlook or Yahoo, hosted or inline. Outlook's Word renderer drops
+          an inline <code>&lt;svg&gt;</code> element outright and Gmail strips
+          <code>&lt;style&gt;</code>, so the mark is an <code>&lt;img&gt;</code> whose
+          <code>src</code> is <code>public/email-mark-40.png</code> made absolute per send against
+          <code>MOTIR_BASE_URL</code>, at 2× its 20&nbsp;px slot with explicit
+          <code>width</code>/<code>height</code> attributes — and it needs <code>alt="Motir"</code>,
+          because ~40% of clients block images by default and the alt text is then the entire
+          header.
+        </li>
+        <li>
+          <b
+            >This frame draws the mark by <code>&lt;use href="#mark-a"&gt;</code>, as every other
+            panel does</b
+          >
+          — a mock is one self-contained document a browser renders, so the symbol reference is what
+          keeps the panel honest when the mark changes. It is a property of the BOARD and carries no
+          implication for the shipped email, whose transport is the bullet above. (It draws the wave
+          band because that is the approved mark; the panel shipped the set-aside lattice from §1
+          until MOTIR-3508.)
         </li>
         <li>
           One colour for both themes. Email has no reliable dark-mode signal, and #5645d4 holds

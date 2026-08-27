@@ -51,6 +51,7 @@ import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { openAiPlanningSettings } from './_helpers/ai-planning-settings';
 import {
   AUTO_PLAN_THRESHOLD,
   SPRINT_JOB_ID,
@@ -122,14 +123,11 @@ async function stubSprintPlanJob(page: Page, seed: AiCadenceSeed): Promise<void>
 
 // ── Page helpers ─────────────────────────────────────────────────────────────
 
-/** Reach the AI-planning settings page through its real door — the settings
- *  rail's Automation group — so the recording shows how a person gets there. */
-async function openAiPlanningSettings(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await page.getByRole('link', { name: 'AI planning' }).click();
-  await page.waitForURL('**/settings/project/ai-planning');
-  await expect(page.getByTestId('ai-planning-settings')).toBeVisible();
-}
+// Reaching the AI-planning settings page through its real door — the settings
+// rail's Automation group, so the recording shows how a person gets there — is
+// `_helpers/ai-planning-settings.ts`'s `openAiPlanningSettings`, imported above.
+// It lived here in a copy of its own until MOTIR-3692, which is how one
+// navigation race took the `billing-cloud` leg down four different ways.
 
 const autoPlanSwitch = (page: Page) =>
   page.getByRole('switch', { name: 'Expand the plan automatically' });

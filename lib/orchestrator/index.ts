@@ -7,7 +7,7 @@ import {
 } from './adapters/fly/indexImage';
 import { fakeOrchestrator } from './adapters/fake';
 import { OrchestratorNotConfiguredError } from './errors';
-import { probeImagePull } from './imagePull';
+import { probeImagePull, type RegistryCredentialResolver } from './imagePull';
 import type { ContainerOrchestrator, OrchestratorProvider } from './types';
 
 // WHICH adapter is behind the port on this deployment (Story MOTIR-1916 ·
@@ -167,13 +167,17 @@ export function indexFleetConfig(): IndexFleetConfig {
  * per-path verdict is the honest shape.
  */
 export type FleetBootableVerdict =
-  /** The registry served the manifest anonymously. A Fly Machine can boot it. */
+  /** The registry served the manifest to the caller that will boot it —
+   *  anonymously on a third-party registry, or with the fleet's own org
+   *  credential on `registry.fly.io`. A Fly Machine can boot it. */
   | { verdict: 'bootable'; reference: string; digest: string | null }
   /** DEFINITE: the registry will not serve this image. The loud one. */
   | { verdict: 'unpullable'; reference: string; detail: string }
   /** Nothing to check — this deployment provisions no real containers. */
   | { verdict: 'not_applicable'; detail: string }
-  /** Could not tell. A transport failure, never a claim about the image. */
+  /** Could not tell. A transport failure, or a registry whose challenge this
+   *  probe cannot answer and for which no credential is configured. Never a
+   *  claim about the image (MOTIR-3606). */
   | { verdict: 'indeterminate'; reference: string; detail: string };
 
 /**
@@ -233,6 +237,44 @@ export async function verifyFleetBootable(): Promise<FleetBootableVerdict> {
 }
 
 /**
+ * Fly's OWN container registry — the host §5's mirror copies a closed image into.
+ *
+ * Named HERE, in the composition root, for the same reason the adapter choice is:
+ * this is the one file outside `adapters/fly/` permitted to know Fly exists
+ * (`tests/ciFleet/orchestratorPortBoundary.test.ts`), and marrying a registry
+ * HOST to a credential is exactly the composition this module is for. The probe
+ * itself still knows nothing but "some registries want a username and password".
+ */
+const FLY_REGISTRY_HOST = 'registry.fly.io';
+
+/**
+ * The credential to probe `registry.fly.io` with — and the correction MOTIR-3606
+ * is about.
+ *
+ * ⚠️ THIS IS NOT A WIDENING OF WHAT `bootable` MEANS, AND THE DISTINCTION IS THE
+ * WHOLE POINT. §0's reduction — "can Fly boot this image?" is "will the registry
+ * serve a stranger?" — is exact for a THIRD-PARTY registry, because the Machines
+ * API create payload has no field to hand Fly a credential with. It is simply
+ * false for Fly's own registry, which a Machine authenticates to as the org, and
+ * which is why §5 mirrors a closed image there in the first place. So the
+ * credential the probe uses here is the SAME org credential the boot uses; asking
+ * anonymously was not the stricter question, it was the wrong one.
+ *
+ * ⚠️ AND IT MUST BE THE FLEET'S TOKEN, NOT A FLY TOKEN. `flyFleetConfig()` is
+ * the accessor that already refuses a fallback to a general Fly credential
+ * (`flyMachines.ts`: "a distinct variable and there is no fallback"), so reading
+ * the host's credential through it inherits that refusal rather than re-deciding
+ * it. On a deployment with no fleet configured it throws, and the probe is then
+ * told there is no credential — which is correct, and lands on
+ * `unauthenticatable` rather than a false alarm.
+ *
+ * The username is ignored by `registry.fly.io` (any value works; the token is the
+ * password), and `x` is the convention `flyctl auth docker` writes.
+ */
+const flyRegistryCredential: RegistryCredentialResolver = (registry) =>
+  registry === FLY_REGISTRY_HOST ? { username: 'x', password: flyFleetConfig().token } : null;
+
+/**
  * One pull path's probe, mapped onto the verdict's three non-trivial arms.
  *
  * Shared by both preflights (MOTIR-2030) so the two paths cannot drift in what
@@ -243,7 +285,7 @@ export async function verifyFleetBootable(): Promise<FleetBootableVerdict> {
  * differently.
  */
 async function probeToVerdict(image: string): Promise<FleetBootableVerdict> {
-  const probe = await probeImagePull(image);
+  const probe = await probeImagePull(image, flyRegistryCredential);
   if (probe.pullable === true) {
     return { verdict: 'bootable', reference: probe.reference, digest: probe.digest };
   }
