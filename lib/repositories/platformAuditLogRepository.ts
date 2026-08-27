@@ -1,4 +1,8 @@
-import { Prisma, type PlatformAuditLog } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type PlatformAuditLog,
+  type PlatformAuditTargetKind,
+} from '@/generated/prisma/client';
 
 /**
  * The platform audit trail — `docs/decisions/platform-staff-auth.md` §3b.
@@ -52,6 +56,32 @@ export const platformAuditLogRepository = {
   ): Promise<PlatformAuditLog[]> {
     return tx.platformAuditLog.findMany({
       where: { actorUserId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  },
+
+  /**
+   * The most recent rows for ONE TARGET, newest first (MOTIR-1167).
+   *
+   * Panel 9's "Support actions" log — *"every operator write on this account,
+   * newest first, append-only"*. Served by the `(target_kind, target_id,
+   * created_at)` index.
+   *
+   * ⚠️ IT RETURNS READS AS WELL AS WRITES, and the SERVICE decides what the card
+   * shows. Keeping the filter out of the repository is the single-op rule doing
+   * its job: "which actions count as a write" is the audit vocabulary's
+   * knowledge (`PLATFORM_AUDIT_ACTIONS`), not the table's, and a repository that
+   * encoded it would have to be edited every time a consumer adds a verb.
+   */
+  async listByTarget(
+    targetKind: PlatformAuditTargetKind,
+    targetId: string,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlatformAuditLog[]> {
+    return tx.platformAuditLog.findMany({
+      where: { targetKind, targetId },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });

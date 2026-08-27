@@ -3,7 +3,16 @@
 import { type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, Coins, LogOut, Search, Server, Shield } from 'lucide-react';
+import {
+  Activity,
+  Building2,
+  Coins,
+  LogOut,
+  Search,
+  Server,
+  Shield,
+  UserSearch,
+} from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import type { PlatformOperatorDTO } from '@/lib/dto/platform';
@@ -38,6 +47,7 @@ export interface AdminShellLabels {
   navOverview: string;
   navUsage: string;
   navTenants: string;
+  navUsers: string;
   navMonitoring: string;
   navGovernance: string;
   staffMarkTitle: string;
@@ -47,12 +57,19 @@ export interface AdminShellLabels {
   exitToApp: string;
   /**
    * The version tags on the reserved rows — the story that builds each. The
-   * asset draws "10.2" / "10.3"; "10.1" carries the two Platform rows this
-   * foundation does not build either (MOTIR-732 / MOTIR-733).
+   * asset draws "10.3"; "10.1" carries the two Platform rows neither this
+   * foundation nor MOTIR-1167 builds (MOTIR-732 / MOTIR-733).
+   *
+   * ⚠️ `soonMonitoring` IS GONE (MOTIR-1167). Monitoring is a LIVE row now — the
+   * day-1 health glance took the Operations → Monitoring row the asset reserved
+   * for 10.2, exactly as the asset's own boundary #1 says it would: *"the day-1
+   * glance takes the left-nav Operations → Monitoring row that Panels 2–6 draw
+   * as a reserved 10.2 stub … when MOTIR-737 draws the full ops board, that
+   * board takes this row and this panel goes away."* The row has one owner at a
+   * time, and this is the handover.
    */
   soonUsage: string;
   soonTenants: string;
-  soonMonitoring: string;
   soonGovernance: string;
 }
 
@@ -103,6 +120,20 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           disabled: true,
           badge: <Pill tone="neutral">{labels.soonTenants}</Pill>,
         },
+        // The USER lookup (MOTIR-1167) — Panel 9's door, and a LIVE row.
+        //
+        // ⚠️ It is a row of its own rather than the top bar's ⌘K box, which
+        // stays inert. That box is Panel 3's ESTATE search: it groups results
+        // into Organizations / Workspaces / Projects / Users, and three of those
+        // four read tenant tables that have no `platform_staff` policy arm yet
+        // (MOTIR-730 owns them). A ⌘K palette that silently answered one of its
+        // four groups would be worse than one that says it is not wired.
+        {
+          icon: <UserSearch />,
+          label: labels.navUsers,
+          href: '/admin/users',
+          active: pathname.startsWith('/admin/users'),
+        },
       ],
     },
     {
@@ -113,8 +144,7 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           icon: <Server />,
           label: labels.navMonitoring,
           href: '/admin/monitoring',
-          disabled: true,
-          badge: <Pill tone="neutral">{labels.soonMonitoring}</Pill>,
+          active: pathname === '/admin/monitoring',
         },
         {
           icon: <Shield />,

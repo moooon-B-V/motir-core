@@ -108,6 +108,13 @@ describe('every row carries a decided policy', () => {
     'token-scoped',
     'no-gate',
     'finding',
+    // PLATFORM-SCOPED (MOTIR-1167) — see the NON_PERMISSION set below for the
+    // full argument. Short form: the row IS gated, by `requirePlatformStaff` on
+    // the `User.platformRole` ladder, and a catalog key would be GRANTABLE to a
+    // customer's API token. The two sets are kept in step deliberately: a
+    // decision this one admits and that one does not would let a row read as
+    // decided while its blank permission cell went unargued.
+    'platform-scoped',
   ]);
 
   // Row shape: | Operation | … | Permission | Decision | Why |
@@ -159,6 +166,19 @@ describe('every row carries a decided policy', () => {
       'token-scoped',
       'no-gate',
       'finding',
+      // PLATFORM-SCOPED (MOTIR-1167) — the SIXTH answer, and the only one that
+      // means "gated harder than a permission key, by a mechanism this catalog
+      // must not be able to reach". `lib/permissions/catalog.ts` is the TENANT
+      // vocabulary and `lib/tokens/grant.ts` grants keys FROM it to API tokens,
+      // so a `platform:*` key would be grantable — a customer's PAT could carry
+      // standing outside every tenant, which is the exact invariant
+      // `docs/decisions/platform-staff-auth.md` §1 exists to hold. What governs
+      // these rows is `requirePlatformStaff(<degree>)` on the `User.platformRole`
+      // ladder, asserted at two layers and audited in the same transaction.
+      //
+      // Added to the SET rather than special-cased on the row, because the set
+      // is what makes "no key" an argued decision instead of a blank cell.
+      'platform-scoped',
     ]);
     const bad = tableRows()
       .filter((c) => at(c, PERMISSION) === '—')

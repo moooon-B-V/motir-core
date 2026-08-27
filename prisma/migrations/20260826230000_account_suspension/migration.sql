@@ -1,0 +1,54 @@
+-- ===========================================================================
+-- ACCOUNT SUSPENSION (MOTIR-1167) — the two columns behind the day-1 operator
+-- write `docs/decisions/platform-staff-auth.md` §7 allocates to this card:
+-- *"Suspend / unsuspend an **account** · 8.5 MOTIR-1167 · operator · reason
+-- required · audited."*
+--
+-- ---------------------------------------------------------------------------
+-- WHY THE COLUMNS LAND HERE AND NOT ON A NEW TABLE
+-- ---------------------------------------------------------------------------
+-- Suspension is a property OF the account, read on the hottest path in the
+-- product (every session create), and at most one suspension is live at a time.
+-- A `user_suspension` table would put a join on the sign-in path to answer a
+-- question two nullable columns answer in the row already being read, and would
+-- then need its own RLS posture on a table reached BEFORE any context exists.
+--
+-- The HISTORY of suspensions is not lost by this choice: every suspend and
+-- unsuspend writes a `platform_audit_log` row inside the same transaction as
+-- the column write (`platformSupportService`), and that table is the append-only
+-- record. These columns are the ENFORCED state; the log is the trail.
+--
+-- ---------------------------------------------------------------------------
+-- NO RLS, AND THAT IS THE EXISTING POSTURE RATHER THAN A NEW DECISION
+-- ---------------------------------------------------------------------------
+-- `user` is one of the tables in `tests/tenant-root-creation-rls.test.ts`'s
+-- DELIBERATELY_UNGUARDED map — *"the global identity; users are not
+-- workspace-scoped"* — and this migration does not change that. It is also why
+-- the day-1 operator tools work identically before and after MOTIR-2435's
+-- cutover to the non-bypass role: the reads and writes behind them touch `user`
+-- and `session`, neither of which has a policy to go blind on. The tenant tables
+-- the ESTATE search would need are a different matter and a different card
+-- (MOTIR-730 owns their `platform_staff` READ arms).
+--
+-- ---------------------------------------------------------------------------
+-- NO BACKFILL, NO DEFAULT
+-- ---------------------------------------------------------------------------
+-- NULL is "not suspended" and is what every existing row and every row the
+-- product creates carries. There is no prior state that maps onto a suspension,
+-- so there is nothing to migrate — the same shape `platform_role` took.
+--
+-- ---------------------------------------------------------------------------
+-- AND NO INDEX, DELIBERATELY
+-- ---------------------------------------------------------------------------
+-- Both reads that touch these columns are keyed by the primary key: the sign-in
+-- refusal reads the row it is already fetching, and the drill-down reads one
+-- account by id. A "list every suspended account" surface would earn an index,
+-- and there is none in this card's scope (Panel 9 draws one account at a time).
+-- An index added ahead of its query is a write cost with no reader, and a
+-- hand-written PARTIAL one additionally has to stay clear of every `@@index`
+-- column list for ever or `migrate diff` reports a permanent spurious rename
+-- (the MOTIR-1960 finding). Add it with the surface that needs it.
+-- ===========================================================================
+
+ALTER TABLE "user" ADD COLUMN     "suspended_at" TIMESTAMP(3);
+ALTER TABLE "user" ADD COLUMN     "suspended_reason" TEXT;

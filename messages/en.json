@@ -803,6 +803,7 @@
     "googleSignInIncomplete": "Google sign-in didn't complete. Try again, or use email.",
     "googleSignUpIncomplete": "Google sign-up didn't complete. Try again, or use email.",
     "wrongPassword": "That password isn't right. Try again, or reset it.",
+    "accountSuspended": "This account has been suspended. Contact support if you think this is a mistake.",
     "emailAddress": "Email address",
     "signingInAs": "Signing in as {email}",
     "useDifferentEmail": "Use a different email",
@@ -6668,11 +6669,11 @@
       "overview": "Overview",
       "usage": "Usage & cost",
       "tenants": "Tenants",
+      "users": "Users",
       "monitoring": "Monitoring",
       "governance": "Governance",
       "soonUsage": "10.1",
       "soonTenants": "10.1",
-      "soonMonitoring": "10.2",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -6686,6 +6687,197 @@
       "subtitle": "The whole estate at a glance — how many organizations, workspaces, projects and users Motir hosts, and what's happened recently across every tenant. Read-only; tenant governance lives in the Governance toolkit.",
       "pendingTitle": "The estate is not wired up yet",
       "pendingDescription": "The counts and the activity feed read across every tenant, which is the audited cross-tenant read layer — a separate card. This console's gate, its audit trail and this shell are in place; the numbers arrive with them."
+    },
+    "users": {
+      "breadcrumb": "Platform · Users",
+      "breadcrumbAria": "Account",
+      "title": "Find an account",
+      "subtitle": "Search every account Motir hosts by email address or name. Opening one is a cross-tenant read and is recorded in the audit log. Organizations, workspaces and projects are not searchable yet — that is the estate read layer, a separate card.",
+      "searchLabel": "Email address or name",
+      "searchPlaceholder": "ada@example.com",
+      "searchSubmit": "Search",
+      "tooShort": "Type at least {n} characters — a shorter query would list accounts rather than find one.",
+      "idleTitle": "Nothing searched yet",
+      "idleDescription": "Paste the email address from the support message. Every search is recorded against your operator account.",
+      "noneTitle": "No account matches",
+      "noneDescription": "Nothing matches “{query}”. Check the spelling, or try the name instead of the address — people write in from addresses they did not sign up with.",
+      "resultsTitle": "Matching accounts",
+      "resultsCount": "{n} found",
+      "capped": "Showing the first {n}. Narrow the search rather than paging — a broad list of accounts is not what this surface is for.",
+      "suspended": "Suspended",
+      "active": "Active",
+      "emailUnverified": "Email unverified",
+      "twoFactor": "Two-factor on",
+      "platformStanding": "Platform staff · {role}",
+      "crumbPlatform": "Platform",
+      "crumbUsers": "Users",
+      "auditBanner": "You are viewing {name}'s account as platform staff. This cross-tenant read is recorded in the audit log, against {operator}.",
+      "suspendedSince": "This account was suspended on {at}.",
+      "suspendedReason": "Reason on record: {reason}",
+      "noReasonRecorded": "none recorded",
+      "facts": {
+        "title": "Account",
+        "created": "Signed up",
+        "sessions": "Open sessions",
+        "sessionCount": "{n}",
+        "emailVerified": "Email verified",
+        "yes": "Yes",
+        "no": "No"
+      },
+      "action": {
+        "sendReset": "Send password reset",
+        "suspend": "Suspend account",
+        "unsuspend": "Lift suspension",
+        "resetSent": "Password-reset link sent",
+        "suspended": "Account suspended",
+        "unsuspended": "Suspension lifted",
+        "failedTitle": "That action did not go through",
+        "error": {
+          "REASON_REQUIRED": "A reason is required — it is what makes the audit row readable months from now.",
+          "NOT_FOUND": "That account no longer exists. Reload the page.",
+          "ALREADY_IN_STATE": "Somebody else changed this account while you were typing. Reload and look again before acting.",
+          "NOT_PERMITTED": "Your operator account cannot perform this action.",
+          "FAILED": "Something went wrong and nothing was changed. The failure has been logged."
+        },
+        "readOnlyNotice": "Your operator account reads the estate but does not act on it. Sending a password reset or suspending an account needs the operator degree."
+      },
+      "confirm": {
+        "reasonLabel": "Reason — required, written to the audit log",
+        "reasonHint": "Shown to any operator reading this account later, and to {name} if they ask.",
+        "cancel": "Cancel",
+        "reset": {
+          "title": "Send {name} a password reset?",
+          "body": "A reset link goes to their own email address and expires in an hour. You never see it and never set a password for them — they choose their own. Their current password keeps working until they use the link, and their open sessions are untouched.",
+          "confirm": "Send the link"
+        },
+        "suspend": {
+          "title": "Suspend {name}?",
+          "body": "They are signed out of every session immediately and cannot sign back in. Their workspaces, projects and work items are untouched, and another platform operator can lift the suspension.",
+          "confirm": "Suspend the account"
+        },
+        "unsuspend": {
+          "title": "Lift {name}'s suspension?",
+          "body": "They can sign in again from their next attempt. This does not sign them in and does not restore the sessions that were revoked — they sign in for themselves.",
+          "confirm": "Lift the suspension"
+        }
+      },
+      "log": {
+        "title": "Support actions",
+        "subtitle": "Every operator write on this account, newest first. Append-only.",
+        "scope": "This account",
+        "empty": "No operator has written to this account.",
+        "foot": "Showing {n} actions",
+        "colWhen": "When",
+        "colAction": "Action",
+        "colOperator": "Operator",
+        "colReason": "Reason",
+        "operatorRole": "Platform {role}",
+        "action": {
+          "user.password_reset_sent": "Password reset sent",
+          "user.suspend": "Suspended",
+          "user.unsuspend": "Suspension lifted"
+        }
+      }
+    },
+    "monitoring": {
+      "breadcrumb": "Platform · Monitoring",
+      "title": "System health",
+      "subtitle": "Is the machinery running? Six signals, read-only, refreshed on load. Each card links OUT to the provider's own dashboard — Motir shows the state and never redeploys, cancels or replays. The deeper per-provider board is Story 10.2.",
+      "state": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "unreachable": "Can't reach"
+      },
+      "signal": {
+        "database": {
+          "title": "Database",
+          "value": "Reachable · {ms} ms",
+          "detail": "Postgres · {region}, alongside the app.",
+          "unreachable": {
+            "unreachable": "No response"
+          },
+          "unreachableDetail": {
+            "unreachable": "The database did not answer a ping. This is not a latency of zero — nothing was measured."
+          },
+          "linkOut": "Neon console"
+        },
+        "hosting": {
+          "title": "Hosting",
+          "value": "Answering from {region}",
+          "detail": "Fly app {app} · machine {machineId}. This is the machine serving you — the fleet's size lives in the Fly dashboard, and the per-provider board is Story 10.2.",
+          "unreachable": {
+            "notManaged": "Not a managed host"
+          },
+          "unreachableDetail": {
+            "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance."
+          },
+          "linkOut": "Fly dashboard"
+        },
+        "schedules": {
+          "title": "Scheduled jobs",
+          "value": "{overdue} of {total} crons overdue",
+          "detail": "From the daily health check's schedule probe — a cron that stopped firing. Listed below.",
+          "unreachable": {
+            "probeFailed": "No response"
+          },
+          "unreachableDetail": {
+            "probeFailed": "The schedule probe did not answer. This is not zero overdue jobs — nothing was checked."
+          },
+          "linkOut": "Inngest functions"
+        },
+        "failedJobs": {
+          "title": "Failed jobs",
+          "value": "{count} dead-lettered · 24h",
+          "detail": "Failed after their retries and not yet replayed. Replay happens per workspace, in that workspace's own jobs dashboard.",
+          "unreachable": {
+            "probeFailed": "No response"
+          },
+          "unreachableDetail": {
+            "probeFailed": "The dead-letter set did not answer. This is not a count of zero — nothing was counted."
+          },
+          "linkOut": "Inngest runs"
+        },
+        "errors": {
+          "title": "Errors",
+          "value": "No reading",
+          "detail": "—",
+          "unreachable": {
+            "noReadCredential": "No reading from Sentry",
+            "notConfigured": "Error reporting is off"
+          },
+          "unreachableDetail": {
+            "noReadCredential": "Errors ARE being reported, but this console holds no Sentry API credential to read the count back. This is not an error count of zero. The credential and the per-provider board arrive with Story 10.2.",
+            "notConfigured": "This build has no Sentry DSN, so nothing is reported anywhere. This is not an error count of zero — expected on a self-hosted instance."
+          },
+          "linkOut": "Sentry issues"
+        },
+        "lastHealthCheck": {
+          "title": "Last health check",
+          "value": "Ran {ranAt}",
+          "detail": "Status {status}. Schedules, runner image, indexer image. Runs once daily and does not retry, so a miss shows up here as a stale timestamp.",
+          "unreachable": {
+            "probeFailed": "No response",
+            "never": "Never run"
+          },
+          "unreachableDetail": {
+            "probeFailed": "The job ledger did not answer. This is not a report that the check never ran.",
+            "never": "The ledger holds no run of the daily health check. Either this deployment has never reached 09:00, or the schedule is not registered — which is the fault the check itself exists to catch."
+          },
+          "linkOut": "Job runs"
+        }
+      },
+      "overdue": {
+        "title": "Overdue schedules",
+        "subtitle": "Crons that missed more than one consecutive tick, newest miss first.",
+        "count": "{n} overdue",
+        "empty": "Every scheduled job has run since its previous tick.",
+        "foot": "Showing {n} of {total} overdue · {checked} schedules checked",
+        "colJob": "Job",
+        "colCron": "Cron",
+        "colLastFired": "Last fired",
+        "colExpected": "Expected",
+        "never": "Never"
+      }
     }
   }
 }
