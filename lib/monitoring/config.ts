@@ -1,6 +1,16 @@
 // The monitoring seam — ONE place that answers "is error monitoring on, and
 // what is this build?" for all four Sentry entry points (server, edge, client,
-// `next.config.ts`).
+// `next.config.ts`) — and, as of MOTIR-3606, for the job WORKER, which is a
+// fifth and is not a Next entry point at all.
+//
+// ⚠️ THIS FILE IS IMPORTED BY `next.config.ts`, SO IT MAY IMPORT ALMOST NOTHING.
+// Next transpiles the config with a plain Node resolver that does not understand
+// the `@/` path alias, so a transitive import reaching one fails the BUILD with
+// `MODULE_NOT_FOUND` — pointing at a file several hops away, which is a long way
+// from the line that caused it. MOTIR-3606 hit exactly that by adding a
+// `dropExpectedDomainErrors` import here; the options builder that needs it
+// lives in `./serverInit` instead, which no Next config touches. Keep this
+// module free of anything but `process.env` reads.
 //
 // Subtask 8.5.6 / MOTIR-1162. The provisioned values and which of the two homes
 // each belongs in are recorded on MOTIR-1161; this file is the code side of

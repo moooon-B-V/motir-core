@@ -166,3 +166,49 @@ describe('the server request-error hook is always exported (`instrumentation.ts`
     expect(init).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── THE FIFTH RUNTIME (MOTIR-3606) ─────────────────────────────────────────
+//
+// The four surfaces above are Next entry points. The JOB WORKER is not: it is a
+// plain esbuild bundle (`pnpm build:worker` → `scripts/worker.ts`) running in
+// `fly.toml`'s `worker` process group, and `instrumentation.ts` never executes
+// there — its own header says so about the E2E seams. So for the whole life of
+// the Postgres job engine, every scheduled job in production ran with NO error
+// monitoring, which is half of why `system.daily-health-check` could dead-letter
+// 23 mornings running and reach nobody.
+//
+// ⚠️ IT IS ASSERTED ON THE SOURCE, and that is a deliberate second-best.
+// Importing `scripts/worker.ts` starts a claim loop against a database; there is
+// nothing to call. What CAN be pinned is that the entrypoint reaches for the
+// shared options builder at all — which is the property that was missing, and
+// the one a future refactor would silently drop. The same guard shape
+// `orchestratorPortBoundary.test.ts` uses, and for the same reason: some things
+// only a source read can see.
+describe('the WORKER process initialises monitoring — it is not a Next runtime', () => {
+  it('scripts/worker.ts calls Sentry.init through the shared options builder', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const source = readFileSync(join(process.cwd(), 'scripts/worker.ts'), 'utf8');
+
+    expect(source).toContain('serverSentryInitOptions');
+    // From `serverInit`, NOT `config` — `next.config.ts` imports `config`, and a
+    // transitive `@/` alias reaching it fails `next build` with MODULE_NOT_FOUND.
+    expect(source).toContain('@/lib/monitoring/serverInit');
+    expect(source).toMatch(/Sentry\.init\(/);
+    // The gate travels with the options: a null return means no DSN, and the
+    // worker must then call nothing at all (the self-host contract).
+    expect(source).toMatch(/if \(!options\) return;/);
+  });
+
+  it('the worker bundle keeps the SDK — it is not in the esbuild `external` set', async () => {
+    // A packaging trap with a silent failure mode: marking `@sentry/*` external
+    // would resolve at build time here and fail at RUNTIME inside the image,
+    // whose `node_modules` is Next's minimal traced set. `build-worker.mjs`
+    // states that hazard about `@prisma/client`; this pins it for the SDK.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const build = readFileSync(join(process.cwd(), 'scripts/build-worker.mjs'), 'utf8');
+    const externals = /external:\s*\[([^\]]*)\]/.exec(build)?.[1] ?? '';
+    expect(externals).not.toContain('sentry');
+  });
+});

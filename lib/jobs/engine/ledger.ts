@@ -1,5 +1,6 @@
 import type { JobQueueRun, Prisma } from '@/generated/prisma/client';
 import { jobRunsService } from '@/lib/services/jobRunsService';
+import { alertTerminalJobFailure } from '@/lib/monitoring/jobFailureAlert';
 import { engineJob } from './registry';
 import { buildEngineContext, UnknownEngineJobError } from './runner';
 import { jobServices } from '../services';
@@ -133,6 +134,21 @@ export async function recordEngineTerminalFailure(
   eventData: unknown,
 ): Promise<void> {
   const identity = ledgerIdentity(run);
+  // ⚠️ THE ALERT FIRES BEFORE THE WRITE, AND THAT ORDER IS DELIBERATE
+  // (MOTIR-3606). It is synchronous, best-effort and cannot throw, so it costs
+  // the write nothing — and putting it first means a ledger write that ITSELF
+  // fails (a vanished tenant, a database that has gone away) still produces the
+  // signal. The row is the record; the alert is the only thing that reaches a
+  // person, so it must not be the half that goes missing when the database is
+  // the problem.
+  alertTerminalJobFailure({
+    functionId: identity.functionId,
+    eventName: identity.eventName,
+    workspaceId: identity.workspaceId,
+    attempts: run.attempts,
+    engine: 'engine',
+    error,
+  });
   await jobRunsService.recordTerminalFailure({
     functionId: identity.functionId,
     eventId: identity.eventId,
