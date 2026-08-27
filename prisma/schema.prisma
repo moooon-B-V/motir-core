@@ -887,6 +887,23 @@ model Organization {
   /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
   acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
 
+  /// Whether every member of this organization must hold a second factor
+  /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
+  /// person is the OR of the two tiers — this column, and `requiresTwoFactor`
+  /// on any `Workspace` of this org they belong to — so the org sets a FLOOR a
+  /// workspace may raise and can never lower. Two columns rather than one
+  /// derived flag on purpose: they are separate facts set by different admins,
+  /// and storing only the OR would silently drop every workspace's own
+  /// requirement the first time the org's is switched off.
+  ///
+  /// Set by an org owner/admin; read by the compliance verdict in MOTIR-3645.
+  /// `organization.acceptanceVideoEnabled` above is the shipped precedent for
+  /// an org-level boolean policy (`organizationsService.setAcceptanceVideoEnabled`).
+  ///
+  /// NO `@@index`: the org read is a primary-key lookup, and an index on a
+  /// two-valued boolean would be dead weight.
+  requiresTwoFactor Boolean @default(false) @map("requires_two_factor")
+
   memberships                 OrganizationMembership[]
   workspaces                  Workspace[]
   // CI-minutes consumption attributed to this org (Story MOTIR-1775 ·
@@ -960,6 +977,24 @@ model Workspace {
   name               String
   slug               String             @unique
   subtaskPrMergeMode SubtaskPrMergeMode @default(manual)
+
+  /// Whether every member of this workspace must hold a second factor
+  /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
+  /// person is the OR of the two tiers — this column, and `requiresTwoFactor`
+  /// on the owning `Organization` — so a workspace admin may RAISE the org's
+  /// floor and can never lower it: when the org already requires it, this
+  /// control renders locked on and names the org (MOTIR-3642's design).
+  /// Kept as its own column rather than folded into a derived org-level flag
+  /// so that "this workspace chose it" survives the org switching its own off.
+  ///
+  /// Set by a workspace owner/admin (`isWorkspaceManager`); read by the
+  /// compliance verdict in MOTIR-3645.
+  ///
+  /// NO `@@index`: the read rides `workspace_membership`'s existing
+  /// `@@index([userId])` join, and an index on a two-valued boolean would be
+  /// dead weight.
+  requiresTwoFactor  Boolean            @default(false) @map("requires_two_factor")
+
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
