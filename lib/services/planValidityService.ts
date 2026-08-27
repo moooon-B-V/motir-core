@@ -135,6 +135,32 @@ async function projectedProseAdvisories(
   );
   const storedRows = new Map(rows.map((r) => [r.id, r] as [string, (typeof rows)[number]]));
 
+  // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625), projected. A
+  // blocker's type comes from the PLAN wherever the plan sets one — an `add`
+  // proposing the very `type: design` card this lift creates is the commonest
+  // shape a plan-time author has, and it has no stored row at all — and from the
+  // stored row otherwise. Only the REAL blockers the read above did not already
+  // fetch are looked up, and by TYPE alone rather than by body.
+  const blockerIds = new Set<string>();
+  for (const node of scanned) {
+    for (const blockerId of proj.blockedBy.get(node.id) ?? []) blockerIds.add(blockerId);
+  }
+  const storedBlockerTypes = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTypesByIds(
+          [...blockerIds].filter((id) => !id.startsWith(TEMP_REF_PREFIX) && !storedRows.has(id)),
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((r) => [r.id, r.type]),
+  );
+  const blockerType = (id: string): string | null =>
+    proj.projectedType.has(id)
+      ? (proj.projectedType.get(id) ?? null)
+      : (storedRows.get(id)?.type ?? storedBlockerTypes.get(id) ?? null);
+
   const subjects = scanned.map((node) => {
     const exemptIds = new Set<string>([node.id]);
     let parentId = node.parentId;
@@ -192,6 +218,14 @@ async function projectedProseAdvisories(
       // `remove`s a container's last child makes it a leaf. Both are exactly the
       // questions the gate asks, and only the projection can answer them.
       hasChildren: (proj.childrenByParent.get(node.id)?.length ?? 0) > 0,
+      // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625), off the SAME
+      // projected adjacency the exempt walk above consumes — so a plan that
+      // LIFTS a card's design into a proposed sibling and wires the edge in the
+      // same batch stops the advisory at authoring time, which is the earliest
+      // moment the remedy exists.
+      hasDesignBlocker: [...(proj.blockedBy.get(node.id) ?? [])].some(
+        (blockerId) => blockerType(blockerId) === 'design',
+      ),
     };
   });
 

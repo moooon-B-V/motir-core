@@ -1491,6 +1491,50 @@ describe('planValidityService.validateProjectedWorkItem — THE DESIGN GATE, pro
     ]);
   });
 
+  it('goes QUIET when the plan LIFTS the design into a proposed sibling it is blocked_by', async () => {
+    // HOLE 1 (MOTIR-3625) at the earliest possible moment. The remedy the
+    // advisory names is a LIFT — the design criterion becomes its own `type:
+    // design` card, placed BESIDE the card it gates, with a `blocked_by` edge as
+    // the entire relationship between them — and a plan can express both halves
+    // in one batch. Neither card exists yet, so the type comes from the plan's
+    // own `proposedFields` and the edge from a `planItem:` temp-ref: this is the
+    // one caller where BOTH inputs are projected rather than stored.
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const design = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'The design amendment',
+        kind: 'subtask',
+        type: 'design',
+        executor: 'coding_agent',
+      },
+      parentRef: story.id,
+    });
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Builds what the drawing decides',
+        kind: 'subtask',
+        executor: 'coding_agent',
+        descriptionMd: selfBlockingBody,
+      },
+      parentRef: story.id,
+      blockedByRefs: [`planItem:${itemIdByTitle(design, 'The design amendment')}`],
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    expect(res.advisories).toEqual([]);
+  });
+
   it('goes QUIET when the plan gives the proposal a child — the PROJECTED adjacency decides', async () => {
     // The remedy, expressed as a plan: the design criterion becomes a child card
     // and the parent is a container. `hasChildren` comes from the projection, not

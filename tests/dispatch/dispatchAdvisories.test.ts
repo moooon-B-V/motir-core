@@ -1118,6 +1118,59 @@ describe('THE DESIGN GATE advisory — a card that draws its own design and then
     ]);
   });
 
+  /** A sibling of an arbitrary work TYPE, for the lifted-design arm below. */
+  async function makeSibling(fx: WorkItemFixture, title: string, type: WorkItemTypeDto) {
+    return workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title, type, executor: 'coding_agent' },
+      fx.ctx,
+    );
+  }
+
+  it('says NOTHING once the design is LIFTED — a blocked_by edge to a `type: design` sibling', async () => {
+    // HOLE 1 (MOTIR-3625). `selfBlockingDesignCriteria` is a pure string scan, so
+    // the card that DID what this advisory asks — lifted its design into its own
+    // card and wired itself to wait for it — still names the mock it consumes and
+    // still builds the surface, and read identically to one that never lifted
+    // anything. Three of eight cards in one story were reported that way, every
+    // one correctly shaped and correctly wired.
+    //
+    // The remedy is the edge, so the edge is the answer: the check now reads it.
+    const fx = await makeWorkItemFixture();
+    const design = await makeSibling(fx, 'Draw the plan canvas', 'design');
+    const card = await makeDesignCard(fx, 'A decided plan on the canvas', reconstructedBody());
+    await workItemsService.linkWorkItems(
+      { fromId: card.id, toId: design.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([]);
+  });
+
+  it('STILL fires when the blocker is not a DESIGN card — the gate reads the TYPE, not the edge', async () => {
+    // The narrowest thing that could have been written instead, and why it would
+    // be wrong: *"has any blocked_by edge"* would mute the check for every card
+    // that waits on a migration or a service, which is most of them. The lift the
+    // advisory asks for is specifically into a `type: design` card, so that is
+    // what discharges it.
+    const fx = await makeWorkItemFixture();
+    const service = await makeSibling(fx, 'The projected-rows service', 'code');
+    const card = await makeDesignCard(fx, 'A decided plan on the canvas', reconstructedBody());
+    await workItemsService.linkWorkItems(
+      { fromId: card.id, toId: service.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 4,
+      },
+    ]);
+  });
+
   it('says NOTHING about a card carrying only one of the two roles', async () => {
     const fx = await makeWorkItemFixture();
     const designOnly = await makeDesignCard(
