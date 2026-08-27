@@ -4,6 +4,8 @@ import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 import { Pill } from '@/components/ui/Pill';
 import type { RepoDelivery, RepoDeliveryState } from '@/lib/workItems/repoDelivery';
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
+import { deliverySetShortfall } from '@/lib/workItems/deliverySet';
 
 // EVERY repository a work item ships in, with each one's DELIVERY state (Story
 // MOTIR-2725 · MOTIR-2415), per design/work-items/repository-set.mock.html and
@@ -57,11 +59,29 @@ export interface RepositorySetFieldProps {
    *  SERVER-side by `workItemsService.listRepoDelivery`, which calls the same
    *  classifier the completion gate calls. */
   delivery: RepoDelivery[];
+  /**
+   * The card's DELIVERY SET (Story MOTIR-3655 · MOTIR-3660) — every pull request
+   * that delivers it, which the caption's SUBJECT is drawn from when what is
+   * outstanding is a pull request rather than a repository.
+   *
+   * The GLYPH's amended predicate is applied by `amendRepoDeliveryWithSet` before
+   * `delivery` ever reaches this component, server-side, so the peek and the
+   * detail page cannot arrive at different glyphs for one card. Only the caption
+   * needs the set itself, because only the caption NAMES the member.
+   *
+   * Defaulted to `[]`, which is the state of nearly every card: with no
+   * deliveries the field renders exactly what it shipped.
+   */
+  deliveries?: WorkItemDeliveryDto[];
   /** The peek's compression (MOTIR-2414). Read-mode only. */
   compact?: boolean;
 }
 
-export function RepositorySetField({ delivery, compact = false }: RepositorySetFieldProps) {
+export function RepositorySetField({
+  delivery,
+  deliveries = [],
+  compact = false,
+}: RepositorySetFieldProps) {
   const t = useTranslations('issueViews');
 
   // The EMPTY set — a deliberate state, not a hole. The value is the shipped
@@ -154,7 +174,7 @@ export function RepositorySetField({ delivery, compact = false }: RepositorySetF
           </li>
         ) : null}
       </ul>
-      <RepositoryCountCaption delivery={delivery} compact={compact} />
+      <RepositoryCountCaption delivery={delivery} deliveries={deliveries} compact={compact} />
     </div>
   );
 }
@@ -168,12 +188,69 @@ export function RepositorySetField({ delivery, compact = false }: RepositorySetF
  */
 function RepositoryCountCaption({
   delivery,
+  deliveries,
   compact,
 }: {
   delivery: RepoDelivery[];
+  deliveries: WorkItemDeliveryDto[];
   compact: boolean;
 }) {
   const t = useTranslations('issueViews');
+
+  // ── The caption's SUBJECT is whatever is OUTSTANDING (MOTIR-3660) ────────
+  // ONE line, never two: two counts answering different questions on one
+  // surface is what a reader misreads. So a delivery-level shortfall is
+  // answered FIRST and returns, because it is the more specific fact — the
+  // repository count says `1 of 1 delivered` about the very card the gate is
+  // holding, while the delivery line names the pull request that is holding it.
+  //
+  // ⚠️ This runs BEFORE the `< 2` guard below, and that ordering IS the fix.
+  // The repository caption disappears on a one-element set — correctly, since
+  // one row says everything a count could — but a card with TWO pull requests in
+  // ONE repository has a one-element repository set and something outstanding,
+  // and under the old ordering it rendered no caption at all while
+  // `deferred_incomplete_delivery_set` held it.
+  const members = deliveries.map((d) => ({
+    repoLabel: d.pullRequest.repo,
+    number: d.pullRequest.number,
+    merged: d.pullRequest.state === 'merged',
+    baseRef: d.baseRef,
+    defaultBranch: d.defaultBranch,
+  }));
+  // The SAME function the gate derives its hold and its comment from, so the
+  // words on the rail and the words in the comment cannot describe different
+  // sets.
+  const shortfall = deliverySetShortfall(members);
+  const mergedCount = members.filter(
+    (m) => m.merged && m.baseRef !== null && m.baseRef === m.defaultBranch,
+  ).length;
+  if (shortfall.outstanding.length > 0) {
+    return (
+      <CaptionLine
+        text={t('deliveriesMergedOpen', {
+          merged: mergedCount,
+          total: members.length,
+          pr: shortfall.outstanding.join(', '),
+        })}
+      />
+    );
+  }
+  if (shortfall.strandedBase.length > 0) {
+    const stranded = deliveries.find(
+      (d) => `${d.pullRequest.repo}#${d.pullRequest.number}` === shortfall.strandedBase[0],
+    );
+    return (
+      <CaptionLine
+        text={t('deliveriesMergedStranded', {
+          merged: mergedCount,
+          total: members.length,
+          pr: shortfall.strandedBase.join(', '),
+          base: stranded?.baseRef ?? '',
+        })}
+      />
+    );
+  }
+
   // One repository has nothing to count — the row already says everything.
   if (delivery.length < 2) return null;
 
@@ -198,5 +275,11 @@ function RepositoryCountCaption({
       total: delivery.length,
     });
   }
+  return <CaptionLine text={text} />;
+}
+
+/** The caption's one line, so every branch above renders the same element rather
+ *  than four copies of one className that can drift apart. */
+function CaptionLine({ text }: { text: string }) {
   return <p className="mt-2 font-sans text-xs text-(--el-text-muted)">{text}</p>;
 }

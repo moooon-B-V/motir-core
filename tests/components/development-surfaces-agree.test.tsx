@@ -95,6 +95,7 @@ const DATA: QuickViewData = {
   archived: null,
   pullRequests: [OPEN_PR],
   repoDelivery: [{ repo: 'motir-core', state: 'awaiting', primary: true }],
+  deliveries: [],
   hasChildren: false,
   canPlan: true,
   id: 'cmqvitem0000000000003036',

@@ -503,6 +503,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             className="mt-6"
             pullRequests={data.pullRequests}
             itemIdentifier={data.identifier}
+            // The DELIVERY SET (MOTIR-3660) — the same list the detail page
+            // draws from, so the `Not on trunk` pill and any row the singular
+            // column could not name appear on both surfaces or on neither.
+            deliveries={data.deliveries ?? []}
             // MOTIR-2415 added this row behind a prop and left the peek's
             // default empty so its output could not move by accident. This is
             // the card that turns it on — by DECISION, and the design (2414 Q2)
@@ -597,7 +601,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 does not send the field. A client rendering against an older
                 deploy — or a mid-deploy window — must show the empty set, which
                 is a real state, rather than throw. */}
-            <RepositorySetField delivery={view.repoDelivery ?? []} compact />
+            <RepositorySetField
+              delivery={view.repoDelivery ?? []}
+              deliveries={view.deliveries ?? []}
+              compact
+            />
           </QuickViewRailField>
 
           {/* Work Type + Executor — leaf-only (Story 2.7). The faint value glyph

@@ -106,6 +106,7 @@ import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
 import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { amendRepoDeliveryWithSet } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
@@ -4743,7 +4744,12 @@ export const workItemsService = {
     // classifier. The peek showing a different delivery state from the detail
     // page is the drift this story exists to remove, so the two surfaces do not
     // each compute it.
-    const repoDelivery = await this.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx);
+    //
+    // AMENDED by the delivery set since MOTIR-3660 — `getDeliveryView` returns
+    // both halves so the peek and the detail page cannot combine them
+    // differently.
+    const deliveryView = await this.getDeliveryView(detail.item.id, detail.item.targetRepos, ctx);
+    const repoDelivery = deliveryView.repos;
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -4762,6 +4768,7 @@ export const workItemsService = {
       projectComponents,
       estimationConfig,
       repoDelivery,
+      deliveryView.deliveries,
     );
   },
 
@@ -4818,6 +4825,40 @@ export const workItemsService = {
       workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx),
     );
     return rows.map(toWorkItemDeliveryDto);
+  },
+
+  /**
+   * Everything the two READ surfaces need to draw a card's delivery, in ONE call
+   * (Story MOTIR-3655 · MOTIR-3660, design `design/work-items/delivery-set.mock.html`).
+   *
+   * ── Why this exists rather than two calls at each host ────────────────────
+   * The rail's glyph and the Development section's rows are two views of one
+   * question, and the detail page and the quick view must not answer it
+   * differently. Handing each host two lists and a combining rule is exactly the
+   * arrangement that let those two surfaces disagree before (MOTIR-3036), so the
+   * combining happens HERE and a host makes no editorial decision at all.
+   *
+   * `repos` is the classified repository set AMENDED by the delivery set: a row
+   * reads `delivered` only when neither completion gate holds on it. `deliveries`
+   * is the set itself, which the caption needs because only the caption NAMES the
+   * pull request that is outstanding.
+   *
+   * ⚠️ {@link listRepoDelivery} is deliberately LEFT ALONE and still returns the
+   * unamended classification. Its other caller is `dispatchPromptService`, which
+   * tells an agent what has landed before it starts work — a different audience
+   * and a different question, and changing what a dispatch prompt says is not
+   * this card's to do.
+   */
+  async getDeliveryView(
+    workItemId: string,
+    targetRepos: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<{ repos: RepoDelivery[]; deliveries: WorkItemDeliveryDto[] }> {
+    const [repos, deliveries] = await Promise.all([
+      this.listRepoDelivery(workItemId, targetRepos, ctx),
+      this.listDeliverySet(workItemId, ctx),
+    ]);
+    return { repos: amendRepoDeliveryWithSet(repos, deliveries), deliveries };
   },
 
   /**

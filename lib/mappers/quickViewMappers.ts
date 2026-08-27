@@ -7,6 +7,7 @@ import type { ComponentDto } from '@/lib/dto/components';
 import type { EstimationConfigDto } from '@/lib/dto/estimation';
 import type { Locale } from '@/lib/i18n/locales';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 
@@ -46,6 +47,9 @@ export function toQuickViewData(
   /** Every repository the item ships in, with its delivery state (MOTIR-2416) —
    *  resolved by the same service call the detail page uses. */
   repoDelivery: RepoDelivery[],
+  /** The card's DELIVERY SET (MOTIR-3660) — the Development section's rows and
+   *  the rail caption's subject. Empty on nearly every card. */
+  deliveries: WorkItemDeliveryDto[],
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -98,6 +102,7 @@ export function toQuickViewData(
     },
     pullRequests,
     repoDelivery,
+    deliveries,
     // MOTIR-910: the peek header's Plan / Re-plan door. `hasChildren` rides the
     // detail aggregate already read above; `canPlan` is the project capability
     // the service resolves (this mapper stays pure).

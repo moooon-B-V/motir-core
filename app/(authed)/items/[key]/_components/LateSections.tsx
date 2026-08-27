@@ -118,6 +118,9 @@ interface LateProps {
   /** Read in the page's TIER-TWO group — the rail's Repositories card needs it
    *  too, so it is read once there and passed down rather than read twice. */
   repoDelivery: React.ComponentProps<typeof DevelopmentSectionBody>['repoDelivery'];
+  /** The card's DELIVERY SET (MOTIR-3660), read in the same TIER-TWO group and
+   *  passed down for the same reason — the rail needs it too. */
+  deliveries: React.ComponentProps<typeof DevelopmentSectionBody>['deliveries'];
 }
 
 /**
@@ -130,6 +133,7 @@ export async function LateUpperSections({
   itemIdentifier,
   canEdit,
   repoDelivery,
+  deliveries,
 }: LateProps) {
   const r = await reads;
   const [tGithub, tAcceptance, tDesignResult] = await Promise.all([
@@ -156,6 +160,7 @@ export async function LateUpperSections({
             // not this page's. Pre-filtering here is what let this page and the
             // quick view disagree (MOTIR-3036).
             repoDelivery={repoDelivery}
+            deliveries={deliveries}
           />
         </ContentSectionCard>
       </DevelopmentLinkProvider>

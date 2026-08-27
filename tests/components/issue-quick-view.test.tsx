@@ -65,6 +65,7 @@ const DATA: QuickViewData = {
   archived: null,
   pullRequests: [],
   repoDelivery: [],
+  deliveries: [],
   hasChildren: false,
   canPlan: true,
   // MOTIR-2562 — the editor inputs the widened payload carries. The peek's rail

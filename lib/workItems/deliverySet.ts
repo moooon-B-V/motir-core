@@ -1,3 +1,7 @@
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
+import type { RepoDelivery, RepoDeliveryState } from './repoDelivery';
+import { repoNameKey } from './repoName';
+
 /**
  * The DELIVERY SET's shortfall — which of a card's deliveries have not landed
  * (Story MOTIR-3655 · MOTIR-3659, ADR `docs/decisions/work-item-delivery-links.md`).
@@ -97,4 +101,86 @@ export function hasDeliverySetShortfall(shortfall: DeliverySetShortfall): boolea
     shortfall.strandedBase.length > 0 ||
     shortfall.unknownBase.length > 0
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The RAIL's amended predicate (Story MOTIR-3655 · MOTIR-3660)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * AMEND a classified repository set with what the DELIVERY SET knows
+ * (design `design/work-items/delivery-set.mock.html`, CHANGE 1).
+ *
+ * ── The bug this closes, stated exactly ───────────────────────────────────
+ * `classifyRepoDelivery` calls a repository `delivered` when **any** linked pull
+ * request merged onto its default branch. That is the right answer to
+ * `deferred_incomplete_repo_set`'s question — *has this repository seen a
+ * merge?* — and the WRONG answer for a reader, because a card with two pull
+ * requests in ONE repository, one merged and one open, then reads `Delivered`
+ * while `deferred_incomplete_delivery_set` is holding it. The rail would assert
+ * finished about a card the gate is refusing to finish, which is the failure
+ * MOTIR-3655 was filed about, one layer up.
+ *
+ * So a row is `delivered` only when NEITHER gate holds on it: the repository has
+ * seen a merge AND every delivery recorded in that repository has landed on that
+ * repository's own default branch. The two gates keep their separate questions —
+ * they are not collapsed here, and neither reads this — and the glyph mirrors
+ * their CONJUNCTION, which is what a reader actually wants to know.
+ *
+ * ── What it never does ────────────────────────────────────────────────────
+ * **It only ever weakens a row.** A repository the classifier called `awaiting`
+ * or `unestablished` is never promoted by a delivery, because a delivery is
+ * evidence about a pull request and those two states are claims about the
+ * repository. And a card with an EMPTY delivery set — nearly every card in the
+ * tree — comes back byte-identical, which is the property the whole story must
+ * not perturb and is why the empty case is the first line.
+ *
+ * Pure, and it lives beside the shortfall it agrees with rather than in the
+ * component, so the peek and the detail page cannot each grow their own version
+ * of it — the drift `repoDelivery.ts`'s own header was written about.
+ */
+export function amendRepoDeliveryWithSet(
+  repos: readonly RepoDelivery[],
+  deliveries: readonly WorkItemDeliveryDto[],
+): RepoDelivery[] {
+  if (deliveries.length === 0) return [...repos];
+
+  // Grouped on the shared repository IDENTITY: the two sides are written by
+  // different tables in different forms (`motir-core` from the card's pin,
+  // `moooon-B-V/motir-core` from the pull request), and comparing the raw
+  // strings matches nothing at all — the defect `awaitingRepoRows` documents.
+  const byRepo = new Map<string, WorkItemDeliveryDto[]>();
+  for (const delivery of deliveries) {
+    const key = repoNameKey(delivery.pullRequest.repo);
+    if (key === null) continue;
+    const bucket = byRepo.get(key);
+    if (bucket) bucket.push(delivery);
+    else byRepo.set(key, [delivery]);
+  }
+
+  return repos.map((row) => {
+    if (row.state !== 'delivered') return row;
+    const key = repoNameKey(row.repo);
+    const mine = key === null ? undefined : byRepo.get(key);
+    if (mine === undefined || mine.length === 0) return row;
+
+    const shortfall = deliverySetShortfall(
+      mine.map((d) => ({
+        repoLabel: d.pullRequest.repo,
+        number: d.pullRequest.number,
+        merged: d.pullRequest.state === 'merged',
+        baseRef: d.baseRef,
+        defaultBranch: d.defaultBranch,
+      })),
+    );
+    if (!hasDeliverySetShortfall(shortfall)) return row;
+
+    // WHICH weaker state, and the order matters: an unrecorded base is a
+    // question the reader has to answer (`unknown`, the warning glyph), while an
+    // open or stranded delivery is work that has not arrived (`awaiting`, the
+    // dashed one). A row with both is `unknown`, because that is the one that
+    // asks for an action rather than for patience.
+    const state: RepoDeliveryState = shortfall.unknownBase.length > 0 ? 'unknown' : 'awaiting';
+    return { ...row, state };
+  });
 }

@@ -1338,6 +1338,8 @@
     "repositoriesAllDelivered": "All delivered.",
     "repositoriesDeliveredCount": "{delivered} of {total} delivered.",
     "repositoriesOutstanding": "{delivered} of {total} delivered. {repo} is outstanding.",
+    "deliveriesMergedOpen": "{merged} of {total} deliveries merged. {pr} is still open.",
+    "deliveriesMergedStranded": "{merged} of {total} deliveries merged onto their trunk. {pr} landed on {base}.",
     "repositoriesUnknownBranch": "{repo} merged, but Motir has no record of which branch.",
     "repositoryDelivery": {
       "delivered": "Delivered",
@@ -5664,6 +5666,8 @@
       "notConnected": "GitHub isn't connected for this workspace. Connect it in Settings → Workspace → GitHub.",
       "prNotFound": "That pull request could not be found.",
       "autoLinkCaptionManual": "Linked automatically when a branch or PR mentions <mono>{key}</mono> — or linked by hand from here.",
+      "intoBase": "into {base}",
+      "notOnTrunk": "Not on trunk",
       "noPullRequestYet": "No pull request yet",
       "mergedBranchUnknown": "Merged — branch not recorded",
       "repoState": {
