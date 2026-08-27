@@ -214,6 +214,36 @@ describe('the delivery', () => {
     expect(emails()[0]?.data?.entries?.map((e) => e.identifier)).toEqual([open.identifier]);
   });
 
+  it('is a no-op when the PROJECT was deleted between the tick and the send', async () => {
+    const fx = await publicFixture();
+    const row = await follower(fx);
+    await adminDb.project.delete({ where: { id: fx.projectId } });
+
+    const result = await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: 'x',
+      now: MONDAY,
+    });
+    expect(result).toEqual({ sent: false, itemCount: 0 });
+    expect(emails()).toHaveLength(0);
+  });
+
+  it('is a no-op when the follower opted OUT between the tick and the send', async () => {
+    const fx = await publicFixture();
+    const row = await follower(fx, { digestOptIn: false });
+    const result = await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: 'x',
+      now: MONDAY,
+    });
+    // The tick's audience read already filters these out; this is the second
+    // check, at the moment it actually matters — somebody can untick the box
+    // between Monday's scan and Monday's send.
+    expect(result.sent).toBe(false);
+  });
+
   it('is a no-op when the follow was deleted between the tick and the send', async () => {
     const fx = await publicFixture();
     const row = await follower(fx);
@@ -229,6 +259,46 @@ describe('the delivery', () => {
     });
     expect(result).toEqual({ sent: false, itemCount: 0 });
     expect(emails()).toHaveLength(0);
+  });
+});
+
+describe('the account tier’s digest', () => {
+  it('mails the ACCOUNT’s own address, which no follow row stores', async () => {
+    const fx = await publicFixture();
+    // An account follow carries `userId` and no `email`, so the recipient is
+    // resolved from the user at send time rather than copied onto the row —
+    // which is also what makes a changed account address take effect.
+    const row = await follower(fx, {
+      email: null,
+      userId: fx.ownerId,
+      lastDigestAt: new Date('2026-08-17T09:00:00.000Z'),
+    });
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Shipped' });
+    await ship(fx, item.id, '2026-08-20T10:00:00.000Z');
+
+    const result = await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: `${row.id}:2026-W35`,
+      now: MONDAY,
+    });
+
+    expect(result.sent).toBe(true);
+    const user = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ownerId } });
+    expect(emails()[0]?.to).toBe(user.email);
+  });
+
+  it('pages an audience larger than one read', async () => {
+    const fx = await publicFixture();
+    // 3 followers is enough to prove the loop advances its cursor rather than
+    // re-reading page one for ever; the page size itself is an implementation
+    // constant, not a contract.
+    for (let i = 0; i < 3; i += 1) {
+      await follower(fx, { email: `reader${i}@example.com` });
+    }
+    const result = await publicFollowDigestService.enqueueDueDigests(MONDAY);
+    expect(result.enqueued).toBe(3);
+    expect(new Set(digests().map((d) => d.followId)).size).toBe(3);
   });
 });
 
