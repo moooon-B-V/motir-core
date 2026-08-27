@@ -925,7 +925,11 @@
       "bodyOrganization": "{tier} requires everyone in the organization to sign in with a second factor. It takes about a minute, and you will go straight back to what you were opening. Nothing has been deleted and you are still a member of every workspace you were in.",
       "bodyWorkspace": "{tier} requires everyone in the workspace to sign in with a second factor. It takes about a minute, and you will go straight back to what you were opening. Nothing has been deleted and your membership has not changed.",
       "signOut": "Not now — sign out",
-      "signOutNote": "You can come back and set this up any time you sign in."
+      "signOutNote": "You can come back and set this up any time you sign in.",
+      "satisfiedChip": "Two-factor authentication is on",
+      "satisfiedHeadline": "You're all set",
+      "satisfiedBody": "You will be asked for your second factor the next time you sign in. Save your recovery codes below if you have not already — they are the way back in if you lose the device.",
+      "continueTo": "Continue to {destination}"
     }
   },
   "shell": {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PasskeyManager } from './PasskeyManager';
 import { TwoFactorManager } from './TwoFactorManager';
 import { withPasskeyMethod } from './twoFactorMethods';
@@ -46,6 +46,23 @@ interface Props {
   otpPeriodMinutes: number;
   totpPeriodSeconds: number;
   trustDeviceDays: number;
+  /**
+   * OPTIONAL, and only the forced-enrolment screen passes it (MOTIR-3648).
+   *
+   * Fires when the account's second-factor state CHANGES — `false → true` the
+   * moment a first method lands, `true → false` if the last one is removed. Not
+   * on mount: a caller wants the transition, not the initial value it already
+   * has as a prop.
+   *
+   * ⚠️ WHY IT EXISTS. `/two-factor-required` mounts these panes to hold somebody
+   * out of the product until they enrol, and it is a Server Component: it cannot
+   * see a client island's state, and this file deliberately does not
+   * `router.refresh()` (see the header). Without a signal the person enrols
+   * successfully and the screen does not move — the dead screen the design of
+   * record's panel 6 exists to prevent. The account Security pane passes
+   * nothing and is unchanged.
+   */
+  onSecondFactorChange?: (hasSecondFactor: boolean) => void;
 }
 
 export function AccountSecurityPanes({
@@ -58,9 +75,28 @@ export function AccountSecurityPanes({
   otpPeriodMinutes,
   totpPeriodSeconds,
   trustDeviceDays,
+  onSecondFactorChange,
 }: Props) {
   const [status, setStatus] = useState<TwoFactorStatusDTO>(initialStatus);
   const [passkeys, setPasskeys] = useState<PasskeyDTO[]>(initialPasskeys);
+
+  // The second-factor transition, reported to a caller that asked for it.
+  //
+  // ⚠️ `methods.length > 0` IS THE CONTRACT (`lib/dto/twoFactor.ts`), not
+  // `status.enabled` — a passkey counts with that flag false, which is the whole
+  // regression Story MOTIR-1215 was named for. `handlePasskeys` below keeps
+  // `methods` derived from the passkey list, so this reads one value rather than
+  // re-deriving from two.
+  //
+  // The ref seeds from the INITIAL value so mounting never fires the callback;
+  // only a change does.
+  const hasSecondFactor = status.methods.length > 0;
+  const lastReported = useRef(hasSecondFactor);
+  useEffect(() => {
+    if (lastReported.current === hasSecondFactor) return;
+    lastReported.current = hasSecondFactor;
+    onSecondFactorChange?.(hasSecondFactor);
+  }, [hasSecondFactor, onSecondFactorChange]);
 
   /**
    * The ONE place the two surfaces meet: a passkey list change re-derives

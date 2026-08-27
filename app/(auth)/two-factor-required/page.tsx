@@ -1,6 +1,7 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { ShieldCheck } from 'lucide-react';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { safeNextPath } from '@/lib/auth/twoFactorGate';
@@ -15,7 +16,7 @@ import { twoFactorService } from '@/lib/services/twoFactorService';
 import { passkeyService } from '@/lib/services/passkeyService';
 import { usersService } from '@/lib/services/usersService';
 import { Pill } from '@/components/ui/Pill';
-import { AccountSecurityPanes } from '../../(authed)/settings/account/_components/AccountSecurityPanes';
+import { HeldEnrolment } from './_components/HeldEnrolment';
 import { SignOutLink } from './_components/SignOutLink';
 
 // The FORCED-ENROLMENT SCREEN (Story MOTIR-1215 · Subtask MOTIR-3648), built to
@@ -38,6 +39,24 @@ import { SignOutLink } from './_components/SignOutLink';
 // `/sign-in` (the group's layout will not do it), and a COMPLIANT visitor is
 // sent on to their destination — somebody who types the URL, or who enrols in
 // another tab, must not sit on a dead screen.
+//
+// ⚠️ IT HAS TWO STATES, NOT ONE, AND THE SECOND IS THE ONE EASIEST TO FORGET.
+// HELD is the obvious half. SATISFIED — the asset's panel 6, "the return to the
+// route they actually asked for" — is what makes the first half survivable: this
+// is a Server Component, so it asks `resolveRequirement` once at render, and the
+// panes below are a client island that deliberately never `router.refresh()`es.
+// Without the satisfied branch AND `HeldEnrolment`'s refresh, a person enrols
+// successfully and the screen does not move. They are stuck on a held page, now
+// compliant, with no way forward but retyping a URL. The story's verification
+// recipe asks for the opposite in step 3: "You land back on the work item you
+// asked for."
+//
+// ⚠️ AND IT DOES NOT WHISK THEM AWAY. A compliant visitor who typed the URL, or
+// who just enrolled, gets a screen with a Continue on it — not an instant
+// redirect. Recovery codes are offered by the panes below, and a redirect fired
+// the moment a credential lands takes the person past them. `required: false` IS
+// still an instant redirect: nobody is asking that person anything, so there is
+// nothing to show them.
 //
 // ⚠️ IT MOUNTS THE SHIPPED ENROLMENT SURFACE; IT DOES NOT REBUILD IT.
 // `AccountSecurityPanes` is the state OWNER that `settings/account/security`
@@ -64,7 +83,8 @@ export default async function TwoFactorRequiredPage({
   const destination = safeNextPath(next);
 
   const requirement = await twoFactorPolicyService.resolveRequirement(session.user.id);
-  if (!requirement.required || requirement.compliant) redirect(destination);
+  // Nobody is asking this person anything — there is no screen to show them.
+  if (!requirement.required) redirect(destination);
 
   const t = await getTranslations('auth.twoFactorRequired');
   const [status, passwordCapability, trustedDevices, passkeys] = await allSettledOrThrow([
@@ -74,27 +94,47 @@ export default async function TwoFactorRequiredPage({
     passkeyService.listForUser(session.user.id),
   ]);
 
+  const satisfied = requirement.compliant;
+
   return (
     <section data-auth-wide className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
-        {/* ⚠️ NOT `--el-danger`, and the asset says so outright: nothing has
-            gone wrong. `info` puts the hue in the tint BACKGROUND with strong
-            ink, which is also what keeps it AA in both themes. */}
-        <Pill severity="info" className="self-start">
+        {/* ⚠️ NOT `--el-danger` on EITHER branch, and the asset says so outright:
+            nothing has gone wrong. Both put the hue in the tint BACKGROUND with
+            strong ink, which is also what keeps them AA in both themes. */}
+        <Pill severity={satisfied ? 'success' : 'info'} className="self-start">
           <ShieldCheck className="h-3 w-3" aria-hidden />
-          {t('requiredBy', { tier: requirement.mandatedBy!.name })}
+          {satisfied ? t('satisfiedChip') : t('requiredBy', { tier: requirement.mandatedBy!.name })}
         </Pill>
         <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight text-(--el-text)">
-          {t('headline')}
+          {satisfied ? t('satisfiedHeadline') : t('headline')}
         </h1>
         <p className="text-(--el-text-muted) font-sans text-base">
-          {requirement.mandatedBy!.tier === 'organization'
-            ? t('bodyOrganization', { tier: requirement.mandatedBy!.name })
-            : t('bodyWorkspace', { tier: requirement.mandatedBy!.name })}
+          {satisfied
+            ? t('satisfiedBody')
+            : requirement.mandatedBy!.tier === 'organization'
+              ? t('bodyOrganization', { tier: requirement.mandatedBy!.name })
+              : t('bodyWorkspace', { tier: requirement.mandatedBy!.name })}
         </p>
+
+        {/* ⚠️ THE RETURN, and the whole reason the path was carried from the
+            edge (MOTIR-3652) and validated at the gate (`safeNextPath`). A
+            person who clicked a work-item link goes back to THAT work item —
+            landing them on a generic dashboard is the failure the design notes
+            name outright. A LINK, not a router push, so it is the browser's
+            navigation and works with a middle click. */}
+        {satisfied ? (
+          <Link
+            href={destination}
+            className="bg-(--el-accent) text-(--el-accent-text) hover:bg-(--el-accent-pressed) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background mt-2 inline-flex h-(--height-btn-md) items-center justify-center gap-2 self-start rounded-(--radius-btn) px-(--spacing-btn-x) font-sans text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          >
+            {t('continueTo', { destination })}
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        ) : null}
       </header>
 
-      <AccountSecurityPanes
+      <HeldEnrolment
         initialStatus={status}
         initialPasskeys={passkeys}
         email={session.user.email}
@@ -106,15 +146,20 @@ export default async function TwoFactorRequiredPage({
         trustDeviceDays={Math.round(TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS / 86_400)}
       />
 
-      {/* ⚠️ THE WAY OUT IS NOT OPTIONAL. Every other route is closed to this
-          person, so a screen with no exit is a trap: somebody on a borrowed
-          laptop, or without their phone, must be able to leave rather than
-          bounce between a redirect and a screen they cannot satisfy. The asset
-          gives this its own panel for exactly that reason. */}
-      <footer className="border-(--el-border) flex flex-col items-start gap-2 border-t pt-(--spacing-md)">
-        <SignOutLink label={t('signOut')} />
-        <span className="text-(--el-text-secondary) font-sans text-xs">{t('signOutNote')}</span>
-      </footer>
+      {/* ⚠️ THE WAY OUT IS NOT OPTIONAL — on every HELD panel, which is what the
+          asset requires and what this condition says. Every other route is
+          closed to a held person, so a screen with no exit is a trap: somebody
+          on a borrowed laptop, or without their phone, must be able to leave
+          rather than bounce between a redirect and a screen they cannot
+          satisfy. Once they are SATISFIED it is no longer an exit but an
+          ordinary sign-out, and it would sit under a Continue competing with
+          it — so it goes, and the whole product is open to them again. */}
+      {satisfied ? null : (
+        <footer className="border-(--el-border) flex flex-col items-start gap-2 border-t pt-(--spacing-md)">
+          <SignOutLink label={t('signOut')} />
+          <span className="text-(--el-text-secondary) font-sans text-xs">{t('signOutNote')}</span>
+        </footer>
+      )}
     </section>
   );
 }

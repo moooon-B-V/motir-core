@@ -310,6 +310,11 @@ export default defineConfig({
         'lib/auth/requireCompliantSession.ts',
         'app/**/two-factor-required/page.tsx',
         'app/**/two-factor-required/_components/SignOutLink.tsx',
+        // …and the island that tells the server gate to look again once a
+        // second factor lands. Without it the satisfied panel above is
+        // unreachable and a person who enrols stays held. Measured at
+        // 100/100/100/100.
+        'app/**/two-factor-required/_components/HeldEnrolment.tsx',
         // ⚠️ `_guard.tsx` is REPORT-ONLY (below `thresholds`), and the reason is
         // worth stating rather than quietly omitting: MOTIR-2476 measured it at
         // 50% lines, and the uncovered half is `guardSettingsPage`'s body — one
@@ -1590,6 +1595,12 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/two-factor-required/_components/SignOutLink.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/two-factor-required/_components/HeldEnrolment.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

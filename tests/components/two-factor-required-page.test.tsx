@@ -176,13 +176,44 @@ describe('the /two-factor-required screen', () => {
     );
   });
 
-  it('redirects a COMPLIANT visitor onward — nobody sits on a dead screen', async () => {
-    // Somebody who types the URL, or who enrolled in another tab.
+  it('shows a COMPLIANT visitor the SATISFIED panel, with the way onward', async () => {
+    // Somebody who types the URL, or who just enrolled on this screen.
+    //
+    // ⚠️ A SCREEN, NOT AN INSTANT REDIRECT, and the difference is the point.
+    // Sending them away the moment a credential lands takes them past the
+    // recovery codes the panes below offer, and past any confirmation that it
+    // worked. `design/auth/design-notes.md` panel 6 draws a screen with a
+    // Continue on it; the person leaves when they say so.
     resolveRequirement.mockResolvedValue({ required: true, mandatedBy: ORG, compliant: true });
-    const mod = await import('@/app/(auth)/two-factor-required/page');
-    await expect(
-      mod.default({ searchParams: Promise.resolve({ next: '/items/MOTIR-1215' }) }),
-    ).rejects.toThrow('NEXT_REDIRECT:/items/MOTIR-1215');
+    await renderPage('/items/MOTIR-1215');
+
+    expect(screen.getByRole('heading', { name: "You're all set", level: 1 })).toBeTruthy();
+    expect(screen.getByText('Two-factor authentication is on')).toBeTruthy();
+
+    const onward = screen.getByRole('link', { name: /Continue to \/items\/MOTIR-1215/ });
+    expect(onward.getAttribute('href')).toBe('/items/MOTIR-1215');
+  });
+
+  it('⚠️ the SATISFIED panel drops the sign-out control, and the held one keeps it', async () => {
+    // The exit is mandatory while somebody is HELD — every other route is closed
+    // to them, so a screen with no way out is a trap. Once they are compliant the
+    // whole product is open again, so it is no longer an exit; leaving it would
+    // put an ordinary sign-out directly under the Continue, competing with it.
+    resolveRequirement.mockResolvedValue({ required: true, mandatedBy: ORG, compliant: false });
+    await renderPage('/items/MOTIR-1215');
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeTruthy();
+    cleanup();
+
+    resolveRequirement.mockResolvedValue({ required: true, mandatedBy: ORG, compliant: true });
+    await renderPage('/items/MOTIR-1215');
+    expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull();
+  });
+
+  it('⚠️ the satisfied panel is not an ERROR state — no alert, no danger role', async () => {
+    // The asset says it outright, on BOTH branches: nothing has gone wrong.
+    resolveRequirement.mockResolvedValue({ required: true, mandatedBy: ORG, compliant: true });
+    const { container } = await renderPageReturning('/items/MOTIR-1215');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('redirects a visitor nobody is asking anything of', async () => {
@@ -193,17 +224,28 @@ describe('the /two-factor-required screen', () => {
     );
   });
 
-  it('⚠️ VALIDATES `next` before redirecting to it — a query string is editable', async () => {
+  it('⚠️ VALIDATES `next` before offering it — a query string is editable', async () => {
     // The value reached the gate from a forgeable header and then rode a query
-    // string a person can retype. Both are untrusted.
+    // string a person can retype. Both are untrusted — and now it is rendered as
+    // an `href` a person CLICKS, which is if anything a shorter path from a
+    // hostile value to a hostile navigation than the redirect was.
     resolveRequirement.mockResolvedValue({ required: true, mandatedBy: ORG, compliant: true });
-    const mod = await import('@/app/(auth)/two-factor-required/page');
     for (const hostile of ['https://evil.example/x', '//evil.example', '/a/../../b']) {
-      await expect(
-        mod.default({ searchParams: Promise.resolve({ next: hostile }) }),
-        hostile,
-      ).rejects.toThrow(`NEXT_REDIRECT:${AUTHED_LANDING_PATH}`);
+      await renderPage(hostile);
+      const onward = screen.getByRole('link', { name: /Continue to/ });
+      expect(onward.getAttribute('href'), hostile).toBe(AUTHED_LANDING_PATH);
+      cleanup();
     }
+  });
+
+  it('still redirects a visitor NOBODY is asking anything of, to the same validated path', async () => {
+    // `required: false` is the one arm that stays an instant redirect: there is
+    // no screen to show somebody under no requirement at all.
+    resolveRequirement.mockResolvedValue({ required: false, mandatedBy: null, compliant: false });
+    const mod = await import('@/app/(auth)/two-factor-required/page');
+    await expect(
+      mod.default({ searchParams: Promise.resolve({ next: '//evil.example' }) }),
+    ).rejects.toThrow(`NEXT_REDIRECT:${AUTHED_LANDING_PATH}`);
   });
 });
 
