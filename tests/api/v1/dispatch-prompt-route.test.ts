@@ -460,6 +460,7 @@ describe('the dispatch-prompt schema', () => {
           path: 'lib/services/workflowsService.ts',
           pullRequest: 'moooon-B-V/motir-core#2059',
           pullRequestTitle: 'Bind the READ surface for motir_app',
+          state: 'merged',
           mergedAt: '2026-08-15T14:00:00.000Z',
         },
       ],
@@ -472,7 +473,49 @@ describe('the dispatch-prompt schema', () => {
       path: 'lib/services/workflowsService.ts',
       pullRequest: 'moooon-B-V/motir-core#2059',
       pullRequestTitle: 'Bind the READ surface for motir_app',
+      state: 'merged',
       mergedAt: '2026-08-15T14:00:00.000Z',
+    });
+    expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
+  });
+
+  it('carries the OPEN subsumption arm as its own wire variant (MOTIR-3230)', () => {
+    // The merged variant above is byte-identical to the shipped shape plus
+    // `state`; THIS payload is one no consumer has ever received, which is what
+    // makes the pair additive under §8 rather than a retype of `mergedAt`.
+    const mapped = presentDispatchPrompt({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr',
+      sessionBranch: null,
+      advisories: [
+        {
+          kind: 'subsumption',
+          item: 'PROD-1',
+          severity: 'likely-in-flight',
+          path: 'lib/services/workflowsService.ts',
+          pullRequest: 'moooon-B-V/motir-core#2200',
+          pullRequestTitle: 'Inject the resolver into every main() call',
+          state: 'open',
+          mergedAt: null,
+        },
+      ],
+    } as unknown as Parameters<typeof presentDispatchPrompt>[0]);
+
+    expect(mapped.advisories[0]).toEqual({
+      kind: 'subsumption',
+      item: 'PROD-1',
+      severity: 'likely-in-flight',
+      path: 'lib/services/workflowsService.ts',
+      pullRequest: 'moooon-B-V/motir-core#2200',
+      pullRequestTitle: 'Inject the resolver into every main() call',
+      state: 'open',
+      mergedAt: null,
     });
     expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
   });

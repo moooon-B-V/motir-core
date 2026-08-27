@@ -1596,11 +1596,20 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseSelfBlockingDesignAdvisoryDto;
 
 /**
- * The severity of a SUBSUMPTION advisory (MOTIR-2903). One member today, named
- * rather than inlined so the family reads like its two siblings and a second
- * member cannot arrive without every renderer's `switch` noticing.
+ * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
+ * so the family reads like its two siblings and a member cannot arrive without
+ * every renderer's `switch` noticing — which is what happened: MOTIR-3230 added
+ * the second.
+ *
+ * The two are OPPOSITE INSTRUCTIONS, not degrees of the same one:
+ *  - **`likely-already-shipped`** — a MERGED pull request touched the path. Read
+ *    its diff; close this card if the work is subsumed.
+ *  - **`likely-in-flight`** — an OPEN pull request is touching the path now. Do
+ *    NOT file a second card and do NOT cut a branch off the default branch to
+ *    rebuild their half; go and coordinate. Two fixes for one defect are each
+ *    green alone and cancel when both merge.
  */
-export type WorkItemProseSubsumptionSeverityDto = 'likely-already-shipped';
+export type WorkItemProseSubsumptionSeverityDto = 'likely-already-shipped' | 'likely-in-flight';
 
 /**
  * A card whose DELIVERABLE MAY ALREADY BE IN THE REPOSITORY (MOTIR-2903): a path
@@ -1631,7 +1640,7 @@ export type WorkItemProseSubsumptionSeverityDto = 'likely-already-shipped';
  * paths with its sibling by design, and unlike the other two findings this one
  * re-fires on every dispatch until the card closes.
  */
-export interface WorkItemProseSubsumptionAdvisoryDto {
+export interface WorkItemProseSubsumptionAdvisoryBaseDto {
   /** The union discriminant — see {@link WorkItemProseAdvisoryDto}. */
   kind: 'subsumption';
   /** The card whose body names the covered path. */
@@ -1639,13 +1648,35 @@ export interface WorkItemProseSubsumptionAdvisoryDto {
   severity: WorkItemProseSubsumptionSeverityDto;
   /** The FIRST path the body names that a qualifying merge touched. */
   path: string;
-  /** The covering merge, as `owner/name#number` — where to read the diff. */
+  /** The covering pull request, as `owner/name#number` — where to read the diff. */
   pullRequest: string;
   /** That pull request's title, or `null` when the mirror row carries none. */
   pullRequestTitle: string | null;
-  /** When it merged, ISO-8601 — always AFTER the card's own `createdAt`. */
-  mergedAt: string;
 }
+
+/**
+ * The two arms of a subsumption finding (MOTIR-3230), as a DISCRIMINATED pair
+ * rather than one shape with a nullable instant.
+ *
+ * `state` is the discriminator a consumer branches on, so the two dispositions are
+ * separable without parsing `severity`. Modelling it as a union rather than
+ * `mergedAt: string | null` is what makes both producers TOTAL: a merged finding
+ * cannot be constructed without its instant, and an open one cannot be constructed
+ * carrying one, so neither needs a fallback that would paper over the mistake.
+ */
+export type WorkItemProseSubsumptionAdvisoryDto = WorkItemProseSubsumptionAdvisoryBaseDto &
+  (
+    | {
+        state: 'merged';
+        /** When it merged, ISO-8601 — always AFTER the card's own `createdAt`. */
+        mergedAt: string;
+      }
+    | {
+        state: 'open';
+        /** Null, always — an open pull request has not merged. */
+        mergedAt: null;
+      }
+  );
 
 /**
  * ONE prose advisory — a discriminated union over `kind` (MOTIR-2175).

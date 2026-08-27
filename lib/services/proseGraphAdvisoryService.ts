@@ -409,14 +409,23 @@ function selfBlockingDesignAdvisory(
   };
 }
 
-/** One merged pull request, reduced to what the subsumption check reads. */
-interface CoveringMerge {
+/** One pull request, reduced to what the subsumption check reads. */
+interface CoveringChange {
   /** `owner/name#number` — where a reader goes to read the diff. */
   reference: string;
   /** The bare repo NAME, for the carried-repository-set narrowing. */
   repoName: string;
   title: string | null;
-  mergedAt: Date;
+  /**
+   * Which of the two arms this row is (MOTIR-3230). It is the DISPOSITION, not a
+   * detail: a merged hit says *read that pull request and close this card if it is
+   * subsumed*, and an open one says *somebody is changing this path right now, so
+   * do not file a second card and do not cut a branch against it*. Collapsing them
+   * into one finding would give a reader one verb for two opposite instructions.
+   */
+  state: 'merged' | 'open';
+  /** When it merged — null for the OPEN arm, which has not. */
+  mergedAt: Date | null;
   /** The work item this pull request is LINKED to, or null. */
   workItemId: string | null;
   /** The paths it touched, as a set, for a per-path hit test. */
@@ -424,10 +433,10 @@ interface CoveringMerge {
 }
 
 /**
- * The merged pull requests that could cover ANY subject in this batch —
- * **ONE query for the whole batch**, not one per subject.
+ * The pull requests — merged OR open — that could cover ANY subject in this batch
+ * — **ONE query for the whole batch**, not one per subject.
  *
- * `findMergedTouchingPaths` (MOTIR-2922) takes a single `since` and a single
+ * `findTouchingPaths` (MOTIR-2922, widened by MOTIR-3230) takes a single `since` and a single
  * `excludeWorkItemId`, and both of those are per-SUBJECT facts: each card has
  * its own filing instant, and each excludes its OWN pull requests. Issuing the
  * query per subject would be N round-trips for a `validate_work_item` over a
@@ -448,7 +457,7 @@ interface CoveringMerge {
 async function buildSubsumptionIndex(
   scanned: ReadonlyArray<{ subject: ProseAdvisorySubject }>,
   ctx: ServiceContext,
-): Promise<CoveringMerge[]> {
+): Promise<CoveringChange[]> {
   const union = new Set<string>();
   for (const s of scanned) {
     if (s.subject.id == null || s.subject.createdAt == null) continue;
@@ -465,33 +474,43 @@ async function buildSubsumptionIndex(
   if (since === null) return [];
 
   const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    githubPullRequestRepository.findMergedTouchingPaths(
-      ctx.workspaceId,
-      [...union],
-      since,
-      null,
-      tx,
-    ),
+    githubPullRequestRepository.findTouchingPaths(ctx.workspaceId, [...union], since, null, tx),
   );
-  return rows.flatMap((row) =>
-    // `mergedAt` is nullable on the model (every row written before MOTIR-2922
-    // has none), and the ordering clause is the half of the rule that cannot be
-    // approximated — a row that cannot say WHEN it merged is dropped rather than
-    // assumed recent. The query already filters on it, so this is the type
+  const changes = rows.flatMap<CoveringChange>((row) => {
+    const common = {
+      reference: `${row.repo.owner}/${row.repo.name}#${row.number}`,
+      repoName: row.repo.name,
+      title: row.title,
+      workItemId: row.workItemId,
+      paths: new Set(row.changedPaths),
+    };
+    // The OPEN arm is keyed on the row's own state rather than on `mergedAt`
+    // being null, because those two agree for every row the webhook writes and
+    // disagree for exactly the row this must not mis-read: a pre-MOTIR-2922 merge,
+    // which is closed, merged, and carries no merge instant. Reading it off
+    // `mergedAt` would present that row as work in flight.
+    if (!row.merged) return [{ ...common, state: 'open' as const, mergedAt: null }];
+    // `mergedAt` is nullable on the model (every row written before MOTIR-2922 has
+    // none), and the ordering clause is the half of the rule that cannot be
+    // approximated — a merged row that cannot say WHEN it landed is dropped rather
+    // than assumed recent. The query already filters on it, so this is the type
     // narrowing rather than a second policy.
-    row.mergedAt === null
+    return row.mergedAt === null
       ? []
-      : [
-          {
-            reference: `${row.repo.owner}/${row.repo.name}#${row.number}`,
-            repoName: row.repo.name,
-            title: row.title,
-            mergedAt: row.mergedAt,
-            workItemId: row.workItemId,
-            paths: new Set(row.changedPaths),
-          },
-        ],
-  );
+      : [{ ...common, state: 'merged' as const, mergedAt: row.mergedAt }];
+  });
+  // OPEN first, then merged by recency. The accessor's `orderBy` can only speak
+  // for the merged arm — an open row has no `mergedAt`, so where the database puts
+  // it under a `DESC` clause is a fact about null ordering, not about the data —
+  // and {@link subsumptionAdvisory} takes the FIRST hit per path, so the order has
+  // to be a decision rather than an accident. Open wins because its disposition
+  // strictly dominates: *stop and coordinate* is the right move whether or not a
+  // merged pull request also touched the path, while *read the merged diff* is
+  // wrong if somebody is editing that file right now.
+  return changes.sort((a, b) => {
+    if (a.state !== b.state) return a.state === 'open' ? -1 : 1;
+    return (b.mergedAt?.getTime() ?? 0) - (a.mergedAt?.getTime() ?? 0);
+  });
 }
 
 /**
@@ -508,9 +527,12 @@ async function buildSubsumptionIndex(
  * Two narrowings applied here rather than in SQL, both exact:
  *  - **The card's OWN pull requests never cover it.** A card whose branch is
  *    open is doing its work, not having it done for it.
- *  - **`mergedAt` must be strictly after the card's `createdAt`.** A merge that
- *    predates the card is the substrate it was written against, which is the
- *    opposite finding.
+ *  - **`mergedAt` must be strictly after the card's `createdAt`** — on the MERGED
+ *    arm only. A merge that predates the card is the substrate it was written
+ *    against, which is the opposite finding. **The OPEN arm carries no such test
+ *    (MOTIR-3230)**: a pull request opened before this card was filed and still
+ *    open is not old evidence, it is a colleague with the file open right now, and
+ *    that is the most actionable version of this finding rather than the least.
  *
  * And one narrowing that is precision rather than correctness: when the card
  * CARRIES a repository set, only merges in one of those repos count. A same-named
@@ -526,36 +548,55 @@ async function buildSubsumptionIndex(
  */
 function subsumptionAdvisory(
   subject: ProseAdvisorySubject,
-  merges: readonly CoveringMerge[],
+  changes: readonly CoveringChange[],
 ): WorkItemProseAdvisoryDto | null {
-  if (merges.length === 0) return null;
+  if (changes.length === 0) return null;
   const { id, createdAt } = subject;
   if (id == null || createdAt == null) return null;
   if (isSubsumptionCheckExempt(subject.descriptionMd)) return null;
 
   const carried = new Set(subject.targetRepos.map((r) => r.toLowerCase()));
-  const candidates = merges.filter(
+  const candidates = changes.filter(
     (m) =>
       m.workItemId !== id &&
-      m.mergedAt > createdAt &&
+      // The ordering clause is the MERGED arm's alone — see the rule above. An
+      // open pull request has no instant to compare and needs none.
+      (m.state === 'open' || (m.mergedAt !== null && m.mergedAt > createdAt)) &&
       (carried.size === 0 || carried.has(m.repoName.toLowerCase())),
   );
   if (candidates.length === 0) return null;
 
   for (const path of bodyFilePaths(subject.descriptionMd)) {
-    // `candidates` arrives ordered by `mergedAt` desc (the accessor's own
-    // `orderBy`), so the first hit is the most recent merge touching this path.
+    // `candidates` arrives OPEN-first, then merged by recency (the index sorts it,
+    // deliberately — see `buildSubsumptionIndex`), so the first hit for a path is
+    // the in-flight pull request if there is one and the most recent merge if not.
     const covering = candidates.find((m) => m.paths.has(path));
     if (!covering) continue;
-    return {
-      kind: 'subsumption',
+    const base = {
+      kind: 'subsumption' as const,
       item: subject.item,
-      severity: 'likely-already-shipped',
       path,
       pullRequest: covering.reference,
       pullRequestTitle: covering.title,
-      mergedAt: covering.mergedAt.toISOString(),
     };
+    // The two variants are CONSTRUCTED separately rather than assembled with a
+    // nullable field, because the DTO is a discriminated pair and this is where
+    // the discriminant is decided. It costs three lines and buys the guarantee
+    // that a `merged` finding cannot be emitted without its instant, checked by
+    // the compiler rather than by a reviewer.
+    //
+    // Two severities for two opposite dispositions (MOTIR-3230): `state` is what a
+    // consumer branches on, and `severity` is what a HUMAN reads first — a reader
+    // told "already shipped" about a pull request nobody has merged would take
+    // exactly the wrong action.
+    return covering.state === 'open' || covering.mergedAt === null
+      ? { ...base, severity: 'likely-in-flight' as const, state: 'open' as const, mergedAt: null }
+      : {
+          ...base,
+          severity: 'likely-already-shipped' as const,
+          state: 'merged' as const,
+          mergedAt: covering.mergedAt.toISOString(),
+        };
   }
   return null;
 }
