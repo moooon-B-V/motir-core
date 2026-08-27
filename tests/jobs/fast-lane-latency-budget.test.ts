@@ -14,9 +14,11 @@ import { FAST_LANE_CONSUMER_IDS, FAST_LANE_LATENCY_BUDGET } from '@/lib/jobs/lat
 // card is explicit that a test which cannot fail for the reason it names is worse
 // than no test, so this suite does not pretend to be one.
 //
-// The real number is measured out-of-band by
-// `scripts/experiments/inngest-fastlane-lag.mjs` against the production REST API,
-// and its baseline is recorded on the constant itself.
+// The real number is measured out-of-band, and the constant records one reading
+// per substrate the lane has run on: `scripts/experiments/inngest-fastlane-lag.mjs`
+// against the production Inngest REST API (`inngestBaseline`, historical), and
+// `scripts/experiments/engine-fastlane-lag.mjs` against the engine's own ledger
+// from inside the deployment (`engineBaseline`, the substrate in production).
 //
 // WHAT IS ASSERTABLE HERE — the structural preconditions the budget rests on.
 // Each of these CAN fail, and each fails for exactly the reason it names:
@@ -65,21 +67,56 @@ function consumersOfBudgetEvents(): InngestFnConfig[] {
 }
 
 describe('the fast lane carries a stated latency budget', () => {
-  it('states a budget, with the measured baseline it was written against', () => {
+  it('states a budget, with a measured reading for EACH substrate the lane has run on', () => {
     expect(FAST_LANE_LATENCY_BUDGET.p95Ms).toBeGreaterThan(0);
-    // The baseline is what makes the budget falsifiable rather than
-    // aspirational-forever: without it, nobody can tell movement from noise.
-    expect(FAST_LANE_LATENCY_BUDGET.baseline.samples).toBeGreaterThan(0);
-    expect(FAST_LANE_LATENCY_BUDGET.baseline.p95Ms).toBeGreaterThan(0);
+    // A reading is what makes the budget falsifiable rather than
+    // aspirational-forever: without one, nobody can tell movement from noise.
+    // Both are asserted because the COMPARISON is the deliverable — a constant
+    // holding only the current p95 cannot support "it went from 29.4s to 2.2s".
+    for (const reading of [
+      FAST_LANE_LATENCY_BUDGET.inngestBaseline,
+      FAST_LANE_LATENCY_BUDGET.engineBaseline,
+    ]) {
+      expect(reading.samples).toBeGreaterThan(0);
+      expect(reading.p95Ms).toBeGreaterThan(0);
+    }
   });
 
-  it('is HONEST that the budget is not currently met', () => {
-    // ⚠️ This asserts the gap, deliberately. The budget was written at the value
-    // we want (5s) against a measured p95 of ~29s, and recording that inversion
-    // in a test is what stops the number being quietly relaxed to whatever the
-    // system happens to do. If a later change genuinely closes the gap, this
-    // test is the one that says so — flip it, and say what closed it.
-    expect(FAST_LANE_LATENCY_BUDGET.baseline.p95Ms).toBeGreaterThan(FAST_LANE_LATENCY_BUDGET.p95Ms);
+  it('is HONEST about the budget on the substrate in production — the ENGINE now MEETS it', () => {
+    // ⚠️ FLIPPED BY MOTIR-3464, against a reading, which is the only thing
+    // entitled to flip it. This assertion used to say the budget was NOT met;
+    // it said so about Inngest, and it said so deliberately, so that the only
+    // way to make the suite report "met" was to make it true.
+    //
+    // It is now true. MOTIR-3594 measured the Postgres job engine over 18 h
+    // (n=363, window 2026-08-26T16:30:17Z → 2026-08-27T10:30Z) at a p95 of
+    // 2,172 ms against the 5,000 ms budget — and a MAX of 4,160 ms, so even the
+    // worst sample in the window is inside it.
+    //
+    // ⚠️ WHICH READING THIS ASSERTS ON IS THE LOAD-BEARING PART. It must be the
+    // substrate actually running the lane (MOTIR-3463 cut it over on
+    // 2026-08-26; the lane became whole at 15:36:59Z). Point this at a baseline
+    // for a lane nothing runs on and the guard cannot fail for the reason it
+    // names — which is the failure mode the original test was written against,
+    // one level up. If the lane moves substrate again, this line moves with it.
+    expect(
+      FAST_LANE_LATENCY_BUDGET.engineBaseline.p95Ms,
+      'The fast lane MISSES its interactive-latency budget on the substrate in ' +
+        'production. Do NOT relax FAST_LANE_LATENCY_BUDGET.p95Ms to make this pass — ' +
+        'the budget is a commitment, not a description. Record the new reading in ' +
+        'engineBaseline, restore the gap assertion, and file a card for the distance. ' +
+        'See docs/decisions/job-lane-occupancy.md §6.',
+    ).toBeLessThanOrEqual(FAST_LANE_LATENCY_BUDGET.p95Ms);
+  });
+
+  it('still records the Inngest gap the budget was written against', () => {
+    // The "from" half of the comparison, pinned so it cannot be quietly edited
+    // to flatter the "to" half. Inngest missed the budget by 5.9×, and that is
+    // now a historical fact about a substrate we have left — not a live
+    // condition, and not something to re-measure (MOTIR-3418 retires the lane).
+    expect(FAST_LANE_LATENCY_BUDGET.inngestBaseline.p95Ms).toBeGreaterThan(
+      FAST_LANE_LATENCY_BUDGET.p95Ms,
+    );
   });
 
   it('covers EXACTLY the functions that consume its events — a new consumer fails here', () => {
