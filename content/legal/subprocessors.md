@@ -107,8 +107,8 @@ are that last hop.
 | **Alibaba Cloud** (Alibaba Cloud Computing Ltd.)                   | A selectable model (Qwen), served from Model Studio       | The prompt text, and the work-item content sent with it | **Frankfurt, Germany (EU)** |
 | **Zhipu AI** (Beijing Zhipu Huazhang Technology Co., Ltd.)         | A selectable model (GLM)                                  | The prompt text, and the work-item content sent with it | People's Republic of China  |
 | **Moonshot AI** (Beijing Moonshot Technology Co., Ltd.)            | A selectable model (Kimi)                                 | The prompt text, and the work-item content sent with it | People's Republic of China  |
-| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | A planner model                                           | The prompt text, and the work-item content sent with it | People's Republic of China  |
-| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning request needs one             | The search query, which is derived from what you asked  | USA                         |
+| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | A selectable model                                        | The prompt text, and the work-item content sent with it | People's Republic of China  |
+| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning or agent request needs one    | The search query, which is derived from what you asked  | USA                         |
 
 **The set was read from the gateway's own administration on 2026-08-26 and RE-READ
 on 2026-08-27**, not inferred from source. Our gateway is a multi-provider relay
