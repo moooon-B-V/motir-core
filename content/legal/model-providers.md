@@ -69,62 +69,50 @@ to know:
 
 ## The providers
 
-Grouped by their transfer position, because that is the difference that matters and it
-does not track the flag on the company.
+One row per provider, with the two facts that decide whether you want your content going
+there: **how long it is kept**, and **whether it trains a model**. There is no ranking
+here and no grouping — the providers differ along these axes and you choose against them,
+which is the only honest way to present a set a customer selects from.
 
-### No transfer outside the EEA
+The **transfer basis** of each — adequacy, Standard Contractual Clauses, or none on offer
+— is a separate question with its own table, in
+[_Transfer bases_ on the subprocessor list](/legal/subprocessors).
 
-| Provider          | Models | Where it runs                                                             | Its data practices                                                                                                                                             |
-| ----------------- | ------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Alibaba Cloud** | Qwen   | **Frankfurt, Germany.** Model Studio, with the deployment scope pinned EU | [EEA Data Processing Addendum](https://www.alibabacloud.com/help/en/legal/latest/ae8upq) · [GDPR trust centre](https://www.alibabacloud.com/trust-center/gdpr) |
+| Provider          | Models              | Region                      | Prompt retention                                 | Trains on your prompts?                | Its data practices                                                                                                                                             |
+| ----------------- | ------------------- | --------------------------- | ------------------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OpenAI**        | GPT, and embeddings | USA                         | Up to 30 days for abuse monitoring, then deleted | **No** — not on API content            | [Sub-processor list](https://openai.com/policies/sub-processor-list/) · published DPA                                                                          |
+| **Anthropic**     | Claude              | USA                         | Zero Data Retention available                    | **No** — not on commercial API content | Published Data Processing Addendum, incorporated automatically on its commercial terms                                                                         |
+| **Alibaba Cloud** | Qwen                | **Frankfurt, Germany (EU)** | _Not confirmed_                                  | _Not confirmed_                        | [EEA Data Processing Addendum](https://www.alibabacloud.com/help/en/legal/latest/ae8upq) · [GDPR trust centre](https://www.alibabacloud.com/trust-center/gdpr) |
+| **DeepSeek**      | DeepSeek            | People's Republic of China  | _Not confirmed_                                  | _Not confirmed_                        | Published privacy policy and open-platform terms                                                                                                               |
+| **Zhipu AI**      | GLM                 | People's Republic of China  | _Not confirmed_                                  | _Not confirmed_                        | `open.bigmodel.cn` platform terms                                                                                                                              |
+| **Moonshot AI**   | Kimi                | People's Republic of China  | _Not confirmed_                                  | _Not confirmed_                        | [Kimi Open Platform terms](https://platform.kimi.ai/docs/agreement/modeluse)                                                                                   |
+| **Brave**         | Search, not a model | USA                         | Up to 90 days for query records                  | Not applicable                         | Brave Search API Data Processing Addendum                                                                                                                      |
 
-Inference stays inside the Union, so Chapter V of the GDPR does not engage at all. This
-is the strongest position on this page, and it belongs to a Chinese company's model —
-which is worth stating, because the intuition that a Chinese model implies a Chinese
-transfer is simply wrong, and this row is the counter-example.
+**⚠️ A cell reading _not confirmed_ is an OPEN ITEM, not a pass.** It means we have not
+yet read that vendor's published answer, and it should be treated as unknown rather than
+as favourable. The four rows carrying them are being closed; until they are, a workspace
+that needs a retention or training guarantee should select a provider whose row states
+one.
 
-### Transfer outside the EEA, with a processing agreement and Standard Contractual Clauses
-
-| Provider      | Models               | Where it runs | Its data practices                                                                     |
-| ------------- | -------------------- | ------------- | -------------------------------------------------------------------------------------- |
-| **OpenAI**    | GPT, and embeddings  | USA           | [Sub-processor list](https://openai.com/policies/sub-processor-list/) · published DPA  |
-| **Anthropic** | Claude               | USA           | Published Data Processing Addendum, incorporated automatically on its commercial terms |
-| **Brave**     | Search (not a model) | USA           | Brave Search API Data Processing Addendum                                              |
-
-Each publishes an Art. 28 processing agreement incorporating the Commission's Standard
-Contractual Clauses (Modules 2 and 3, Decision 2021/914). Anthropic additionally offers
-Zero Data Retention. These are ordinary, documented transfers.
-
-### Transfer outside the EEA, with no processing agreement on offer
-
-| Provider        | Models   | Where it runs              | Its data practices                                                           |
-| --------------- | -------- | -------------------------- | ---------------------------------------------------------------------------- |
-| **DeepSeek**    | DeepSeek | People's Republic of China | Published privacy policy and open-platform terms                             |
-| **Zhipu AI**    | GLM      | People's Republic of China | `open.bigmodel.cn` platform terms                                            |
-| **Moonshot AI** | Kimi     | People's Republic of China | [Kimi Open Platform terms](https://platform.kimi.ai/docs/agreement/modeluse) |
-
-**None of these three publishes an Art. 28 processing agreement or Standard Contractual
-Clauses for its hosted API.** What that means — and, just as importantly, what it does
-not — is set out in full under
-[_The three providers without a processing agreement_](/legal/subprocessors). The short
-version: it is a gap in three vendors' paperwork, **not** a consequence of where they
-are established. SCCs are available for transfers to any third country, and the row at
-the top of this page is a Chinese provider with a clean instrument.
+**Neither moooon B.V. nor its gateway trains on your content**, whichever provider you
+select. The rows above describe what the _provider_ does once a request reaches it.
 
 ---
 
-## Choosing, and restricting
+## Restricting where your requests go
 
-**The model is selected per project.** At general availability the default is a provider
-from one of the first two groups, so reaching the third is a deliberate choice made with
-this page available. Hosted agents select their own model, which need not be the same
-one the planner uses.
+The table exists so it can be acted on, not only read.
 
-**The constraint is enforced where the request leaves**, not by convention: the gateway
-routes on a residency group, and a provider with no recorded transfer basis cannot enter
-the group that serves EU traffic. A request for a model that would breach the constraint
-fails rather than silently routing — the correct failure, because a planning job that
-errors can be retried and a transfer that has happened cannot be undone.
+- **Choose the model per project.** That choice determines the provider, and at general
+  availability the default is a provider whose retention and training rows are stated
+  rather than open.
+- **Hosted agents choose their own model**, which need not be the planner's — so a
+  workspace can plan on one provider and execute on another.
+- **The constraint is enforced where the request leaves.** The gateway routes on a
+  residency group, and a provider without a recorded transfer basis cannot enter the
+  group that serves EU traffic. A request that would breach it **fails rather than
+  routing** — the correct failure, because a job that errors can be retried and a
+  transfer that has happened cannot be undone.
 
 ---
 

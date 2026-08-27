@@ -121,32 +121,31 @@ introduces a company other than moooon B.V.
 
 ### The providers, and where the list lives
 
-**→ [The full model-provider list is at `/legal/model-providers`](/legal/model-providers)**,
-with each provider's own data practices linked.
+**→ [The full model-provider list is at `/legal/model-providers`](/legal/model-providers)**
+— one row per provider, with its region, how long it retains a prompt, whether it trains
+on your content, and a link to its own published data practices.
 
-It is a separate page deliberately. The provider set changes whenever a channel is
-enabled, and a list that changes should not be welded into a document that is versioned
-and re-approved — that coupling is what makes a subprocessor page go stale. The
-contractual commitments stay here and in the [DPA](/legal/dpa); the current roster lives
-there.
+It is a separate page deliberately. The provider set changes whenever a gateway channel
+is enabled, and hosted agents select models independently of the planner, so it churns
+for two reasons at once. Welding a churning roster into a document that is versioned,
+counsel-reviewed and subject to re-consent produces one of two bad outcomes: the roster
+goes stale, or every routing change drags a contract document through a version bump.
+**That coupling is the mechanism behind every staleness incident this page has had.**
 
-What does not change, and therefore belongs here, is the shape of the transfer position.
-Providers fall into three groups, and the difference is the paperwork rather than the
-flag on the company:
+Three things about that relationship belong here rather than there, because they are
+commitments rather than facts about a roster:
 
-| Group                                              | Transfer position                                                                                  |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **EU-resident inference**                          | No transfer outside the EEA at all, so Chapter V never engages                                     |
-| **Transfer with the full instrument**              | An Art. 28 processing agreement incorporating the SCCs (Modules 2 and 3, Decision 2021/914)        |
-| **Transfer with no processing agreement on offer** | The vendor publishes neither a DPA nor clauses — disclosed, never the default, and explained below |
-
-**The first group is not the Western providers.** It currently holds one company, and it
-is Chinese. That is the whole reason this page groups by instrument instead of by
-country, and it is set out in _The three providers without a processing agreement_ below.
-
-**Only providers with a recorded transfer basis may serve EU traffic**, and that is
-enforced at the gateway — a residency group a no-basis upstream cannot enter — rather
-than by convention. `docs/decisions/ai-upstream-transfer-basis.md` carries the decision.
+- **Your content goes to the provider you selected.** We do not route it elsewhere to
+  save money, and the model chosen for a project is what determines the recipient.
+- **Neither moooon B.V. nor its gateway trains on your content**, and we contractually
+  require each provider to comply with applicable data-protection law. **A provider's own
+  terms govern its independent use of your data**, which is why the roster links to those
+  terms rather than summarising them — a summary of somebody else's policy is a promise
+  we are not in a position to keep.
+- **Only providers with a recorded transfer basis may serve EU traffic**, enforced at the
+  gateway by a residency group a no-basis upstream cannot enter, rather than by
+  convention. `docs/decisions/ai-upstream-transfer-basis.md` carries the decision, and
+  each provider's basis has a row in _Transfer bases_ below.
 
 ## Optional integrations — only if you connect them
 
@@ -254,9 +253,11 @@ key — is structurally unavailable, so a transfer impact assessment for these t
 would rest on contractual measures alone. That is a real weakness, and it is why
 they are not the default.
 
-**What we do about it.** The planner model is a per-project setting; the default is
-a Tier 1 or Tier 2 provider, and reaching a Tier 3 model is a deliberate choice
-made with this page in front of you. **Two of the three are removable without
+**What we do about it.** The model is a per-project setting, so the provider is
+chosen rather than assigned. At general availability the default is a provider
+that publishes a processing agreement, which makes reaching one of these three a
+deliberate choice — today the default is DeepSeek, which is accurate to state on a
+page nobody can yet sign up to and would not be on one they could. **Two of the three are removable without
 changing models at all** — DeepSeek and GLM publish their weights under the MIT
 licence, so serving them from our own EU infrastructure would remove the
 processor, the transfer and the gap together. We list all three rather than omit
@@ -271,13 +272,17 @@ recorded here rather than resolved silently:
 - **Spaceship — one open question remains, and it is not a transfer question.**
   Whether corporate correspondence belongs on a published subprocessor list is
   for counsel (MOTIR-3621).
-- **The three Tier 3 processing agreements — OPEN, and disclosed rather than
+- **Three missing processing agreements — OPEN, and disclosed rather than
   gating.** DeepSeek, Zhipu AI and Moonshot AI offer no Art. 28 agreement, so
   their rows carry a gap a customer may weigh. It does not block publication:
   this page's job is to state the position accurately, and an omitted row would
   serve a reader worse than a candid one. Each is reopened if that vendor
   publishes a DPA, if a supervisory authority addresses business use of the API,
   or if a customer requires it closed.
+- **⚠️ Four retention and training answers are UNREAD**, and are marked _not
+  confirmed_ on the model-provider list rather than assumed favourable. Alibaba
+  Cloud, DeepSeek, Zhipu AI and Moonshot AI each need their published answer read
+  and recorded.
 - **⚠️ The six-provider set is a LAUNCH intention, and must be re-read before
   general availability.** Two channels were enabled when the gateway was last
   read. Listing a provider that never ships is the same error as omitting one

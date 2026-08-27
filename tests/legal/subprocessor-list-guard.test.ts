@@ -114,11 +114,7 @@ const PAGES = [
   },
   {
     path: join(ROOT, 'content', 'legal', 'model-providers.md'),
-    liveSections: [
-      'No transfer outside the EEA',
-      'Transfer outside the EEA, with a processing agreement',
-      'Transfer outside the EEA, with no processing agreement',
-    ],
+    liveSections: ['The providers'],
   },
 ] as const;
 const SCAN_ROOTS = ['lib', 'app'];

@@ -312,9 +312,20 @@ that this is enforced at the gateway rather than by convention — stay in the d
 that are versioned.
 
 **Why it still blocks launch.** The subprocessor list is launch-blocking and now
-deliberately incomplete on its own: it names the transfer POSITIONS and defers the
-roster. Shipping one without the other would disclose less than the single page did
-before the split.
+deliberately incomplete on its own: it keeps the COMMITMENTS — your content goes to the
+provider you selected, we do not train on it, only a provider with a recorded transfer
+basis may serve EU traffic — and defers the roster of who those providers currently are.
+Shipping one without the other would disclose less than the single page did before the
+split.
+
+**The roster's shape follows a public routing service rather than a subprocessor list.**
+One flat row per provider carrying its region, prompt retention, and whether it trains —
+the two facts a customer can act on per request — with its own terms LINKED rather than
+summarised, since a summary of somebody else's policy is a promise we cannot keep. An
+earlier draft grouped providers into three transfer tiers; that was invented here and
+matched no comparable, it duplicated the transfer-basis table that already exists, and
+the duplicate carried facts that churn ("currently holds one company"). Transfer basis
+stays in ONE place: `subprocessors.md` § _Transfer bases_.
 
 **A consequence for the guard.** `tests/legal/subprocessor-list-guard.test.ts` reads BOTH
 pages. A vendor moved from one to the other must remain disclosed somewhere, or the split
