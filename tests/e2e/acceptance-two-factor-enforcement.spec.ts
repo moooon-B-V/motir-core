@@ -319,6 +319,21 @@ test('an organization requires a second factor, and nobody loses their place', a
       await page.goto('/settings/workspace/security');
       await expect(page.getByRole('heading', { name: 'Security', level: 1 })).toBeVisible();
 
+      // ⚠️ WAIT FOR THE PREVIOUS PAGE TO BE GONE, not merely for this one to
+      // arrive. React keeps the OUTGOING subtree mounted (hidden) while the new
+      // one streams, so for a moment BOTH are in the DOM — and the chapter
+      // before this one was `/settings/organization`, whose fold-in renders the
+      // very same "Required by {org}" chip. A text query sees both copies and
+      // strict mode refuses; `getByRole` would not, because the accessibility
+      // tree excludes the hidden one, which is why the switch assertion below
+      // never noticed. Observed once on CI, green on the run before it.
+      //
+      // The wait has to be TEXT-based for the same reason: a role query resolves
+      // against the a11y tree and would report the old page gone while its DOM
+      // is still there. `CLAUDE.md` records the class under the loading-boundary
+      // rule.
+      await expect(page.getByText('Organization settings')).toHaveCount(0);
+
       // ⚠️ THE OTHER FRAME THAT HAS TO BE LEGIBLE. The organization requires it,
       // so this workspace's own switch is LOCKED — and it says so, and it says
       // WHO. An admin denied a control is owed the name of whoever holds it, and
