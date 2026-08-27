@@ -42,7 +42,6 @@ export interface CreatePublicFollowInput {
   confirmedAt?: Date | null;
   confirmTokenHash?: string | null;
   confirmTokenExpiresAt?: Date | null;
-  unsubscribeTokenHash: string;
 }
 
 export const publicFollowRepository = {
@@ -96,15 +95,13 @@ export const publicFollowRepository = {
   },
 
   /**
-   * The follow an unsubscribe link addresses, by token hash. Unlike the
-   * confirmation token this one never expires — an unsubscribe link has to work
-   * in a mail somebody finds two years later.
+   * One follow by id — the digest's per-follower read, and the unsubscribe
+   * path's, since the unsubscribe token IS the id plus a signature over it
+   * (`followTokens.signUnsubscribeToken`). There is no lookup by unsubscribe
+   * token because there is no unsubscribe token stored to look up.
    */
-  async findByUnsubscribeTokenHash(
-    unsubscribeTokenHash: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<PublicFollow | null> {
-    return tx.publicFollow.findFirst({ where: { unsubscribeTokenHash } });
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<PublicFollow | null> {
+    return tx.publicFollow.findUnique({ where: { id } });
   },
 
   /** Record one follow. Required `tx` — runs in the service's workspace-bound transaction. */
@@ -119,7 +116,6 @@ export const publicFollowRepository = {
         confirmedAt: data.confirmedAt ?? null,
         confirmTokenHash: data.confirmTokenHash ?? null,
         confirmTokenExpiresAt: data.confirmTokenExpiresAt ?? null,
-        unsubscribeTokenHash: data.unsubscribeTokenHash,
       },
     });
   },

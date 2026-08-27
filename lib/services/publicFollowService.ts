@@ -12,6 +12,7 @@ import {
   looksLikeEmail,
   mintFollowToken,
   normalizeFollowEmail,
+  verifyUnsubscribeToken,
 } from '@/lib/publicProjects/followTokens';
 import {
   FollowDigestUnavailableError,
@@ -148,7 +149,6 @@ export const publicFollowService = {
           userId: actorUserId,
           digestOptIn: (options.digestOptIn ?? false) && digestAvailable(),
           confirmedAt: new Date(),
-          unsubscribeTokenHash: hashFollowToken(mintFollowToken()),
         },
         tx,
       );
@@ -233,7 +233,6 @@ export const publicFollowService = {
             workspaceId: project.workspaceId,
             projectId: project.id,
             email,
-            unsubscribeTokenHash: hashFollowToken(mintFollowToken()),
             ...data,
           },
           tx,
@@ -306,9 +305,12 @@ export const publicFollowService = {
    * that unsubscribing failed.
    */
   async unsubscribeByToken(token: string): Promise<void> {
-    const found = await withSystemContext((tx) =>
-      publicFollowRepository.findByUnsubscribeTokenHash(hashFollowToken(token), tx),
-    );
+    // The token IS the follow id plus an HMAC over it, so verifying it both
+    // authenticates the bearer and tells us which row to delete — no lookup by
+    // a stored secret, and nothing stored that could be replayed.
+    const followId = verifyUnsubscribeToken(token);
+    if (!followId) return;
+    const found = await withSystemContext((tx) => publicFollowRepository.findById(followId, tx));
     if (!found) return;
     await withWorkspaceServiceContext(found.workspaceId, (tx) =>
       publicFollowRepository.deleteById(found.id, tx),

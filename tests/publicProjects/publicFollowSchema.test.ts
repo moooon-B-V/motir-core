@@ -77,7 +77,6 @@ async function seedFollow(
       email: data.email ?? null,
       digestOptIn: data.digestOptIn ?? false,
       confirmedAt: data.userId ? new Date() : null,
-      unsubscribeTokenHash: `unsub-${Math.random()}`,
     },
   });
 }
@@ -175,7 +174,6 @@ describe('public_follow RLS — a workspace gate, and deliberately no anonymous 
             workspaceId: b.workspaceId,
             projectId: b.projectId,
             email: 'smuggled@example.com',
-            unsubscribeTokenHash: 'unsub-x',
           },
         }),
       ),
@@ -192,7 +190,6 @@ describe('publicFollowRepository', () => {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         email: 'reader@example.com',
-        unsubscribeTokenHash: 'unsub-hash',
         confirmTokenHash: 'confirm-hash',
         confirmTokenExpiresAt: new Date(Date.now() + 86_400_000),
       },
@@ -209,9 +206,7 @@ describe('publicFollowRepository', () => {
       expect((await publicFollowRepository.findByConfirmTokenHash('confirm-hash', tx))?.id).toBe(
         emailOnly.id,
       );
-      expect((await publicFollowRepository.findByUnsubscribeTokenHash('unsub-hash', tx))?.id).toBe(
-        emailOnly.id,
-      );
+      expect((await publicFollowRepository.findById(emailOnly.id, tx))?.id).toBe(emailOnly.id);
       expect(await publicFollowRepository.countByProject(fx.projectId, tx)).toBe(2);
     });
   });
@@ -226,7 +221,6 @@ describe('publicFollowRepository', () => {
         email: 'yes@example.com',
         digestOptIn: true,
         confirmedAt: new Date(),
-        unsubscribeTokenHash: 'u1',
       },
     });
     // Opted in but NEVER confirmed the address — must not be mailed. This is
@@ -239,7 +233,6 @@ describe('publicFollowRepository', () => {
         email: 'unconfirmed@example.com',
         digestOptIn: true,
         confirmedAt: null,
-        unsubscribeTokenHash: 'u2',
       },
     });
     // Following, but not subscribed: following is not subscribing.
@@ -261,7 +254,6 @@ describe('publicFollowRepository', () => {
         email: 'stale@example.com',
         confirmedAt: null,
         createdAt: old,
-        unsubscribeTokenHash: 'u1',
       },
     });
     await adminDb.publicFollow.create({
@@ -270,7 +262,6 @@ describe('publicFollowRepository', () => {
         projectId: fx.projectId,
         email: 'fresh@example.com',
         confirmedAt: null,
-        unsubscribeTokenHash: 'u2',
       },
     });
     // Confirmed and old — must survive, or the sweep would delete real followers.
@@ -281,7 +272,6 @@ describe('publicFollowRepository', () => {
         email: 'confirmed@example.com',
         confirmedAt: old,
         createdAt: old,
-        unsubscribeTokenHash: 'u3',
       },
     });
 

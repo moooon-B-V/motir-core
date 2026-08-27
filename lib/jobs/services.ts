@@ -10,6 +10,7 @@ import { notificationFanInService } from '@/lib/services/notificationFanInServic
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { rateLimitService } from '@/lib/services/rateLimitService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
+import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
 import { billingService } from '@/lib/services/billingService';
 import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
@@ -55,6 +56,7 @@ export const jobServices = {
   attachments: attachmentsService,
   rateLimit: rateLimitService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
+  publicFollowDigest: publicFollowDigestService,
   automationEngine: automationEngineService,
   billing: billingService,
   aiBugTelemetry: aiBugTelemetryService,

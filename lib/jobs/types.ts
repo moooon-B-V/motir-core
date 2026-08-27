@@ -278,6 +278,22 @@ export interface FilterSubscriptionDeliverData {
 }
 
 /**
+ * The `public-follow/digest` event payload (Story 8.9 · Subtask 8.9.7) — one per
+ * DUE follower, enqueued by the weekly `system.public-follow-digest-tick` cron
+ * so each delivery retries / dead-letters independently (the filter-subscription
+ * fan-out shape). The consumer re-reads the shipped set AT SEND TIME, which is
+ * why it carries an id rather than the items themselves: a digest composed at
+ * tick time could mail an epic that was made private in between.
+ * Workspace-scoped — the follow row carries a denormalized `workspaceId`.
+ */
+export interface PublicFollowDigestData {
+  workspaceId: string;
+  followId: string;
+  /** `<followId>:<ISO week>` — one mail per follower per week, at most. */
+  occurrenceKey: string;
+}
+
+/**
  * The `system.billing-seat-sync` event payload (Story 8.1 · Subtask 8.1.12) —
  * one per org-membership add/remove, enqueued best-effort AFTER the membership tx
  * commits (`enqueueScaledTrackerSeatSync`). The consumer
@@ -388,6 +404,7 @@ export interface JobEventDataMap {
   'system.attachment-gc': SystemScheduledData;
   'system.rate-limit-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
+  'system.public-follow-digest-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
   /** The code-graph OFFBOARDING sweep (Story MOTIR-2192 · MOTIR-2168) — drains
@@ -424,6 +441,7 @@ export interface JobEventDataMap {
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
+  'public-follow/digest': PublicFollowDigestData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;

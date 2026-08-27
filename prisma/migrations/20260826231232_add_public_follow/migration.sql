@@ -9,7 +9,6 @@ CREATE TABLE "public_follow" (
     "confirmed_at" TIMESTAMP(3),
     "confirm_token_hash" TEXT,
     "confirm_token_expires_at" TIMESTAMP(3),
-    "unsubscribe_token_hash" TEXT NOT NULL,
     "last_digest_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,

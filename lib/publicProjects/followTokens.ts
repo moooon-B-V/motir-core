@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 // The two tokens a public follow carries (Story 8.9 · Subtask 8.9.5 ·
 // `docs/decisions/public-follow-and-changelog.md` §7).
@@ -8,14 +8,23 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 // line, which matters more here than for a session token: these two are mailed
 // to an address, so they live in somebody's inbox for years.
 //
-// They differ in exactly one way, and it is deliberate:
+// ⚠️ THEY ARE TWO DIFFERENT MECHANISMS, not two instances of one, and the
+// difference follows from their lifetimes:
 //
-//   * the CONFIRM token EXPIRES (24 hours) and is single-use — it proves an
-//     address was reachable at the moment somebody typed it, and that proof
-//     goes stale;
-//   * the UNSUBSCRIBE token NEVER expires — an unsubscribe link has to work in
-//     a mail found two years later, and an expired one would leave a person
-//     with no way out except our support inbox.
+//   * the CONFIRM token is RANDOM, stored as a hash, EXPIRES in 24 hours and is
+//     single-use. It proves an address was reachable at the moment somebody
+//     typed it, and that proof goes stale.
+//   * the UNSUBSCRIBE token is DERIVED — an HMAC over the follow's id, keyed by
+//     the app's existing signing secret — so it is recomputable at any time and
+//     valid FOREVER. An unsubscribe link has to work in a mail found two years
+//     later; an expired one leaves a person with no way out but our support
+//     inbox.
+//
+// The derived form is why nothing stores an unsubscribe token: a random one
+// would have to be either kept in the clear (never) or rotated on each send,
+// and rotating breaks exactly the two-year-old mail the rule exists for. This
+// mirrors `lib/savedFilters/subscriptionToken.ts`, which solved the same
+// problem for filter-subscription emails.
 
 /** How long a confirmation link stays usable. */
 export const CONFIRM_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -45,20 +54,44 @@ export function hashFollowToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+function unsubscribeSecret(): string {
+  const value = process.env['BETTER_AUTH_SECRET'];
+  if (!value) {
+    throw new Error('BETTER_AUTH_SECRET is not set — cannot sign unsubscribe tokens.');
+  }
+  return value;
+}
+
+function unsubscribeDigest(followId: string): string {
+  return createHmac('sha256', unsubscribeSecret()).update(followId).digest('base64url');
+}
+
 /**
- * Compare a supplied token against a stored hash in CONSTANT time.
+ * The unsubscribe token for one follow — `<followId>.<hmac>`.
  *
- * The lookup itself is by hash, so an attacker cannot time the DB index — but
- * the comparison is still done this way because the day someone adds a
- * "verify this token against the row we already loaded" path, it should already
- * be safe. Both sides are fixed-length hex, so `timingSafeEqual`'s own
- * length check cannot itself leak.
+ * Derived rather than stored, so it can be recomputed for a digest sent years
+ * after the follow was created, and so nothing anywhere holds a replayable
+ * value. It authenticates exactly one row and grants exactly one idempotent
+ * delete: a leaked token can unsubscribe the person it was already going to
+ * unsubscribe, and nothing else.
  */
-export function followTokenMatches(token: string, storedHash: string): boolean {
-  const supplied = Buffer.from(hashFollowToken(token), 'utf8');
-  const stored = Buffer.from(storedHash, 'utf8');
-  if (supplied.length !== stored.length) return false;
-  return timingSafeEqual(supplied, stored);
+export function signUnsubscribeToken(followId: string): string {
+  return `${followId}.${unsubscribeDigest(followId)}`;
+}
+
+/**
+ * Verify an unsubscribe token and return the follow id it authenticates, or
+ * `null` when it is malformed or the signature does not match. Constant-time
+ * compare, so the digest cannot be probed a byte at a time.
+ */
+export function verifyUnsubscribeToken(token: string): string | null {
+  const dot = token.lastIndexOf('.');
+  if (dot <= 0) return null;
+  const followId = token.slice(0, dot);
+  const provided = Buffer.from(token.slice(dot + 1));
+  const expected = Buffer.from(unsubscribeDigest(followId));
+  if (provided.length !== expected.length) return null;
+  return timingSafeEqual(provided, expected) ? followId : null;
 }
 
 /**

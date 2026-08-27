@@ -51,6 +51,13 @@ export interface EmailMessage {
    * whose response was lost in flight. Optional: the dev providers ignore it.
    */
   idempotencyKey?: string;
+  /**
+   * Extra headers to put on the wire, from the template's `RenderedEmail`
+   * (Story 8.9 · Subtask 8.9.7). The only shipped use is the follower digest's
+   * `List-Unsubscribe` pair. Providers that cannot carry custom headers ignore
+   * them; the dev providers print them.
+   */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -332,6 +339,10 @@ function resendProvider(): SendEmail {
           // the stripped fallback keeps a caller that skipped it out of the
           // spam-scoring penalty an html-only message earns.
           text: msg.text ?? htmlToText(msg.html),
+          // Resend takes per-message headers as a body field, NOT as request
+          // headers — putting `List-Unsubscribe` on the HTTP request would set
+          // it on the API call rather than on the mail.
+          ...(msg.headers ? { headers: msg.headers } : {}),
         }),
       });
     } catch (cause) {

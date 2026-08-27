@@ -780,6 +780,14 @@
       "what": "One email a week, on Monday. Weeks with nothing shipped send nothing, and every email carries a one-click unsubscribe.",
       "fallback": "Or paste this link into your browser:",
       "ignore": "This link expires in 24 hours. If you didn't ask for this, ignore this email — nothing will be sent to this address, and we'll forget it within a week."
+    },
+    "followDigest": {
+      "subject": "{count, plural, one {# thing shipped} other {# things shipped}} on {project}",
+      "preview": "What {project} shipped this week",
+      "lede": "{project} shipped {count, plural, one {# thing} other {# things}} this week:",
+      "viewAll": "See the full changelog",
+      "unsubscribe": "Unsubscribe",
+      "why": "You're getting this because you follow this project on Motir. One click above stops it."
     }
   },
   "auth": {

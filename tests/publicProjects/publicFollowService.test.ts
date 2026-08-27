@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { publicFollowService } from '@/lib/services/publicFollowService';
-import { hashFollowToken } from '@/lib/publicProjects/followTokens';
+import { hashFollowToken, signUnsubscribeToken } from '@/lib/publicProjects/followTokens';
 import {
   FollowDigestUnavailableError,
   FollowTokenInvalidError,
@@ -273,24 +273,29 @@ describe('unsubscribe', () => {
     const fx = await publicFixture();
     await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'reader@example.com', null);
     const row = await adminDb.publicFollow.findFirstOrThrow();
-    // The service mints the unsubscribe token and stores only its hash, so a
-    // test drives it the way an email would: set a known hash, use the token.
-    await adminDb.publicFollow.update({
-      where: { id: row.id },
-      data: { unsubscribeTokenHash: hashFollowToken('KNOWN-TOKEN') },
-    });
+    // The token is DERIVED from the row's id, not stored — which is exactly why
+    // a link in a two-year-old email still resolves. A test signs it the same
+    // way the digest does.
+    const token = signUnsubscribeToken(row.id);
 
-    await publicFollowService.unsubscribeByToken('KNOWN-TOKEN');
+    await publicFollowService.unsubscribeByToken(token);
     expect(await adminDb.publicFollow.count()).toBe(0);
 
     // Idempotent by design: a second click, a mail client's prefetch, or a link
     // found years later must never report that unsubscribing failed — the
     // person has no other lever.
-    await expect(publicFollowService.unsubscribeByToken('KNOWN-TOKEN')).resolves.toBeUndefined();
+    await expect(publicFollowService.unsubscribeByToken(token)).resolves.toBeUndefined();
   });
 
-  it('succeeds silently for a token that names nothing', async () => {
+  it('succeeds silently for a malformed token, and for a FORGED signature', async () => {
     await expect(publicFollowService.unsubscribeByToken('nonsense')).resolves.toBeUndefined();
+    // A token whose id is real but whose signature is not must not delete the
+    // row — the HMAC is the whole authorization here.
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'reader@example.com', null);
+    const row = await adminDb.publicFollow.findFirstOrThrow();
+    await publicFollowService.unsubscribeByToken(`${row.id}.forged-signature`);
+    expect(await adminDb.publicFollow.count()).toBe(1);
   });
 });
 

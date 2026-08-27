@@ -8,6 +8,7 @@ import {
   followConfirmEmail,
   type FollowConfirmEmailProps,
 } from '@/lib/emailTemplates/followConfirm';
+import { followDigestEmail, type FollowDigestEmailProps } from '@/lib/emailTemplates/followDigest';
 import { emailChangeEmail, type EmailChangeEmailProps } from '@/lib/emailTemplates/emailChange';
 import {
   workspaceInviteEmail,
@@ -79,7 +80,8 @@ export type TransactionalEmail =
       data: AutomationRuleFailedEmailProps;
     }
   | { to: string; template: 'two-factor-otp'; data: TwoFactorOtpEmailProps }
-  | { to: string; template: 'follow-confirm'; data: FollowConfirmEmailProps };
+  | { to: string; template: 'follow-confirm'; data: FollowConfirmEmailProps }
+  | { to: string; template: 'follow-digest'; data: FollowDigestEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -122,6 +124,8 @@ export const emailService = {
     const rendered = await renderTemplate(message);
     const result = await sendEmail({
       to: message.to,
+      // The spread carries `headers` when the template returned any — the
+      // follower digest's `List-Unsubscribe` pair is the one shipped case.
       ...rendered,
       idempotencyKey: message.idempotencyKey,
     });
@@ -148,6 +152,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return passwordResetEmail(message.data);
     case 'follow-confirm':
       return followConfirmEmail(message.data);
+    case 'follow-digest':
+      return followDigestEmail(message.data);
     case 'email-change':
       return emailChangeEmail(message.data);
     case 'workspace-invite':

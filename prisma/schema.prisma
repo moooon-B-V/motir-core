@@ -2285,10 +2285,16 @@ model PublicRequestVote {
 /// binds `app.workspace_id` and nothing else, from a trusted project lookup.
 /// (AMENDMENT 1 of the ADR records the correction and its reasoning.)
 ///
-/// TOKENS are stored HASHED, never in the clear. `confirm_token_hash` gates the
-/// email-only tier's double opt-in and expires; `unsubscribe_token_hash` is
-/// permanent, because an unsubscribe link has to work in a mail somebody finds
-/// two years later.
+/// TOKENS. The CONFIRM token is random and stored HASHED, never in the clear —
+/// it gates the email-only tier's double opt-in and expires in 24 hours.
+///
+/// There is deliberately NO unsubscribe-token column. That token is DERIVED
+/// (an HMAC over this row's id, keyed by the app's signing secret —
+/// `lib/publicProjects/followTokens.ts`, mirroring the shipped
+/// `savedFilters/subscriptionToken.ts`), so it can be recomputed for a digest
+/// sent years later and is valid forever. A stored random token would have to
+/// be either kept in the clear or rotated per send, and rotating breaks exactly
+/// the old-mail case an unsubscribe link exists for.
 model PublicFollow {
   id          String @id @default(cuid())
   workspaceId String @map("workspace_id")
@@ -2311,7 +2317,6 @@ model PublicFollow {
 
   confirmTokenHash      String?   @map("confirm_token_hash")
   confirmTokenExpiresAt DateTime? @map("confirm_token_expires_at")
-  unsubscribeTokenHash  String    @map("unsubscribe_token_hash")
 
   /// The digest window's lower bound, per follower — so a follower who joins
   /// mid-week gets the next full week rather than a backfill, and a failed send
