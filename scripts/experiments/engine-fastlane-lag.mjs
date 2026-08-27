@@ -139,8 +139,8 @@ export const quantile = (sorted, q) => {
 };
 
 /**
- * The six fields `FAST_LANE_LATENCY_BUDGET.baseline` records, from a list of
- * lags in milliseconds. Shaped so the result drops into that constant without
+ * The six fields `FAST_LANE_LATENCY_BUDGET.engineBaseline` records, from a list
+ * of lags in milliseconds. Shaped so the result drops into that constant without
  * reinterpretation.
  *
  * ⚠️ AN EMPTY WINDOW REPORTS `samples: 0` AND NULL FIGURES, never zeros. A
