@@ -81,9 +81,76 @@ export const POST_AUTH_LANDING = AUTHED_LANDING_PATH;
  * is carried by BOTH of that page's branches — the create-first door a fresh
  * sign-up sees and the list an existing account sees.
  */
+/** The screen the re-consent gate holds a reader on (`lib/legal/reconsentGate.ts`). */
+const RECONSENT_PATH = '/re-consent';
+
 async function settleOnHome(page: Page): Promise<void> {
+  // ⚠️ WAIT FOR EITHER DESTINATION FIRST, then act. Reading `page.url()` before
+  // this would race the sign-in navigation the caller just triggered: mid-flight
+  // the URL is still the credential form, the hold would read as absent, and the
+  // wait below would hang on `/re-consent` exactly as it did before this fix.
+  // Waiting on the SET of settled destinations is the authoritative signal, and
+  // it is still never a sleep (CLAUDE.md § E2E).
+  await page.waitForURL(
+    (url) => url.pathname.startsWith(RECONSENT_PATH) || url.pathname.endsWith(POST_AUTH_LANDING),
+    { timeout: 30_000 },
+  );
+  await clearReconsentHold(page);
   await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
   await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * THE RE-CONSENT HOLD, cleared the way a person clears it (Bug MOTIR-3713).
+ *
+ * ── Why this is here at all ────────────────────────────────────────────────
+ * `app/(authed)/layout.tsx` holds a signed-in reader at `/re-consent` when their
+ * accepted version of the Terms, the Privacy Policy or the Acceptable Use Policy
+ * is materially behind what is published (MOTIR-1135). A user created through
+ * the SIGN-UP flow has acceptance recorded by better-auth's
+ * `databaseHooks.user.create.after`, so `signUp` never meets the screen. Every
+ * seeded user is created by `usersService.createUser` instead — bypassing that
+ * hook — so `signIn` always does, and twenty-one acceptance specs died on the
+ * `waitForURL` below with no explanation of why.
+ *
+ * ── Why HERE, and not by seeding acceptance ───────────────────────────────
+ * The seeded users come from **forty-odd** `_helpers/*-seed.ts` modules, each
+ * calling `usersService.createUser` directly. Stamping acceptance in each is
+ * forty edits that the forty-first seed silently reopens — the failure mode this
+ * repository's own source guards keep warning about. `settleOnHome` is the one
+ * door both flows already pass through.
+ *
+ * ⚠️ AND IT CLEARS THE HOLD BY DRIVING THE REAL SCREEN, which is the point. The
+ * cheap fixes — recording acceptance behind the product's back, or exempting the
+ * E2E origin in the gate — would make the lane green by making the gate
+ * unreachable, so the next regression in it would be invisible. Clicking the
+ * button a person clicks means every one of these specs exercises the interstitial
+ * on its way past, and a gate that stops clearing fails here loudly.
+ *
+ * ⚠️ A NO-OP OFF-CLOUD, AND THAT IS WHY ONLY ONE LANE WAS RED. The gate opens
+ * with `if (!isMotirCloud()) return null`, so it fires in the acceptance lane
+ * (`MOTIR_CLOUD=true`) and not in the main one — which is the whole reason
+ * `playwright.config.ts`'s bulk legs stayed green while every acceptance shard
+ * failed, and why reading the two lanes as disagreeing about the same code would
+ * have been the wrong conclusion.
+ *
+ * Also a no-op for `signUp` and for any already-accepted user: the URL check
+ * answers immediately when the hold is not there, so nothing waits on a screen
+ * that never appears.
+ */
+async function clearReconsentHold(page: Page): Promise<void> {
+  // Its CALLER has already waited for one of the two destinations, so this read
+  // is of a settled URL rather than of one mid-navigation — which is the whole
+  // reason the wait is up there and not in here.
+  if (!new URL(page.url()).pathname.startsWith(RECONSENT_PATH)) return;
+
+  // The button's own words carry the scope — one document, two, or all three —
+  // so the label is matched as the alternation the copy actually ships rather
+  // than as a guess at which count this run produced.
+  await page.getByRole('button', { name: /^Agree (and|to both and|to all and) continue$/ }).click();
+
+  // The agreement is a Server Action that redirects; the caller's own
+  // `waitForURL` is what settles it, so nothing is awaited twice here.
 }
 
 // Sign up a fresh user → auto-workspace, zero projects → lands on /home, whose
