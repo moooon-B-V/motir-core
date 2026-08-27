@@ -333,6 +333,15 @@ model User {
   // must outlive their account. Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   platformAuditEntries        PlatformAuditLog[]        @relation("PlatformAuditLogActor")
+  // What this account has agreed to, and when (Story 8.4 · MOTIR-1135). A LIST
+  // and append-only: the row set IS the evidence, so an acceptance is never
+  // overwritten by the next one. Cascade — the record is about a person's
+  // agreement to a contract that ends with their account, and the customer-facing
+  // promise on the account-deletion surface is that their rows go with them (the
+  // `apiTokens` / `passkeys` semantics, not the `platformAuditEntries` one).
+  // Modelled on both sides per the FK-`@relation` rule so `migrate dev` reports
+  // no drift.
+  legalAcceptances            LegalAcceptance[]
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -7440,4 +7449,65 @@ model CodeGraphOffboarding {
   /// The sweep's only read: rows whose `dueAt` has passed, oldest first.
   @@index([dueAt])
   @@map("code_graph_offboarding")
+}
+
+/// One recorded agreement: this user accepted this legal document at this
+/// version, at this moment (Story 8.4 · Subtask MOTIR-1135).
+///
+/// ⚠️ APPEND-ONLY. A row is never updated and never deleted while the account
+/// lives, because the table IS the evidence: the question a regulator or a
+/// disputing customer asks is *what did they agree to, and when*, and a
+/// current-value column answers only the first half of the most recent one.
+/// Recording the version in the KEY rather than in a mutable column is what
+/// makes that true — and it makes the write idempotent, so a retried signup
+/// hook or a double-submitted interstitial writes nothing the second time
+/// instead of stamping a fresh timestamp over a real one.
+///
+/// ⚠️ IT IS NOT ONE ROW PER ACCEPTANCE ACT — it is one row per DOCUMENT.
+/// `content/legal/terms.md` §15 makes the Terms, the Acceptable Use Policy and
+/// the Privacy Policy a single agreement, and the interstitial offers a single
+/// button for all of them (`design/auth/design-notes.md`, *One agreement, one
+/// control*). One act therefore writes up to three rows sharing an
+/// `acceptedAt`. Per-document rows are what let the re-consent check compare
+/// each document's own semver against its own accepted version, which is the
+/// whole mechanism — a single scalar could not represent a reader who is
+/// current on the Terms and behind on the Privacy Policy.
+///
+/// There is deliberately no `workspaceId`: an agreement is between moooon B.V.
+/// and a PERSON, made at sign-up before any workspace is resolved, and it does
+/// not change when they join another org. Its RLS gate therefore keys on
+/// `app.user_id`, the `api_token` precedent, not on `app.workspace_id`.
+model LegalAcceptance {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+
+  /// The document's slug — its filename in `content/legal/` without the
+  /// extension, which is also its `/legal/<slug>` URL. A plain string rather
+  /// than an enum: `lib/legal/documents.ts` treats THE DIRECTORY as the
+  /// registry (nothing enumerates slugs, so a document ships by existing), and
+  /// an enum here would re-introduce exactly the hardcoded list that module's
+  /// docstring records as a shipped defect. A slug that no longer names a file
+  /// is a historical row, which is correct: the agreement happened.
+  documentSlug String @map("document_slug")
+
+  /// The version string as it stood in that document's front matter when the
+  /// person agreed — `1.0.0`. Stored verbatim rather than parsed, because it is
+  /// EVIDENCE: the semver split is a reading we do of it (`lib/legal/consent.ts`),
+  /// and a reading is not the thing that was shown.
+  version String
+
+  acceptedAt DateTime @default(now()) @map("accepted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The idempotency key. Re-recording an acceptance the person already made is
+  /// a no-op rather than a second row (`skipDuplicates` on the write), so the
+  /// signup hook's retry and a double-clicked interstitial are both safe.
+  @@unique([userId, documentSlug, version])
+  /// The gate's read: every acceptance this user holds for the re-consent set,
+  /// on every signed-in page load. `userId` alone is the prefix the query
+  /// filters on; the slug narrows it in the same index.
+  @@index([userId, documentSlug])
+  @@map("legal_acceptance")
 }

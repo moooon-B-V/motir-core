@@ -54,13 +54,16 @@ function SignUpShell() {
   return (
     <AuthShell headline={t('welcomeToMotir')} subhead={t('signUpSubhead')}>
       <div className="flex flex-col gap-5" aria-hidden />
+      {/* The notice renders in the Suspense fallback too, so it is present from
+          the first paint rather than appearing when the form resolves. It is the
+          one element on this card that must never be missable. */}
+      <LegalNotice />
     </AuthShell>
   );
 }
 
 function SignUpForm() {
   const t = useTranslations('auth');
-  const tLegal = useTranslations('legal');
   const router = useRouter();
   const searchParams = useSearchParams();
   // The post-auth landing: `/home`, the SAME destination sign-in defaults to
@@ -252,36 +255,67 @@ function SignUpForm() {
           </Button>
 
           <FooterLink prompt={t('alreadyHaveAccount')} linkText={t('logIn')} href="/sign-in" />
-
-          {/*
-            The legal line (MOTIR-1134). GDPR Art. 13 owes transparency AT
-            COLLECTION, and this form is where collection begins — so the
-            Privacy Policy has to be reachable from HERE, not only from a footer
-            on a page the person may never have visited.
-
-            ⚠️ This is a LINK, not an acceptance control. Nothing here records
-            consent, and the copy deliberately does not claim it does.
-            MOTIR-1135 owns capturing acceptance and turns this line into the
-            statement that agreeing is what the button does. Wording it that way
-            now would assert a record we are not yet keeping.
-          */}
-          <p className="font-sans text-[13px] text-(--el-text-secondary)">
-            {tLegal.rich('signUpNotice', {
-              terms: (chunks) => (
-                <Link href="/legal/terms" className="text-(--el-link) hover:underline">
-                  {chunks}
-                </Link>
-              ),
-              privacy: (chunks) => (
-                <Link href="/legal/privacy" className="text-(--el-link) hover:underline">
-                  {chunks}
-                </Link>
-              ),
-            })}
-          </p>
         </form>
       )}
+
+      <LegalNotice />
     </AuthShell>
+  );
+}
+
+/**
+ * The agreement notice, at the card FOOT — outside the step branch, so BOTH
+ * steps render it (Story 8.4 · Subtask MOTIR-1135 · design
+ * `design/auth/legal-agreement.mock.html`, panels 1–3).
+ *
+ * ⚠️ THE PLACEMENT IS THE FIX, AND IT CLOSES A LIVE DEFECT. MOTIR-1134 put this
+ * line inside the `step === 'password'` branch, and `Continue with Google` sits
+ * on the step BEFORE it and creates an account outright — so **a person who
+ * signed up with Google was never shown the Terms or the Privacy Policy at
+ * all.** GDPR Art. 13 owes transparency AT COLLECTION, and for that path
+ * collection is step 1. Measured rather than read: `/sign-up` served from
+ * `next dev` and driven in Chromium found no notice anywhere in the identity
+ * step's DOM. Keep it outside both branches.
+ *
+ * ⚠️ A PARAGRAPH, NOT A CHECKBOX — and this card is where that was decided.
+ * MOTIR-1135's own body assumed a required tick-box; the design rejected it and
+ * DRAWS the rejection (panel 4, all three states) so the decision stays
+ * checkable:
+ *
+ *   * Consent is not the lawful basis. The account is Art. 6(1)(b), performance
+ *     of a contract — a tick-box is EVIDENCE, not a legal requirement, and the
+ *     evidence is the `legal_acceptance` row this form's submit now writes.
+ *   * Linear, Vercel, Notion, GitHub and Stripe all state it passively at the
+ *     submit control.
+ *   * It would add a submit-blocked failure mode to the highest-value control in
+ *     the product, in exchange for evidence we already keep.
+ *
+ * So it takes no focus of its own — it is a paragraph, and only its two links are
+ * focusable — and it is LAST in the DOM, which is what keeps `autoFocus` on the
+ * email field working for a reader who starts typing immediately.
+ *
+ * There is exactly ONE line and this is it: MOTIR-1134's `legal.signUpNotice`,
+ * kept, moved, and with one word changed (*an account* → *a Motir account*),
+ * which is what makes the same string read correctly on step 1 where the Google
+ * button is the subject. Do not add a second.
+ */
+function LegalNotice() {
+  const tLegal = useTranslations('legal');
+  return (
+    <p className="border-t border-(--el-border) pt-4 font-sans text-[13px] text-(--el-text-secondary)">
+      {tLegal.rich('signUpNotice', {
+        terms: (chunks) => (
+          <Link href="/legal/terms" className="text-(--el-link) hover:underline">
+            {chunks}
+          </Link>
+        ),
+        privacy: (chunks) => (
+          <Link href="/legal/privacy" className="text-(--el-link) hover:underline">
+            {chunks}
+          </Link>
+        ),
+      })}
+    </p>
   );
 }
 

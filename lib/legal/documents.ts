@@ -19,7 +19,7 @@ import { join } from 'node:path';
 // of a list is paid repeatedly and the cost of a glob is paid once.
 //
 // ── Front matter is parsed here rather than by a dependency ─────────────────
-// The shape is fixed and tiny — four scalar keys, no nesting, no arrays — and
+// The shape is fixed and tiny — five scalar keys, no nesting, no arrays — and
 // the repository has no YAML parser in its dependency tree. Adding one to read
 // `title: Terms of Service` would be a new production dependency, a new
 // subprocessor-adjacent supply-chain surface, and a new thing to keep current,
@@ -44,7 +44,17 @@ export interface LegalDocument {
   slug: string;
   /** Human title, from front matter. */
   title: string;
-  /** Version string. MOTIR-1135's re-consent compares against this. */
+  /**
+   * Version string, verbatim from the front matter — `1.0.0`.
+   *
+   * ⚠️ ITS COMPONENTS CARRY MEANING, and `lib/legal/consent.ts` is where that
+   * meaning lives: a MAJOR or MINOR bump is a MATERIAL change and prompts every
+   * reader to re-accept, a PATCH bump takes effect when published and prompts
+   * nobody. That is not a convention this module invented — `content/legal/terms.md`
+   * §14 promises outright that clarifications and corrections *"take effect when
+   * published"*, so a bare `>` comparison over this string would break a clause in
+   * the published contract on every typo fix. Bump the right component.
+   */
   version: string;
   /**
    * The effective date, or `null` when it is not yet set. `null` is the
@@ -53,6 +63,23 @@ export interface LegalDocument {
   effectiveDate: string | null;
   /** Front-matter status, e.g. `approved`. */
   status: string;
+  /**
+   * One human sentence saying what MOVED in this version, or `null` when the
+   * author has not written one (Story 8.4 · Subtask MOTIR-1135).
+   *
+   * The re-consent interstitial draws each changed document as a row carrying
+   * its title, its version delta and this sentence — *"a person asked to
+   * re-accept is owed a link to what changed"* (`design/auth/design-notes.md`).
+   * A version delta alone tells a reader that something moved and nothing about
+   * what, which is the difference between a notice and a formality.
+   *
+   * ⚠️ NULL IS A SUPPORTED STATE, NOT A BUG. The design names the degraded form
+   * — the delta and a link, with no sentence — as an acceptable fallback, so the
+   * row renders either way and nothing gates on this being present. It is
+   * deliberately NOT defaulted to a generic string: an invented sentence is
+   * worse than an absent one on a screen whose whole subject is what changed.
+   */
+  changeSummary: string | null;
   /** The Markdown body, front matter removed. */
   body: string;
 }
@@ -108,6 +135,10 @@ export function parseLegalDocument(slug: string, source: string): LegalDocument 
     version: meta.get('version') ?? '',
     effectiveDate: effectiveDate === '' || effectiveDate === NOT_YET_SET ? null : effectiveDate,
     status: meta.get('status') ?? '',
+    // An absent key and an empty value both mean "no sentence written", so the
+    // renderer branches on ONE thing. `|| null` rather than `?? null` for
+    // exactly that: `changeSummary:` with nothing after it parses to `''`.
+    changeSummary: meta.get('changeSummary') || null,
     body,
   };
 }
