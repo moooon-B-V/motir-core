@@ -1,8 +1,8 @@
 ---
 title: Cookie Policy
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Cookie Policy
@@ -10,8 +10,6 @@ status: draft
 **This policy covers the hosted Motir service at `app.motir.co`, operated by moooon B.V.
 It does not describe a self-hosted installation**, which sets whichever cookies its own
 operator configures.
-
-> **⚠️ DRAFT — not yet reviewed by counsel and not yet published.** Pending MOTIR-3621.
 
 ## We do not ask for cookie consent, and this is why
 

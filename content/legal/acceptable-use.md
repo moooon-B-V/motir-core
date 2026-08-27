@@ -1,8 +1,8 @@
 ---
 title: Acceptable Use Policy
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Acceptable Use Policy
@@ -10,8 +10,6 @@ status: draft
 **This policy applies to the hosted Motir service at `app.motir.co`, operated by moooon
 B.V., and forms part of the [Terms of Service](/legal/terms).** It does not apply to a
 self-hosted installation, whose operator sets its own rules.
-
-> **⚠️ DRAFT — not yet reviewed by counsel and not yet published.** Pending MOTIR-3621.
 
 ---
 

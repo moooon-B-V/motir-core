@@ -1,8 +1,8 @@
 ---
 title: Terms of Service
-version: 0.1.0-draft
+version: 1.0.0
 effectiveDate: TBD
-status: draft
+status: approved
 ---
 
 # Terms of Service
@@ -12,8 +12,6 @@ status: draft
 **They do not govern a self-hosted installation.** Motir's project-management core is open
 source under the GPL-3.0, and running it yourself is covered by that licence, not by this
 agreement. Nothing here restricts what you may do with the open-source software.
-
-> **⚠️ DRAFT — not yet reviewed by counsel and not yet published.** Pending MOTIR-3621.
 
 ---
 
