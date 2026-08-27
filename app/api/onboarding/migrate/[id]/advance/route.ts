@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { mapMigrateError } from '../../_errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/onboarding/migrate/[id]/advance — attempt the NEXT transition from
 // wherever the run sits (Story 7.15 · MOTIR-931). The service kicks the current
@@ -16,8 +16,9 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   try {

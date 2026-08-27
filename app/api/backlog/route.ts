@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { backlogService } from '@/lib/services/backlogService';
 import { isIssueType } from '@/lib/issues/parentRules';
@@ -49,8 +49,8 @@ const MAX_TITLE_LENGTH = 200;
 // forged-URL degrade the board route + the navigator use — the page never emits
 // a bad param). `cursor` / `limit` are unchanged.
 export async function GET(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -119,8 +119,8 @@ export async function GET(req: Request): Promise<Response> {
 //     / AssigneeNotInWorkspaceError / ReporterNotInWorkspaceError
 //     / CrossProjectSprintAssignmentError                                    → 422
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

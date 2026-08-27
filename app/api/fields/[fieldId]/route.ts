@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { customFieldErrorResponse } from '@/lib/customFields/errorResponse';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // /api/fields/[fieldId] (Story 5.3 · Subtask 5.3.2) — project-admin gated.
 //   PATCH  — exactly ONE of:
@@ -26,6 +27,12 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { fieldId } = await params;
 
   let body: unknown;
@@ -70,6 +77,12 @@ export async function DELETE(_req: Request, { params }: RouteParams): Promise<Re
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { fieldId } = await params;
 
   try {

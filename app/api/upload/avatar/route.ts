@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { usersService } from '@/lib/services/usersService';
 import { AttachmentError } from '@/lib/blob/errors';
 
@@ -16,8 +16,9 @@ import { AttachmentError } from '@/lib/blob/errors';
 // No `db.*` / no transaction here — the service owns the storage write.
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   let file: FormDataEntryValue | null;
   try {

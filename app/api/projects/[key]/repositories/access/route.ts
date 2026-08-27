@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // COLLABORATOR ACCESS to the project's repositories (Story MOTIR-1775 ·
 // MOTIR-1900) — the endpoint behind the access step's **Connect GitHub** return
@@ -30,8 +30,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const body = (await req.json().catch(() => null)) as { rowId?: unknown } | null;
@@ -56,8 +57,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   try {

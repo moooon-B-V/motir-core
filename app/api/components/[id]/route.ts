@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { componentsService } from '@/lib/services/componentsService';
 import { mapComponentError } from '@/lib/components/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // PATCH/DELETE /api/components/[id] (Story 5.4 · Subtask 5.4.3) — edit /
 // delete one component, both project-admin-gated (the 6.4 two-tier check).
@@ -19,8 +19,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 
@@ -76,8 +77,9 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

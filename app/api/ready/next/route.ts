@@ -6,6 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/ready/next (Subtask 7.0.5) — the DISPATCH half of the agent-dispatch
 // surface (Story 7.0). Give me ONE thing to run next: returns the first ready
@@ -123,6 +124,12 @@ export async function POST(req: Request): Promise<Response> {
   if (!ctx) {
     return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   let raw: unknown;
   try {

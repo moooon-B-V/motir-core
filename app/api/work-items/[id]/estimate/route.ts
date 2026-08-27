@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { estimationService } from '@/lib/services/estimationService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // PATCH /api/work-items/[id]/estimate (Story 4.3 · Subtask 4.3.3) — set or clear
 // an issue's STORY-POINT estimate (separate from the 2.3.6 TIME estimate). Thin
@@ -20,8 +20,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

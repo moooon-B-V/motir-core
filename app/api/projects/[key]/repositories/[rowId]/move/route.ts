@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // REORDER one row of the set (Story MOTIR-1775 · MOTIR-1782) — the endpoint behind
 // the establish step's **Move up** / **Move down**.
@@ -17,8 +17,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ rowId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { rowId } = await params;
   const body = (await req.json().catch(() => null)) as { direction?: unknown } | null;

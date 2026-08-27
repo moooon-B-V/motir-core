@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { isAiPlanningConfigured } from '@/lib/ai/planningConfig';
 import { ConnectAiGate } from '@/app/_components/ConnectAiGate';
 import { ONBOARDING_ENTRY_PATH } from '@/lib/onboarding/pendingIdea';
@@ -42,6 +43,11 @@ export default async function OnboardingGroupLayout({ children }: { children: Re
   // with `next=/onboarding`, so after signing in they land back in onboarding
   // rather than the default dashboard. The sign-in form honors `?next`.
   if (!session) redirect(`/sign-in?next=${encodeURIComponent(ONBOARDING_ENTRY_PATH)}`);
+  // ⚠️ TWO FULL-PAGE HOLDS, AND THE ORDER IS DECIDED: 2FA first, re-consent
+  // second — who is signing in, then what they are agreeing to. `(authed)`
+  // records the same ordering, where the 2FA gate wins by throwing out of the
+  // shared wave; here there is no wave to ride, so it is simply written first.
+  await assertTwoFactorCompliance(session.user.id);
 
   // THE RE-CONSENT HOLD (Story 8.4 · MOTIR-1135). `(onboarding)` is its own
   // signed-in route group, reachable without ever passing through `(authed)`, so

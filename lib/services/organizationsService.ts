@@ -14,7 +14,7 @@ import {
   withUserContext,
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
-import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { isOrgAdminRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import {
   AlreadyOrgMemberError,
   LastOrgOwnerError,
@@ -98,10 +98,6 @@ function randomSuffix(): string {
 
 function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequestError {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
-}
-
-function isOrgAdminRole(role: OrganizationRole | null | undefined): boolean {
-  return role === ORGANIZATION_ROLE.owner || role === ORGANIZATION_ROLE.admin;
 }
 
 /**

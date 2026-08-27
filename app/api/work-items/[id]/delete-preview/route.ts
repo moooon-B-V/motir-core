@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/work-items/[id]/delete-preview (Story 2.8 · Subtask 2.8.7) — the
 // cascade IMPACT the delete-confirm dialog (2.8.4) reads BEFORE the user
@@ -27,8 +27,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

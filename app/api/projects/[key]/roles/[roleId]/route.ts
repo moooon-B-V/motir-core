@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { roleDefinitionErrorResponse } from '@/lib/permissions/errorResponse';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/roles/[roleId] (Story MOTIR-2257 · Subtask MOTIR-2474)
 //   PATCH  — a partial { name?, permissions? }, so the editor's rename AND
@@ -29,6 +30,12 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { key, roleId } = await params;
 
   let body: unknown;
@@ -86,6 +93,12 @@ export async function DELETE(req: Request, { params }: RouteParams): Promise<Res
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { key, roleId } = await params;
   const reassignTo = new URL(req.url).searchParams.get('reassignTo');
 

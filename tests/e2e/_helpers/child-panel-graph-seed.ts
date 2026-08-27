@@ -17,10 +17,10 @@
 // the tree, the links and the per-level read the canvas hits are all real.
 
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { createTestPerson } from './testPerson';
 
 export const CHILD_PANEL_GRAPH_PASSWORD = 'child-panel-graph-e2e-pass-7';
 
@@ -49,7 +49,7 @@ export interface ChildPanelGraphSeed {
 }
 
 export async function seedChildPanelGraph(email: string): Promise<ChildPanelGraphSeed> {
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: CHILD_PANEL_GRAPH_PASSWORD,
     name: 'Child Panel Owner',

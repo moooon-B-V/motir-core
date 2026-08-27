@@ -49,10 +49,16 @@ const getWorkspaceContext = deferred('ctx', { userId: 'u1', workspaceId: 'w1' })
 const listUserWorkspaces = deferred('workspaces', []);
 const findStandingByUserId = deferred('standing', null);
 const cookiesFn = deferred('cookies', { get: () => undefined });
+// The 2FA enforcement gate (MOTIR-3648) joins the SAME wave — see the fourth
+// assertion below for why that placement is the property, not a detail.
+const assertTwoFactorCompliance = deferred('twoFactor', undefined);
 
 vi.mock('next/navigation', () => ({ redirect: (to: string) => redirected(to) }));
 vi.mock('next/headers', () => ({ cookies: () => cookiesFn() }));
 vi.mock('@/lib/auth', () => ({ getSession: () => getSession() }));
+vi.mock('@/lib/auth/twoFactorGate', () => ({
+  assertTwoFactorCompliance: () => assertTwoFactorCompliance(),
+}));
 vi.mock('@/lib/workspaces', () => ({ getWorkspaceContext: () => getWorkspaceContext() }));
 vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: { listUserWorkspaces: () => listUserWorkspaces() },
@@ -153,9 +159,38 @@ describe('the authed layout gate (MOTIR-3433)', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect([...started].sort()).toEqual(['cookies', 'ctx', 'standing', 'workspaces']);
+    expect([...started].sort()).toEqual(['cookies', 'ctx', 'standing', 'twoFactor', 'workspaces']);
 
     release?.();
     await pending;
+  });
+
+  it('⚠️ the 2FA gate rides that wave — it is not a FIFTH sequential round trip', async () => {
+    // MOTIR-3648. This gate runs on every signed-in page load in the product, so
+    // an `await` of its own above the wave would add a round trip to every one
+    // of them — undoing the fix this file exists to protect. The property is
+    // that it is STARTED alongside the other four and before any of them
+    // resolves, which a sequential `await` cannot produce.
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue', email: 'y@example.com' } });
+
+    const pending = AuthedLayout({ children: null });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(started).toContain('twoFactor');
+    expect(started).toHaveLength(5);
+
+    release?.();
+    await pending;
+  });
+
+  it('⚠️ the 2FA gate does NOT run for a request with no session', async () => {
+    // It reads the policy for a USER, so running it before the session gate
+    // would be both meaningless and a tenant read for an anonymous visitor —
+    // the exact thing the first assertion protects.
+    getSession.mockResolvedValue(null);
+
+    await expect(AuthedLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
+    expect(started).not.toContain('twoFactor');
   });
 });

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { reportsService } from '@/lib/services/reportsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/projects/[key]/velocity (Story 4.6 · Subtask 4.6.4) — the
 // cross-sprint VELOCITY read: the last `?lastN` (default 7) COMPLETED sprints
@@ -25,8 +25,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const lastNParam = new URL(req.url).searchParams.get('lastN');

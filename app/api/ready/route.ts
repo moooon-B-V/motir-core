@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidReadyCursorError, type ReadyListFilter } from '@/lib/workItems/readyFilter';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/ready (Subtask 7.0.4) — the LIST half of the agent-dispatch surface
 // (Story 7.0). Returns every ready-to-start work item in a project as a page of
@@ -67,6 +68,12 @@ export async function GET(req: Request): Promise<Response> {
   if (!ctx) {
     return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
 
   const params = new URL(req.url).searchParams;
 

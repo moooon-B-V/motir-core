@@ -113,6 +113,30 @@ describe('POST /api/upload/project-image', () => {
     expect(stored).toHaveLength(0);
   });
 
+  // Story MOTIR-1215 · MOTIR-3653 — the 2FA hold, on the same route and one arm
+  // below the 401. A member held at the enrolment screen still holds a valid
+  // session cookie, so without this gate they could keep writing into a
+  // project's public prefix from a browser console while every PAGE refuses
+  // them. Real rows and the real predicate: the policy is set on the org this
+  // fixture actually created.
+  it('403s a member their ORGANIZATION is holding, and stores nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const workspace = await adminDb.workspace.findUniqueOrThrow({
+      where: { id: fx.workspaceId },
+    });
+    await adminDb.organization.update({
+      where: { id: workspace.organizationId },
+      data: { requiresTwoFactor: true },
+    });
+    signInAs(fx);
+
+    const res = await upload(fx.projectIdentifier, pngOf(64));
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('TWO_FACTOR_REQUIRED');
+    expect(stored).toHaveLength(0);
+  });
+
   // The gate that does not exist on the avatar route, and the reason this card
   // is not a copy of it: a workspace member who cannot manage the project must
   // not be able to write into its prefix.

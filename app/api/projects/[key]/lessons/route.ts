@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/projects/[key]/lessons (Subtask MOTIR-3337 · Story MOTIR-3329)
 // One page of the project's own lesson library — what its AI planner learned
@@ -41,8 +41,9 @@ function parseLimit(raw: string | null): number | undefined {
 }
 
 export async function GET(req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   const url = new URL(req.url);

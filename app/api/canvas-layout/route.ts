@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { canvasLayoutService } from '@/lib/services/canvasLayoutService';
 import { InvalidCanvasPositionError } from '@/lib/canvasLayout/errors';
@@ -27,8 +27,8 @@ import type { CanvasNodePositionInput } from '@/lib/dto/canvasLayout';
 //        an invalid coordinate → 422; a malformed body → 400)
 
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -54,8 +54,8 @@ export async function GET(): Promise<Response> {
 }
 
 export async function PATCH(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

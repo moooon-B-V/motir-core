@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { mapPlanChangeError, noActiveProject } from '../../_errors';
@@ -19,8 +19,8 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // including the metered-AI ones (402 out-of-credits / 502 transport) the submit
 // path can raise.
 export async function POST(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();

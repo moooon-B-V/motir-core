@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoEstablishService } from '@/lib/services/projectRepoEstablishService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
 import { isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import type { AddProjectRepoInput } from '@/lib/dto/projectRepos';
 
 // The project's REPOSITORY SET, as the establish step reads and grows it (Story
@@ -31,8 +31,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   try {
@@ -50,8 +51,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const body = (await req.json().catch(() => null)) as Partial<AddProjectRepoInput> | null;

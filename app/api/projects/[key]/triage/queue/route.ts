@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { triageService } from '@/lib/services/triageService';
 import { triageActionErrorResponse } from '@/lib/triage/errorResponse';
 import { InvalidTriageCursorError } from '@/lib/triage/triageQueue';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/projects/[key]/triage/queue?cursor=&limit= (Subtask 6.11.6) — one
 // page of a project's ACTIVE triage queue, addressed by the project IDENTIFIER
@@ -16,8 +16,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const url = new URL(req.url);

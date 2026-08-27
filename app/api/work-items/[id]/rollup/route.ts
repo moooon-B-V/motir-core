@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { estimationService } from '@/lib/services/estimationService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/work-items/[id]/rollup (Story 4.3 · Subtask 4.3.5) — the BOUNDED
 // epic/parent subtree roll-up (`{ total }`) the list/tree parent row binds to
@@ -19,8 +19,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

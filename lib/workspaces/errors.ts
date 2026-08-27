@@ -29,6 +29,24 @@ export class NotAMemberError extends Error {
   }
 }
 
+/**
+ * Thrown when a workspace-administrative action requires the MANAGER tier
+ * (`owner` / `admin` — `isWorkspaceManager`) and the actor is a plain `member`
+ * or a `viewer` (Story MOTIR-1215 · Subtask MOTIR-3645).
+ *
+ * The org-tier analogue is `OrgForbiddenError`, and the same 404-not-403 split
+ * applies: a workspace the actor cannot SEE raises `NotAMemberError` (→ 404) so
+ * a cross-tenant workspace stays indistinguishable from a missing one, while a
+ * workspace they can see but may not administer raises THIS (→ 403).
+ */
+export class WorkspaceForbiddenError extends Error {
+  readonly code = 'WORKSPACE_FORBIDDEN' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(`User ${userId} lacks workspace-manager rights on workspace ${workspaceId}.`);
+    this.name = 'WorkspaceForbiddenError';
+  }
+}
+
 export class InviteTargetAlreadyMemberError extends Error {
   readonly code = 'ALREADY_MEMBER' as const;
   constructor(email: string, workspaceId: string) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { mapAutomationError } from '@/lib/automation/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/automation-rules/[ruleId]/enabled (Story 6.6 · Subtask
 // 6.6.1) — the enable/disable toggle (admin-only), its own route so the editor
@@ -13,8 +13,9 @@ import { mapAutomationError } from '@/lib/automation/errorResponse';
 type Params = { params: Promise<{ key: string; ruleId: string }> };
 
 export async function PUT(req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, ruleId } = await params;
 

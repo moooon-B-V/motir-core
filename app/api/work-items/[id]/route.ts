@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // DELETE /api/work-items/[id] (Story 2.8 · Subtask 2.8.3) — PERMANENTLY delete a
 // work item AND its entire subtree (Jira-parity "Delete Issues"). Thin HTTP layer
@@ -20,8 +20,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

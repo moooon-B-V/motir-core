@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/projects/[key]/lessons/[lessonId] (Subtask MOTIR-3337 · Story
 // MOTIR-3329) — one lesson in full: what happened, why it matters, how to apply
@@ -23,8 +23,9 @@ interface RouteParams {
 }
 
 export async function GET(_req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key, lessonId } = await params;
 
   try {

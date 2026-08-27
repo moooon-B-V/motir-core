@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -23,8 +23,8 @@ import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 // already-shipped `sprintRepository.listByProject` leaf (Story 4.1) the backlog
 // UI binds to. Available to any project member (a read, not owner-gated).
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -59,8 +59,8 @@ export async function GET(): Promise<Response> {
 //   ProjectNotFoundError     → 404
 //   SprintWindowInvalidError → 422
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

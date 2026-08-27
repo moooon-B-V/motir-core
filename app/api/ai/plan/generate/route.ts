@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
@@ -28,8 +28,8 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // `MOTIR_AI_OUT_OF_CREDITS` the 7.4.9 UI branches to the paywall — never collapsed
 // into the generic 502 every other motir-ai failure maps to.
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

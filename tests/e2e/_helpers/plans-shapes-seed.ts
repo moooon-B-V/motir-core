@@ -28,12 +28,12 @@
 // for E2E setup. No raw plan or plan-item inserts.
 
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { createTestPerson } from './testPerson';
 
 export const PLANS_SHAPES_PASSWORD = 'plans-shapes-e2e-pass-7';
 
@@ -114,7 +114,7 @@ export interface PlansShapesSeed {
 }
 
 async function makeTenant(email: string): Promise<{ ctx: ServiceContext; projectId: string }> {
-  const owner = await usersService.createUser({
+  const owner = await createTestPerson({
     email,
     password: PLANS_SHAPES_PASSWORD,
     name: 'Shapes Owner',

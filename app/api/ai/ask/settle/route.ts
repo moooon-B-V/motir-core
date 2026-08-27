@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiAskService } from '@/lib/services/aiAskService';
 import { mapPlanChangeError, noActiveProject } from '../../plan-change/_errors';
@@ -26,8 +26,8 @@ import { mapPlanChangeError, noActiveProject } from '../../plan-change/_errors';
 // ceiling. A limiter here would cap a database write and prevent no provider call
 // — while refusing a caller the answer they have already been charged for.
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();

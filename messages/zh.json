@@ -609,7 +609,9 @@
       "projectGone": "该项目已不存在。",
       "noProjectForParent": "选择父级前请先选择或创建一个项目。",
       "unknownIssueType": "未知的工作项类型。",
-      "couldNotLink": "无法关联所选工作项。"
+      "couldNotLink": "无法关联所选工作项。",
+      "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。",
+      "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -916,6 +918,18 @@
       "waiting": "正在等待你的浏览器…",
       "noMatch": "本设备上没有与 Motir 账户匹配的通行密钥。请先用邮箱和密码登录，然后在账户设置中添加一把通行密钥。",
       "challengeExpired": "这一步花的时间太久，我们已重新开始。请再试一次。"
+    },
+    "twoFactorRequired": {
+      "requiredBy": "由 {tier} 要求",
+      "headline": "设置第二重验证后继续",
+      "bodyOrganization": "{tier} 要求组织中的所有成员登录时使用第二重验证。大约需要一分钟，完成后你会直接回到刚才要打开的页面。没有任何内容被删除，你仍然是原有各工作区的成员。",
+      "bodyWorkspace": "{tier} 要求工作区中的所有成员登录时使用第二重验证。大约需要一分钟，完成后你会直接回到刚才要打开的页面。没有任何内容被删除，你的成员身份也没有变化。",
+      "signOut": "暂不设置——退出登录",
+      "signOutNote": "你可以在下次登录时随时回来设置。",
+      "satisfiedChip": "双重验证已开启",
+      "satisfiedHeadline": "一切就绪",
+      "satisfiedBody": "下次登录时会要求你提供第二重验证。如果还没有保存恢复码，请在下方保存——设备丢失时它是你重新登录的方式。",
+      "continueTo": "继续前往 {destination}"
     }
   },
   "shell": {
@@ -938,7 +952,8 @@
       "plans": "计划",
       "resumeOnboarding": "继续引导",
       "resumeOnboardingInProgress": "继续引导，进行中",
-      "legal": "法律条款"
+      "legal": "法律条款",
+      "security": "安全"
     },
     "topNav": {
       "global": "全局",
@@ -1046,7 +1061,9 @@
       "current": "当前",
       "goToBacklog": "前往待办列表",
       "goToFilters": "前往筛选器",
-      "aiHeading": "AI"
+      "aiHeading": "AI",
+      "goToOrgSecurity": "前往组织安全设置",
+      "goToWorkspaceSecurity": "前往工作区安全设置"
     },
     "shortcuts": {
       "title": "键盘快捷键",
@@ -1660,7 +1677,11 @@
         "description": "从左上角的切换器创建一个工作区即可开始。"
       },
       "title": "工作区设置",
-      "subtitle": "管理工作区名称、成员和生命周期。"
+      "subtitle": "管理工作区名称、成员和生命周期。",
+      "security": {
+        "title": "安全",
+        "subtitle": "{workspace} 中所有成员的登录要求。"
+      }
     },
     "name": {
       "renamedToast": "工作区已重命名",
@@ -4297,7 +4318,8 @@
       "switchOrg": "切换组织",
       "createOrg": "创建组织",
       "workspacesCount": "{count} 个工作区",
-      "usage": "用量与费用"
+      "usage": "用量与费用",
+      "security": "安全"
     },
     "settings": {
       "title": "组织设置",
@@ -4405,6 +4427,22 @@
       "loading": "正在加载成员…",
       "noActiveOrgTitle": "无组织",
       "noActiveOrgDescription": "你还不属于任何组织。"
+    },
+    "security": {
+      "title": "安全",
+      "subtitleOrg": "{org} 中所有成员的登录要求。",
+      "cardTitle": "要求两步验证",
+      "cardBodyOrg": "该组织的所有成员登录时都需要第二重验证。不会有人被登出，也不会有人被移除——下次打开 Motir 时，系统会请对方设置一次，任意一种方式均可：通行密钥、验证器应用或邮件验证码。",
+      "stateOff": "未要求",
+      "stateOnOrg": "{org} 的所有成员均需启用",
+      "lockedBy": "由 {org} 要求",
+      "lockedNoteAbove": "{org} 要求所有成员启用两步验证，因此这里无法关闭。{org} 的所有者或管理员可在组织的安全设置中更改。",
+      "lockedNoteBoth": "该工作区要求两步验证，{org} 也同样要求。关闭组织的要求后，该工作区自身的要求仍然保留。",
+      "savedToast": "安全策略已保存",
+      "saveErrorTitle": "无法保存安全策略",
+      "readOnlyNote": "只有 {tier} 的所有者或管理员才能更改此设置。",
+      "cardBodyWorkspace": "在此工作区额外要求第二重验证。组织的设置在此之上仍然适用，且无法在这里降低。",
+      "stateOnWorkspace": "{workspace} 的所有成员均需启用"
     }
   },
   "triage": {

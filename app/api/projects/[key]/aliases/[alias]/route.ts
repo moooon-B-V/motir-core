@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // DELETE /api/projects/[key]/aliases/[alias] (Story 6.8 · Subtask 6.8.1)
 // Release a retired project key (the Jira Cloud "Previous project keys" remove):
@@ -21,6 +22,12 @@ export async function DELETE(_req: Request, { params }: RouteParams): Promise<Re
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { key, alias } = await params;
 
   try {

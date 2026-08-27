@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { backlogService } from '@/lib/services/backlogService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
@@ -8,6 +7,7 @@ import {
   SprintNotFoundError,
 } from '@/lib/sprints/errors';
 import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/sprints/[id]/issues/bulk (Subtask 4.2.2) — assign a multi-selection
 // of issues to a sprint ATOMICALLY (the backlog's "Move to sprint ▸" bulk
@@ -28,8 +28,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

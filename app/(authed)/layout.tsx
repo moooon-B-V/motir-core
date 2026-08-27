@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
@@ -119,12 +120,22 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   //                                     rows, and `null` — carry on — for every
   //                                     reader who is current, which is all of
   //                                     them until a document moves.
+  //   · assertTwoFactorCompliance()  — the 2FA enforcement gate (Story MOTIR-1215
+  //     (MOTIR-3648)                    · MOTIR-3648), held in this wave for the
+  //                                     same reason and at the same cost. It
+  //                                     redirects by THROWING, so its rejection
+  //                                     leaves the `Promise.all` and the
+  //                                     framework answers it — nothing below here
+  //                                     runs for a visitor being held, which is
+  //                                     exactly how it wins the ordering the
+  //                                     comment under the wave records.
   const [ctx, workspaceModels, platformStanding, cookieStore, reconsentHold] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(session.user.id),
     platformStaffRepository.findStandingByUserId(session.user.id),
     cookies(),
     resolveReconsentHold(session.user.id),
+    assertTwoFactorCompliance(session.user.id),
   ]);
 
   // ⚠️ ENFORCED AFTER THE WAVE, NOT INSIDE IT — and that placement is the

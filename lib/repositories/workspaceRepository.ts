@@ -63,7 +63,11 @@ export const workspaceRepository = {
 
   async update(
     id: string,
-    data: { name: string },
+    data: {
+      name?: string;
+      /** The workspace-tier require-2FA policy (Story MOTIR-1215 · MOTIR-3644). */
+      requiresTwoFactor?: boolean;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<Workspace> {
     return tx.workspace.update({ where: { id }, data });

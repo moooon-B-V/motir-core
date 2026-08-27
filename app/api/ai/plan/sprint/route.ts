@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import {
   aiSprintPlanningService,
@@ -13,8 +13,8 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // packing job for the active project. HTTP only: session, active project, ONE
 // service call, typed errors → status codes.
 export async function POST(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   // A caller outside the tenant has no active project to resolve, so a foreign
   // project reads as "none" — 404, never 403 (no existence leak).

@@ -12,6 +12,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // tests/ai/projectLessonWrite.test.ts against the real service; this file mocks
 // the service to isolate the transport, per CLAUDE.md's thin-route contract.
 
+// MOTIR-3653 / MOTIR-3648 — every route and route group now resolves the 2FA
+// hold first. This suite is about this route's own gates, so the policy answers
+// "nobody is asking", which is the state each case below was written in.
+vi.mock('@/lib/services/twoFactorPolicyService', async () =>
+  (await import('../helpers/noTwoFactorPolicy')).noTwoFactorPolicy(),
+);
+
 vi.mock('@/lib/workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/workspaces')>();
   return { ...actual, getWorkspaceContext: vi.fn() };

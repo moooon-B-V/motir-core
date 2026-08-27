@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 
@@ -22,6 +23,11 @@ import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 export default async function PlanningGroupLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
   if (!session) redirect(`/sign-in?next=${encodeURIComponent(PLANNING_WORKSPACE_PATH)}`);
+  // ⚠️ TWO FULL-PAGE HOLDS, AND THE ORDER IS DECIDED: 2FA first, re-consent
+  // second — who is signing in, then what they are agreeing to. `(authed)`
+  // records the same ordering, where the 2FA gate wins by throwing out of the
+  // shared wave; here there is no wave to ride, so it is simply written first.
+  await assertTwoFactorCompliance(session.user.id);
 
   // THE RE-CONSENT HOLD (Story 8.4 · MOTIR-1135) — see the twin in
   // `app/(onboarding)/layout.tsx`. `(planning)` is a third signed-in group that

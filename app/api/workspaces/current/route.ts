@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 
@@ -16,10 +16,9 @@ import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 // here, and 404 is the honest answer.
 
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
-  }
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const cookieStore = await cookies();
   const preferredWorkspaceId = cookieStore.get(WORKSPACE_COOKIE_NAME)?.value ?? null;

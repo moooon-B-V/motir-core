@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { authorizeDesignPublish } from '@/lib/designEvidence/publishAuth';
 import { resolveWorkItemByIdentifier } from '@/lib/publishAuth/ciPublishAuth';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import type { DesignAssetKindDTO } from '@/lib/dto/designEvidence';
 
 // POST /api/work-items/[id]/design-evidence (Story MOTIR-2664 · Subtask
@@ -123,8 +123,9 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   const identifier = id.trim().toUpperCase();

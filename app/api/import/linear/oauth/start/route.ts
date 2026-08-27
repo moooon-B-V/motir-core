@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomBytes } from 'node:crypto';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { linearImportOAuthService } from '@/lib/services/linearImportOAuthService';
 import { LinearOAuthNotConfiguredError } from '@/lib/import/linear/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -9,6 +8,7 @@ import {
   appendStatus,
   safeImportReturnPath,
 } from '@/lib/import/oauthReturn';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/import/linear/oauth/start (Story 7.16 · MOTIR-1655) — step 1 of the
 // Linear "Connect" grant for the issue importer. The signed-in member is
@@ -26,8 +26,8 @@ export const LINEAR_OAUTH_STATE_COOKIE = 'linear_import_oauth_state';
 export async function GET(req: NextRequest): Promise<Response> {
   // getWorkspaceContext returns null only when there is no session, so it doubles
   // as the auth gate — an unauthenticated caller gets a 401, not a redirect.
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
 
   // The wizard door to return to after the round-trip, open-redirect-validated.
   const returnTo = safeImportReturnPath(req.nextUrl.searchParams.get('returnTo'));

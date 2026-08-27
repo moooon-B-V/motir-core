@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectStatusAutomationService } from '@/lib/services/projectStatusAutomationService';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import type { UpdateProjectStatusAutomationInput } from '@/lib/dto/projectStatusAutomation';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET / PATCH /api/projects/[key]/status-automation (Story MOTIR-1615 · Subtask
 // MOTIR-1618) — read or admin-update a project's bidirectional status-derivation
@@ -31,8 +31,9 @@ interface RouteParams {
 }
 
 export async function GET(_req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   try {
@@ -46,8 +47,9 @@ export async function GET(_req: Request, { params }: RouteParams): Promise<Respo
 }
 
 export async function PATCH(req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
   const { key } = await params;
 
   let body: unknown;

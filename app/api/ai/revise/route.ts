@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
@@ -29,8 +29,8 @@ import {
 //   PlanRevisionInFlightError    → 409 (another revision holds this plan)
 //   MotirAiOutOfCreditsError     → 402 · MotirAiError → 502
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

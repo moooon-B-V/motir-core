@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { cliDeviceService } from '@/lib/services/cliDeviceService';
 import {
   DeviceGrantExpiredError,
@@ -28,8 +28,9 @@ import { NotAMemberError } from '@/lib/workspaces/errors';
 // Routes are HTTP-only (CLAUDE.md): parse → one service call → typed-error→status.
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   let body: unknown;
   try {

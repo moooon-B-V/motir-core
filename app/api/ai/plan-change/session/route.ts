@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { mapPlanChangeError, noActiveProject } from '../_errors';
@@ -19,8 +19,8 @@ import { mapPlanChangeError, noActiveProject } from '../_errors';
 // database, so no model job is submitted and no provider money is spent on this path. The AI
 // ceiling guards the doors that SUBMIT; adding one here would only cap a database read.
 export async function POST(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();

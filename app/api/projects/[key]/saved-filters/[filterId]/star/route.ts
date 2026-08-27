@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { mapSavedFilterError } from '@/lib/savedFilters/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/saved-filters/[filterId]/star (Story 6.2 · Subtask
 // 6.2.1) — the per-user star toggle (the dropdown's starred-first group, the
@@ -16,8 +16,9 @@ import { mapSavedFilterError } from '@/lib/savedFilters/errorResponse';
 type Params = { params: Promise<{ key: string; filterId: string }> };
 
 export async function PUT(_req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, filterId } = await params;
   try {
@@ -31,8 +32,9 @@ export async function PUT(_req: Request, { params }: Params): Promise<Response> 
 }
 
 export async function DELETE(_req: Request, { params }: Params): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key, filterId } = await params;
   try {

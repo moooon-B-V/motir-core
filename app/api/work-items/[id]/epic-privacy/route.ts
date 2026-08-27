@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { NotEpicError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NotProjectAdminError } from '@/lib/projects/errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // PATCH /api/work-items/[id]/epic-privacy (Story 6.14 · Subtask 6.14.7) — the
 // project-admin write that sets/unsets an EPIC's `publicChildrenHidden` privacy
@@ -20,8 +20,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

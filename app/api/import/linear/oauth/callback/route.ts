@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { linearImportOAuthService } from '@/lib/services/linearImportOAuthService';
 import {
   LinearOAuthExchangeError,
@@ -11,6 +10,7 @@ import {
   appendStatus,
   safeImportReturnPath,
 } from '@/lib/import/oauthReturn';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { LINEAR_OAUTH_STATE_COOKIE } from '../start/route';
 
 // GET /api/import/linear/oauth/callback (Story 7.16 · MOTIR-1655) — step 2 of
@@ -36,8 +36,9 @@ function importRedirect(returnTo: string, status: string): NextResponse {
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const returnTo = safeImportReturnPath(req.cookies.get(IMPORT_OAUTH_RETURN_COOKIE)?.value);
   const params = req.nextUrl.searchParams;

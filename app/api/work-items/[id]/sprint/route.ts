@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { backlogService } from '@/lib/services/backlogService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // POST /api/work-items/[id]/sprint (Subtask 4.1.4) — assign an issue to a sprint
 // or move it back to the backlog. Thin HTTP layer over backlogService; the issue
@@ -25,8 +25,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
 

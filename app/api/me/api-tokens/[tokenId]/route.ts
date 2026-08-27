@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { ApiTokenNotFoundError } from '@/lib/apiTokens/errors';
 
@@ -23,8 +23,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ tokenId: string }> },
 ): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const { tokenId } = await params;
   try {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
 import { mapAppearancePreferenceError } from '@/lib/appearance/errorResponse';
 
@@ -19,16 +19,18 @@ import { mapAppearancePreferenceError } from '@/lib/appearance/errorResponse';
 const AXIS_KEYS = ['pattern', 'styleId', 'paletteId', 'typeId'] as const;
 
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const preference = await appearancePreferenceService.getResolved(session.user.id);
   return NextResponse.json({ preference });
 }
 
 export async function PATCH(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   let body: unknown;
   try {

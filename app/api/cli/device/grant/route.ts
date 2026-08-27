@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { cliDeviceService } from '@/lib/services/cliDeviceService';
 import {
   DeviceGrantExpiredError,
@@ -28,8 +28,9 @@ import {
 // Routes are HTTP-only (CLAUDE.md): parse → one service call → typed-error→status.
 
 export async function GET(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   // `user_code` (snake_case) matches the query parameter the CLI already prints in
   // `verification_uri_complete`, so the page can forward what it was handed.

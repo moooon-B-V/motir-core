@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { AttachmentError } from '@/lib/blob/errors';
@@ -14,8 +14,8 @@ import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 // `[]`. No `db.*` / no transaction here — the service owns both.
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

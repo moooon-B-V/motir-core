@@ -24,3 +24,15 @@ export type OrgRole = (typeof ORGANIZATION_ROLE)[keyof typeof ORGANIZATION_ROLE]
 export function isOrgOwnerRole(role: string | null | undefined): boolean {
   return role === ORGANIZATION_ROLE.owner;
 }
+
+/**
+ * True when the role is ADMIN-EQUIVALENT at the org tier — owner or admin.
+ *
+ * Lives here rather than beside its first caller (MOTIR-3645) because it is now
+ * asked in two services: `organizationsService`'s access gate and
+ * `twoFactorPolicyService`'s policy setter. Two copies of "who may administer
+ * an organization" is exactly the shape that drifts when a fourth role is added.
+ */
+export function isOrgAdminRole(role: string | null | undefined): boolean {
+  return role === ORGANIZATION_ROLE.owner || role === ORGANIZATION_ROLE.admin;
+}

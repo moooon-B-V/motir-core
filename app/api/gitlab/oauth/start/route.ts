@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomBytes } from 'node:crypto';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { encodeOAuthState } from '@/lib/gitlab/oauthState';
@@ -22,8 +22,8 @@ export const GITLAB_OAUTH_NONCE_COOKIE = 'gitlab_oauth_nonce';
 const SETTINGS_PATH = '/settings/workspace/gitlab';
 
 export async function GET(_req: NextRequest): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getWorkspaceContext();
   if (!ctx) {

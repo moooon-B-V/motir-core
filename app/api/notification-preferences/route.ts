@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { mapNotificationPreferenceError } from '@/lib/notifications/preferenceErrorResponse';
 
@@ -16,16 +16,18 @@ import { mapNotificationPreferenceError } from '@/lib/notifications/preferenceEr
 //   contract).
 
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   const matrix = await notificationPreferencesService.getMatrix(session.user.id);
   return NextResponse.json({ matrix });
 }
 
 export async function PUT(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+  const { session } = gate;
 
   let body: unknown;
   try {

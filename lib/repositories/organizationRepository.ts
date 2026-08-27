@@ -61,7 +61,14 @@ export const organizationRepository = {
 
   async update(
     id: string,
-    data: { name?: string; slug?: string; isMeta?: boolean; acceptanceVideoEnabled?: boolean },
+    data: {
+      name?: string;
+      slug?: string;
+      isMeta?: boolean;
+      acceptanceVideoEnabled?: boolean;
+      /** The org-tier require-2FA policy (Story MOTIR-1215 · MOTIR-3644). */
+      requiresTwoFactor?: boolean;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {
     return tx.organization.update({ where: { id }, data });

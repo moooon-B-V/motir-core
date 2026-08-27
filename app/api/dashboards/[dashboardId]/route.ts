@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { mapDashboardError } from '@/lib/dashboards/errorResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // /api/dashboards/[dashboardId] (Story 6.3 · Subtask 6.3.1) — one
 // dashboard: the grid read + the owner-only mutations. Thin HTTP layer over
@@ -18,8 +18,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { dashboardId } = await params;
   try {
@@ -39,8 +40,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   let body: unknown;
   try {
@@ -88,8 +90,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { dashboardId } = await params;
   try {

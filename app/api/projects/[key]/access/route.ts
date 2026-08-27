@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
+import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // PATCH /api/projects/[key]/access (Story 6.4 · Subtask 6.4.4)
 // Set the project's browse-access level (open / limited / private). Body:
@@ -18,6 +19,12 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   if (!ctx) {
     return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
+  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
+  // arm rather than folded into `requireCompliantWorkspaceContext`, because
+  // that arm carries a body of its own that must not change.
+  const hold = await refuseIfNonCompliant(ctx.userId);
+  if (hold) return hold;
+
   const { key } = await params;
 
   let body: unknown;

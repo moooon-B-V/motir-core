@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { MotirAiError } from '@/lib/ai/errors';
@@ -23,8 +23,8 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // simply "no active project" → 404 (the no-existence-leak shape, finding #26).
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
 
   const ctx = await getActiveProject();
   if (!ctx) {

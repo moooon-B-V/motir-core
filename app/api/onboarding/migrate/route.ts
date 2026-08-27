@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getSession } from '@/lib/auth';
+import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { MigrateOnboardingExistsError } from '@/lib/migrateOnboarding/errors';
@@ -13,8 +13,8 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // HTTP only (CLAUDE.md 4-layer): resolve the session + active project, call ONE
 // service method, map typed errors. The service owns the transaction.
 export async function POST(req: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
   const ctx = await getActiveProject();
   if (!ctx) {
     return NextResponse.json(

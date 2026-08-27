@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { mapMigrateError } from '../../_errors';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/onboarding/migrate/[id]/index-status — the Index step's live per-repo
 // progress (Story 7.15 · MOTIR-934). The wizard polls this to render the
@@ -16,8 +16,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id } = await params;
   try {

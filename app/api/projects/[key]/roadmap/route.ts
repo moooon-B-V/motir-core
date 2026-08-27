@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/projects/[key]/roadmap?parentId=<id>&scope=sprint (Subtask 7.20.4
 // re-plan, MOTIR-1010; sprint scope MOTIR-1381) — ONE LEVEL of the project
@@ -28,8 +28,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { key } = await params;
   const search = new URL(req.url).searchParams;

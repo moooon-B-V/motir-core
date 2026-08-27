@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
 import {
   InvalidProposalError,
@@ -11,6 +10,7 @@ import {
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { UpdateProposalInput } from '@/lib/dto/plans';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // ⚠️ NO UI CALLS THIS ANY MORE (MOTIR-3084). MOTIR-1370's proposal edit modal —
 // this route's only consumer — was REMOVED: manual editing of a proposal is not
@@ -41,8 +41,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> },
 ): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
 
   const { id, itemId } = await params;
 
