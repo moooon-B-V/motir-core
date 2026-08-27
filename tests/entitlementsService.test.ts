@@ -44,6 +44,14 @@ async function setTier(organizationId: string, sub: ScaledTrackerSubscription): 
   });
 }
 
+/** One-line rendering of a settled rejection, for the race test's failure census —
+ *  an `EntitlementExceededError` and a `40P01 deadlock detected` are different
+ *  worlds and the split alone shows neither. */
+function reasonLabel(reason: unknown): string {
+  if (reason instanceof Error) return `${reason.name}: ${reason.message.slice(0, 120)}`;
+  return String(reason);
+}
+
 /** Flag the org as the META org (moooon B.V.) — the `meta` tier, every cap lifted. */
 async function setMeta(organizationId: string): Promise<void> {
   await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
@@ -198,10 +206,42 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
   // The org-row FOR UPDATE lock must serialize them so EXACTLY ONE lands the
   // 250th item and the other is rejected — never a 251-item overage (the
   // warm-pool TOCTOU a count-then-write with no lock would allow).
+  //
+  // ⚠️ AND THE RACE IS WEAKER THAN ITS NAME (MOTIR-3707, measured — see MOTIR-3710).
+  // `Promise.allSettled` on its own does NOT overlap the two attempts: the first
+  // reaches its count, its create AND its COMMIT before the second counts, so the
+  // second legitimately sees 250 and rejects — with or without the lock. Deleting
+  // `lockByIdForUpdate` from `assertWithinWorkItemCap` leaves this test GREEN.
+  // Forcing the overlap (a barrier holding both transactions open past their GUC
+  // binding) makes it report finalCount=251 on UNMODIFIED product code, because
+  // `SELECT … FOR UPDATE` on `organization` matches zero rows under
+  // `withWorkspaceContext` — the UPDATE policy `organization_mutate_active` reads
+  // `app.organization_id`, which that context never binds. That is a product
+  // defect with its own card; strengthening this race belongs to it, not here,
+  // because landing the barrier before the fix turns `main` red.
+  //
+  // ⚠️ THE ASSERTION ORDER IS LOAD-BEARING (MOTIR-3707) — do not reorder it back.
+  // `fulfilled.length === 2` is produced by TWO different worlds and the split
+  // alone cannot tell them apart: the lock did not serialize (a real 251-item
+  // overage, a product defect) or `seedWorkItems` under-delivered (both creates
+  // legitimately under the cap). The PROJECT ROW COUNT is the discriminator, so
+  // it is asserted BEFORE the race (the precondition, world b) and measured
+  // BEFORE the split assertion can throw (the outcome, world a). A red run then
+  // names its own world instead of stating the one fact both worlds share —
+  // which is what made this test's three reds cost a hand triage each.
   it('serializes concurrent creates at the boundary via FOR UPDATE (no overage)', async () => {
     const fx = await makeWorkItemFixture();
     const orgId = await orgIdOf(fx.workspaceId);
     await seedWorkItems(fx, 249);
+
+    // WORLD (b) — the fixture. Assert the precondition the race is premised on,
+    // here, where the observed count is the failure message. Without this the
+    // same shortfall surfaces 30 lines down as an ambiguous 2-fulfilled race.
+    const seededCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(
+      seededCount,
+      'precondition: seedWorkItems(fx, 249) must land exactly 249 rows before the race',
+    ).toBe(249);
 
     // Both positions are minted BEFORE the race, and distinct: two racing
     // transactions would each read the same last sibling and mint the same
@@ -238,12 +278,22 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
 
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(EntitlementExceededError);
-
+    // WORLD (a) — the lock. MEASURED FIRST, before any assertion can throw, so
+    // the number survives into every failure below: 250 = the lock held,
+    // 251 = it did not serialize, 249 = both attempts lost the race.
     const finalCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
-    expect(finalCount).toBe(250);
+    const census =
+      `census: seeded=${seededCount} finalCount=${finalCount} ` +
+      `fulfilled=${fulfilled.length} rejected=${rejected.length} ` +
+      `rejections=[${rejected.map((r) => reasonLabel((r as PromiseRejectedResult).reason)).join(' | ')}]`;
+
+    // The overage is the headline: a 251 here is a paying customer past their cap.
+    expect(finalCount, `${census} — 251 means the org-row FOR UPDATE did not serialize`).toBe(250);
+    expect(fulfilled, census).toHaveLength(1);
+    expect(rejected, census).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason, census).toBeInstanceOf(
+      EntitlementExceededError,
+    );
   });
 });
 

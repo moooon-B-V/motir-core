@@ -120,6 +120,31 @@ export interface ProseAdvisorySubject {
   storyPoints: number | null;
   estimateMinutes: number | null;
   hasChildren: boolean;
+  /**
+   * Whether the card carries a `blocked_by` edge to a `type: design` item — read
+   * ONLY by the SELF-BLOCKING-DESIGN check (MOTIR-3625), and the one input that
+   * lets it tell the defect from the remedy.
+   *
+   * `selfBlockingDesignCriteria` is a pure string scan, so a card that has
+   * ALREADY lifted its design into a sibling and wired itself to wait for it
+   * reads exactly like one that never did: it still names the mock it consumes
+   * and still builds the surface. Those are the two halves of the finding, and
+   * on such a card they are the correct shape rather than the defect. The
+   * advisory's own remedy — *lift the design criterion into its own `type:
+   * design` card the rest is `blocked_by`* — is then already discharged, so
+   * emitting it asks a reader to prove a negative about a card that is right.
+   *
+   * ⚠️ `exemptIds` already carries the `blocked_by` SET and is deliberately not
+   * reused here: it is IDS only, flattened together with the card itself and its
+   * ancestors, and the question this check asks is about the TYPE behind one of
+   * those edges. Answering it off `exemptIds` would need the types anyway and
+   * would silently widen an input the reference scan owns.
+   *
+   * Required, like `hasChildren` and for the same reason: every caller has to
+   * decide what it knows. `false` is a real answer (no design blocker), and a
+   * caller that has not looked must not take it by default.
+   */
+  hasDesignBlocker: boolean;
 }
 
 /**
@@ -393,11 +418,24 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
  * children run, which is the shape this check wants a card pushed into. So a
  * parent is never reported, whatever its criteria say — the finding is about a
  * LEAF that holds both halves.
+ *
+ * ⚠️ AND A CARD THAT HAS ALREADY LIFTED ITS DESIGN IS NEVER REPORTED
+ * (MOTIR-3625). `hasDesignBlocker` is the check's SECOND scope test and it is
+ * the graph half of a finding whose prose half cannot see edges at all: the
+ * remedy this advisory names is *lift the design criterion into its own `type:
+ * design` card the rest is `blocked_by`*, so a card that carries exactly that
+ * edge has already done what it would be told to do. Three of eight cards in one
+ * story were reported that way, every one of them correctly shaped and correctly
+ * wired — and a false entry costs a reader more than a silent miss does, because
+ * dismissing it means reconstructing enough of the card to prove nothing is
+ * wrong. The arm this does NOT touch is the one the check was built for: a card
+ * that both draws and builds with NO design blocker still emits.
  */
 function selfBlockingDesignAdvisory(
   subject: ProseAdvisorySubject,
 ): WorkItemProseAdvisoryDto | null {
   if (subject.hasChildren) return null;
+  if (subject.hasDesignBlocker) return null;
   const found = selfBlockingDesignCriteria(subject.descriptionMd);
   if (!found) return null;
   return {
@@ -742,16 +780,37 @@ export async function buildDispatchProseAdvisories(
         ? item.createdAt
         : new Date(item.createdAt);
 
-  const { ancestors, blockerLinks, rows } = await withWorkspaceServiceContext(
+  const { ancestors, blockerLinks, rows, blockerTypes } = await withWorkspaceServiceContext(
     ctx.workspaceId,
-    async (tx) => ({
-      ancestors: await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
-      blockerLinks: await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
-      rows:
-        (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate || selfBlockingCandidate
-          ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
+    async (tx) => {
+      const ancestors = await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx);
+      const blockerLinks = await workItemLinkRepository.findByFromItem(
+        item.id,
+        'is_blocked_by',
+        tx,
+      );
+      return {
+        ancestors,
+        blockerLinks,
+        rows:
+          (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate || selfBlockingCandidate
+            ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
+            : [],
+        // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625): the TYPES
+        // behind this card's `blocked_by` edges, so a card that has already
+        // lifted its design into a sibling is not reported for still naming it.
+        // Read ONLY when the prose could fire — `selfBlockingCandidate` is the
+        // same free string scan the row read above is gated on, so the common
+        // card pays nothing, and `blockerLinks` is already in hand.
+        blockerTypes: selfBlockingCandidate
+          ? await workItemRepository.findTypesByIds(
+              blockerLinks.map((l) => l.toId),
+              ctx.workspaceId,
+              tx,
+            )
           : [],
-    }),
+      };
+    },
   );
   const createdAt = suppliedCreatedAt ?? rows[0]?.createdAt ?? null;
   // The row is read ONLY when `sizingCandidate` or `selfBlockingCandidate`
@@ -765,6 +824,10 @@ export async function buildDispatchProseAdvisories(
   const estimateMinutes =
     item.estimateMinutes !== undefined ? item.estimateMinutes : (rows[0]?.estimateMinutes ?? null);
   const hasChildren = rows[0]?.hasChildren ?? false;
+  // Empty when the check could not fire (the read above is gated), which emits
+  // nothing either way — the same never-invent-a-finding-out-of-an-absent-row
+  // contract the sizing fallbacks have.
+  const hasDesignBlocker = blockerTypes.some((r) => r.type === 'design');
   const exemptIds = new Set<string>([item.id]);
   for (const a of ancestors) exemptIds.add(a.id);
   for (const l of blockerLinks) exemptIds.add(l.toId);
@@ -783,6 +846,7 @@ export async function buildDispatchProseAdvisories(
         storyPoints,
         estimateMinutes,
         hasChildren,
+        hasDesignBlocker,
       },
     ],
     ctx,

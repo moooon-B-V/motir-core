@@ -14600,7 +14600,16 @@
               needs 3:1)
             </div>
           </div>
-          <div class="swatch" data-theme="dark" style="background: #0f0f0f; border-color: #2a2a2a">
+          <!-- data-appearance-scope re-emits the Tier-3 --el-* layer onto this nested element so it
+               recomputes against the dark --color-* above it; without it the --el-* resolved at
+               :root and inherited down LIGHT (MOTIR-3592). The shipped design system carries the
+               selector — packages/design-system/theme.css, embedded verbatim in this mock. -->
+          <div
+            class="swatch"
+            data-theme="dark"
+            data-appearance-scope
+            style="background: #0f0f0f; border-color: #2a2a2a"
+          >
             <div style="display: flex; align-items: center; gap: 8px">
               <a
                 href="/dashboard"

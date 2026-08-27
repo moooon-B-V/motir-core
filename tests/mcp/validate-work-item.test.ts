@@ -1577,6 +1577,49 @@ describe('workItemsService.validateWorkItem — the SELF-BLOCKING-DESIGN advisor
     expect((await readinessOf(selfBlocking.identifier)).ready).toBe(true);
   });
 
+  it('says NOTHING about a SUBTREE child whose design is already LIFTED to a sibling', async () => {
+    // HOLE 1 (MOTIR-3625) on the SUBTREE path — the path a planner actually
+    // calls, and the one the three false entries came back on. The child is
+    // shaped exactly as this advisory asks: its design lives in a `type: design`
+    // sibling under the same story, and it carries the `blocked_by` edge to it.
+    // Reporting it would tell a correctly-wired card to do what it has done.
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The planning canvas' },
+      fx.ctx,
+    );
+    const design = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        parentId: story.id,
+        title: 'Design — the plan canvas',
+        type: 'design',
+        executor: 'coding_agent',
+      },
+      fx.ctx,
+    );
+    const child = await card(
+      fx,
+      'Builds what the drawing decides',
+      RECONSTRUCTED_SELF_BLOCKING_BODY,
+      {
+        kind: 'subtask',
+        parentId: story.id,
+      },
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: child.id, toId: design.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories.filter((a) => a.severity === 'likely-self-blocking-design')).toEqual(
+      [],
+    );
+  });
+
   it('scans a whole SUBTREE — the story reports its self-blocking child', async () => {
     const fx = await makeWorkItemFixture();
     const story = await workItemsService.createWorkItem(
