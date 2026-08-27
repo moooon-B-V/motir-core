@@ -15,7 +15,7 @@ import { useTranslations } from 'next-intl';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
-import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
@@ -61,7 +61,26 @@ const CI_STATE_META: Record<
   running: { icon: CircleEllipsis, pill: { severity: 'warning' } },
 };
 
-function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
+/**
+ * A pull request that MERGED, but onto a base that is not its repository's
+ * default branch (Story MOTIR-3655 · MOTIR-3660, design `delivery-set.mock.html`
+ * panel 3) — `null` when the row is fine or when nothing is known about it.
+ *
+ * It is the ONE new element the delivery-set design adds, and it exists because
+ * such a row renders today EXACTLY like one that delivered: `Merged`, mint, done.
+ * A merge onto a side branch delivered nothing to the trunk, `deliverySetShortfall`
+ * counts it as a shortfall, and the reader had no way to see the difference
+ * without opening the pull request.
+ */
+type StrandedBase = string | null;
+
+function PullRequestRow({
+  pr,
+  strandedBase,
+}: {
+  pr: LinkedPullRequestDto;
+  strandedBase: StrandedBase;
+}) {
   const t = useTranslations('github');
   const state = PR_STATE_META[pr.state];
   const ci = pr.ci ? CI_STATE_META[pr.ci] : null;
@@ -76,6 +95,16 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
         </div>
         <div className="truncate font-sans text-xs text-(--el-text-identifier)">
           {pr.repo} · #{pr.number}
+          {strandedBase !== null ? (
+            // The branch that swallowed the merge, NAMED — so the reader learns
+            // where the work went without opening the pull request. Beside the
+            // pill rather than instead of it: the pill says something is wrong,
+            // this says what.
+            <>
+              {' · '}
+              {t('development.intoBase', { base: strandedBase })}
+            </>
+          ) : null}
           {pr.linkedManually ? (
             // Provenance at a glance (design Panel 5a) — a manual link (set by
             // the explicit affordance, not the auto-resolver) carries the quiet
@@ -92,6 +121,14 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
           <PrPillGlyph className="h-3 w-3" aria-hidden />
           {t(`development.prState.${pr.state}`)}
         </Pill>
+        {strandedBase !== null ? (
+          // BESIDE `Merged`, never replacing it — both facts are true and the
+          // reader needs both: it did merge, and it did not reach the trunk.
+          <Pill severity="warning">
+            <CircleQuestionMark className="h-3 w-3" aria-hidden />
+            {t('development.notOnTrunk')}
+          </Pill>
+        ) : null}
         {ci ? (
           <Pill {...ci.pill}>
             <ci.icon className="h-3 w-3" aria-hidden />
@@ -191,6 +228,79 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
   );
 }
 
+/** One row the section draws: the pull request, plus what its delivery knows. */
+interface PullRequestRowModel {
+  repo: string;
+  number: number;
+  pr: LinkedPullRequestDto;
+  strandedBase: StrandedBase;
+}
+
+/**
+ * MERGE the two sources of "which pull requests deliver this card" into the rows
+ * the section draws (MOTIR-3660) — see the `deliveries` prop's note for why there
+ * are two and why neither is dropped.
+ *
+ * Exported so a test can assert the merge over lists rather than over rendered
+ * markup: the interesting cases here are ordering and identity, and asserting
+ * those through the DOM measures the DOM.
+ *
+ * - Identity is `owner/name#number`, CASE-INSENSITIVELY on the repository half.
+ *   A git host treats repository names case-insensitively and the two sides are
+ *   written by different tables, so a case difference is the same pull request
+ *   and must not become two rows.
+ * - `pullRequests` keeps its order and comes first, because that is the order
+ *   this section has always drawn and nothing here is a reason to change it.
+ * - A pull request in BOTH keeps the `pullRequests` DTO — they are the same row
+ *   read twice — and gains the delivery's base facts, which the DTO has not got.
+ */
+export function mergePullRequestRows(
+  pullRequests: readonly LinkedPullRequestDto[],
+  deliveries: readonly WorkItemDeliveryDto[],
+): PullRequestRowModel[] {
+  const identity = (repo: string, number: number): string => `${repo.toLowerCase()}#${number}`;
+  // A pull request is STRANDED when it merged onto a base that is not its
+  // repository's trunk. A null base is NOT stranded — it is unknown, and the
+  // rail's glyph is where that question is asked; claiming "not on trunk" about
+  // a merge nobody recorded a base for would assert something false.
+  const strandedOf = (d: WorkItemDeliveryDto): StrandedBase =>
+    d.pullRequest.state === 'merged' && d.baseRef !== null && d.baseRef !== d.defaultBranch
+      ? d.baseRef
+      : null;
+
+  const byIdentity = new Map<string, WorkItemDeliveryDto>();
+  for (const d of deliveries) {
+    byIdentity.set(identity(d.pullRequest.repo, d.pullRequest.number), d);
+  }
+
+  const rows: PullRequestRowModel[] = [];
+  const drawn = new Set<string>();
+  for (const pr of pullRequests) {
+    const key = identity(pr.repo, pr.number);
+    if (drawn.has(key)) continue;
+    drawn.add(key);
+    const delivery = byIdentity.get(key);
+    rows.push({
+      repo: pr.repo,
+      number: pr.number,
+      pr,
+      strandedBase: delivery === undefined ? null : strandedOf(delivery),
+    });
+  }
+  for (const d of deliveries) {
+    const key = identity(d.pullRequest.repo, d.pullRequest.number);
+    if (drawn.has(key)) continue;
+    drawn.add(key);
+    rows.push({
+      repo: d.pullRequest.repo,
+      number: d.pullRequest.number,
+      pr: d.pullRequest,
+      strandedBase: strandedOf(d),
+    });
+  }
+  return rows;
+}
+
 /** The section's BODY — rows or EmptyState + the auto-link caption. Shared by
  *  both hosts; the host supplies its own header (SectionLabel on the peek, the
  *  ContentSectionCard title on the detail page). */
@@ -199,6 +309,7 @@ export function DevelopmentSectionBody({
   itemIdentifier,
   manualLinkable = false,
   repoDelivery = [],
+  deliveries = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -223,17 +334,45 @@ export function DevelopmentSectionBody({
    * carries no repositories renders exactly the shipped section.
    */
   repoDelivery?: RepoDelivery[];
+  /**
+   * The card's DELIVERY SET (Story MOTIR-3655 · MOTIR-3660) — every pull request
+   * recorded as delivering this card, with the two facts a pull-request row
+   * cannot carry on its own: the base it targets and its repository's trunk.
+   *
+   * ⚠️ IT IS UNIONED WITH `pullRequests`, NOT SUBSTITUTED FOR IT, and that is a
+   * statement about the EXPAND window rather than a preference. Two writers still
+   * set the singular `github_pull_request.work_item_id`: the explicit link arms —
+   * which dual-write a delivery row (MOTIR-3658) — and
+   * `historicalPullRequestBackfillService`, which resolves a card by parsing the
+   * title and does NOT. So neither source is complete on its own today: the table
+   * holds rows the column structurally cannot (a `motir auto` pull request
+   * delivering twelve cards), and the column holds rows the table has not been
+   * told about. A surface that picked one would silently drop the other's, and a
+   * dropped row is strictly worse than a duplicated one — so they are merged, on
+   * `owner/name#number`, and the pull request appears exactly once.
+   *
+   * The union collapses to one source when MOTIR-3672 retires the title parse.
+   */
+  deliveries?: WorkItemDeliveryDto[];
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
+  // The rows to draw, and what each one's delivery knows about it. `pullRequests`
+  // keeps its order and its place at the front — it is what this section has
+  // always drawn — and a delivery the column never named is appended.
+  const rows = mergePullRequestRows(pullRequests, deliveries);
   // The repositories still owed a row of their own — never the raw set (see the
   // prop's note). Derived BEFORE the empty-state gate, because the gate asks
   // whether there is anything to draw, and the raw set can be non-empty while
   // every one of its repositories already has a pull-request row.
-  const awaiting = awaitingRepoRows(repoDelivery, pullRequests);
+  // ⚠️ Cross-referenced against the MERGED rows, not the prop: a repository whose
+  // only pull request came from the delivery set would otherwise be handed a
+  // "No pull request yet" placeholder directly beneath the pull request it was
+  // asserting it about — MOTIR-3036's defect, re-entered through the new door.
+  const awaiting = awaitingRepoRows(repoDelivery, rows);
   // The big EmptyState is for an item with NOTHING to show. An item that carries
   // repositories always has rows — the awaiting ones — so it never lands here.
-  if (pullRequests.length === 0 && awaiting.length === 0) {
+  if (rows.length === 0 && awaiting.length === 0) {
     return (
       <EmptyState
         className="mt-2"
@@ -246,8 +385,12 @@ export function DevelopmentSectionBody({
   return (
     <>
       <ul className="list-none">
-        {pullRequests.map((pr) => (
-          <PullRequestRow key={`${pr.repo}#${pr.number}`} pr={pr} />
+        {rows.map((row) => (
+          <PullRequestRow
+            key={`${row.repo}#${row.number}`}
+            pr={row.pr}
+            strandedBase={row.strandedBase}
+          />
         ))}
         {/* After the real rows: a placeholder per repository still owed one.
             Ordered by the item's own repository order, so the list reads in the
@@ -275,6 +418,7 @@ export function DevelopmentSection({
   itemIdentifier,
   className,
   repoDelivery = [],
+  deliveries = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   itemIdentifier: string;
@@ -283,6 +427,9 @@ export function DevelopmentSection({
    *  shared body, so the peek shows the same rows the detail page does rather
    *  than a reduced second form. Unfiltered, per the body's prop note. */
   repoDelivery?: RepoDelivery[];
+  /** The card's delivery set (MOTIR-3660) — passed straight through, so the peek
+   *  draws the same rows and the same `Not on trunk` pill the detail page does. */
+  deliveries?: WorkItemDeliveryDto[];
 }) {
   const t = useTranslations('github');
   return (
@@ -292,6 +439,7 @@ export function DevelopmentSection({
         pullRequests={pullRequests}
         itemIdentifier={itemIdentifier}
         repoDelivery={repoDelivery}
+        deliveries={deliveries}
       />
     </section>
   );

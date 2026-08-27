@@ -94,7 +94,7 @@ describe('the write→read SEAM — one card, three consumers, real Postgres', (
       created.identifier,
       caller.ctx,
     );
-    const body = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}));
+    const body = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}, []));
     expect(body.targetRepos).toEqual(['motir-ai', 'motir-core']);
 
     // 3. The MCP ITEM payload.
@@ -111,7 +111,7 @@ describe('the write→read SEAM — one card, three consumers, real Postgres', (
       created.identifier,
       caller.ctx,
     );
-    const body = presentWorkItemDetail(detail, 0, {});
+    const body = presentWorkItemDetail(detail, 0, {}, []);
 
     // Asserted against the SET on each surface, not against a repeated literal —
     // the claim is a relationship between two fields, so a test that hard-coded
@@ -135,7 +135,7 @@ describe('the write→read SEAM — one card, three consumers, real Postgres', (
       created.identifier,
       caller.ctx,
     );
-    const body = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}));
+    const body = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}, []));
 
     expect(dto).toMatchObject({ targetRepo: null, targetRepos: [] });
     expect(body).toMatchObject({ targetRepo: null, targetRepos: [] });

@@ -4,6 +4,7 @@ import {
   execCommand,
   GitError,
   openSessionPr,
+  updateSessionPr,
   pushSessionBranchIfAhead,
   runIdFromDate,
   sessionBranchCommits,
@@ -299,5 +300,62 @@ describe('openSessionPr — reported, never thrown', () => {
   it('reports a created PR with no URL on stdout as opened-without-a-link', () => {
     const { run } = scriptedRunner((bin, args) => (args[1] === 'list' ? ok('') : ok('')));
     expect(openSessionPr('/repo', input, run)).toEqual({ url: null, outcome: 'opened' });
+  });
+});
+
+describe('updateSessionPr — the close-out completes what the early open could not know', () => {
+  // MOTIR-3681. The pull request is opened at a repository's first implemented
+  // card, so what it is CREATED with describes only what had landed then. The
+  // close-out renders the full title and body and hands them here.
+  it('edits the pull request identified by its BRANCH, with BOTH title and body', () => {
+    const { run, log } = scriptedRunner(() => ok(''));
+    expect(
+      updateSessionPr(
+        '/repo',
+        'motir/auto-1',
+        { title: 'ACME-1 — 2 work items', body: 'all of it' },
+        run,
+      ),
+    ).toEqual({ ok: true });
+    // ⚠️ The TITLE is not optional. `sessionPrTitle` counts the cards it is
+    // given, so one written at card one says "1 work item" for ever — and it is
+    // the line a reviewer reads first.
+    expect(log).toEqual(['gh pr edit motir/auto-1 --title ACME-1 — 2 work items --body all of it']);
+  });
+
+  it('names whatever `gh` said — stderr, else stdout, else the bare exit code', () => {
+    // Three fallbacks, because a `gh` that fails silently on one stream is not a
+    // reason to report nothing. The last arm is the one a reader meets when the
+    // binary dies without a word, and it is the only place the exit code shows.
+    const onStderr = updateSessionPr('/r', 'b', { title: 't', body: 'x' }, () => ({
+      exitCode: 1,
+      stdout: 'ignored',
+      stderr: 'said on stderr',
+    })).message;
+    const onStdout = updateSessionPr('/r', 'b', { title: 't', body: 'x' }, () => ({
+      exitCode: 1,
+      stdout: 'said on stdout',
+      stderr: '',
+    })).message;
+    const onCodeOnly = updateSessionPr('/r', 'b', { title: 't', body: 'x' }, () => ({
+      exitCode: 7,
+      stdout: '',
+      stderr: '',
+    })).message;
+
+    expect(onStderr).toContain('said on stderr');
+    expect(onStdout).toContain('said on stdout');
+    expect(onCodeOnly).toContain('gh exited 7');
+  });
+
+  it('REPORTS a failure and never throws — stale text must not abort the summary', () => {
+    // By the time this runs the work is integrated, pushed and reviewable. A
+    // missing `gh` is a far smaller problem than a summary that dies, which is
+    // the same discipline `openSessionPr` applies.
+    const { run } = scriptedRunner(() => fail('gh: not found'));
+    const result = updateSessionPr('/repo', 'motir/auto-1', { title: 't', body: 'b' }, run);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('motir/auto-1');
+    expect(result.message).toContain('gh: not found');
   });
 });

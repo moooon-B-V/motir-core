@@ -206,7 +206,7 @@ export default async function IssueDetailPage({
   const [
     members,
     sprints,
-    repoDelivery,
+    deliveryView,
     projectComponents,
     estimationConfig,
     parentRollup,
@@ -230,7 +230,12 @@ export default async function IssueDetailPage({
     // Per-repository DELIVERY (Story MOTIR-2725 · MOTIR-2415). TIER TWO because
     // the rail's Repositories card renders it — the Development section below
     // uses the same value, passed down rather than read twice.
-    workItemsService.listRepoDelivery(item.id, item.targetRepos, ctx),
+    // The rail's glyph AND the Development section's rows, from ONE call
+    // (MOTIR-3660): `getDeliveryView` returns the repository set already amended
+    // by the delivery set, plus the set itself. Combining them at the host is
+    // what let this page and the quick view disagree (MOTIR-3036), so neither
+    // does it.
+    workItemsService.getDeliveryView(item.id, item.targetRepos, ctx),
     // The project taxonomy behind the rail's Components picker (Story 5.4 ·
     // Subtask 5.4.8) — browse-gated, name-ordered, admin-bounded (finding #57).
     componentsService.listComponents(ctx.project.identifier, {
@@ -479,7 +484,8 @@ export default async function IssueDetailPage({
                 itemId={item.id}
                 itemIdentifier={item.identifier}
                 canEdit={canEdit}
-                repoDelivery={repoDelivery}
+                repoDelivery={deliveryView.repos}
+                deliveries={deliveryView.deliveries}
               />
             </Suspense>
             <ChildPanel
@@ -523,7 +529,8 @@ export default async function IssueDetailPage({
               parent={detail.parent}
               reporterIsSelf={item.reporterId === ctx.userId}
               customFields={detail.customFields}
-              repoDelivery={repoDelivery}
+              repoDelivery={deliveryView.repos}
+              deliveries={deliveryView.deliveries}
               labelsComponents={{
                 projectKey: ctx.project.identifier,
                 labels: detail.labels,

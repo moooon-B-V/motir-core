@@ -7,7 +7,7 @@ import type {
   WorkItemRefMap,
 } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
-import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -170,6 +170,11 @@ export interface QuickViewData {
    * cannot disagree about whether a repository has landed.
    */
   repoDelivery: RepoDelivery[];
+  /** The card's DELIVERY SET (Story MOTIR-3655 · MOTIR-3660) — every pull request
+   *  recorded as delivering it. The peek draws the same Development rows and the
+   *  same rail caption the detail page does, from the same list. Empty on nearly
+   *  every card, which is the shipped behaviour unchanged. */
+  deliveries: WorkItemDeliveryDto[];
   /**
    * Does the item already have children (MOTIR-910)? The peek header's
    * Plan / Re-plan entrance picks its face from this — an item with children is

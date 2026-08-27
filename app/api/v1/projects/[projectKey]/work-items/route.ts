@@ -151,7 +151,9 @@ export const POST = withV1Route<{ projectKey: string }>(
     ctx.responseHeaders.set('Location', `/api/v1/work-items/${created.identifier}`);
     // A freshly created item has no children, so there is no sub-graph to
     // project — `{}` is the honest input, not a skipped read.
-    return NextResponse.json(presentWorkItemDetail(detail, 0, {}), { status: 201 });
+    // A card that did not exist a moment ago has no delivery set, and `[]` is
+    // the whole truth rather than a placeholder.
+    return NextResponse.json(presentWorkItemDetail(detail, 0, {}, []), { status: 201 });
   },
 );
 

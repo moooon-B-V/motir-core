@@ -257,6 +257,48 @@ export interface SessionPrResult {
  * `gh` would hide completed work behind a tooling gap. The caller prints the
  * message and the human opens the PR by hand.
  */
+/**
+ * Rewrite an OPEN session pull request's TITLE and BODY (Story MOTIR-3655 ·
+ * MOTIR-3681).
+ *
+ * ── Why this exists ────────────────────────────────────────────────────────
+ * The pull request is now opened at a repository's FIRST implemented card
+ * rather than at the end of the run, so what it is CREATED with describes only
+ * what had landed at that moment. The close-out still runs, still renders the
+ * full title and body from every record, and hands them here — so the reviewer
+ * reads the whole run even though the pull request existed from card one.
+ *
+ * ⚠️ THE TITLE, not only the body. `sessionPrTitle` counts the cards it is given
+ * (`<PARENT-KEY> — 8 work items`), so a title written at card one is not merely
+ * thin — it is WRONG about the number, permanently, and it is the line a
+ * reviewer reads first.
+ *
+ * Reported, never thrown, for the same reason `openSessionPr` reports: by the
+ * time this runs the work is integrated, pushed and reviewable, and a stale
+ * body is a far smaller problem than a summary that aborts over `gh`.
+ */
+export function updateSessionPr(
+  cwd: string,
+  branch: string,
+  input: { title: string; body: string },
+  run: CommandRunner = execCommand,
+): { ok: boolean; message?: string } {
+  const edited = run(
+    'gh',
+    ['pr', 'edit', branch, '--title', input.title, '--body', input.body],
+    cwd,
+  );
+  if (edited.exitCode !== 0) {
+    return {
+      ok: false,
+      message:
+        `Opened, but could not refresh ${branch}'s pull request: ` +
+        `${edited.stderr || edited.stdout || `gh exited ${edited.exitCode}`}`,
+    };
+  }
+  return { ok: true };
+}
+
 export function openSessionPr(
   cwd: string,
   input: { branch: string; title: string; body: string },

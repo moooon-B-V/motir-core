@@ -303,10 +303,17 @@ describe('motir next --agent', () => {
     expect(call.prompt).toBe(PROMPT_TEXT);
     expect(call.cwd).toBe(join(harness.root, 'motir-core'));
     expect(call.command).toMatchObject({ binary: 'claude', args: ['--yolo'] });
-    // The `get_work_item` between the agent and the close-out is the re-plan
-    // read-back (MOTIR-3018): a finished card and a REFUSED one both exit 0, so
-    // the run asks the card which it was. Its per-item cost is stated here
+    // TWO `get_work_item`s, and they answer different questions — stated here
     // rather than hidden, because this list is where a reviewer counts requests.
+    //
+    //  * BEFORE the transition — the re-plan read-back (MOTIR-3018): a finished
+    //    card and a REFUSED one both exit 0, so the run asks the card which it
+    //    was.
+    //  * AFTER it — the CI WATCH (MOTIR-3685): the run reads its own card's
+    //    delivery set to learn whether the build passed. `v1Detail` carries
+    //    `deliveries: []` here, so the watch finds nothing to watch and returns
+    //    after exactly ONE read. A project with a CI mirror pays more, and pays
+    //    it deliberately.
     expect(toolNames()).toEqual([
       'whoami',
       'next_ready',
@@ -314,6 +321,7 @@ describe('motir next --agent', () => {
       'dispatch_prompt',
       'get_work_item',
       'transition_status',
+      'get_work_item',
     ]);
     // The ONLY transition left on this path is the one the agent EARNED.
     //
@@ -988,11 +996,13 @@ describe('a PARTIALLY DELIVERED card — the run says so (MOTIR-3136)', () => {
     // second source of truth about what has shipped, which is the defect
     // `lib/workItems/repoDelivery.ts` exists to prevent one level down.
     //
-    // ⚠️ THE ONE `get_work_item` IS NOT THAT READ — it is the re-plan read-back
-    // (MOTIR-3018), and it happens AFTER the agent, so nothing about the
-    // delivery report can have come from it. Asserted by position rather than by
-    // absence: the request budget for the repository facts is still zero, and
-    // this test is still the thing that says so.
+    // ⚠️ NEITHER `get_work_item` IS THAT READ, and both happen AFTER the agent,
+    // so nothing about the delivery report can have come from either: the first
+    // is the re-plan read-back (MOTIR-3018) and the second is the CI watch
+    // (MOTIR-3685). Asserted by POSITION rather than by absence — the request
+    // budget for the REPOSITORY FACTS is still zero, and this test is still the
+    // thing that says so, which is why the count is allowed to grow while the
+    // property does not.
     setup({ prompt: halfShipped(), repos: ['motir-core', 'motir-ai'] });
     await nextCommand({ agent: 'claude' });
 
@@ -1004,8 +1014,10 @@ describe('a PARTIALLY DELIVERED card — the run says so (MOTIR-3136)', () => {
       'dispatch_prompt',
       'get_work_item',
       'transition_status',
+      'get_work_item',
     ]);
-    // Everything the resume notice reported was rendered before this index.
+    // Everything the resume notice reported was rendered before this index —
+    // the FIRST card read, which is the earliest either of them occurs.
     expect(names.indexOf('get_work_item')).toBeGreaterThan(names.indexOf('dispatch_prompt'));
   });
 });

@@ -6,11 +6,22 @@
 # it is unauthenticated in CI and points at no repository, so the run's final
 # step (ONE pull request per repo) would report a tooling failure and the smoke
 # test would stop one move short of the end. This shim stands in for exactly the
-# two invocations `openSessionPr` makes, so the loop's close-out is exercised for
-# real: the branch is pushed, the PR is opened, the summary carries its URL.
+# invocations `openSessionPr` and `updateSessionPr` make, so the loop's close-out
+# is exercised for real: the branch is pushed, the PR is opened, the summary
+# carries its URL.
 #
 # It is put on PATH by loop-smoke.sh and lives only for that run — the image
 # itself is never modified.
+#
+# ⚠️ IT REMEMBERS (Story MOTIR-3655 · MOTIR-3681). It used to answer EMPTY to
+# every `pr list`, which is a fake that cannot tell the two outcomes apart: the
+# pull request is now opened at a repository's FIRST implemented card and
+# REFRESHED at close-out, so a forgetful stub sends every one of those calls
+# down the create path and the smoke measures the stub's amnesia rather than the
+# loop. State is keyed by **working directory AND head branch, never the branch
+# alone** — a multi-repo run uses ONE branch name in every checkout, so a
+# branch-keyed store would have the second repository find the first's pull
+# request and skip its own.
 #
 # Every invocation is appended to $MOTIR_SMOKE_GH_LOG so the smoke test can
 # assert WHAT the CLI asked for, not merely that it exited 0.
@@ -23,15 +34,71 @@ if [ -n "${MOTIR_SMOKE_GH_LOG:-}" ]; then
     printf '%s\n' "$(printf '%s ' "$@" | tr '\n' ' ')" >> "$MOTIR_SMOKE_GH_LOG"
 fi
 
+# The open pull requests this run has opened, one `<cwd>\t<head>\t<url>` per
+# line. It lives beside the call log so it is cleaned up with it.
+STATE="${MOTIR_SMOKE_GH_LOG:-/tmp/motir-smoke-gh}.prs"
+
+# The argument AFTER `--head`, which is not at a fixed position.
+flag_value() {
+    local want="$1"; shift
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = "$want" ]; then
+            printf '%s' "${2:-}"
+            return 0
+        fi
+        shift
+    done
+    return 0
+}
+
+lookup() {
+    [ -f "$STATE" ] || return 0
+    while IFS="$(printf '\t')" read -r c h u; do
+        if [ "$c" = "$PWD" ] && [ "$h" = "$1" ]; then
+            printf '%s' "$u"
+            return 0
+        fi
+    done < "$STATE"
+    return 0
+}
+
 if [ "${1:-}" = 'pr' ] && [ "${2:-}" = 'list' ]; then
-    # No existing pull request for the branch — empty stdout, exit 0, which is
-    # what sends `openSessionPr` down its create path.
+    # An OPEN pull request for this branch IN THIS CHECKOUT, if one was opened —
+    # which is what sends `openSessionPr` down its `existing` path rather than
+    # opening a second one.
+    url="$(lookup "$(flag_value --head "$@")")"
+    if [ -n "$url" ]; then echo "$url"; fi
     exit 0
 fi
 
 if [ "${1:-}" = 'pr' ] && [ "${2:-}" = 'create' ]; then
+    head="$(flag_value --head "$@")"
+    if [ -n "$(lookup "$head")" ]; then
+        # The real `gh` refuses a second pull request for a branch that already
+        # has one open. A stub that cheerfully opens another would let exactly
+        # the duplicate-PR bug this smoke exists to catch pass.
+        echo "stub gh: a pull request is already open for $head" >&2
+        exit 1
+    fi
+    # A distinct number per pull request. `2>/dev/null` on `wc` would NOT cover
+    # this: the `<` redirection fails in the SHELL, before `wc` exists to have a
+    # stderr, so the guard has to be the file test.
+    open_count=0
+    if [ -f "$STATE" ]; then open_count="$(wc -l < "$STATE")"; fi
+    url="https://github.example.invalid/smoke/demo-repo/pull/$(( open_count + 1 ))"
+    printf '%s\t%s\t%s\n' "$PWD" "$head" "$url" >> "$STATE"
     # `gh pr create` prints the URL as its last line; the CLI parses exactly that.
-    echo 'https://github.example.invalid/smoke/demo-repo/pull/1'
+    echo "$url"
+    exit 0
+fi
+
+if [ "${1:-}" = 'pr' ] && [ "${2:-}" = 'edit' ]; then
+    # `gh pr edit <branch> --title … --body …` — the close-out's refresh. It
+    # FAILS on a branch with no open pull request, as the real one does.
+    if [ -z "$(lookup "${3:-}")" ]; then
+        echo "stub gh: no pull request found for ${3:-}" >&2
+        exit 1
+    fi
     exit 0
 fi
 

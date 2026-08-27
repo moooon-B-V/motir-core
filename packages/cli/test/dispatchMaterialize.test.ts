@@ -238,12 +238,53 @@ describe('every dispatching call site routes through the changed resolution', ()
     expect(source).toContain('cloneUrl: dispatch.targetRepoCloneUrl ?? null');
   });
 
-  it.each(SITES)('%s materializes BEFORE it spawns an agent', (file) => {
+  // ⚠️ WHERE the materialization LIVES moved (MOTIR-3695), and the guard moved
+  // with it. `commands/dispatch.ts` and `commands/batch.ts` no longer call
+  // `materializeDispatchCheckouts` themselves — they run `dispatchLeg.ts`, which
+  // is the ONE implementation of materialize-then-spawn for both. A guard that
+  // reads a file cannot follow a call, so asserting the old string in the old
+  // file would now fail on a tree where the rule holds MORE tightly than before.
+  //
+  // The property being guarded is unchanged: no site spawns an agent without
+  // having materialized first, and every site REFUSES on a failure rather than
+  // launching anyway. What changed is that two sites satisfy it by delegating,
+  // and the delegate is held to the whole rule itself.
+  const SPAWN_SITES: { file: string; owns: boolean }[] = [
+    { file: 'commands/dispatch.ts', owns: false },
+    { file: 'commands/auto.ts', owns: true },
+    { file: 'commands/batch.ts', owns: false },
+    { file: 'dispatchLeg.ts', owns: true },
+  ];
+
+  it.each(SPAWN_SITES)('$file materializes BEFORE it spawns an agent', ({ file, owns }) => {
     const source = readFileSync(join(import.meta.dirname, '..', 'src', file), 'utf8');
 
-    expect(source).toContain('materializeDispatchCheckouts');
-    // The refusal is what makes it a gate rather than a courtesy: every site
-    // reads the failures and stops.
-    expect(source).toContain('materialized.failures.length > 0');
+    if (owns) {
+      expect(source).toContain('materializeDispatchCheckouts');
+      // The refusal is what makes it a gate rather than a courtesy: every site
+      // that owns the call reads the failures and stops.
+      expect(source).toContain('materialized.failures.length > 0');
+    } else {
+      // A delegating site must actually delegate — and must NOT also keep a
+      // private copy, which is the state this refactor existed to leave behind.
+      expect(source).toContain('runDispatchLeg');
+      expect(source).not.toContain('materializeDispatchCheckouts');
+    }
+  });
+
+  it('the delegating sites all reach ONE leg — there is no second one', () => {
+    // The AC's `git grep`, as an assertion: a future card that copies the leg
+    // rather than calling it fails here rather than at the next divergence.
+    // Matched as a CALL — `name(` — not as a bare mention. A guard that keys on
+    // the name alone also matches the PROSE that explains why the rule exists,
+    // so a file documenting the seam would fail the guard about it.
+    const leg = readFileSync(join(import.meta.dirname, '..', 'src', 'dispatchLeg.ts'), 'utf8');
+    for (const marker of ['agentSubmittedReplan', 'workReachedRemote', 'checkBootstrapCheckout']) {
+      expect(leg).toContain(`${marker}(`);
+      for (const file of ['commands/dispatch.ts', 'commands/batch.ts']) {
+        const source = readFileSync(join(import.meta.dirname, '..', 'src', file), 'utf8');
+        expect(source).not.toContain(`${marker}(`);
+      }
+    }
   });
 });

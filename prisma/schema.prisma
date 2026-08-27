@@ -1065,6 +1065,7 @@ model Workspace {
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos                ProjectRepo[]
   workItemRepos               WorkItemRepo[]
+  workItemDeliveries          WorkItemDelivery[]
   /// The per-member collaborator records on this workspace's repositories
   /// (MOTIR-1910). Cascade: they are tenant-scoped rows with no life of their own.
   projectRepoCollaborators    ProjectRepoCollaborator[]
@@ -2132,6 +2133,7 @@ model WorkItem {
   // item's references are not a fact about anything. Modelled both sides per the
   // FK-`@relation` rule.
   repositories         WorkItemRepo[]
+  deliveries           WorkItemDelivery[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -2347,7 +2349,7 @@ model PublicFollow {
   /// Set on the EMAIL-ONLY tier only; null on the account tier. Stored
   /// LOWERCASED — the unique index is on the stored form, so the service
   /// normalizes before it writes or looks up.
-  email String?
+  email  String?
 
   /// Following is not subscribing: the digest is opt-IN and off by default on
   /// BOTH stored tiers (ADR §4).
@@ -5404,6 +5406,7 @@ model GithubRepo {
   /// disconnecting this repo leaves the set row with a null realized repo, not a
   /// deleted plan.
   projectRepo                 ProjectRepo?
+  workItemDeliveries          WorkItemDelivery[]
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -5483,14 +5486,54 @@ model GithubPullRequest {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  repo      GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  workItem  WorkItem?        @relation(fields: [workItemId], references: [id], onDelete: SetNull)
-  checkRuns GithubCheckRun[]
+  repo       GithubRepo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?          @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  checkRuns  GithubCheckRun[]
+  deliveries WorkItemDelivery[]
 
   @@unique([repoId, number])
   @@index([repoId])
   @@index([workItemId])
   @@map("github_pull_request")
+}
+
+/// One DELIVERY of a work item by a pull request — the ONE association between the
+/// two, many-to-many in both directions (Story MOTIR-3655 · MOTIR-3657), specified
+/// by `docs/decisions/work-item-delivery-links.md`.
+///
+/// N cards linking to the SAME pull-request row is N rows, and that is how one pull
+/// request delivers N cards; one card linking to two pull-request rows is two rows,
+/// and that is how a card spans repositories. Nothing else is needed to express
+/// either direction.
+///
+/// Every row is written by `link_pull_request` — a per-card DECLARATION by the agent
+/// that did that card's work, never an inference from what a diff touched. That is
+/// the property MOTIR-3527 wanted and the reason this supersedes it rather than
+/// contradicting it.
+///
+/// `repo_id` is a REAL column and not a join away: the completion gate compares each
+/// member's merge against THAT repository's own default branch, and resolving it per
+/// member through `github_pull_request → github_repo` is an N+1 on the delivery path.
+/// `workspace_id` is carried on the ROW because RLS does not traverse foreign keys —
+/// note `GithubPullRequest` has none of its own and reads tenancy through its repo.
+model WorkItemDelivery {
+  id                  String   @id @default(cuid())
+  workspaceId         String   @map("workspace_id")
+  workItemId          String   @map("work_item_id")
+  githubPullRequestId String   @map("github_pull_request_id")
+  repoId              String   @map("repo_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem    WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  pullRequest GithubPullRequest @relation(fields: [githubPullRequestId], references: [id], onDelete: Cascade)
+  repo        GithubRepo        @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, githubPullRequestId])
+  @@index([workspaceId])
+  @@index([githubPullRequestId])
+  @@index([repoId])
+  @@map("work_item_delivery")
 }
 
 /// One terminal CI check result for a linked PR (Story 7.10 · Subtask 7.10.6 /

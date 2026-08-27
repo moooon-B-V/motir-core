@@ -1338,6 +1338,8 @@
     "repositoriesAllDelivered": "全部已交付。",
     "repositoriesDeliveredCount": "{total} 个中已交付 {delivered} 个。",
     "repositoriesOutstanding": "{total} 个中已交付 {delivered} 个，{repo} 仍未完成。",
+    "deliveriesMergedOpen": "{total} 项交付中已合并 {merged} 项，{pr} 仍处于打开状态。",
+    "deliveriesMergedStranded": "{total} 项交付中已合并到主干 {merged} 项，{pr} 合并到了 {base}。",
     "repositoriesUnknownBranch": "{repo} 已合并，但 Motir 没有记录合并到了哪个分支。",
     "repositoryDelivery": {
       "delivered": "已交付",
@@ -5661,6 +5663,8 @@
       "notConnected": "此工作区尚未连接 GitHub。请在“设置 → 工作区 → GitHub”中进行连接。",
       "prNotFound": "找不到该拉取请求。",
       "autoLinkCaptionManual": "当分支或 PR 提及 <mono>{key}</mono> 时会自动关联，也可在此手动关联。",
+      "intoBase": "合并到 {base}",
+      "notOnTrunk": "不在主干",
       "noPullRequestYet": "尚无拉取请求",
       "mergedBranchUnknown": "已合并 —— 未记录分支",
       "repoState": {

@@ -413,9 +413,52 @@ There is nothing to wait for locally, and nothing has gone wrong: In Review mean
 "a human should look at this", so only a green build is entitled to say it.
 
 **A red build leaves the card at Implemented**, and the CI comment on the card
-names the check that failed. Push a fix to the same branch — when the checks go
-green, the card promotes itself. You never move it by hand, and moving it by hand
-is the one thing that defeats the gate.
+names the check that failed. You never move it by hand, and moving it by hand is
+the one thing that defeats the gate.
+
+**A card reaches In Review only when EVERY pull request delivering it is green.**
+A card delivered by two branches — one green, one red — stays at Implemented; the
+last one to go green is what promotes it, however much later that is. One green
+and one still running is the same answer: running is not a pass.
+
+### The run watches its own build, and fixes it
+
+Every lane WATCHES CI once its pull requests are open, and dispatches a fixing
+agent on each red — you do not have to push the fix yourself.
+
+| lane          | watches                      | when                                     |
+| ------------- | ---------------------------- | ---------------------------------------- |
+| `motir run`   | the pull requests it opened  | as soon as they are open                 |
+| `motir batch` | the same, once per card      | **after each card**, before the next     |
+| `motir auto`  | every pull request it opened | **only when no card is left to pick up** |
+
+`motir auto` does not gate between cards: its pull requests are for the whole
+run, so they are not finished until the run is. `motir batch`'s are for ONE card,
+so it will not start the next one on top of a red build.
+
+**Five fixing attempts, then it gives up.** The counter moves on a RED verdict
+only — a build that is still running costs nothing, however long it takes — and
+the sixth red ends the loop. Every fixing iteration pushes and re-triggers CI, so
+a genuine flake gets five fresh rolls; red six times running is not a flake, and
+there is no separate flake handling to configure.
+
+At a give-up the cards stay at **Implemented**, the run names the failing check
+and its repository, and the command exits **non-zero** — so a script can tell
+"built and green" from "built and still red".
+
+**`--keep-going` decides only what happens after the sixth red.** The five fixes
+are always attempted:
+
+|                | after five failed fixes                           |
+| -------------- | ------------------------------------------------- |
+| default        | **halt the drain** — do not pick up the next card |
+| `--keep-going` | **move to the next card**                         |
+
+**The fixing agent is told to read the failure first, and permitted to change
+nothing.** An environmental failure — a connection reset, a runner death, a
+cold-compile timeout — is not something to patch around, and an iteration that
+correctly changes nothing still spends one of the five. That is what makes the
+cap do the flake work instead of the agent doing it badly.
 
 **One merge closes the whole run.** A `motir auto` run puts every card on one
 session branch and opens one pull request; merging it closes **every** card that

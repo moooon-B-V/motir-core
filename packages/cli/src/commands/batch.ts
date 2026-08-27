@@ -15,9 +15,7 @@ import { runAgent } from '../agentRun.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
-  agentSubmittedReplan,
   autoOnlyFlagError,
-  checkBootstrapCheckout,
   cwdReasonLabel,
   findingsPolicyOf,
   renderClaimRefusal,
@@ -25,12 +23,12 @@ import {
   renderNothingPushed,
   renderReplanSubmitted,
   renderRepositoriesBlock,
-  materializeDispatchCheckouts,
-  renderMaterialization,
   resolveDispatchTarget,
   resolveDispatchTargets,
 } from '../dispatch.js';
-import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
+import { execCommand, type CommandRunner } from '../git.js';
+import { runDispatchLeg } from '../dispatchLeg.js';
+import { runCiWatchPhase } from '../ciWatch.js';
 import {
   batchExitCode,
   classifySnapshotItem,
@@ -57,12 +55,27 @@ import type { DispatchItem, MotirClient } from '../client.js';
 //     up front (`listReadyForDispatch` → `planSnapshot`) and nothing re-reads the
 //     ready set to pick work afterwards. The only later read is the newly-ready
 //     COUNT, which is reporting — it can never add an item to the run.
-//  2. **No git, no lineage.** This module deliberately imports nothing from
-//     `git.ts`: it creates no branch, pushes nothing, and opens no pull request.
-//     Each item's server-generated prompt carries the per-item-PR GIT WORKFLOW,
-//     so the AGENT branches off origin/main in its own repo and opens its own
-//     pull request. `mark_integrated` is never called — two items in the same
-//     repo simply open two independent pull requests.
+//  2. **No lineage of its own.** This module creates no branch and integrates
+//     nothing: each item's server-generated prompt carries the per-item-PR GIT
+//     WORKFLOW, so the AGENT branches off origin/main in its own repo and opens
+//     its own pull request, and `mark_integrated` is never called — two items in
+//     the same repo simply open two independent pull requests. An item that
+//     turns out to carry a session lineage is REFUSED rather than run.
+//
+//     ⚠️ This rule used to read *"No git… this module deliberately imports
+//     nothing from `git.ts`"*, and that half had stopped being true well before
+//     MOTIR-3695 (`workReachedRemote` is a git read, and the exit-0-is-not-a-push
+//     check cannot be made without one). A stale rule in a header is worse than
+//     no rule, because the next reader takes it as a constraint and works around
+//     it. What was actually meant — no branch, no integration — is what it says
+//     now.
+//
+//  3. **The per-card sequence is `runDispatchLeg`'s, not this file's**
+//     (MOTIR-3695). Materialize-before-spawn, echo-before-spawn,
+//     exit-0-is-not-an-outcome and exit-0-is-not-a-push are four rules that must
+//     hold in `motir run` too, and two copies is two chances for them to hold in
+//     one. This module supplies the chrome and folds the leg's verdict into a
+//     drain record; it does not re-derive the verdict.
 
 export interface BatchOptions extends DeliveryOptions {
   kinds?: string;
@@ -85,6 +98,35 @@ export interface BatchDeps {
    *  FLAG surface (`optionRegistrationAudit` holds every field there to a
    *  registered option). */
   run?: CommandRunner;
+  /** The CI watch's inter-poll wait (MOTIR-3685) — injected so a test does not
+   *  spend real seconds proving a pending verdict costs no attempt. */
+  wait?: () => Promise<void>;
+  /** The CI watch's POLL bound (MOTIR-3685), distinct from the five-fix cap. */
+  maxCiPolls?: number;
+  /**
+   * THE BETWEEN-ITERATION SEAM (Story MOTIR-3655 · MOTIR-3695, for MOTIR-3685).
+   *
+   * Called after each card the drain finishes and BEFORE the next one is
+   * dispatched, with what that card produced. Returning `'stop'` ends the drain
+   * exactly as `--max` does — the remaining cards land in `notReached`, the
+   * summary is computed over what actually ran, and nothing is excluded.
+   *
+   * ── Why it is here before anything uses it ────────────────────────────────
+   * MOTIR-3685 puts a CI gate in this position: `motir batch` must watch the
+   * pull requests the finished card opened and NOT start the next card while
+   * they are red, which is what makes batch different from `motir auto` (whose
+   * pull requests are for every card at once). A drain that cannot be
+   * interrupted between cards makes that card impossible to build without
+   * re-opening this one, so the shape is settled here where the loop is being
+   * rewritten anyway.
+   *
+   * It is a DEPENDENCY rather than a flag: like `run` and `runAgentFn` it is a
+   * seam, and `BatchOptions` is the flag surface that `optionRegistrationAudit`
+   * holds to registered options.
+   *
+   * Absent in production today — the drain runs exactly as it did.
+   */
+  afterCard?: (record: BatchRecord, context: { cwd: string }) => Promise<'continue' | 'stop'>;
 }
 
 type ResolvedAgent = NonNullable<ReturnType<typeof resolveAgent>>;
@@ -189,6 +231,51 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
       clock: deps.clock ?? Date.now,
       runAgentFn: deps.runAgentFn ?? runAgent,
       run: deps.run ?? execCommand,
+      // ── THE CI GATE BETWEEN CARDS (Story MOTIR-3655 · MOTIR-3685) ────────
+      //
+      // This is what makes `motir batch` different from `motir auto`: batch's
+      // pull requests are for ONE card, so the next card must not be started
+      // while the one just finished is red. `auto`'s are for every card at once
+      // and it watches only when there is nothing left to pick up.
+      //
+      // An injected gate WINS — a test drives the seam directly rather than
+      // through a real CI verdict.
+      afterCard:
+        deps.afterCard ??
+        (async (record, context) => {
+          // Nothing to watch on a card that did not get built.
+          if (record.outcome !== 'implemented') return 'continue';
+          const watch = await runCiWatchPhase({
+            client: session.client,
+            key: record.key,
+            title: record.title ?? null,
+            agent: agent.parsed,
+            cwd: context.cwd,
+            report: (line) => info(line),
+            ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+            ...(deps.wait ? { wait: deps.wait } : {}),
+            ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
+          });
+          if (watch.kind === 'green' || watch.kind === 'nothing') return 'continue';
+
+          // ── `--keep-going` decides what happens AFTER the sixth red ───────
+          //
+          // The five-fix loop always runs; the flag only chooses what follows.
+          // That keeps its shipped meaning intact — *one bad card should not end
+          // the whole drain* — rather than inventing a second halt condition it
+          // cannot reach. A CI give-up is the same shape as a failed agent: this
+          // one card did not work out.
+          //
+          // ⚠️ NO EXCLUDE ENTRY IS WRITTEN, and the asymmetry with a failed
+          // agent is deliberate rather than an oversight. A failed agent is
+          // excluded because its card is left in a PICKABLE state and a later
+          // `motir batch` would re-attempt it. A CI give-up leaves the card at
+          // `implemented`, which is not in the ready set at all — `planSnapshot`
+          // is built from `listReadyForDispatch` — so an exclude entry could
+          // never match anything and would be a local opinion about a card the
+          // server already holds back.
+          return opts.keepGoing ? 'continue' : 'stop';
+        }),
       ownerId,
     });
     info('');
@@ -211,13 +298,15 @@ export interface BatchInput {
   ownerId: string;
   /** The git runner the MOTIR-3004 push check asks; defaults to the real one. */
   run?: CommandRunner;
+  /** The between-iteration gate — see {@link BatchDeps.afterCard}. */
+  afterCard?: (record: BatchRecord, context: { cwd: string }) => Promise<'continue' | 'stop'>;
 }
 
 /** Snapshot, print, drain. Exported so the whole command can be driven against
  *  a scripted client + agent, which is the only way the "never picks up an item
  *  that became ready mid-run" property can actually be asserted. */
 export async function runBatch(input: BatchInput): Promise<BatchSummary> {
-  const { session, opts, kinds, max, agent, clock, runAgentFn, ownerId } = input;
+  const { session, opts, kinds, max, agent, clock, runAgentFn, ownerId, afterCard } = input;
   const gitRun = input.run ?? execCommand;
   const { client, serverUrl, projectKey } = session;
 
@@ -316,6 +405,16 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
         }
       } else {
         removeExclude(serverUrl, projectKey, entry.key);
+      }
+
+      // THE BETWEEN-ITERATION SEAM (MOTIR-3695) — see `BatchDeps.afterCard`. It
+      // runs AFTER the exclude bookkeeping, so a gate that stops the drain
+      // leaves the card's own record exactly as it would have been, and BEFORE
+      // the next dispatch, which is the whole point.
+      if (afterCard && (await afterCard(outcome.record, { cwd: outcome.cwd })) === 'stop') {
+        stopReason = 'gated';
+        stopIndex = index + 1;
+        break;
       }
     }
   } finally {
@@ -444,8 +543,11 @@ interface DispatchOneInput {
 }
 
 type DispatchOneResult =
-  | { kind: 'record'; record: BatchRecord }
-  | { kind: 'skipped'; skip: SnapshotSkip };
+  /** `cwd` rides the RESULT rather than the record: the between-iteration gate
+   *  needs the checkout CI is red on, and `BatchRecord` is the reporting shape
+   *  the summary renders — widening it would put a filesystem path in a
+   *  transcript that has no use for one. */
+  { kind: 'record'; record: BatchRecord; cwd: string } | { kind: 'skipped'; skip: SnapshotSkip };
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
@@ -519,70 +621,61 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   for (const line of renderRepositoriesBlock(targets)) info(`   ${line.trimStart()}`);
   info('   its own branch off origin/main, its own pull request');
 
-  // ⚠️ MATERIALIZE BEFORE THE SPAWN (MOTIR-3588) — the same rule `deliver()`
-  // applies, through the same function, because batch prints its own lines
-  // rather than going through it and a second implementation is how the two
-  // drift. A clone that fails skips this item instead of launching an agent
-  // against a prompt that cannot run.
-  const materialized = materializeDispatchCheckouts(
-    link.dir,
-    targets.length > 0 ? targets : [target],
-  );
-  for (const line of renderMaterialization(materialized)) info(`   ${line.trimStart()}`);
-  if (materialized.failures.length > 0) {
+  // ⚠️ THE SHARED LEG (MOTIR-3695). Materialize-before-spawn, echo-before-spawn,
+  // exit-0-is-not-an-outcome and exit-0-is-not-a-push are `runDispatchLeg`'s,
+  // which is the SAME code `motir run` runs — batch no longer carries a second
+  // copy of four rules that have to agree.
+  //
+  // The verdicts below are where the two commands legitimately differ, and each
+  // difference was here before the leg was: batch folds a verdict into a drain
+  // RECORD (so the summary and the exit code can be computed over the run),
+  // where `run` prints and sets `process.exitCode`.
+  const started = clock();
+  const verdict = await runDispatchLeg({
+    client,
+    rootDir: link.dir,
+    key: entry.key,
+    dispatch,
+    agent: agent.parsed,
+    targets,
+    primary: target,
+    // NULL, deliberately, exactly as before: batch has no session branch to
+    // offer and must not start believing in one the server happened to mention.
+    sessionBranch: null,
+    onMaterialization: (lines) => {
+      for (const line of lines) info(`   ${line.trimStart()}`);
+    },
+    // One block per dispatched item, in the drain's own order.
+    beforeSpawn: () => echoPromptIfAsked(input.opts, entry.key, dispatch),
+    runAgentFn,
+    run,
+  });
+  const durationMs = clock() - started;
+  const base = { key: entry.key, title: entry.title, durationMs, repo: dispatch.targetRepo };
+
+  if (verdict.kind === 'checkout_unavailable') {
     return {
       kind: 'skipped',
       skip: { key: entry.key, title: entry.title, reason: 'checkout_unavailable' },
     };
   }
 
-  // BEFORE the spawn (MOTIR-3052), so the prompt is on the stream even when the
-  // agent then fails, times out or is killed — and one block per dispatched
-  // item, in the drain's own order.
-  echoPromptIfAsked(input.opts, entry.key, dispatch);
-
-  const started = clock();
-  const result = await runAgentFn({
-    command: agent.parsed,
-    prompt: dispatch.prompt,
-    cwd: target.cwd,
-  });
-  const durationMs = clock() - started;
-  const base = { key: entry.key, title: entry.title, durationMs, repo: dispatch.targetRepo };
-
-  if (result.exitCode !== 0) {
-    info(`${entry.key}: agent exited ${result.exitCode} — left In Progress, nothing reverted.`);
+  if (verdict.kind === 'agent_failed') {
+    info(`${entry.key}: agent exited ${verdict.exitCode} — left In Progress, nothing reverted.`);
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: {
         ...base,
         outcome: 'failed',
-        detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+        detail: verdict.signal ? `killed by ${verdict.signal}` : `exit ${verdict.exitCode}`,
       },
     };
   }
 
-  // A bootstrap dispatch that did not produce its checkout is a FAILED dispatch,
-  // not a success with a warning: the prompt's whole job was to create it.
-  const suspect = (targets.length > 0 ? targets : [target])
-    .map((t) => checkBootstrapCheckout(t))
-    .find((s) => s !== null);
-  if (suspect) {
-    info(`${entry.key}: ${suspect.message}`);
-    info(`Hint: ${suspect.hint}`);
-    return {
-      kind: 'record',
-      record: { ...base, outcome: 'failed', detail: 'bootstrap checkout missing' },
-    };
-  }
-
-  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
-  // both exit 0, so ask the card which it was before deciding anything else —
-  // and ask BEFORE the push check, because a refusing agent reverts and pushes
-  // nothing by design, so that check would otherwise report a correctly-refused
-  // card as work that went missing. A skip, not a record: the run implemented
-  // nothing, and `keepGoing` is not consulted because there was no failure.
-  if (await agentSubmittedReplan(client, entry.key)) {
+  // A SKIP, not a record: the run implemented nothing, and `keepGoing` is not
+  // consulted because there was no failure.
+  if (verdict.kind === 'replan_submitted') {
     info(renderReplanSubmitted(entry.key));
     return {
       kind: 'skipped',
@@ -590,15 +683,31 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     };
   }
 
-  // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004). `implemented` claims the code is on the
-  // remote; an agent that exits 0 having pushed nothing must not produce a card
-  // that says so. Refused rather than recorded — the item stays In Progress,
-  // which is what an interrupted run looks like.
-  if (workReachedRemote(target.cwd, entry.key, null, run) === 'nothing') {
+  // Refused rather than recorded as built — the item stays In Progress, which is
+  // what an interrupted run looks like.
+  if (verdict.kind === 'nothing_pushed') {
     info(renderNothingPushed(entry.key, dispatch));
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: { ...base, outcome: 'failed', detail: 'nothing reached the remote' },
+    };
+  }
+
+  // ⚠️ A bootstrap dispatch that did not produce its checkout is a FAILED
+  // dispatch to BATCH — not a success with a warning, as it is to `motir run`.
+  // The prompt's whole job was to create it, and a drain that recorded it as
+  // implemented would carry the lie into every later card's report. The leg
+  // reports the suspects and declines to decide precisely so this stays a
+  // per-command judgement rather than becoming a silent change to one of them.
+  const suspect = verdict.suspects[0];
+  if (suspect) {
+    info(`${entry.key}: ${suspect.message}`);
+    info(`Hint: ${suspect.hint}`);
+    return {
+      kind: 'record',
+      cwd: target.cwd,
+      record: { ...base, outcome: 'failed', detail: 'bootstrap checkout missing' },
     };
   }
 
@@ -615,6 +724,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     info(`${entry.key}: ${refusal}`);
     return {
       kind: 'record',
+      cwd: target.cwd,
       record: { ...base, outcome: 'failed', detail: 'container has open children' },
     };
   }
@@ -628,8 +738,8 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     key: entry.key,
     implementationSource: 'byok',
     implementationHarness: deriveAgentHarness(agent.parsed.binary),
-    implementationModel: result.model,
+    implementationModel: verdict.model,
   });
   info(`${entry.key}: Implemented via its own pull request — CI decides when it is reviewable.`);
-  return { kind: 'record', record: { ...base, outcome: 'implemented' } };
+  return { kind: 'record', record: { ...base, outcome: 'implemented' }, cwd: target.cwd };
 }

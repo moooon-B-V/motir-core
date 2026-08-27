@@ -149,7 +149,16 @@ export type BatchStopReason =
   /** An agent failed and `--keep-going` was not passed. */
   | 'halted'
   /** Ctrl-C. */
-  | 'interrupted';
+  | 'interrupted'
+  /**
+   * A between-iteration GATE said stop (MOTIR-3695's `BatchDeps.afterCard`).
+   *
+   * Its own reason rather than `halted`, because the two mean opposite things to
+   * an operator: `halted` says an agent FAILED, while this says the card the
+   * drain just finished is not yet safe to build on — MOTIR-3685's red CI is the
+   * case — and the remaining cards are untouched and still ready.
+   */
+  | 'gated';
 
 /**
  * One dispatched card, READ BACK from the server at exit (MOTIR-3197).
@@ -220,6 +229,7 @@ const STOP_LABEL: Record<BatchStopReason, string> = {
   max: '--max reached',
   halted: 'halted on the first agent failure (--keep-going continues past one)',
   interrupted: 'interrupted (Ctrl-C)',
+  gated: 'stopped between cards — the card just finished is not ready to build on',
 };
 
 const SKIP_LABEL: Record<SnapshotSkipReason, string> = {

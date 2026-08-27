@@ -46,6 +46,7 @@ import { Avatar, FieldCard } from './FieldCard';
 import { CustomFieldsSection } from './CustomFieldsSection';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
 import { LabelsCard } from './LabelsCard';
 import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
@@ -85,6 +86,9 @@ export interface CoreFieldsPanelProps {
    * deliberate one, not a missing value.
    */
   repoDelivery?: RepoDelivery[];
+  /** The card's DELIVERY SET (MOTIR-3660) — the rail caption names the pull
+   *  request that is outstanding, which a repository row cannot. */
+  deliveries?: WorkItemDeliveryDto[];
   /**
    * Labels + components (Story 5.4 · Subtask 5.4.8) — the two cards slot
    * between Parent and Due date (the relational group, ahead of the
@@ -156,6 +160,7 @@ export function CoreFieldsPanel({
   reporterIsSelf,
   customFields = [],
   repoDelivery = [],
+  deliveries = [],
   labelsComponents,
   sprints = [],
 }: CoreFieldsPanelProps) {
@@ -644,7 +649,7 @@ export function CoreFieldsPanel({
           page could not resolve delivery... except it must: the empty set is a
           DELIBERATE state with its own copy, so the card always renders. */}
       <FieldCard label={t('repositories')} editable={false}>
-        <RepositorySetField delivery={repoDelivery} />
+        <RepositorySetField delivery={repoDelivery} deliveries={deliveries} />
       </FieldCard>
 
       {/* Custom fields (5.3.7) — a contiguous block after the last built-in

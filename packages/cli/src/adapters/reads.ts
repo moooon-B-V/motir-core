@@ -311,6 +311,25 @@ export function toWorkItemDetail(body: DetailBody): WorkItemDetail {
       sprintId: body.sprintId,
       descriptionMd: body.descriptionMd,
     },
+    // The DELIVERY SET (MOTIR-3697). Mapped field by field like everything else
+    // here, and OMITTED rather than defaulted to `[]` when the server did not
+    // send it: an older Motir saying nothing and a current one saying "no
+    // deliveries" are different facts, and the watch loop treats only the first
+    // as "I cannot tell".
+    ...(body.deliveries
+      ? {
+          deliveries: body.deliveries.map((d) => ({
+            repo: d.repo,
+            number: d.number,
+            title: d.title,
+            url: d.url,
+            state: d.state,
+            ci: d.ci,
+            baseRef: d.baseRef,
+            defaultBranch: d.defaultBranch,
+          })),
+        }
+      : {}),
     ancestors: body.ancestorKeys.map((key) => ({ identifier: key })),
     children,
     blockedBy: body.links.blockedBy.map(link),

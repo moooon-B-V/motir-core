@@ -62,6 +62,7 @@ const DATA: QuickViewData = {
   readiness: null,
   pullRequests: [],
   repoDelivery: [],
+  deliveries: [],
   hasChildren: false,
   canPlan: true,
   status: 'in_progress',

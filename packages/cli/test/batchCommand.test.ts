@@ -94,6 +94,14 @@ function planScripts(keys: string[]): { v1: V1Script } {
           .map((k) => v1ReadyRow(k, { title: `Item ${k}` })),
       ),
     }),
+    // The card, read back — by the leg's replan check (MOTIR-3018) and by the CI
+    // WATCH between cards (MOTIR-3685). `v1Detail` carries `deliveries: []`, so
+    // these runs see nothing to watch and the gate lets every card through,
+    // which is the behaviour a project with no CI mirror has.
+    'GET /api/v1/work-items/{key}': (req) => {
+      const key = String(req.params['key']);
+      return { body: v1Detail(key, { status: statuses.get(key) ?? 'todo' }) };
+    },
     'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
       body: v1DispatchPrompt(String(req.params['key']), {
         prompt: `PROMPT ${String(req.params['key'])}`,
@@ -326,5 +334,138 @@ describe('motir batch — a MULTI-REPOSITORY card (MOTIR-3133)', () => {
     expect(text).toContain('motir-core  (the working directory)');
     expect(text).toContain('motir-ai  (a sibling checkout)');
     expect(process.exitCode ?? 0).toBe(0);
+  });
+});
+
+// ── THE CI GATE BETWEEN CARDS (Story MOTIR-3655 · MOTIR-3685) ────────────────
+//
+// This is what makes `motir batch` different from `motir auto`: batch's pull
+// requests are for ONE card, so the next card must not be started while the one
+// just finished is red.
+//
+// `--keep-going` is asserted on BOTH halves, because the flag decides only what
+// happens AFTER the five fixes — never whether they are attempted.
+
+/** Capture everything the run writes to stderr — the sink `info()` prints to. */
+function captureStderr(): string[] {
+  const lines: string[] = [];
+  (process.stderr.write as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (chunk: string) => {
+      lines.push(String(chunk));
+      return true;
+    },
+  );
+  return lines;
+}
+
+/** One delivery in the shape v1 publishes it (MOTIR-3697). */
+function ciDelivery(ci: string, number = 1): Record<string, unknown> {
+  return {
+    repo: 'moooon/motir-core',
+    number,
+    title: 'a change',
+    url: `https://github.com/moooon/motir-core/pull/${number}`,
+    state: 'open',
+    ci,
+    baseRef: 'main',
+    defaultBranch: 'main',
+  };
+}
+
+/** Script the plan, then override the card read so a NAMED card reports red CI
+ *  for ever. Everything else keeps `deliveries: []` — nothing to watch. */
+function scriptPlanWithRedCi(keys: string[], redKey: string): void {
+  const scripts = planScripts(keys);
+  const statuses = new Map<string, string>();
+  scripts.v1['GET /api/v1/work-items/{key}'] = (req) => {
+    const key = String(req.params['key']);
+    return {
+      body: v1Detail(key, {
+        status: statuses.get(key) ?? 'implemented',
+        ...(key === redKey ? { deliveries: [ciDelivery('failing')] } : {}),
+      }),
+    };
+  };
+  server.scriptV1(scripts.v1);
+}
+
+describe('motir batch — the CI gate between cards', () => {
+  it('STOPS the drain after five failed fixes, without --keep-going', async () => {
+    scriptPlanWithRedCi(['PROD-1', 'PROD-2'], 'PROD-1');
+
+    const stderr = captureStderr();
+    const prompts: string[] = [];
+    await batchCommand(
+      { ...AGENT },
+      {
+        clock: () => 0,
+        wait: async () => {},
+        runAgentFn: async ({ prompt }) => {
+          prompts.push(prompt);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    const text = stderr.join('');
+    // The five fixes WERE attempted — the flag never decides that.
+    expect(prompts.filter((p) => p.startsWith('# Make the build pass')).length).toBe(5);
+    expect(text).toContain('giving up after 5 fixing attempts');
+    // And the SECOND card was never dispatched.
+    expect(prompts).not.toContain('PROMPT PROD-2');
+  });
+
+  it('MOVES ON to the next card with --keep-going, after the same five fixes', async () => {
+    scriptPlanWithRedCi(['PROD-1', 'PROD-2'], 'PROD-1');
+
+    const stderr = captureStderr();
+    const prompts: string[] = [];
+    await batchCommand(
+      { ...AGENT, keepGoing: true },
+      {
+        clock: () => 0,
+        wait: async () => {},
+        runAgentFn: async ({ prompt }) => {
+          prompts.push(prompt);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    const text = stderr.join('');
+    // Still five fixes — the flag changes what follows, not whether they happen.
+    expect(prompts.filter((p) => p.startsWith('# Make the build pass')).length).toBe(5);
+    expect(text).toContain('giving up after 5 fixing attempts');
+    // …and the drain carried on.
+    expect(prompts).toContain('PROMPT PROD-2');
+  });
+
+  it('does not gate a card whose CI is GREEN', async () => {
+    const scripts = planScripts(['PROD-1', 'PROD-2']);
+    scripts.v1['GET /api/v1/work-items/{key}'] = (req) => ({
+      body: v1Detail(String(req.params['key']), {
+        status: 'implemented',
+        deliveries: [ciDelivery('passing')],
+      }),
+    });
+    server.scriptV1(scripts.v1);
+
+    const stderr = captureStderr();
+    const prompts: string[] = [];
+    await batchCommand(
+      { ...AGENT },
+      {
+        clock: () => 0,
+        wait: async () => {},
+        runAgentFn: async ({ prompt }) => {
+          prompts.push(prompt);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    expect(prompts.filter((p) => p.startsWith('# Make the build pass'))).toHaveLength(0);
+    expect(prompts).toEqual(['PROMPT PROD-1', 'PROMPT PROD-2']);
+    expect(stderr.join('')).toContain('CI is green');
   });
 });

@@ -1075,6 +1075,17 @@ export interface components {
             implementationHarness: string | null;
             implementationModel: string | null;
             archivedAt: string | null;
+            deliveries: {
+                repo: string;
+                number: number;
+                title: string;
+                url: string;
+                /** @enum {string} */
+                state: "open" | "merged" | "closed";
+                ci: ("passing" | "failing" | "running") | null;
+                baseRef: string | null;
+                defaultBranch: string;
+            }[];
         };
         WorkItemLinkGroups: {
             blockedBy: {

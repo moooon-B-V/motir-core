@@ -103,8 +103,10 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
-import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
-import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { amendRepoDeliveryWithSet } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
@@ -4742,7 +4744,12 @@ export const workItemsService = {
     // classifier. The peek showing a different delivery state from the detail
     // page is the drift this story exists to remove, so the two surfaces do not
     // each compute it.
-    const repoDelivery = await this.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx);
+    //
+    // AMENDED by the delivery set since MOTIR-3660 — `getDeliveryView` returns
+    // both halves so the peek and the detail page cannot combine them
+    // differently.
+    const deliveryView = await this.getDeliveryView(detail.item.id, detail.item.targetRepos, ctx);
+    const repoDelivery = deliveryView.repos;
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -4761,6 +4768,7 @@ export const workItemsService = {
       projectComponents,
       estimationConfig,
       repoDelivery,
+      deliveryView.deliveries,
     );
   },
 
@@ -4785,6 +4793,72 @@ export const workItemsService = {
       githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
     );
     return rows.map(toLinkedPullRequestDto);
+  },
+
+  /**
+   * A work item's DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — every pull request
+   * that delivers this card, oldest link first, each with the CI verdict and the
+   * two fields that say whether its merge reached the trunk.
+   *
+   * ── This is NOT `listLinkedPullRequests` under a new name ─────────────────
+   * That method reads `github_pull_request.work_item_id`, the SCALAR link, and so
+   * answers a question with a structural ceiling of one card per pull request: a
+   * `motir auto` pull request delivering twelve cards can be the link target of at
+   * most one of them, and appears on no other card's surface. This reads
+   * `work_item_delivery`, which is many-to-many in both directions. While the
+   * EXPAND step runs, both are written and both are correct; when the scalar is
+   * dropped, this is the survivor.
+   *
+   * ⚠️ Empty is the ORDINARY answer. Nearly every card in the tree has no delivery
+   * row, and every consumer — the gate, the rail, the CLI's watch loop — must read
+   * an empty array as *nothing to say about this card*, never as *nothing has
+   * landed*. That is why the shape is an array on every card and never `null`.
+   *
+   * `ctx` is for the BINDING, not for a gate (MOTIR-2815), exactly as
+   * {@link listLinkedPullRequests}: `work_item_delivery` is policy-gated on
+   * `app.workspace_id`, so an unbound read returns an EMPTY LIST for a card that
+   * has deliveries — the failure that looks like an answer. Callers pass an id an
+   * access-gated read has already resolved; this adds no tenancy gate of its own.
+   */
+  async listDeliverySet(workItemId: string, ctx: ServiceContext): Promise<WorkItemDeliveryDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx),
+    );
+    return rows.map(toWorkItemDeliveryDto);
+  },
+
+  /**
+   * Everything the two READ surfaces need to draw a card's delivery, in ONE call
+   * (Story MOTIR-3655 · MOTIR-3660, design `design/work-items/delivery-set.mock.html`).
+   *
+   * ── Why this exists rather than two calls at each host ────────────────────
+   * The rail's glyph and the Development section's rows are two views of one
+   * question, and the detail page and the quick view must not answer it
+   * differently. Handing each host two lists and a combining rule is exactly the
+   * arrangement that let those two surfaces disagree before (MOTIR-3036), so the
+   * combining happens HERE and a host makes no editorial decision at all.
+   *
+   * `repos` is the classified repository set AMENDED by the delivery set: a row
+   * reads `delivered` only when neither completion gate holds on it. `deliveries`
+   * is the set itself, which the caption needs because only the caption NAMES the
+   * pull request that is outstanding.
+   *
+   * ⚠️ {@link listRepoDelivery} is deliberately LEFT ALONE and still returns the
+   * unamended classification. Its other caller is `dispatchPromptService`, which
+   * tells an agent what has landed before it starts work — a different audience
+   * and a different question, and changing what a dispatch prompt says is not
+   * this card's to do.
+   */
+  async getDeliveryView(
+    workItemId: string,
+    targetRepos: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<{ repos: RepoDelivery[]; deliveries: WorkItemDeliveryDto[] }> {
+    const [repos, deliveries] = await Promise.all([
+      this.listRepoDelivery(workItemId, targetRepos, ctx),
+      this.listDeliverySet(workItemId, ctx),
+    ]);
+    return { repos: amendRepoDeliveryWithSet(repos, deliveries), deliveries };
   },
 
   /**

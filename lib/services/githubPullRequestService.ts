@@ -3,6 +3,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { toLinkedPullRequestDto, toPullRequestLinkCandidateDto } from '@/lib/mappers/githubMappers';
 import {
@@ -104,6 +105,24 @@ export const githubPullRequestService = {
       const updated = await githubPullRequestRepository.setWorkItemLink(
         pullRequestId,
         currentItemId,
+        tx,
+      );
+      // The DELIVERY LINK, written beside the FK (Story MOTIR-3655 · MOTIR-3658,
+      // ADR `docs/decisions/work-item-delivery-links.md`). This is the EXPAND
+      // window: both are written, the table is what later readers move to, and
+      // the column is dropped by a follow-up once none of them reads it.
+      //
+      // ⚠️ The two disagree ON PURPOSE about a re-link, and the table is the one
+      // that is right. The FK is singular so a re-link MOVES it; the table ADDS,
+      // because one pull request delivering several cards is a real shape (a
+      // `motir auto` run is exactly it) that the column could never express.
+      await workItemDeliveryRepository.add(
+        {
+          workspaceId: ctx.workspaceId,
+          workItemId: currentItemId,
+          githubPullRequestId: pullRequestId,
+          repoId: pr.repoId,
+        },
         tx,
       );
       return toLinkedPullRequestDto(updated);
@@ -246,6 +265,19 @@ export const githubPullRequestService = {
       // touches `work_item_id` + `linked_manually` and nothing else, so the
       // already-ingested case cannot clobber a delivery's state fields.
       const updated = await githubPullRequestRepository.setWorkItemLink(prId, input.workItemId, tx);
+      // The DELIVERY LINK — see the note on the sibling arm. `repo.id` rather
+      // than a re-read: this arm already resolved the repository row, and the
+      // gate compares each member's merge against THAT repository's own default
+      // branch, so the column is stored rather than joined for per member.
+      await workItemDeliveryRepository.add(
+        {
+          workspaceId: ctx.workspaceId,
+          workItemId: input.workItemId,
+          githubPullRequestId: prId,
+          repoId: repo.id,
+        },
+        tx,
+      );
 
       let movedFrom: string | null = null;
       if (previousWorkItemId && previousWorkItemId !== input.workItemId) {
@@ -254,6 +286,48 @@ export const githubPullRequestService = {
       }
 
       return { link: toLinkedPullRequestDto(updated), created: existing === null, movedFrom };
+    });
+  },
+
+  /**
+   * Remove ONE delivery link — the door a mistaken link needs (Story MOTIR-3655 ·
+   * MOTIR-3658).
+   *
+   * ── Why this has to exist now, when it never did before ───────────────────
+   * With the singular FK a correction was expressible as a MOVE: link the pull
+   * request to the right item and the wrong association vanished, because there
+   * was only ever one. `work_item_delivery` is a set, so a re-link ADDS and the
+   * mistaken row stays. Removal therefore stops being a side effect of the fix
+   * and has to be its own operation.
+   *
+   * ── What it does NOT touch ────────────────────────────────────────────────
+   * `github_pull_request.work_item_id` is left exactly as it is. That column is
+   * the legacy scalar this story is retiring, its readers have not moved yet, and
+   * clearing it here would take a delivery's status sync away from a card whose
+   * OTHER links are perfectly good. The link table is the thing being corrected;
+   * the column is dropped by the follow-up, not edited by this door.
+   *
+   * Returns whether a row was actually removed, so a caller can say "nothing to
+   * unlink" rather than reporting a success that did nothing.
+   */
+  async unlinkPullRequest(
+    workItemId: string,
+    pullRequestId: string,
+    ctx: ServiceContext,
+  ): Promise<{ removed: boolean }> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId)
+        throw new WorkItemNotFoundError(workItemId);
+
+      const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
+      // The REPO row is the tenant (MOTIR-1931), never its installation — the
+      // same gate the link arms use, and for the same reason.
+      if (!pr || pr.repo.workspaceId !== ctx.workspaceId)
+        throw new GithubPullRequestNotFoundError(pullRequestId);
+
+      const count = await workItemDeliveryRepository.remove(workItemId, pullRequestId, tx);
+      return { removed: count > 0 };
     });
   },
 };

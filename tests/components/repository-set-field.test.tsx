@@ -6,6 +6,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import messages from '@/messages/en.json';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
 
 // The rail's REPOSITORY SET (Story MOTIR-2725 · MOTIR-2415), per
 // design/work-items/repository-set.mock.html and its quick-view compression.
@@ -23,8 +24,38 @@ function d(repo: string, state: RepoDelivery['state'], primary = false): RepoDel
 
 afterEach(cleanup);
 
-function renderField(props: { delivery: RepoDelivery[]; compact?: boolean }) {
+function renderField(props: {
+  delivery: RepoDelivery[];
+  deliveries?: WorkItemDeliveryDto[];
+  compact?: boolean;
+}) {
   return render(<RepositorySetField {...props} />);
+}
+
+/** One delivery, in the shape the rail's caption reads it. */
+function delivery(
+  repoLabel: string,
+  number: number,
+  over: {
+    state?: 'open' | 'merged' | 'closed';
+    baseRef?: string | null;
+    defaultBranch?: string;
+  } = {},
+): WorkItemDeliveryDto {
+  const { state = 'open', baseRef = 'main', defaultBranch = 'main' } = over;
+  return {
+    pullRequest: {
+      title: `pull ${number}`,
+      repo: repoLabel,
+      number,
+      state,
+      ci: null,
+      url: `https://github.com/${repoLabel}/pull/${number}`,
+      linkedManually: false,
+    },
+    baseRef,
+    defaultBranch,
+  };
 }
 
 describe('the repository SET on the detail rail', () => {
@@ -154,5 +185,94 @@ describe('the quick-view COMPRESSION is a prop over the same input (MOTIR-2414)'
       expect(detail).toContain(word);
       expect(peek).toContain(word);
     }
+  });
+});
+
+// ── The caption's SUBJECT is whatever is OUTSTANDING (Story MOTIR-3655 ·
+// MOTIR-3660, design `delivery-set.mock.html` CHANGE 2) ──────────────────────
+
+describe('the caption names the DELIVERY when a delivery is what is outstanding', () => {
+  it('speaks on a ONE-repository card, which is exactly where it used to go silent', () => {
+    // The shipped caption returns null below two repositories — correctly, since
+    // one row says everything a repository count could. But a card with TWO pull
+    // requests in ONE repository has a one-element set and something
+    // outstanding, and it rendered nothing at all while the gate held it.
+    renderField({
+      delivery: [d('motir-core', 'awaiting', true)],
+      deliveries: [
+        delivery('moooon/motir-core', 1, { state: 'merged' }),
+        delivery('moooon/motir-core', 2),
+      ],
+    });
+
+    expect(
+      screen.getByText(
+        t.deliveriesMergedOpen
+          .replace('{merged}', '1')
+          .replace('{total}', '2')
+          .replace('{pr}', 'moooon/motir-core#2'),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('names the base a STRANDED merge landed on, so the reader need not open it', () => {
+    renderField({
+      delivery: [d('motir-core', 'awaiting', true)],
+      deliveries: [
+        delivery('moooon/motir-core', 1, { state: 'merged' }),
+        delivery('moooon/motir-core', 2, { state: 'merged', baseRef: 'release/1.4' }),
+      ],
+    });
+
+    expect(
+      screen.getByText(
+        t.deliveriesMergedStranded
+          .replace('{merged}', '1')
+          .replace('{total}', '2')
+          .replace('{pr}', 'moooon/motir-core#2')
+          .replace('{base}', 'release/1.4'),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('draws ONE line, never two — the delivery answer REPLACES the repository count', () => {
+    // Two counts answering different questions on one surface is what a reader
+    // misreads, which is why the design settles this explicitly.
+    renderField({
+      delivery: [d('motir-core', 'delivered', true), d('motir-ai', 'awaiting')],
+      deliveries: [
+        delivery('moooon/motir-core', 1, { state: 'merged' }),
+        delivery('moooon/motir-ai', 2),
+      ],
+    });
+
+    const captions = screen.getAllByText(/delivered|deliveries/).filter((el) => el.tagName === 'P');
+    expect(captions).toHaveLength(1);
+    expect(captions[0]!.textContent).toContain('moooon/motir-ai#2');
+  });
+
+  it('says NOTHING when every delivery landed on its trunk and nothing is outstanding', () => {
+    renderField({
+      delivery: [d('motir-core', 'delivered', true)],
+      deliveries: [delivery('moooon/motir-core', 1, { state: 'merged' })],
+    });
+
+    expect(screen.queryByText(/deliveries/)).toBeNull();
+  });
+
+  it('is UNCHANGED on a card with no deliveries — the overwhelming majority', () => {
+    // The shipped repository caption still owns the surface when the delivery
+    // set is empty. An asset that improves the two-delivery card and perturbs
+    // the other ten thousand has made the product worse.
+    renderField({ delivery: [d('motir-core', 'delivered', true), d('motir-ai', 'awaiting')] });
+
+    expect(
+      screen.getByText(
+        t.repositoriesOutstanding
+          .replace('{delivered}', '1')
+          .replace('{total}', '2')
+          .replace('{repo}', 'motir-ai'),
+      ),
+    ).toBeTruthy();
   });
 });
