@@ -239,7 +239,11 @@ describe('the brand mock draws the approved mark (MOTIR-3508)', () => {
     // approved and nobody re-reads.
     const mock = designAsset(MOCK);
     const LATTICE_OUTER = 'M12 3.6L20.4 12L12 20.4L3.6 12Z';
-    expect(mock.match(new RegExp(LATTICE_OUTER.replace(/\./g, '\\.'), 'g'))).toHaveLength(1);
+    // Counted as a plain SUBSTRING, not through a regex built by escaping the
+    // literal: path data is punctuation-dense, so hand-escaping it is a
+    // sanitizer to get wrong (`js/incomplete-sanitization` says so), and there
+    // is nothing here a regex would buy.
+    expect(mock.split(LATTICE_OUTER).length - 1).toBe(1);
 
     const symbol = mock.match(/<g id="mark-lattice">[\s\S]*?\n {8}<\/g>/);
     expect(symbol, 'the mock declares a #mark-lattice symbol').not.toBeNull();
