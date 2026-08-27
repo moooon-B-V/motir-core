@@ -193,12 +193,19 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   // `advisories: []` is the observation the family exists to invert. MOTIR-2757
   // was `valid: true` with an empty array while its whole deliverable sat merged
   // on `main`.
-  if (subsumed.length > 0) {
+  // ⚠️ THE TWO ARMS ARE RENDERED SEPARATELY (MOTIR-3230), because they carry
+  // OPPOSITE instructions and this block is the only place most readers meet either.
+  // One list would have to print `merged null` for an open pull request, and a reader
+  // told a card's work "may already be in the repository" about a pull request nobody
+  // has merged takes exactly the wrong action.
+  const mergedHits = subsumed.filter((a) => a.state === 'merged');
+  const inFlightHits = subsumed.filter((a) => a.state === 'open');
+  if (mergedHits.length > 0) {
     lines.push(
       '',
       `Advisory (${unaffected}): these cards name a file that a LATER merge already changed, so ` +
         'their deliverable may already be in the repository:',
-      ...subsumed.map(
+      ...mergedHits.map(
         (a) =>
           `  ${a.item} names ${a.path}, changed by ${a.pullRequest} (merged ${a.mergedAt}` +
           `${a.pullRequestTitle ? ` — "${a.pullRequestTitle}"` : ''})`,
@@ -208,6 +215,23 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'cards touching one file in sequence is the ordinary case and is why this never gates; a ' +
         'boundary-contract card that shares paths with its sibling by design opts out by saying ' +
         'so in its body (isSubsumptionCheckExempt).',
+    );
+  }
+  if (inFlightHits.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards name a file an OPEN pull request is changing right ` +
+        'now — somebody is already working here:',
+      ...inFlightHits.map(
+        (a) =>
+          `  ${a.item} names ${a.path}, being changed by ${a.pullRequest}` +
+          `${a.pullRequestTitle ? ` — "${a.pullRequestTitle}"` : ''} (OPEN, not merged)`,
+      ),
+      'Go and read that pull request before filing a second card against the path, and before ' +
+        'cutting a branch off the default branch to fix it yourself. Two fixes for one defect ' +
+        'are each green alone and CANCEL when both merge — a red trunk and a third card. Same ' +
+        'family as the merged advisory and the same opt-out applies; what differs is the ' +
+        'remedy, because nothing has landed yet and the cheap move is a conversation.',
     );
   }
   return lines;

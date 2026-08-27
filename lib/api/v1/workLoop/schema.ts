@@ -205,19 +205,50 @@ const selfBlockingDesignShapeAdvisorySchema = z.object({
  * of. `V1_CONTRACT_VERSION` moves with it (Amendment 8's obligation), which is
  * how a client learns the family exists without re-reading a document.
  */
-const subsumptionAdvisorySchema = z.object({
+const subsumptionAdvisoryBase = {
   kind: z.literal('subsumption'),
   item: workItemKeySchema,
   severity: advisorySeveritySchema,
-  /** The first path the card's body names that a qualifying merge touched. */
+  /** The first path the card's body names that a qualifying pull request touched. */
   path: z.string(),
-  /** The covering merge as `owner/name#number` — where to read the diff. */
+  /** The covering pull request as `owner/name#number` — where to read the diff. */
   pullRequest: z.string(),
   /** That pull request's title, or `null` when the mirror row carries none. */
   pullRequestTitle: z.string().nullable(),
+};
+
+/**
+ * ⚠️ TWO VARIANTS RATHER THAN ONE NULLABLE FIELD, and the reason is §8 (MOTIR-3230).
+ *
+ * The obvious spelling of "an open pull request has not merged" is to relax
+ * `mergedAt` to `z.string().nullable()`. That is a RETYPE of a declared field, which
+ * §8 forbids outright — a client narrowing `mergedAt` to a string would start
+ * receiving null from an operation whose contract had promised otherwise.
+ *
+ * Split into two variants, nothing a client has ever received changes: the MERGED
+ * variant is byte-identical to the shipped shape plus `state: 'merged'`, which is
+ * §8's allowed "new field on an existing shape". The OPEN variant is a payload no
+ * consumer has ever seen, so none can be broken by its arrival — the same reasoning
+ * that made the `shape` member additive when it joined this union.
+ */
+const subsumptionMergedAdvisorySchema = z.object({
+  ...subsumptionAdvisoryBase,
+  state: z.literal('merged'),
   /** When it merged, ISO-8601 — always after the card's own creation. */
   mergedAt: z.string(),
 });
+
+const subsumptionOpenAdvisorySchema = z.object({
+  ...subsumptionAdvisoryBase,
+  state: z.literal('open'),
+  /** Null, always — an open pull request has not merged. Branch on `state`. */
+  mergedAt: z.null(),
+});
+
+const subsumptionAdvisorySchema = z.union([
+  subsumptionMergedAdvisorySchema,
+  subsumptionOpenAdvisorySchema,
+]);
 
 /**
  * ONE advisory. A plain union rather than a discriminated one, because the
@@ -356,15 +387,20 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
         };
       }
       if (advisory.kind === 'subsumption') {
-        return {
+        const base = {
           kind: 'subsumption' as const,
           item: advisory.item,
           severity: advisory.severity,
           path: advisory.path,
           pullRequest: advisory.pullRequest,
           pullRequestTitle: advisory.pullRequestTitle,
-          mergedAt: advisory.mergedAt,
         };
+        // Branched on `state` rather than on `mergedAt`, so the two wire variants
+        // are produced by the same discriminant a consumer reads them by, and a
+        // merged entry can never be emitted carrying a null instant.
+        return advisory.state === 'open'
+          ? { ...base, state: 'open' as const, mergedAt: null }
+          : { ...base, state: 'merged' as const, mergedAt: advisory.mergedAt };
       }
       return {
         item: advisory.item,

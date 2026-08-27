@@ -468,6 +468,52 @@ plus its mirrored consumer, two coordinated PRs, legitimately one card) and
 **cannot see the bare-symbol form** of the same tell (a symbol whose repo you
 happen to know), so it narrows the human check rather than replacing it.
 
+A **`subsumption`** entry has a far end like a `reference` does, but the far end
+is a PULL REQUEST rather than a work item: a path the card's body names is being
+changed somewhere else. **Two dispositions, and they are opposite instructions
+rather than degrees of one** — read `state` (or `severity`, which agrees) and
+never infer from `mergedAt`:
+
+| `state`    | `severity`               | `mergedAt`           | what it found                                                    | remedy                                                                     |
+| ---------- | ------------------------ | -------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `"merged"` | `likely-already-shipped` | ISO-8601, never null | a MERGED pull request touched the path AFTER this card was filed | READ that diff against the acceptance criteria; close the card if subsumed |
+| `"open"`   | `likely-in-flight`       | `null`, always       | an OPEN pull request is touching the path right now              | do NOT file a second card and do NOT branch to fix it — go and coordinate  |
+
+```jsonc
+{ "kind": "subsumption", "item": "ACME-7", "severity": "likely-already-shipped",
+  "path": "lib/services/workflowsService.ts", "pullRequest": "acme/app#2059",
+  "pullRequestTitle": "Bind the READ surface", "state": "merged",
+  "mergedAt": "2026-08-15T12:00:00.000Z" },
+{ "kind": "subsumption", "item": "ACME-7", "severity": "likely-in-flight",
+  "path": "lib/services/workflowsService.ts", "pullRequest": "acme/app#2200",
+  "pullRequestTitle": "Inject the resolver", "state": "open", "mergedAt": null }
+```
+
+**Why the OPEN arm exists at all (MOTIR-3230), because the merged one looks
+sufficient.** A pull request is merged for the rest of time and open for about an
+hour, so a merged-only check is loudest long after the answer stops mattering and
+silent in the one window where it would change what somebody does. The cost of
+the silence is not a duplicate card: a session that files against a path someone
+is already changing usually goes on to FIX it, off the default branch, in
+ignorance — and two fixes for one defect are each green alone and CANCEL when
+both merge.
+
+**The two arms carry different time semantics, deliberately.** The merged arm
+requires `mergedAt` strictly after the card's own `createdAt`, because a merge
+that predates the card is the substrate it was written against — the opposite
+finding. The open arm carries **no such clause**: a pull request opened before
+the card and still open is not old evidence, it is a colleague with the file open
+now. Where both arms hit one path, the OPEN entry is reported, because its remedy
+is right whether or not something also merged.
+
+**What it cannot see: a path nobody has captured.** The finding matches against
+each pull request's recorded `changedPaths`, which are captured on the `opened` /
+`reopened` / `closed` deliveries — so an open pull request's list is a SNAPSHOT
+from when it was opened, refreshed at merge, and a file added by a later push is
+invisible until then. Rows written before path capture existed carry none at all
+and match nothing. A silent array is therefore never proof that nobody is working
+on a path.
+
 - **Always present, `[]` when there are none** — so a client reads one shape.
 - **The `likely-missing-edge` tier only.** The prose-vs-graph check also emits a
   plain `advisory` tier for a reference named anywhere ELSE in a body (an
@@ -1574,6 +1620,18 @@ the rendered surface it draws — LIFT the design criterion onto its own
 third carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth
 carries `designCriterionIndex` and `surfaceCriterionIndex`. Only two of the four
 carry `criterionIndex`, so narrow on `severity` before reading one.
+
+A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
+body names is being changed SOMEWHERE ELSE — the one advisory family whose far
+end is a pull request rather than a work item. It carries `state`, which is the
+disposition: **`"merged"`** (`likely-already-shipped`, with an ISO-8601
+`mergedAt`) means read that diff and close the card if it is subsumed, while
+**`"open"`** (`likely-in-flight`, with `mergedAt: null`) means somebody is
+editing that file right now — coordinate rather than filing a second card or
+cutting a branch to fix it yourself. See
+[the dispatch advisories](#the-dispatch-advisories) for the full shape, the two
+arms' different time semantics, and what path capture cannot see. A card whose
+body opts out (`isSubsumptionCheckExempt`) is never reported.
 
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it

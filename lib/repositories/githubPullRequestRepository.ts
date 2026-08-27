@@ -397,9 +397,28 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
-  /** The workspace's MERGED pull requests whose captured paths intersect `paths`
-   *  and whose merge landed strictly after `since` (MOTIR-2922) — the single read
-   *  a subsumption check consumes, so that consumer adds no data access of its own.
+  /** The workspace's pull requests whose captured paths intersect `paths` — the
+   *  single read a subsumption check consumes, so that consumer adds no data
+   *  access of its own. TWO arms, and they answer different questions:
+   *
+   *  - **MERGED**, landing strictly after `since` (MOTIR-2922) — *the work may
+   *    already be in the tree*. `since` exists because a merge that predates the
+   *    asking card is the substrate it was written against, which is the opposite
+   *    finding.
+   *  - **OPEN** (MOTIR-3230) — *somebody is changing this path right now*. **No
+   *    `since` clause, deliberately**: an open pull request is current by
+   *    definition, so there is no interval in which it is too old to matter. The
+   *    merged arm needs an ordering fact because a merge is permanent; the open arm
+   *    does not, because being open is itself the recency.
+   *
+   *  ⚠️ WHY THE OPEN ARM IS THE ONE THAT MATTERS, said here because the change
+   *  looks like a widening for completeness and is not. A pull request is merged
+   *  for the rest of time and open for about an hour, so a merged-only read is
+   *  available for the whole period in which the answer no longer changes anything
+   *  and blind for the one window in which it would. Two sessions filing against a
+   *  path one of them is already changing is the normal state of this project, and
+   *  the second usually goes on to FIX it off the default branch, in ignorance —
+   *  two green pull requests that cancel when both merge.
    *
    *  `excludeWorkItemId` drops the card doing the asking: a card's own merged PR
    *  touching its own paths is the ordinary case and is not evidence that someone
@@ -412,7 +431,7 @@ export const githubPullRequestRepository = {
    *  the installation, which names no workspace under Motir's shared provisioning
    *  install. Read-only path → `db`, with `tx` accepted so a caller already inside
    *  a bound transaction keeps its context. */
-  async findMergedTouchingPaths(
+  async findTouchingPaths(
     workspaceId: string,
     paths: string[],
     since: Date,
@@ -424,23 +443,42 @@ export const githubPullRequestRepository = {
     return client.githubPullRequest.findMany({
       where: {
         repo: { is: { workspaceId } },
-        merged: true,
-        // A merged PR is always closed, so this is redundant with `merged` for
-        // every row the webhook writes — and it is what makes "omits an OPEN row"
-        // hold for a row some other path leaves inconsistent, rather than merely
-        // usually hold.
-        state: 'closed',
-        mergedAt: { gt: since },
         changedPaths: { hasSome: paths },
-        // Spelled as an explicit OR rather than `{ workItemId: { not: id } }`,
-        // because whether a Prisma `not` on a NULLABLE column keeps or drops the
-        // null rows is a version-dependent detail, and the answer here has to be
-        // KEEP. Stating it removes the dependency.
-        ...(excludeWorkItemId
-          ? { OR: [{ workItemId: null }, { workItemId: { not: excludeWorkItemId } }] }
-          : {}),
+        // The two arms and the exclusion as SEPARATE `AND` members rather than two
+        // sibling `OR` keys: an object literal carries one `OR`, so writing both at
+        // this level would silently drop whichever was declared first. `AND` is the
+        // only spelling under which each clause is independently true.
+        AND: [
+          {
+            OR: [
+              {
+                merged: true,
+                // A merged PR is always closed, so this is redundant with `merged`
+                // for every row the webhook writes — and it is what makes "omits an
+                // inconsistent row" hold rather than merely usually hold.
+                state: 'closed',
+                mergedAt: { gt: since },
+              },
+              // `merged: false` beside the state for the same reason, plus one this
+              // arm owns: it is what stops a row whose `state` some other path left
+              // stale being read as in-flight work after it has already landed.
+              { state: 'open', merged: false },
+            ],
+          },
+          // Spelled as an explicit OR rather than `{ workItemId: { not: id } }`,
+          // because whether a Prisma `not` on a NULLABLE column keeps or drops the
+          // null rows is a version-dependent detail, and the answer here has to be
+          // KEEP. Stating it removes the dependency.
+          ...(excludeWorkItemId
+            ? [{ OR: [{ workItemId: null }, { workItemId: { not: excludeWorkItemId } }] }]
+            : []),
+        ],
       },
       include: { repo: true },
+      // Merged rows descend by merge instant, as they always have. An OPEN row has
+      // no `mergedAt` at all, so its position under this clause is a fact about the
+      // database's null ordering rather than about the data — the consumer sorts the
+      // two arms itself (`buildSubsumptionIndex`) rather than depending on it.
       orderBy: { mergedAt: 'desc' },
     });
   },
