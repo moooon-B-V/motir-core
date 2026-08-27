@@ -94,6 +94,31 @@ model User {
   /// (dev) and the production operator script (MOTIR-2932) until Story 10.3
   /// ships a grant surface — nothing in the product writes it.
   platformRole        PlatformRole? @map("platform_role")
+  /// When a platform operator SUSPENDED this account (MOTIR-1167, the ADR
+  /// `docs/decisions/platform-staff-auth.md` §7's `operator`-tier write). NULL
+  /// means "not suspended", which is every customer account and the default for
+  /// every row. A suspended user is signed out of every session at the moment of
+  /// the write and cannot open a new one: `lib/auth/index.ts`'s
+  /// `databaseHooks.session.create.before` refuses the session, which is the ONE
+  /// seam every sign-in path funnels through (email/password, Google, the CLI
+  /// device grant, the 2FA challenge) — a per-endpoint check would have to be
+  /// added again for each new one.
+  ///
+  /// A TIMESTAMP rather than a boolean, for the reason `deletedAt` columns
+  /// usually are: "when" is the question an operator asks about a suspension
+  /// they did not perform, and a boolean answers it with a join against the
+  /// audit log that may have been trimmed. The audit row remains the record of
+  /// WHO and WHY; this column is the ENFORCED state, and the two are written in
+  /// one transaction.
+  ///
+  /// Suspending an ORGANIZATION is a different power and a different card
+  /// (MOTIR-748, `superadmin`) — this one governs a single account.
+  suspendedAt         DateTime?     @map("suspended_at")
+  /// The operator's stated reason for the current suspension, snapshotted onto
+  /// the row so the account's own state answers "why am I locked out?" without
+  /// a log read. Cleared on unsuspend, together with `suspendedAt`. The audit
+  /// log keeps every reason ever given; this holds only the live one.
+  suspendedReason     String?       @map("suspended_reason")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -373,6 +398,14 @@ model PlatformAuditLog {
 
   @@index([organizationId, createdAt])
   @@index([actorUserId, createdAt])
+  /// The TARGET index (MOTIR-1167) — "what has been done to THIS account?",
+  /// which is the question Panel 9's "Support actions" log asks and which
+  /// neither index above can serve: the actor index answers "what did this
+  /// operator do", and the organization index is null for every user-targeted
+  /// row. Composite on `(target_kind, target_id)` rather than on `target_id`
+  /// alone because the column carries ids from five different tiers and a
+  /// cuid collision across them, while unlikely, would be a cross-tier read.
+  @@index([targetKind, targetId, createdAt])
   @@map("platform_audit_log")
 }
 

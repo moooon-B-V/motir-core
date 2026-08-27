@@ -1,5 +1,10 @@
-import type { PlatformAuditLog } from '@/generated/prisma/client';
-import type { PlatformAuditLogDTO, PlatformOperatorDTO } from '@/lib/dto/platform';
+import type { PlatformAuditLog, User } from '@/generated/prisma/client';
+import type {
+  PlatformAuditLogDTO,
+  PlatformOperatorDTO,
+  PlatformUserDetailDTO,
+  PlatformUserSummaryDTO,
+} from '@/lib/dto/platform';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 
 /** A `platform_audit_log` row → the DTO. */
@@ -27,4 +32,38 @@ export function toPlatformAuditLogDTO(row: PlatformAuditLog): PlatformAuditLogDT
  */
 export function toPlatformOperatorDTO(principal: PlatformPrincipal): PlatformOperatorDTO {
   return { email: principal.email, role: principal.role };
+}
+
+/**
+ * A `user` row → the operator LOOKUP's row (MOTIR-1167).
+ *
+ * ⚠️ AN ALLOW-LIST, NOT A SPREAD-AND-DELETE. Every field is named, so a column
+ * added to `user` later — a phone number, a locale, a billing id — does NOT
+ * silently appear on a cross-tenant operator surface because a mapper forwarded
+ * whatever it was handed. That is the same argument `platformStaffRepository`
+ * makes for its three-column `select`, one layer up.
+ */
+export function toPlatformUserSummaryDTO(row: User): PlatformUserSummaryDTO {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    createdAt: row.createdAt.toISOString(),
+    suspendedAt: row.suspendedAt?.toISOString() ?? null,
+  };
+}
+
+/** A `user` row + its session count → the operator DRILL-DOWN's account. */
+export function toPlatformUserDetailDTO(
+  row: User,
+  activeSessionCount: number,
+): PlatformUserDetailDTO {
+  return {
+    ...toPlatformUserSummaryDTO(row),
+    emailVerified: row.emailVerified,
+    twoFactorEnabled: row.twoFactorEnabled,
+    suspendedReason: row.suspendedReason,
+    activeSessionCount,
+    platformRole: row.platformRole,
+  };
 }

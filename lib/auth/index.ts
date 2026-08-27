@@ -8,6 +8,7 @@ import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { sendAuthEmail } from '@/lib/auth/authMail';
+import { assertAccountNotSuspended } from '@/lib/auth/accountSuspension';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
@@ -258,6 +259,20 @@ export const auth = betterAuth({
   // (lib/workspaces/middleware.ts). That backfill also future-proofs any
   // later signup path that bypasses this hook.
   databaseHooks: {
+    // ⚠️ A SUSPENDED ACCOUNT CANNOT OPEN A SESSION (MOTIR-1167). Every way into
+    // Motir — email + password, Google, the two-factor challenge, the RFC 8628
+    // device grant behind `motir login` — ends here, and none of them shares an
+    // endpoint with the others, so this hook is the only placement that cannot
+    // be routed around by adding a sign-in path. The reasoning, and why it
+    // THROWS rather than returning `false`, is in
+    // `lib/auth/accountSuspension.ts`.
+    session: {
+      create: {
+        before: async (session) => {
+          await assertAccountNotSuspended(session.userId);
+        },
+      },
+    },
     user: {
       create: {
         after: async (user) => {

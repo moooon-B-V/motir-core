@@ -1,0 +1,88 @@
+/**
+ * The day-1 system-health glance — design `platform-admin/design-notes.md`
+ * **Panel 8** (MOTIR-1167).
+ *
+ * Six read-only signals and one list, shaped so the UI renders them uniformly
+ * and the SERVICE owns every judgement about what a signal means.
+ *
+ * ⚠️ THE THREE STATES ARE NOT A SEVERITY SCALE, and the third is the reason
+ * this file exists. The asset's own argument:
+ *
+ * > an unreachable probe must never read as a zero. The Errors card says "No
+ * > response from Sentry" and "this is **not** an error count of zero" in situ —
+ * > a green card reading "0 errors" while the probe is down is the failure this
+ * > panel exists to prevent.
+ *
+ * So `unreachable` is a distinct member from `healthy`, and no default anywhere
+ * collapses it into one: a signal whose probe threw carries `unreachable` and a
+ * null `value`, never a zero. Every place a number could be invented instead of
+ * measured is a place this panel stops being worth having.
+ */
+
+/** One signal's verdict. */
+export type PlatformSignalState = 'healthy' | 'degraded' | 'unreachable';
+
+/** Which signal a card is — the key the UI resolves its copy and icon from. */
+export type PlatformSignalId =
+  | 'database'
+  | 'hosting'
+  | 'schedules'
+  | 'failedJobs'
+  | 'errors'
+  | 'lastHealthCheck';
+
+/**
+ * One of the six cards.
+ *
+ * `value` and `detail` are DATA the UI interpolates into its own localized copy
+ * — never a rendered English sentence. The asset's copy strings are template
+ * literals (`"{n} of {total} crons overdue"`), so the numbers cross the boundary
+ * as numbers and the words live in `messages/*.json`.
+ */
+export interface PlatformSignalDTO {
+  id: PlatformSignalId;
+  state: PlatformSignalState;
+  /**
+   * The interpolation values for this signal's headline and its body, keyed by
+   * the placeholder names the `admin` namespace uses. Empty when the probe could
+   * not answer — which is what keeps an unreachable card from rendering a zero.
+   */
+  values: Record<string, string | number>;
+  /**
+   * Where the card's "link OUT to the provider's own dashboard" goes, or `null`
+   * when this deployment has no such destination configured.
+   *
+   * ⚠️ Nullable ON PURPOSE. Motir is self-hostable, and a self-hosted instance
+   * has no Fly app and no Neon project; a hard-coded URL there would send an
+   * operator to somebody else's console. The label is the UI's; the target is
+   * the deployment's.
+   */
+  linkOut: string | null;
+}
+
+/** One overdue cron, as the glance's single list renders it. */
+export interface PlatformOverdueScheduleDTO {
+  /** The job's function id, e.g. `system.daily-health-check`. */
+  functionId: string;
+  cron: string;
+  /** ISO-8601, or null when the ledger has never seen this job run. */
+  lastRunAt: string | null;
+  /** ISO-8601 — the tick it was judged against. */
+  expectedAt: string | null;
+}
+
+/** The whole glance. */
+export interface PlatformHealthDTO {
+  /** ISO-8601 — when these signals were read. The panel refreshes on load. */
+  checkedAt: string;
+  signals: PlatformSignalDTO[];
+  /**
+   * The crons that have missed more than one consecutive tick, newest miss
+   * first. Capped by the service; `overdueTotal` is the true count so the
+   * pager's "Showing {n} of {total}" cannot lie about what was elided.
+   */
+  overdue: PlatformOverdueScheduleDTO[];
+  overdueTotal: number;
+  /** How many schedules were checked — the foot's "{checked} schedules checked". */
+  schedulesChecked: number;
+}

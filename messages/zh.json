@@ -773,6 +773,7 @@
     "googleSignInIncomplete": "Google登录未完成。请重试，或改用邮箱登录。",
     "googleSignUpIncomplete": "Google注册未完成。请重试，或改用邮箱注册。",
     "wrongPassword": "密码不正确。请重试，或重置密码。",
+    "accountSuspended": "该账号已被停用。如果你认为这是误操作，请联系客服。",
     "emailAddress": "邮箱地址",
     "signingInAs": "正在以 {email} 登录",
     "useDifferentEmail": "换个邮箱",
@@ -6533,11 +6534,11 @@
       "overview": "总览",
       "usage": "用量与成本",
       "tenants": "租户",
+      "users": "用户",
       "monitoring": "监控",
       "governance": "治理",
       "soonUsage": "10.1",
       "soonTenants": "10.1",
-      "soonMonitoring": "10.2",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -6551,6 +6552,197 @@
       "subtitle": "一眼看清全部租户——Motir托管了多少组织、工作区、项目和用户，以及各租户最近发生了什么。只读；租户治理在治理工具中。",
       "pendingTitle": "租户数据尚未接入",
       "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一张卡片交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
+    },
+    "users": {
+      "breadcrumb": "平台·用户",
+      "breadcrumbAria": "账号",
+      "title": "查找账号",
+      "subtitle": "按邮箱地址或姓名搜索 Motir 托管的所有账号。打开一个账号属于跨租户读取，会记入审计日志。组织、工作区和项目暂时无法搜索——那属于跨租户读取层，由另一张卡片交付。",
+      "searchLabel": "邮箱地址或姓名",
+      "searchPlaceholder": "ada@example.com",
+      "searchSubmit": "搜索",
+      "tooShort": "请至少输入 {n} 个字符——更短的查询是在列出账号，而不是找到某一个。",
+      "idleTitle": "尚未搜索",
+      "idleDescription": "把工单里的邮箱地址粘贴进来。每一次搜索都会记在你的运维账号名下。",
+      "noneTitle": "没有匹配的账号",
+      "noneDescription": "没有匹配“{query}”的结果。检查拼写，或改用姓名搜索——用户常常用注册邮箱之外的地址来联系我们。",
+      "resultsTitle": "匹配的账号",
+      "resultsCount": "找到 {n} 个",
+      "capped": "只显示前 {n} 个。请缩小搜索范围，而不是翻页——这个界面不是用来浏览账号列表的。",
+      "suspended": "已停用",
+      "active": "正常",
+      "emailUnverified": "邮箱未验证",
+      "twoFactor": "已开启两步验证",
+      "platformStanding": "平台员工 · {role}",
+      "crumbPlatform": "平台",
+      "crumbUsers": "用户",
+      "auditBanner": "你正以平台员工身份查看 {name} 的账号。这次跨租户读取已记入审计日志，归属于 {operator}。",
+      "suspendedSince": "该账号于 {at} 被停用。",
+      "suspendedReason": "记录在案的原因：{reason}",
+      "noReasonRecorded": "未填写",
+      "facts": {
+        "title": "账号",
+        "created": "注册于",
+        "sessions": "在线会话",
+        "sessionCount": "{n}",
+        "emailVerified": "邮箱已验证",
+        "yes": "是",
+        "no": "否"
+      },
+      "action": {
+        "sendReset": "发送密码重置",
+        "suspend": "停用账号",
+        "unsuspend": "解除停用",
+        "resetSent": "密码重置链接已发送",
+        "suspended": "账号已停用",
+        "unsuspended": "已解除停用",
+        "failedTitle": "操作没有生效",
+        "error": {
+          "REASON_REQUIRED": "必须填写原因——几个月后审计记录能不能读懂，全靠它。",
+          "NOT_FOUND": "该账号已不存在。请重新加载页面。",
+          "ALREADY_IN_STATE": "你输入的时候，别人改动了这个账号。请重新加载并确认后再操作。",
+          "NOT_PERMITTED": "你的运维账号没有执行该操作的权限。",
+          "FAILED": "出了问题，什么都没有改动。该故障已记录。"
+        },
+        "readOnlyNotice": "你的运维账号可以查看，但不能操作。发送密码重置或停用账号需要 operator 等级。"
+      },
+      "confirm": {
+        "reasonLabel": "原因——必填，将写入审计日志",
+        "reasonHint": "之后查看该账号的任何运维人员都会看到；{name} 如果询问，也会被告知。",
+        "cancel": "取消",
+        "reset": {
+          "title": "给 {name} 发送密码重置？",
+          "body": "重置链接会发到他们自己的邮箱，一小时后失效。你看不到链接，也不会替他们设置密码——密码由他们自己选。在他们使用链接之前，原密码仍然有效，已登录的会话也不受影响。",
+          "confirm": "发送链接"
+        },
+        "suspend": {
+          "title": "停用 {name}？",
+          "body": "他们会立即从所有会话中登出，并且无法重新登录。他们的工作区、项目和工作项不受影响，另一位平台运维人员可以解除停用。",
+          "confirm": "停用该账号"
+        },
+        "unsuspend": {
+          "title": "解除 {name} 的停用？",
+          "body": "他们从下一次尝试起就能重新登录。这不会替他们登录，也不会恢复此前被吊销的会话——需要他们自己登录。",
+          "confirm": "解除停用"
+        }
+      },
+      "log": {
+        "title": "运维操作",
+        "subtitle": "该账号上的每一次运维写操作，最新的在前。只追加，不修改。",
+        "scope": "本账号",
+        "empty": "还没有运维人员对该账号做过写操作。",
+        "foot": "显示 {n} 条操作",
+        "colWhen": "时间",
+        "colAction": "操作",
+        "colOperator": "操作人",
+        "colReason": "原因",
+        "operatorRole": "平台 {role}",
+        "action": {
+          "user.password_reset_sent": "已发送密码重置",
+          "user.suspend": "已停用",
+          "user.unsuspend": "已解除停用"
+        }
+      }
+    },
+    "monitoring": {
+      "breadcrumb": "平台·监控",
+      "title": "系统健康",
+      "subtitle": "机器还在转吗？六个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。更深入的分服务商看板属于故事 10.2。",
+      "state": {
+        "healthy": "正常",
+        "degraded": "降级",
+        "unreachable": "读不到"
+      },
+      "signal": {
+        "database": {
+          "title": "数据库",
+          "value": "可达 · {ms} 毫秒",
+          "detail": "Postgres · {region}，与应用同机房。",
+          "unreachable": {
+            "unreachable": "无响应"
+          },
+          "unreachableDetail": {
+            "unreachable": "数据库没有响应 ping。这不是延迟为零——什么都没测到。"
+          },
+          "linkOut": "Neon 控制台"
+        },
+        "hosting": {
+          "title": "托管",
+          "value": "由 {region} 响应",
+          "detail": "Fly 应用 {app} · 机器 {machineId}。这是正在为你服务的机器；机器总数请看 Fly 控制台，分服务商看板属于故事 10.2。",
+          "unreachable": {
+            "notManaged": "非托管环境"
+          },
+          "unreachableDetail": {
+            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。"
+          },
+          "linkOut": "Fly 控制台"
+        },
+        "schedules": {
+          "title": "定时任务",
+          "value": "{total} 个定时任务中有 {overdue} 个逾期",
+          "detail": "来自每日健康检查的调度探针——已经不再触发的定时任务。下方列出。",
+          "unreachable": {
+            "probeFailed": "无响应"
+          },
+          "unreachableDetail": {
+            "probeFailed": "调度探针没有响应。这不是逾期数为零——什么都没检查。"
+          },
+          "linkOut": "Inngest 函数"
+        },
+        "failedJobs": {
+          "title": "失败任务",
+          "value": "24 小时内 {count} 条进入死信",
+          "detail": "重试用尽后失败且尚未重放。重放在各自工作区的任务看板中进行。",
+          "unreachable": {
+            "probeFailed": "无响应"
+          },
+          "unreachableDetail": {
+            "probeFailed": "死信集合没有响应。这不是计数为零——什么都没数到。"
+          },
+          "linkOut": "Inngest 运行"
+        },
+        "errors": {
+          "title": "错误",
+          "value": "无读数",
+          "detail": "—",
+          "unreachable": {
+            "noReadCredential": "读不到 Sentry",
+            "notConfigured": "错误上报未开启"
+          },
+          "unreachableDetail": {
+            "noReadCredential": "错误确实在上报，但本控制台没有可用于读回计数的 Sentry API 凭据。这不是错误数为零。凭据和分服务商看板随故事 10.2 一起交付。",
+            "notConfigured": "此构建没有配置 Sentry DSN，因此不会向任何地方上报。这不是错误数为零——自托管实例出现这种情况是正常的。"
+          },
+          "linkOut": "Sentry 问题"
+        },
+        "lastHealthCheck": {
+          "title": "最近一次健康检查",
+          "value": "运行于 {ranAt}",
+          "detail": "状态 {status}。检查调度、运行器镜像、索引器镜像。每天只跑一次且不重试，因此漏跑会表现为这里的时间戳变旧。",
+          "unreachable": {
+            "probeFailed": "无响应",
+            "never": "从未运行"
+          },
+          "unreachableDetail": {
+            "probeFailed": "任务台账没有响应。这不是说该检查从未运行过。",
+            "never": "台账中没有任何一次每日健康检查的记录。要么这个部署还没到过 09:00，要么该调度没有注册——而后者正是这个检查本身要发现的故障。"
+          },
+          "linkOut": "任务运行"
+        }
+      },
+      "overdue": {
+        "title": "逾期的定时任务",
+        "subtitle": "连续错过一次以上触发的定时任务，最近漏跑的排在前面。",
+        "count": "{n} 个逾期",
+        "empty": "每个定时任务都在上一个触发点之后运行过。",
+        "foot": "显示 {total} 个逾期中的 {n} 个 · 已检查 {checked} 个调度",
+        "colJob": "任务",
+        "colCron": "Cron",
+        "colLastFired": "上次触发",
+        "colExpected": "应触发于",
+        "never": "从未"
+      }
     }
   }
 }

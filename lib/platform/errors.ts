@@ -45,3 +45,47 @@ export class MissingAuditReasonError extends Error {
     this.name = 'MissingAuditReasonError';
   }
 }
+
+/**
+ * The account an operator asked for does not exist (MOTIR-1167).
+ *
+ * Carries the id, like `MissingAuditReasonError` and unlike
+ * `NotPlatformStaffError`: this one is only ever raised for a principal who has
+ * already passed the gate, so there is nothing left to leak. The operator typed
+ * or followed a stale id and needs to know which one missed.
+ *
+ * ⚠️ It is NOT the 404 posture. The gate's 404 says "this route does not
+ * exist"; this says "this ACCOUNT does not exist", to somebody already inside
+ * the console. Rendering it as the app's `notFound()` is correct and is what the
+ * drill-down does — the two answers coincide on the screen and mean different
+ * things, which is why they are different types here.
+ */
+export class PlatformUserNotFoundError extends Error {
+  readonly code = 'PLATFORM_USER_NOT_FOUND';
+
+  constructor(readonly userId: string) {
+    super(`No account with id "${userId}"`);
+    this.name = 'PlatformUserNotFoundError';
+  }
+}
+
+/**
+ * A suspend was asked for on an already-suspended account, or an unsuspend on
+ * one that is not suspended (MOTIR-1167).
+ *
+ * The state is read and re-checked INSIDE the write transaction under a row
+ * lock, so this is a genuine lost race between two operators rather than a
+ * stale-page nuisance: without the lock, two concurrent suspends would each
+ * read "open", each write, and the audit log would carry two suspensions of one
+ * account with the second one's reason silently winning the column.
+ */
+export class PlatformSuspensionStateError extends Error {
+  readonly code = 'PLATFORM_SUSPENSION_STATE';
+
+  constructor(readonly suspended: boolean) {
+    super(
+      suspended ? 'That account is already suspended' : 'That account is not currently suspended',
+    );
+    this.name = 'PlatformSuspensionStateError';
+  }
+}

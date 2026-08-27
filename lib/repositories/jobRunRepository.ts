@@ -217,4 +217,24 @@ export const jobRunRepository = {
     // impossible case out of the caller as a branch it could never exercise.
     return rows.map((row) => ({ eventName: row.eventName, latestStartedAt: row._max.startedAt! }));
   },
+
+  /**
+   * The most recent run of one event name, across ALL workspaces (MOTIR-1167).
+   *
+   * The operator console's "Last health check" signal: the `job_run` row for
+   * `scheduled.system.daily-health-check`, whose `output` carries that tick's
+   * probe verdicts and whose `started_at` is the timestamp the card reads. Like
+   * `listAll` and `findLatestStartedAtByEventNames` it carries no workspace
+   * filter, so the caller MUST supply a `withSystemContext` tx.
+   *
+   * Returns the WHOLE row rather than a timestamp, because the card also draws
+   * how many probes ran and whether the tick succeeded — and both live in
+   * columns the aggregate above deliberately drops.
+   */
+  async findLatestByEventName(
+    eventName: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun | null> {
+    return tx.jobRun.findFirst({ where: { eventName }, orderBy: { startedAt: 'desc' } });
+  },
 };

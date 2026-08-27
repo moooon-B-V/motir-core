@@ -140,21 +140,65 @@ describe('append-only, as an application property', () => {
       'create',
       'listByActor',
       'listByOrganization',
+      // MOTIR-1167's target read — Panel 9's "Support actions" log. A READ, so
+      // it belongs on this list rather than falsifying it. The assertion is
+      // pinned TIGHT on purpose: a consumer adding a read extends it and says
+      // so, which is the moment a `deleteMany` slipped in beside one would have
+      // to be argued for rather than merged.
+      'listByTarget',
     ]);
   });
 });
 
 describe('the reason rule', () => {
-  it('every seeded action is a READ, so none requires a reason', () => {
+  // ⚠️ THE POLICY PER ACTION IS THE ADR'S §7 ALLOCATION TABLE, ASSERTED AS A MAP.
+  //
+  // This case used to read *"every seeded action is a READ, so none requires a
+  // reason"* — true of MOTIR-2896's build, and it stopped being true the moment
+  // MOTIR-1167 added the day-1 writes, exactly as the sibling case below
+  // predicted it would. A loop asserting one value over every member cannot say
+  // anything once the members differ, so it is replaced by the allocation
+  // itself: each action, its required degree of accountability, named. A new
+  // verb added without a decided policy fails the exhaustiveness check below
+  // rather than defaulting into whichever arm the loop happened to assert.
+  const EXPECTED_POLICY = {
+    'console.open': 'never',
+    'estate.read': 'never',
+    'health.read': 'never',
+    'user.read': 'never',
+    'user.password_reset_sent': 'required',
+    'user.suspend': 'required',
+    'user.unsuspend': 'required',
+  } as const;
+
+  it('every action carries the policy the ADR allocates it', () => {
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
-      expect(reasonPolicyFor(action as keyof typeof PLATFORM_AUDIT_ACTIONS)).toBe('never');
+      const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;
+      expect(EXPECTED_POLICY[key], `${action} has no decided reason policy`).toBeDefined();
+      expect(reasonPolicyFor(key), action).toBe(EXPECTED_POLICY[key]);
+    }
+    // Both directions: an action retired from the vocabulary must not linger
+    // here claiming to be governed.
+    expect(Object.keys(PLATFORM_AUDIT_ACTIONS).sort()).toEqual(Object.keys(EXPECTED_POLICY).sort());
+  });
+
+  it('every READ is reason-free and every WRITE demands one', () => {
+    // The property underneath the table above, stated so it survives the table
+    // growing: the ADR's rule is *"REQUIRED for every write action, NULL for a
+    // read"*, and `<domain>.<verb>` names the verb. Reads are the closed set;
+    // anything else is a write.
+    const READS = ['console.open', 'estate.read', 'health.read', 'user.read'];
+    for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
+      const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;
+      expect(reasonPolicyFor(key), action).toBe(READS.includes(action) ? 'never' : 'required');
     }
   });
 
-  it('holds in both arms, including the one no action carries yet', () => {
-    // MOTIR-1167 adds the first two `required` actions (send password reset,
-    // suspend an account). The rule ships now, with the mechanism it guards, so
-    // that card inherits a tested check instead of writing the first one.
+  it('holds in both arms', () => {
+    // Written by MOTIR-2896 when NO action carried `required`, so that the
+    // rule's load-bearing half did not ship unexecuted. MOTIR-1167's three
+    // writes are now the first callers to take that arm through the action
+    // lookup, and the case stays as the direct test of the pure function.
     expect(reasonSatisfied('never', null)).toBe(true);
     expect(reasonSatisfied('never', 'anything')).toBe(true);
     expect(reasonSatisfied('required', 'customer asked us to')).toBe(true);
