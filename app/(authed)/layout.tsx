@@ -15,6 +15,7 @@ import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloudBilling } from '@/lib/billing/availability';
+import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -110,22 +111,45 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // keeps its existing order. This is the only performance work in the card: no
   // query changed, no index, no cache, and the shell renders exactly what it
   // rendered before.
-  //   · assertTwoFactorCompliance()  — the 2FA enforcement gate (MOTIR-3648).
-  //                                  Held IN THIS WAVE rather than awaited above
-  //                                  it: it runs on every signed-in page load,
-  //                                  and a fifth sequential round trip is exactly
-  //                                  what MOTIR-3433's wave exists to avoid. It
-  //                                  redirects by throwing, so the rejection
-  //                                  leaves the `Promise.all` and the framework
-  //                                  answers it — nothing below here runs for a
-  //                                  visitor who is being held.
-  const [ctx, workspaceModels, platformStanding, cookieStore] = await Promise.all([
+  //   · resolveReconsentHold()      — THE RE-CONSENT HOLD (Story 8.4 ·
+  //     (MOTIR-1135)                    MOTIR-1135). Joined to this wave rather
+  //                                     than added as a fifth sequential round
+  //                                     trip, for the reason the paragraph above
+  //                                     gives: it runs on every signed-in page
+  //                                     load. One indexed read of at most three
+  //                                     rows, and `null` — carry on — for every
+  //                                     reader who is current, which is all of
+  //                                     them until a document moves.
+  //   · assertTwoFactorCompliance()  — the 2FA enforcement gate (Story MOTIR-1215
+  //     (MOTIR-3648)                    · MOTIR-3648), held in this wave for the
+  //                                     same reason and at the same cost. It
+  //                                     redirects by THROWING, so its rejection
+  //                                     leaves the `Promise.all` and the
+  //                                     framework answers it — nothing below here
+  //                                     runs for a visitor being held, which is
+  //                                     exactly how it wins the ordering the
+  //                                     comment under the wave records.
+  const [ctx, workspaceModels, platformStanding, cookieStore, reconsentHold] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(session.user.id),
     platformStaffRepository.findStandingByUserId(session.user.id),
     cookies(),
+    resolveReconsentHold(session.user.id),
     assertTwoFactorCompliance(session.user.id),
   ]);
+
+  // ⚠️ ENFORCED AFTER THE WAVE, NOT INSIDE IT — and that placement is the
+  // recorded answer to `design/auth/design-notes.md`'s planning flag 4, which
+  // asks MOTIR-1135 to ORDER the two full-page holds that both want this slot
+  // rather than discover the ordering later. **2FA first, re-consent second**:
+  // who is signing in, then what they are agreeing to. A gate that throws Next's
+  // redirect sentinel from inside the `Promise.all` above short-circuits it
+  // before this line is reached, so it wins by construction — which is the shape
+  // Story MOTIR-1215's enforcement gate takes. `lib/legal/reconsentGate.ts`
+  // carries the full reasoning; the split into resolve-then-enforce exists for
+  // this and nothing else.
+  if (reconsentHold) redirect(reconsentHold.destination);
+
   const isPlatformStaff = platformStanding?.platformRole != null;
 
   // The active ORGANIZATION (Story 6.10.5 — the shell org control). It must

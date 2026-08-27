@@ -5,6 +5,7 @@ import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { isAiPlanningConfigured } from '@/lib/ai/planningConfig';
 import { ConnectAiGate } from '@/app/_components/ConnectAiGate';
 import { ONBOARDING_ENTRY_PATH } from '@/lib/onboarding/pendingIdea';
+import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 
 // The onboarding route group's layout (Subtask 7.3.5 / MOTIR-833). Onboarding is
 // an IMMERSIVE, FULL-SCREEN surface — the canvas roadmap (left) + the chat rail
@@ -42,9 +43,20 @@ export default async function OnboardingGroupLayout({ children }: { children: Re
   // with `next=/onboarding`, so after signing in they land back in onboarding
   // rather than the default dashboard. The sign-in form honors `?next`.
   if (!session) redirect(`/sign-in?next=${encodeURIComponent(ONBOARDING_ENTRY_PATH)}`);
-  // The 2FA enforcement gate (MOTIR-3648) — after the session read, before
-  // anything tenant-scoped. This group has no other read to ride, so it is
-  // awaited on its own; that is the whole cost here.
+  // ⚠️ TWO FULL-PAGE HOLDS, AND THE ORDER IS DECIDED: 2FA first, re-consent
+  // second — who is signing in, then what they are agreeing to. `(authed)`
+  // records the same ordering, where the 2FA gate wins by throwing out of the
+  // shared wave; here there is no wave to ride, so it is simply written first.
   await assertTwoFactorCompliance(session.user.id);
+
+  // THE RE-CONSENT HOLD (Story 8.4 · MOTIR-1135). `(onboarding)` is its own
+  // signed-in route group, reachable without ever passing through `(authed)`, so
+  // a gate wired only into the app shell would leave this door open — which is
+  // the shape `proxy.ts`'s own matcher comment records as what happens to a rule
+  // that lives in a comment. Sequential here rather than in a wave because this
+  // layout has no other read to share one with.
+  const hold = await resolveReconsentHold(session.user.id);
+  if (hold) redirect(hold.destination);
+
   return children;
 }

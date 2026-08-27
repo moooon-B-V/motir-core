@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
+import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 
 // The planning route group's layout (Subtask MOTIR-1729). The universal planning
 // workspace is the canvas (left) + chat rail (right) owning the WHOLE viewport,
@@ -22,8 +23,18 @@ import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
 export default async function PlanningGroupLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
   if (!session) redirect(`/sign-in?next=${encodeURIComponent(PLANNING_WORKSPACE_PATH)}`);
-  // The 2FA enforcement gate (MOTIR-3648) — after the session read, before
-  // anything tenant-scoped.
+  // ⚠️ TWO FULL-PAGE HOLDS, AND THE ORDER IS DECIDED: 2FA first, re-consent
+  // second — who is signing in, then what they are agreeing to. `(authed)`
+  // records the same ordering, where the 2FA gate wins by throwing out of the
+  // shared wave; here there is no wave to ride, so it is simply written first.
   await assertTwoFactorCompliance(session.user.id);
+
+  // THE RE-CONSENT HOLD (Story 8.4 · MOTIR-1135) — see the twin in
+  // `app/(onboarding)/layout.tsx`. `(planning)` is a third signed-in group that
+  // renders outside the app shell, so it owes the same gate; a hold that only
+  // covers `(authed)` is a hold a "Plan with AI" deep link walks straight past.
+  const hold = await resolveReconsentHold(session.user.id);
+  if (hold) redirect(hold.destination);
+
   return children;
 }

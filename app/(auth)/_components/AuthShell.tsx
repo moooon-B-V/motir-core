@@ -8,27 +8,45 @@ import { type ReactNode } from 'react';
  * the same vertical rhythm — keep it here, not on individual pages.
  *
  * `tight` is the `design/cli-connect/` mock's `.ac-head.tight`: a smaller
- * headline and a closer stack, for the ONE auth screen that must fit a
+ * headline and a closer stack, for the auth screens that must fit a
  * measured amount of content above the fold (`/device`'s confirm step,
  * Subtask MOTIR-1867 — its four facts and both CTAs have to be visible
  * together at 648px, and the default 5xl headline alone costs ~56px of
  * that budget). It lives here rather than on the page for the reason the
  * paragraph above gives: the rhythm is this component's job.
+ *
+ * `eyebrow` is an optional node ABOVE the headline, inside the same header
+ * stack (Story 8.4 · MOTIR-1135). The two HOLD screens — a policy update and
+ * forced 2FA enrolment — both open with a status chip that says what state the
+ * reader is in before the headline says what to do about it, and
+ * `design/auth/legal-agreement.mock.html`'s `.ac-head` draws it in exactly that
+ * order: chip, then `h1`, then the body copy. It is a slot here rather than
+ * markup on the page for the same reason `tight` is: a chip placed by each page
+ * would pay its own gap and the two holds would drift apart.
  */
 export function AuthShell({
   headline,
   subhead,
+  eyebrow,
   tight = false,
   children,
 }: {
   headline: string;
   subhead?: ReactNode;
+  eyebrow?: ReactNode;
   tight?: boolean;
   children: ReactNode;
 }) {
   return (
     <section className={tight ? 'flex flex-col gap-3' : 'flex flex-col gap-8'}>
+      {/* ⚠️ The header's own gaps are UNCHANGED by the eyebrow. `/device`'s fold
+          budget is MEASURED (622px inside 1366×648 — 26px of headroom, all of
+          it), so widening `tight`'s gap to make room for a chip would spend a
+          screen's margin that this card never uses. The eyebrow pays its own
+          spacing instead, and a page that passes none renders byte-identically
+          to before. */}
       <header className={tight ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
+        {eyebrow ? <div className={tight ? 'pb-1' : ''}>{eyebrow}</div> : null}
         <h1
           className={
             tight

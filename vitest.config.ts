@@ -190,6 +190,32 @@ export default defineConfig({
         'lib/publicProjects/followTokens.ts',
         'lib/publicProjects/changelogCursor.ts',
         'lib/publicProjects/atomFeed.ts',
+
+        // Story 8.4 · Subtask MOTIR-1135 — capturing what a person agreed to and
+        // asking again when a document MATERIALLY changes. MEASURED first, per
+        // the note above: **100 statements / 100 branches / 100 functions / 100
+        // lines on every one of these five files**, over `tests/legal/` on this
+        // branch, so the floors below are a ratchet under a real number rather
+        // than an aspiration.
+        //
+        // The surface earns a gate because what it enforces is a CLAUSE, not a
+        // feature: `content/legal/terms.md` §14 promises that non-material
+        // changes take effect when published with no prompt, and `consent.ts`'s
+        // MAJOR/MINOR-vs-PATCH rule is the whole of how that promise is kept. A
+        // regression there is a broken published promise that no other test in
+        // the tree would catch.
+        //
+        // ⚠️ `app/(auth)/re-consent/**` IS NOT HERE, for the reason the block
+        // below states about `page.tsx` files — the page is an async Server
+        // Component and this repo has no RSC render harness. Its two islands are
+        // covered by `tests/components/reconsent-card.test.tsx` and its behaviour
+        // end to end by MOTIR-1137; adding them without a harness would gate on
+        // a number nothing can move.
+        'lib/legal/consent.ts',
+        'lib/legal/documents.ts',
+        'lib/legal/reconsentGate.ts',
+        'lib/repositories/legalAcceptanceRepository.ts',
+        'lib/services/legalAcceptanceService.ts',
         'lib/repositories/publicFollowRepository.ts',
         'lib/services/publicFollowService.ts',
         'lib/services/publicFollowDigestService.ts',
@@ -1640,6 +1666,40 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/publicFollowService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story 8.4 · Subtask MOTIR-1135 — all five measured at 100 on every
+        // axis (see the `include` block's note). 90 is the standard floor, so
+        // there are ten points of headroom before the gate bites; it is a
+        // ratchet against a regression, not a target to hit.
+        'lib/legal/consent.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/legal/documents.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/legal/reconsentGate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/legalAcceptanceRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/legalAcceptanceService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

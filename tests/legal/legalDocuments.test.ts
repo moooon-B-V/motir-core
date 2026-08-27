@@ -28,7 +28,7 @@ describe('parseLegalDocument', () => {
     'body text',
   ].join('\n');
 
-  it('reads the four front-matter keys and strips them from the body', () => {
+  it('reads the front-matter keys and strips them from the body', () => {
     const doc = parseLegalDocument('terms', full);
     expect(doc).toMatchObject({
       slug: 'terms',
@@ -39,6 +39,31 @@ describe('parseLegalDocument', () => {
     });
     expect(doc.body).toBe('\n# Terms\nbody text');
     expect(doc.body).not.toContain('title:');
+  });
+
+  // `changeSummary` (MOTIR-1135) — the one-sentence "what moved" line the
+  // re-consent interstitial draws beside each changed document's version delta.
+  it('reads changeSummary when present, and reports its absence as null', () => {
+    const withSummary = parseLegalDocument(
+      'terms',
+      [
+        '---',
+        'title: T',
+        'version: 2.0.0',
+        'changeSummary: Adds the hosted agent.',
+        '---',
+        '',
+      ].join('\n'),
+    );
+    expect(withSummary.changeSummary).toBe('Adds the hosted agent.');
+
+    // Absent, and present-but-empty, are ONE state to the renderer: there is no
+    // sentence to show. An invented fallback would be worse than nothing on a
+    // screen whose whole subject is what changed.
+    expect(parseLegalDocument('terms', full).changeSummary).toBeNull();
+    expect(
+      parseLegalDocument('terms', ['---', 'changeSummary:', '---', ''].join('\n')).changeSummary,
+    ).toBeNull();
   });
 
   it('maps the TBD sentinel to null rather than passing it through', () => {
