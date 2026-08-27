@@ -169,12 +169,29 @@ export default defineConfig({
         // that is a stated gap rather than an oversight. They are async Server
         // Components: covering one in vitest means rendering it, and rendering it
         // means AWAITING it — which is the opposite of the pending state this
-        // story is about. This repo has no RSC render harness, so no `app/**/
-        // page.tsx` has ever been in this report. Their behaviour is asserted
-        // structurally instead (`tests/navigation/*-arrival.test.ts`, 59 tests)
-        // and end to end. Adding them here without that harness would either
-        // report near-zero and gate nothing, or force a threshold low enough to
-        // be meaningless — the loosening this block's own note warns against.
+        // story is about. Their behaviour is asserted structurally instead
+        // (`tests/navigation/*-arrival.test.ts`, 59 tests) and end to end.
+        //
+        // ⚠️ CORRECTED (MOTIR-3568) — THE REASON GIVEN HERE WAS "this repo has
+        // no RSC render harness, so no `app/**/page.tsx` has ever been in this
+        // report", AND BOTH HALVES WERE FALSE WHEN IT WAS WRITTEN. Six route
+        // components were already in this list — `app/**/docs/page.tsx`,
+        // `docs/api/page.tsx`, `docs/api/getting-started/page.tsx`,
+        // `docs/api/stability/page.tsx`, `docs/sandbox/page.tsx` (all five also
+        // GATED at 90/90/90 in `thresholds`) and `docs/layout.tsx` — and Story
+        // 11.4 covered them by RENDERING them, with a `renderPageToHtml` helper
+        // over `react-dom/server.edge` declared in three `tests/api-docs/*`
+        // suites. Four `tests/planning/*` suites `await` a page and walk the
+        // returned tree. The technique existed in seven files; what did not
+        // exist was one place to find it and the request-scoped shims an AUTHED
+        // page needs.
+        //
+        // The true statement is narrower and is now the one this file makes: no
+        // page under `app/(authed)` had ever been in the report. Five of them
+        // are, REPORT-ONLY, in the MOTIR-3568 block below, and the harness they
+        // are covered by is `tests/helpers/serverPageHarness.tsx`. The seventeen
+        // stay out until somebody measures them, which is this list's own rule
+        // rather than a verdict about what is renderable.
         'components/ui/PageSkeleton.tsx',
         'components/settings/SettingsPaneFrame.tsx',
         // Story 8.9 (Follow the build) · Subtask 8.9.8 — the files this story
@@ -205,12 +222,14 @@ export default defineConfig({
         // regression there is a broken published promise that no other test in
         // the tree would catch.
         //
-        // ⚠️ `app/(auth)/re-consent/**` IS NOT HERE, for the reason the block
-        // below states about `page.tsx` files — the page is an async Server
-        // Component and this repo has no RSC render harness. Its two islands are
-        // covered by `tests/components/reconsent-card.test.tsx` and its behaviour
-        // end to end by MOTIR-1137; adding them without a harness would gate on
-        // a number nothing can move.
+        // ⚠️ `app/(auth)/re-consent/**` IS NOT HERE. Its two islands are covered
+        // by `tests/components/reconsent-card.test.tsx` and its behaviour end to
+        // end by MOTIR-1137, and nobody has measured the page itself.
+        // (This note used to give the reason as "this repo has no RSC render
+        // harness". That was false when written and is corrected in the
+        // MOTIR-3449 block above; a harness now exists at
+        // `tests/helpers/serverPageHarness.tsx`, so the page is a MEASURE-then-pin
+        // candidate like any other file rather than an impossibility.)
         'lib/legal/consent.ts',
         'lib/legal/documents.ts',
         'lib/legal/reconsentGate.ts',
@@ -1500,9 +1519,11 @@ export default defineConfig({
         // it (a controlled status, a slot, a read-only method row) but did not
         // write it, and gating 800 lines of pre-existing enrolment flow on a
         // change to three of them is the trap the `changeRequestCiFeedback.ts`
-        // note above names. `security/page.tsx` is out for the standing reason
-        // no `app/**/page.tsx` is in this report: it is an async Server
-        // Component and this repo has no RSC render harness.
+        // note above names. `security/page.tsx` is out because nobody has
+        // measured it — not because a route component cannot be measured. (The
+        // "standing reason" this note used to cite, *no `app/**/page.tsx` is in
+        // this report*, was false when written: see the correction in the
+        // MOTIR-3449 block at the top of this list.)
         'app/**/settings/account/_components/PasskeyManager.tsx',
         'app/**/settings/account/_components/AccountSecurityPanes.tsx',
         'app/**/settings/account/_components/twoFactorMethods.ts',
@@ -1523,6 +1544,37 @@ export default defineConfig({
         'lib/repositories/passkeyRepository.ts',
         'lib/mappers/passkeyMappers.ts',
         'lib/services/passkeyService.ts',
+
+        // ── Task MOTIR-3568 — THE FIRST AUTHED ROUTE COMPONENTS IN THIS REPORT ──
+        //
+        // One page from each of MOTIR-3440's five families, rendered by
+        // `tests/helpers/serverPageHarness.tsx` in `tests/navigation/render/`.
+        // The decision that put them here — and why the alternative, declaring
+        // route components permanently out of scope, was weighed and rejected —
+        // is `docs/decisions/rsc-render-harness.md`.
+        //
+        // ⚠️ REPORT-ONLY, and deliberately: NOT ONE of these has a `thresholds`
+        // entry. That is this list's own sequence — measure, then pin — and it is
+        // the sequence the notes above keep citing while the number stays
+        // unmeasured. CI publishes a per-file figure for these five on the first
+        // run that carries this diff; pinning happens in a follow-up card, off
+        // that figure, and NEVER at a value chosen to make a build pass. A number
+        // below the floor is a finding to state, not a bar to lower — and TWO of
+        // these five are below it on the diff-scoped measurement recorded in the
+        // ADR (`code-health` at 81.66/63.33/72.72/81.48, `automation` at
+        // 94.44/70/75/93.75), which is exactly why none of them is pinned here.
+        //
+        // ⚠️ A DYNAMIC SEGMENT IS ESCAPED — `\\[id\\]`, not `[id]`. Unescaped,
+        // `[id]` is a character CLASS to picomatch (one char, `i` or `d`), and
+        // that it happens to match the literal directory today is a coincidence
+        // to rely on exactly as much as the `app/(authed)/…` form the note at the
+        // top of this block warns about. `tests/coverage-gate-globs.test.ts`
+        // fails the build on either mistake.
+        'app/**/settings/project/automation/page.tsx',
+        'app/**/plans/\\[id\\]/page.tsx',
+        'app/**/items/\\[key\\]/edit/page.tsx',
+        'app/**/code-health/page.tsx',
+        'app/**/invite/accept/page.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
