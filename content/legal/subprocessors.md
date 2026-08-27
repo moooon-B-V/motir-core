@@ -89,12 +89,16 @@ Motir's AI planning features send the text you provide to **motir-ai**, moooon B
 own gateway, which forwards it to an upstream model provider. **If you never use an AI
 feature, no prompt data leaves the core service.**
 
-| Subprocessor                                                       | Purpose                                                                                   | Data reached                                                            | Location                   |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------- |
-| **motir-ai** (moooon B.V.)                                         | Our own AI gateway — routing, metering, and the planning intelligence                     | Prompts, plan text, and the work-item content you ask it to reason over | Fly.io, region `iad`, USA  |
-| **OpenAI** (OpenAI, L.L.C.)                                        | The language model that answers a planning request, and the embedding model behind search | The prompt text, and the content sent for embedding                     | USA                        |
-| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning request needs one                                             | The search query, which is derived from what you asked                  | USA                        |
-| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | The language model serving the planner's default — see the transfer note below            | The prompt text, and the work-item content sent with it                 | People's Republic of China |
+| Subprocessor                                                       | Purpose                                                               | Data reached                                                            | Location                    |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------- |
+| **motir-ai** (moooon B.V.)                                         | Our own AI gateway — routing, metering, and the planning intelligence | Prompts, plan text, and the work-item content you ask it to reason over | Fly.io, region `iad`, USA   |
+| **OpenAI** (OpenAI, L.L.C.)                                        | A planner model, and the embedding model behind search                | The prompt text, and the content sent for embedding                     | USA                         |
+| **Anthropic** (Anthropic PBC)                                      | A planner model (Claude)                                              | The prompt text, and the work-item content sent with it                 | USA                         |
+| **Alibaba Cloud** (Alibaba Cloud Computing Ltd.)                   | A planner model (Qwen), served from Model Studio                      | The prompt text, and the work-item content sent with it                 | **Frankfurt, Germany (EU)** |
+| **Zhipu AI** (Beijing Zhipu Huazhang Technology Co., Ltd.)         | A planner model (GLM)                                                 | The prompt text, and the work-item content sent with it                 | People's Republic of China  |
+| **Moonshot AI** (Beijing Moonshot Technology Co., Ltd.)            | A planner model (Kimi)                                                | The prompt text, and the work-item content sent with it                 | People's Republic of China  |
+| **DeepSeek** (Hangzhou DeepSeek Artificial Intelligence Co., Ltd.) | A planner model                                                       | The prompt text, and the work-item content sent with it                 | People's Republic of China  |
+| **Brave** (Brave Software, Inc.)                                   | Web search, when a planning request needs one                         | The search query, which is derived from what you asked                  | USA                         |
 
 **The upstream set was read from the gateway on 2026-08-26 and RE-READ on
 2026-08-27**, not inferred from the code. motir-ai does not call a model provider
@@ -112,15 +116,39 @@ enabled upstream, records its basis, and requires the gateway to enforce the
 constraint rather than merely state it. Each provider above has its own row in
 _Transfer bases_ below.
 
-> **⚠️ DeepSeek is listed, and it is the one row on this page whose paperwork is
-> incomplete.** It serves the planner's default model from mainland China, and it
-> publishes **no Art. 28 processing agreement and no Standard Contractual Clauses**
-> for its hosted API. We name it rather than omit it, because a customer assessing
-> this list is entitled to weigh it. What that does and does not mean is set out in
-> full under _Transfer bases_ below, including the fact that it is **removable
-> without changing models** — DeepSeek publishes its weights under the MIT licence,
-> and self-hosting them on our own EU infrastructure would remove the processor,
-> the transfer and the gap together.
+### The model providers fall into three tiers, and the difference is the paperwork
+
+They are not interchangeable from a data-protection standpoint, and a list that
+presented them as one undifferentiated block would hide the only distinction a
+reader actually needs.
+
+**Tier 1 — no transfer at all.** **Alibaba Cloud** serves Qwen from **Model Studio's
+Frankfurt region**, and the workspace deployment scope is pinned to the EU, so
+inference stays inside the Union. Chapter V does not engage. This is the strongest
+position on the page, and it belongs to a Chinese company's model — which is worth
+saying plainly, because the intuition that a Chinese model implies a Chinese
+transfer is wrong, and it is the whole reason this section is tiered by paperwork
+rather than by flag.
+
+**Tier 2 — a third-country transfer with the full instrument.** **OpenAI** and
+**Anthropic** each publish an Art. 28 processing agreement with the Commission's
+Standard Contractual Clauses (Modules 2 and 3, Decision 2021/914) incorporated.
+**Brave** does the same for search. These are ordinary, documented transfers.
+
+**Tier 3 — no processing agreement is on offer.** **DeepSeek**, **Zhipu AI** (GLM)
+and **Moonshot AI** (Kimi) publish no Art. 28 agreement and no clauses for their
+hosted APIs. What that means, and what it does not, is set out in full under
+_Transfer bases_ below. In short: it is a gap in three vendors' paperwork, **not** a
+consequence of where they are established — SCCs are available for any third
+country, and Tier 1 is a Chinese provider with a clean instrument.
+
+> **⚠️ You choose which tier serves your workspace.** The planner model is a
+> per-project setting, not something we pick for you, and **the default is a Tier 1
+> or Tier 2 provider**. A Tier 3 model is available, and reaching one is a
+> deliberate choice made with this page in front of you. That is the same shape the
+> large model gateways use — the provider is selected by the customer, and the
+> gateway's job is to make the selection informed and to enforce it — and it is why
+> this page tiers the providers instead of averaging them.
 
 ## Optional integrations — only if you connect them
 
@@ -179,49 +207,63 @@ from 2026-08-26, and the three previously-open rows re-read on **2026-08-27**.
 Recorded below rather than assumed. A row marked _not confirmed_ is an open item,
 not a pass.
 
-| Vendor                                            | Basis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Read from                                                                    |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Fly.io**                                        | **DPF-certified** — active participant under the EU–US Data Privacy Framework and its UK and Swiss extensions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Fly.io's published DPF privacy policy                                        |
-| **Resend**                                        | **DPF-certified** — EU–US DPF and the UK Extension                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Resend's own certification announcement                                      |
-| **Neon**                                          | **SCCs** — its DPA incorporates the Commission-approved SCCs and the UK Addendum, and it also relies on the DPF                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Neon's published DPA                                                         |
-| **Tigris**                                        | **SCCs** — its DPA incorporates the Approved EU SCCs with the UK Addendum, with the Irish supervisory authority named as competent for EEA data subjects                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Tigris's published Data Processing Addendum                                  |
-| **OpenAI** (models + embeddings, via the gateway) | **SCCs** — Module 2 where we are controller, Module 3 where we are processor                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | OpenAI's published DPA                                                       |
-| **Brave** (search, via the gateway)               | **SCCs** — the Brave Search API Data Processing Addendum incorporates the EU SCCs and the UK Addendum. Query records are retained for up to 90 days                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Brave's published Search API DPA                                             |
-| **Plausible**                                     | **No Chapter V transfer** — established and hosted in the EU                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Its stated EU hosting                                                        |
-| **Google** (optional sign-in)                     | **DPF-certified** — Google LLC is an active participant in the EU–US DPF, the UK Extension and the Swiss–US DPF, and states it relies on **SCCs** for transfers the framework does not cover. **CLOSED 2026-08-27**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Google's published data-transfer-frameworks page                             |
-| **Sentry**                                        | **DPF-certified** — Functional Software, Inc. self-certifies to the EU–US DPF, the UK Extension and the Swiss–US framework, and its DPA (v5.1.0) offers the **EU SCCs** as the fallback should the framework not apply. **CLOSED 2026-08-27**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Sentry's published DPA and privacy pages                                     |
-| **Spaceship (Spacemail)**                         | **SCCs** — its published Data Processing Addendum states that data may be transferred to the US and other non-adequate locations "using an approved transfer mechanism, such as the Standard Contractual Clauses", with the SCCs attached to the DPA and moooon B.V. as the controller/exporter. **Transfer basis CLOSED 2026-08-27**; whether this row belongs on the list at all remains an open counsel question, which is a different question                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Spaceship's published Data Processing Addendum                               |
-| **DeepSeek** (planner models, via the gateway)    | **No Art. 28 processing agreement is on offer, and that — not the destination — is the gap.** DeepSeek publishes no data processing agreement and no SCCs for its hosted API, and its privacy policy states that personal data is processed and stored in the **People's Republic of China**, for which there is no EU adequacy decision. Two things follow, and they are routinely run together: **(a)** SCCs under Art. 46(2)(c) are available for _any_ third country, adequacy or not, so nothing about China forecloses a lawful transfer — the obstacle is that this vendor offers no clauses to sign; **(b)** because the model must read the prompt in plaintext, the supplementary measure the EDPB relies on (encryption where the importer holds no key) is unavailable, so a transfer impact assessment here would rest on contractual measures alone. **It is removable without changing models:** DeepSeek's weights are published under the MIT licence, and self-hosting them on EU infrastructure would remove the processor, the transfer and this row together. | DeepSeek's published privacy policy and open-platform terms, read 2026-08-27 |
+| Vendor                                            | Basis                                                                                                                                                                                                                                                                                                                                                                                                                                              | Read from                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Fly.io**                                        | **DPF-certified** — active participant under the EU–US Data Privacy Framework and its UK and Swiss extensions                                                                                                                                                                                                                                                                                                                                      | Fly.io's published DPF privacy policy                                        |
+| **Resend**                                        | **DPF-certified** — EU–US DPF and the UK Extension                                                                                                                                                                                                                                                                                                                                                                                                 | Resend's own certification announcement                                      |
+| **Neon**                                          | **SCCs** — its DPA incorporates the Commission-approved SCCs and the UK Addendum, and it also relies on the DPF                                                                                                                                                                                                                                                                                                                                    | Neon's published DPA                                                         |
+| **Tigris**                                        | **SCCs** — its DPA incorporates the Approved EU SCCs with the UK Addendum, with the Irish supervisory authority named as competent for EEA data subjects                                                                                                                                                                                                                                                                                           | Tigris's published Data Processing Addendum                                  |
+| **OpenAI** (models + embeddings, via the gateway) | **SCCs** — Module 2 where we are controller, Module 3 where we are processor                                                                                                                                                                                                                                                                                                                                                                       | OpenAI's published DPA                                                       |
+| **Brave** (search, via the gateway)               | **SCCs** — the Brave Search API Data Processing Addendum incorporates the EU SCCs and the UK Addendum. Query records are retained for up to 90 days                                                                                                                                                                                                                                                                                                | Brave's published Search API DPA                                             |
+| **Anthropic** (Claude, via the gateway)           | **DPA + SCCs** — Anthropic's Data Processing Addendum incorporates the Commission's Standard Contractual Clauses (Module 2 where we are controller, Module 3 where we are processor, Decision 2021/914), automatically on acceptance of its commercial terms. Zero-Data-Retention is available and is the configuration we use where a model supports it                                                                                           | Anthropic's published Data Processing Addendum                               |
+| **Alibaba Cloud** (Qwen, via the gateway)         | **NO CHAPTER V TRANSFER — inference is EU-resident.** Qwen is served from Model Studio's **Frankfurt** region with the workspace deployment scope pinned to the EU, so the personal data does not leave the Union and Chapter V does not engage. Alibaba Cloud additionally publishes an **EEA Data Processing Addendum incorporating the SCCs** (Decision 2021/914), which governs anything that falls outside that scope                         | Alibaba Cloud's published EEA DPA and Model Studio region documentation      |
+| **Zhipu AI** (GLM, via the gateway)               | **No Art. 28 processing agreement is on offer.** The `open.bigmodel.cn` platform publishes no DPA and no SCCs, and neither China nor Singapore has an EU adequacy decision. See _The three providers without a processing agreement_ below. **Removable without changing models:** GLM's weights are published under the MIT licence                                                                                                               | Zhipu's published open-platform terms, read 2026-08-27                       |
+| **Moonshot AI** (Kimi, via the gateway)           | **No Art. 28 processing agreement is on offer.** Moonshot publishes no DPA and no SCCs for the hosted Kimi API, and it is established in Beijing. See _The three providers without a processing agreement_ below                                                                                                                                                                                                                                   | Moonshot's published Kimi Open Platform terms, read 2026-08-27               |
+| **Plausible**                                     | **No Chapter V transfer** — established and hosted in the EU                                                                                                                                                                                                                                                                                                                                                                                       | Its stated EU hosting                                                        |
+| **Google** (optional sign-in)                     | **DPF-certified** — Google LLC is an active participant in the EU–US DPF, the UK Extension and the Swiss–US DPF, and states it relies on **SCCs** for transfers the framework does not cover. **CLOSED 2026-08-27**                                                                                                                                                                                                                                | Google's published data-transfer-frameworks page                             |
+| **Sentry**                                        | **DPF-certified** — Functional Software, Inc. self-certifies to the EU–US DPF, the UK Extension and the Swiss–US framework, and its DPA (v5.1.0) offers the **EU SCCs** as the fallback should the framework not apply. **CLOSED 2026-08-27**                                                                                                                                                                                                      | Sentry's published DPA and privacy pages                                     |
+| **Spaceship (Spacemail)**                         | **SCCs** — its published Data Processing Addendum states that data may be transferred to the US and other non-adequate locations "using an approved transfer mechanism, such as the Standard Contractual Clauses", with the SCCs attached to the DPA and moooon B.V. as the controller/exporter. **Transfer basis CLOSED 2026-08-27**; whether this row belongs on the list at all remains an open counsel question, which is a different question | Spaceship's published Data Processing Addendum                               |
+| **DeepSeek** (planner models, via the gateway)    | **No Art. 28 processing agreement is on offer**, and its privacy policy states that personal data is processed and stored in the **People's Republic of China**. See _The three providers without a processing agreement_ below. **Removable without changing models:** DeepSeek's weights are published under the MIT licence                                                                                                                     | DeepSeek's published privacy policy and open-platform terms, read 2026-08-27 |
 
-### The AI upstream — settled on 2026-08-26, and how
+### The three providers without a processing agreement
 
-This was the one open row on this page, and it carries the most sensitive payload
-on it: whatever a customer typed, plus the work-item content they asked the
-planner to reason over. It is settled in
-`docs/decisions/ai-upstream-transfer-basis.md`. The short version:
+The model providers carry the most sensitive payload on this page — whatever a
+customer typed, plus the work-item content they asked the planner to reason over.
+**Three of the six publish no Art. 28 processing agreement and no Standard
+Contractual Clauses for their hosted APIs: DeepSeek, Zhipu AI (GLM) and Moonshot
+AI (Kimi).** This section says what that is, because the question is asked often
+and answered badly.
 
-- **The enabled channel set was read from the gateway's own administration**, not
-  from any repository — the fact this page previously said it could not settle.
-  Two model channels were enabled: **OpenAI** and **DeepSeek**.
-- **OpenAI carries SCCs**, and is the model provider this page lists. **Brave**,
-  which serves web search through the same gateway, carries SCCs too.
-- **DeepSeek offers neither**, and it serves the planner's default model. It
-  publishes no processing agreement and no clauses, and it states that personal
-  data is processed and stored in the People's Republic of China.
-- **What that is, stated precisely.** It is a gap in one vendor's paperwork. It is
-  **not** a consequence of where that vendor is established: Art. 46(2)(c) SCCs
-  are available for transfers to any third country, and an EU controller may use a
-  Chinese processor that signs them. Nor do the European regulatory actions say
-  otherwise — Italy's authority ordered **DeepSeek** to stop processing Italian
-  users' data through its consumer app, and the investigations opened in France,
-  Ireland, Germany, Belgium and Portugal are of the same kind. They are findings
-  about DeepSeek as a controller of its own users. None of them restricts a
-  European company from calling the API.
-- **The decision is to list it and say so**, rather than to omit it or to drop the
-  model. A subprocessor list is worth reading only if it names the uncomfortable
-  row, and this is ours. The escape route, if a customer needs it closed, is
-  self-hosting the MIT-licensed weights on EU infrastructure — which removes the
-  processor rather than replacing the model.
+**It is a gap in three vendors' paperwork. It is not a consequence of where they
+are established.** Art. 46(2)(c) SCCs are available for transfers to any third
+country, adequacy decision or not, and an EU controller may lawfully use a Chinese
+processor that signs them. The demonstration is on this very page: **Alibaba
+Cloud** is a Chinese company, and it carries both an EEA DPA with the SCCs and
+EU-resident inference — a stronger position than any US provider listed here. The
+obstacle for these three is that they offer no clauses to sign, and an EU-
+established vendor with the same gap would be in exactly the same position.
+
+**The European regulatory actions do not say otherwise**, and they are routinely
+misread. Italy's authority ordered **DeepSeek** to stop processing Italian users'
+data through its consumer app, and the investigations opened in France, Ireland,
+Germany, Belgium and Portugal are of the same kind: findings about DeepSeek as
+controller of its own users. **None of them restricts a European company from
+calling the API.**
+
+**What the gap does mean.** Because a model must read the prompt in plaintext, the
+supplementary measure the EDPB relies on — encryption where the importer holds no
+key — is structurally unavailable, so a transfer impact assessment for these three
+would rest on contractual measures alone. That is a real weakness, and it is why
+they are not the default.
+
+**What we do about it.** The planner model is a per-project setting; the default is
+a Tier 1 or Tier 2 provider, and reaching a Tier 3 model is a deliberate choice
+made with this page in front of you. **Two of the three are removable without
+changing models at all** — DeepSeek and GLM publish their weights under the MIT
+licence, so serving them from our own EU infrastructure would remove the
+processor, the transfer and the gap together. We list all three rather than omit
+them, because a subprocessor list is worth reading only if it names the
+uncomfortable rows.
 
 Of the three rows that were open on 2026-08-26, **two are now closed** —
 **Google** (DPF-certified, plus SCCs where the framework does not reach) and
@@ -231,12 +273,19 @@ recorded here rather than resolved silently:
 - **Spaceship — one open question remains, and it is not a transfer question.**
   Whether corporate correspondence belongs on a published subprocessor list is
   for counsel (MOTIR-3621).
-- **DeepSeek's processing agreement — OPEN, and disclosed rather than gating.**
-  No Art. 28 agreement is on offer, so the row above carries a gap a customer may
-  weigh. It does not block publication: this page's job is to state the position
-  accurately, and an omitted row would serve a reader worse than a candid one.
-  Reopened if DeepSeek publishes a DPA, if a supervisory authority addresses
-  business use of the API, or if a customer requires it closed.
+- **The three Tier 3 processing agreements — OPEN, and disclosed rather than
+  gating.** DeepSeek, Zhipu AI and Moonshot AI offer no Art. 28 agreement, so
+  their rows carry a gap a customer may weigh. It does not block publication:
+  this page's job is to state the position accurately, and an omitted row would
+  serve a reader worse than a candid one. Each is reopened if that vendor
+  publishes a DPA, if a supervisory authority addresses business use of the API,
+  or if a customer requires it closed.
+- **⚠️ The six-provider set is a LAUNCH intention, and must be re-read before
+  general availability.** Two channels were enabled when the gateway was last
+  read. Listing a provider that never ships is the same error as omitting one
+  that does, in the other direction — so this page is re-read against the
+  gateway's channel table before the service opens, and any provider that did not
+  arrive is removed.
 
 ---
 

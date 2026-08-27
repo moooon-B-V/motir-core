@@ -147,6 +147,14 @@ export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {
   DeepSeek:
     'reached THROUGH the gateway; motir-core names only the model IDS ' +
     '(lib/projectAiSettings/plannerModels.ts), never a host or an SDK',
+  // The rest of the planner model set, on the same footing: the gateway holds
+  // the channels, so motir-core never names a host or installs an SDK for any of
+  // them. Pinned here so a provider cannot quietly drop off a published legal
+  // page — the most this guard can do for an upstream it cannot see.
+  Anthropic: 'reached THROUGH the gateway; motir-core never names it',
+  'Alibaba Cloud': 'reached THROUGH the gateway; motir-core never names it',
+  'Zhipu AI': 'reached THROUGH the gateway; motir-core never names it',
+  'Moonshot AI': 'reached THROUGH the gateway; motir-core never names it',
   'Spaceship (Spacemail)': 'a mailbox, with no code path at all',
   Stripe:
     'the `stripe` SDK and the checkout, portal, subscription, seat-sync and webhook ' +
