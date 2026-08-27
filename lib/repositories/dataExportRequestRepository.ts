@@ -116,11 +116,6 @@ export const dataExportRequestRepository = {
     });
   },
 
-  /** One request by id — the build job's read of the row it was handed. */
-  async findById(id: string, tx: Prisma.TransactionClient): Promise<DataExportRequest | null> {
-    return tx.dataExportRequest.findUnique({ where: { id } });
-  },
-
   /** Record a build's outcome (ready + its blob, failed + its reason, expired).
    *  Write → `tx` required. Keyed by `id` — the caller has just locked it. */
   async update(
