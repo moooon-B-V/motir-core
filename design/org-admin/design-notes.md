@@ -7,10 +7,11 @@ truth for every UI subtask in Story 6.10. Built FROM the real design system
 the shipped `components/ui/*` primitives), so the code subtask composes the same
 primitives — no Pencil→code gap.
 
-| Surface                                           | Asset                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Org switcher + settings + members**             | **`org-admin.mock.html`** (HTML mockup)       | The whole org-admin surface — no `design/org-admin/` asset existed; the 6.10.1 design gate produces this. Multi-panel: switcher (single/multi-org) · settings · paginated members · role+invite · empty/loading/error/forbidden. **Gates 6.10.5.**                                                                                                                                                                               |
-| **Members seat/billing affordances (scaled org)** | **`members-billing.mock.html`** (HTML mockup) | The **seat layer added onto the shipped Members page** for a SCALED org (Story 8.1 · 8.1.13 / MOTIR-1260): seat summary band, add-member prorated-charge note, remove-member prorated-credit confirm, free/self-host unchanged, `past_due`, non-admin. Cloud-only + scaled-only. **Gates 8.1.14 / MOTIR-1261.** See [§ Members seat / billing affordances](#members-seat--billing-affordances-scaled-org--story-81--8113) below. |
+| Surface                                           | Asset                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Org switcher + settings + members**             | **`org-admin.mock.html`** (HTML mockup)       | The whole org-admin surface — no `design/org-admin/` asset existed; the 6.10.1 design gate produces this. Multi-panel: switcher (single/multi-org) · settings · paginated members · role+invite · empty/loading/error/forbidden. **Gates 6.10.5.**                                                                                                                                                                                                                                 |
+| **Members seat/billing affordances (scaled org)** | **`members-billing.mock.html`** (HTML mockup) | The **seat layer added onto the shipped Members page** for a SCALED org (Story 8.1 · 8.1.13 / MOTIR-1260): seat summary band, add-member prorated-charge note, remove-member prorated-credit confirm, free/self-host unchanged, `past_due`, non-admin. Cloud-only + scaled-only. **Gates 8.1.14 / MOTIR-1261.** See [§ Members seat / billing affordances](#members-seat--billing-affordances-scaled-org--story-81--8113) below.                                                   |
+| **Require-2FA policy control (org + workspace)**  | **`security-policy.mock.html`** (HTML mockup) | The require-2FA control as BOTH tenancy tiers render it, plus its two access paths and the §6d fold-in (Story 8.13 · 8.13.1 / MOTIR-3642). Multi-panel: org menu · settings rail (above and below the reveal threshold) · off · on · **locked on, mandated above** · on-here-and-above · fold-in · refused · arrival · dark. **Gates 8.13.5 (MOTIR-3646) and 8.13.6 (MOTIR-3647).** See [§ The require-2FA policy control](#the-require-2fa-policy-control-story-813--8131) below. |
 
 ## What this area is
 
@@ -625,3 +626,192 @@ parity (every colour flips through Tier-0 under `--el-*`).
 en is the source; keep it byte-stable as other locales are added (8.1.14 adds
 these under the existing `orgAdmin` namespace, alongside a `MOTIR_CLOUD` +
 scaled-flag gate).
+
+---
+
+## The require-2FA policy control (Story 8.13 · 8.13.1)
+
+**Asset:** `security-policy.mock.html` + `security-policy.png`. Gates **8.13.5**
+(MOTIR-3646, the org pane) and **8.13.6** (MOTIR-3647, the workspace control).
+The member-facing half — the forced-enrolment screen a non-compliant person
+meets — is **8.13.2**'s (MOTIR-3643) and lands in the **`design/auth`** area
+beside the two-factor challenge and passkey sign-in screens; it is not drawn
+here.
+
+### What this asset owns, and what it deliberately does not
+
+It owns **one card**, its **two access paths**, and the **locked state**. It
+**COMPOSES** two surfaces it does not re-specify:
+
+- `design/workspaces/settings.pen` / `settings.png` owns the workspace settings
+  page. This asset adds a pane to it; it does not redraw it.
+- `design/org-admin/org-admin.mock.html` owns the org settings home, and its
+  **panel 5d** owns the refusal treatment reused verbatim in panel 8.
+- `design/settings/arrival.mock.html` owns the settings-pane arrival frame,
+  composed in panel 9. This pane adds **no `loading.tsx`** — see the arrival note
+  below.
+
+### ⚠️ Two primitives MOVED since `org-admin.mock.html` was drawn
+
+This asset follows the shipped components, not its predecessor in this folder.
+Both differences are visible in the export and both matter to the implementer:
+
+| primitive | what `org-admin.mock.html` draws                                                   | what ships today                                                                                                                                                                                                                                 |
+| --------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Card`    | a bordered header strip (`.card-head` with a `border-bottom`), padding on the body | ONE padded box — `rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding)` on `--el-card`, whose `header` slot is a plain block with `mb-(--spacing-md)` and whose `footer` slot adds `border-t` + `mt/pt-(--spacing-md)` |
+| `Switch`  | n/a (that asset draws none)                                                        | `h-5 w-9` (36×20) with a 14px knob; checked fill `--el-switch-on`, knob `--el-switch-knob`, unchecked track `--el-muted` on a `--el-border-strong` border; `disabled` is `opacity-50` + `cursor-not-allowed`                                     |
+
+Build to the table's right-hand column. `AcceptanceVideoCard.tsx` is the shipped
+worked example of exactly this card shape (an org-level boolean policy with a
+`Switch` on the right of a label row), and 8.13.5 should read it before writing.
+
+### The panels
+
+| #   | panel                                 | what it shows                                                                                                                    |
+| --- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Access path A — the org menu**      | `OrgControl.tsx`'s menu with **Security** inserted directly under Settings.                                                      |
+| 2   | **Access path B — the settings rail** | `SidebarNav.tsx`'s bottom section with **Security** added, AND the same rail below the reveal threshold where the row is ABSENT. |
+| 3   | **Off**                               | Nobody is required. The body copy carries the consequences.                                                                      |
+| 4   | **On, set at this tier**              | The org control, operable, with the state named in text.                                                                         |
+| 5   | **Locked on, mandated above**         | The workspace control when the org already requires it.                                                                          |
+| 6   | **On here AND above**                 | Set locally, then mandated by the org too.                                                                                       |
+| 7   | **The fold-in**                       | The workspace card hosted on `/settings/organization` for a single-workspace org, below the org card.                            |
+| 8   | **Refused**                           | Panel 5d's `EmptyState`, replacing the CARD and not the page.                                                                    |
+| 9   | **Arrival**                           | `SettingsPaneFrame` as the in-page `<Suspense>` fallback.                                                                        |
+| 10  | **Dark**                              | Three of the states again with the tokens flipped.                                                                               |
+
+### ⚠️ The locked state is the one an implementer will otherwise improvise
+
+**The switch is `disabled`, NOT absent.** A missing control tells a workspace
+admin nothing, and a live control that silently does nothing is worse than both.
+The indicator is a **`Pill`** — never bespoke markup — carrying
+**"Required by {org}"**, so the organization is named: a person denied a switch
+is owed the name of whoever holds it.
+
+**The Pill is `--el-tint-sky` with `--el-text-strong` ink, and it is NOT
+`--el-danger`.** `design/settings/design-notes.md`'s shipped ruling applies:
+nothing has gone wrong here, something was decided elsewhere. Sky rather than
+lavender because lavender is already the org-role chip's tone in this area, and
+the two must not read as the same class of thing. Hue in the tint BACKGROUND with
+`--el-text-strong` text is what keeps it AA in both themes.
+
+**Panels 5 and 6 are DIFFERENT states and must not be collapsed.** MOTIR-3644
+stores the two tiers as two columns rather than their OR precisely so that
+"the workspace chose this too" survives the org switching its own off. Panel 6's
+copy says both; panel 5's says only the org. An implementer who renders one
+treatment for both loses the distinction the schema was shaped to keep.
+
+### ⚠️ The fold-in decides the layout (MOTIR-3502 · `organization-tier.md` §6d)
+
+Below **two** workspaces in the active org, `/settings/workspace` **404s**
+(`resolveWorkspaceTierDisclosure` → `notFound()`), and its sections are hosted on
+`/settings/organization` by `WorkspaceFoldInSection` — _"a MOUNT, not a
+rewrite"_. So the workspace require-2FA control has **two homes**, and a design
+that drew only `/settings/workspace/security` would describe a surface most
+organizations cannot reach. Panel 7 draws the second home: the identical card,
+below the org-scoped cards, in the same `stack` grammar the fold-in already uses
+for Name / Members / Danger zone. **It is the same component mounted twice, never
+a second drawing.**
+
+**The rail row follows the same threshold, and this is where this pane departs
+from its neighbours.** `SidebarNav.tsx` says outright that Job runs and Git are
+NOT gated on the reveal, because they are workspace-SCOPED but not
+workspace-NAMED. `/settings/workspace/security` **is** workspace-named and 404s
+below the threshold, so its row must be hidden there or it points at a 404.
+Panel 2's right half is that state.
+
+### Arrival
+
+Panel 9 is `SettingsPaneFrame`, rendered as the fallback of an in-page
+`<Suspense>` placed **after** the pane's own gate. The real header (`<h1>` +
+subtitle) is painted ABOVE the boundary, so it is on screen immediately and no
+placeholder covers it. **Do NOT add a `loading.tsx`** — `CLAUDE.md`'s rule
+applies: a route-level boundary flushes the response head and fixes the status at
+200, and this pane's siblings under `settings/` decide existence.
+
+### Primitives composed
+
+| element                   | primitive                        | tokens                                                                                                      |
+| ------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| The policy card           | `Card`                           | `--el-card` fill, `--el-border`, `--radius-card`, `--spacing-card-padding`; header slot `mb-(--spacing-md)` |
+| Card title                | `<h3>` in the header slot        | `--el-text`, 16px/600                                                                                       |
+| Card body copy            | `<p>` in the header slot         | `--el-text-muted` — safe here because the card fill IS the white page/card surface                          |
+| State label               | `<span>`                         | `--el-text-secondary` off, `--el-text` on                                                                   |
+| The toggle                | `Switch`                         | `--el-switch-on` / `--el-switch-knob` / `--el-muted` / `--el-border-strong`; `--shadow-subtle` on the knob  |
+| Locked indicator          | `Pill`                           | `--el-tint-sky` background, `--el-text-strong` ink, `--radius-badge`, `--spacing-chip-x/y`                  |
+| Locked explanation        | `<p>`                            | `--el-text-secondary`, `mt-(--spacing-md)`                                                                  |
+| Refusal                   | `EmptyState` (which is a `Card`) | glyph `--el-icon-muted`, title `--el-text`, description `--el-text-subtitle`                                |
+| Arrival blocks            | `SettingsPaneFrame`              | `--el-muted` fill, `--radius-control`                                                                       |
+| Org menu                  | `Popover` + menu rows            | `--el-border`, `--shadow-elevated`, `--radius-card`; rows `--radius-control`, `--spacing-control-x/y`       |
+| Rail rows                 | `Sidebar` rows                   | `--el-text-secondary`, active `--el-surface`, `--radius-control`                                            |
+| The `›` context separator | `<span aria-hidden>`             | `--el-text-faint` — **decorative only**, which is what makes that ink legitimate                            |
+
+No Tier-0 `--color-*` is referenced by any element rule (only the `:root` /
+`[data-theme='dark']` token blocks define them), and no raw `rounded-*` / `p-*` /
+`h-*` appears. The one `9999px` radius is `--radius-badge` and the genuinely
+circular switch track/knob, which is the sanctioned carve-out.
+
+### ⚠️ The `--el-*` layer is re-declared inside the dark block, and it has to be
+
+A custom property is substituted at the element it is **declared** on. An
+`--el-*` declared only on `:root` therefore computes against `:root`'s
+`--color-*`, and a nested element that flips `--color-*` inherits the
+already-resolved LIGHT value. Panel 10 rendered white until the `--el-*` layer
+was re-declared inside `[data-theme='dark']`. This costs nothing in the app —
+`data-theme` lives on `<html>` there — but any multi-panel board that wants light
+and dark in ONE export needs it, and the next such asset in this folder should
+copy the pattern rather than rediscover it.
+
+### Copy strings (en — new keys for 8.13.5 / 8.13.6)
+
+Both UI cards ship `en` + `zh` together; `tests/i18n-catalog.test.ts` enforces
+the parity, so a missing `zh` twin is a red build.
+
+- Pane title **"Security"**; org subtitle **"Sign-in requirements for everyone in
+  {org}."**, workspace subtitle **"Sign-in requirements for everyone in
+  {workspace}."**
+- Card title (both tiers) **"Require two-factor authentication"**.
+- Org body **"Everyone in this organization signs in with a second factor. Nobody
+  is signed out and nobody is removed — the next time a person opens Motir they
+  are asked to set one up, and any method counts: a passkey, an authenticator app
+  or email codes."**
+- Workspace body **"Additionally require a second factor for everyone in this
+  workspace. Your organization's setting applies on top of this one and cannot be
+  lowered here."**
+- State labels **"Not required"** / **"Required for every member of {org}"** /
+  **"Required for every member of {workspace}"**.
+- Locked pill **"Required by {org}"**.
+- Locked explanation (org mandates, workspace does not) **"{org} requires
+  two-factor authentication for every member, so it cannot be switched off for
+  this workspace. An owner or admin of {org} can change it in the organization's
+  Security settings."**
+- Locked explanation (BOTH) **"This workspace requires two-factor
+  authentication, and so does {org}. Turning off the organization's requirement
+  will leave this workspace's own requirement in place."**
+- Refusal **"You don't have access to this"** / **"Only an owner or an admin of
+  {org} can change its security settings. Ask one of them if this needs to
+  change."**
+- Menu / rail row label **"Security"**.
+- Switch `aria-label` **"Require two-factor authentication"** — the switch is a
+  bare control and announces nothing without it.
+
+**No copy implies a deadline.** Rung 1 is explicit that neither Atlassian nor
+GitHub ships a grace period or a countdown, so nothing here says "by" or
+"within".
+
+### ⚠️ Planning flags
+
+1. **The rail row is gated and its neighbours are not**, which reads as an
+   inconsistency to anyone who does not know §6d. 8.13.6's acceptance criteria
+   already carry the `notFound()` requirement; the RAIL half is this asset's, and
+   the comment beside it in `SidebarNav.tsx` should say why this row differs from
+   Job runs and Git or the next reader will "fix" it.
+2. **The org pane has no refusal ROUTE of its own.** Panel 8 refuses the CARD
+   inside a rendered pane, matching how `settings/organization/page.tsx` gates
+   per section rather than per page. If 8.13.5 instead makes the whole route
+   404 for a non-admin, that is a different decision from the one drawn here and
+   should be taken deliberately, not by accident.
+3. **Nothing here draws a member LIST.** "Who is not yet compliant?" is a
+   reasonable next question for an admin who has just switched this on, and this
+   story does not answer it. Not a gap in 8.13 — a candidate for a later card,
+   named so it is not smuggled into 8.13.5.
