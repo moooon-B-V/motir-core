@@ -131,26 +131,33 @@ carries a decided policy, and no row says `new`.
 > That is eight rows leaving the pending count and one gaining a gate — nine, and the guard's pin
 > falls **36 → 27** for exactly that reason. No key was added, removed or re-labelled.
 
-| Domain               | Permissions                                                                       |
-| -------------------- | --------------------------------------------------------------------------------- |
-| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                |
-| `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                     |
-| `board` (1)          | `board:configure`                                                                 |
-| `comment` (2)        | `comment:add` · `comment:moderate`                                                |
-| `estimation` (1)     | `estimation:manage`                                                               |
-| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                              |
-| `import` (1)         | `import:run` ᵖ                                                                    |
-| `member` (2)         | `member:manage` · `project:manage_access`                                         |
-| `project` (2)        | `project:administer` · `project:browse`                                           |
-| `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`      |
-| `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                         |
-| `repository` (2)     | `repository:manage` · `repository:manage_access`                                  |
-| `sprint` (1)         | `sprint:manage` ᵖ                                                                 |
-| `watcher` (1)        | `watcher:manage`                                                                  |
-| `work_item` (4)      | `project:browse` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
-| `workflow` (2)       | `automation:manage` · `workflow:manage`                                           |
+| Domain               | Permissions                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                                      |
+| `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                                           |
+| `board` (1)          | `board:configure`                                                                                       |
+| `comment` (2)        | `comment:add` · `comment:moderate`                                                                      |
+| `estimation` (1)     | `estimation:manage`                                                                                     |
+| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                                                    |
+| `import` (1)         | `import:run` ᵖ                                                                                          |
+| `member` (2)         | `member:manage` · `project:manage_access`                                                               |
+| `project` (2)        | `project:administer` · `project:browse`                                                                 |
+| `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                            |
+| `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                                               |
+| `repository` (2)     | `repository:manage` · `repository:manage_access`                                                        |
+| `sprint` (1)         | `sprint:manage` ᵖ                                                                                       |
+| `watcher` (1)        | `watcher:manage`                                                                                        |
+| `work_item` (5)      | `project:browse` · `work_item:archive` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
+| `workflow` (2)       | `automation:manage` · `workflow:manage`                                                                 |
 
 ᵖ = `planned` — justified here, not yet enforced.
+
+⚠️ **This table is the MOTIR-2255 SNAPSHOT, kept per DOMAIN rather than refreshed wholesale.** The
+catalog has grown since — the `lesson` keys (MOTIR-3336 / MOTIR-3553) never joined it, and
+`ai:decide_plan` did — so `lib/permissions/catalog.ts` is the enumeration to read, and a domain row
+here is authoritative only about the domain a later card actually touched.
+`work_item` is one of those: MOTIR-3629 split `work_item:archive` out of `work_item:delete` and
+updated the row in the same change.
 
 ## GATE TODAY, MEASURED (MOTIR-2304)
 
@@ -313,6 +320,15 @@ worse failure than a gap.
 **R41.** Governed by canEdit.
 
 **R42.** Archive / delete cascades over a subtree — separable from editing a field. Jira grants _Delete Issues_ to the Administrators project role, so a member keeps every edit and loses the cascade.
+
+> ⚠️ **CORRECTED by MOTIR-3629 (2026-08-26) — the cascade rationale is FALSE OF ARCHIVE, and it must not survive as the justification.** ~~Archive / delete cascades over a subtree~~: `workItemsService.archiveWorkItem` stamps `archivedAt` on ONE row and leaves the children live, which `app/api/v1/work-items/[key]/archive/route.ts` and the `archive_work_item` tool description both say unprompted. So the two operations were grouped on the single property archive does NOT have, and they differ on **both** axes that make delete dangerous — reversibility and blast radius — under a key named after the destructive one. The consequence was not theoretical: there was no way to grant the reversible operation without the irreversible one, so a planner token that archives superseded nodes had to carry the subtree delete permanently, and a **member** — who can edit every field — could not archive at all.
+>
+> The rule now SPLITS, and each half keeps a rationale that describes it:
+>
+> - **`work_item:archive`** — a REVERSIBLE, non-cascading soft-remove of one row. Separable from editing a field because it takes the item out of every active view for the whole team, and separable from deleting because nothing is destroyed. Held by **member** and above; the mirror is Linear, whose archive semantics this operation already copies (the service's own header cites "the Linear shape" for leaving children intact) and where archiving is every member's ordinary remove.
+> - **`work_item:delete`** — the IRREVERSIBLE cascade over a subtree, and its dry run. The Jira sentence above is unchanged and is now about this half alone: _Delete Issues_ is the Administrators project role, so a member keeps every edit and loses the cascade.
+>
+> Nothing about either OPERATION changed — only the boundary of who may invoke which. Back-compatibility is by IMPLICATION rather than migration: `work_item:delete` confers `work_item:archive` at resolution (`PERMISSION_IMPLICATIONS`, `lib/permissions/catalog.ts`), so no stored token grant and no authored custom role lost an operation. `docs/decisions/token-permissions.md` §10 carries that decision in full.
 
 > ⚠️ **CORRECTED by MOTIR-2354.** `DELETE /api/work-items/[id]` was filed under R41 / `work_item:edit` while its own DRY RUN (`/delete-preview`) was mapped here — and in the code the preview was the tighter of the two (`assertCanManage` vs the delete's `assertCanManage`, against an inventory row claiming `work_item:edit`). A destroy and its preview cannot be governed by different keys; both now ask `work_item:delete`.
 
@@ -710,7 +726,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/work-items/[id]/acceptance-evidence/upload-token` | POST        | `acceptanceEvidenceService` → `resolveStory` → `assertPermission` (was — none —)           | `work_item:edit`        | existing | R43 |
 | `/api/work-items/[id]/activity/all`                     | GET         | workspace only                                                                             | `project:browse`        | existing | R2  |
 | `/api/work-items/[id]/activity/history`                 | GET         | `activityService.listHistory` → `assertPermission` (was workspace only)                    | `project:browse`        | existing | R2  |
-| `/api/work-items/[id]/archive`                          | DELETE/POST | `workItemsService.{archive,unarchive}WorkItem` → `assertPermission`                        | `work_item:delete`      | existing | R42 |
+| `/api/work-items/[id]/archive`                          | DELETE/POST | `workItemsService.{archive,unarchive}WorkItem` → `assertPermission`                        | `work_item:archive`     | existing | R42 |
 | `/api/work-items/[id]/components`                       | POST/PUT    | workspace only                                                                             | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/components/[componentId]`         | DELETE      | workspace only                                                                             | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/delete-preview`                   | GET         | `workItemsService.getDeletePreview` → `assertPermission`                                   | `work_item:delete`      | existing | R42 |

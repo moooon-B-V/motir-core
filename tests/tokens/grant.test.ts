@@ -128,14 +128,22 @@ describe('DEFAULT_TOKEN_GRANT', () => {
     expect(grantsIrreversible(DEFAULT_TOKEN_GRANT)).toBe(false);
   });
 
-  it('therefore also withholds ARCHIVE, which is the narrowing ADR §8 records', () => {
-    // Under the six scopes, archive was ON by default (recoverable) and delete
-    // OFF. Both assert `work_item:delete` in shipped code, so one key cannot
-    // hold them apart — and the safe direction is the one that withholds. A
-    // NEW default-minted token cannot archive; this test is where that is
-    // stated rather than discovered.
-    expect(TOOL_PERMISSIONS.archive_work_item).toBe('work_item:delete');
-    expect(grantAllows(DEFAULT_TOKEN_GRANT, TOOL_PERMISSIONS.archive_work_item)).toBe(false);
+  // ⚠️ INVERTED BY MOTIR-3629, and the inversion is what §10 records. This read
+  // "therefore also withholds ARCHIVE, which is the narrowing ADR §8 records":
+  // under the six scopes archive was ON by default (recoverable) and delete OFF,
+  // both asserted `work_item:delete` in shipped code, so one key could not hold
+  // them apart and the safe direction was the one that withheld.
+  //
+  // The key that could not hold them apart now exists, so the default grant is
+  // back where §8 said it wanted to be — and by the SAME derivation, with no arm
+  // added: archive is grantable and is not irreversible, so it falls in.
+  it('DOES confer ARCHIVE again, without conferring the irreversible delete', () => {
+    expect(TOOL_PERMISSIONS.archive_work_item).toBe('work_item:archive');
+    expect(grantAllows(DEFAULT_TOKEN_GRANT, TOOL_PERMISSIONS.archive_work_item)).toBe(true);
+    expect(grantAllows(DEFAULT_TOKEN_GRANT, TOOL_PERMISSIONS.unarchive_work_item)).toBe(true);
+    expect(grantAllows(DEFAULT_TOKEN_GRANT, TOOL_PERMISSIONS.delete_work_item)).toBe(false);
+    // …and it is the derivation, not a special case, that puts it there.
+    expect(IRREVERSIBLE_PERMISSIONS).not.toContain('work_item:archive');
   });
 
   it('still admits the everyday work: read, edit, comment, plan, sprints', () => {
@@ -189,7 +197,51 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       'work_items:archive',
       'work_items:delete',
     ]);
-    expect([...grant].sort()).toEqual(['project:browse', 'work_item:delete'].sort());
+    // MOTIR-3629 — the two legacy strings stop collapsing onto one key: each
+    // expands to the key its own operations now assert. `work_item:archive`
+    // appears once even though BOTH rows reach it (one by expansion, one by the
+    // delete → archive implication), which is what this test is about.
+    expect([...grant].sort()).toEqual(
+      ['project:browse', 'work_item:archive', 'work_item:delete'].sort(),
+    );
+  });
+
+  // ── MOTIR-3629 — the token half of the back-compatibility decision ────────
+  // The archive split would otherwise have taken an operation away from every
+  // credential already minted, and §5's standing posture forbids the obvious
+  // repair: nothing rewrites a live credential's row. So the expansion carries
+  // it, on READ, exactly as a legacy scope string is carried.
+
+  it('a stored `work_item:delete` still confers archiving — no minted token lost an operation', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:delete']);
+    expect([...grant].sort()).toEqual(
+      ['project:browse', 'work_item:archive', 'work_item:delete'].sort(),
+    );
+    expect(grantAllows(grant, TOOL_PERMISSIONS.archive_work_item)).toBe(true);
+  });
+
+  it('does NOT confer it in the other direction — archiving never implies destroying', () => {
+    // The whole point of the split: a grant may now say "you may tidy the board"
+    // WITHOUT saying "you may destroy a tree". If this ever passes both ways the
+    // split has bought nothing.
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:archive']);
+    expect([...grant].sort()).toEqual(['project:browse', 'work_item:archive'].sort());
+    expect(grantAllows(grant, TOOL_PERMISSIONS.delete_work_item)).toBe(false);
+  });
+
+  it('a legacy `work_items:archive` row stops conferring the cascade delete', () => {
+    // The archive → delete half of ADR §5's accepted merge, closed. That string
+    // was minted to mean "may archive"; while the two shared a key it silently
+    // meant "may destroy a subtree" as well.
+    const { grant, unrecognised } = expandStoredGrant(['work_items:archive']);
+    expect([...grant]).toEqual(['work_item:archive']);
+    expect(grantAllows(grant, TOOL_PERMISSIONS.delete_work_item)).toBe(false);
+    expect(unrecognised).toEqual([]);
+  });
+
+  it('a legacy `work_items:delete` row keeps BOTH, via the implication', () => {
+    const { grant } = expandStoredGrant(['work_items:delete']);
+    expect([...grant].sort()).toEqual(['work_item:archive', 'work_item:delete'].sort());
   });
 
   it('DROPS an unrecognised value rather than throwing or defaulting', () => {

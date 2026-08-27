@@ -114,9 +114,25 @@ export function isLegacyTokenScope(value: unknown): value is TokenScope {
  *     route, which is the stronger of the two reasons and survives the next
  *     entrance somebody adds. What a legacy `work_items:write` still confers is
  *     `ai:view_plan`, i.e. plan AUTHORING and nothing else.
- *   * `work_items:archive` / `work_items:delete` — both archive and delete
- *     assert `work_item:delete`, so the old two-scope split has no counterpart
- *     in the gates.
+ *   * `work_items:archive` / `work_items:delete` — the two-scope split is BACK,
+ *     and each maps to the key its own operations now assert.
+ *
+ *     ⚠️ AMENDED 2026-08-26 (MOTIR-3629). This entry used to read: "both archive
+ *     and delete assert `work_item:delete`, so the old two-scope split has no
+ *     counterpart in the gates." It was true and it was the evidence: a legacy
+ *     vocabulary carrying a distinction the new one could not express is a
+ *     missing term announcing itself, and `work_item:archive` is that term. So
+ *     `work_items:archive` expands to `work_item:archive` alone, which RESTORES
+ *     what that string meant when it was minted — a token that could hide a row
+ *     and not destroy a tree. That is a NARROWING of a stored row, which is
+ *     always legal here; the direction stale data may never take is WIDER.
+ *
+ *     `work_items:delete` keeps `work_item:delete`, and its holder keeps
+ *     archiving: `PERMISSION_IMPLICATIONS` confers archive from delete at
+ *     resolution, so nothing minted under either string lost an operation. This
+ *     also closes the second half of ADR §5's accepted merge — the
+ *     archive → delete direction, where a token granted only the recoverable
+ *     operation had silently gained the irreversible one.
  *   * `sprints:write` — `assertCanManageSprints` / `assertCanGroom`.
  *   * `integration` — `markIntegrated` / `completeSession` reach
  *     `applyStatusTransition → assertCanEdit`, the same gate `transition_status`
@@ -132,7 +148,7 @@ export function isLegacyTokenScope(value: unknown): value is TokenScope {
 export const LEGACY_SCOPE_PERMISSIONS: Record<TokenScope, readonly PermissionKey[]> = {
   read: ['project:browse'],
   'work_items:write': ['work_item:edit', 'comment:add', 'ai:plan', 'ai:view_plan'],
-  'work_items:archive': ['work_item:delete'],
+  'work_items:archive': ['work_item:archive'],
   'work_items:delete': ['work_item:delete'],
   'sprints:write': ['sprint:manage'],
   integration: ['work_item:edit'],

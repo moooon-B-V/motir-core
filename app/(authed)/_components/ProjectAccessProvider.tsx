@@ -32,7 +32,9 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  * correctly right up until someone composes a role that distinguishes the two —
  * which is the entire point of the epic. `canManage` was the worse of the pair:
  * it meant *administers the project*, and it was gating **Delete**, which has
- * had its own permission (`work_item:delete`) since MOTIR-2291.
+ * had its own permission (`work_item:delete`) since MOTIR-2291 — and archiving
+ * has had its own since MOTIR-3629 (`work_item:archive`), which is a third
+ * answer the two booleans could never have carried.
  *
  * The BROWSE gate is enforced separately (the switcher only lists browsable
  * projects; a non-browsable active project renders the no-access state on the

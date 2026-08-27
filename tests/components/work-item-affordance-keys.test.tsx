@@ -57,24 +57,44 @@ describe('the keys the sweep landed, read off the gates', () => {
   // re-keys a write cannot leave an affordance gating on a key nobody asserts.
   const service = readFileSync(join(process.cwd(), 'lib/services/workItemsService.ts'), 'utf8');
 
-  it('archive, unarchive and delete all assert `work_item:delete` in the service', () => {
-    // This is the finding the card did not predict. `archiveWorkItem` and
-    // `unarchiveWorkItem` were gated in the UI on `canEdit` — and a MEMBER holds
-    // `work_item:edit` and NOT `work_item:delete`, so the Archive row the product
-    // offered them earned a 403 on click.
-    for (const method of ['archiveWorkItem', 'unarchiveWorkItem', 'deleteWorkItem']) {
+  // ⚠️ AMENDED BY MOTIR-3629. This assertion used to read "archive, unarchive and
+  // delete all assert `work_item:delete` in the service", and its comment named
+  // the resulting 403 as "the finding the card did not predict": archive and
+  // restore were gated in the UI on `canEdit`, a MEMBER holds `work_item:edit`
+  // and not `work_item:delete`, so the Archive row the product offered them
+  // earned a 403 on click.
+  //
+  // MOTIR-2473 could only move the row, which would have hidden archiving from
+  // every member — one key spanned a reversible single-row hide and an
+  // irreversible subtree destroy, so there was no third answer to give. It never
+  // moved, and the 403 shipped. The split is what makes the affordance tellable,
+  // so this test now pins the SEPARATION rather than the collapse.
+  it('archive and unarchive assert `work_item:archive`; delete keeps `work_item:delete`', () => {
+    for (const method of ['archiveWorkItem', 'unarchiveWorkItem']) {
       const body = service.split(`async ${method}(`)[1]?.slice(0, 1600);
       expect(body, `${method} not found`).toBeDefined();
-      expect(body, `${method} no longer asserts 'work_item:delete'`).toContain(
-        "'work_item:delete'",
+      expect(body, `${method} must assert 'work_item:archive'`).toContain("'work_item:archive'");
+      // The reversible operation must not reach for the irreversible key — that
+      // is the whole defect, stated as an assertion.
+      expect(body, `${method} still asserts 'work_item:delete'`).not.toContain(
+        "assertPermission(current.projectId, ctx, 'work_item:delete'",
       );
     }
+    const del = service.split('async deleteWorkItem(')[1]?.slice(0, 1600);
+    expect(del, 'deleteWorkItem not found').toBeDefined();
+    expect(del, "deleteWorkItem no longer asserts 'work_item:delete'").toContain(
+      "'work_item:delete'",
+    );
   });
 
-  it('a MEMBER does not hold `work_item:delete` — which is why that row moves', () => {
+  it('a MEMBER holds `work_item:archive` and NOT `work_item:delete` — the pair the split expresses', () => {
     expect(BUILTIN_ROLE_PERMISSIONS.member.has('work_item:edit')).toBe(true);
+    expect(BUILTIN_ROLE_PERMISSIONS.member.has('work_item:archive')).toBe(true);
     expect(BUILTIN_ROLE_PERMISSIONS.member.has('work_item:delete')).toBe(false);
+    expect(BUILTIN_ROLE_PERMISSIONS.admin.has('work_item:archive')).toBe(true);
     expect(BUILTIN_ROLE_PERMISSIONS.admin.has('work_item:delete')).toBe(true);
+    // A viewer removes nothing, reversibly or otherwise.
+    expect(BUILTIN_ROLE_PERMISSIONS.viewer.has('work_item:archive')).toBe(false);
   });
 
   it('the context no longer offers the two booleans to reach for', () => {
@@ -92,12 +112,13 @@ describe('the keys the sweep landed, read off the gates', () => {
 });
 
 describe('DELETE is offered on `work_item:delete`, not `project:administer`', () => {
-  const menu = (canEdit: boolean, canDelete: boolean) => (
+  const menu = (canEdit: boolean, canDelete: boolean, canArchive = canEdit) => (
     <WorkItemActionsMenu
       itemId="wi_1"
       identifier="MOTIR-1"
       title="A work item"
       canEdit={canEdit}
+      canArchive={canArchive}
       canDelete={canDelete}
       onDeleted={() => {}}
       onArchived={() => {}}
@@ -119,6 +140,19 @@ describe('DELETE is offered on `work_item:delete`, not `project:administer`', ()
     withKeys(menu(true, false), MEMBER);
     screen.getByRole('button', { name: /actions/i }).click();
     await screen.findByRole('menu');
+    expect(screen.queryByRole('menuitem', { name: /delete/i })).toBeNull();
+  });
+
+  it('…and IS offered Archive, because a member now holds that key (MOTIR-3629)', async () => {
+    // The other half of the row above, and the reason the split is not cosmetic:
+    // the same actor, in the same menu, keeps the reversible affordance and loses
+    // only the irreversible one. Before the split this was the state that could
+    // not be drawn — the menu either showed a member a 403ing Archive row or
+    // hid archiving from every member.
+    withKeys(menu(true, false, MEMBER.includes('work_item:archive')), MEMBER);
+    screen.getByRole('button', { name: /actions/i }).click();
+    await screen.findByRole('menu');
+    expect(screen.getByRole('menuitem', { name: /archive/i })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /delete/i })).toBeNull();
   });
 });

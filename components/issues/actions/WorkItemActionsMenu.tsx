@@ -31,8 +31,15 @@ import {
 // design/work-items/delete-confirm.mock.html panels 0–1 — IDENTICAL on the
 // detail header, list rows, and board cards. The shipped `Popover` (no
 // hand-rolled menu), keyboard-operable. Order: `Edit details` · `Copy link` · —
-// · `Archive` · `Delete…`. Permission-gated, Jira-faithfully: `Edit`/`Archive`
-// need `canEdit`; `Delete` needs `canDelete`. A user without a
+// · `Archive` · `Delete…`. Permission-gated, Jira-faithfully: `Edit` needs
+// `canEdit`; `Archive`/`Restore` need `canArchive`; `Delete` needs `canDelete`.
+//
+// ⚠️ ARCHIVE HAS ITS OWN GATE NOW (MOTIR-3629), and it did not before: the row
+// was drawn on `canEdit` while `archiveWorkItem` asserted `work_item:delete`, so
+// a MEMBER — who holds edit and not delete — was offered an Archive row that
+// 403'd on click. `work_item:archive` is the key that makes the affordance
+// tellable: `member` holds it, so the row is now offered to exactly the actors
+// the service admits. A user without a
 // capability does NOT see that row (hidden, never shown-disabled); a viewer with
 // neither collapses to just `Copy link`. Delete is the only danger-coloured row
 // and opens the 2.8.4 confirm dialog; Archive (reversible) runs inline with an
@@ -40,7 +47,7 @@ import {
 //
 // The `archived` prop (Story 2.9 · Subtask 2.9.11, per delete-confirm.mock.html
 // §2.9.7 "On the DETAIL page — panel 8") puts the menu in its ARCHIVED-item
-// mode: the `canEdit` row swaps Archive→Restore (runs the same `runUnarchive`
+// mode: the `canArchive` row swaps Archive→Restore (runs the same `runUnarchive`
 // the Undo toast uses, inline), and `Delete…` opens the ARCHIVED variant of the
 // confirm dialog (2.9.10 — no Archive escape-hatch + the live-descendant
 // warning). Defaults to `false`, so the active surfaces are byte-for-byte
@@ -63,6 +70,7 @@ export function WorkItemActionsMenu({
   identifier,
   title,
   canEdit,
+  canArchive,
   canDelete,
   archived = false,
   onDeleted,
@@ -80,9 +88,25 @@ export function WorkItemActionsMenu({
   /** The `PROD-N` key — used for the link, the menu label, and toasts. */
   identifier: string;
   title: string;
-  /** Edit + Archive/Restore gate (the project EDIT capability). */
+  /** Edit gate — `work_item:edit`, the project EDIT capability. */
   canEdit: boolean;
-  /** Delete gate (the project-admin MANAGE capability). */
+  /**
+   * Whether the actor may ARCHIVE or RESTORE a work item — `work_item:archive`,
+   * the key `workItemsService.archiveWorkItem` / `unarchiveWorkItem` assert.
+   *
+   * ⚠️ ADDED BY MOTIR-3629, and its absence was a live mis-gate. Archive and
+   * Restore were drawn on `canEdit` while the service asserted
+   * `work_item:delete`, so the menu offered a MEMBER (edit yes, delete no) a row
+   * that 403'd. There was no correct prop to pass: one key spanned the
+   * reversible hide and the irreversible subtree destroy, so gating on it would
+   * have hidden Archive from every member instead. The catalog now carries both
+   * terms and `member` holds the archive one, so this prop can tell the truth.
+   *
+   * It is REQUIRED rather than defaulted: every host reads a permission set
+   * already, and a default would let the next surface silently inherit whichever
+   * answer happened to be convenient — which is how the first mis-gate lasted.
+   */
+  canArchive: boolean;
   /**
    * Whether the actor may DELETE a work item — `work_item:delete`, the key
    * `workItemsService.deleteWorkItem` (`:2267`) actually asserts.
@@ -369,11 +393,11 @@ export function WorkItemActionsMenu({
               {t('copyLink')}
             </button>
 
-            {canEdit || canDelete ? (
+            {canArchive || canDelete ? (
               <div className="mx-1 my-1 h-px bg-(--el-border)" role="separator" />
             ) : null}
 
-            {canEdit ? (
+            {canArchive ? (
               archived ? (
                 <button
                   type="button"
@@ -433,8 +457,17 @@ export function WorkItemActionsMenu({
           }}
           // The archived variant has no "Archive instead" escape-hatch (the item
           // is already archived) — omit the handler so the dialog drops the row.
+          //
+          // ⚠️ AND NEITHER DOES AN ACTOR WITHOUT `canArchive` (MOTIR-3629). The
+          // escape-hatch runs `runArchive`, so offering it to someone the archive
+          // gate refuses would put the 403 this card removed back inside the
+          // delete dialog. In practice the condition holds for every real actor —
+          // `work_item:delete` CONFERS `work_item:archive` at resolution — which
+          // is exactly why it is worth testing rather than assuming: the prop is
+          // supplied by the host, and the invariant lives in the server's
+          // resolution, not in this component.
           onArchiveInstead={
-            archived
+            archived || !canArchive
               ? undefined
               : () => {
                   setDialogOpen(false);

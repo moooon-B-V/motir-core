@@ -36,12 +36,15 @@ import type { ArchivedRowData } from './archivedRows';
 // The actions cell is TOTAL over the two independent capabilities (Subtask
 // 2.9.5, design-notes §2.9.7), each affordance HIDDEN — never shown-disabled —
 // when its gate is unmet (the WorkItemActionsMenu pattern):
-//   • Restore — the prominent inline `[Restore]` button, gated `work_item:delete`.
+//   • Restore — the prominent inline `[Restore]` button, gated `work_item:archive`
+//     (MOTIR-3629; it was `work_item:delete` while the two were one key).
 //   • Delete  — a danger `Delete…` row inside a per-row `⋯` overflow menu, gated
 //     `canDelete` (read from `useProjectAccess()`, not a server prop — the
 //     `WorkItemRowActions` pattern). The `⋯` is PURELY the Delete affordance.
 // When NEITHER gate is met the whole actions column is dropped (the view-only
-// state). `canDelete` comes from the provider mounted in the authed layout.
+// state). Both keys come from the provider mounted in the authed layout, and the
+// three states are now all reachable: a member sees Restore alone, an admin sees
+// both, a browse-only viewer sees no column.
 //
 // Pagination is URL-driven (?page=) so the Server Component re-reads each page;
 // the parent keys this island by page, so the optimistic-removed set resets on
@@ -69,16 +72,20 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
   const router = useRouter();
   const pathname = usePathname();
   // Delete is project-admin (canDelete) — the same gate the server enforces
-  // (`deleteWorkItem`/`getDeletePreview` → `assertCanManage`). Read from the
+  // (`deleteWorkItem` → `assertPermission('work_item:delete')`). Read from the
   // provider mounted in the authed layout (the WorkItemRowActions pattern), so
   // no new server prop has to thread through the page.
-  // MOTIR-2473 — Delete AND Restore both go through `work_item:delete`, so this
-  // island reads ONE key where it used to take two answers: `unarchiveWorkItem`
-  // (`:2208`) asserts exactly what `deleteWorkItem` (`:2267`) does. Restore was
-  // gated on the `canDelete` prop, which a MEMBER holds and `work_item:delete` is
-  // not — so the product offered a member a Restore button that 403'd. The prop
-  // is gone; the affordance now tells the truth.
+  //
+  // MOTIR-2473 collapsed this island onto ONE key, because `unarchiveWorkItem`
+  // asserted exactly what `deleteWorkItem` did. MOTIR-3629 splits it back into
+  // TWO, and this time they are two OPERATIONS rather than two guesses at one:
+  // Restore asks `work_item:archive` (reversible, one row) and Delete asks
+  // `work_item:delete` (irreversible, the whole subtree). A MEMBER holds the
+  // first and not the second, so this page now shows them Restore and no
+  // Delete — which is the state 2473 wanted and could not express, having only
+  // the choice between a 403ing button and no button at all.
   const { can } = useProjectAccess();
+  const canArchive = can('work_item:archive');
   const canDelete = can('work_item:delete');
 
   // Optimistic removal: the ids removed (restored OR deleted) this page + the
@@ -152,8 +159,11 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
   const visibleRows = rows.filter((r) => !removedIds.has(r.id));
   const effectiveTotal = Math.max(0, total - removedIds.size);
   // The actions column shows when EITHER capability is present; it's dropped only
-  // when neither Restore nor Delete is available (the view-only state).
-  const showActions = canDelete;
+  // when neither Restore nor Delete is available (the view-only state). That
+  // sentence has been the intent since 2.9.5 and became literally true again at
+  // MOTIR-3629 — while the two affordances shared one key it read `canDelete`,
+  // which is the same value written twice.
+  const showActions = canArchive || canDelete;
   // Grid: Title · Status · Archived by · Archived (· actions when showActions).
   // The actions track is 150px (was 120px) to seat `[Restore]` + `⋯` together.
   const gridTemplate = showActions
@@ -254,7 +264,7 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
 
                   {showActions ? (
                     <div role="cell" className="relative z-10 flex items-center justify-end gap-1">
-                      {canDelete ? (
+                      {canArchive ? (
                         <Button
                           variant="secondary"
                           size="sm"

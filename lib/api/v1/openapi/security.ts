@@ -85,9 +85,18 @@ export const V1_EXPOSED_PERMISSIONS: readonly PermissionKey[] = GRANTABLE_PERMIS
  * it. Emitting it as a required permission would advertise an operation that
  * does not exist.
  *
- * ⚠️ It also excludes ARCHIVE from v1, which is new: archive and delete assert
- * ONE key (ADR §3), so v1's two archive operations declare `work_item:delete`
- * and the audit rule has to admit them by PATH. See that rule for the split.
+ * ⚠️ CORRECTED (MOTIR-3629). This block used to end: "It also excludes ARCHIVE
+ * from v1, which is new: archive and delete assert ONE key (ADR §3), so v1's two
+ * archive operations declare `work_item:delete` and the audit rule has to admit
+ * them by PATH."
+ *
+ * That is no longer true, and its being true was the defect. v1 exposes archive
+ * and not delete; under one key the document could not SAY so, so this set
+ * excluded an operation v1 actually serves and the audit spelled the difference
+ * with a path allow-list. With `work_item:archive` in the catalog the two
+ * operations declare their own key, so it lands in {@link V1_EXPOSED_PERMISSIONS}
+ * by the ordinary derivation, `work_item:delete` is the only work-item key left
+ * here, and the audit's carve-out is deleted.
  */
 export const V1_UNEXPOSED_PERMISSIONS: readonly PermissionKey[] = GRANTABLE_PERMISSIONS.filter(
   (key) => !V1_EXPOSED_PERMISSIONS.includes(key),

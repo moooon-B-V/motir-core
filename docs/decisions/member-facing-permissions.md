@@ -112,6 +112,31 @@ this without opening another file:
 | `ai:plan`             | a project **viewer**; a **workspace member with no project membership**        | run a planning job — chat, expand, augment, replan, generate, sprint-plan, explanation, the pre-plan | reading the plan a job produced                       |
 | `ai:view_plan`        | a project **viewer**; a **workspace member with no project membership**        | approve, decline or edit a proposal on a generated plan                                              | reading a generated plan (via `project:browse`)       |
 
+> ⚠️ **AMENDED by MOTIR-3629 (2026-08-26) — `work_item:delete`'s row was TWO
+> operations, and only one of them belonged at admin.** Both tables above say
+> _"archive or delete a work item and its subtree"_, which is one cell describing
+> a reversible single-row hide and an irreversible subtree destroy at the same
+> time. The Jira evidence quoted in the assignment table is about _Delete
+> Issues_ and is unchanged; it was never evidence about archiving, and Jira has no
+> archive permission for it to be evidence about.
+>
+> `work_item:archive` splits out (`docs/decisions/token-permissions.md` §10) and
+> the assignment is **admin ✅ · member ✅ · viewer ❌**. Rung-1 evidence: Linear,
+> whose archive semantics this operation already copies — `archiveWorkItem`'s own
+> header cites _"the Linear shape"_ for leaving children intact — and where
+> archiving is every member's ordinary remove while deleting is not. `viewer` is
+> unchanged: a read-only actor removes nothing.
+>
+> So the revocation row now reads: a project **member** loses only the subtree
+> DELETE, and keeps archiving; a project **viewer** and a **workspace member with
+> no project membership** still lose both. The last of those is the one place
+> archive parts from `member` — §2's argument decides it, because taking a row out
+> of every active view for the whole team is an act of ownership on a project
+> nobody put you on, reversible or not.
+>
+> Nothing here is a migration: `work_item:delete` confers `work_item:archive` at
+> resolution, so every actor who could archive under the old row still can.
+
 Two rows deserve their reasoning spelled out because the answer could plausibly
 have gone the other way:
 

@@ -2479,6 +2479,66 @@ describe('the eight member-facing keys resolve to exactly the actors the decisio
     }
   });
 
+  // ── MOTIR-3629 — the ROLE half of the back-compatibility decision ─────────
+  // The token half lives in `tests/tokens/grant.test.ts`; this is the same rule
+  // reaching the other stored carrier, `project_role_definition.permissions`,
+  // through `customRoleBase`. Neither is migrated — §5's posture — so the
+  // implication is what keeps every actor who could archive able to.
+
+  it('a CUSTOM ROLE authored before the split still archives — resolution confers it', () => {
+    const held = resolvePermissions({
+      accessLevel: 'open',
+      workspaceRole: 'member',
+      projectRole: 'member',
+      customRolePermissions: ['project:browse', 'work_item:edit', 'work_item:delete'],
+    });
+    expect(held.has('work_item:archive')).toBe(true);
+    expect(held.has('work_item:delete')).toBe(true);
+  });
+
+  it('…and a role that lists ONLY archive does not gain the destroy', () => {
+    const held = resolvePermissions({
+      accessLevel: 'open',
+      workspaceRole: 'member',
+      projectRole: 'member',
+      customRolePermissions: ['project:browse', 'work_item:archive'],
+    });
+    expect(held.has('work_item:archive')).toBe(true);
+    expect(held.has('work_item:delete')).toBe(false);
+  });
+
+  it('a project MEMBER archives and does not delete, on every access level', () => {
+    // The assignment MOTIR-3629 decided, over the levels rather than at one
+    // point: `levelGrants` names neither key, so both take the default arm and
+    // the answer must be the same on all four.
+    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
+      const held = resolvePermissions({
+        accessLevel,
+        workspaceRole: 'member',
+        projectRole: 'member',
+      });
+      expect(held.has('work_item:archive'), `member / ${accessLevel} / archive`).toBe(true);
+      expect(held.has('work_item:delete'), `member / ${accessLevel} / delete`).toBe(false);
+    }
+  });
+
+  it('a project VIEWER archives on no level, and neither does an implicit workspace member', () => {
+    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
+      expect(
+        resolvePermissions({ accessLevel, workspaceRole: 'member', projectRole: 'viewer' }).has(
+          'work_item:archive',
+        ),
+        `viewer / ${accessLevel}`,
+      ).toBe(false);
+      expect(
+        resolvePermissions({ accessLevel, workspaceRole: 'member', projectRole: null }).has(
+          'work_item:archive',
+        ),
+        `implicit workspace member / ${accessLevel}`,
+      ).toBe(false);
+    }
+  });
+
   it('the implicit workspace-member grant grew by exactly report:view', () => {
     // The set the decision's §2 is about. Asserted as an exact set rather than a
     // per-key loop, so a key added here later fails loudly instead of widening

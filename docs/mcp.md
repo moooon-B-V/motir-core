@@ -114,10 +114,16 @@ from the shipped map** rather than transcribed — so it cannot go stale the day
 someone adds a tool. Each tool's own entry below names its permission too.
 
 **Default grant.** A token minted without an explicit choice gets **every
-grantable permission EXCEPT `work_item:delete`**. Note that `work_item:delete`
-governs **archiving as well as deleting** — that is the gate the server has
-always applied to both — so a default-granted token can neither archive nor
-delete, and archiving is an opt-in.
+grantable permission EXCEPT `work_item:delete`** — the one irreversible key. So a
+default-granted token can archive (`work_item:archive`, a reversible soft-remove
+that leaves an item's children untouched) and cannot delete a subtree; opting in
+to the destroy is a deliberate tick.
+
+> The two used to be ONE key, and a default-granted token could do neither. They
+> were separated in 2026-08 because grouping them made the reversible operation
+> ungrantable without the irreversible one. A grant that still names only
+> `work_item:delete` reaches both — holding the destroy confers the hide — so
+> nothing minted under the old vocabulary lost an operation.
 
 **AI planning is its own permission.** `ai:plan` gates `expand_item` and the
 three plan-session tools, all of which spend the workspace's AI credits. Under
@@ -1293,8 +1299,9 @@ typed error.
 Soft-delete (archive) a work item: it leaves the ready set (`list_ready` /
 `next_ready`) and search, but is fully recoverable. Archives **only this item** —
 children are left intact (the deliberate "Linear shape", not a Jira parent→subtree
-cascade; a destructive subtree delete is the separate `delete_work_item`). Same
-edit gate as the UI.
+cascade; a destructive subtree delete is the separate `delete_work_item`). Gated
+on **`work_item:archive`** — the reversible half of removal, which a project
+member holds; the same gate the UI's Archive row asks for.
 
 | Input | Type   | Required | Notes                 |
 | ----- | ------ | -------- | --------------------- |
@@ -1306,7 +1313,8 @@ edit gate as the UI.
 
 Restore an archived work item — the inverse of `archive_work_item` (Jira
 "restore"). Clears `archivedAt` so the item returns to active views and records an
-`unarchived` history entry. Same edit gate as the UI.
+`unarchived` history entry. Gated on **`work_item:archive`**, like its inverse —
+restoring cannot be the tighter of the two.
 
 | Input | Type   | Required | Notes                 |
 | ----- | ------ | -------- | --------------------- |
@@ -1321,9 +1329,11 @@ every descendant, and all their links / comments / history, are removed in one
 transaction. This is **irreversible**: there is no undo, unlike
 `archive_work_item`. Pick **archive** for a recoverable soft-remove that takes a
 single card out of the ready set, **delete** to erase a mistaken subtree for
-good. Gated on the same project-admin **manage** capability the UI's delete
-requires (a member who can edit but not manage gets a typed access error); a
-missing / cross-tenant key is an indistinguishable 404 not-found.
+good. Gated on **`work_item:delete`** — the irreversible key, which a project
+admin holds and a member does not (a member who can edit and archive but not
+delete gets a typed access error). Holding it also confers `work_item:archive`:
+destroying a subtree strictly dominates hiding one row. A missing / cross-tenant
+key is an indistinguishable 404 not-found.
 
 | Input | Type   | Required | Notes                 |
 | ----- | ------ | -------- | --------------------- |

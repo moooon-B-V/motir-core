@@ -82,6 +82,38 @@
 // nor `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`. What changes is that a custom
 // role can now withhold one without the other.
 
+// ⚠️ `work_item:archive` AND `work_item:delete` ARE REVERSIBLE AND IRREVERSIBLE,
+// AND THEY WERE ONE KEY (MOTIR-3629, 2026-08-26). The same shape as the split
+// directly above, one domain over: one key spanning two operations of different
+// severity, so granting the benign one conferred the dangerous one.
+//
+// `permission-inventory.md` R42 grouped archive with delete because both
+// "cascade over a subtree". Archive does not — `archiveWorkItem` stamps
+// `archivedAt` on ONE row and leaves the children live, which the route and the
+// MCP tool description both say in their own words. So the two were grouped on
+// the single property archive does NOT have, and they differ on BOTH axes that
+// make delete dangerous: reversibility and blast radius.
+//
+// The vocabulary was already paying for the missing term in two places, which is
+// what a missing term looks like: `/api/v1` exposes archive and not delete, so
+// its route audit had to admit the archive PATHS by name because the permission
+// could no longer express the difference (that exception is deleted with this
+// key); and `lib/mcp/scopes.ts` still carried `work_items:archive` and
+// `work_items:delete` as two legacy scopes that had collapsed onto one key.
+//
+//   * `work_item:archive` gates `archiveWorkItem` / `unarchiveWorkItem` — the
+//     reversible, non-cascading soft-remove, on all three seams (the service, the
+//     two MCP tools, the two `/api/v1` operations).
+//   * `work_item:delete` keeps the irreversible subtree delete and its dry run,
+//     and stays the ONE key {@link PERMISSION_IMPLICATIONS} implies from, the one
+//     `IRREVERSIBLE_PERMISSIONS` names, and the one `/api/v1` does not expose.
+//
+// It is NOT behaviour-neutral, deliberately: `member` gains `work_item:archive`
+// (`builtinRoles.ts`), because a member could already see the Archive row and
+// earn a 403 on it, and "may not destroy a subtree" was never meant to say "may
+// not tidy your own board". `docs/decisions/token-permissions.md` §10 records
+// that and the back-compatibility decision.
+
 /**
  * The domain groups, in the order a UI renders them. Every permission carries
  * exactly one, and a domain with no permissions is a guard failure (an empty
@@ -151,6 +183,16 @@ export const PERMISSIONS = [
   // run had to be able to RETIRE a lesson in order to record that one applied.
   'lesson:reinforce',
   'work_item:edit',
+  // MOTIR-3629 — REVERSIBLE removal, split out of `work_item:delete`, and placed
+  // BEFORE it so the domain reads in order of severity: edit a field, hide a
+  // row, destroy a subtree. The two were one key because `permission-inventory.md`
+  // R42 grouped them on "cascades over a subtree" — which is false of archive
+  // (`archiveWorkItem` stamps `archivedAt` on ONE row; children are untouched),
+  // so a grantor who wanted to say "you may tidy the board" had to say "you may
+  // destroy a tree". They differ on BOTH axes that make delete dangerous —
+  // reversibility and blast radius — and the key governing them was named after
+  // the destructive one.
+  'work_item:archive',
   'work_item:delete',
   'work_item:triage',
   'comment:add',
@@ -246,6 +288,11 @@ const PERMISSION_META: Record<
   // (`canReinforceLessons`, lib/projects/access.ts) lands in the same change.
   'lesson:reinforce': { domain: 'project', enforcement: 'enforced' }, // MOTIR-3553
   'work_item:edit': { domain: 'work_item', enforcement: 'enforced' },
+  // `enforced` on arrival, like every key since MOTIR-2356: `PLANNED_PERMISSIONS`
+  // is empty and pinned there, so the gates land in the same change — the two
+  // service assertions (`archiveWorkItem` / `unarchiveWorkItem`), the two MCP tool
+  // rows and the two `/api/v1` declarations all move with it.
+  'work_item:archive': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-3629
   'work_item:delete': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
   'work_item:triage': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
   'comment:add': { domain: 'comment', enforcement: 'enforced' },
@@ -295,6 +342,54 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionDescriptor> = O
     } satisfies PermissionDescriptor,
   ]),
 ) as Record<PermissionKey, PermissionDescriptor>;
+
+/**
+ * The keys a held permission CONFERS in addition to itself, applied wherever a
+ * grant or a role is RESOLVED (MOTIR-3629).
+ *
+ * ⚠️ THIS IS NOT A HIERARCHY, AND IT IS NOT A COMPATIBILITY SHIM. An entry
+ * belongs here only when the implying key's operation STRICTLY DOMINATES the
+ * implied one's on every axis that makes it dangerous — so that withholding the
+ * implied key from a holder of the implying one would express nothing a grantor
+ * could mean. The one entry says exactly that: `work_item:delete` destroys a
+ * whole subtree irreversibly, and refusing its holder the reversible soft-remove
+ * of a single row is not a narrower grant, it is an incoherent one.
+ *
+ * Because it is a statement about the OPERATIONS rather than about old data, it
+ * has no sunset: it is equally true of a grant authored tomorrow. That is also
+ * what makes it the back-compatibility answer for the archive split
+ * (`docs/decisions/token-permissions.md` §10) — every credential and every custom
+ * role that could archive before the split can archive after it, with no
+ * migration touching a stored row, which is the posture §5 already takes for a
+ * legacy scope string and `resolve.ts` takes for a stored role array.
+ *
+ * ⚠️ ONE PASS, NOT A CLOSURE. {@link withImpliedPermissions} expands the held set
+ * once and does not follow an implied key's own implications. With a single entry
+ * the two are identical; the choice is stated so a second entry is added
+ * deliberately rather than silently gaining transitive reach.
+ * `tests/permissions/catalog.test.ts` pins that no implied key is itself an
+ * implier, so the day the two would diverge is a red build.
+ */
+export const PERMISSION_IMPLICATIONS: Partial<Record<PermissionKey, readonly PermissionKey[]>> = {
+  'work_item:delete': ['work_item:archive'],
+};
+
+/**
+ * A held set plus everything {@link PERMISSION_IMPLICATIONS} says it confers.
+ *
+ * The ONE expansion both resolution seams share — `resolvePermissions`
+ * (`lib/permissions/resolve.ts`, for a role or a stored custom-role array) and
+ * `expandStoredGrant` (`lib/tokens/grant.ts`, for a token's stored column) — so
+ * the grid, the token list and the two dispatch gates cannot disagree about what
+ * a grant confers. Returns a new Set; the input is never mutated.
+ */
+export function withImpliedPermissions(keys: Iterable<PermissionKey>): Set<PermissionKey> {
+  const held = new Set<PermissionKey>(keys);
+  for (const key of [...held]) {
+    for (const implied of PERMISSION_IMPLICATIONS[key] ?? []) held.add(implied);
+  }
+  return held;
+}
 
 /** Membership test usable on an untrusted string (a persisted / posted value). */
 export function isPermissionKey(value: unknown): value is PermissionKey {
