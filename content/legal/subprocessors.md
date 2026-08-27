@@ -143,9 +143,14 @@ consequence of where they are established — SCCs are available for any third
 country, and Tier 1 is a Chinese provider with a clean instrument.
 
 > **⚠️ You choose which tier serves your workspace.** The planner model is a
-> per-project setting, not something we pick for you, and **the default is a Tier 1
-> or Tier 2 provider**. A Tier 3 model is available, and reaching one is a
-> deliberate choice made with this page in front of you. That is the same shape the
+> per-project setting, not something we pick for you. **At general availability the
+> DEFAULT will be a Tier 1 or Tier 2 provider**, so reaching a Tier 3 model is a
+> deliberate choice made with this page in front of you. That is a commitment about
+> launch and not a description of today: the current default is a Tier 3 model,
+> which is accurate to state on a page nobody can yet sign up to and would not be
+> accurate to state on one they could. It is enforced at the gateway — a residency
+> group that a no-basis upstream cannot enter — rather than by convention, so that
+> a later configuration change cannot quietly undo it. That is the same shape the
 > large model gateways use — the provider is selected by the customer, and the
 > gateway's job is to make the selection informed and to enforce it — and it is why
 > this page tiers the providers instead of averaging them.
