@@ -448,7 +448,7 @@ describe('5 — CONTRACT TOTALITY: three consumers, one card, one test', () => {
     const rows = await refs(item.id, fx.workspace.id);
     const dto = toWorkItemDto(row, rows);
     const detail = await workItemsService.getIssueDetail(fx.project.id, item.identifier, fx.ctx);
-    const publicBody = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}));
+    const publicBody = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}, []));
     const mcp = presentMcpWorkItem(dto);
 
     // The ORDER is the set's, not the rows' creation order — `api` was pinned

@@ -86,3 +86,43 @@ export interface PullRequestLinkCandidateDto {
    *  the link. Null when the PR is unlinked. */
   linkedTo: string | null;
 }
+
+/**
+ * ONE MEMBER of a work item's DELIVERY SET (Story MOTIR-3655 · MOTIR-3697, ADR
+ * `docs/decisions/work-item-delivery-links.md`) — one pull request that delivers
+ * this card, with everything a reader needs to say whether it has ARRIVED.
+ *
+ * ── Why the pull request is NESTED rather than flattened ───────────────────
+ * `pullRequest` is the SAME {@link LinkedPullRequestDto} the Development surface
+ * already renders, carried whole. Flattening it would mean a second spelling of
+ * `ci` and of the merged/closed collapse on the same pull request, and two
+ * spellings of one answer is the defect this whole story is about — one level
+ * up, at the schema. So `merged` is `pullRequest.state === 'merged'` and the CI
+ * verdict is `pullRequest.ci`; there is no copy of either here.
+ *
+ * ⚠️ `ci` therefore comes from `derivePrCiState` and from nothing else. It is
+ * the one verdict `ciPromotion` reads and the one the Development pill shows, so
+ * a lane that watches CI through this DTO cannot drift from what a person sees
+ * (MOTIR-3685's own acceptance criterion forbids a second one).
+ *
+ * ── What the two extra fields are FOR ─────────────────────────────────────
+ * `baseRef` and `defaultBranch` exist so a consumer can tell the three shortfall
+ * kinds `lib/workItems/deliverySet.ts` computes apart without a second round
+ * trip: OUTSTANDING (not merged), STRANDED (merged onto a base that is not its
+ * repository's default branch — a merge that delivered nothing to the trunk) and
+ * UNKNOWN (merged with no base recorded). The comparison is PER REPOSITORY and
+ * never against a hard-coded `'main'`: a self-hoster's trunk is `master` or
+ * `trunk`, and a card spanning two repositories may face two different names.
+ */
+export interface WorkItemDeliveryDto {
+  /** The delivering pull request, in the shape every other surface renders it. */
+  pullRequest: LinkedPullRequestDto;
+  /** That pull request's OWN repository's default branch — the branch a merge
+   *  has to reach for the delivery to count. */
+  defaultBranch: string;
+  /** The branch the pull request TARGETS. Null on a row mirrored before Motir
+   *  recorded base branches, which is the UNKNOWN kind: whether the work reached
+   *  the trunk cannot be told, and the remedy is an operator backfill rather
+   *  than a merge. */
+  baseRef: string | null;
+}

@@ -5,11 +5,13 @@ import type {
   GithubRepoDTO,
   LinkedPullRequestDto,
   PullRequestLinkCandidateDto,
+  WorkItemDeliveryDto,
 } from '@/lib/dto/github';
 import type {
   GithubPullRequestCandidate,
   GithubPullRequestWithContext,
 } from '@/lib/repositories/githubPullRequestRepository';
+import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { derivePrCiState } from '@/lib/github/prCiState';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
@@ -69,6 +71,32 @@ export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): Linke
     ci: derivePrCiState(row.checkRuns),
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
     linkedManually: row.linkedManually,
+  };
+}
+
+/**
+ * A delivery row → one member of the work item's DELIVERY SET (Story MOTIR-3655 ·
+ * MOTIR-3697).
+ *
+ * The pull-request half goes through {@link toLinkedPullRequestDto} UNCHANGED, so
+ * a member's title fallback, merged/closed collapse, link-out URL and — the one
+ * that matters — its CI verdict are literally the values the Development surface
+ * renders, produced by the same call. Not a parallel mapping that agrees today.
+ *
+ * The delivery row's own `repo` is what the pull request's context needs: `repoId`
+ * is written from the pull request's repository when the link is recorded, so the
+ * two are the same row and joining twice would only give the reader a way to see
+ * them disagree.
+ */
+export function toWorkItemDeliveryDto(row: WorkItemDeliveryWithChecks): WorkItemDeliveryDto {
+  return {
+    pullRequest: toLinkedPullRequestDto({
+      ...row.pullRequest,
+      repo: row.repo,
+      checkRuns: row.pullRequest.checkRuns,
+    }),
+    defaultBranch: row.repo.defaultBranch,
+    baseRef: row.pullRequest.baseRef,
   };
 }
 

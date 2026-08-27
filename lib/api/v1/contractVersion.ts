@@ -229,10 +229,34 @@
  *   consumer has ever received and so can break none. `severity` was already
  *   open-ended and every client is required to tolerate unknown members of it.
  *
+ * - `1.22.0` — MOTIR-3697 adds `deliveries` to the work-item detail resource: the
+ *   DELIVERY SET, every pull request that delivers the card, each with its
+ *   repository, number, title, url, `state`, `baseRef`, that repository's own
+ *   `defaultBranch`, and `ci`.
+ *
+ *   It exists because `ci` had no route out. `derivePrCiState` is server-side, and
+ *   no v1 read exposed a pull request at all — so a PAT-authenticated client that
+ *   needed to know whether its own pull request was green could only shell out to
+ *   `gh pr checks`. That is a SECOND CI verdict, computed from different inputs by
+ *   different rules, and it would drift from the pill a person reads on the same
+ *   card. MOTIR-3685's watch-and-fix loop is the consumer, and its own acceptance
+ *   criterion forbids the second verdict; this is the first one, published.
+ *
+ *   `baseRef` + `defaultBranch` ride along because a merge is not a delivery: a
+ *   pull request merged onto a base that is NOT its repository's default branch
+ *   delivered nothing to the trunk, and a client cannot tell without both. Never
+ *   `main` by assumption — a self-hoster's trunk is `master` or `trunk`, and a card
+ *   spanning two repositories may face two different names.
+ *
+ *   Additive: one new field on an existing shape (§8's first allowed change); no
+ *   declared field removed, renamed or retyped. **It is an ARRAY on every work
+ *   item, never `null` and never absent**, and empty is the ordinary answer — it
+ *   means nothing is recorded, never that nothing has landed.
+ *
  *   ⚠️ THIS NUMBER IS A SERIALIZED RESOURCE. Every in-flight additive pull
  *   request claims the next MINOR, so read `V1_CONTRACT_VERSION` on
  *   `origin/main` before merging and RENUMBER if a sibling has taken it since —
  *   the entry names the OPERATION rather than a position precisely so that stays
  *   one line (the 1.14.0 → 1.17.0 note above is the same process working).
  */
-export const V1_CONTRACT_VERSION = '1.21.0';
+export const V1_CONTRACT_VERSION = '1.22.0';

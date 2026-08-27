@@ -795,6 +795,39 @@ it is the sibling sub-graph — the item's OWN edges are the richer top-level
 show` folds it into the build-order WAVE column; `show --json` adds a computed
 `wave` per child (`null` for a member of a dependency cycle).
 
+The aggregate also carries **`deliveries`** — the card's DELIVERY SET, every pull
+request that delivers it, oldest link first. This is the read an agent makes
+after opening a pull request and calling
+[`link_pull_request`](#link_pull_request): it says whether the card is delivered
+by one branch or by several, and whether the others are green.
+
+```jsonc
+"deliveries": [
+  {
+    "pullRequest": {
+      "title": "feat(api): the delivery set", "repo": "acme/web", "number": 2291,
+      "state": "open", "ci": "passing",
+      "url": "https://github.com/acme/web/pull/2291", "linkedManually": true
+    },
+    "baseRef": "main", "defaultBranch": "main"
+  }
+]
+```
+
+Three things about it are load-bearing:
+
+- **Empty is the ordinary answer.** Most cards have no delivery row, and `[]`
+  means _nothing is recorded_ — never _nothing has landed_. It is an array on
+  every card and never `null`.
+- **`pullRequest.ci` is the ONE CI verdict** — the same `derivePrCiState` the
+  Development pill shows and the promotion to In Review acts on. Do not derive a
+  second one from `gh pr checks`: two opinions about one commit is the drift this
+  field exists to prevent.
+- **A merge is not a delivery.** `baseRef` is the branch the pull request
+  targets and `defaultBranch` is that repository's own trunk — never assume
+  `main`. Merged onto anything else, the work reached no trunk; merged with
+  `baseRef: null`, whether it did cannot be told.
+
 #### `get_work_item_activity`
 
 Read one page of a work item's **discussion and change trail** — the comments

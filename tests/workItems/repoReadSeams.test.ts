@@ -186,7 +186,7 @@ describe('ALL THREE published surfaces agree — one card, one test', () => {
     );
 
     const detail = await workItemsService.getIssueDetail(fx.projectId, item.identifier, fx.ctx);
-    const v1 = presentWorkItemDetail(detail, 0, {}) as {
+    const v1 = presentWorkItemDetail(detail, 0, {}, []) as {
       targetRepositories: { ref: string; name: string }[];
       targetRepos: string[];
       targetRepo: string | null;

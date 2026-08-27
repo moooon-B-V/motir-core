@@ -207,7 +207,7 @@ describe('3 — the scalar is a PROJECTION, on both surfaces', () => {
         item.identifier,
         caller.ctx,
       );
-      const published = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}));
+      const published = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}, []));
       expect(published.targetRepos[0] ?? null).toBe(published.targetRepo);
     }
   });

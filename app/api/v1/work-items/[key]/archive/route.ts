@@ -49,8 +49,14 @@ export const POST = withV1Route<{ key: string }>(
     const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
     ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
     const childEdges = await readChildDependencyEdges(detail, ctx.service);
+    const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
     return NextResponse.json(
-      presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
+      presentWorkItemDetail(
+        detail,
+        commentCountFor(counts, detail.item.id),
+        childEdges,
+        deliveries,
+      ),
     );
   },
 );

@@ -12,6 +12,7 @@ import type {
   WorkItemSummaryDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
 
 // The v1 WORK-ITEM resource, declared once (Story 11.2 · Subtask 11.2.2 —
 // MOTIR-2040). Every sibling endpoint — list, detail, create, update,
@@ -358,6 +359,37 @@ export const workItemChildSchema = workItemRefSchema.extend({
 });
 export type WorkItemChild = z.infer<typeof workItemChildSchema>;
 
+/**
+ * ONE MEMBER of the DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — one pull request
+ * that delivers this card.
+ *
+ * Declared in the v1 layer rather than imported from `lib/dto/github`, like every
+ * other shape here: a change to the internal DTO must be a COMPILE error at the
+ * presenter, not a silent change to the published contract.
+ */
+const workItemDeliverySchema = z.object({
+  /** `owner/name`. */
+  repo: z.string(),
+  number: z.number().int(),
+  title: z.string(),
+  url: z.string(),
+  /** `merged` collapses the raw open/closed pair — a merged pull request is never
+   *  reported as `closed`, which is what makes this field alone sufficient to say
+   *  whether the delivery landed. */
+  state: z.enum(['open', 'merged', 'closed']),
+  /** The pull request's CI at its latest recorded commit, from `derivePrCiState` —
+   *  the SAME verdict `ciPromotion` acts on and the Development pill shows. `null`
+   *  is the absence of CI, which is not a state and not a failure. */
+  ci: z.enum(['passing', 'failing', 'running']).nullable(),
+  /** The branch the pull request TARGETS; null on a row mirrored before base
+   *  branches were recorded. */
+  baseRef: z.string().nullable(),
+  /** THAT repository's default branch — never assume `main`. A merge onto anything
+   *  else delivered nothing to the trunk. */
+  defaultBranch: z.string(),
+});
+export type WorkItemDelivery = z.infer<typeof workItemDeliverySchema>;
+
 /** The single-item READ: the work item's fields plus everything a detail adds. */
 export const workItemDetailSchema = workItemFieldsSchema.extend({
   descriptionMd: z.string().nullable(),
@@ -409,6 +441,22 @@ export const workItemDetailSchema = workItemFieldsSchema.extend({
   implementationHarness: z.string().nullable(),
   implementationModel: z.string().nullable(),
   archivedAt: isoDateTimeSchema.nullable(),
+  /** The DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — every pull request that
+   *  delivers this card, oldest link first.
+   *
+   *  This is the only route a PAT-authenticated client has to a pull request's CI
+   *  verdict: `derivePrCiState` is server-side and no v1 read exposed it, so a CLI
+   *  that had to know whether its own pull request was green could only shell out
+   *  to `gh pr checks` — a SECOND verdict, which would drift from the pill a person
+   *  reads on the same card. The `ci` here is the first one.
+   *
+   *  ⚠️ EMPTY IS THE ORDINARY ANSWER, on an overwhelming majority of cards, and it
+   *  means *nothing is recorded* — never *nothing has landed*. It is an array on
+   *  every work item and never `null` or absent, so a client needs no branch.
+   *
+   *  ADDITIVE: a new field on an existing shape, §8's first allowed change; no
+   *  declared field is removed, renamed or retyped. `V1_CONTRACT_VERSION` moves. */
+  deliveries: z.array(workItemDeliverySchema),
 });
 export type WorkItemDetail = z.infer<typeof workItemDetailSchema>;
 
@@ -541,11 +589,19 @@ export function presentWorkItemRef(
  * returns it, and REQUIRED so a route cannot forget the projection and publish an
  * edge-free sub-graph. Pass `{}` where the caller genuinely has no children to
  * describe (a create, or the links-only presenter).
+ *
+ * `deliveries` arrives the same way again (MOTIR-3697), and is REQUIRED for a
+ * sharper version of the same reason: an omitted delivery set does not read as
+ * missing, it reads as EMPTY, and an empty delivery set is a positive claim that
+ * nothing delivers this card. A route that forgot it would publish that claim
+ * about every work item it returns, and no client could tell. Pass `[]` only where
+ * the answer is genuinely empty — a create, whose card cannot yet have one.
  */
 export function presentWorkItemDetail(
   detail: IssueDetailDto,
   commentCount: number,
   childEdges: Readonly<Record<string, WorkItemDependencyEdgesDto>>,
+  deliveries: readonly WorkItemDeliveryDto[],
 ): WorkItemDetail {
   const { item } = detail;
 
@@ -620,15 +676,28 @@ export function presentWorkItemDetail(
     implementationHarness: item.implementationHarness,
     implementationModel: item.implementationModel,
     archivedAt: item.archivedAt,
+    // Field by field, never a spread — the internal DTO nests the pull request and
+    // the wire resource is flat, so the two shapes are deliberately different and a
+    // change to either has to be made here on purpose.
+    deliveries: deliveries.map((delivery) => ({
+      repo: delivery.pullRequest.repo,
+      number: delivery.pullRequest.number,
+      title: delivery.pullRequest.title,
+      url: delivery.pullRequest.url,
+      state: delivery.pullRequest.state,
+      ci: delivery.pullRequest.ci,
+      baseRef: delivery.baseRef,
+      defaultBranch: delivery.defaultBranch,
+    })),
   };
 }
 
 /** Present the five edge groups on their own — the `GET …/links` body (11.2.9),
  *  reusing the SAME declaration the detail resource nests. */
 export function presentWorkItemLinkGroups(detail: IssueDetailDto): WorkItemLinkGroups {
-  // No child edges: `links` is the item's OWN five edge groups and reads nothing
-  // from the children, so this presenter owes no projection.
-  return presentWorkItemDetail(detail, 0, {}).links;
+  // No child edges and no deliveries: `links` is the item's OWN five edge groups
+  // and reads neither, so this presenter owes no projection of either.
+  return presentWorkItemDetail(detail, 0, {}, []).links;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

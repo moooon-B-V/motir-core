@@ -186,12 +186,20 @@ export async function runGetWorkItem(
   // The CHILD rows now DERIVE from v1's `workItemChildSchema` (MOTIR-2228) —
   // the sub-graph the founding defect lived in. The rest of the aggregate is the
   // envelope, which stays MCP's own (ADR Amendment 7 Q6).
+  // The DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — every pull request that
+  // delivers this card, with its CI verdict. An agent that has just opened a pull
+  // request and called `link_pull_request` reads back HERE whether the card is
+  // delivered by one branch or several, and whether the others are green. Empty
+  // is the ordinary answer and means nothing is recorded, never that nothing has
+  // landed. It rides the `catchall`-open envelope, so no payload schema widens.
+  const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx);
   const structured = {
     ...detail,
     item,
     children: detail.children.map((child) =>
       presentMcpWorkItemChild(child, edges[child.id], (id) => keyById.get(id)),
     ),
+    deliveries,
   };
   return toolOk(summarize(detail, item.commentCount), derived(getWorkItemPayload, structured));
 }

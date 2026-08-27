@@ -369,6 +369,7 @@ describe('the v1 work-item presenters', () => {
       } as unknown as Parameters<typeof presentWorkItemDetail>[0],
       0,
       {},
+      [],
     );
 
     expect(detail.children[0]?.parentKey).toBeNull();

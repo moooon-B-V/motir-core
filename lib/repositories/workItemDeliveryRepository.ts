@@ -32,6 +32,19 @@ export type WorkItemDeliveryWithPr = Prisma.WorkItemDeliveryGetPayload<{
 
 const WITH_PR = { pullRequest: true, repo: true } as const;
 
+/** A delivery row whose pull request also carries its CHECK ROWS — what a read has
+ *  to have to derive the CI verdict (MOTIR-3697). Its own type, and its own read
+ *  below, because the check rows are the expensive half: the completion gate and
+ *  the CI promotion ask about MERGES and would pay for rows they never look at. */
+export type WorkItemDeliveryWithChecks = Prisma.WorkItemDeliveryGetPayload<{
+  include: { pullRequest: { include: { checkRuns: true } }; repo: true };
+}>;
+
+const WITH_CHECKS = {
+  pullRequest: { include: { checkRuns: true } },
+  repo: true,
+} as const;
+
 export const workItemDeliveryRepository = {
   /**
    * One card's DELIVERY SET — every pull request delivering it, oldest link first.
@@ -69,6 +82,30 @@ export const workItemDeliveryRepository = {
       where: { workItemId: { in: [...workItemIds] } },
       include: WITH_PR,
       orderBy: [{ workItemId: 'asc' }, { createdAt: 'asc' }],
+    });
+  },
+
+  /**
+   * One card's delivery set WITH the check rows behind each member's CI verdict
+   * (MOTIR-3697) — what the DTO needs and what {@link listByWorkItem} deliberately
+   * does not fetch.
+   *
+   * Same rows, same order, one heavier `include`. Kept apart from
+   * {@link listByWorkItem} rather than folded into it because the two callers want
+   * genuinely different things: the completion gate asks *has it merged*, which the
+   * pull-request row answers on its own, while a READER also asks *is it green*,
+   * which only the check rows can. Widening the gate's read would make every
+   * completion evaluation drag every check row of every delivery for an answer it
+   * never consults.
+   */
+  async listByWorkItemWithChecks(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemDeliveryWithChecks[]> {
+    return tx.workItemDelivery.findMany({
+      where: { workItemId },
+      include: WITH_CHECKS,
+      orderBy: { createdAt: 'asc' },
     });
   },
 

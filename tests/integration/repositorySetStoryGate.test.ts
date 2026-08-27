@@ -125,7 +125,7 @@ describe('1 — the write→read SEAM: one card, real Postgres, three consumers'
     const row = await adminDb.workItem.findUnique({ where: { id: created.id } });
     const dto = toWorkItemDto(row!);
     const detail = await workItemsService.getIssueDetail(fx.project.id, created.identifier, fx.ctx);
-    const publicBody = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}));
+    const publicBody = workItemDetailSchema.parse(presentWorkItemDetail(detail, 0, {}, []));
     const mcp = presentMcpWorkItem(dto);
 
     for (const shape of [dto, publicBody, mcp]) {

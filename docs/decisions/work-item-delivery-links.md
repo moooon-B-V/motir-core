@@ -178,6 +178,16 @@ link row, and each reader is moved to the table one card at a time.
 | `ciPromotion`                                                                    | `resolveChangeRequestWorkItemSet`  | MOTIR-3685                                     |
 | **the columns themselves**                                                       | both                               | **a follow-up card, once this table is empty** |
 
+**One reader is NEW rather than moved.** `workItemsService.listDeliverySet`
+(MOTIR-3697) reads the table and nothing else — there is no scalar it could have
+read, because the question it answers (_every_ pull request delivering this card,
+each with its CI verdict) has no expression in either column. It publishes the
+set on the work-item DTO, on v1's detail resource as `deliveries`, and on
+`get_work_item`'s payload. Its CI value goes through `toLinkedPullRequestDto`, so
+it is literally the verdict the Development pill shows rather than a second
+derivation that agrees today — which is the property MOTIR-3685's watch loop is
+built on and its acceptance criterion forbids breaking.
+
 ### `mark_integrated` SURVIVES, minus its `sessionBranch` argument
 
 It is not made redundant by `link_pull_request`, and the two do not overlap once

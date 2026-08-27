@@ -387,7 +387,7 @@ describe('service → schema → response, per resource, against real Postgres',
     const edges = await workItemsService.getDependencyEdgesForItems([child.id], caller.ctx);
 
     const { presentWorkItemDetail } = await import('@/lib/api/v1/workItems/schema');
-    const mapped = presentWorkItemDetail(detail, 0, edges);
+    const mapped = presentWorkItemDetail(detail, 0, edges, []);
 
     expect(() => workItemDetailSchema.parse(mapped)).not.toThrow();
     expect(mapped.children[0]?.dependencies).toEqual({ blockedBy: [], blocks: [] });

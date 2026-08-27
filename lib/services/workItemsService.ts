@@ -103,8 +103,9 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
-import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
-import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
@@ -4785,6 +4786,38 @@ export const workItemsService = {
       githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
     );
     return rows.map(toLinkedPullRequestDto);
+  },
+
+  /**
+   * A work item's DELIVERY SET (Story MOTIR-3655 · MOTIR-3697) — every pull request
+   * that delivers this card, oldest link first, each with the CI verdict and the
+   * two fields that say whether its merge reached the trunk.
+   *
+   * ── This is NOT `listLinkedPullRequests` under a new name ─────────────────
+   * That method reads `github_pull_request.work_item_id`, the SCALAR link, and so
+   * answers a question with a structural ceiling of one card per pull request: a
+   * `motir auto` pull request delivering twelve cards can be the link target of at
+   * most one of them, and appears on no other card's surface. This reads
+   * `work_item_delivery`, which is many-to-many in both directions. While the
+   * EXPAND step runs, both are written and both are correct; when the scalar is
+   * dropped, this is the survivor.
+   *
+   * ⚠️ Empty is the ORDINARY answer. Nearly every card in the tree has no delivery
+   * row, and every consumer — the gate, the rail, the CLI's watch loop — must read
+   * an empty array as *nothing to say about this card*, never as *nothing has
+   * landed*. That is why the shape is an array on every card and never `null`.
+   *
+   * `ctx` is for the BINDING, not for a gate (MOTIR-2815), exactly as
+   * {@link listLinkedPullRequests}: `work_item_delivery` is policy-gated on
+   * `app.workspace_id`, so an unbound read returns an EMPTY LIST for a card that
+   * has deliveries — the failure that looks like an answer. Callers pass an id an
+   * access-gated read has already resolved; this adds no tenancy gate of its own.
+   */
+  async listDeliverySet(workItemId: string, ctx: ServiceContext): Promise<WorkItemDeliveryDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx),
+    );
+    return rows.map(toWorkItemDeliveryDto);
   },
 
   /**
