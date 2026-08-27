@@ -2038,10 +2038,20 @@ named.
   eyeballed; the sweep is reproduced below. Two failures were found and fixed:
   - **`.me .em` (the rail's email) was `--el-text-muted` at 4.17:1** on
     `--el-sidebar-bg` — the documented sidebar trap. Raised to
-    `--el-text-secondary`. ⚠️ **Six sibling assets in this folder carry the
+    `--el-text-secondary`. ~~⚠️ **Six sibling assets in this folder carry the
     original** (`account-settings` · `profile` · `two-factor` · `passkeys` ·
     `appearance` · `token-scopes`); that is a pre-existing defect filed as its own
-    bug, deliberately **not** half-fixed here.
+    bug, deliberately **not** half-fixed here.~~
+    **DISCHARGED, and the enumeration was wrong (MOTIR-3693).** That bug fixed
+    the GUARD first and then let the guard count: muted ink on `--el-sidebar-bg`
+    stood on **18 assets across 9 areas**, not six in this folder. **This asset
+    was one of them** — not for `.me .em`, which was already
+    `--el-text-secondary`, but for its 24 rail glyph slots, which the sweep below
+    could not see either: `--el-sidebar-bg` was on neither ink guard's list of
+    tinted surfaces, so _"0 failures"_ meant 0 failures the guard could see on a
+    surface it was not measuring. `TINTED_SURFACE_TOKENS` is now derived from
+    `theme.css` and asserted total there, all 18 assets are swept, and the rail
+    glyphs carry `aria-hidden` exactly as the shipped `Sidebar` does.
   - **`--el-danger` as the danger-card heading is 4.51:1 in light and 4.25:1 in
     dark** — it clears AA for normal text in one theme and misses it in the other,
     and the base dark block does not flip `--color-destructive`. So the heading is

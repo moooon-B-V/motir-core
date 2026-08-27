@@ -296,7 +296,7 @@ export function CatalogueNav({
       ))}
 
       {total > 0 && shown === 0 && (
-        <p className="mt-4 px-(--spacing-control-x) text-[12.5px] text-(--el-text-muted)">
+        <p className="mt-4 px-(--spacing-control-x) text-[12.5px] text-(--el-text-secondary)">
           {t('findEmpty', { query: query.trim() })}
         </p>
       )}
