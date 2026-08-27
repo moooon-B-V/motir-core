@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { engineJobs } from '@/lib/jobs/engine/registry';
+// ⚠️ THE DECLARATION IS SHIPPED CODE NOW, and this test asserts against THAT
+// source rather than holding its own copy (MOTIR-3716). One list, not two: the
+// running process reconciles the same constants against the live secret, which a
+// list living only here could never be compared to.
+import { DELIBERATELY_ON_INNGEST, MIGRATED_TO_ENGINE } from '@/lib/jobs/engine/census';
 // The REAL registry, for its side effect — every definition module evaluated, so
 // this walks the shipped set rather than a fixture.
 import '@/lib/jobs/registry';
@@ -41,66 +46,27 @@ import '@/lib/jobs/registry';
 // So this asserts the thing CI can own — that every registered job has had its
 // lane DECLARED by a human, in the repository, under review. Adding a job now
 // fails this test until its author names the lane, which is precisely the
-// moment the decision is cheapest and the context is freshest. Keeping the
-// declaration equal to the live secret remains an operator duty; this guard
-// makes the declaration exist at all.
+// moment the decision is cheapest and the context is freshest.
 //
-// ⚠️ TO FIX A FAILURE: add the id to ONE of the two lists below. Do not delete
-// the assertion. If the job belongs on the engine, it also needs adding to
-// `MOTIR_POSTGRES_JOB_IDS` in production — the list here records intent, and a
-// PR is not a deploy.
-
-/** Jobs intended to run on the Postgres engine. Kept equal to the production secret. */
-const MIGRATED_TO_ENGINE = [
-  'automation-engine/commented',
-  'automation-engine/created',
-  'automation-engine/field.changed',
-  'automation-engine/transitioned',
-  'email.send',
-  'filter-subscription/deliver',
-  'notification-fan-in/comment.created',
-  'notification-fan-in/mentioned',
-  'notification-fan-in/transitioned',
-  'outward-bug-telemetry/created',
-  'plan-drift/transitioned',
-  'public-follow/digest',
-  'status-derivation/child-set-changed',
-  'status-derivation/created',
-  'status-derivation/requested',
-  'status-derivation/transitioned',
-  'system.abandoned-plan-sweep',
-  'system.attachment-gc',
-  'system.auto-plan-cadence-tick',
-  'system.automation-retention-sweep',
-  'system.billing-seat-sync',
-  'system.ci-actions-gate-sweep',
-  'system.ci-minutes-reconcile',
-  'system.ci-runner-provision-sweep',
-  'system.ci-runner-reap',
-  'system.code-graph-offboard-sweep',
-  'system.daily-health-check',
-  'system.filter-subscription-tick',
-  'system.job-run-reap',
-  'system.migrate-onboarding-sweep',
-  'system.plan-target-lock-sweep',
-  'system.public-follow-digest-tick',
-  'system.rate-limit-sweep',
-  'watcher-notify/comment.created',
-  'watcher-notify/transitioned',
-  'work-item/comment.created',
-  'work-item/embedding.requested',
-  'work-item/mentioned',
-] as const;
-
-/**
- * Jobs deliberately still on Inngest, each with the card that owns moving it.
- * An entry here is a DECISION, not a backlog: it says somebody looked.
- */
-const DELIBERATELY_ON_INNGEST: ReadonlyArray<{ id: string; because: string }> = [
-  { id: 'system.code-graph-index', because: 'container supervisor — MOTIR-3489 owns the flip' },
-  { id: 'system.code-graph-refresh', because: 'container supervisor — MOTIR-3489 owns the flip' },
-  { id: 'system.ci-runner-boot', because: 'container supervisor — MOTIR-3489 owns the flip' },
-];
+// ===========================================================================
+// ⚠️ THE LISTS MOVED — AND THAT IS WHAT CLOSED THE OTHER HALF (MOTIR-3716)
+// ===========================================================================
+// `MIGRATED_TO_ENGINE` and `DELIBERATELY_ON_INNGEST` now live in
+// `lib/jobs/engine/census.ts` and are IMPORTED here. Nothing about this guard
+// changed; what changed is that the declaration is readable by the running
+// PROCESS, which is what let `reconcileLanes()` compare it against the live
+// secret. While the lists lived in this file, the half a pull request can carry
+// was closed completely and the half only an operator can carry was as unowned
+// as it had ever been — four jobs drifted in ~34 hours (MOTIR-3682, MOTIR-3688,
+// MOTIR-3709), and the last of them was declared correctly right here.
+//
+// ⚠️ TO FIX A FAILURE: add the id to ONE of the two lists in `census.ts`. Do not
+// delete the assertion, and do not re-add a local copy — one list, not two. If
+// the job belongs on the engine it also needs adding to `MOTIR_POSTGRES_JOB_IDS`
+// in production; the declaration records intent, and a PR is not a deploy. The
+// difference between the two is now reported by the worker at start-up and by
+// `system.daily-health-check` daily, so it no longer waits for someone to run
+// `comm` by hand.
 
 describe('every registered job declares which lane it runs on', () => {
   const registered = engineJobs().map((d) => d.id);
