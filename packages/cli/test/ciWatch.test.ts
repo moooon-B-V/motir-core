@@ -518,6 +518,28 @@ describe('the fixing prompt', () => {
     expect(prompt).toContain('link nothing');
     expect(prompt).toContain('Do not touch the work item');
   });
+
+  it('says the PUSH is the verification, and bans the wider local re-run', () => {
+    // The pull toward re-running is strongest HERE and it does not feel like
+    // waste — it feels like checking your work. In this loop it is redundant by
+    // construction: every fixing iteration pushes, every push re-triggers CI, so
+    // the next poll already produces the verdict the local run anticipates.
+    // Observed: a run whose CI named ONE file fixed that file, then ran 294
+    // files to check the blast radius and harvested five unrelated
+    // database-contention failures belonging to other sessions.
+    expect(prompt).toContain('THE PUSH IS THE VERIFICATION');
+    expect(prompt).toContain('AT MOST the single file');
+    expect(prompt).toContain('NEVER the suite');
+  });
+
+  it('does not merely discourage the wide run — it gives the REASON', () => {
+    // A bare prohibition is the kind an agent reasons its way around ("this
+    // case is different"). The reason is what closes that door: the local copy
+    // is not merged with the default branch, so it is the WEAKER evidence, not
+    // merely the slower one.
+    expect(prompt).toContain('NOT merged');
+    expect(prompt).toContain('less trustworthy');
+  });
 });
 
 describe('there is exactly ONE CI verdict, and it is the server’s', () => {
