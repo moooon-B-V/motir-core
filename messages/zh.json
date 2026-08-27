@@ -6774,9 +6774,11 @@
         "colReason": "原因",
         "operatorRole": "平台 {role}",
         "action": {
-          "user.password_reset_sent": "已发送密码重置",
-          "user.suspend": "已停用",
-          "user.unsuspend": "已解除停用"
+          "user": {
+            "password_reset_sent": "已发送密码重置",
+            "suspend": "已停用",
+            "unsuspend": "已解除停用"
+          }
         }
       }
     },
