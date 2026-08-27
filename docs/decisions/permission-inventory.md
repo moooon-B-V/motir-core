@@ -540,6 +540,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | Operation                                    | Verbs                 | Gate today                                                        | Permission | Decision | Why |
 | -------------------------------------------- | --------------------- | ----------------------------------------------------------------- | ---------- | -------- | --- |
 | `/api/%5Ftest/db-role`                       | GET                   | — none, deliberately —                                            | —          | no-gate  | R53 |
+| `/api/%5Ftest/pull-request-links`            | POST                  | `assertCanBrowse`, `assertPermission`                             | —          | finding  | R8  |
 | `/api/%5Ftest/work-item-links`               | DELETE/GET/POST       | `assertCanBrowse`, `assertCanEdit`                                | —          | finding  | R8  |
 | `/api/%5Ftest/work-items`                    | DELETE/GET/PATCH/POST | `assertCanBrowse`, `assertCanEdit`                                | —          | finding  | R8  |
 | `/api/auth/[...all]`                         | —                     | — none —                                                          | —          | no-gate  | R12 |

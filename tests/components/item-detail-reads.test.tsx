@@ -90,7 +90,12 @@ vi.mock('@/lib/services/workItemsService', () => ({
   workItemsService: {
     getIssueDetail: () => getIssueDetail(),
     listLinkedPullRequests: deferred('pullRequests', []),
-    listRepoDelivery: deferred('repoDelivery', []),
+    // ONE call since MOTIR-3660 — `getDeliveryView` returns the repository set
+    // already amended by the delivery set, plus the set itself, so the rail and
+    // the Development section take their two halves from a single read. That is
+    // exactly what this file guards (tier two, read ONCE, not once per tier);
+    // what changed is the name of the call, not the property.
+    getDeliveryView: deferred('deliveryView', { repos: [], deliveries: [] }),
     resolveReferenceSummaries: deferred('workItemRefs', []),
   },
 }));
@@ -263,7 +268,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // resolved. Serialised awaits would show exactly one.
     for (const name of [
       'pullRequests',
-      'repoDelivery',
+      'deliveryView',
       'members',
       'sprints',
       'commentCaps',
@@ -380,8 +385,10 @@ describe('the late stack (MOTIR-3436)', () => {
     await new Promise((r) => setTimeout(r, 0));
 
     // The rail's Repositories card renders it, so it must be awaited before the
-    // first flush; the Development section takes the same value as a prop.
-    expect(started.filter((s) => s === 'repoDelivery').length).toBe(1);
+    // first flush; the Development section takes the same value as a prop. ONE
+    // read for both halves is the point — `getDeliveryView` returns them
+    // together precisely so neither host combines them itself (MOTIR-3660).
+    expect(started.filter((s) => s === 'deliveryView').length).toBe(1);
     release?.();
     await pending.catch(() => undefined);
   });

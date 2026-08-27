@@ -122,8 +122,21 @@ function developmentSection(page: Page) {
     .first();
 }
 
-const CORE_PR = 4101;
-const SECOND_PR = 4202;
+// ⚠️ THE 9000 BLOCK IS THIS SPEC'S (Bug MOTIR-3248). Pull-request numbers are a
+// SHARED namespace across every E2E spec that delivers a signed webhook —
+// `github_pull_request` is `@@unique([repoId, number])` and every spec's
+// `seedGithubInstallation` upserts the SAME installation and repo row — so a
+// collision fails at a distance, only once sharding happens to put two specs in
+// one database. 4000 is `github.spec.ts`'s; 5000–8000 are taken.
+//
+// Written as `number:` LITERALS rather than bare constants because
+// `tests/e2e-pull-request-number-blocks.test.ts` reads the source: a spec whose
+// numbers it cannot see is reported as `0 numbers found`, which that guard
+// treats as a FAILURE — a sweep that read nothing is broken, not passing.
+const CORE = { repo: E2E_REPO, number: 9101 };
+const SECOND = { repo: E2E_REPO_SECOND, number: 9202 };
+const CORE_PR = CORE.number;
+const SECOND_PR = SECOND.number;
 
 /** A pull-request row's meta line, exactly as `DevelopmentSection` renders it
  *  (`{repo} · #{number}`) — the ONE string that identifies a row uniquely when
