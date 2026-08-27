@@ -5,13 +5,14 @@ Design reference for the `auth` area: the signed-out surfaces served from
 (`/device`, `/unsubscribe/filter-subscription`) that joined the group after this
 asset was drawn.
 
-| Surface             | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth 2.0**        | **`auth-screens.pen`** (Pencil source)           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                                                                                                                                            |
-| **2FA challenge**   | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.**                                                                                                              |
-| **Passkey sign-in** | **`passkey-sign-in.mock.html`** (HTML mock)      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`. |
-| CLI hand-off        | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                        |
-| Brand lockup        | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                  |
+| Surface             | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth 2.0**        | **`auth-screens.pen`** (Pencil source)           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                                                                                                                                                                                                         |
+| **2FA challenge**   | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.**                                                                                                                                                                           |
+| **Passkey sign-in** | **`passkey-sign-in.mock.html`** (HTML mock)      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`.                                                              |
+| **2FA required**    | **`two-factor-required.mock.html`** (HTML mock)  | The screen a member without a second factor meets once their organization or workspace starts REQUIRING one (Story 8.13 · MOTIR-3643): who is asking, the three ways to satisfy it, the mounted enrolment surface, the return to where they were going, and the way out. Signed IN but held — it wears the `(auth)` frame precisely so nothing else is reachable. **Gates MOTIR-3648**; the admin-facing half is `../org-admin/security-policy.mock.html`. |
+| CLI hand-off        | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                                                                                     |
+| Brand lockup        | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                                                                               |
 
 `auth-screens.pen` is a **legacy Pencil source** — one of the fourteen `.pen`
 files still in the tree, and this area holds no HTML mock beside it. New assets
@@ -724,3 +725,186 @@ translate.
   "translated" into existence later.
 - No Tier-0 `--color-*` outside the token block and the Google mark's own fills;
   no raw `rounded-*` / `p-*` / `h-*` on any control's own box.
+
+---
+
+## 2FA required — the forced-enrolment screen (Story 8.13 · 8.13.2)
+
+**Asset:** `two-factor-required.mock.html` + `two-factor-required.png`. Gates
+**MOTIR-3648** (the enforcement gate and the screen it redirects to). The
+admin-facing half — the policy control both tenancy tiers render — is
+**MOTIR-3642** and lives in `../org-admin/`.
+
+### Why it is in THIS area, signed in
+
+The person **is** signed in. They still land on a signed-OUT frame, and that is
+the design decision rather than a filing convenience.
+
+`app/(auth)/layout.tsx` is a centred card on a `--el-auth-wash` page with the
+`BrandMark` lockup top-left INSIDE the card, and no app chrome at all. Drawing
+this screen inside the app shell — the nav, the project switcher, the ⌘K palette
+all present but inert — would be a worse screen (it advertises everything the
+person cannot reach) and a worse posture (a shell that renders is a shell whose
+data was loaded). So the screen joins `two-factor-challenge.mock.html` and
+`passkey-sign-in.mock.html` in this area, wearing their frame, and the `(auth)`
+grammar is reproduced here rather than re-specified.
+
+### ⚠️ It MOUNTS the enrolment surfaces; it does not redraw them
+
+8.11 shipped the authenticator, email-OTP and recovery-code flows and 8.12
+shipped passkey registration, all drawn in `../settings/two-factor.mock.html`
+and `../settings/passkeys.mock.html`. **Panel 5 shows the COMPOSITION and
+nothing more** — the dashed outline in it is review chrome marking the mounted
+region, NOT a border to build. A second drawing of a QR code and a
+recovery-code sheet would be built twice and drift from the real one.
+
+What this card genuinely owns is the **frame**: who is asking, why nothing is
+reachable, what counts as satisfying it, and what happens next.
+
+### The panels
+
+| #   | panel                                  | what it shows                                                                     |
+| --- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | **Held, mandated by the ORGANIZATION** | The default. Plus the arrival drawn as a flow, because nobody clicks to get here. |
+| 2   | **Held, mandated by the WORKSPACE**    | The same screen naming the workspace.                                             |
+| 3   | **Held, mandated by BOTH**             | The ORGANIZATION is named — see the rule below.                                   |
+| 4   | **Choosing a method**                  | Three routes, one honest trade-off each.                                          |
+| 5   | **Mid-enrolment**                      | The shipped 8.11 surface mounted in this frame.                                   |
+| 6   | **Satisfied**                          | The return to the route they actually asked for.                                  |
+| 7   | **The way out**                        | The sign-out control, and why it is not optional.                                 |
+| 8   | **Dark**                               | Held and satisfied, tokens flipped.                                               |
+
+### The rule for panel 3 — the HIGHEST mandating tier is the one named
+
+When both the organization and a workspace require it, **the organization is
+reported**. It is the floor: naming the workspace would suggest that leaving it,
+or getting its policy switched off, would help — and it would not. The body then
+adds one sentence naming the workspace too, so the person is not misled about who
+to ask. `twoFactorPolicyService.resolveRequirement` (MOTIR-3645) already returns
+exactly this in `mandatedBy`, so the screen renders the verdict rather than
+re-deriving it.
+
+### The access path runs the OTHER way — arrival and departure, not a door
+
+Nobody navigates here. Panel 1 therefore draws the **arrival** as a four-step
+flow with a concrete case — a work-item link opened from an email — and panel 6
+draws the **departure** back to that same URL.
+
+- The path is carried from the edge as **`x-current-path`** (MOTIR-3652), because
+  a Next.js layout has no supported way to learn the current URL.
+- **The gate must validate it as a same-origin relative path before redirecting**
+  — a leading `/`, no scheme, no `//`, no `..` — and fall back to a fixed safe
+  destination otherwise. `proxy.ts` documents that at the header's definition;
+  MOTIR-3648 is the consumer that has to honour it. **The destination is drawn as
+  a chip showing the work item, not as a raw URL**, so the person recognises
+  where they were going.
+- **Never a generic dashboard.** Landing somebody on `/dashboard` after they
+  clicked a specific link is the failure this whole card exists to prevent.
+
+### ⚠️ The sign-out control is MANDATORY on every held panel
+
+Every other route is closed to this person, so a screen with no exit is a trap:
+somebody on a borrowed laptop, without their phone, or who simply does not want
+to do this right now must be able to leave rather than bounce between a redirect
+and a screen they cannot satisfy. It is a **ghost** `Button` in the footer —
+present on every held panel, never competing with the primary action — and the
+line under it (_"You can come back and set this up any time you sign in."_)
+removes the fear that leaving costs them something. Panel 7 exists to make this
+non-negotiable rather than a detail an implementer might drop for tidiness.
+
+### ⚠️ NOT an error state
+
+**No `--el-danger` fill, no red banner, no alert role, anywhere in this asset.**
+Nothing has gone wrong: a policy was switched on and the person is being asked to
+do a one-minute thing. The two chips carry their hue in the tint BACKGROUND with
+`--el-text-strong` ink — `--el-tint-sky` for _who is asking_, `--el-tint-mint` for
+_done_ — which is also what keeps them AA in both themes.
+
+**And no copy implies a deadline.** Per rung 1 there is no grace period and no
+countdown (Atlassian's authentication policy prompts at next login with no
+window; GitHub blocks immediately), so no string here says "by", "within", or
+"before".
+
+### Primitives composed
+
+| element                         | primitive                          | tokens                                                                                           |
+| ------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Page wash                       | `app/(auth)/layout.tsx`            | `--el-auth-wash`                                                                                 |
+| The card                        | that layout's card                 | `--el-page-bg`, `--radius-card`, `--shadow-elevated`                                             |
+| Brand lockup                    | `BrandMark`                        | `--el-accent` glyph on `--el-accent-text`, `--radius-control`                                    |
+| Headline + subhead              | `AuthShell`                        | `font-serif` 32px `--el-text`; subhead `--el-text-muted`                                         |
+| "Who is asking" chip            | `Pill`                             | `--el-tint-sky` background, `--el-text-strong` ink                                               |
+| "Two-factor is on" chip         | `Pill`                             | `--el-tint-mint` background, `--el-text-strong` ink                                              |
+| Primary action                  | `Button` primary                   | `--el-accent` / `--el-accent-text`, `--radius-btn`, `--height-btn-md`                            |
+| Method rows                     | `Card` each                        | `--el-card`, `--el-border`, `--radius-card`; icon tile `--el-card-icon-bg` / `--el-card-icon-fg` |
+| "Fastest" / "Least secure" tags | `Pill`                             | `--el-tint-mint` and `--el-surface`                                                              |
+| Destination chip                | a bordered row                     | `--el-surface-soft`, `--radius-input`; kind glyph on `--el-tint-lavender`                        |
+| Sign-out                        | `Button` ghost                     | `--el-text-secondary`, `--height-btn-sm`                                                         |
+| The mounted 8.11 surface        | `../settings/two-factor.mock.html` | not re-specified                                                                                 |
+
+No Tier-0 `--color-*` is referenced by any element rule (only the `:root` /
+`[data-theme='dark']` token blocks define them), and no raw `rounded-*` / `p-*` /
+`h-*` appears. `--el-text-faint` appears nowhere in this asset.
+
+**The `--el-*` layer is re-declared inside `[data-theme='dark']`**, for the reason
+`../org-admin/design-notes.md` records: a custom property is substituted at the
+element it is DECLARED on, so a nested panel that flips `--color-*` inherits the
+already-resolved LIGHT `--el-*` unless the layer is re-declared. Panel 8 needs it;
+the app does not, because `data-theme` lives on `<html>` there.
+
+### Copy strings (en — new `auth.twoFactorRequired.*` keys for MOTIR-3648)
+
+`en` + `zh` ship together; `tests/i18n-catalog.test.ts` enforces the parity.
+
+- Chip **"Required by {tier}"** — `{tier}` is the org or workspace NAME, from
+  `mandatedBy.name`.
+- Headline **"Set up a second factor to continue"**.
+- Body, org **"{org} requires everyone in the organization to sign in with a
+  second factor. It takes about a minute, and you will go straight back to what
+  you were opening. Nothing has been deleted and you are still a member of every
+  workspace you were in."**
+- Body, workspace **"{workspace} requires everyone in the workspace to sign in
+  with a second factor. It takes about a minute, and you will go straight back to
+  what you were opening. Nothing has been deleted and your membership has not
+  changed."**
+- Body, both **"{org} requires everyone in the organization to sign in with a
+  second factor, and {workspace} requires it too. Setting one up satisfies both.
+  It takes about a minute, and you will go straight back to what you were
+  opening."**
+- Primary **"Choose how to set it up"**.
+- Chooser headline **"Choose how to sign in"**; sub **"Any one of these satisfies
+  what {tier} is asking for. You can add the others later."**
+- Passkey **"Use a passkey"** · tag **"Fastest"** · **"Your device's fingerprint,
+  face or PIN. Nothing to install, nothing to type, and it cannot be phished."**
+- Authenticator **"Use an authenticator app"** · **"A six-digit code from an app
+  like 1Password, Authy or Google Authenticator. Works with no signal."**
+- Email **"Email me a code"** · tag **"Least secure"** · **"We email a code each
+  time you sign in. Nothing to set up — but anyone who reaches your inbox reaches
+  your account."**
+- Satisfied chip **"Two-factor authentication is on"**; headline **"You're all
+  set"**; body **"Your {method} will be asked for the next time you sign in.
+  Taking you back to where you were going."**; primary **"Continue to {key}"**;
+  secondary **"Save my recovery codes first"**.
+- Way out **"Not now — sign out"** · **"You can come back and set this up any
+  time you sign in."**
+- Back, mid-enrolment **"← Choose a different method"**.
+
+### ⚠️ Planning flags
+
+1. **The destination chip needs the work item's TITLE, and the gate may not have
+   it.** Panel 1 and panel 6 draw `MOTIR-1215` plus its title, which reads far
+   better than a URL — but the gate knows only a path. Either MOTIR-3648 resolves
+   the path to a label (a read the gate does not otherwise make, on the hot path)
+   or the chip degrades to the path alone. **Drawn with the title, and the
+   degraded form is the acceptable fallback** — not a reason to hold the card.
+2. **"Save my recovery codes first" is 8.11's surface, offered from here.**
+   Recovery codes are shown ONCE, and this is the only moment the person is
+   guaranteed to be looking — but the button navigates INTO account settings,
+   which the enforcement gate has just started allowing. If that ordering turns
+   out to be awkward to build, dropping the button is safe: the codes are still
+   offered by the enrolment flow itself.
+3. **Nothing here covers a person with NO way to comply** — no phone, no
+   security key, email delivery broken. The sign-out control is the whole answer
+   today, and it is the honest one for this story. If support ever needs a
+   per-user exemption, that is a new card and a new admin surface, not a clause
+   smuggled into this screen.
