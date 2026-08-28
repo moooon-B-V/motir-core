@@ -66,11 +66,25 @@ export const jobQueueRepository = {
    *   2. **`SKIP LOCKED`** makes that second worker take the NEXT row instead of
    *      BLOCKING on the first. Without it the claim is correct and serial — N
    *      workers would queue behind one row and the pool would buy nothing.
-   *   3. **The state write is in the SAME statement** (`UPDATE … FROM (SELECT …
-   *      FOR UPDATE SKIP LOCKED) …`), so there is no window between locking a
-   *      row and marking it claimed. A separate UPDATE would still be correct
-   *      inside one transaction, but this way the claim cannot be split by an
-   *      early return or a thrown error between the two.
+   *   3. **The state write is in the SAME statement** (`UPDATE … FROM due …`,
+   *      the CTE being the locking SELECT), so there is no window between
+   *      locking a row and marking it claimed. A separate UPDATE would still be
+   *      correct inside one transaction, but this way the claim cannot be split
+   *      by an early return or a thrown error between the two.
+   *   4. **`AS MATERIALIZED` is what makes the LIMIT a BOUND** (Bug MOTIR-3769),
+   *      and it is load-bearing rather than stylistic. This was written as
+   *      `UPDATE … FROM ( SELECT … LIMIT n ) AS due`, and **a `LIMIT` inside a
+   *      `FROM`-subquery is a planner preference, not a guarantee**: PostgreSQL
+   *      may plan the subquery as the INNER, RE-SCANNED side of a nested loop,
+   *      and the limit then bounds each re-scan instead of the statement. Under
+   *      the RUNTIME role (`motir_app`, `rolbypassrls = false` — the role
+   *      production connects as) that is exactly the plan chosen, because the
+   *      policy qual on `q` changes the cost model and the join order with it:
+   *      three due rows and `limit = 1` claimed **three**. As the database owner
+   *      the same statement claims one, which is why every existing test was
+   *      green — none of them asserted the claim's CARDINALITY. `MATERIALIZED`
+   *      (PostgreSQL 12+) forces exactly one evaluation, and says out loud what
+   *      the statement always meant.
    *
    * The `ORDER BY run_at` is what makes the queue fair (oldest due first) and is
    * served by `job_queue_state_run_at_idx` with no sort — asserted by an EXPLAIN
@@ -101,6 +115,15 @@ export const jobQueueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<JobQueueRun[]> {
     return tx.$queryRaw<JobQueueRun[]>`
+      WITH due AS MATERIALIZED (
+              SELECT "id"
+                FROM "job_queue"
+               WHERE "state" = 'pending'
+                 AND "run_at" <= (now() AT TIME ZONE 'UTC')
+               ORDER BY "run_at"
+                 FOR UPDATE SKIP LOCKED
+               LIMIT ${limit}
+           )
       UPDATE "job_queue" AS q
          SET "state"            = 'running',
              "claimed_by"       = ${workerId},
@@ -112,15 +135,7 @@ export const jobQueueRepository = {
              "debounce_key"     = NULL,
              "debounce_first_seen_at" = NULL,
              "updated_at"       = (now() AT TIME ZONE 'UTC')
-        FROM (
-              SELECT "id"
-                FROM "job_queue"
-               WHERE "state" = 'pending'
-                 AND "run_at" <= (now() AT TIME ZONE 'UTC')
-               ORDER BY "run_at"
-                 FOR UPDATE SKIP LOCKED
-               LIMIT ${limit}
-             ) AS due
+        FROM due
        WHERE q."id" = due."id"
       RETURNING q."id",
                 q."job_id"           AS "jobId",
@@ -137,6 +152,38 @@ export const jobQueueRepository = {
                 q."created_at"       AS "createdAt",
                 q."updated_at"       AS "updatedAt"
     `;
+  },
+
+  /**
+   * THE DUE BACKLOG — how many runs are claimable right now, and how long the
+   * oldest of them has been waiting (Subtask MOTIR-3764).
+   *
+   * ⚠️ THE POINT IS WHO CAN ASK. This is a direct read of `job_queue`, so it
+   * answers whether anything is CLAIMING even when nothing is: the check that
+   * would otherwise report a wedged worker is itself a job, and a job engine
+   * cannot be the thing that reports its own death. Nothing here enqueues, and
+   * nothing here depends on a run.
+   *
+   * `run_at <= now()` is what makes this a backlog rather than a schedule: a
+   * retry backed off for five minutes and a cron fire due tomorrow are both
+   * `pending` and neither is waiting on a worker. `AT TIME ZONE 'UTC'` on both
+   * sides, per this file's header — the database is the clock.
+   *
+   * An EMPTY queue answers `{ depth: 0, oldestRunAt: null }`, which is a
+   * measurement and not an absence: `min()` over no rows is `NULL`, and the
+   * caller must render that as "nothing waiting" rather than as an unread probe.
+   */
+  async readDueBacklog(
+    tx: Prisma.TransactionClient,
+  ): Promise<{ depth: number; oldestRunAt: Date | null }> {
+    const rows = await tx.$queryRaw<Array<{ depth: number; oldestRunAt: Date | null }>>`
+      SELECT count(*)::int      AS "depth",
+             min("run_at")      AS "oldestRunAt"
+        FROM "job_queue"
+       WHERE "state" = 'pending'
+         AND "run_at" <= (now() AT TIME ZONE 'UTC')
+    `;
+    return rows[0] ?? { depth: 0, oldestRunAt: null };
   },
 
   /**

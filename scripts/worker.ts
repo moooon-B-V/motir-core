@@ -77,6 +77,16 @@ import '@/lib/jobs/registry';
  * so a production worker never even loads `undici`'s mock machinery.
  */
 async function installE2ESeams(): Promise<void> {
+  // The LONG-RUNNING PROBE (MOTIR-3767) — its own flag, and checked FIRST so it
+  // does not inherit the code-graph seam's early return. The two are independent
+  // seams that happen to share this hook.
+  const { slowJobEnabled } = await import('@/lib/test-slow-job');
+  if (slowJobEnabled()) {
+    const { registerSlowTestJob } = await import('@/lib/test-slow-job');
+    registerSlowTestJob();
+    console.info('[worker] E2E_TEST_SLOW_JOB active — the long-running probe is registered.');
+  }
+
   const { codeGraphMockEnabled } = await import('@/lib/test-code-graph-mock');
   if (!codeGraphMockEnabled()) return;
   const { installSharedMockAgent } = await import('@/lib/test-mock-agent');

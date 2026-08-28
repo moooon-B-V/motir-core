@@ -153,6 +153,42 @@ The honest summary: §1, §2's arithmetic and §3 are all measurements of a reti
 history; §2's CONCLUSION — a supervisor is not what delays the fast lane — survives, re-grounded
 above on the engine.
 
+### ⚠️ RE-EXAMINED 2026-08-28 (MOTIR-3761, corrected by MOTIR-3763): the price above is CORRECT, and it IS STILL PAID — what changed is that it is now BOUNDED
+
+**The amendment's pricing is where this record ends and it is not where the question ends.** _"The
+collapsed loop holds ONE claim for the container's whole life … AND THAT IS A REAL COST, NOT AN
+ABSENCE OF ONE. It is affordable because the pool is ours to size"_ is exactly right, and on
+2026-08-28 the pool turned out to be size **one** — read from the platform, not from `fly.toml` —
+and the affordability argument met the bill. A 35-minute `system.code-graph-refresh` held its claim
+and four unrelated claims beside it; 139 rows sat unclaimed, the oldest for 30 minutes; a status
+cascade arrived thirteen minutes late.
+
+**Where that was examined, and what it decided:** `job-queue-foundation.md` **§15**. In short —
+
+- **§15.3**: a claimed batch does NOT have to settle together. `tick()`'s `Promise.all` was a
+  consequence of writing _"run these"_, not a control anybody chose; claiming is governed by free
+  capacity instead.
+- **§15.4 — CORRECTED, and this is the half worth reading.** It first said a supervisor need not
+  hold its claim while it waits, and recommended `ctx.step.sleep` between polls. **A probe falsified
+  that before it shipped:** a resume re-invokes the handler from the top and only `step.run` results
+  are memoized, so every un-memoized call before a yield re-executes on every later pass — 4 sleeps
+  cost 10 polls, and at the shipped cadence a 30-minute index would make **7 503** orchestrator
+  reads instead of 122. `step.sleep`'s two benefits were never separable: the released slot is only
+  useful because the checkpoints make the resume cheap. **So the supervisor keeps its claim, and
+  this section's pricing stands unamended.**
+- **§15.5**: what BOUNDS the occupancy is the worker's own in-flight **pool** — three long-running
+  supervisors against a pool of ten, so seven slots remain for the fast lane. The job's admission cap
+  still rations containers, and the queue still rations nothing.
+
+**So this amendment's CONCLUSION survives a second time, on a third footing — and this record's own
+sentence about the pool turns out to be the load-bearing one.** A supervisor is still not what
+delays the fast lane: first because the slot was released between ~128 polls, then because there was
+no shared pool to occupy, and now because **the pool is ours to size and it is sized with headroom.**
+That sentence was written here as a reason the cost is affordable, and it is exactly what §15.5 now
+leans on — not because nothing else was tried, but because the alternative was measured and does not
+fit. What delayed the fast lane on 2026-08-28 was the batch's settle coupling (§15.3), which is a
+different defect and is fixed.
+
 ---
 
 ## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps — HISTORICAL

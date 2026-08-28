@@ -122,7 +122,11 @@ describe('§1 the emit→run seam, end to end', () => {
 
     // The REAL emit surface every service calls — not the dispatcher directly.
     await sendEvent(trigger as never, { workspaceId, workItemId: 'wi_1' } as never);
-    expect(await worker('gate-seam').tick()).toBe(1);
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762, so the worker is held
+    // and `settled()` awaited — the handler has not run when the tick resolves.
+    const seamWorker = worker('gate-seam');
+    expect(await seamWorker.tick()).toBe(1);
+    await seamWorker.settled();
     expect(handled).toEqual([{ workspaceId, workItemId: 'wi_1' }]);
 
     // ⚠️ ASSERTED THROUGH THE DTO, NOT THE TABLE. A key that drifts between the
@@ -165,8 +169,9 @@ describe('§1 the emit→run seam, end to end', () => {
     // Drain until nothing is left, so a second queued run could not hide.
     const w = worker('gate-idem');
     while ((await w.tick()) > 0) {
-      /* drain */
+      await w.settled(); // the tick returns at the claim (MOTIR-3762)
     }
+    await w.settled();
 
     expect(deliveries).toBe(1);
     const runs = await jobsDashboardService.listJobRuns({

@@ -4,12 +4,14 @@ import { deploymentIdentity } from '@/lib/deployment/identity';
 import type {
   PlatformHealthDTO,
   PlatformOverdueScheduleDTO,
+  PlatformQueueHealthDTO,
   PlatformSignalDTO,
 } from '@/lib/dto/platformHealth';
 import { serverSentryDsn } from '@/lib/monitoring/config';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
+import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { platformAuditService } from '@/lib/services/platformAuditService';
@@ -88,6 +90,28 @@ const DLQ_WINDOW_MS = 24 * 60 * 60 * 1000;
  */
 const DB_SLOW_MS = 500;
 
+/**
+ * How long the OLDEST claimable run may wait before the queue reads `stalled`.
+ *
+ * ⚠️ AGE IS THE SIGNAL AND DEPTH IS THE CONTEXT, which is the whole shape of
+ * this check. A deep queue draining fast is healthy; a queue three rows deep
+ * that has not moved in twenty minutes is not, and only one of those two numbers
+ * can tell them apart.
+ *
+ * Five minutes, and the reasoning is arithmetic rather than taste. A DUE row is
+ * claimable immediately: the worker's idle poll ceiling is `IDLE_MAX_MS` = 5 s
+ * (`lib/jobs/engine/worker.ts`), and a `NOTIFY` normally beats even that. A row
+ * that is backed off after a failure, debounced, or scheduled for later is NOT
+ * due, so none of those explain a wait here — `readDueBacklog` filters on
+ * `run_at <= now()` precisely so that this constant has one meaning. Five
+ * minutes is therefore sixty poll intervals of slack, which is generous enough
+ * that a deploy, a slow reclaim or a long claim transaction cannot reach it, and
+ * tight enough that the 2026-08-28 stall — 30 minutes unclaimed, 139 rows deep
+ * — would have fired twenty-five minutes before anybody asked why the tree
+ * looked broken.
+ */
+const QUEUE_STALL_MS = 5 * 60 * 1000;
+
 export const platformHealthService = {
   /**
    * The whole glance, for one platform principal.
@@ -130,6 +154,45 @@ export const platformHealthService = {
       overdue: overdue.slice(0, OVERDUE_PAGE_SIZE),
       overdueTotal: overdue.length,
       schedulesChecked: report?.entries.length ?? 0,
+    };
+  },
+
+  /**
+   * THE QUEUE BACKLOG (Subtask MOTIR-3764) — the one reading on this service
+   * that is NOT part of {@link read}'s glance, and not gated by a staff session.
+   *
+   * ⚠️ IT IS COMPUTED BY A DIRECT QUERY, NOT BY A JOB, NOT FROM A CACHE, AND NOT
+   * FROM A COUNTER THE WORKER HOLDS. On 2026-08-28 the queue stopped being
+   * claimed at 10:15:16 and the only thing that noticed was a person wondering
+   * why six work items had not moved. Nothing else could have: the check that
+   * would report it, `system.daily-health-check`, is itself a job — so a wedged
+   * worker takes the alarm down with the thing it is meant to alarm on. Every
+   * signal above was green throughout, because a queue 139 rows deep with a
+   * healthy worker, a current lease and zero failures is green on all six.
+   *
+   * ⚠️ AND IT THROWS RATHER THAN ABSORBING. `probe()` exists so one dead card
+   * cannot take the board down, which is right for a board and wrong here: the
+   * caller is a machine deciding whether to page somebody, and an unreadable
+   * database must reach it as a failure rather than as a healthy-looking reading
+   * with a reason in it. The route turns the throw into a 503.
+   */
+  async readQueueHealth(now: Date = new Date()): Promise<PlatformQueueHealthDTO> {
+    const { depth, oldestRunAt } = await withSystemContext((tx) =>
+      jobQueueRepository.readDueBacklog(tx),
+    );
+    // `max(0, …)` because `run_at` is a DUE time, and a row due one millisecond
+    // ago has a negative age against a clock read a moment earlier.
+    const oldestPendingAgeMs =
+      oldestRunAt === null ? null : Math.max(0, now.getTime() - oldestRunAt.getTime());
+
+    return {
+      // AGE decides, never depth. An empty queue has no age and is healthy.
+      state:
+        oldestPendingAgeMs !== null && oldestPendingAgeMs > QUEUE_STALL_MS ? 'stalled' : 'healthy',
+      depth,
+      oldestPendingAgeMs,
+      stallThresholdMs: QUEUE_STALL_MS,
+      checkedAt: now.toISOString(),
     };
   },
 };

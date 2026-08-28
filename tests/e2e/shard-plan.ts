@@ -243,6 +243,26 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * is the direction that unbalances the bin-packer and a local number runs at or
  * below the CI cost. Re-measure from the first green run that includes it.
  *
+ * ⚠️ `cascade-under-load.spec.ts` (MOTIR-3767) carries the LOCAL provenance too,
+ * and it is the guard's fifth catch — brand new, so with no entry here it would
+ * have been assigned to no leg and gone green by never executing.
+ *
+ * Measured on 2026-08-28 against a production build, on a private lane with its
+ * own port, its own database and its own job worker. Body: **2.5 s**; wall-clock
+ * over the file **2.0 m including the production build**. Recorded as **5.0** — the body plus the hooks the
+ * reporter attributes separately, rounded UP, for this file's standing reason:
+ * under-estimating is the direction that unbalances the bin-packer, and a local
+ * number runs at or below the CI cost.
+ *
+ * ⚠️ AND THE NUMBER IS ONLY THIS SMALL BECAUSE THE LONG JOB ENDS ON A SIGNAL.
+ * The spec needs a run that is still in flight when the cascade lands, and the
+ * obvious shape — a job that sleeps for a fixed duration — would have to outlast
+ * the cascade's own latency on the SLOWEST runner, so it would cost that
+ * worst-case every time it ran. `lib/test-slow-job.ts` waits for a release row
+ * the spec writes after asserting instead, so the run costs what the assertions
+ * cost and the ordering is pinned rather than raced. Its 30 s clamp is a runaway
+ * guard for a spec that dies mid-assertion, never the expected duration.
+ *
  * ⚠️ `code-graph-refresh-engine.spec.ts` and `code-graph-writer-seam.spec.ts`
  * (MOTIR-3417) carry the LOCAL provenance too, and they are the guard's fourth
  * catch: both are brand new, so on their first CI run they had no entry here,
@@ -351,6 +371,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'board-ui.spec.ts': 45.1,
   'build-in-public-flow.spec.ts': 8.0,
   'canvas-detail.spec.ts': 5.7,
+  'cascade-under-load.spec.ts': 5.0,
   'charts.spec.ts': 8.9,
   'child-panel-graph.spec.ts': 4.4,
   'cli-connect.spec.ts': 20.2,

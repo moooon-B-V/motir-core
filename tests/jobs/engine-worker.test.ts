@@ -1,11 +1,16 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobQueueRun } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
-import { JobWorker, retryBackoffMs, serializeWorkerFailure } from '@/lib/jobs/engine/worker';
+import {
+  JobWorker,
+  POOL_SIZE,
+  retryBackoffMs,
+  serializeWorkerFailure,
+} from '@/lib/jobs/engine/worker';
 import { JobStepYield } from '@/lib/jobs/engine/step';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -75,6 +80,20 @@ async function readRun(id: string): Promise<JobQueueRun> {
 
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
+/** Poll an authoritative read until it holds, or fail — never a fixed sleep. */
+async function until(
+  predicate: () => boolean | Promise<boolean>,
+  what: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`timed out waiting for: ${what}`);
+}
+
 describe('the claim — two workers, one queue', () => {
   it('NEVER executes the same run twice under genuine concurrency', async () => {
     const ws = await makeWorkspace();
@@ -101,8 +120,14 @@ describe('the claim — two workers, one queue', () => {
     const b = make('worker-b');
 
     // Drive both until the queue is drained, concurrently — the warm-pool race.
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762, and the race this test
+    // is about lives in the claim — so the concurrent `Promise.all` over the two
+    // ticks is unchanged. What is added is draining each round's DETACHED
+    // settles before asking "was there anything left", so the loop's exit
+    // condition still means the queue is empty rather than momentarily unclaimed.
     for (let round = 0; round < 12; round++) {
       const [ca, cb] = await Promise.all([a.tick(), b.tick()]);
+      await Promise.all([a.settled(), b.settled()]);
       if (ca === 0 && cb === 0) break;
     }
 
@@ -194,6 +219,9 @@ describe('the lease — a worker that dies', () => {
     // `tick` reclaims expired leases BEFORE claiming, so the abandoned run is
     // picked up in the same tick rather than waiting for the next one.
     expect(await live.tick()).toBe(1);
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762 — the settle is detached,
+    // so the authoritative signal for "it finished" is `settled()`, not the tick.
+    await live.settled();
     expect(executed).toEqual([runId]);
     expect((await readRun(runId)).state).toBe('succeeded');
   });
@@ -263,6 +291,7 @@ describe('failure, retry and the durable yield', () => {
     });
 
     await w.tick();
+    await w.settled();
     let row = await readRun(runId);
     expect(row.state).toBe('pending'); // retrying
     expect(row.attempts).toBe(1);
@@ -272,6 +301,7 @@ describe('failure, retry and the durable yield', () => {
     // Make it due again and spend the last attempt.
     await adminDb.jobQueueRun.update({ where: { id: runId }, data: { runAt: new Date() } });
     await w.tick();
+    await w.settled();
     row = await readRun(runId);
     expect(row.state).toBe('failed');
     expect(row.attempts).toBe(2);
@@ -294,6 +324,7 @@ describe('failure, retry and the durable yield', () => {
     });
 
     await w.tick();
+    await w.settled();
     const row = await readRun(runId);
     expect(row.state).toBe('pending');
     expect(row.runAt.getTime()).toBe(resumeAt.getTime());
@@ -318,8 +349,424 @@ describe('failure, retry and the durable yield', () => {
     });
 
     await w.tick();
+    await w.settled();
     expect((await readRun(good)).state).toBe('succeeded');
     expect((await readRun(bad)).state).toBe('pending'); // retrying
+  });
+});
+
+describe("the worker's own defaults and lifecycle (coverage floor, MOTIR-3766)", () => {
+  // ⚠️ THESE ARE FIXTURES, NOT AN IGNORE DIRECTIVE. The story gate's coverage
+  // rule is to SORT the uncovered arms: an arm a fixture can reach gets one, and
+  // only an arm that is unreachable by construction gets a directive. Every arm
+  // below is reachable in one line, which is why none of them is ignored.
+
+  it('defaults the workerId and the logger when the caller supplies neither', async () => {
+    const ws = await makeWorkspace();
+    const runId = await enqueue(ws);
+    // No `workerId`, no `logger` — the two `??` defaults in the constructor.
+    const w = new JobWorker({ execute: async () => {} });
+
+    expect(w.workerId).toMatch(/^worker-[0-9a-f-]{36}$/);
+    expect(await w.tick()).toBe(1);
+    await w.settled();
+    const row = await readRun(runId);
+    expect(row.state).toBe('succeeded');
+    // The default logger is `console`, and a green run never reaches it — which
+    // is why constructing it is the whole assertion. The claim itself released
+    // its `claimed_by` when the run settled, so the id is asserted above.
+    expect(row.claimedBy).toBeNull();
+  });
+
+  it('start() is IDEMPOTENT — a second call does not start a second loop or heartbeat', async () => {
+    const w = new JobWorker({ workerId: 'twice', logger: silent, execute: async () => {} });
+    w.start();
+    w.start(); // the `if (this.running) return` arm
+    await w.shutdown();
+    // The real assertion is the absence of a leak: a second heartbeat interval
+    // would survive the single `clearInterval` in `shutdown()` and hold the
+    // process open. `unref` hides that from the runner, so assert the contract
+    // rather than the timer — a second loop would also claim concurrently.
+    expect(w.inFlightCount).toBe(0);
+  });
+
+  it("the HEARTBEAT renews this worker's leases on its own cadence", async () => {
+    const ws = await makeWorkspace();
+    const runId = await enqueue(ws);
+    let release!: () => void;
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    const w = new JobWorker({
+      workerId: 'beating',
+      logger: silent,
+      // A tiny renew cadence so the interval callback actually fires inside the
+      // test — the callback, its `withSystemContext` and its `.catch` are the
+      // three functions a `tick()`-only test never reaches. The drain window is
+      // small because the run is held open on purpose.
+      timings: { renewMs: 20, leaseMs: 60_000, drainTimeoutMs: 100 },
+      execute: async () => held,
+    });
+
+    w.start();
+    await until(async () => (await readRun(runId)).state === 'running', 'the run to be claimed');
+    const first = (await readRun(runId)).leaseExpiresAt;
+    await until(async () => {
+      const next = (await readRun(runId)).leaseExpiresAt;
+      return first !== null && next !== null && next.getTime() > first.getTime();
+    }, 'the heartbeat to push the lease forward');
+
+    release();
+    await w.shutdown();
+  });
+
+  it('`waitForSlot` resolves ONCE — the invariant behind its defensive guard', async () => {
+    // The arm `worker.ts` carries a `v8 ignore` on. It cannot be reached from
+    // outside, so what is asserted is the property that makes it unreachable:
+    // a waiter is woken exactly once, and `releaseSlot` drains the set.
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws), await enqueue(ws)];
+    let settles = 0;
+    const w = new JobWorker({
+      workerId: 'one-slot',
+      logger: silent,
+      timings: { poolSize: 1, claimBatch: 5, idleMinMs: 5, idleMaxMs: 20 },
+      execute: async () => {
+        settles += 1;
+        await new Promise((r) => setTimeout(r, 15));
+      },
+    });
+
+    w.start();
+    try {
+      await until(async () => {
+        const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+        return rows.every((r) => r.state === 'succeeded');
+      }, 'a pool of ONE to drain three runs through repeated slot waits');
+    } finally {
+      await w.shutdown();
+    }
+    // Three runs through one slot means the loop waited for a slot and was woken
+    // by a settle at least twice — and each run executed exactly once, which is
+    // what a double-resolve would break.
+    expect(settles).toBe(3);
+  });
+
+  it('serializeWorkerFailure keeps an Error that carries NO stack', () => {
+    const bare = new Error('no stack here');
+    // Some runtimes and some thrown values arrive without one; the `?:` arm that
+    // handles it is otherwise unreached.
+    Object.defineProperty(bare, 'stack', { value: undefined });
+    expect(serializeWorkerFailure(bare)).toEqual({ message: 'no stack here' });
+  });
+});
+
+describe('the CLAIM is bounded by its LIMIT (bug MOTIR-3769)', () => {
+  // ⚠️ EVERY ASSERTION HERE GOES THROUGH `withSystemContext`, AND THAT IS THE
+  // POINT. The defect is invisible as the database OWNER: without a policy qual
+  // on `job_queue` the planner evaluates the locking sub-select once and the
+  // bound holds. Under `motir_app` — the role production connects as, and the
+  // suite's only connection — the qual changes the cost model, the sub-select
+  // becomes the re-scanned inner side of a nested loop, and the limit bounds
+  // each re-scan instead of the statement. Measured before the fix: three due
+  // rows, `limit = 1`, THREE claimed. `AS MATERIALIZED` is what makes it a bound.
+  //
+  // No existing test caught it because none asserted the claim's CARDINALITY —
+  // `claims OLDEST-DUE first` drives three ticks at `claimBatch: 1` and checks
+  // the execution ORDER, which is identical either way.
+
+  it('claims EXACTLY the limit and leaves the rest untouched', async () => {
+    const ws = await makeWorkspace();
+    const t = Date.now();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++)
+      ids.push(await enqueue(ws, { runAt: new Date(t - 5_000 + i * 100) }));
+
+    const claimed = await withSystemContext((tx) =>
+      jobQueueRepository.claimDueRuns('bounded-claim', 2, 60_000, tx),
+    );
+    expect(claimed).toHaveLength(2);
+    // Oldest-due first survives the fix — the bound did not cost the ordering.
+    expect(claimed.map((c) => c.id)).toEqual(ids.slice(0, 2));
+
+    const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(rows.filter((r) => r.state === 'running')).toHaveLength(2);
+    const untouched = rows.filter((r) => r.state === 'pending');
+    expect(untouched).toHaveLength(3);
+    // Not merely unclaimed — UNTOUCHED. An over-claim spends an attempt on every
+    // row it takes, so the attempt counter is the second, independent witness.
+    expect(untouched.every((r) => r.attempts === 0 && r.claimedBy === null)).toBe(true);
+  });
+
+  it('claims everything due when the limit is larger than the queue', async () => {
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws)];
+    const claimed = await withSystemContext((tx) =>
+      jobQueueRepository.claimDueRuns('roomy-claim', 10, 60_000, tx),
+    );
+    expect(claimed.map((c) => c.id).sort()).toEqual([...ids].sort());
+  });
+
+  it('spends exactly ONE attempt per row it claims', async () => {
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws), await enqueue(ws)];
+    await withSystemContext((tx) => jobQueueRepository.claimDueRuns('attempts', 1, 60_000, tx));
+    const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(rows.filter((r) => r.attempts === 1)).toHaveLength(1);
+    expect(rows.filter((r) => r.attempts === 0)).toHaveLength(2);
+  });
+});
+
+describe('the claim RATE — free capacity, not the slowest run (MOTIR-3762)', () => {
+  // `docs/decisions/job-queue-foundation.md` §15.3. Every assertion here is
+  // against the real queue, and every "slow" run is genuinely slow — a handler
+  // held open across real database round-trips, never a fake timer, because a
+  // fake timer would prove the code does what the test schedules rather than
+  // that the loop is free while a run is in flight.
+
+  /** A handler gate: `hold()` inside a run, `release()` from the test. */
+  function gate(): { wait: Promise<void>; release: () => void } {
+    let release!: () => void;
+    const wait = new Promise<void>((r) => {
+      release = r;
+    });
+    return { wait, release };
+  }
+
+  /** Poll an authoritative read until it holds, or fail — never a fixed sleep. */
+  async function until(
+    predicate: () => boolean | Promise<boolean>,
+    what: string,
+    timeoutMs = 5_000,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await predicate()) return;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error(`timed out waiting for: ${what}`);
+  }
+
+  it('claims and COMPLETES further runs while a far slower one is still in flight', async () => {
+    const ws = await makeWorkspace();
+    // Oldest first, so the claim order is the enqueue order — the slow run is
+    // taken by the first tick, exactly as the 35-minute refresh was.
+    const t = Date.now();
+    const slow = await enqueue(ws, { jobId: 'slow.job', runAt: new Date(t - 3_000) });
+    const fastIds = [
+      await enqueue(ws, { jobId: 'fast.job.1', runAt: new Date(t - 2_000) }),
+      await enqueue(ws, { jobId: 'fast.job.2', runAt: new Date(t - 1_000) }),
+    ];
+
+    const held = gate();
+    const w = new JobWorker({
+      workerId: 'capacity',
+      logger: silent,
+      // ONE per claim, so the slow run is alone in its batch and the ONLY thing
+      // that could stop the next tick is the old `await Promise.all`.
+      timings: { claimBatch: 1 },
+      execute: async (run) => {
+        if (run.jobId === 'slow.job') await held.wait;
+      },
+    });
+
+    expect(await w.tick()).toBe(1);
+    await until(
+      async () => (await readRun(slow)).state === 'running',
+      'the slow run to be claimed',
+    );
+
+    // THE assertion: with a run in flight that has not settled, the worker
+    // claims again and the fast runs reach a TERMINAL state — asserted on
+    // `job_queue` rows, not on a spy.
+    for (const _ of fastIds) {
+      expect(await w.tick()).toBe(1);
+    }
+    await until(async () => {
+      const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: fastIds } } });
+      return rows.every((r) => r.state === 'succeeded');
+    }, 'the fast runs to succeed');
+
+    // …and the slow one is STILL in flight while that is true. That ordering is
+    // the test: without it, "the fast runs finished" says nothing.
+    const slowRow = await readRun(slow);
+    expect(slowRow.state).toBe('running');
+    expect(slowRow.claimedBy).toBe('capacity');
+    expect(w.inFlightCount).toBe(1);
+
+    held.release();
+    await w.settled();
+    expect((await readRun(slow)).state).toBe('succeeded');
+  });
+
+  it('never exceeds the POOL SIZE, on a queue deeper than the pool', async () => {
+    const ws = await makeWorkspace();
+    const ids: string[] = [];
+    for (let i = 0; i < 10; i++) ids.push(await enqueue(ws));
+
+    let concurrent = 0;
+    let peak = 0;
+    const w = new JobWorker({
+      workerId: 'bounded',
+      logger: silent,
+      // A batch LARGER than the pool, so a tick that passed the constant instead
+      // of the free capacity would over-claim on its very first pass.
+      timings: { claimBatch: 5, poolSize: 3, idleMinMs: 5, idleMaxMs: 25 },
+      execute: async () => {
+        concurrent += 1;
+        peak = Math.max(peak, concurrent);
+        try {
+          await new Promise((r) => setTimeout(r, 20)); // real work, real overlap
+        } finally {
+          concurrent -= 1;
+        }
+      },
+    });
+
+    w.start();
+    try {
+      // The whole queue drains — which is also the back-pressure assertion: a
+      // saturated loop that waited on the QUEUE instead of on a SLOT would still
+      // get here, but a loop that stopped claiming would not.
+      await until(async () => {
+        const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+        return rows.every((r) => r.state === 'succeeded');
+      }, 'the whole queue to drain through a pool of 3');
+    } finally {
+      await w.shutdown();
+    }
+
+    expect(peak).toBeLessThanOrEqual(3);
+    // And the bound was actually EXERCISED — a peak of 1 would mean the queue
+    // never got deep enough for the assertion above to have measured anything.
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it('claims AT MOST the free capacity, and a FULL pool does not call the claim at all', async () => {
+    const ws = await makeWorkspace();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) ids.push(await enqueue(ws));
+
+    const limits: number[] = [];
+    const claimDueRuns = jobQueueRepository.claimDueRuns.bind(jobQueueRepository);
+    // A spy that DELEGATES — the queue, the transaction and the lock are all the
+    // real ones; what is recorded is the limit the loop asked for, which is the
+    // thing this criterion is about and the one thing a row cannot show.
+    const spy = vi
+      .spyOn(jobQueueRepository, 'claimDueRuns')
+      .mockImplementation(async (workerId, limit, leaseMs, tx) => {
+        limits.push(limit);
+        return claimDueRuns(workerId, limit, leaseMs, tx);
+      });
+
+    const held = gate();
+    const w = new JobWorker({
+      workerId: 'saturated',
+      logger: silent,
+      timings: { claimBatch: 5, poolSize: 2 },
+      execute: async () => {
+        await held.wait;
+      },
+    });
+
+    try {
+      // min(claimBatch 5, capacity 2) = 2 — the batch size does not win.
+      expect(await w.tick()).toBe(2);
+      expect(limits).toEqual([2]);
+      expect(w.freeCapacity).toBe(0);
+
+      // Pool full ⇒ the claim is not reached at all, so no further limit is
+      // recorded and nothing else leaves `pending`.
+      expect(await w.tick()).toBe(0);
+      expect(limits).toEqual([2]);
+      expect(limits.every((l) => l > 0)).toBe(true);
+      const pending = await adminDb.jobQueueRun.findMany({
+        where: { id: { in: ids }, state: 'pending' },
+      });
+      expect(pending).toHaveLength(3);
+      expect(pending.every((r) => r.attempts === 0)).toBe(true);
+    } finally {
+      held.release();
+      await w.settled();
+      spy.mockRestore();
+    }
+  });
+
+  it('SIGTERM during a DETACHED slow run still releases every claim, attempts refunded', async () => {
+    const ws = await makeWorkspace();
+    const slow = await enqueue(ws, { jobId: 'slow.job' });
+    const mate = await enqueue(ws, { jobId: 'fast.job' });
+
+    const held = gate();
+    const w = new JobWorker({
+      workerId: 'draining-detached',
+      logger: silent,
+      timings: { claimBatch: 5, drainTimeoutMs: 200 },
+      execute: async (run) => {
+        if (run.jobId === 'slow.job') await held.wait;
+      },
+    });
+
+    const claimed = await w.tick();
+    expect(claimed).toBe(2);
+    // The fast mate settles on its own while the slow one is still held — the
+    // detached shape, which is what this extends the existing drain cover to.
+    await until(async () => (await readRun(mate)).state === 'succeeded', 'the mate to settle');
+    expect(w.inFlightCount).toBe(1);
+
+    await w.shutdown(); // times out on the held run, and releases it anyway
+
+    const slowRow = await readRun(slow);
+    expect(slowRow.state).toBe('pending');
+    expect(slowRow.claimedBy).toBeNull();
+    // ⚠️ THE REFUND, which the older drain assertions did not check: a deploy
+    // must not eat a retry. `claimDueRuns` spent an attempt at the claim and
+    // `releaseClaims` gives it back.
+    expect(slowRow.attempts).toBe(0);
+
+    held.release();
+    await w.settled();
+  });
+
+  it('a THROWING handler fails only its own run — an in-flight mate is untouched', async () => {
+    const ws = await makeWorkspace();
+    const t = Date.now();
+    const slow = await enqueue(ws, { jobId: 'slow.job', runAt: new Date(t - 2_000) });
+    const bad = await enqueue(ws, { jobId: 'bad.job', runAt: new Date(t - 1_000) });
+    const good = await enqueue(ws, { jobId: 'good.job', runAt: new Date(t) });
+
+    const held = gate();
+    const w = new JobWorker({
+      workerId: 'mixed-detached',
+      logger: silent,
+      timings: { claimBatch: 5 },
+      execute: async (run) => {
+        if (run.jobId === 'slow.job') await held.wait;
+        if (run.jobId === 'bad.job') throw new Error('nope');
+      },
+    });
+
+    expect(await w.tick()).toBe(3);
+    await until(async () => {
+      const [b, g] = await Promise.all([readRun(bad), readRun(good)]);
+      return b.state === 'pending' && b.attempts === 1 && g.state === 'succeeded';
+    }, 'the bad run to retry and the good one to succeed');
+
+    // The throw settled its own row and left the in-flight one alone.
+    expect((await readRun(slow)).state).toBe('running');
+    expect(w.inFlightCount).toBe(1);
+
+    held.release();
+    await w.settled();
+    expect((await readRun(slow)).state).toBe('succeeded');
+  });
+
+  it('POOL_SIZE leaves headroom for the fast lane beside the long supervisors', () => {
+    // §15.6.3: the floor is the count of long-running supervisors that may be in
+    // flight at once — `system.code-graph-index`, `system.code-graph-refresh`,
+    // `system.ci-runner-boot` — plus headroom. A pool at or below three would
+    // reproduce 2026-08-28 with extra steps.
+    expect(POOL_SIZE).toBeGreaterThan(3);
   });
 });
 

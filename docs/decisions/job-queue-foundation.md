@@ -1056,10 +1056,353 @@ expression by the machinery `lib/jobs/engine/eventExpression.ts` already runs fo
   each record their own reason at length. This section is why the OPTION is absent, not why those
   two do not want one.
 
+## §15 — What actually bounds concurrent supervision: the batch settles independently, and the POOL bounds the supervisor (MOTIR-3761, corrected by [MOTIR-3763])
+
+§14.5 named two things it did not examine — **`CLAIM_BATCH`** and **the worker machine count** — and
+said plainly that they are the real concurrency controls now. On **2026-08-28** a production stall
+made the question concrete rather than theoretical, so this section examines both, on that
+measurement, and answers the three questions the incident actually raises:
+
+1. **Does a claimed batch have to settle together?** (§15.3 — no.)
+2. **May a container supervisor hold its claim while it waits?** (§15.4 — it may, and **measured, it must**: the yield this section first recommended was falsified before it shipped.)
+3. **What bounds concurrent supervision afterwards?** (§15.5.)
+
+**It re-opens nothing in §14.** §15.2 is the distinction, stated first, because the incident looks
+like evidence for the thing §14.1 refused and is not.
+
+### §15.1 — The measurement, with the query that produced each reading
+
+Read from the production database **inside the `motir-core` Fly machine** on 2026-08-28, at
+`10:43:20Z`, during the forensics recorded on the story this section is written for. The stall
+itself: [MOTIR-3672]'s pull request merged at `10:37:06Z`, `status-derivation/transitioned` was
+enqueued at `10:37:08.211` with `run_at` already in the past, and **it did not run until
+`10:50:52`** — thirteen minutes in which six subtask children stayed `implemented`.
+
+| reading                                        | value                                                                                                             | the query                                                                                                                                        |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| pending depth, and whether anything holds them | **139**, all `claimed_by IS NULL`, `max(attempts) = 0`                                                            | `select count(*), count(*) filter (where claimed_by is null) as unclaimed, max(attempts) from job_queue where state = 'pending';`                |
+| oldest due-pending row                         | `10:12:39` — **30 minutes** unclaimed                                                                             | `select min(run_at) from job_queue where state = 'pending' and run_at <= now();`                                                                 |
+| the last time ANY job started                  | **`10:15:16`** — 28 minutes before the read                                                                       | `select max(started_at) from job_run;`                                                                                                           |
+| what was `running`                             | one row: `system.code-graph-refresh`, `claimed_by = worker-576bb4ce-…`, `lease_expires_at` **45 s in the future** | `select job_id, claimed_by, lease_expires_at, run_at from job_queue where state = 'running';`                                                    |
+| how long a refresh takes                       | six consecutive runs, **2 058–2 116 s** each, back to back 07:12 → 10:50, every one `projectsIndexed: 2`          | `select id, started_at, finished_at, duration_ms from job_run where function_id = 'system.code-graph-refresh' order by started_at desc limit 6;` |
+
+**The claimant was ALIVE.** The lease was current and being renewed, so the reclaim path had nothing
+to do: `reclaimExpiredLeases` exists for a claimant that DIED, and this one had not. That is what
+makes the reading a fact about the CLAIM LOOP rather than about worker health.
+
+**And the two controls §14.5 named, each read from where it actually lives — not from a file that
+describes it:**
+
+| control         | value                                                                                      | where it was read                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `CLAIM_BATCH`   | **5**                                                                                      | `lib/jobs/engine/worker.ts` — a constant in this repository                                                     |
+| worker machines | **ONE** — `8576143c4ee538` `started`, plus `891e16eb021e28` `stopped` and `standby_for` it | **the platform**: `fly machine list -a motir-core --json`, 2026-08-28, filtered on `fly_process_group = worker` |
+
+> ⚠️ **The machine count is read from the PLATFORM, deliberately.** `fly.toml` declares the group and
+> its own header says at length that it CONFIGURES rather than PROVISIONS; a count taken from it is a
+> claim about the deployment and not a reading of it. The `app` group answers `2` to the same
+> command, so the file and the platform do agree here — which is a fact obtained, not a fact assumed.
+> The standby is not a pool member: it is `stopped`, it bills no compute, and it takes over only on
+> host hardware failure.
+
+**So the accepted bound on 2026-08-28 was: one worker × one 35-minute supervisor ⇒ no capacity for
+anything else.** Every number above is a consequence of that one sentence.
+
+#### ⚠️ §15.1a — CORRECTED: `CLAIM_BATCH` was never a BOUND, it was a preference (Bug [MOTIR-3769])
+
+The table above reads `CLAIM_BATCH = 5` off `worker.ts`, and that is what the constant says. **What
+the claim STATEMENT did with it is a different fact, and it was measured after §15 was first
+written.** `claimDueRuns` was `UPDATE "job_queue" AS q … FROM ( SELECT "id" … FOR UPDATE SKIP LOCKED
+LIMIT n ) AS due …`, and **a `LIMIT` inside a `FROM`-subquery is a planner preference rather than a
+guarantee**: PostgreSQL may plan that sub-select as the inner, re-scanned side of a nested loop, at
+which point the limit bounds each re-scan instead of the statement. Under the runtime role
+(`motir_app`, `rolbypassrls = false`) that is the plan it picks, because the policy qual on `q`
+changes the cost model and the join order with it — three due rows and `limit = 1` claimed **three**.
+As the database owner the same statement claims one, which is why the suite was green: no test
+asserted the claim's CARDINALITY.
+
+**Two things follow, and the second is a caution rather than a finding.**
+
+- **The prose in §15.3 that says "four unrelated runs were claimed beside it" describes the INTENT of
+  `CLAIM_BATCH = 5`, not a measured cardinality.** Whatever was claimed in the 10:15:16 tick was
+  bounded by what was DUE at that instant, not by five. The 2026-08-28 readings in §15.1 are
+  unaffected — every one of them is a count of rows in a state, not of a batch — and the defect §15.3
+  names is unaffected too: `Promise.all` over the claimed set detains that set whatever its size, and
+  a larger set makes it worse rather than better.
+- **⚠️ IT IS NOT ESTABLISHED THAT PRODUCTION PICKED THAT PLAN.** A plan is a function of statistics
+  and table size, and production's `job_queue` is nothing like a three-row test table. What is
+  established is that the bound was planner-dependent rather than guaranteed, and that at least one
+  plan PostgreSQL legitimately chooses ignores it. Do not re-derive an outage from this paragraph.
+
+The fix is `WITH due AS MATERIALIZED ( … )`, which forces exactly one evaluation and says out loud
+what the statement always meant. `claimDueRuns`'s own header carries it as the FOURTH load-bearing
+property of the claim, beside `FOR UPDATE`, `SKIP LOCKED` and the single-statement write.
+
+### §15.2 — §14.1 is NOT re-opened, and the distinction is what keeps this section honest
+
+A thirteen-minute cascade delay reads as a fairness problem, and the obvious remedy for a fairness
+problem is a scheduler that knows which jobs matter. **§14.1 considered exactly that and refused it**,
+and the refusal is carried by the type (`DefineJobOptions` declares no such member,
+`tests/jobs/defineJob-options-are-read.test.ts` asserts every declared option is read by something).
+Nothing here proposes one.
+
+**The distinction, stated once so nobody has to re-derive it:**
+
+|                     | §14.1 — **REFUSED**                                                                                                                                            | §15 — **this section**                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| what it is          | a per-job, **event-keyed ADMISSION limit** — at most N runs of job X in flight per key                                                                         | the **SETTLE COUPLING** of runs that are already claimed |
+| where it would live | a predicate inside `claimDueRuns`, evaluated per candidate row under the lock                                                                                  | `tick()`, after the claiming transaction has committed   |
+| what it decides     | **which** runs may be claimed                                                                                                                                  | **when the loop may claim again**                        |
+| what it costs       | the `ORDER BY run_at` on the index (§14.2.2), a head-of-line-blocking choice nobody has a consumer to calibrate (§14.2.3), and a liveness obligation (§14.2.1) | nothing on the claim statement at all                    |
+
+**The test that settles which side a change is on, and it needs no judgement: does it add a member to
+`DefineJobOptions`, or a predicate to `claimDueRuns`?** Two noes ⇒ §14.1 is untouched. §15's
+recommendations are two noes, and `tests/jobs/defineJob-options-are-read.test.ts` and
+`tests/jobs/engine-schema.test.ts`'s no-`Sort` plan assertion both stand unchanged.
+
+### §15.3 — Question 1: must a claimed batch settle together? NO — and nobody chose that it should
+
+`tick()` claims up to `CLAIM_BATCH` runs and then awaits every one of them:
+
+```ts
+const claimed = await withSystemContext((tx) =>
+  jobQueueRepository.claimDueRuns(this.workerId, this.claimBatch, this.leaseMs, tx),
+);
+if (claimed.length === 0) return 0;
+for (const run of claimed) this.inFlight.add(run.id);
+await Promise.all(claimed.map((run) => this.settle(run))); // ← the tick cannot return
+```
+
+`Promise.all` is what "run these" looks like when written down; it is not a concurrency control, and
+no decision in this record chose it. **The file's own header already contradicts it** — _"a run
+legitimately longer than the lease is the normal case, not the exception (the container supervisors
+sleep for half an hour)"_ — so on 2026-08-28 four runs that had nothing to do with a code-graph
+rebuild were claimed, held, and not executed for thirty-five minutes, and the loop could not issue
+another tick to reach the other 139.
+
+**DECIDED: the claim rate is governed by FREE CAPACITY, not by the slowest run in flight.**
+
+- Settle each claimed run **independently**; the loop does not await the batch.
+- Bound in-flight work by a **pool size** — a number this repository sets, in this file, for this
+  worker.
+- **Claim only up to the free slots.** `claimDueRuns` already takes a limit; pass the remaining
+  capacity rather than a constant, so a full pool claims nothing instead of claiming into nothing.
+- Apply back-pressure when the pool is full: wait for a slot.
+
+**What must survive unchanged, because it is what makes a detached settle safe rather than clever:**
+`inFlight` (the drain's own condition), the heartbeat (which renews every run this worker holds,
+scoped to `claimed_by`), the SIGTERM drain that releases claims, and the attempt refund on
+reclaim/drain. A drain that does not release a claim held by a detached settle would turn this
+change into the failure mode it exists to remove.
+
+### §15.4 — Question 2: may a supervisor hold its claim while it waits? IT MAY, AND — MEASURED — IT MUST
+
+> **⚠️ THIS SECTION IS A CORRECTION ([MOTIR-3763]).** It first read _"IT MAY, AND IT SHOULD NOT"_ and
+> recommended that the supervision loops yield between polls with `ctx.step.sleep`. **That
+> recommendation was falsified by a probe before any of it shipped, and the falsification is kept here
+> rather than edited away**, because the reasoning that produced it is reachable again by anybody who
+> reads §13 and thinks the same true thought about a durable sleep.
+
+`docs/decisions/job-lane-occupancy.md` §2's [MOTIR-3488] amendment prices the occupancy exactly, and
+it is right: _"The collapsed loop holds ONE claim for the container's whole life … **AND THAT IS A
+REAL COST, NOT AN ABSENCE OF ONE.** It is affordable because the pool is ours to size."_
+
+**What this section originally proposed** was to stop paying it. `settle()` catches
+`isJobStepYield(err)` and calls `jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx,
+{ refundAttempt: true })`, so a `ctx.step.sleep` re-enqueues the run at the deadline, refunds the
+attempt and releases the claim. The argument was that `step.sleep` had done two jobs — survive
+Vercel's invocation ceiling, and release the slot — and that only the first was a platform artifact,
+so the YIELD could be restored without restoring the per-poll STEPPING that [MOTIR-3484] deleted.
+
+#### The measurement that killed it
+
+**On this engine a resume re-invokes the handler FROM THE TOP** — `lib/jobs/engine/runner.ts`'s
+`runQueuedJob` builds a fresh context and calls `def.handler`, which §13.2 already states in bold —
+and **only `step.run` results are memoized.** So every UN-memoized call before a yield re-executes
+on every later pass. In a supervision loop that call is the POLL, and a poll is a real round trip to
+the container orchestrator.
+
+A probe driving exactly the proposed shape (`sleep, poll, sleep, poll, …` with the poll an ordinary
+call), through the real `createStepApi` against the real `job_step` table:
+
+```
+4 sleeps  ->  PASSES=5  POLLS=10  STEPS=4
+```
+
+**Ten, not four.** N(N+1)/2 — the polls are re-executed, and only the sleeps are saved. Applied to
+the shipped cadence (`indexPollWaitMs` is 3 s, 6 s, 12 s, then 15 s ⇒ ~122 polls per 30-minute
+index, `job-lane-occupancy.md` §2's arithmetic):
+
+| shape                                       | orchestrator reads per index |
+| ------------------------------------------- | ---------------------------- |
+| today — an in-process `await` between polls | **122**                      |
+| the yield, with the poll left un-memoized   | **7 503**                    |
+
+At a pessimistic ~1.5 s per provider `describe` that is about three hours of provider calls inside a
+thirty-minute container. **It is not a cost to weigh; it does not fit.**
+
+#### And it would have destroyed the container on the first poll
+
+`runIndexContainer`'s teardown is a `finally`, and a `JobStepYield` is a THROW — so a yielding poll
+loop would have called `settleIndexContainer` on its first suspension and torn down the container it
+was watching. **A yield is a SUSPENSION, not a path out of the loop**, and §13.4's requirement that
+_"teardown is reached on every path out"_ does not cover it. Any future attempt at this shape owes a
+guard that distinguishes the two before it owes anything else.
+
+#### The two shapes that DO release the slot, and why neither is a smaller version of this
+
+1. **Memoize every poll** — one `step.run` per poll, ~128 per index. That is precisely the shape
+   [MOTIR-3484] deleted and §13.2 rejected on its N² memo cost. Restoring it is a coherent option; it
+   is not this one, and this section does not recommend it.
+2. **Stop looping** — make a supervision a state machine over RUNS rather than a loop inside one, so
+   each run does exactly one poll and re-enqueues itself. The claim is then held for the duration of
+   one provider read. That is a redesign of where supervision state lives, and it is [MOTIR-3778].
+
+**DECIDED: the supervisor KEEPS its claim.** The occupancy stands as [MOTIR-3488] priced it, and
+§15.5 names what bounds it. What the 2026-08-28 outage actually needed is §15.3, which is shipped:
+the batch no longer settles together, so one long supervisor detains nothing but its own slot.
+
+#### ⚠️ §15.4a — the amendment to §13.1 limb 3 is WITHDRAWN, and §13.1 stands unchanged
+
+This section previously amended §13.1 limb 3 — _"everything except the WAIT is ordinary control
+flow"_ — on the ground that §13 had weighed DURABILITY and not OCCUPANCY. **That amendment is
+withdrawn. Limb 3 stands exactly as written: the interval between polls is ordinary control flow.**
+
+**Why the amendment was wrong, stated as the mechanism rather than as a verdict.** It treated the
+two axes as separable — as though a wait could be made durable for its occupancy benefit while
+everything around it stayed ordinary. **On a replaying engine they are not separable in that
+direction.** A yield is only affordable when everything before it is memoized, because the resume
+replays from the top; so buying the occupancy benefit requires paying the durability cost for the
+whole loop, which is the cost §13.2 measured and refused. The wait is the one construct where
+"durable" and "cheap" cannot both hold, and §13.1 limb 3 is the sentence that says so.
+
+**And §13.2's cost objection was not answered, it was answered over the wrong quantity.** This
+section computed _"three memo rows per replay, so ~366 lookups, linear in N"_ — a correct count of
+MEMO traffic, which is bounded by the number of checkpoints. The quantity that explodes is the
+ORDINARY calls between them, which appear in no step ledger and were not counted. §13.2's own
+sentence enumerates memo lookups, so applying its figure to memo lookups feels like applying it;
+that substitution is the whole of the mistake and it is why it survived being written into a
+decision record.
+
+#### ⚠️ §15.4b — `step.sleep`'s two jobs were ONE job, and the table that said otherwise was the error
+
+The corrected reading:
+
+| what `step.sleep` bought                                        | did it depend on the STEPPING?                                                                                          | disposition                       |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| surviving `maxDuration = 300` — a run longer than an invocation | **YES** — the checkpoints are what let a run resume at all                                                              | gone with the platform, correctly |
+| releasing the slot while waiting                                | **ALSO YES** — a released slot is only useful if the resume is cheap, and the resume is cheap only because of the memos | **stays gone, with it**           |
+
+The row that read _"releasing the slot … did NOT depend on Vercel … restored here"_ was false, and it
+was false in the most plausible possible way: the slot release genuinely does not depend on **Vercel**
+— it is a property of a queue-backed engine — and the sentence then slid from _not platform-specific_
+to _separable from the stepping_. Those are different claims and only the first is true.
+
+**[MOTIR-3484] and [MOTIR-3485] remain correct in full**, and `lib/jobs/indexFleetSteps.ts`'s
+[MOTIR-3484] block needs no correction after all: its argument that the loop is fine _because the
+platform ceiling is gone_ is true, and this section no longer claims it is incomplete. The three
+memoized side-effect steps, the admission backoff inside one step (§13.3(c)) and the in-process wait
+all stay exactly as they are.
+
+**`tests/jobs/supervisor-cutover-story-gate.test.ts` is UNCHANGED and needs no restatement.** It
+asserts that the step count is identical at two poll counts, and that property is still literally
+true of the shipped supervisors — it was only the yield that would have falsified it. A card that
+restated it would have been editing a correct test to match a change that is not happening.
+
+### §15.5 — Question 3: what bounds concurrent supervision afterwards?
+
+**THE WORKER'S OWN POOL, and after §15.4 that is a complete answer rather than a residual one.** A
+supervision holds one slot of `POOL_SIZE` for its container's life; three long-running supervisors
+exist (`system.code-graph-index`, `system.code-graph-refresh`, `system.ci-runner-boot`); the pool is
+**10**. So the worst case is three slots occupied and seven left for the fast lane — which is why the
+2026-08-28 queue of 139 rows drains in seconds once §15.3 stops the batch coupling.
+
+| what is being rationed                    | the instrument                                                                                                     | why it is the right one                                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **containers, and the money they cost**   | the admission cap in the job's own domain — `lib/ciFleet/limits.ts`, `docs/decisions/code-graph-index-fleet.md` §7 | it rations the actually scarce resource, which the queue cannot see (§14.3's fourth row, unchanged) |
+| **SUPERVISOR OCCUPANCY**                  | the **pool size** §15.3 introduces, minus the count of concurrent supervisions                                     | it is a number in this file, and the occupancy is bounded by construction rather than by a promise  |
+| **runs executing at once on ONE worker**  | the same **pool size**                                                                                             | changeable without a deploy of anything else                                                        |
+| **total in-flight work across the fleet** | pool size × **worker machine count**                                                                               | both ours to set; the second is `fly.toml` plus a release, read back from the platform (§15.1)      |
+
+**The residual cost, stated rather than left implicit:** N concurrent supervisions occupy N of
+`POOL_SIZE` slots for their containers' lives, and nothing reclaims those slots early. That is
+[MOTIR-3488]'s priced trade-off, unchanged and now bounded by a number this repository sets.
+
+**THE TRIGGER TO REVISE — and it is a measurement, not a feeling.** Schedule [MOTIR-3778] (the
+self-rescheduling supervision) when the pool is demonstrably contended by supervisions: a
+queue-depth or oldest-pending-age alert firing while the in-flight set is full of them, or a FOURTH
+long-running supervisor arriving. Tidiness is not the trigger, and neither is the fact that a held
+claim reads badly.
+
+**So §14.5's two controls are answered:** `CLAIM_BATCH` is no longer a concurrency control at all
+once §15.3 lands (§15.6.3), and the worker machine count remains the fleet-level instrument — but
+the answer to _"how do we survive a long supervisor"_ is the POOL, not the machine count, which is
+what it was implicitly being asked to be at a count of one.
+
+### §15.6 — The alternatives, each with a verdict, so they are not re-proposed
+
+**1 · A completion CALLBACK from the container, instead of polling — REJECTED, and not on cost.**
+It is genuinely lower-latency: the supervisor learns of the exit at the instant it happens rather
+than up to fifteen seconds later. It costs an inbound route, that route's authentication, and orphan
+detection for the callback that never arrives — and that last item is the decisive one, because **a
+callback that may be lost needs the poll loop as its correctness path anyway.** That is the exact
+shape §9's `LISTEN`/`NOTIFY` reasoning already settled one tier down: _the poll is the correctness
+path and the notification is the latency path_, in that order. So a callback is an OPTIMISATION on
+top of a loop that must exist regardless, and it does not touch the problem §15 is about, which is
+occupancy rather than latency. **Revise when polling LATENCY is the measured complaint** — it is not
+what 2026-08-28 measured.
+
+**2 · Raising the worker machine count — ACCEPTED AS A MITIGATION, REJECTED AS THE FIX.**
+It helps and it is cheap ($11.83/mo per machine, and `fly.toml` plus a release is the whole
+operation). What it does not fix is the RATIO: the settle coupling is per-worker and per-tick, so at
+any machine count one long supervisor still strands the four runs claimed beside it. Two machines
+would have made 2026-08-28 half as bad and not absent, and the queue would still have had 139 rows
+in it. **Do it when throughput demands it; do not do it INSTEAD of §15.3**, which is the difference
+between buying capacity and stopping the leak.
+
+**3 · Raising or lowering `CLAIM_BATCH` — REJECTED as an instrument for this, in both directions.**
+RAISING it makes the coupling strictly worse: more claims held behind the slowest member. LOWERING
+it to 1 removes the coupling by removing the batch, at the price of one claim round-trip per run —
+which is a real cost on the hot path and buys nothing that §15.3 does not buy better. **Under §15.3
+the batch stops being the coupling at all**, and `CLAIM_BATCH` reverts to what it always should have
+been — an amortiser for the claim round-trip — where **5 is defensible and no evidence exists to move
+it** (and, since [MOTIR-3769], is actually enforced — see §15.1a). The number that now wants deciding is the POOL size, whose floor is the count of long-running
+supervisors that may legitimately be in flight at once plus headroom for the fast lane.
+
+### §15.7 — What §15 does not settle
+
+- **What a refresh COSTS.** Thirty-five minutes to re-derive a graph is a fact about the indexer —
+  the whole-tree rebuild, the sequential per-project fan-out — and it belongs to [MOTIR-3759].
+  §15 makes a long job harmless; it does not make it shorter.
+- **How long a merge takes to reach production.** [MOTIR-3760].
+- **The 4× consumer fan-out on `work-item/transitioned`.** Deferred deliberately by the epic that
+  built this engine; §15 inherits that boundary rather than moving it.
+- **Where the DETECTION lives.** §15.1's two readings — depth and oldest-pending age — are the ones
+  that ended the investigation, and nothing computed them at the time. Making them readable from
+  outside the worker process is a sibling card's deliverable, and it is deliberately not a job:
+  **a job engine cannot be the thing that reports its own death.**
+- **`motir-ai`'s own queue.** Unchanged from §14.5 — read as evidence in §14.2.1, not as a thing to
+  change here.
+- **The poll CADENCE, the backoffs and the budgets.** Every value in `INDEX_FLEET_TIME_BUDGETS`,
+  `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is unchanged by this section — and after
+  §15.4's correction, so is the wait itself. §15 changes what the CLAIM LOOP does; it changes
+  nothing about how a supervision waits.
+- **Whether supervision should stop being a loop at all.** [MOTIR-3778] carries the
+  self-rescheduling shape — one poll per run, the session in a durable row — with the measurement
+  that would schedule it. §15.5 names the trigger; this section does not decide it.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
 [MOTIR-3485]: https://app.motir.co/items/MOTIR-3485
 [MOTIR-3701]: https://app.motir.co/items/MOTIR-3701
+[MOTIR-2384]: https://app.motir.co/items/MOTIR-2384
+[MOTIR-3488]: https://app.motir.co/items/MOTIR-3488
+[MOTIR-3672]: https://app.motir.co/items/MOTIR-3672
+[MOTIR-3759]: https://app.motir.co/items/MOTIR-3759
+[MOTIR-3760]: https://app.motir.co/items/MOTIR-3760
+[MOTIR-3769]: https://app.motir.co/items/MOTIR-3769
+[MOTIR-3763]: https://app.motir.co/items/MOTIR-3763
+[MOTIR-3778]: https://app.motir.co/items/MOTIR-3778
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss

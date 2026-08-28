@@ -215,6 +215,9 @@ describe('§2a the seam — scheduler → repository → claim → ledger', () =
       },
     });
     expect(await worker.tick()).toBe(1);
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762; `settled()` is what
+    // says the handler and the ledger write are done.
+    await worker.settled();
     expect(handled).toEqual([jobId]);
 
     const ledger = await adminDb.jobRun.findMany({ where: { functionId: jobId } });
@@ -256,6 +259,7 @@ describe('§2b a SCHEDULED run that throws reaches the DLQ and is replayable', (
       },
     });
     await worker.tick();
+    await worker.settled();
 
     const queued = await adminDb.jobQueueRun.findFirstOrThrow({ where: { jobId } });
     expect(queued.state).toBe('failed');
@@ -379,7 +383,13 @@ describe('§3a TWO WORKERS DO NOT DOUBLE-FIRE A TICK', () => {
       });
     };
 
-    await Promise.all([make('worker-a').tick(), make('worker-b').tick()]);
+    // The two ticks still race — that is the assertion. They are held so their
+    // DETACHED settles can be awaited (MOTIR-3762): the tick returns at the
+    // claim, and the execution count is what this test is about.
+    const workerA = make('worker-a');
+    const workerB = make('worker-b');
+    await Promise.all([workerA.tick(), workerB.tick()]);
+    await Promise.all([workerA.settled(), workerB.settled()]);
 
     // Exactly one queue row for the fire, and exactly one execution of it.
     const queued = await adminDb.jobQueueRun.findMany({ where: { jobId } });
@@ -466,6 +476,7 @@ describe('§3d jobScheduleHealthService still judges a MIGRATED job', () => {
       },
     });
     await worker.tick();
+    await worker.settled();
 
     // Judged an hour after the fire: one tick has passed, so the job is inside
     // the probe's one-missed-tick tolerance and must read healthy.

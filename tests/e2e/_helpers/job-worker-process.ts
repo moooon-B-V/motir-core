@@ -155,6 +155,14 @@ export async function startJobWorker(): Promise<void> {
       ...(process.env['EMAIL_OUTBOX_PATH']
         ? { EMAIL_OUTBOX_PATH: process.env['EMAIL_OUTBOX_PATH'] }
         : {}),
+      // ⚠️ THE LONG-RUNNING PROBE (MOTIR-3767), always on for this lane and
+      // DORMANT until something enqueues it. Unlike the index-writer seam below
+      // it needs no opt-in: registering the job costs one `defineJob` call and
+      // installs no interceptor, so a spec that never enqueues
+      // `system.e2e-slow-probe` cannot tell it is there. Set unconditionally
+      // because the worker starts ONCE in `globalSetup` — a per-spec opt-in
+      // would mean restarting it, which is exactly the cost this avoids.
+      E2E_TEST_SLOW_JOB: '1',
       // The index-writer seam — see `indexWriterSeamEnv` for why it is here and
       // nowhere else.
       ...indexWriterSeamEnv(),
