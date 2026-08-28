@@ -5,17 +5,19 @@
  * owns the PROCESS concerns:
  *
  * **The embedded external-seam stub.** The fixture seeds through the shipped
- * services, and two of those paths call out of process: the object-store
- * uploader (`lib/blob/uploader` — every attachment upload) and the Inngest
- * event API (`lib/jobs/sendEvent` — fired post-commit by every comment).
- * Neither external should run at seed time: there are no real store credentials
- * in dev/CI (CI's are placeholders), and 300+ comment events would either THROW
- * (no event key — `inngest.send` is not fire-and-forget) or enqueue hundreds
- * of pointless notification jobs against a live dev server. So the runner
- * starts ONE tiny local HTTP server speaking just enough of both APIs and
- * points both SDKs at it via env (`MOTIR_S3_*`, `INNGEST_DEV` +
- * `INNGEST_BASE_URL`) — every gate, transaction, audit row and link-on-write
- * still runs the real shipped code.
+ * services, and one of those paths calls out of process: the object-store
+ * uploader (`lib/blob/uploader` — every attachment upload). There are no real
+ * store credentials in dev/CI (CI's are placeholders), so the runner starts ONE
+ * tiny local HTTP server speaking just enough of the S3 API and points the SDK at
+ * it via env (`MOTIR_S3_*`) — every gate, transaction, audit row and
+ * link-on-write still runs the real shipped code.
+ *
+ * ⚠️ IT USED TO STUB A SECOND SEAM (MOTIR-3418). `sendEvent` was an HTTP send to
+ * a third party, so 300+ post-commit comment events would either THROW (no event
+ * key) or enqueue hundreds of pointless notification jobs against a live dev
+ * server; the stub answered the event API too. An emit is a row in the database
+ * this seed is already writing to now, so there is nothing out of process to
+ * stub — the rows are enqueued and simply sit there unless a worker is running.
  *
  * ⚠️ The blob half is a REAL local HTTP server rather than an undici intercept,
  * and it must stay one (MOTIR-2389): this seed runs as its own PROCESS with no
@@ -36,12 +38,6 @@ function startSeamStub(): Promise<{ origin: string; close: () => void }> {
     // Drain the body — the blob SDK streams the file bytes up.
     req.on('data', () => {});
     req.on('end', () => {
-      if (req.url?.startsWith('/e/')) {
-        // Inngest event API: ack and drop (seed-time events are noise).
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ ids: [`evt_seed_${++uploadCounter}`], status: 200 }));
-        return;
-      }
       // The object store: an S3 PUT/HEAD/DELETE on `/<bucket>/<key>`. The
       // uploader computes the key itself, so an empty 200 with an ETag is the
       // whole contract a seed-time write needs.
@@ -79,8 +75,6 @@ async function main() {
   // An unroutable stub origin — the bytes never leave this process, so the host
   // only has to be a well-formed prefix for the seeded public asset URLs.
   process.env['MOTIR_S3_PUBLIC_BASE_URL'] ??= 'https://seed-collab.public.store.invalid';
-  process.env['INNGEST_DEV'] = '1';
-  process.env['INNGEST_BASE_URL'] = stub.origin;
 
   const { seedCollabFixture, SEED_COLLAB_OWNER_EMAIL, SEED_COLLAB_PASSWORD } =
     await import('./seedCollabFixture');

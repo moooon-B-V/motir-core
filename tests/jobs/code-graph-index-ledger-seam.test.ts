@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
+import type { JobQueueRun } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
+import { recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -105,7 +107,7 @@ describe('a dispatched index is visible to the ledger’s REAL consumers', () =>
     stubIndexFleet();
     containerExitsWith(0);
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
       events: [indexEventFor({ installationId, workspaceId })],
     });
@@ -165,7 +167,7 @@ describe('four repos produce four runs with four DISTINCT repoRefs', () => {
     containerExitsWith(0);
 
     for (const repo of repos) {
-      const engine = new InngestTestEngine({ function: codeGraphIndex });
+      const engine = new JobTestEngine({ function: codeGraphIndex });
       const { result } = await engine.execute({
         events: [
           indexEventFor({
@@ -226,7 +228,7 @@ describe('a no-op verdict reaches the ledger and still does not count as an inde
       );
       stubIndexFleet();
 
-      const engine = new InngestTestEngine({ function: codeGraphIndex });
+      const engine = new JobTestEngine({ function: codeGraphIndex });
       const { result } = await engine.execute({
         events: [
           indexEventFor({
@@ -264,7 +266,7 @@ describe('a no-op verdict reaches the ledger and still does not count as an inde
     const { workspaceId, installationId } = await seedIndexWorkspace('seam-nows', 1);
     stubIndexFleet();
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, error } = (await engine.execute({
       events: [indexEventFor({ installationId, workspaceId: 'ws-gone' })],
     })) as { result?: unknown; error?: unknown };
@@ -289,14 +291,16 @@ describe('a no-op verdict reaches the ledger and still does not count as an inde
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('a container failure is legible in the ledger, not an opaque code', () => {
-  // ⚠️ THE FAILURE RECORD IS WRITTEN BY `onFailure`, NOT BY THE THROW. A step
-  // scheduled from a try/catch after the terminally-failed step never executes on
-  // the real executor (PRODECT_FINDINGS #39), so `defineJob` moved the
-  // dead-letter write into Inngest's `onFailure` — a SEPARATE invocation the
-  // in-process engine does not drive. Asserting only the thrown error therefore
+  // ⚠️ THE FAILURE RECORD IS WRITTEN BY A TERMINAL-FAILURE HOOK, NOT BY THE
+  // THROW. A step scheduled from a try/catch after the terminally-failed step
+  // never executes on a real durable executor (PRODECT_FINDINGS #39), so the
+  // dead-letter write lives OUTSIDE the handler — in
+  // `recordEngineTerminalFailure`, which the worker calls once when a run's
+  // `attempts` reach `maxAttempts`. Asserting only the thrown error therefore
   // proves nothing about what an operator actually reads off the run. So this
-  // drives the handler to its throw, then invokes the SHIPPED `onFailure` off the
-  // function's own config with exactly the payload Inngest hands it.
+  // drives the handler to its throw, then calls the SHIPPED hook with the run row
+  // the worker would have been holding. (It used to reach into the vendor
+  // function object's `opts.onFailure`, which was the same shape one lane over.)
   it.each([
     [30, 'graph_unbuildable'],
     [137, 'out_of_memory'],
@@ -308,7 +312,7 @@ describe('a container failure is legible in the ledger, not an opaque code', () 
       containerExitsWith(exitCode);
       const event = indexEventFor({ installationId, workspaceId });
 
-      const engine = new InngestTestEngine({ function: codeGraphIndex });
+      const engine = new JobTestEngine({ function: codeGraphIndex });
       const { result, error } = (await engine.execute({
         events: [event],
       })) as { result?: unknown; error?: { message?: string } };
@@ -320,16 +324,21 @@ describe('a container failure is legible in the ledger, not an opaque code', () 
       expect(running).toHaveLength(1);
       expect(running[0]!.status).toBe('running');
 
-      // Now the terminal-failure invocation, with the shape `defineJob` reads:
-      // the ORIGINAL event under `event.data.event`, and the error that ended it.
-      const onFailure = (
-        codeGraphIndex as unknown as { opts: { onFailure: (a: unknown) => unknown } }
-      ).opts.onFailure;
-      await onFailure({
-        event: { data: { event, run_id: 'run-terminal' } },
-        error: new Error(String(error?.message)),
-        step: { run: async (_id: string, fn: () => unknown) => fn() },
-      });
+      // Now the terminal-failure call, with the row the worker would hold: the
+      // same `eventId` the `running` row above was keyed on, so the correlation
+      // flips that row rather than writing a second one.
+      await recordEngineTerminalFailure(
+        {
+          id: 'run-terminal',
+          jobId: 'system.code-graph-index',
+          eventId: running[0]!.eventId,
+          eventName: running[0]!.eventName,
+          workspaceId,
+          attempts: 5,
+        } as unknown as JobQueueRun,
+        new Error(String(error?.message)),
+        event.data,
+      );
 
       // ⚠️ WHAT THE OPERATOR READS. The exit code is the container's entire
       // diagnostic channel, so the record names the class — "the parser died on

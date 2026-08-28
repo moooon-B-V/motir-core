@@ -10,18 +10,13 @@ import { sendEvent, sendSystemEvent } from '@/lib/jobs/sendEvent';
 import { JobWorker } from '@/lib/jobs/engine/worker';
 import { executeWithLedger } from '@/lib/jobs/engine/ledger';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
-import { dispatchEventToEngine, hasInngestSubscribers } from '@/lib/jobs/engine/dispatcher';
-import {
-  manifestJobs,
-  manifestSubscribers,
-  manifestScheduledJobs,
-} from '@/lib/jobs/engine/manifest';
+import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
+import { manifestJobs, manifestScheduledJobs } from '@/lib/jobs/engine/manifest';
 import {
   ensureJobManifestLoaded,
   resetJobManifestLoadForTests,
 } from '@/lib/jobs/engine/subscribers';
 import { resolveIdempotencyKey } from '@/lib/jobs/engine/idempotency';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import '@/lib/jobs/registry';
@@ -57,20 +52,16 @@ import '@/lib/jobs/registry';
 // Real Postgres throughout, no mocks. No `retries` — a retry here would hide the
 // ordering flakiness this gate exists to expose.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
 const REPO_ROOT = join(__dirname, '..', '..');
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -118,14 +109,19 @@ describe('§1 the emit→run seam, end to end', () => {
     const { workspaceId, userId } = await makeWorkspace();
     const jobId = 'test.gate-seam';
     const handled: unknown[] = [];
-    defineJob({ id: jobId as never, trigger: 'work-item/embedding.requested' }, (ctx) => {
+    // ⚠️ ITS OWN TRIGGER, NOT A REAL EVENT (MOTIR-3418). The probe used to share
+    // `work-item/embedding.requested` with the real consumer and be isolated by
+    // the per-job cutover switch, which enqueued only the routed id. With one lane
+    // a dispatch enqueues EVERY subscriber, so the worker's tick would claim two
+    // runs and this seam assertion would be about the wrong one.
+    const trigger = 'test/gate-seam.requested';
+    defineJob({ id: jobId as never, trigger: trigger as never }, (ctx) => {
       handled.push(ctx.event.data);
       return { handled: true };
     });
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     // The REAL emit surface every service calls — not the dispatcher directly.
-    await sendEvent('work-item/embedding.requested', { workspaceId, workItemId: 'wi_1' });
+    await sendEvent(trigger as never, { workspaceId, workItemId: 'wi_1' } as never);
     expect(await worker('gate-seam').tick()).toBe(1);
     expect(handled).toEqual([{ workspaceId, workItemId: 'wi_1' }]);
 
@@ -142,7 +138,7 @@ describe('§1 the emit→run seam, end to end', () => {
     expect(dto, 'the run never reached the operator surface').toBeDefined();
     expect(dto!.status).toBe('succeeded');
     expect(dto!.workspaceId).toBe(workspaceId);
-    expect(dto!.eventName).toBe('work-item/embedding.requested');
+    expect(dto!.eventName).toBe(trigger);
     expect(dto!.output).toEqual({ handled: true });
   });
 
@@ -161,7 +157,6 @@ describe('§1 the emit→run seam, end to end', () => {
         return { delivered: deliveries };
       },
     );
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     const payload = { workspaceId, workItemId: 'wi_1', idempotencyKey: 'one-token' };
     await sendEvent('work-item/embedding.requested', payload as never);
@@ -188,7 +183,7 @@ describe('§1 the emit→run seam, end to end', () => {
 // §2 THE GUARDS A PERCENTAGE CANNOT SEE
 // ───────────────────────────────────────────────────────────────────────────
 
-describe('§2a routing totality, derived from the registry', () => {
+describe('§2a dispatch totality, derived from the registry', () => {
   /** Every event-triggered job the manifest knows — never a hand-written list. */
   const eventJobs = () => manifestJobs().filter((d) => d.cron === undefined);
 
@@ -197,7 +192,13 @@ describe('§2a routing totality, derived from the registry', () => {
     expect(eventJobs().length).toBeGreaterThan(10);
   });
 
-  it('routes each job INDIVIDUALLY — its id moves it, and moves nothing else', async () => {
+  it('dispatches each job under ITS OWN trigger, and under no other', async () => {
+    // ⚠️ THIS ASSERTED A ROUTING SWITCH (MOTIR-3418 removed it). It set
+    // `MOTIR_POSTGRES_JOB_IDS` to one id at a time and checked that the id moved
+    // that job and nothing else, then that an unrouted job enqueued nothing at
+    // all. There is no switch left; what the section was really protecting — that
+    // a job's TRIGGER is what selects it, derived from the registry rather than
+    // from a hand-written list — is asserted directly.
     const { workspaceId } = await makeWorkspace();
     // One representative per distinct trigger keeps the run bounded while still
     // deriving the set from the registry rather than naming ids.
@@ -206,32 +207,28 @@ describe('§2a routing totality, derived from the registry', () => {
 
     for (const [trigger, jobId] of byTrigger) {
       await truncateJobRuns();
-      process.env[JOB_ENGINE_JOBS_ENV] = jobId;
       const result = await dispatchEventToEngine(trigger, { workspaceId });
-
-      // Routed: exactly this job, and no sibling subscriber of the same event.
-      expect(result.enqueued, `routing ${jobId} did not enqueue it`).toEqual([jobId]);
-
-      // Unrouted: nothing at all, not even a job_event row.
-      await truncateJobRuns();
-      delete process.env[JOB_ENGINE_JOBS_ENV];
-      const off = await dispatchEventToEngine(trigger, { workspaceId });
-      expect(off.enqueued, `${jobId} enqueued while unrouted`).toEqual([]);
-      expect(off.eventId).toBeNull();
+      expect(result.enqueued, `dispatching ${trigger} did not enqueue ${jobId}`).toContain(jobId);
+      // …and the job is enqueued by NO other event in the registry.
+      for (const other of byTrigger.keys()) {
+        if (other === trigger) continue;
+        await truncateJobRuns();
+        const off = await dispatchEventToEngine(other, { workspaceId });
+        expect(off.enqueued, `${jobId} enqueued on ${other}`).not.toContain(jobId);
+      }
     }
   });
 
-  it('FAILS if a job is registered whose event cannot be routed', async () => {
+  it('FAILS if a job is registered whose event cannot be dispatched', async () => {
     // The guard's own falsifiability: a job whose trigger the dispatcher cannot
-    // resolve would enqueue nothing when routed. Demonstrated on a job with a
-    // trigger no dispatch names.
+    // resolve would enqueue nothing. Demonstrated on a job with a trigger no
+    // other dispatch names.
     const { workspaceId } = await makeWorkspace();
     const jobId = 'test.gate-unroutable';
     defineJob({ id: jobId as never, trigger: 'work-item/field.changed' }, () => ({}));
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
-    const routed = await dispatchEventToEngine('work-item/field.changed', { workspaceId });
-    expect(routed.enqueued).toContain(jobId);
+    const dispatched = await dispatchEventToEngine('work-item/field.changed', { workspaceId });
+    expect(dispatched.enqueued).toContain(jobId);
     // …and dispatching the WRONG event name for it enqueues nothing, which is
     // the shape a mis-registered trigger would produce for every event.
     const wrong = await dispatchEventToEngine('work-item/child-set.changed', { workspaceId });
@@ -239,43 +236,12 @@ describe('§2a routing totality, derived from the registry', () => {
   });
 });
 
-describe('§2b the split-subscriber invariant — what makes a PARTIAL cutover safe', () => {
-  /** An event with more than one subscriber, taken from the registry. */
-  const multiSubscriberEvent = (): { trigger: string; ids: string[] } => {
-    for (const d of manifestJobs()) {
-      if (!d.trigger) continue;
-      const ids = manifestSubscribers(d.trigger).map((s) => s.id);
-      if (ids.length > 1) return { trigger: d.trigger, ids };
-    }
-    throw new Error('no multi-subscriber event in the registry — the invariant is untestable');
-  };
-
-  it('stays TRUE while ANY subscriber is unrouted', () => {
-    const { trigger, ids } = multiSubscriberEvent();
-    expect(ids.length).toBeGreaterThan(1);
-
-    // Move every subscriber but the last.
-    for (let i = 1; i <= ids.length - 1; i += 1) {
-      process.env[JOB_ENGINE_JOBS_ENV] = ids.slice(0, i).join(',');
-      expect(
-        hasInngestSubscribers(trigger),
-        `${trigger} dropped Inngest with ${ids.length - i} subscriber(s) still on it`,
-      ).toBe(true);
-    }
-  });
-
-  it('turns FALSE only when the LAST one moves', () => {
-    const { trigger, ids } = multiSubscriberEvent();
-    process.env[JOB_ENGINE_JOBS_ENV] = ids.join(',');
-    expect(hasInngestSubscribers(trigger)).toBe(false);
-  });
-
-  it('is asserted on an event that genuinely has several consumers', () => {
-    // Otherwise the two directions above could both hold trivially.
-    const { ids } = multiSubscriberEvent();
-    expect(ids.length).toBeGreaterThanOrEqual(2);
-  });
-});
+// ⚠️ §2b STOOD HERE — "the split-subscriber invariant, what makes a PARTIAL
+// cutover safe" (MOTIR-3418 removed it). It asserted that an event kept needing
+// the old transport while ANY of its subscribers was still on it, and stopped
+// only when the LAST one moved. There is no partial cutover and no second
+// transport: every subscriber of an event is enqueued by the same dispatch, which
+// §2a above asserts over the whole registry.
 
 describe('§2c the import boundaries, as tree-level assertions', () => {
   const SOURCE_ROOTS = ['lib', 'app', 'components', 'scripts'];
@@ -333,7 +299,6 @@ describe('§2d tenancy — the dispatcher writes through withSystemContext, unde
     const { workspaceId } = await makeWorkspace();
     const jobId = 'test.gate-tenancy';
     defineJob({ id: jobId as never, trigger: 'work-item/embedding.requested' }, () => ({}));
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     await sendEvent('work-item/embedding.requested', { workspaceId, workItemId: 'wi_1' });
 
@@ -349,7 +314,6 @@ describe('§2d tenancy — the dispatcher writes through withSystemContext, unde
     // `email.send`'s `workspaceId` is `string | null` by design — a password
     // reset is identity-scoped. `null` must reach the rows as null, never as a
     // `"system"` sentinel, which would violate the FK.
-    process.env[JOB_ENGINE_JOBS_ENV] = 'email.send';
     await sendEvent('email.send', {
       workspaceId: null,
       idempotencyKey: 'gate-null-ws',
@@ -368,7 +332,6 @@ describe('§2d tenancy — the dispatcher writes through withSystemContext, unde
   });
 
   it('writes a SYSTEM event untenanted, through the same seam', async () => {
-    process.env[JOB_ENGINE_JOBS_ENV] = 'system.billing-seat-sync';
     await sendSystemEvent('system.billing-seat-sync', { organizationId: 'org_gate' });
 
     const queued = await adminDb.jobQueueRun.findFirstOrThrow({

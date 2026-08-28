@@ -1,7 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
@@ -26,6 +25,8 @@ import {
   createActionsVariableFake,
   type ActionsVariableFake,
 } from '../helpers/actionsVariableFake';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
+import * as jobDispatcher from '@/lib/jobs/engine/dispatcher';
 
 // The repo-CREATION primitive over real Postgres (Story MOTIR-1775 · MOTIR-1781).
 //
@@ -203,7 +204,7 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   _setReadinessPollForTests({ attempts: 2, delayMs: 0 });
   installGitHub();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
 });
 
 afterEach(() => {
@@ -530,16 +531,15 @@ describe('the shipped chain is used, not extended', () => {
     // The job the reconcile/bind paths send, one per created repo, carrying the
     // OWNING workspace — the same event name and payload shape
     // `enqueueNewlyAddedRepos` produces. Nothing new was added to the chain.
-    const send = vi.mocked(inngest.send);
+    const send = vi.mocked(jobDispatcher.dispatchEventToEngine);
     expect(send).toHaveBeenCalledTimes(2);
-    expect(send.mock.calls.map((c) => (c[0] as { name: string }).name)).toEqual([
-      'system.code-graph-index',
-      'system.code-graph-index',
+    const sent = dispatchedEvents(send);
+    expect(sent.map((e) => e.name)).toEqual(['system.code-graph-index', 'system.code-graph-index']);
+    expect(sent.map((e) => (e.data as { repoName: string }).repoName)).toEqual([
+      'acme-web',
+      'acme-api',
     ]);
-    expect(
-      send.mock.calls.map((c) => (c[0] as { data: { repoName: string } }).data.repoName),
-    ).toEqual(['acme-web', 'acme-api']);
-    expect((send.mock.calls[0]![0] as { data: Record<string, unknown> }).data).toMatchObject({
+    expect(sent[0]!.data).toMatchObject({
       installationId: INSTALLATION_ID,
       workspaceId: fx.workspaceId,
       repoOwner: MOTIR_ORG,
@@ -549,7 +549,7 @@ describe('the shipped chain is used, not extended', () => {
 
   it('a queue blip never costs the repository — the enqueue is best-effort', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(inngest.send).mockRejectedValue(new Error('queue down'));
+    vi.mocked(jobDispatcher.dispatchEventToEngine).mockRejectedValue(new Error('queue down'));
     const fx = await makeWorkItemFixture();
     const rowId = await addRow(fx, 'web', 'acme-web');
 

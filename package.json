@@ -10,7 +10,6 @@
   "packageManager": "pnpm@11.2.2",
   "scripts": {
     "dev": "next dev",
-    "dev:inngest": "INNGEST_DEV=1 next dev",
     "build": "prisma generate && node scripts/migrate-deploy.mjs && next build",
     "start": "next start",
     "lint": "eslint",
@@ -86,7 +85,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fractional-indexing": "^3.2.0",
-    "inngest": "4.5.0",
     "jose": "^6.2.3",
     "lucide-react": "^1.16.0",
     "mcp-handler": "^1.1.0",
@@ -107,7 +105,6 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
-    "@inngest/test": "1.0.0",
     "@playwright/test": "^1.60.0",
     "@seriousme/openapi-schema-validator": "^2.9.0",
     "@tailwindcss/postcss": "^4",
@@ -127,7 +124,6 @@
     "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
-    "inngest-cli": "1.27.0",
     "lint-staged": "^17.0.5",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3",

@@ -10,11 +10,11 @@ import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ActivityAllEntryDto } from '@/lib/dto/activity';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { inngest } from '@/lib/jobs/client';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../../helpers/jobs';
 
 // Subtask 5.5.2 — the All merged stream: the 5.1.2 comment threads and the
 // 5.5.1 history entries interleaved by a bounded two-source composite-cursor
@@ -34,7 +34,7 @@ beforeEach(async () => {
   await truncateAll();
   // Block the comment-created job publish at the client edge (the one
   // permitted stub besides getSession — the network has no Inngest here).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] as string[] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

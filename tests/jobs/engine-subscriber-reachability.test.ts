@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 
 // THE EMIT PATH RESOLVES THE REAL SUBSCRIBER SET (Story MOTIR-3415 · MOTIR-3458).
 //
@@ -72,17 +71,12 @@ async function fanOutVisibleToTheEmitPath(eventName: string): Promise<string[]> 
 // So this guard routes a job first, which is also the state it is describing:
 // the question it asks is whether an operator who HAS cut a job over gets the
 // real subscriber set.
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
 
 beforeEach(() => {
   vi.resetModules();
-  process.env[JOB_ENGINE_JOBS_ENV] = 'status-derivation/transitioned';
 });
 
-afterEach(() => {
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
-});
+afterEach(() => {});
 
 describe('the job manifest is complete on the emit path', () => {
   it('sees the SAME job set as the full registry, from a different module graph', async () => {
@@ -109,36 +103,46 @@ describe('the job manifest is complete on the emit path', () => {
     ]);
   });
 
-  it('answers the Inngest question from a REAL set once the emit path has loaded', async () => {
+  it('resolves a REAL subscriber set once the emit path has loaded', async () => {
+    // ⚠️ THIS USED TO ASK THE INNGEST QUESTION (MOTIR-3418). `hasInngestSubscribers`
+    // answered "does this event still need the old transport", and the point of the
+    // test was that BEFORE the emit path had run, the manifest was empty and a SAFE
+    // DEFAULT answered instead — which is exactly why MOTIR-3458's defect was
+    // invisible: the fallback was doing the whole job. The transport is gone and so
+    // is the question; the failure it guarded against is not, because an empty
+    // manifest on the emit path now means NOTHING IS ENQUEUED AT ALL.
     vi.resetModules();
     await import('@/lib/jobs/sendEvent');
-    const { dispatchEventToEngine, hasInngestSubscribers } =
-      await import('@/lib/jobs/engine/dispatcher');
+    const { dispatchEventToEngine } = await import('@/lib/jobs/engine/dispatcher');
 
-    // BEFORE the emit path has run, the manifest is empty and the SAFE DEFAULT is
-    // what answers. That is the state which shipped, and it is exactly why the
-    // defect was invisible: the fallback was doing the whole job.
-    expect(hasInngestSubscribers('work-item/transitioned')).toBe(true);
-
-    await dispatchEventToEngine('work-item/transitioned', { workspaceId: null });
+    const result = await dispatchEventToEngine('work-item/transitioned', { workspaceId: null });
 
     const { manifestSubscribers } = await import('@/lib/jobs/engine/manifest');
     expect(manifestSubscribers('work-item/transitioned')).toHaveLength(5);
-    // Still true — but now because five real subscribers are unrouted, not
-    // because nothing was known.
-    expect(hasInngestSubscribers('work-item/transitioned')).toBe(true);
+    // The dispatch LOADED the manifest and enqueued for every one of them — not
+    // for an empty set it happened to read before anything was registered.
+    expect(result.enqueued).toHaveLength(5);
   });
 
-  it('ORDERS the load before the synchronous Inngest question', async () => {
-    // `hasInngestSubscribers` cannot await the loader, so it is correct only
-    // because `sendEvent` dispatches to the engine FIRST. That ordering is
-    // load-bearing, so it is asserted rather than assumed.
-    const source = readFileSync(join(__dirname, '..', '..', 'lib', 'jobs', 'sendEvent.ts'), 'utf8');
-    const dispatchAt = source.indexOf('await dispatchEventToEngine(');
-    const askAt = source.indexOf('hasInngestSubscribers(name)');
-    expect(dispatchAt).toBeGreaterThan(-1);
-    expect(askAt).toBeGreaterThan(-1);
-    expect(dispatchAt).toBeLessThan(askAt);
+  it('LOADS the manifest before it resolves subscribers', async () => {
+    // The ordering is load-bearing: `manifestSubscribers` is synchronous, so it is
+    // correct only because `dispatchEventToEngine` awaits the loader first. The
+    // sibling assertion ("ORDERS the load before the synchronous Inngest question")
+    // read `sendEvent.ts` for a call that no longer exists; this reads the
+    // dispatcher for the ordering that still decides the answer.
+    const source = readFileSync(
+      join(__dirname, '..', '..', 'lib', 'jobs', 'engine', 'dispatcher.ts'),
+      'utf8',
+    );
+    // ⚠️ THE CODE, NOT THE PROSE. Both names appear in the file's own comments —
+    // several times, and above the code — so a bare `indexOf` compares two
+    // sentences. Anchoring on the statements themselves is what makes the
+    // assertion about the ordering rather than about the header.
+    const loadAt = source.indexOf('  await ensureJobManifestLoaded();');
+    const resolveAt = source.indexOf('const subscribers = manifestSubscribers(name);');
+    expect(loadAt).toBeGreaterThan(-1);
+    expect(resolveAt).toBeGreaterThan(-1);
+    expect(loadAt).toBeLessThan(resolveAt);
   });
 
   it('keeps the MANIFEST and the engine REGISTRY in step — they are one registration', async () => {

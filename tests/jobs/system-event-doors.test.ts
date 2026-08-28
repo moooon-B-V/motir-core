@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // THE SYSTEM-EVENT DOORS (Story MOTIR-3415 · Subtask MOTIR-3456).
 //
-// `sendSystemEvent` and `dispatchSystemEvent` exist so the per-job cutover
-// switch is consulted for the `system.*` namespace, which four emitters used to
-// bypass by calling the Inngest client directly.
+// `sendSystemEvent` and `dispatchSystemEvent` exist so every `system.*` emitter
+// goes through ONE seam. Four of them used to reach the queue directly, so a
+// change to what emitting means — at the time the per-job cutover switch, today
+// the engine's idempotency and debounce — simply did not reach them.
 //
 // ⚠️ WHAT THESE ASSERT IS THAT NOTHING OBSERVABLE MOVED. MOTIR-3413's boundary is
 // "no job's OBSERVABLE behaviour changes", and routing four events through a new
@@ -13,43 +14,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // easily lost in a refactor — each caller's ERROR POLICY must survive. Two of
 // the four deliberately do NOT swallow (one reports its outcome, one wants a
 // step retry), which is why there are two doors rather than one.
+//
+// ⚠️ THERE USED TO BE TWO TRANSPORTS HERE (MOTIR-3418 removed one). This file
+// mocked the dispatcher AND spied the vendor client, and half its assertions were
+// about the relationship between them: both lanes attempted, the vendor send
+// skipped once every subscriber had moved, an engine failure not cancelling the
+// vendor send. There is one write now, so `dispatchEventToEngine` IS the
+// transport, and each of those cases is either gone or restated against it.
 
-const sendMock = vi.fn();
 const dispatchToEngineMock = vi.fn();
-const hasInngestSubscribersMock = vi.fn();
 
-// ⚠️ THE INNGEST CLIENT IS SPIED ON, NOT MODULE-MOCKED, and that is a consequence
-// of MOTIR-3458 worth stating. `sendEvent` now side-effect-imports
-// `./engine/subscribers`, which evaluates all 37 definition modules so the emit
-// path can see its subscribers — and every one of them calls
-// `inngest.createFunction` at module scope. A `vi.mock` supplying only `send`
-// therefore breaks the import itself with `inngest.createFunction is not a
-// function`, long before any assertion runs. Spying keeps the real client (so
-// the definitions still build) while still observing the transport.
 vi.mock('@/lib/jobs/engine/dispatcher', () => ({
   dispatchEventToEngine: (...a: unknown[]) => dispatchToEngineMock(...a),
-  hasInngestSubscribers: (...a: unknown[]) => hasInngestSubscribersMock(...a),
 }));
 
-beforeEach(async () => {
+beforeEach(() => {
   vi.clearAllMocks();
-  const { inngest } = await import('@/lib/jobs/client');
-  vi.spyOn(inngest, 'send').mockImplementation((...a: unknown[]) => sendMock(...a));
   dispatchToEngineMock.mockResolvedValue({
     eventId: null,
     enqueued: [],
     alreadyEnqueued: [],
+    coalesced: [],
     failed: [],
   });
-  hasInngestSubscribersMock.mockReturnValue(true);
-  sendMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The four events that used to bypass the switch, with the payload each carries. */
+/** The four events that used to bypass the seam, with the payload each carries. */
 const CONVERTED = [
   { name: 'system.billing-seat-sync', data: { organizationId: 'org_1' } },
   {
@@ -76,32 +70,18 @@ const CONVERTED = [
 ] as const;
 
 describe('sendSystemEvent — the best-effort door', () => {
-  it.each(CONVERTED)(
-    'consults the engine and reaches Inngest for $name',
-    async ({ name, data }) => {
-      const { sendSystemEvent } = await import('@/lib/jobs/sendEvent');
-      await sendSystemEvent(name, data as never);
-
-      // The switch is read on the engine arm — this is the whole point of the card.
-      expect(dispatchToEngineMock).toHaveBeenCalledWith(name, data, { idempotencyKey: null });
-      // …and with nothing routed, the event reaches Inngest exactly as before,
-      // with a BYTE-IDENTICAL envelope.
-      expect(sendMock).toHaveBeenCalledWith({ name, data });
-    },
-  );
-
-  it('SKIPS the Inngest send once every subscriber of the event has moved', async () => {
-    hasInngestSubscribersMock.mockReturnValue(false);
+  it.each(CONVERTED)('reaches the engine for $name, with its payload', async ({ name, data }) => {
     const { sendSystemEvent } = await import('@/lib/jobs/sendEvent');
-    await sendSystemEvent('system.billing-seat-sync', { organizationId: 'org_1' });
+    await sendSystemEvent(name, data as never);
 
-    expect(dispatchToEngineMock).toHaveBeenCalledOnce();
-    expect(sendMock).not.toHaveBeenCalled();
+    // The whole point of the card: the emitter goes through the seam, and the
+    // payload arrives BYTE-IDENTICAL.
+    expect(dispatchToEngineMock).toHaveBeenCalledWith(name, data, { idempotencyKey: null });
   });
 
   it('SWALLOWS a transport failure — the caller emits post-commit', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    sendMock.mockRejectedValue(new Error('inngest unreachable'));
+    dispatchToEngineMock.mockRejectedValue(new Error('engine down'));
     const { sendSystemEvent } = await import('@/lib/jobs/sendEvent');
 
     await expect(
@@ -109,39 +89,10 @@ describe('sendSystemEvent — the best-effort door', () => {
     ).resolves.toBeUndefined();
     expect(spy).toHaveBeenCalled();
   });
-
-  it('SWALLOWS an engine failure AND still reaches Inngest', async () => {
-    // The two lanes carry different subscribers, so giving up on the second
-    // because the first failed would drop every job that has not moved.
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    dispatchToEngineMock.mockRejectedValue(new Error('engine down'));
-    const { sendSystemEvent } = await import('@/lib/jobs/sendEvent');
-
-    await expect(
-      sendSystemEvent('system.code-graph-index', {
-        installationId: 'i',
-        workspaceId: 'w',
-        repoOwner: 'o',
-        repoName: 'r',
-        defaultBranch: 'main',
-      }),
-    ).resolves.toBeUndefined();
-    expect(sendMock).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalled();
-  });
 });
 
 describe('dispatchSystemEvent — the strict door', () => {
   it('RETHROWS a transport failure, so a step retry and an outcome report still work', async () => {
-    sendMock.mockRejectedValue(new Error('inngest unreachable'));
-    const { dispatchSystemEvent } = await import('@/lib/jobs/sendEvent');
-
-    await expect(
-      dispatchSystemEvent('system.ci-runner-boot', { intentId: 'intent_1', workspaceId: null }),
-    ).rejects.toThrow('inngest unreachable');
-  });
-
-  it('RETHROWS an engine failure too', async () => {
     dispatchToEngineMock.mockRejectedValue(new Error('engine down'));
     const { dispatchSystemEvent } = await import('@/lib/jobs/sendEvent');
 
@@ -154,10 +105,11 @@ describe('dispatchSystemEvent — the strict door', () => {
     const { dispatchSystemEvent } = await import('@/lib/jobs/sendEvent');
     await dispatchSystemEvent('system.ci-runner-boot', { intentId: 'intent_1', workspaceId: null });
 
-    expect(sendMock).toHaveBeenCalledWith({
-      name: 'system.ci-runner-boot',
-      data: { intentId: 'intent_1', workspaceId: null },
-    });
+    expect(dispatchToEngineMock).toHaveBeenCalledWith(
+      'system.ci-runner-boot',
+      { intentId: 'intent_1', workspaceId: null },
+      { idempotencyKey: null },
+    );
   });
 });
 
@@ -187,18 +139,10 @@ describe('the converted call sites keep their existing error policy', () => {
       ...(await importOriginal<typeof import('@/lib/orchestrator')>()),
       isOrchestratorConfigured: () => true,
     }));
-    vi.doMock('@/lib/jobs/engine/dispatcher', () => ({
-      dispatchEventToEngine: async () => ({
-        eventId: null,
-        enqueued: [],
-        alreadyEnqueued: [],
-        failed: [],
-      }),
-      hasInngestSubscribers: () => true,
-    }));
-    const { inngest } = await import('@/lib/jobs/client');
     const send = vi.fn().mockRejectedValue(new Error('down'));
-    vi.spyOn(inngest, 'send').mockImplementation((...a: unknown[]) => send(...a));
+    vi.doMock('@/lib/jobs/engine/dispatcher', () => ({
+      dispatchEventToEngine: (...a: unknown[]) => send(...a),
+    }));
     return { send };
   }
 
@@ -216,10 +160,13 @@ describe('the converted call sites keep their existing error policy', () => {
     const { enqueueScaledTrackerSeatSync } = await import('@/lib/billing/seatSync');
     await expect(enqueueScaledTrackerSeatSync('org_1')).resolves.toBeUndefined();
     // The part that makes the assertion above mean anything.
-    expect(send).toHaveBeenCalledWith({
-      name: 'system.billing-seat-sync',
-      data: { organizationId: 'org_1' },
-    });
+    expect(send).toHaveBeenCalledWith(
+      'system.billing-seat-sync',
+      { organizationId: 'org_1' },
+      {
+        idempotencyKey: null,
+      },
+    );
   });
 
   it('dispatchCiRunnerBoot still REPORTS send_failed rather than swallowing silently', async () => {

@@ -5,7 +5,7 @@
 
 /** One scheduled job's verdict. */
 export interface ScheduleHealthEntryDTO {
-  /** The Inngest function id, e.g. `system.ci-actions-gate-sweep`. */
+  /** The job id, e.g. `system.ci-actions-gate-sweep`. */
   functionId: string;
   /** Its cron expression, as declared on `defineJob`. */
   cron: string;

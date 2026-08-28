@@ -26,7 +26,6 @@ import { expect, test } from '@playwright/test';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { signUp, createFirstProject } from './_helpers/shell-session';
-import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
 import { postSignedWebhook } from './_helpers/github-seed';
 import {
   E2E_INDEX_INSTALLATION_ID,
@@ -50,13 +49,11 @@ test.beforeEach(async () => {
     'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
   );
   await adminDb.fleetInFlightSlot.deleteMany({});
-  await routeJobsToEngine(REFRESH_JOB);
 });
 
 test.afterEach(async () => {
   // Unconditional: a spec that leaves the routing set hands the next spec a
   // server running this job on a lane it was not written against.
-  await clearJobRouting();
   await adminDb.fleetInFlightSlot.deleteMany({});
 });
 

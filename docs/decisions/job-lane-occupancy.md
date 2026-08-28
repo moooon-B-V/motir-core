@@ -17,6 +17,22 @@ person). That turns §6's saturation HYPOTHESIS into arithmetic — four consume
 five slots — so §3 and §6 are both amended on the record rather than rewritten, and §4's _"the
 reading that would settle it"_ is now taken.
 
+> ⚠️ **AMENDED 2026-08-27 by MOTIR-3418 — THE SUBSTRATE THIS RECORD MEASURES NO LONGER EXISTS.**
+> Every measurement below was taken against Inngest: §1 and §2 against its dev server, §3 against
+> its dashboard, §6 against its production account. The epic those cards belong to (MOTIR-3413)
+> replaced it with a Postgres-backed engine, and MOTIR-3418 deleted the SDK, the serve route, the
+> dependency and the account.
+>
+> **The record is kept in full, and it is kept because it cannot be re-taken.** Its findings are why
+> the code looks the way it does — why the supervisors were stepped, why the stepping was collapsed,
+> why the engine's debounce cap is measured from first arrival, why `concurrency` was removed rather
+> than ported. A reader arriving at one of those decisions needs the arithmetic that produced it, and
+> the arithmetic is here.
+>
+> **What is TRUE OF PRODUCTION today is §5 and the amendment to §2's conclusion**, both of which are
+> written about the engine. Everything else is a measurement of a platform this repository left, and
+> the section headings say which is which.
+
 MOTIR-3245 was filed on one sentence in `lib/jobs/definitions/codeGraphRefresh.ts`:
 
 > _"A stepped supervision loop holds its Inngest concurrency slot for the CONTAINER'S WHOLE
@@ -108,48 +124,61 @@ A 30-minute index writes **three** `step.run`s, not ~128, and a full-length CI s
 requires the step count to be identical.
 
 **The shape changed because its reason expired**, not because of anything in this record: the
-stepping existed to fit under `app/api/inngest/route.ts`'s `maxDuration = 300`, a Vercel directive,
-and motir-core has been a long-lived Fly process since MOTIR-2384.
+stepping existed to fit under the serve route's `maxDuration = 300`, a Vercel directive, and
+motir-core has been a long-lived Fly process since MOTIR-2384. (Both the route and the directive
+were deleted by MOTIR-3418.)
 
-**§1's finding is untouched.** _A sleeping run holds no slot_ was measured against Inngest's
-scheduler and remains true of it; the three supervisors still run on that lane until the operator
-task flips their ids. It is simply no longer what a supervisor DOES: it does not sleep in steps any
-more.
+**§1's finding is HISTORICAL.** _A sleeping run holds no slot_ was measured against the vendor's
+scheduler and was true of it. Nothing runs on that scheduler now, and a supervisor does not sleep in
+steps any more either — so the finding describes neither the platform nor the code. It stays because
+it is the measurement that justified collapsing the loops.
 
 **And §2's CONCLUSION — that a supervisor is not what delays the fast lane — survives on a
 different footing, which is the part worth stating rather than reasserting.** It used to hold
 because the slot was released between ~128 polls; it now holds because:
 
-- **on the POSTGRES ENGINE there is no shared five-slot pool to occupy at all.** §3's ceiling is a
-  property of the Inngest account. The engine's worker claims with `FOR UPDATE SKIP LOCKED` at
-  `CLAIM_BATCH` per tick, and a long-running handler holds a lease rather than a slot — which is
-  why `lib/jobs/engine/worker.ts` states that a run longer than its lease is the NORMAL case.
-- **on the INNGEST lane, for as long as the supervisors are still routed there, the occupancy is
-  now the OPPOSITE of what this section measured**: a collapsed loop holds ONE invocation for the
-  container's life instead of ~128 sub-second ones. Whether that matters depends on a property of
-  Inngest Cloud that has not been measured, and MOTIR-3548 is filed against exactly that window.
-  **Do not read §2's ~10% duty cycle as describing the code as it stands.**
+- **there is no shared five-slot pool to occupy at all.** §3's ceiling was a property of a vendor
+  account that no longer exists. The engine's worker claims with `FOR UPDATE SKIP LOCKED` at
+  `CLAIM_BATCH` per tick, and a long-running handler holds a LEASE rather than a slot — which is
+  why `lib/jobs/engine/worker.ts` states that a run longer than its lease is the NORMAL case. A
+  supervisor watching a container for an hour occupies one worker's claim slot for that hour, and
+  the bound on that is the worker pool's size (`fly.toml`'s `worker` process group), not a plan tier.
+- **⚠️ AND THAT IS A REAL COST, NOT AN ABSENCE OF ONE.** The collapsed loop holds ONE claim for the
+  container's whole life instead of ~128 sub-second ones — the OPPOSITE of what §2 measured. It is
+  affordable because the pool is ours to size and a machine is $11.83/mo, where the vendor's was a
+  plan tier at $99/mo. **Do not read §2's ~10% duty cycle as describing the code as it stands**, and
+  do read the worker count as the thing that now bounds concurrent supervision.
 
-The honest summary: §1 and §3 measure Inngest and stay; §2's arithmetic is history; §2's conclusion
-is re-grounded above and is now lane-dependent.
+The honest summary: §1, §2's arithmetic and §3 are all measurements of a retired platform and are
+history; §2's CONCLUSION — a supervisor is not what delays the fast lane — survives, re-grounded
+above on the engine.
 
 ---
 
-## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps
+## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps — HISTORICAL
 
-**Scope — decisive, and it is a code fact.** **No job in this repo sets `concurrency` at all.**
-All 24 definitions under `lib/jobs/definitions/` were checked; every occurrence of the word is a
-comment or `defineJob`'s plumbing. `defineJob` supports `{ limit, key?, scope? }` with
-`scope: 'fn' | 'env' | 'account'` (MOTIR-1982) and **nothing uses it**.
+> ⚠️ **THE POOL THIS SECTION MEASURES IS GONE** (MOTIR-3418). It was a property of a vendor
+> account, and the account is closed. What bounds concurrent work now is the `worker` process
+> group's machine count and each worker's `CLAIM_BATCH` — a number this repository sets and can
+> change, which is the whole point of the epic. The section stays because **the arithmetic in it is
+> the epic's justification**: four consumers per `work-item/transitioned` against five slots is the
+> measured reason a single status change could starve the fast lane.
 
-So there is no function-level, env-scoped or account-scoped limit that this deployment
-configures. The only ceiling in play is the **account-level capacity Inngest applies to the
-environment by plan**, shared by all 24 functions and partitioned by nothing.
+**Scope — decisive, and it was a code fact.** **No job in this repo set `concurrency` at all.**
+All 24 definitions under `lib/jobs/definitions/` were checked; every occurrence of the word was a
+comment or `defineJob`'s plumbing. `defineJob` supported `{ limit, key?, scope? }` with
+`scope: 'fn' | 'env' | 'account'` (MOTIR-1982) and **nothing used it** — which is why MOTIR-3418
+deleted the option outright rather than porting it: a forwarded constraint no job declares and no
+engine reads is a lie in a type signature.
+
+So there was no function-level, env-scoped or account-scoped limit this deployment configured. The
+only ceiling in play was the **account-level capacity the vendor applied to the environment by
+plan**, shared by all 24 functions and partitioned by nothing.
 
 That is worth stating plainly in both directions: the parent's picture of _one unpartitioned
 pool_ is **correct**. What is false is that a supervisor sits in it for thirty minutes.
 
-**Size — 5 CONCURRENT STEPS.** Read off the Inngest dashboard's plan page on **2026-08-23** by Yue
+**Size — 5 CONCURRENT STEPS.** Read off the vendor dashboard's plan page on **2026-08-23** by Yue
 (MOTIR-3406), on the **Hobby** plan, for the `prodect-core` app's production environment. The row
 reads verbatim:
 
@@ -169,7 +198,7 @@ deployment holds can reach it. The production signing key (`INNGEST_SIGNING_KEY`
 | `GET /v1/account`, `/v1/envs`, `/v1/apps`, `/v1/functions` | **404** — not part of the REST surface                               |
 | `POST /gql { account { plan … } }`                         | **UNAUTHENTICATED** — the dashboard API takes a different credential |
 
-**It was read, not inferred.** A number copied from Inngest's public pricing page would be a claim
+**It was read, not inferred.** A number copied from a public pricing page would have been a claim
 about the plan rather than a reading of the deployment — the _"a config file is a claim about the
 deployment, not a reading of it"_ mistake this corpus already records. The distinction is the whole
 reason MOTIR-3406 was a card rather than a sentence.

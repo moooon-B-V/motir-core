@@ -102,7 +102,6 @@ export default defineConfig({
     // does not even construct the admin client.
     setupFiles: [
       './tests/helpers/perWorkerDb.ts',
-      './tests/helpers/inngestSetup.ts',
       './tests/helpers/actEnvironment.ts',
       './tests/helpers/inFlightProbe.ts',
     ],

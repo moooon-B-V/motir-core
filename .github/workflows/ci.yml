@@ -876,12 +876,12 @@ jobs:
       # the retrying Playwright install — shared verbatim with the acceptance
       # lane in `acceptance-video.yml` (MOTIR-1949).
       - uses: ./.github/actions/e2e-setup
-      # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
-      # pinned `inngest-cli` devDependency — `pnpm install` above runs its
-      # postinstall (allowlisted in pnpm-workspace.yaml `allowBuilds`) to fetch
-      # the binary, so it's present before any spec runs. This replaced the old
-      # npx-cache + pre-warm steps, which existed only to keep the 95MB cold
-      # download out of Playwright's 120s webServer window (the timeout flake).
+      # NOTE: the lane's job EXECUTOR needs no setup step of its own. It used to
+      # be a vendor dev-server binary — a pinned `inngest-cli` devDependency whose
+      # postinstall fetched a 95MB Go binary, allowlisted in pnpm-workspace.yaml
+      # so it landed before Playwright's 120s webServer window rather than inside
+      # it. MOTIR-3418 retired it: the executor is the app's own worker bundle,
+      # started by `globalSetup` from the same source the specs are testing.
       # ONE run step per matrix leg. `matrix.args` selects the slice (a
       # --grep-invert+--shard bulk slice, or a --grep at-scale lane); the
       # override env is per-leg and empty ('') on bulk legs — playwright.config
@@ -1048,12 +1048,12 @@ jobs:
       # the retrying Playwright install — shared verbatim with the acceptance
       # lane in `acceptance-video.yml` (MOTIR-1949).
       - uses: ./.github/actions/e2e-setup
-      # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
-      # pinned `inngest-cli` devDependency — `pnpm install` above runs its
-      # postinstall (allowlisted in pnpm-workspace.yaml `allowBuilds`) to fetch
-      # the binary, so it's present before any spec runs. This replaced the old
-      # npx-cache + pre-warm steps, which existed only to keep the 95MB cold
-      # download out of Playwright's 120s webServer window (the timeout flake).
+      # NOTE: the lane's job EXECUTOR needs no setup step of its own. It used to
+      # be a vendor dev-server binary — a pinned `inngest-cli` devDependency whose
+      # postinstall fetched a 95MB Go binary, allowlisted in pnpm-workspace.yaml
+      # so it landed before Playwright's 120s webServer window rather than inside
+      # it. MOTIR-3418 retired it: the executor is the app's own worker bundle,
+      # started by `globalSetup` from the same source the specs are testing.
       # ONE run step per matrix leg. `matrix.args` selects the slice (a
       # --grep-invert+--shard bulk slice, or a --grep at-scale lane); the
       # override env is per-leg and empty ('') on bulk legs — playwright.config
@@ -1350,18 +1350,16 @@ jobs:
           echo "::error::$url did not answer 200 after 5 attempts — the release is not serving."
           exit 1
 
-      # The sync that used to ride Vercel's `deployment_status` event, which Fly
-      # does not raise. It is a STEP of the deploy now, and a failure is a red
-      # check: a stale Inngest app registry drops events SILENTLY, which is how
-      # five production jobs stayed dead for a month (MOTIR-1970).
+      # ⚠️ A FUNCTION-REGISTRATION STEP STOOD HERE (MOTIR-3418 removed it). The
+      # vendor's control plane held its own registry of this app's functions, and
+      # it went stale silently — five production jobs stayed dead for a month
+      # (MOTIR-1970) — so the deploy PUT the serve route and failed red if the sync
+      # did. The engine has no second registry to keep in step: the worker reads
+      # `lib/jobs/registry.ts` out of the image it is running, so a job is
+      # registered by being deployed and cannot be registered any other way.
       #
-      # The URL is the CUSTOM domain on purpose — it is where Inngest will
-      # invoke the functions, so it is the only URL whose registration means
-      # anything. The repo variable keeps a domain change out of this file.
-      - name: Register the deployed functions with Inngest
-        uses: ./.github/actions/inngest-sync
-        with:
-          serve-url: ${{ vars.INNGEST_SERVE_URL || 'https://app.motir.co/api/inngest' }}
+      # The repository variable that held the serve URL is now unread; it can be
+      # deleted from the repo's variables at leisure.
 
       # ⚠️ Read the OBSERVATION from the PLATFORM, never from `fly.toml`. A config
       # file is a claim about the deployment, not a reading of it: motir-ai's
@@ -1378,7 +1376,7 @@ jobs:
       # two app machines. MOTIR-3425 added the `worker` process group, the pool
       # became four, and nothing updated the variable — so every deploy ended RED
       # on a deploy that had SUCCEEDED: the image released, the release answered,
-      # Inngest synced, three migrations applied. `CI complete` went red and the
+      # the functions synced, three migrations applied. `CI complete` went red and the
       # trunk's red stopped saying anything about whether the trunk is deployed,
       # which is the most expensive direction for a check to fail in.
       #

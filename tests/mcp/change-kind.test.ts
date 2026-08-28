@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -11,6 +10,7 @@ import { runChangeKind } from '@/lib/mcp/tools/changeKind';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // MCP reclassify tool (MOTIR-1020) over real Postgres. `change_kind` is a thin
 // adapter over `workItemsService.updateWorkItem({ kind })` — the same path the
@@ -23,7 +23,7 @@ import { truncateAuthTables } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] as string[] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

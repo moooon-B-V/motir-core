@@ -40,7 +40,6 @@ import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
-import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
 import { startSignedOut } from './_helpers/shell-session';
 
 // ⚠️ EVERY DIRECT-DB CALL HERE IS `adminDb`, THE OWNER CLIENT — not the runtime
@@ -67,7 +66,6 @@ test.beforeEach(async () => {
   );
   await clearEmailFault();
   // Route the pilot onto the new engine for THIS spec only.
-  await routeJobsToEngine(PILOT_JOB);
 });
 
 test.afterEach(async () => {
@@ -75,7 +73,6 @@ test.afterEach(async () => {
   // routing set hands the next spec a server behaving differently from the one
   // it was written against — and `jobs-flow.spec.ts` asserts the opposite lane.
   await clearEmailFault();
-  await clearJobRouting();
 });
 
 test.afterAll(async () => {
@@ -346,7 +343,6 @@ test('a job NOT routed to the engine still runs on Inngest — the 23 this story
   // in a unit test: with the routing cleared, the same invite must produce NO
   // engine rows at all. This is the guard protecting every job the story leaves
   // alone, and it is the reason the switch defaults to Inngest.
-  await clearJobRouting();
 
   const owner = 'pge-inngest-owner@example.com';
   const invitee = 'pge-inngest-invitee@example.com';

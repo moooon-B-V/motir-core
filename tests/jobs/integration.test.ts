@@ -1,7 +1,6 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { replayDLQ } from '@/lib/jobs/dlq';
 import { EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailSend';
@@ -25,7 +24,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // forced-failure E2E uncovered — documented inline:
 //
 //   • Idempotency dedup ("two identical sends collapse to one run") is enforced
-//     by the Inngest RUNTIME, not by our code. The in-process @inngest/test
+//     by the Inngest RUNTIME, not by our code. The in-process the in-process JobTestEngine
 //     harness does not run that dedup layer (same documented boundary as
 //     email-send.test.ts), so a unit test CANNOT honestly show "two events → one
 //     row" — it would just run the handler twice. What's unit-true is the WIRING
@@ -70,7 +69,7 @@ describe('scheduled job', () => {
     // behaviour is covered in `schedule-health.test.ts`.
     await seedHealthyJobSchedules();
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
     // `toMatchObject`, not `toEqual`: the payload also carries the schedule
     // report, which is not what this test is pinning.
@@ -108,19 +107,16 @@ describe('idempotency', () => {
 
     // The dedup itself is enforced by Inngest (config expression), not our code.
     expect(EMAIL_SEND_IDEMPOTENCY).toBe('event.data.idempotencyKey');
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob({ id: 'email.send', idempotency: EMAIL_SEND_IDEMPOTENCY }, () => undefined);
-      const config = spy.mock.calls.at(-1)?.[0] as { idempotency?: string } | undefined;
-      expect(config?.idempotency).toBe('event.data.idempotencyKey');
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      { id: 'email.send', idempotency: EMAIL_SEND_IDEMPOTENCY },
+      () => undefined,
+    );
+    expect(def.idempotency).toBe('event.data.idempotencyKey');
   });
 
   it('the in-process harness does NOT dedup (so the runtime drop is an E2E concern, not a unit one)', async () => {
     // Documents the boundary honestly: running the same-key event twice in-process
-    // produces TWO rows, because @inngest/test bypasses the runtime dedup layer.
+    // produces TWO rows, because the in-process JobTestEngine bypasses the runtime dedup layer.
     // The REAL drop (two events → one run) is an Inngest-platform behavior, proven
     // against the dev server in jobs-flow.spec.ts. We assert the boundary so a
     // future reader doesn't mistake "two rows here" for a dedup bug.
@@ -145,14 +141,14 @@ describe('DLQ replay ↔ idempotency window (finding #40)', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-replay-window',
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       idempotencyKey: 'window-key',
     });
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'evt-replay-window',
-      lane: 'inngest',
+      lane: 'engine',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'transient boom' },
@@ -161,16 +157,30 @@ describe('DLQ replay ↔ idempotency window (finding #40)', () => {
     });
     const dlqId = (await adminDb.jobRunDlq.findFirst())!.id;
 
-    const sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
     await withSystemContext((tx) => replayDLQ(dlqId, tx));
-    // Capture the call BEFORE restoring — mockRestore() resets mock.calls.
-    const sent = sendSpy.mock.calls[0]![0] as { data: { idempotencyKey?: string } };
-    sendSpy.mockRestore();
+
+    // ⚠️ READ OFF THE ROW, NOT OFF A SPY (MOTIR-3418). This used to spy the vendor
+    // transport, because a replay was a re-`send`. A replay is now a `job_event` +
+    // `job_queue` pair written straight into the queue, so the durable row IS the
+    // observation — a strictly better one, since it is also what the dedup index
+    // is enforced against.
+    const replayed = await adminDb.jobEvent.findFirstOrThrow({
+      where: { name: 'email.send' },
+      orderBy: { receivedAt: 'desc' },
+    });
+    const sent = replayed.data as { idempotencyKey?: string };
     // The re-emit carries a DISTINCT key (original + a dlq-row-scoped suffix), so
-    // Inngest's same-key dedup does NOT drop it — the operator's explicit replay
-    // overrides idempotency, which is the corrected 1.6.6 behavior. (1.6.4 re-
-    // emitted `window-key` unchanged and the runtime silently dropped it.)
-    expect(sent.data.idempotencyKey).toBe(`window-key:replay:${dlqId}`);
-    expect(sent.data.idempotencyKey).not.toBe('window-key');
+    // the `(job_id, idempotency_key)` partial unique index does NOT swallow it —
+    // the operator's explicit replay overrides idempotency, which is the corrected
+    // 1.6.6 behaviour. (1.6.4 re-emitted `window-key` unchanged and it was
+    // silently dropped.)
+    expect(sent.idempotencyKey).toBe(`window-key:replay:${dlqId}`);
+    expect(sent.idempotencyKey).not.toBe('window-key');
+    // …and the queue row it created carries the same key, which is the half the
+    // index actually reads.
+    const queued = await adminDb.jobQueueRun.findFirstOrThrow({
+      where: { eventId: replayed.id },
+    });
+    expect(queued.idempotencyKey).toBe(`window-key:replay:${dlqId}`);
   });
 });

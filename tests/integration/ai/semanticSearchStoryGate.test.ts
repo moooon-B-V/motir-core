@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../../helpers/jobs';
 
 // THE STORY-LEVEL GATE for Story MOTIR-2694 (Subtask MOTIR-2698) — the five
 // guards of `docs/decisions/plan-tree-embeddings.md`, asserted over the ASSEMBLED
@@ -144,7 +144,7 @@ async function createAndEmbed(
     { projectId: fx.projectId, kind: 'task', ...input },
     fx.ctx,
   );
-  const { result } = await new InngestTestEngine({
+  const { result } = await new JobTestEngine({
     function: workItemEmbeddingRequested,
     events: [{ name: 'work-item/embedding.requested', data: requestedSince(from) }],
   }).execute();
@@ -453,7 +453,7 @@ describe('MOTIR-2694 story gate · guard 4 — degradation is a normal outcome',
 
     vi.mocked(embedTexts).mockRejectedValue(new MotirAiUnavailableError('gateway down'));
     for (const data of events) {
-      const { error } = await new InngestTestEngine({
+      const { error } = await new JobTestEngine({
         function: workItemEmbeddingRequested,
         events: [{ name: 'work-item/embedding.requested', data }],
       }).execute();
@@ -524,7 +524,7 @@ describe('MOTIR-2694 story gate · guard 5 — the write path stays OUTSIDE the 
       fx.ctx,
     );
     const data = requestedSince(from);
-    const { error } = await new InngestTestEngine({
+    const { error } = await new JobTestEngine({
       function: workItemEmbeddingRequested,
       events: [{ name: 'work-item/embedding.requested', data }],
     }).execute();
@@ -551,7 +551,7 @@ describe('MOTIR-2694 story gate · guard 5 — the write path stays OUTSIDE the 
     );
     const data = requestedSince(from);
     const run = () =>
-      new InngestTestEngine({
+      new JobTestEngine({
         function: workItemEmbeddingRequested,
         events: [{ name: 'work-item/embedding.requested', data }],
       }).execute();

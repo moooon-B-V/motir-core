@@ -1,5 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-import { inngest } from '@/lib/jobs/client';
+import { describe, expect, it } from 'vitest';
 import { defineJob } from '@/lib/jobs/defineJob';
 import {
   DEFAULT_RETRY_POLICY,
@@ -45,25 +44,13 @@ describe('retry policies', () => {
 
 describe('defineJob forwards the resolved retry budget', () => {
   it('maps retryPolicy "none" to retries: 0 in the Inngest config', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob({ id: 'email.send', retryPolicy: 'none' }, () => undefined);
-      const config = spy.mock.calls.at(-1)?.[0] as { retries?: number } | undefined;
-      expect(config?.retries).toBe(0);
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob({ id: 'email.send', retryPolicy: 'none' }, () => undefined);
+    expect(def.maxAttempts - 1).toBe(0);
   });
 
   it('maps retryPolicy "idempotent" to retries: 4 in the Inngest config', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob({ id: 'email.send', retryPolicy: 'idempotent' }, () => undefined);
-      const config = spy.mock.calls.at(-1)?.[0] as { retries?: number } | undefined;
-      expect(config?.retries).toBe(4);
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob({ id: 'email.send', retryPolicy: 'idempotent' }, () => undefined);
+    expect(def.maxAttempts - 1).toBe(4);
   });
 
   it('throws at definition time when both retryPolicy and retries are given', () => {

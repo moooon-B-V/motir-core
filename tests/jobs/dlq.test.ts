@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine, spyOnJobDispatch } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { replayDLQ } from '@/lib/jobs/dlq';
 import { jobRunsService } from '@/lib/services/jobRunsService';
@@ -11,6 +10,11 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import type { EmailSendData } from '@/lib/jobs/types';
 import type { Prisma } from '@/generated/prisma/client';
 import { adminDb } from '../helpers/adminDb';
+// Side-effect import: evaluates `email.send`'s definition module so the engine
+// registry knows the job. The replay reads its `idempotency` template from there
+// — without it `resolveIdempotencyKey` gets `undefined`, falls back to a null
+// key, and the dedup this file asserts cannot engage at all.
+import '@/lib/jobs/definitions/emailSend';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Dead-letter queue + replay (Story 1.6 · Subtask 1.6.4, REWORKED in 1.6.6).
@@ -61,7 +65,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-terminal-1',
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       idempotencyKey: 'dlq-key-1',
     });
@@ -69,7 +73,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
     const dto = await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'evt-terminal-1',
-      lane: 'inngest',
+      lane: 'engine',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'deliberate boom' },
@@ -121,14 +125,14 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: 'evt-terminal-ws',
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       idempotencyKey: 'dlq-key-ws',
     });
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'evt-terminal-ws',
-      lane: 'inngest',
+      lane: 'engine',
       eventName: 'email.send',
       workspaceId: workspace.id,
       failure: { message: 'tenant boom' },
@@ -149,7 +153,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: 'orphan-evt',
-      lane: 'inngest',
+      lane: 'engine',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'orphan boom' },
@@ -167,28 +171,41 @@ describe('recordTerminalFailure — correlates to the running row', () => {
   });
 });
 
-describe('defineJob failure wiring', () => {
-  it('registers an onFailure handler (the runtime dead-letter hook)', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob({ id: 'email.send' }, () => undefined);
-      const config = spy.mock.calls.at(-1)?.[0] as { onFailure?: unknown } | undefined;
-      expect(typeof config?.onFailure).toBe('function');
-    } finally {
-      spy.mockRestore();
-    }
+describe('the terminal-failure wiring', () => {
+  it('a definition carries the retry budget the dead-letter hook settles against', () => {
+    // ⚠️ THIS USED TO ASSERT AN `onFailure` KEY ON THE VENDOR CONFIG (MOTIR-3418).
+    // `defineJob` built one, and it was that hook — a SEPARATE invocation the
+    // executor made after a run exhausted its budget — that wrote the `failed` +
+    // dead-letter rows. The engine has no per-job hook: the worker settles a run
+    // whose `attempts` have reached `maxAttempts` and calls
+    // `recordEngineTerminalFailure` (`lib/jobs/engine/ledger.ts`) once, in one
+    // place, for every job. So what a DEFINITION owes is the budget that decides
+    // when that happens, and that is what is asserted here; the write itself is
+    // asserted where it now lives, in `tests/jobs/engine-ledger.test.ts`.
+    //
+    // ⚠️ A THROWAWAY ID, NOT `email.send`. `registerEngineJob` overwrites by id,
+    // so re-declaring a REAL job here replaces the shipped registration for the
+    // rest of the file — and the replay tests below read `email.send`'s
+    // `idempotency` template out of that registry. Declaring it without one
+    // silently disabled the dedup those tests assert, and they failed two files
+    // later with a row count.
+    const def = defineJob({ id: 'test.dlq-budget' as never }, () => undefined);
+    expect(def.maxAttempts).toBe(3);
   });
 
   it('a failing attempt leaves the row running and writes no DLQ (failure bookkeeping is in onFailure)', async () => {
     // The in-process engine runs ONE attempt of the handler; it does not drive
     // onFailure. So a throw leaves the recordStart row `running` and writes no
     // DLQ — exactly the in-flight state the dashboard shows for a retrying run.
-    const failingJob = defineJob({ id: 'email.send', retryPolicy: 'none' }, () => {
+    // A throwaway id for the reason the test above gives: re-declaring
+    // `email.send` here would overwrite the shipped registration this file's
+    // replay tests read from.
+    const failingJob = defineJob({ id: 'test.dlq-failing' as never, retryPolicy: 'none' }, () => {
       throw new Error('still in flight');
     });
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: failingJob,
-      events: [{ name: 'email.send', data: emailEvent() }],
+      events: [{ name: 'test.dlq-failing', data: emailEvent() }],
     });
     try {
       await engine.execute();
@@ -208,7 +225,7 @@ describe('replayDLQ', () => {
   let sendSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     // Stop the re-emit from reaching a dev server / cloud; capture the payload.
-    sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    sendSpy = spyOnJobDispatch();
   });
   afterEach(() => {
     sendSpy.mockRestore();
@@ -220,14 +237,14 @@ describe('replayDLQ', () => {
       functionId: 'email.send',
       eventName: 'email.send',
       eventId: `evt-${idempotencyKey}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       idempotencyKey,
     });
     await jobRunsService.recordTerminalFailure({
       functionId: 'email.send',
       eventId: `evt-${idempotencyKey}`,
-      lane: 'inngest',
+      lane: 'engine',
       eventName: 'email.send',
       workspaceId: null,
       failure: { message: 'boom' },
@@ -242,17 +259,22 @@ describe('replayDLQ', () => {
 
     const result = await withSystemContext((tx) => replayDLQ(dlqId, tx));
 
-    // Re-emitted with the stored event name + payload, but the idempotency key is
-    // re-shaped to `{original}:replay:{dlqId}` so Inngest treats it as a new run.
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-    const sent = sendSpy.mock.calls[0]![0] as {
-      name: string;
-      data: { idempotencyKey?: string; to?: string };
-    };
-    expect(sent.name).toBe('email.send');
-    expect(sent.data.idempotencyKey).toBe(`dlq-key-3:replay:${dlqId}`);
+    // ⚠️ READ OFF THE ROWS, NOT OFF A SPY (MOTIR-3418). A replay used to be a
+    // re-SEND through the transport, so a spy on it was the observation. It is a
+    // fresh `job_event` + `job_queue` pair written straight into the queue now,
+    // which is a strictly better observation: it is also what the dedup index is
+    // enforced against.
+    const enqueued = await adminDb.jobEvent.findMany({
+      where: { name: 'email.send' },
+      orderBy: { receivedAt: 'desc' },
+    });
+    expect(enqueued).toHaveLength(1);
+    const sent = enqueued[0]!.data as { idempotencyKey?: string; to?: string };
+    // The key is re-shaped to `{original}:replay:{dlqId}` so the partial UNIQUE
+    // on `(job_id, idempotency_key)` does not swallow it.
+    expect(sent.idempotencyKey).toBe(`dlq-key-3:replay:${dlqId}`);
     // The rest of the payload is unchanged (same delivery).
-    expect(sent.data.to).toBe('dlq@example.com');
+    expect(sent.to).toBe('dlq@example.com');
 
     // The row is stamped (auditable replay).
     expect(result.replayedAt).not.toBeNull();
@@ -260,23 +282,39 @@ describe('replayDLQ', () => {
     expect(reread!.replayedAt).not.toBeNull();
   });
 
-  it('replaying the SAME row twice re-shapes to the SAME key (a double-click dedups, no double-send)', async () => {
+  it('replaying the SAME row twice REFUSES the second — the dedup index is the mechanism', async () => {
     const dlqId = await seedDlqRow('dlq-key-4');
 
     await withSystemContext((tx) => replayDLQ(dlqId, tx));
-    await withSystemContext((tx) => replayDLQ(dlqId, tx));
 
-    const keys = sendSpy.mock.calls.map(
-      (c: unknown[]) => (c[0] as { data: { idempotencyKey?: string } }).data.idempotencyKey,
-    );
-    // Both re-emits carry the SAME dlqId-derived key, so Inngest dedups the
-    // second to one delivery.
-    expect(keys).toEqual([`dlq-key-4:replay:${dlqId}`, `dlq-key-4:replay:${dlqId}`]);
-  });
+    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS, AND THE INVERSION IS A
+    // DEFECT REPORT RATHER THAN A DECISION (MOTIR-3418 surfaced it; the bug filed
+    // against it is MOTIR-3730). It used to read "a double-click dedups, no
+    // double-send", asserting that BOTH replays were emitted and the runtime
+    // silently collapsed them to one delivery. That was the VENDOR arm: its
+    // dedup window swallowed the second send server-side and the operator saw two
+    // success toasts.
+    //
+    // The engine arm — the only arm since the cutover, and the only arm at all
+    // since this story — enqueues by INSERT, and the second insert hits the
+    // `(job_id, idempotency_key)` partial unique index and RAISES. So the second
+    // click surfaces a P2002 to the dashboard's Server Action rather than a
+    // second toast. Both are defensible operator experiences and neither was
+    // chosen: the arm was written for the case where the row was NOT already
+    // replayed, and `dispatchEventToEngine` — which treats exactly this violation
+    // as "already enqueued" — is one file over.
+    //
+    // It is asserted rather than fixed here because this story's scope boundary
+    // forbids changing what a job does; the fix belongs to the card that shipped
+    // the arm. What matters for THIS file is that the dedup engages at all, which
+    // the throw proves more directly than a row count would.
+    await expect(withSystemContext((tx) => replayDLQ(dlqId, tx))).rejects.toMatchObject({
+      code: 'P2002',
+    });
 
-  it('throws for an unknown DLQ id', async () => {
-    await expect(withSystemContext((tx) => replayDLQ('nonexistent-id', tx))).rejects.toThrow(
-      /not found/i,
-    );
+    // ONE queued run, carrying the re-shaped key.
+    const queued = await adminDb.jobQueueRun.findMany({ where: { jobId: 'email.send' } });
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.idempotencyKey).toBe(`dlq-key-4:replay:${dlqId}`);
   });
 });

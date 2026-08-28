@@ -4,7 +4,6 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { parseIdempotencyTemplate, resolveIdempotencyKey } from '@/lib/jobs/engine/idempotency';
 import { emailSend, EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailSend';
 
@@ -20,39 +19,39 @@ import { emailSend, EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailS
 // Against REAL Postgres, because the guarantee is a UNIQUE CONSTRAINT and a mock
 // cannot have one.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
-
-// Two test jobs on the same event: one declaring a template, one declaring none.
-// Registered at module scope, exactly as a real definition module is.
+// Two test jobs, one declaring a template and one declaring none. Registered at
+// module scope, exactly as a real definition module is.
+//
+// ⚠️ ONE TRIGGER EACH, NOT ONE SHARED (MOTIR-3418). They used to subscribe to a
+// single real event and be selected between by the per-job cutover switch, so a
+// dispatch enqueued only the routed one and `enqueued` named exactly the job under
+// test. With one lane a dispatch enqueues EVERY subscriber, so a shared trigger
+// returns both probes plus the real consumers of that event. The isolation the
+// switch used to provide is now the trigger's job.
 const DEDUPED_ID = 'test.idempotency-deduped';
 const PLAIN_ID = 'test.idempotency-plain';
+const DEDUPED_TRIGGER = 'test/idempotency-deduped.requested';
+const PLAIN_TRIGGER = 'test/idempotency-plain.requested';
 
 defineJob(
   {
     id: DEDUPED_ID as never,
-    trigger: 'work-item/embedding.requested',
+    trigger: DEDUPED_TRIGGER as never,
     idempotency: 'event.data.idempotencyKey',
   },
   () => ({ ok: true }),
 );
-defineJob({ id: PLAIN_ID as never, trigger: 'work-item/embedding.requested' }, () => ({
+defineJob({ id: PLAIN_ID as never, trigger: PLAIN_TRIGGER as never }, () => ({
   ok: true,
 }));
-
-function route(...ids: string[]): void {
-  process.env[JOB_ENGINE_JOBS_ENV] = ids.join(',');
-}
 
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -64,11 +63,10 @@ const rowsFor = (jobId: string) => adminDb.jobQueueRun.findMany({ where: { jobId
 
 describe('dedup by constraint', () => {
   it('collapses two same-key events to ONE queued run', async () => {
-    route(DEDUPED_ID);
     const payload = { workspaceId: null, workItemId: 'wi_1', idempotencyKey: 'token-abc' };
 
-    const first = await dispatchEventToEngine('work-item/embedding.requested', payload);
-    const second = await dispatchEventToEngine('work-item/embedding.requested', payload);
+    const first = await dispatchEventToEngine(DEDUPED_TRIGGER, payload);
+    const second = await dispatchEventToEngine(DEDUPED_TRIGGER, payload);
 
     expect(first.enqueued).toEqual([DEDUPED_ID]);
     // The SECOND is reported as already-enqueued rather than failed — the
@@ -81,11 +79,10 @@ describe('dedup by constraint', () => {
   });
 
   it('keeps two DIFFERENT keys as two runs', async () => {
-    route(DEDUPED_ID);
     const base = { workspaceId: null, workItemId: 'wi_1' };
 
-    await dispatchEventToEngine('work-item/embedding.requested', { ...base, idempotencyKey: 'k1' });
-    await dispatchEventToEngine('work-item/embedding.requested', { ...base, idempotencyKey: 'k2' });
+    await dispatchEventToEngine(DEDUPED_TRIGGER, { ...base, idempotencyKey: 'k1' });
+    await dispatchEventToEngine(DEDUPED_TRIGGER, { ...base, idempotencyKey: 'k2' });
 
     const rows = await rowsFor(DEDUPED_ID);
     expect(rows).toHaveLength(2);
@@ -93,11 +90,10 @@ describe('dedup by constraint', () => {
   });
 
   it('leaves a job declaring NO template completely unaffected', async () => {
-    route(PLAIN_ID);
     const payload = { workspaceId: null, workItemId: 'wi_1', idempotencyKey: 'token-abc' };
 
-    await dispatchEventToEngine('work-item/embedding.requested', payload);
-    await dispatchEventToEngine('work-item/embedding.requested', payload);
+    await dispatchEventToEngine(PLAIN_TRIGGER, payload);
+    await dispatchEventToEngine(PLAIN_TRIGGER, payload);
 
     // Two identical events, two runs. The partial index excludes NULLs, so a job
     // with no template cannot be deduped by another job's key.
@@ -107,11 +103,10 @@ describe('dedup by constraint', () => {
   });
 
   it('does not dedupe an event that carries NO value for the template', async () => {
-    route(DEDUPED_ID);
     const payload = { workspaceId: null, workItemId: 'wi_1' };
 
-    await dispatchEventToEngine('work-item/embedding.requested', payload);
-    await dispatchEventToEngine('work-item/embedding.requested', payload);
+    await dispatchEventToEngine(DEDUPED_TRIGGER, payload);
+    await dispatchEventToEngine(DEDUPED_TRIGGER, payload);
 
     // A missing value means "do not dedupe", never a synthesised placeholder —
     // which would collide every such event with every other one and drop all but
@@ -122,15 +117,14 @@ describe('dedup by constraint', () => {
 
 describe('the CONCURRENT duplicate — the race the constraint exists for', () => {
   it('yields one row and a swallowed P2002, never two rows and never a throw', async () => {
-    route(DEDUPED_ID);
     const payload = { workspaceId: null, workItemId: 'wi_1', idempotencyKey: 'racing-token' };
 
     // Genuinely concurrent against a warm pool. A check-then-insert would let
     // both reads see "no prior row" and both insert; this is the case a serial
     // test cannot see, and the reason the dedup is a constraint at all.
     const results = await Promise.all([
-      dispatchEventToEngine('work-item/embedding.requested', payload),
-      dispatchEventToEngine('work-item/embedding.requested', payload),
+      dispatchEventToEngine(DEDUPED_TRIGGER, payload),
+      dispatchEventToEngine(DEDUPED_TRIGGER, payload),
     ]);
 
     // Neither call threw — the constraint violation never reaches the caller.
@@ -186,15 +180,17 @@ describe('the resolver is TOTAL', () => {
   });
 });
 
-describe("email.send's Inngest behaviour is untouched", () => {
-  it('still carries the same idempotency config, read off fn.opts', () => {
+describe("email.send's declared idempotency is untouched", () => {
+  it('still carries the same idempotency config, read off the registered definition', () => {
     // MOTIR-3413's boundary is that no job's observable behaviour changes. This
-    // card adds an ENGINE reader for the option; the Inngest side must be
-    // byte-identical, and `fn.opts` is what Inngest KEPT after construction
-    // rather than what we passed in.
-    const opts = (emailSend as unknown as { opts: Record<string, unknown> }).opts;
-    expect(opts['idempotency']).toBe(EMAIL_SEND_IDEMPOTENCY);
-    expect(opts['idempotency']).toBe('event.data.idempotencyKey');
+    // assertion is the byte-for-byte statement of that for the one job in the tree
+    // carrying an `idempotency` template, and MOTIR-3418 did not touch it — only
+    // where it is READ from. It used to come off the vendor function object's
+    // `opts`, which was what the SDK KEPT after construction rather than what we
+    // passed in; there is no construction now, so the declaration and the
+    // registration are the same object.
+    expect(emailSend.idempotency).toBe(EMAIL_SEND_IDEMPOTENCY);
+    expect(emailSend.idempotency).toBe('event.data.idempotencyKey');
   });
 
   it('declares a template the engine can actually evaluate', () => {

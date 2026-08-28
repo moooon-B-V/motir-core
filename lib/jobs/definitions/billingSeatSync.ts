@@ -12,7 +12,7 @@ import type { BillingSeatSyncData } from '../types';
 //
 // `retryPolicy: 'idempotent'`: the sync is absolute (recompute-from-truth) and
 // the endpoint skips the Stripe write when already at quantity, so it converges
-// on re-run by construction — worth Inngest's full 5-attempt budget against a
+// on re-run by construction — worth the `idempotent` policy's full 5-attempt budget against a
 // transient motir-ai/Stripe blip. The same handler IS the reconcile path: a
 // re-run re-derives the live count, so a dropped enqueue self-heals on the next
 // membership change (or a manual replay).

@@ -46,7 +46,7 @@ export interface EmailMessage {
    * The per-send dedup key the `email.send` job already carries (the reset
    * token, the invite token). A provider that supports request-level
    * idempotency passes it through, so a job RETRY of the same send cannot
-   * double-deliver AT THE PROVIDER — Inngest's event-level dedup only
+   * double-deliver AT THE PROVIDER — the engine's event-level dedup only
    * collapses duplicate EVENTS, not a retried attempt of one accepted event
    * whose response was lost in flight. Optional: the dev providers ignore it.
    */

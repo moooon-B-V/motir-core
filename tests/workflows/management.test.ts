@@ -18,8 +18,8 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Workflow management writes (Story 2.2 · Subtask 2.2.5). Real Postgres. The
 // fixture owner can manage; a member can't. Projects come from createTestProject
@@ -30,7 +30,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
 });
 

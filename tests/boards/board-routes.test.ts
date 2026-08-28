@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -12,6 +11,7 @@ import { encodeFilterParam, facetFilterToAst, type FilterAst } from '@/lib/filte
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 import type { ProjectContext } from '@/lib/projects';
 import type { BoardProjectionDto } from '@/lib/dto/boards';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Board API routes (Story 3.1 · Subtask 3.1.6). Real Postgres; we stub only the
 // two session/context resolvers the test env can't supply via cookies
@@ -40,7 +40,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: a cross-column move now emits
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

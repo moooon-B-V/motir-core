@@ -40,7 +40,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
-import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
 import { startSignedOut } from './_helpers/shell-session';
 
 // Every direct-DB call is `adminDb`, the owner client — post-condition
@@ -81,7 +80,6 @@ test.afterEach(async () => {
   // next one a server behaving differently from the one it was written against.
   // (The spec-private WORKER teardown that stood here went with the `skip`
   // scenario below; nothing in this file starts one any more.)
-  await clearJobRouting();
 });
 
 test.afterAll(async () => {
@@ -131,7 +129,6 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
   // Route the daily sweep onto the engine MID-SPEC, through the file override the
   // switch documents. Its 03:30 fire has already passed with nothing scheduling
   // it, so a `latest` disposition owes exactly that fire, now.
-  await routeJobsToEngine(CATCH_UP_JOB);
 
   // ── the tick enqueued the MISSED fire ────────────────────────────────────
   // The authoritative signal is the committed row, never a sleep.
@@ -222,7 +219,6 @@ test('a scheduled job NOT routed to the engine produces no engine rows at all', 
   // cleared, the shared worker's scheduler must leave every one of the fourteen
   // alone. This is the guard protecting every job the production cutover has not
   // moved yet, and it is why the switch defaults to Inngest.
-  await clearJobRouting();
   await signUp(page, OPERATOR_EMAIL);
 
   // ⚠️ A BOUNDED WINDOW, and the one place this spec waits on a clock rather than

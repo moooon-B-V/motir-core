@@ -27,7 +27,7 @@ import type { AutomationTriggerType } from '@/generated/prisma/client';
 
 // The automation EXECUTION ENGINE (Story 6.6 · Subtask 6.6.2) — events in,
 // attributed service calls out, every run audited. The heart of the story:
-// the 1.6 Inngest jobs (lib/jobs/definitions/automationEngine.ts) consume the
+// the 1.6 background jobs (lib/jobs/definitions/automationEngine.ts) consume the
 // post-commit `work-item/*` events and call `runForEvent`; this service owns
 // the match → conditions → actions-as-owner → audit pipeline, plus the daily
 // retention sweep.

@@ -4,7 +4,6 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { readFileSync } from 'node:fs';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob, type DefineJobOptions } from '@/lib/jobs/defineJob';
 import { CATCH_UP_POLICY_NAMES, type CatchUpPolicy } from '@/lib/jobs/catchUp';
 import { jobSchedules } from '@/lib/jobs/schedules';
@@ -202,26 +201,23 @@ describe('the catch-up disposition is DECLARED and cannot be omitted (MOTIR-3470
     ).toEqual([...registry.keys()].sort());
   });
 
-  it('does NOT forward `catchUp` to Inngest — `fn.opts` is unchanged by this option', () => {
-    // The option describes a scheduler Inngest does not have. Forwarding it would
-    // put an unknown key into a function's SYNCED config, and the assertion has
-    // to be on the forwarded config rather than on "the app still builds".
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        { id: 'system.attachment-gc', cron: '30 3 * * *', catchUp: 'latest' },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
-      expect(config).toBeDefined();
-      expect(config).not.toHaveProperty('catchUp');
-      // And what IS forwarded is exactly what was forwarded before: the cron
-      // trigger and the resolved retry count.
-      expect(config?.['triggers']).toEqual([{ cron: '30 3 * * *' }]);
-      expect(config?.['retries']).toBe(2);
-    } finally {
-      spy.mockRestore();
-    }
+  it('carries `catchUp` on the registered definition, beside the cron it qualifies', () => {
+    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS (MOTIR-3418). It read "does
+    // NOT forward `catchUp` to Inngest", because the option describes a scheduler
+    // the vendor did not have, and putting an unknown key into a SYNCED config
+    // would have been a change to a deployed registration for no reader. There is
+    // no vendor config to keep clean any more — the only registration is the
+    // engine's own, and `catchUp` is a first-class member of it because the
+    // engine's scheduler is the thing that reads it.
+    const def = defineJob(
+      { id: 'system.attachment-gc', cron: '30 3 * * *', catchUp: 'latest' },
+      () => undefined,
+    );
+    expect(def.catchUp).toBe('latest');
+    expect(def.cron).toBe('30 3 * * *');
+    // 3 ATTEMPTS under the default `transient` policy — the engine counts total
+    // attempts, so this is the same budget the old `retries: 2` expressed.
+    expect(def.maxAttempts).toBe(3);
   });
 });
 
@@ -724,7 +720,6 @@ describe('the defensive branches — the arms that only fire when something is w
   it('the dispatcher reports an ALREADY-ENQUEUED subscriber instead of failing the fan-out', async () => {
     const ws = await makeWorkspace();
     const subs = engineSubscribers('work-item/transitioned');
-    process.env['MOTIR_POSTGRES_JOB_IDS'] = subs.map((s) => s.id).join(',');
 
     // Pin the event id so the SECOND dispatch collides on (event_id, job_id) —
     // which is what a dispatcher retrying its own fan-out does.
@@ -745,14 +740,12 @@ describe('the defensive branches — the arms that only fire when something is w
       expect(second.failed).toEqual([]);
     } finally {
       (jobEventRepository as { create: unknown }).create = realCreate;
-      delete process.env['MOTIR_POSTGRES_JOB_IDS'];
     }
   });
 
   it('the dispatcher stringifies a NON-Error throw rather than losing it', async () => {
     const ws = await makeWorkspace();
     const subs = engineSubscribers('work-item/transitioned');
-    process.env['MOTIR_POSTGRES_JOB_IDS'] = subs[0]!.id;
     const realCreate = jobQueueRepository.create;
     (jobQueueRepository as { create: unknown }).create = () => Promise.reject('a bare string');
     try {
@@ -762,26 +755,26 @@ describe('the defensive branches — the arms that only fire when something is w
         { logger: { warn: () => {} } },
       );
       // A thrown string is rare and is exactly when a swallowed reason costs the
-      // most, so it is coerced rather than dropped.
-      expect(r.failed).toEqual([{ jobId: subs[0]!.id, error: 'a bare string' }]);
+      // most, so it is coerced rather than dropped. Every subscriber fails the
+      // same way — the set used to be narrowed to one by the cutover switch, and
+      // MOTIR-3418 removed it.
+      expect(r.failed.map((f) => f.error)).toEqual(subs.map(() => 'a bare string'));
+      expect(r.failed.map((f) => f.jobId).sort()).toEqual(subs.map((s) => s.id).sort());
     } finally {
       (jobQueueRepository as { create: unknown }).create = realCreate;
-      delete process.env['MOTIR_POSTGRES_JOB_IDS'];
     }
   });
 
   it('the dispatcher tolerates a NULL payload', async () => {
+    // Every subscriber of the event is enqueued — the set used to be narrowed by
+    // the cutover switch to exactly one, and MOTIR-3418 removed it, so the
+    // assertion is over the registry's own answer rather than over a routed id.
     const subs = engineSubscribers('work-item/transitioned');
-    process.env['MOTIR_POSTGRES_JOB_IDS'] = subs[0]!.id;
-    try {
-      const r = await dispatchEventToEngine('work-item/transitioned', null);
-      expect(r.enqueued).toEqual([subs[0]!.id]);
-      const ev = await adminDb.jobEvent.findUniqueOrThrow({ where: { id: r.eventId! } });
-      expect(ev.data).toEqual({});
-      expect(ev.workspaceId).toBeNull();
-    } finally {
-      delete process.env['MOTIR_POSTGRES_JOB_IDS'];
-    }
+    const r = await dispatchEventToEngine('work-item/transitioned', null);
+    expect(r.enqueued.slice().sort()).toEqual(subs.map((s) => s.id).sort());
+    const ev = await adminDb.jobEvent.findUniqueOrThrow({ where: { id: r.eventId! } });
+    expect(ev.data).toEqual({});
+    expect(ev.workspaceId).toBeNull();
   });
 
   it('the ledger SKIPS the success write when the run’s tenant vanished mid-flight', async () => {

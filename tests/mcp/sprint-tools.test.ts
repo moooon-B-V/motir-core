@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { backlogService } from '@/lib/services/backlogService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -16,6 +15,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import type { SprintDto } from '@/lib/dto/sprints';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // MCP sprint tools (Subtask 7.8.10) over real Postgres. The eight tools — list /
 // create / update / delete sprint, move to sprint / backlog, start / complete —
@@ -36,7 +36,7 @@ beforeEach(async () => {
   await truncateAuthTables();
   // Keep the suite hermetic: the status transition + create fire best-effort
   // post-commit job events; no-op them so nothing reaches the network.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] as string[] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {
