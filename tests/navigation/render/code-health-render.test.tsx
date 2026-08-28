@@ -12,11 +12,18 @@ import { findFirst, renderTree, textOf } from '../../helpers/serverPageHarness';
 // `tests/code-health-page.test.ts` drives `loadCodeHealthSurfaces` — the
 // exported read composition — against a real database, thoroughly, and this file
 // does not repeat one line of it. What that test cannot reach is the DEFAULT
-// EXPORT: the session redirect, the no-project state, the admin-only state, and
-// the `MotirAiError` degradation that hands `loadError` to the island. Every one
-// of those is a decision the page makes and nothing executed until now — which
-// is the shape of the gap the whole card is about, visible on a page that was
-// otherwise well tested.
+// EXPORT: the session redirect, the no-project state, the admin-only state, the
+// per-repo containment of a `MotirAiError`, and the rethrow of anything else.
+// Every one of those is a decision the page makes and nothing executed until now
+// — which is the shape of the gap the whole card is about, visible on a page
+// that was otherwise well tested.
+//
+// ⚠️ AND THE FIRST THING IT FOUND WAS A DEAD ARM (MOTIR-3719). The page used to
+// keep a whole-surface `loadError` and hand it to the island. Rendering it here
+// with both boundary reads rejecting showed the prop arriving `false`: the arm
+// could not execute, because the per-repo containment absorbs every
+// `MotirAiError` before it reaches the page's `catch`. That state, its arm and
+// the island's prop are gone; what is asserted below is the containment itself.
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 const { getActiveProject } = vi.hoisted(() => ({ getActiveProject: vi.fn() }));
@@ -77,7 +84,9 @@ describe('/code-health — the page’s own branches', () => {
 
     expect(island).toBeDefined();
     expect(island.props['repoRefs']).toEqual(['moooon/motir-core']);
-    expect(island.props['loadError']).toBe(false);
+    // The island is seeded from a SUCCESSFUL read and carries no whole-surface
+    // failure state at all — the prop does not exist (MOTIR-3719).
+    expect('loadError' in island.props).toBe(false);
   });
 
   it('renders the header and an island with NO reads when no repo is connected', async () => {
@@ -118,7 +127,10 @@ describe('/code-health — the page’s own branches', () => {
     expect(textOf(tree)).toContain('adminOnlyTitle');
   });
 
-  it('contains a MotirAiError per ROW, and never reaches the page’s loadError', async () => {
+  it('contains an unreachable motir-ai PER ROW, and still renders the island', async () => {
+    // THE page's one answer to "motir-ai is unreachable" (MOTIR-3719 AC1), made
+    // to happen rather than described: both boundary reads reject, which is
+    // every `aiConventionService` call site this page has.
     getConvention.mockRejectedValue(new MotirAiUnavailableError('upstream down'));
     getAudit.mockRejectedValue(new MotirAiUnavailableError('upstream down'));
 
@@ -126,28 +138,29 @@ describe('/code-health — the page’s own branches', () => {
     const island = findFirst(tree, CodeHealthClient)!;
 
     // Containment, per MOTIR-2207: one repo's failure is that row's own state.
+    // The page RENDERS — it does not degrade to a banner and does not throw.
     expect(island).toBeDefined();
     expect(island.props['initialSelectedAudit']).toBeNull();
     expect(island.props['initialConventions']).toEqual([]);
+    // The failing repo keeps its place in the list carrying `surface: null` —
+    // "Couldn't load this report", the `unavailable` row state Panel 7 §6 draws.
+    expect(island.props['initialAudits']).toEqual([
+      { repoKey: 'moooon/motir-core', surface: null },
+    ]);
+    // And there is no whole-surface failure state to hand over. This is the
+    // assertion that would have failed before MOTIR-3719: the prop existed, and
+    // it arrived `false` on the one input that was supposed to raise it.
+    expect('loadError' in island.props).toBe(false);
+  });
 
-    // ⚠️ AND `loadError` IS `false` — WHICH IS THE FINDING, not the assertion's
-    // point. The page still carries
-    //
-    //     if (err instanceof MotirAiError) loadError = `${err.code}: …`;
-    //
-    // and `CodeHealthClient` still renders a banner from it, but no
-    // `MotirAiError` can reach that catch any more: `readRepoAudit` and
-    // `readRepoConvention` each absorb one and return the row's own empty
-    // state, and `loadCodeHealthSurfaces` has no other `aiConventionService`
-    // call site. `resolveCodeContext`, which could still throw one, is issued
-    // OUTSIDE the `try` — so the one live MotirAiError path on this page is
-    // uncaught rather than degraded. Filed as a bug rather than repaired here:
-    // this card's boundary is the harness, and it "changes no product code".
-    //
-    // This is what the card is for. The arm is invisible to a structural test,
-    // which never executes it, and to a reviewer, for whom it reads as the
-    // careful thing to have written. It took a render to see that it is unreachable.
-    expect(island.props['loadError']).toBe(false);
+  it('RETHROWS anything that is neither the project gate nor a contained per-repo failure', async () => {
+    // The `catch`'s surviving arm. A `MotirAiError` cannot reach it (the test
+    // above), and a project-gate error is answered with the admin-only state —
+    // so what is left is a genuine server error, and the page must not swallow
+    // it into a degraded surface that says the code analysis is unavailable.
+    getAudit.mockRejectedValue(new TypeError('reading `id` of undefined'));
+
+    await expect(renderTree(CodeHealthPage)).rejects.toThrow('reading `id` of undefined');
   });
 
   it('renders the no-project state before it resolves any code context', async () => {

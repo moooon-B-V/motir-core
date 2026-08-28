@@ -138,7 +138,6 @@ function render(over: { repoRefs?: string[]; audits?: RepoAuditSurfaceDTO[] } = 
       initialSelectedRepoKey={selected}
       initialSelectedAudit={audits.find((a) => a.repoKey === selected)?.surface ?? null}
       initialConventions={[]}
-      loadError={false}
     />,
     { now: NOW },
   );

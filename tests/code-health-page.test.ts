@@ -297,7 +297,8 @@ describe('/code-health initial read — an audit report for EVERY repo (MOTIR-22
 
     // The blast radius is ONE ROW. Before this card the shared `Promise.all`
     // failed the whole page into `loadError`, taking the repos that resolved
-    // down with the one that didn't.
+    // down with the one that didn't. (That whole-page state is now gone — this
+    // containment is what made it unreachable; MOTIR-3719.)
     expect(audits.find((a) => a.repoKey === 'moooon/motir-ai')?.surface).toBeNull();
     expect(audits.find((a) => a.repoKey === 'moooon/motir-core')?.surface?.audit).not.toBeNull();
     expect(audits.find((a) => a.repoKey === 'moooon/motir-gateway')?.surface?.audit).not.toBeNull();
