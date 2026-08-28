@@ -540,6 +540,61 @@ describe('the fixing prompt', () => {
     expect(prompt).toContain('NOT merged');
     expect(prompt).toContain('less trustworthy');
   });
+
+  it('makes MERGING THE BASE the first step — ahead of reading the log', () => {
+    // CI checks out the branch MERGED with the branch it targets, so the log
+    // describes a tree the fixing agent's checkout does not have: the file it
+    // names can be a sibling's that landed after this branch started, and the
+    // failure can be inherited and already repaired. Reading first means
+    // diagnosing the wrong tree — so the ORDER is the rule, not the mention.
+    expect(prompt).toContain('MERGE THE LATEST BASE BRANCH FIRST');
+    expect(prompt.indexOf('MERGE THE LATEST BASE BRANCH FIRST')).toBeLessThan(
+      prompt.indexOf('Read the ACTUAL failure first'),
+    );
+    expect(prompt).toContain('A MERGE, never a rebase');
+  });
+
+  it('names the branch to merge — the one the pull request TARGETS', () => {
+    // A stacked pull request is based on its parent's branch and CI merges it
+    // with THAT, so the instruction is keyed off `baseRef`, never a hardcoded
+    // `main`.
+    expect(prompt).toContain('git fetch origin && git merge origin/main');
+    expect(
+      renderFixPrompt({
+        key: 'PROD-1',
+        title: null,
+        failing: [delivery({ ci: 'failing', baseRef: 'parent/PROD-2' })],
+        attempt: 1,
+      }),
+    ).toContain('git merge origin/parent/PROD-2');
+  });
+
+  it('falls back to a POINTER when the failing pull requests disagree on a base', () => {
+    // One name would be wrong for at least one of them, and a wrong branch name
+    // is worse than none — so the set's bases are listed per pull request.
+    const mixed = renderFixPrompt({
+      key: 'PROD-1',
+      title: null,
+      failing: [
+        delivery({ ci: 'failing' }),
+        delivery({ ci: 'failing', number: 2, baseRef: 'parent/PROD-2' }),
+      ],
+      attempt: 1,
+    });
+
+    expect(mixed).toContain("git merge origin/<that pull request's base>");
+    expect(mixed).toContain('(base `main`)');
+    expect(mixed).toContain('(base `parent/PROD-2`)');
+  });
+
+  it('says the merge is PUSHED, and that a green merge ends it', () => {
+    // Otherwise the step reads as a local manoeuvre, and the one case it exists
+    // to catch — an inherited red already repaired on the base — needs a push to
+    // be observed at all. It is also the cheapest possible outcome: no diff.
+    expect(prompt).toContain('Push the merge like any other iteration');
+    expect(prompt).toContain('merge alone turns the build green');
+    expect(prompt).toContain('INHERITED');
+  });
 });
 
 describe('there is exactly ONE CI verdict, and it is the server’s', () => {

@@ -244,6 +244,18 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
  * that correctly declines to patch around one has still used a roll. Ending the
  * loop on a no-op would turn the single most common right answer into a give-up.
  *
+ * ⚠️ IT SAYS WHAT TO DO FIRST, AND IT IS NOT READING THE LOG. A pull request's
+ * checks run the branch MERGED with the branch it targets, so the failure being
+ * described happened in a tree that exists nowhere in the checkout the fixing
+ * agent stands in. Diagnosing before merging means diagnosing the wrong tree:
+ * the named file can be a sibling's that landed on the base after this branch
+ * started, the failure can be inherited and already repaired on the base, and
+ * the at-most-one-file measurement the prompt does permit measures a
+ * combination CI never judged. So step 1 is `git merge` the base — a merge,
+ * never a rebase, the repository squash-merges anyway — and that merge is
+ * pushed like any other iteration, which either turns the build green for free
+ * or hands the next iteration an honest tree.
+ *
  * ⚠️ AND IT SAYS WHAT NOT TO RUN, because the pull toward re-running is
  * strongest exactly here and it does not feel like waste — it feels like
  * checking your work. An agent handed a red suite naturally reaches for that
@@ -270,6 +282,14 @@ export function renderFixPrompt(input: {
   failing: readonly WorkItemDelivery[];
   attempt: number;
 }): string {
+  // WHAT to merge is the branch each pull request TARGETS, not the default
+  // branch: a stacked pull request is based on its parent's branch and CI
+  // merges it with THAT. One name when the failing set agrees, and a pointer to
+  // the list above when it does not, because a wrong branch name here is worse
+  // than none.
+  const bases = [...new Set(input.failing.map((d) => d.baseRef ?? d.defaultBranch))];
+  const mergeTarget =
+    bases.length === 1 ? `origin/${bases[0]}` : "origin/<that pull request's base>";
   const lines: string[] = [];
   lines.push(`# Make the build pass — ${input.key}${input.title ? ` (${input.title})` : ''}`);
   lines.push('');
@@ -280,15 +300,30 @@ export function renderFixPrompt(input: {
   lines.push('## The failing pull requests');
   lines.push('');
   for (const d of input.failing) {
-    lines.push(`- **${d.repo}#${d.number}** — ${d.url}`);
+    lines.push(`- **${d.repo}#${d.number}** (base \`${d.baseRef ?? d.defaultBranch}\`) — ${d.url}`);
   }
   lines.push('');
   lines.push('## What to do');
   lines.push('');
-  lines.push('1. **Read the ACTUAL failure first** — the assertion, the locator, the');
-  lines.push('   stack, the job log. Not the summary line, and not a guess from the');
-  lines.push('   test name.');
-  lines.push('2. **Decide what kind of failure it is.**');
+  lines.push('1. **MERGE THE LATEST BASE BRANCH FIRST — before you read anything as a');
+  lines.push(`   diagnosis.** \`git fetch origin && git merge ${mergeTarget}\` in the`);
+  lines.push('   checkout holding the branch. A MERGE, never a rebase.');
+  lines.push('   **CI judges your branch MERGED with the branch it targets**, so the');
+  lines.push('   failure you are about to read happened in a tree this checkout does');
+  lines.push('   not have: the file the log names may be one that landed on the base');
+  lines.push('   after this branch started, and the failure may be inherited rather');
+  lines.push('   than yours. Build the combination CI judged, then diagnose against');
+  lines.push('   it.');
+  lines.push('   - **Push the merge like any other iteration.** It re-triggers CI, so');
+  lines.push('     if the red was inherited and is already repaired on the base, the');
+  lines.push('     merge alone turns the build green and nothing else is owed —');
+  lines.push('     change nothing and say so.');
+  lines.push('   - **A merge CONFLICT is your own work, and no check can report it.**');
+  lines.push('     Resolve it here, in this iteration.');
+  lines.push('2. **Read the ACTUAL failure first** — on the MERGED tree: the assertion,');
+  lines.push('   the locator, the stack, the job log. Not the summary line, and not a');
+  lines.push('   guess from the test name.');
+  lines.push('3. **Decide what kind of failure it is.**');
   lines.push('   - **Caused by this branch** → fix it. Commit to the SAME branch and');
   lines.push('     push; the existing pull request picks it up. Open no new pull');
   lines.push('     request and link nothing — this is repair work on a pull request');
@@ -299,13 +334,19 @@ export function renderFixPrompt(input: {
   lines.push('     the log named, and only because it is seconds. NEVER the suite,');
   lines.push('     never a coverage run, and never a wider sweep to check that');
   lines.push('     nothing else broke: that is the same measurement taken twice,');
-  lines.push('     the second time slower, on a shared machine, and NOT merged');
-  lines.push('     with the default branch — so it is the less trustworthy copy.');
+  lines.push('     the second time slower, on a shared machine, and NOT merged with');
+  lines.push('     the base as CI will merge it at verdict time — so it is the');
+  lines.push('     less trustworthy copy.');
+  lines.push('   - **INHERITED** — the base branch is red on its own, or the log names');
+  lines.push('     a file your diff never touched. Say so and change NOTHING here:');
+  lines.push('     step 1 was the whole fix if there was one, and repairing somebody');
+  lines.push("     else's red belongs in its own pull request, never folded into this");
+  lines.push('     one.');
   lines.push('   - **ENVIRONMENTAL** — a connection reset, a runner or webServer death,');
   lines.push('     a first-hit cold-compile timeout, a different test failing each run —');
   lines.push('     then **say so and change NOTHING**. Pushing a speculative patch to');
   lines.push('     chase a flake makes the diff worse and hides the real signal.');
-  lines.push('3. Do not touch the work item: leave its status, and record no');
+  lines.push('4. Do not touch the work item: leave its status, and record no');
   lines.push('   transition. The build decides when it moves.');
   lines.push('');
   lines.push('Changing nothing is a legitimate outcome and is sometimes the right one.');
