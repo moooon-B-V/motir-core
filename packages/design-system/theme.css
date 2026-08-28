@@ -3674,7 +3674,19 @@
   --color-success: #36c977;
   --color-warning: #fb8b4c;
   --color-destructive: #f0555f; /* reads AS text on the dark canvas (AA ~5.5:1) */
-  --color-destructive-foreground: #ffffff;
+  /* The FILL ink, not a page ink — this is what `Button`'s danger variant paints
+     ON `--color-destructive` above. Dark lightened the red to #f0555f so it would
+     read AS text on the violet canvas, and left the ink at #ffffff: two
+     individually reasonable decisions that are wrong together, at 3.40:1 — the
+     only one of ten palettes x two themes under AA (MOTIR-3664). A lighter red
+     needs darker ink, which is what amber / candy / citrine / evergreen / garnet
+     / sienna already do in their own dark blocks, each with the palette's own
+     near-black. Spectrum's is the deep cool-violet canvas above: white -> #14111f
+     takes the pairing 3.40 -> 5.46:1, mid-range among those six (5.14-8.81).
+     `--color-destructive` itself does NOT move — it is also the border/glyph hue
+     (5.03-5.68:1 on every dark surface here) and the source of
+     --el-priority-highest / --el-type-bug / --el-type-deploy / --el-overdue. */
+  --color-destructive-foreground: #14111f;
   --color-info: #6fa8ff;
 
   --color-link: #8fb8ff;
