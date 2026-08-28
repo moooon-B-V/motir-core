@@ -315,13 +315,33 @@ names this outcome: _"If A is chosen, this card is re-planned rather than run �
 Do not build a column drop the ADR did not choose, and do not silently re-scope
 this card to fit."_ Under A, **its items 1–5 all evaporate**: there is no reader
 to move (§1.2), no invariant to re-home (§3), no column to drop (§4) and nothing
-on the wire to version (§2). Its acceptance criteria 3 and 4 — a `motir auto`
-run's second card still inherits its lineage, and a session-branch merge still
-closes every card the branch carried — are **regression assertions worth having
-and currently unwritten**, and they are what should survive. This file does not
-perform that re-scope: MOTIR-3734 is a decision card and its criteria do not
-carry MOTIR-3735's body, so the re-plan is named here and left to a person, with
-a comment on MOTIR-3735 pointing at this section.
+on the wire to version (§2).
+
+**And its criteria 3 and 4 do not survive either — because they are ALREADY
+ASSERTED.** A first reading of this section proposed keeping them as regression
+guards, on the assumption that a property this load-bearing could not already be
+covered. It is, and has been since 7.8.11:
+
+| the property                                                                                          | asserted at                                                 |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| an implemented dep WITH a branch unblocks its dependent; **WITHOUT one it does not**; done still does | `tests/mcp/integration-state.test.ts:44`                    |
+| conflicting lineages keep the item out of the ready set, and the verdict names them                   | `:74`                                                       |
+| `listReady` / `next_ready` honour the rule and the dispatch payload carries the inherited branch      | `:102`                                                      |
+| `done` clears the branch on ANY transition                                                            | `:227`                                                      |
+| a merged session-branch pull request closes every card the branch carried                             | `tests/github/changeRequestSessionCloseOut.test.ts:154-323` |
+| the pure classifier, both arms                                                                        | `tests/workflows/blockerReadiness.test.ts`                  |
+
+Those tests seed the blocker through `markIntegrated` with **no pull-request row
+in existence**, which is precisely the window criterion 3 was reaching for. So
+the honest re-scope is not a smaller build card: **it is a documentation sweep
+with no test in it at all**, and re-asserting any of the above would be the
+rebuild-a-sibling's-half defect wearing the costume of diligence.
+
+What remains for MOTIR-3735 is the three places that still promise the
+retirement — `work-item-delivery-links.md` §Q2, `prisma/schema.prisma`'s
+uncommented `sessionBranch` field, and `blockerReadiness.ts`'s header — because
+a reader who lands on any of them re-derives a decision that has been made and
+reversed. That card was re-scoped to exactly that on 2026-08-28.
 
 ---
 
