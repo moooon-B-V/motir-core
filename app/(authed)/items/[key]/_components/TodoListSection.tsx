@@ -213,20 +213,24 @@ export function TodoListSection({
       title={t('sectionTitle')}
       subtitle={t('sectionSubtitle')}
       headerRight={
-        <span className="font-mono text-[11px] text-(--el-text-secondary)">
+        <span
+          data-testid="todo-progress"
+          className="font-mono text-[11px] text-(--el-text-secondary)"
+        >
           {t('progress', { done: progress.done, total: progress.total })}
         </span>
       }
     >
       {/* The keyboard reorder's announcement. Always mounted so a screen reader
           picks up the change rather than the region's arrival. */}
-      <p aria-live="polite" className="sr-only">
+      <p data-testid="todo-announcement" aria-live="polite" className="sr-only">
         {announcement}
       </p>
 
       {error ? (
         <div
           role="alert"
+          data-testid="todo-error"
           className="mb-3 flex items-center gap-3 rounded-(--radius-control) border border-(--el-border) bg-(--el-tint-peach) px-3 py-2 text-[12.5px] text-(--el-text-strong)"
         >
           <span className="min-w-0 flex-1">{error}</span>
@@ -237,12 +241,12 @@ export function TodoListSection({
       ) : null}
 
       {todos.length === 0 ? (
-        <div className="py-2">
+        <div data-testid="todo-empty" className="py-2">
           <p className="text-[13.5px] text-(--el-text)">{t('empty')}</p>
           <p className="mt-1 text-[12.5px] text-(--el-text-secondary)">{t('emptyHint')}</p>
         </div>
       ) : (
-        <ul className="list-none">
+        <ul data-testid="todo-list" className="list-none">
           {todos.map((row, index) => (
             <TodoRow
               key={row.id}
@@ -276,13 +280,16 @@ export function TodoListSection({
       )}
 
       {allDone ? (
-        <p className="mt-3 text-[12.5px] text-(--el-text-secondary)">{t('allDone')}</p>
+        <p data-testid="todo-all-done" className="mt-3 text-[12.5px] text-(--el-text-secondary)">
+          {t('allDone')}
+        </p>
       ) : null}
 
       {canEdit ? (
         <div className="mt-2 flex items-center gap-2 border-t border-(--el-border) pt-3">
           <Plus className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
           <Input
+            data-testid="todo-add-input"
             value={adding}
             onChange={(e) => setAdding(e.target.value)}
             aria-label={t('addPlaceholder')}
@@ -365,7 +372,12 @@ function TodoRow({
   }
 
   return (
-    <li className="grid grid-cols-[auto_1fr_auto] items-start gap-2.5 border-t border-(--el-border) py-2.5 first:border-t-0">
+    <li
+      data-testid="todo-row"
+      data-todo-id={row.id}
+      data-todo-done={row.done ? 'true' : 'false'}
+      className="grid grid-cols-[auto_1fr_auto] items-start gap-2.5 border-t border-(--el-border) py-2.5 first:border-t-0"
+    >
       {/* The tick. `stateLabels` is what keeps a screen reader from announcing a
           STEP as "Held" — the primitive's default vocabulary is set-membership,
           which is right for the role editor and wrong here. */}
@@ -398,6 +410,7 @@ function TodoRow({
             <div className="flex flex-wrap items-center gap-2">
               {/* `text` is PLAIN and stays a text node — never the Markdown pipeline. */}
               <span
+                data-testid="todo-text"
                 className={
                   row.done
                     ? 'text-[13.5px] text-(--el-text-secondary) line-through'
@@ -510,7 +523,10 @@ function ExecutorMark({ executor }: { executor: ExecutorDto | null }) {
   const t = useTranslations('workItemTodos');
   if (executor === 'coding_agent') {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-lavender) px-2 py-0.5 text-[11px] text-(--el-text-strong)">
+      <span
+        data-testid="todo-executor-agent"
+        className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-lavender) px-2 py-0.5 text-[11px] text-(--el-text-strong)"
+      >
         <Bot className="h-3 w-3" aria-hidden />
         {t('agentStep')}
       </span>
@@ -540,6 +556,7 @@ function CommandRow({ command }: { command: string }) {
   return (
     <div className="mt-1.5 flex min-w-0 items-center gap-2">
       <pre
+        data-testid="todo-command"
         tabIndex={0}
         className="m-0 min-w-0 flex-1 overflow-x-auto rounded-(--radius-control) border border-(--el-border) bg-(--el-code-bg) px-2 py-1 font-mono text-[12px] whitespace-pre text-(--el-code-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
