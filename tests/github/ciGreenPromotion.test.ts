@@ -619,12 +619,12 @@ describe('a row that is GONE by the time the promotion runs', () => {
  *
  *  ⚠️ MOTIR-3674 — this goes through the REAL link door now. It used to insert a
  *  `work_item_delivery` row directly, which was a faithful fixture only while the
- *  title parse ALSO stamped `github_pull_request.work_item_id` from the branch:
- *  the promotion path reads the union of the delivery table, the scalar and the
- *  session branch, and the direct insert supplied only the first. With the parse
- *  gone, a state with a delivery row and a null scalar is one nothing produces —
- *  `link_pull_request` writes both — so building it here would test a shape that
- *  cannot occur and miss the one that does. */
+ *  title parse ALSO stamped `github_pull_request.work_item_id` from the branch.
+ *  With the parse retired and that column dropped (MOTIR-3757), the delivery row
+ *  IS the whole of a link — but the door stays the door: a fixture that inserts
+ *  the row itself asserts a shape rather than the behaviour a caller gets, and
+ *  `link_pull_request` does more than write the row (it stamps the provenance and
+ *  refreshes the unlinked-pull-request check). */
 async function alsoDelivers(
   s: Awaited<ReturnType<typeof makeScenario>>,
   workItemId: string,

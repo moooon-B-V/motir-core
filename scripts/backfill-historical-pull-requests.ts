@@ -19,7 +19,7 @@
  * needed or made.
  *
  * ⚠️ MERGED PRs ONLY. `classifyImplementationSource` stamps `byok` on
- * `hasLinkedPr`, which is `githubPullRequests.length > 0` — it does NOT read the
+ * `hasLinkedPr`, which is `deliveries.length > 0` — it does NOT read the
  * `merged` column. Mirroring closed-unmerged PRs would therefore stamp `byok` on
  * items whose only PR was abandoned. Filtering at the source is the one option
  * that keeps every stamp true (see `lib/github/historicalPullRequests.ts`).

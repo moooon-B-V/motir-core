@@ -10,7 +10,7 @@ import { notFound, productionGate, requireContext } from '../_helpers';
 // MOTIR-3662). See ../_helpers.ts for the WHY + the three invariants.
 //
 //   POST body={ workItemId, owner, name, number, headRef, baseRef }
-//        → 201 + { link, created, movedFrom }
+//        → 201 + { link, created }
 //
 // ── Why this door exists ───────────────────────────────────────────────────
 // The E2E lane can already open and merge pull requests through the REAL signed
@@ -24,8 +24,8 @@ import { notFound, productionGate, requireContext } from '../_helpers';
 // So this is the same transport the sibling `work-item-links` route is: the
 // SHIPPED service method, reached over HTTP, gated to non-production, with the
 // caller's real session context. `linkPullRequestByCoordinates` runs in full —
-// its `work_item:edit` permission assertion, its tenancy checks, the dual write
-// of the FK and the delivery row.
+// its `work_item:edit` permission assertion, its tenancy checks, and the write of
+// the delivery row that IS the link.
 //
 // ⚠️ It is NOT a shortcut past the link's rules. A card in another workspace,
 // or a repository this workspace has not connected, is refused here exactly as

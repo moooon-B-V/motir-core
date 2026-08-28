@@ -112,13 +112,12 @@ async function heldItem(fx: WorkItemFixture, repos: string[], title = 'Ships som
  *  merged, closed, linked — and no base. This is not a contrived shape; it is
  *  every row written before the MOTIR-2729 migration.
  *
- *  ⚠️ IT WRITES BOTH HALVES OF THE LINK (MOTIR-3721), because the database does:
- *  the `work_item_delivery` migration's pass 1 carried EVERY non-null
- *  `github_pull_request.work_item_id` into a delivery row, so a row of this
- *  vintage carries both today. The readers moved onto the delivery table, so a
- *  fixture that wrote only the column would be describing a state that no longer
- *  exists on any migrated database — and would test the absence of a link rather
- *  than the backfill. */
+ *  ⚠️ THE LINK IS THE DELIVERY ROW (MOTIR-3757). The `work_item_delivery`
+ *  migration's pass 1 carried EVERY non-null `github_pull_request.work_item_id`
+ *  into a delivery row, and the column was then dropped — so a row of this vintage
+ *  carries exactly what this fixture writes. `workItemId: null` means the row
+ *  delivers nothing, which is a real state and the one the unlinked case is
+ *  about. */
 async function preColumnMergedRow(args: {
   repoId: string;
   number: number;
@@ -137,7 +136,6 @@ async function preColumnMergedRow(args: {
       headRef: `subtask/whatever-${args.number}`,
       baseRef: args.baseRef ?? null,
       title: `A change #${args.number}`,
-      workItemId: args.workItemId,
       linkedManually: false,
     },
   });

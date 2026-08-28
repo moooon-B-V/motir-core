@@ -234,10 +234,11 @@ export async function syncChangeRequestStatus(
     // MOTIR-1931 pinned for the resolve itself, applied one layer down.
     await bindWorkspaceContext(tx, repo.workspaceId);
 
-    // Resolve the change request's linked work item — THE STORED LINK, and
-    // nothing else (MOTIR-3674). Lock the row, read it, and use the work item it
-    // names. There is no second arm: a delivery for a pull request that carries
-    // no link resolves to no work item, whatever its head ref or title says.
+    // Resolve the change request's delivered work items — THE STORED LINKS, and
+    // nothing else (MOTIR-3674). Lock the row, read it, and use the cards its
+    // delivery rows name. There is no second arm: a delivery for a pull request
+    // that carries no link resolves to no work item, whatever its head ref or
+    // title says.
     //
     // ⚠️ WHAT WAS DELETED HERE, so the absence reads as a decision. The `else`
     // arm parsed `MOTIR-<n>` out of `${cr.headRef} ${cr.title}` and linked the
@@ -248,20 +249,18 @@ export async function syncChangeRequestStatus(
     // A title naming the parent, a sibling, the bug being fixed or a rule being
     // cited is ordinary good writing, and every one of them mis-linked.
     //
-    // ⚠️ THE CONDITION IS `workItemId`, NOT `linkedManually` — the GRANDFATHERING
-    // decision, and it is load-bearing rather than incidental. Gating on
-    // `linkedManually` would orphan every row the parse ever wrote: on production
-    // that is 1026 of 1096 linked rows (70 are `linked_manually`), 1007 of them
-    // already merged, and the next delivery for each would overwrite its
-    // `work_item_id` with null and empty that card's Development surface. A stored
-    // link is a link — MOTIR-3657's backfill already carried all 1096 into
-    // `work_item_delivery` for exactly this reason. What this card retires is the
-    // INFERENCE, not the history it produced. Prospectively the choice touches TWO
-    // rows: the open, parse-linked pull requests on the day it ships.
+    // ⚠️ THE GRANDFATHERING DECISION, kept as a record because the mechanism it
+    // was about is gone. MOTIR-3674 chose to honour a STORED link however it was
+    // made rather than only a `linkedManually` one: gating on the flag would have
+    // orphaned every row the parse ever wrote — on production 1026 of 1096 linked
+    // rows (70 were `linked_manually`), 1007 of them already merged. A stored link
+    // is a link, and MOTIR-3657's backfill carried all 1096 into
+    // `work_item_delivery` for exactly this reason, which is why MOTIR-3757 could
+    // drop the column without losing one of them. What was retired is the
+    // INFERENCE, not the history it produced.
     //
-    // `linkedManually` is left on the row as the record of HOW the link was made,
-    // and is now read by nothing here. Dropping the column is its own card, once
-    // nothing reads it (MOTIR-3721).
+    // `linkedManually` survives on the row as the record of HOW a link was made,
+    // and is read by nothing here. Retiring it is its own decision.
     await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
     const existingPr = await githubPullRequestRepository.findByRepoAndNumber(
       repo.id,
@@ -269,11 +268,10 @@ export async function syncChangeRequestStatus(
       tx,
     );
     // The manual-override flag is PRESERVED as it stands (MOTIR-1596), so an auto
-    // delivery never clears a manual link. It used to be re-derived from a
-    // successful resolve of the existing row's link column — the read this card
-    // moves — and the derivation bought nothing: a hard-deleted target already
-    // nulls the column through the FK's `SetNull`, and this flag is the record of
-    // HOW a link was made, read by nothing in this file.
+    // delivery never clears the record that a link was declared. It used to be
+    // re-derived from a successful resolve of the existing row's link column, and
+    // the derivation bought nothing even before that column was dropped: this flag
+    // is the record of HOW a link was made, read by nothing in this file.
     const linkedManually = existingPr?.linkedManually ?? false;
 
     // Upsert the change-request row — the change-request→work-item link entity.
@@ -294,11 +292,11 @@ export async function syncChangeRequestStatus(
       // happened in other repositories, whose only record is this row.
       baseRef: cr.baseRef,
       title: cr.title,
-      // ⚠️ `workItemId` IS OMITTED, not written as null (MOTIR-3721). Omitting it
-      // leaves the stored column EXACTLY as it is — the same preservation this
-      // path always performed, now expressed without reading the column to hand
-      // it back. W2 is untouched as a writer: the field is still on the input and
-      // the two callers that decide a link still pass it.
+      // ⚠️ NO LINK IS WRITTEN HERE, and there is no longer a field to omit
+      // (MOTIR-3721 stopped writing it, MOTIR-3757 dropped it). A delivery says
+      // what a pull request IS; only `link_pull_request` says which cards it
+      // delivers, and those rows live in `work_item_delivery`, which this upsert
+      // does not touch.
       linkedManually,
     };
     let prId: string;
@@ -1051,9 +1049,8 @@ export interface ResolvedChangeRequestWorkItem {
  * Its MOTIR-1965 header argued that ONE resolver must serve both the live
  * delivery and the historical backfill, so the two could never drift. That
  * argument is kept and satisfied by removal: there is still exactly one rule, and
- * it is now `work_item_delivery` / `github_pull_request.work_item_id` — a stored
- * link, written by `link_pull_request` or `mark_integrated`, never inferred from
- * text. The backfill stops attributing rather than growing a parser of its own
+ * it is now `work_item_delivery` — a stored link, written by `link_pull_request`
+ * or `mark_integrated`, never inferred from text. The backfill stops attributing rather than growing a parser of its own
  * (`historicalPullRequestBackfillService`, option A of the card).
  *
  * Recorded rather than silently deleted because the function was EXPORTED and its

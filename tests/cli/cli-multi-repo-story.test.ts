@@ -151,15 +151,13 @@ async function card(
 /** A MERGED pull request onto that repository's own default branch — what makes
  *  a repository read `delivered` on the next dispatch.
  *
- *  ⚠️ BOTH HALVES OF THE LINK (MOTIR-3721): the completion facts behind
- *  `delivered` come from `work_item_delivery`, and every row carrying the legacy
- *  column carries a delivery row too — the migration backfilled all of them and
- *  both live writers write the pair. */
+ *  ⚠️ THE LINK IS THE DELIVERY ROW (MOTIR-3757): the completion facts behind
+ *  `delivered` come from `work_item_delivery`, and since the drop that is the only
+ *  place a link can be written. */
 async function recordMerge(repoId: string, workItemId: string, number: number) {
   const row = await adminDb.githubPullRequest.create({
     data: {
       repoId,
-      workItemId,
       number,
       state: 'closed',
       merged: true,

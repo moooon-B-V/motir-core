@@ -335,8 +335,12 @@ describe('block 2 — `removed: false` is an ANSWER; a bad coordinate is a REFUS
   });
 });
 
-describe('block 3 — the legacy column, and the cards that are not this one', () => {
-  it('leaves `github_pull_request.work_item_id` exactly as it stands', async () => {
+describe('block 3 — the pull-request row, and the cards that are not this one', () => {
+  // The predecessor of this case was *leaves `github_pull_request.work_item_id`
+  // exactly as it stands* — correct while that column existed and its drop was
+  // still the CONTRACT card's. MOTIR-3757 dropped it, so what remains to assert is
+  // that unlinking corrects an ASSOCIATION and touches nothing else on the row.
+  it('leaves the mirrored pull request exactly as it stands', async () => {
     const s = await makeScenario({
       email: 'unlink-column@example.com',
       identifier: 'UNC',
@@ -349,18 +353,17 @@ describe('block 3 — the legacy column, and the cards that are not this one', (
     const before = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 950 },
     });
-    expect(before.workItemId).toBe(card.id);
+    expect(await deliveredCards(s, 950)).toEqual([card.id]);
 
     await runUnlinkPullRequest({ key: card.identifier, repository: s.repo, number: 950 }, s.ctx);
 
     const after = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 950 },
     });
-    // The delivery is gone and the column is not. Its drop is the CONTRACT card's
-    // — clearing it here would take the status sync away from a card whose OTHER
-    // links are perfectly good.
+    // The delivery is gone and the MIRROR ROW is not — `linked_manually` included,
+    // which is the record that a link was once DECLARED here and survives the
+    // link's removal exactly as it survived the column's drop.
     expect(await deliveredCards(s, 950)).toEqual([]);
-    expect(after.workItemId).toBe(card.id);
     expect(after.linkedManually).toBe(true);
     // The pull request itself is the webhook's to describe, not the caller's.
     expect(after.state).toBe(before.state);

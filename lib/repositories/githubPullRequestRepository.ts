@@ -9,8 +9,11 @@ import { db } from '@/lib/db';
 
 // GitHub pull-request repository — single Prisma operations on the
 // `github_pull_request` table (Story 7.10 · MOTIR-891). `repoId` is the INTERNAL
-// GithubRepo.id (a cuid). This is the PR→work-item link entity the status sync
-// (MOTIR-892) + CI loop (MOTIR-894) drive; `workItemId` is nullable.
+// GithubRepo.id (a cuid). The row is the MIRROR of a pull request and nothing
+// more: it carries no association with a work item at all (MOTIR-3757 dropped
+// `work_item_id`). `work_item_delivery` holds every such association, and the
+// reads below that answer "which pull requests deliver this card" reach it
+// through the `deliveries` relation.
 
 export interface UpsertGithubPullRequestInput {
   /** The host discriminator — 'github' | 'gitlab' (Story 7.23 · MOTIR-1475). The
@@ -29,23 +32,12 @@ export interface UpsertGithubPullRequestInput {
    *  only because rows written before it existed cannot know theirs. */
   baseRef: string;
   title: string | null;
-  /** The stored 1:1 link (W2, the webhook write). Still WRITTEN and still present
-   *  — MOTIR-3721 moves the column's READERS onto `work_item_delivery` and drops
-   *  nothing; the drop is its own later card, once nothing reads it.
-   *
-   *  ⚠️ OPTIONAL, and the third state is the point (MOTIR-3721). `null` CLEARS
-   *  the link; a string SETS it; **omitting it leaves the stored value exactly as
-   *  it is** (Prisma ignores an `undefined` field, so `update` does not touch the
-   *  column and `create` takes the column default). The status sync omits it: it
-   *  no longer resolves a card from this column, so it has no value to write back
-   *  — and reading the row's own value merely to hand it straight back would be a
-   *  read of the column wearing a write's clothes, which is the thing being
-   *  retired. The two callers that genuinely DECIDE a link
-   *  (`githubPullRequestService`, `historicalPullRequestBackfillService`) pass it
-   *  explicitly, as they always did. */
-  workItemId?: string | null;
-  /** Whether this link is the manual override (MOTIR-1596). The webhook passes
-   *  the row's PRESERVED value so an auto delivery never clears a manual link. */
+  /** Whether this pull request's association with a work item was DECLARED
+   *  (MOTIR-1596) rather than inferred. Nothing reads it for control flow — the
+   *  resolver it made sticky was retired by MOTIR-3674 and the column it
+   *  qualified by MOTIR-3757 — but it is the provenance of the rows already
+   *  written, so every writer still states it rather than letting the default
+   *  decide. The webhook passes the row's PRESERVED value. */
   linkedManually: boolean;
 }
 
@@ -170,7 +162,7 @@ export const githubPullRequestRepository = {
    *  today can be wrong tomorrow and the next delivery writes the right one
    *  anyway. Spending a rate-limited request on either buys nothing.
    *
-   *  ⚠️ NO `work_item_id` IN THE PROJECTION (MOTIR-3721), and its absence is the
+   *  ⚠️ NO CARD ID IN THE PROJECTION (MOTIR-3721), and its absence is the
    *  point rather than a tidy-up. The card ids this sweep must re-evaluate come
    *  from `workItemDeliveryRepository.listWorkItemIdsByPullRequests` over the rows
    *  it actually filled — a SET per pull request, which a scalar column could not
@@ -248,10 +240,10 @@ export const githubPullRequestRepository = {
    * Every change request whose HEAD REF is this branch, with its check rows —
    * the SESSION-BRANCH arm of the CI-green latch (MOTIR-3006).
    *
-   * A session pull request carries no `work_item_id` (its branch deliberately
-   * names no card), so a card integrated onto that branch cannot be reached from
-   * the link column. The branch is the join, and it is the same join the merge
-   * close-out uses.
+   * A session pull request is opened on a branch that deliberately names no card,
+   * so a card integrated onto that branch is not reachable from anything on the
+   * pull request itself. The branch is the join, and it is the same join the
+   * merge close-out uses.
    */
   async listByHeadRefWithChecks(
     headRef: string,
@@ -364,17 +356,24 @@ export const githubPullRequestRepository = {
     });
   },
 
-  /** Set a PR's `workItemId` as the MANUAL override (MOTIR-1596) — stamps
-   *  `linkedManually = true` so the webhook never clears it from the branch/title
-   *  parse. Returns the row with its context for the DTO. Write path → `tx`. */
-  async setWorkItemLink(
+  /** Stamp a PR row as DECLARED rather than inferred (MOTIR-1596). Returns the
+   *  row with its context for the DTO. Write path → `tx`.
+   *
+   *  ⚠️ THIS IS WHAT IS LEFT OF `setWorkItemLink` (MOTIR-3757), and the half that
+   *  went is the half the name was about. That method wrote two columns:
+   *  `work_item_id`, which is GONE — the link is a `work_item_delivery` row, and
+   *  the caller writes it there — and `linked_manually`, which is NOT, because
+   *  the provenance of the rows already written outlives the scalar they
+   *  qualified. Dropping this write instead of narrowing it would leave every
+   *  link declared after this card carrying `false`, which is a worse state for
+   *  the surviving column than either keeping it or retiring it outright. */
+  async markLinkedManually(
     id: string,
-    workItemId: string,
     tx: Prisma.TransactionClient,
   ): Promise<GithubPullRequestWithInstallation> {
     return tx.githubPullRequest.update({
       where: { id },
-      data: { workItemId, linkedManually: true },
+      data: { linkedManually: true },
       include: { repo: { include: { installation: true } }, checkRuns: true },
     });
   },

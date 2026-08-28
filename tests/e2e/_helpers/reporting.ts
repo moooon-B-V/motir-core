@@ -187,7 +187,9 @@ export interface ExpectedCreatedVsResolved {
   axis: string[];
   /** bucketKey → count of items created in that bucket (within the window). */
   created: Record<string, number>;
-  /** bucketKey → count of items resolved (net-into-done) in that bucket. */
+  /** bucketKey → NET resolutions in that bucket (into-done `+1`, out-of-done
+   * `-1`) — so a bucket carrying only a reopen is negative, exactly like the
+   * report's series. */
   resolved: Record<string, number>;
 }
 
@@ -195,10 +197,29 @@ export interface ExpectedCreatedVsResolved {
  * Recompute the created-vs-resolved series INDEPENDENTLY of `reportsService` —
  * in JS, over the back-dated rows, with the same pure bucket math the report's
  * SQL `date_trunc` reproduces. `created` buckets `work_item.createdAt`;
- * `resolved` buckets each resolved item's done-transition revision (its latest
- * revision by construction — the seed orders the transition into a `done`-category
- * status LAST), exactly the net-into-done event the report's resolved series
- * counts. Only in-window events count (the report's `[start, end]` rule).
+ * `resolved` buckets each status-transition REVISION by its own `changedAt`,
+ * `+1` for a transition INTO a `done`-category status and `-1` for one out of
+ * it — the same predicate `aggregateNetResolvedByBucket` applies. Only
+ * in-window events count (the report's `[start, end]` rule).
+ *
+ * ⚠️ INDEPENDENT MEANS "COMPUTED SEPARATELY", NOT "COMPUTED DIFFERENTLY"
+ * (MOTIR-3843). This oracle used to bucket `_max(changedAt)` over ALL of a
+ * currently-`done` item's revisions — i.e. WHEN THE ITEM WAS LAST TOUCHED,
+ * which is a different quantity from WHEN IT WAS RESOLVED. The two agree only
+ * while a resolved item is never revised again; the moment one is (any field,
+ * any revision), the oracle silently re-buckets it into the week of the EDIT
+ * while the report keeps it at its resolution. That drift conserves the total
+ * (+1 +1 −2 = 0 in the failure that found it), so it reads as a re-bucketing
+ * rather than a miscount — and because `expected` is the side a reader trusts,
+ * it accuses the shipped report. The at-scale seed happens to order the
+ * done-transition LAST today, which is what made the old form pass; that is an
+ * accident of the fixture, not a property of the quantity, and the oracle must
+ * not depend on it.
+ *
+ * THE REOPEN ARM IS MODELLED, deliberately. The report's series subtracts on a
+ * transition OUT of a done-category status, so an oracle that only added would
+ * drift again the first time the fixture reopens a resolved item — the same
+ * class of silent divergence, one arm over.
  */
 export async function expectedCreatedVsResolved(
   projectId: string,
@@ -225,15 +246,37 @@ export async function expectedCreatedVsResolved(
     if (inWindow(it.createdAt)) created[bucketKey(period, it.createdAt)]! += 1;
   }
 
-  const doneKeys = await doneCategoryStatusKeys(projectId, workspaceId);
-  const resolvedAgg = await adminDb.workItemRevision.groupBy({
-    by: ['workItemId'],
-    where: { workItem: { projectId, status: { in: doneKeys } } },
-    _max: { changedAt: true },
+  // The resolved series: every in-window status-transition revision, netted by
+  // the CATEGORY of the status it moved from and to — `aggregateNetResolvedByBucket`'s
+  // predicate, expressed in JS over the rows rather than in SQL. The category
+  // lookup mirrors that query's `workflow_status` joins on the diff's
+  // `status.from` / `status.to` KEYS; an unresolvable key reads as "not done",
+  // exactly like the SQL's LEFT-JOIN NULL. Archived items are excluded on the
+  // same side the report excludes them.
+  const categoryOf = new Map(
+    (
+      await adminDb.workflowStatus.findMany({
+        where: { projectId, workspaceId },
+        select: { key: true, category: true },
+      })
+    ).map((s) => [s.key, s.category]),
+  );
+  const revisions = await adminDb.workItemRevision.findMany({
+    where: {
+      workItem: { projectId, archivedAt: null },
+      changeKind: 'updated',
+      changedAt: { gte: start, lte: end },
+    },
+    select: { changedAt: true, diff: true },
   });
-  for (const row of resolvedAgg) {
-    const at = row._max.changedAt;
-    if (at && inWindow(at)) resolved[bucketKey(period, at)]! += 1;
+  for (const rev of revisions) {
+    const diff = rev.diff as { status?: { from?: string | null; to?: string | null } } | null;
+    const step = diff?.status;
+    if (!step) continue; // not a status transition — the report ignores it, so do we
+    const from = step.from == null ? undefined : categoryOf.get(step.from);
+    const to = step.to == null ? undefined : categoryOf.get(step.to);
+    const delta = to === 'done' ? (from === 'done' ? 0 : 1) : from === 'done' ? -1 : 0;
+    if (delta !== 0) resolved[bucketKey(period, rev.changedAt)]! += delta;
   }
 
   return {
