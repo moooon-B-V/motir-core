@@ -582,3 +582,124 @@ export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSee
     nonMemberStoryTitle,
   };
 }
+
+/**
+ * A WIDE root level — enough epics that the whole-level fit falls BELOW the
+ * arrival floor (Story MOTIR-3833 · MOTIR-3841).
+ *
+ * The arrival rule only bites on a level that cannot be drawn legibly whole, so a
+ * fixture with two epics cannot see it at all. Eighteen root epics put the level's
+ * world box at roughly 1000×1324 under the shipped 3-column `deterministicLayout`,
+ * which fits at ~0.30 in a laptop-sized canvas — well under the 0.80 floor. One of
+ * them is the in-progress FRONTIER (the card the arrival centres on) and one is a
+ * drillable STORY-bearing epic, so the same fixture serves the drill / URL / Back
+ * walk without a second seed.
+ */
+export interface WideRoadmapSeed extends RoadmapSeed {
+  /** The drill target's own key + title — what `?item=` names after one drill. */
+  drillEpicIdentifier: string;
+  drillEpicTitle: string;
+  /** A child of the drill target, visible only once drilled in. */
+  drillChildTitle: string;
+  /** Its sibling, which is `is_blocked_by` it — the edge that makes the drilled
+   *  level draw the dependency LEGEND, so the collapse walk has something to
+   *  collapse. */
+  drillSiblingTitle: string;
+  /** The in-progress frontier's title — the "you are here" card. */
+  frontierEpicTitle: string;
+  /** How many root epics the level carries. */
+  rootEpicCount: number;
+}
+
+export async function seedWideRoadmap(email: string): Promise<WideRoadmapSeed> {
+  const { ctx, projectId, projectKey } = await makeTenant(
+    email,
+    'Roadmap E2E — wide',
+    'Wide Roadmap',
+    'WIDE',
+  );
+
+  // The FRONTIER: in-progress, so the level has a "you are here" card for the
+  // arrival to centre on. Its status is DERIVED from a started child.
+  const frontierEpicTitle = 'Epic 7: AI Planning Layer';
+  const frontier = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: frontierEpicTitle },
+    ctx,
+  );
+  const started = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: 'The planning canvas', parentId: frontier.id },
+    ctx,
+  );
+  await workItemsService.updateStatus(started.id, 'in_progress', ctx);
+  await waitForDerivedStatus(frontier.id, 'in_progress');
+
+  // The DRILL TARGET — a second drillable epic, so the walk drills somewhere
+  // other than the frontier and the URL names a level the reader chose.
+  const drillEpicTitle = 'Epic 8: Launch readiness';
+  const drillEpic = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: drillEpicTitle },
+    ctx,
+  );
+  const drillChildTitle = 'Roadmap canvas, refined';
+  const drillChild = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: drillChildTitle, parentId: drillEpic.id },
+    ctx,
+  );
+  // A SECOND child plus a real `is_blocked_by` edge between the two. Without an
+  // edge the canvas draws no dependency legend at all (it is shown only when a
+  // level carries a non-`flow` edge), so a walk over this level could not reach
+  // the collapse control — the fixture would silently skip the chapter it exists
+  // to record. Two nodes still fit far above the arrival floor, so the drilled
+  // level remains the "fitted whole" case.
+  const drillSiblingTitle = 'The level is the URL';
+  const drillSibling = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: drillSiblingTitle, parentId: drillEpic.id },
+    ctx,
+  );
+  await db.workItemLink.create({
+    data: {
+      fromId: drillSibling.id,
+      toId: drillChild.id,
+      kind: 'is_blocked_by',
+      workspaceId: ctx.workspaceId,
+      createdById: ctx.userId,
+    },
+  });
+
+  // …and enough siblings that the level cannot be fitted legibly. Leaf epics: a
+  // childless epic still occupies a cell in the layout, which is all the arrival
+  // scale depends on.
+  const FILLER = 16;
+  for (let i = 1; i <= FILLER; i += 1) {
+    await workItemsService.createWorkItem(
+      { projectId, kind: 'epic', title: `Epic ${i}: Filler stream ${i}` },
+      ctx,
+    );
+  }
+
+  await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: null } });
+
+  const drilled = await db.workItem.findUniqueOrThrow({
+    where: { id: drillEpic.id },
+    select: { identifier: true },
+  });
+
+  return {
+    email,
+    password: ROADMAP_SEED_PASSWORD,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    projectId,
+    projectKey,
+    activeEpicTitle: frontierEpicTitle,
+    otherEpicTitle: drillEpicTitle,
+    doneChildTitle: 'The planning canvas',
+    todoChildTitle: drillChildTitle,
+    drillEpicIdentifier: drilled.identifier,
+    drillEpicTitle,
+    drillChildTitle,
+    drillSiblingTitle,
+    frontierEpicTitle,
+    rootEpicCount: FILLER + 2,
+  };
+}
