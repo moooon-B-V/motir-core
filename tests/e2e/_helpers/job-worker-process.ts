@@ -72,8 +72,27 @@ function indexWriterSeamEnv(): Record<string, string> {
     // clean exit, which is what a `succeeded` ledger row requires. Set here for
     // the same reason as everything above it: this is the process that supervises.
     MOTIR_FAKE_CONTAINER_AUTO_EXIT_CODE: '0',
+    // ⚠️ AND THE CONTAINER HAS TO OUTLIVE THE WORKER (MOTIR-3828). A supervision
+    // is a state machine over RUNS now, so the pass that BOOTS a container and
+    // the pass that first POLLS it are different worker processes by design —
+    // and `killJobWorker()` makes that explicit. The fake's machine map is a
+    // module singleton, so without a shared store a restarted worker reports a
+    // perfectly healthy container as `exists: false`, which
+    // `pollIndexContainer` correctly classifies `never_started`.
+    //
+    // The seam is opt-in and file-backed (`lib/orchestrator/adapters/fake`), so
+    // every vitest suite keeps the in-memory singleton it drives today. One file
+    // per lane, under the same output directory Playwright already owns.
+    MOTIR_FAKE_CONTAINER_STATE_PATH:
+      process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] ?? FAKE_CONTAINER_STATE_PATH,
   };
 }
+
+/**
+ * Where the fake orchestrator's cross-process container store lives for this
+ * lane. Under `out/`, which the run already owns and CI already ignores.
+ */
+const FAKE_CONTAINER_STATE_PATH = 'out/playwright-output/.fake-containers.json';
 
 let worker: ChildProcess | undefined;
 
