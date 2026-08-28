@@ -5,6 +5,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
+import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import { adminDb } from './adminDb';
 
@@ -227,8 +228,22 @@ export async function seedIndexWorkspace(
 }
 
 /** The step ids a run passed to `step.run`, in call order. */
+/**
+ * The step ids a run passed through, FIRST-SEEN ORDER, de-duplicated.
+ *
+ * ⚠️ THE DE-DUPLICATION ARRIVED WITH THE SELF-RESCHEDULING SHAPE (MOTIR-3828)
+ * and it is what keeps these assertions meaning what they meant. A supervision
+ * is a state machine over runs now: every pass re-enters the handler from the
+ * top and CALLS each earlier step id again, taking the memo. So
+ * `ctx.step.run.mock.calls` holds one entry per call rather than one per step,
+ * and a 30-poll supervision would report `index-boot:<pid>` thirty times.
+ *
+ * What the suites using this actually assert is the set of steps a run RECORDS —
+ * one `job_step` row each — which is exactly this list. `admit / boot / settle
+ * as the only steps` and `no step per poll` are both still exact.
+ */
 export function indexStepIds(ctx: { step: { run: { mock: { calls: unknown[][] } } } }): string[] {
-  return ctx.step.run.mock.calls.map((call) => String(call[0]));
+  return [...new Set(ctx.step.run.mock.calls.map((call) => String(call[0])))];
 }
 
 /**
@@ -265,9 +280,42 @@ export const INDEX_FAST_SUPERVISION = {
  * A caller's own options still win, so a test may narrow further.
  */
 export function driveIndexFleetFast(): void {
-  const real = codeGraphIndexDispatchService.runIndexContainer.bind(codeGraphIndexDispatchService);
+  // The IN-PROCESS composition — scripts, harnesses, and this suite's own
+  // service-level tests.
+  const runReal = codeGraphIndexDispatchService.runIndexContainer.bind(
+    codeGraphIndexDispatchService,
+  );
   vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer').mockImplementation(
-    (input, options) => real(input, { ...INDEX_FAST_SUPERVISION, ...options }),
+    (input, options) => runReal(input, { ...INDEX_FAST_SUPERVISION, ...options }),
+  );
+
+  // ⚠️ AND THE JOB'S ONE-PASS ENTRY (MOTIR-3828), which is what
+  // `runIndexFleetSteps` actually calls now. Two things are injected, and both
+  // are test-only uses of a seam the service already exposes:
+  //
+  //   * the millisecond budgets above, for the same reason as ever;
+  //   * an IN-MEMORY supervision store, because `JobTestEngine` synthesises a
+  //     `runId` (`test-run-<jobId>`) rather than claiming a real `job_queue`
+  //     row, and the durable store's row FKs to that table. The store is what
+  //     carries a supervision's poll count and observation across passes — and
+  //     `JobTestEngine` drives those passes, so the two together model the
+  //     engine faithfully without a worker.
+  //
+  // ONE store per call to this helper, so a test's supervisions share it and
+  // two tests never do. The run id is widened with the repoRef because a suite
+  // that dispatches TWO repos in one test would otherwise collide on
+  // `(runId, subject)` — the harness pins one `runId` per job.
+  const supervisionStore = inMemorySupervisionStore();
+  const advanceReal = codeGraphIndexDispatchService.advanceIndexContainer.bind(
+    codeGraphIndexDispatchService,
+  );
+  vi.spyOn(codeGraphIndexDispatchService, 'advanceIndexContainer').mockImplementation(
+    (runId, input, options) =>
+      advanceReal(`${runId}|${input.repoRef}`, input, {
+        ...INDEX_FAST_SUPERVISION,
+        supervisionStore,
+        ...options,
+      }),
   );
 }
 

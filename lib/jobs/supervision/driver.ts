@@ -60,6 +60,12 @@ import { deferRun } from '../engine/defer';
 //   * **No container, no orchestrator, no admission slot.** It calls the
 //     `settle` hook it was given. The caller wraps that hook in its own memoized
 //     `step.run`, which is what makes a teardown idempotent across passes.
+//   * **WHERE the state lives is a SEAM, not a fact of this file** — see
+//     {@link SupervisionStore}. The durable store is the default and is what
+//     production runs on; the in-memory one exists so a caller with no
+//     `job_queue` row (a script, a local harness, every non-job test) drives the
+//     SAME machine rather than a second copy of it. One composition is what
+//     MOTIR-3484 bought and this file may not spend.
 //   * **No BOOT DEADLINE.** The deadline this file evaluates is the OVERALL one,
 //     measured from `bootedAt` — a quantity that depends on no in-memory
 //     observation and is therefore safe to evaluate on a failed read. The
@@ -122,8 +128,20 @@ export type SupervisionPollResult<V> =
 /**
  * Why a terminal transition was entered. Three transitions (see the header);
  * `deadline` and `poll_ceiling` are the two triggers of the second one.
+ *
+ * `replayed` is not a fourth transition: it means the supervision reached one on
+ * an EARLIER pass, and this pass is reading the outcome back out of the caller's
+ * memo. It exists because a fan-out re-enters every already-settled subject on
+ * every later pass, and a pass that polled a destroyed container to rediscover
+ * that would cost one provider read per settled subject per pass — which is the
+ * linearity the whole shape is for.
  */
-export type SupervisionTerminalReason = 'completed' | 'deadline' | 'poll_ceiling' | 'failed';
+export type SupervisionTerminalReason =
+  | 'completed'
+  | 'deadline'
+  | 'poll_ceiling'
+  | 'failed'
+  | 'replayed';
 
 /** The caller's half. `V` is its poll verdict; `O` is its settled outcome. */
 export interface SupervisionHooks<V, O> {
@@ -143,14 +161,232 @@ export interface SupervisionHooks<V, O> {
     state: SupervisionPollState,
     verdict: V | null,
   ): Promise<O>;
-  /** The caller's existing backoff — `indexPollWaitMs` / `pollWaitMs`, unchanged. */
+  /**
+   * The caller's existing backoff — `indexPollWaitMs` / `pollWaitMs`, unchanged.
+   * `waitMs(n)` is the wait BEFORE poll n, which is how both loops this replaces
+   * call it (`await sleep(pollWaitMs(iteration))` at the top of the body).
+   */
   waitMs(pollNumber: number): number;
   /** The caller's total-poll ceiling. */
   maxPolls: number;
   /** How long the supervision may run, measured from `bootedAt`. The caller's own budget. */
   timeoutMs: number;
+  /**
+   * WHERE the per-pass state lives. Defaults to {@link durableSupervisionStore}
+   * — the `job_supervision` table — which is what every job-driven supervision
+   * uses. A caller with no `job_queue` row passes {@link inMemorySupervisionStore}.
+   */
+  store?: SupervisionStore;
   /** Injectable clock, for the tests. Production passes nothing. */
   now?: () => Date;
+}
+
+/** The three fields a pass reads back, plus where the machine is in its lifecycle. */
+export interface SupervisionRow {
+  pollNumber: number;
+  startedAt: Date | null;
+  consecutiveReadFailures: number;
+  state: 'watching' | 'settling' | 'settled';
+}
+
+/**
+ * What `open` returns: the row, plus whether THIS call is the one that created
+ * it.
+ *
+ * ⚠️ `created` IS WHAT KEEPS THE CADENCE IDENTICAL, and it is not derivable from
+ * `pollNumber`. Both loops this replaces wait BEFORE their first poll —
+ * `await sleep(pollWaitMs(iteration))` is the first statement of the `for` body,
+ * so the sequence is boot, wait, poll 1, wait, poll 2 — and a container cannot
+ * have started in the instant after `provision` returned, so poll 1 fired
+ * immediately would be a guaranteed-wasted provider read on every supervision.
+ * The pass that OPENS a supervision therefore defers without polling. It cannot
+ * decide that from `pollNumber === 0`, because that is equally true of the pass
+ * that arrives after the first wait and is owed poll 1.
+ */
+export type SupervisionOpened = SupervisionRow & { created: boolean };
+
+/**
+ * WHERE a supervision's per-pass state lives.
+ *
+ * ⚠️ IT IS A SEAM RATHER THAN AN ABSTRACTION FOR ITS OWN SAKE, and the reason is
+ * concrete. The durable row FKs to `job_queue`, so a caller with no run — a
+ * script, a local harness, and the ~30 test call sites that drive
+ * `runIndexContainer` / `runIntent` straight through — cannot write one. The
+ * alternative to this seam is a SECOND in-process composition of the loop beside
+ * the driven one, which is precisely the shape MOTIR-3484 spent a card
+ * deleting: *"two copies of a supervision loop kept in agreement by hand is a
+ * defect waiting for the first divergence."*
+ *
+ * So the ordering, the transitions and the invariant live here, once, and only
+ * the storage differs.
+ */
+export interface SupervisionStore {
+  /**
+   * Open the supervision, or return the one already open, WITHOUT resetting a
+   * single observation. Tolerates a concurrent opener.
+   */
+  open(runId: string, key: SupervisionKey, nextPollAt: Date): Promise<SupervisionOpened>;
+  /**
+   * Record one advanced poll — but ONLY if the row still reads
+   * `expectedPollNumber` and is still `watching`. The check and the write are
+   * one atomic act; a caller that lost the race writes nothing.
+   */
+  advanceIfUnchanged(
+    runId: string,
+    subject: string,
+    expectedPollNumber: number,
+    observation: { startedAt: Date | null; consecutiveReadFailures: number; nextPollAt: Date },
+  ): Promise<void>;
+  /**
+   * Claim the terminal transition: move `watching` → `settling` atomically.
+   * Returns true when THIS caller made the move, false when somebody else
+   * already had.
+   */
+  claimTerminal(runId: string, subject: string): Promise<boolean>;
+  /** Mark the teardown finished. Only ever called by the claimant. */
+  markSettled(runId: string, subject: string): Promise<void>;
+}
+
+/**
+ * THE DEFAULT — the `job_supervision` table, reached through `withSystemContext`
+ * exactly as `lib/jobs/engine/step.ts` reaches `job_step`.
+ */
+export const durableSupervisionStore: SupervisionStore = {
+  async open(runId, key, nextPollAt) {
+    // Read FIRST, so `created` is a fact rather than an inference. A row that is
+    // already here is the overwhelmingly common case — every pass after the
+    // first — and it costs one indexed lookup either way.
+    const existing = await withSystemContext((tx) =>
+      jobSupervisionRepository.findByRunAndSubject(runId, key.subject, tx),
+    );
+    if (existing) return { ...existing, created: false };
+
+    // ⚠️ ITS OWN TRANSACTION, AND A UNIQUE VIOLATION IS A NORMAL OUTCOME — the
+    // same shape the step shim uses, for the same reason. Two passes can
+    // legitimately reach the FIRST pass of one supervision at once (a lease
+    // reclaim overlapping the previous claimant), and an upsert whose update arm
+    // is empty is a find-then-insert rather than one atomic statement, so the
+    // loser's insert collides. The winner's row is the one BOTH go on to use —
+    // and the catch has to sit OUTSIDE the transaction, because a failed
+    // statement aborts the transaction it is in, so reading the winner from
+    // inside the same one is not available.
+    let created = true;
+    try {
+      await withSystemContext((tx) =>
+        jobSupervisionRepository.open(
+          {
+            runId,
+            subject: key.subject,
+            kind: key.kind,
+            nextPollAt,
+            workspaceId: key.workspaceId,
+          },
+          tx,
+        ),
+      );
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // A concurrent pass created it between the read above and this write. It
+      // is the creator; this one is not, so it polls rather than deferring —
+      // one extra provider read in a race that needs a lease reclaim to happen
+      // at all.
+      created = false;
+    }
+    const row = await withSystemContext((tx) =>
+      jobSupervisionRepository.findByRunAndSubject(runId, key.subject, tx),
+    );
+    /* v8 ignore next -- `open` has just written the row (or lost the race to a
+       pass that did), so the read cannot miss. The throw is here because the
+       repository's type is honestly nullable and a silent `!` would turn a
+       future regression into a `TypeError` three lines later. */
+    if (!row) throw new Error(`job_supervision row for run ${runId} / ${key.subject} vanished`);
+    return { ...row, created };
+  },
+
+  async advanceIfUnchanged(runId, subject, expectedPollNumber, observation) {
+    await withSystemContext(async (tx) => {
+      const locked = await jobSupervisionRepository.findByRunAndSubjectForUpdate(
+        runId,
+        subject,
+        tx,
+      );
+      if (!locked || locked.pollNumber !== expectedPollNumber || locked.state !== 'watching')
+        return;
+      await jobSupervisionRepository.advance(runId, subject, observation, tx);
+    });
+  },
+
+  async claimTerminal(runId, subject) {
+    return withSystemContext(async (tx) => {
+      const locked = await jobSupervisionRepository.findByRunAndSubjectForUpdate(
+        runId,
+        subject,
+        tx,
+      );
+      if (!locked || locked.state !== 'watching') return false;
+      await jobSupervisionRepository.markState(runId, subject, 'settling', tx);
+      return true;
+    });
+  },
+
+  async markSettled(runId, subject) {
+    await withSystemContext((tx) =>
+      jobSupervisionRepository.markState(runId, subject, 'settled', tx),
+    );
+  },
+};
+
+/**
+ * An in-process store, for a caller that has no `job_queue` row to hang a
+ * supervision off.
+ *
+ * ⚠️ ONE PER RUN-TO-COMPLETION CALL, never a module-level singleton: its whole
+ * lifetime is the wrapper loop that created it, and sharing one across calls
+ * would make two unrelated supervisions collide on `(runId, subject)`.
+ *
+ * Its concurrency guarantees are trivially met because there is no concurrency:
+ * one wrapper drives one supervision to completion on one call stack. That is
+ * not a weaker implementation of the same contract — it is the same contract in
+ * a setting where the race it defends against cannot occur.
+ */
+export function inMemorySupervisionStore(): SupervisionStore {
+  const rows = new Map<string, SupervisionRow>();
+  const at = (runId: string, subject: string): string => `${runId}\u0000${subject}`;
+  return {
+    async open(runId, key) {
+      const k = at(runId, key.subject);
+      const existing = rows.get(k);
+      if (existing) return { ...existing, created: false };
+      const fresh: SupervisionRow = {
+        pollNumber: 0,
+        startedAt: null,
+        consecutiveReadFailures: 0,
+        state: 'watching',
+      };
+      rows.set(k, fresh);
+      return { ...fresh, created: true };
+    },
+    async advanceIfUnchanged(runId, subject, expectedPollNumber, observation) {
+      const row = rows.get(at(runId, subject));
+      if (!row || row.pollNumber !== expectedPollNumber || row.state !== 'watching') return;
+      rows.set(at(runId, subject), {
+        pollNumber: row.pollNumber + 1,
+        startedAt: observation.startedAt,
+        consecutiveReadFailures: observation.consecutiveReadFailures,
+        state: 'watching',
+      });
+    },
+    async claimTerminal(runId, subject) {
+      const row = rows.get(at(runId, subject));
+      if (!row || row.state !== 'watching') return false;
+      rows.set(at(runId, subject), { ...row, state: 'settling' });
+      return true;
+    },
+    async markSettled(runId, subject) {
+      const row = rows.get(at(runId, subject));
+      if (row) rows.set(at(runId, subject), { ...row, state: 'settled' });
+    },
+  };
 }
 
 /** What a pass that SETTLED returns. A pass that suspended throws `JobRunDefer` instead and returns nothing. */
@@ -174,45 +410,12 @@ export async function advanceSupervision<V, O>(
   hooks: SupervisionHooks<V, O>,
 ): Promise<SupervisionSettled<O>> {
   const now = hooks.now ?? ((): Date => new Date());
+  const store = hooks.store ?? durableSupervisionStore;
 
   // ── 1 · OPEN OR RE-OPEN, AND READ WHAT THE LAST PASS LEFT ─────────────────
-  // `open` is an upsert whose update arm is empty, so re-entering a LIVE
-  // supervision does not reset a single observation. On the first pass
-  // `next_poll_at` is now: the pass is here.
-  //
-  // ⚠️ IT IS ITS OWN TRANSACTION, AND A UNIQUE VIOLATION IS A NORMAL OUTCOME —
-  // the same shape `lib/jobs/engine/step.ts` uses around `jobStepRepository`,
-  // for the same reason. Two passes can legitimately reach the FIRST pass of one
-  // supervision at once (a lease reclaim overlapping the previous claimant), and
-  // an upsert with an empty update arm is a find-then-insert rather than one
-  // atomic statement, so the loser's insert collides. The winner's row is the
-  // one BOTH must go on to use — and the catch has to sit outside the
-  // transaction, because a failed statement aborts the transaction it is in, so
-  // reading the winner from inside the same one is not available.
-  try {
-    await withSystemContext((tx) =>
-      jobSupervisionRepository.open(
-        {
-          runId,
-          subject: key.subject,
-          kind: key.kind,
-          nextPollAt: now(),
-          workspaceId: key.workspaceId,
-        },
-        tx,
-      ),
-    );
-  } catch (err) {
-    if (!isUniqueViolation(err)) throw err;
-  }
-  const row = await withSystemContext((tx) =>
-    jobSupervisionRepository.findByRunAndSubject(runId, key.subject, tx),
-  );
-  /* v8 ignore next -- `open` has just written the row (or lost the race to a
-     pass that did), so the read cannot miss. The throw is here because the
-     repository's type is honestly nullable and a silent `!` would turn a future
-     regression into a `TypeError` three lines later. */
-  if (!row) throw new Error(`job_supervision row for run ${runId} / ${key.subject} vanished`);
+  // Re-entering a LIVE supervision does not reset a single observation — the
+  // whole reason the row exists, since a defer checkpoints nothing.
+  const row = await store.open(runId, key, now());
 
   const state: SupervisionPollState = {
     pollNumber: row.pollNumber + 1,
@@ -220,19 +423,56 @@ export async function advanceSupervision<V, O>(
     consecutiveReadFailures: row.consecutiveReadFailures,
   };
 
-  // ── 2 · THE DEADLINE TRANSITION, BEFORE THE POLL ──────────────────────────
+  // ── 2 · ALREADY TERMINAL? REPLAY, AND POLL NOTHING ────────────────────────
+  // A fan-out re-enters every already-settled subject on every later pass. A
+  // pass that polled a destroyed container to rediscover that would cost one
+  // provider read per settled subject per pass — the linearity this whole shape
+  // is for. The `settle` hook is the caller's memoized step, so this reads the
+  // stored outcome back and touches nothing.
+  if (row.state !== 'watching') {
+    return {
+      status: 'settled',
+      reason: 'replayed',
+      outcome: await hooks.settle('replayed', state, null),
+      raced: true,
+    };
+  }
+
+  // ── 4 · THE DEADLINE TRANSITION, BEFORE THE POLL ──────────────────────────
   // Checked first so a resumed pass meeting a container that is already past its
   // timeout settles it at once rather than watching it for another N polls —
   // §13.3(a)'s property, which the session-anchored clock is what buys.
   const elapsed = now().getTime() - key.bootedAt.getTime();
   if (elapsed >= hooks.timeoutMs) {
-    return terminate(runId, key.subject, 'deadline', state, null, hooks);
+    return terminate(runId, key.subject, 'deadline', state, null, hooks, store);
   }
   if (row.pollNumber >= hooks.maxPolls) {
-    return terminate(runId, key.subject, 'poll_ceiling', state, null, hooks);
+    return terminate(runId, key.subject, 'poll_ceiling', state, null, hooks, store);
   }
 
-  // ── 3 · ONE POLL, OUTSIDE EVERY TRANSACTION ───────────────────────────────
+  // ── 5 · THE PASS THAT OPENED IT WAITS, AND POLLS NOTHING ──────────────────
+  // Boot, wait, poll 1, wait, poll 2 — the sequence both loops this replaces
+  // have, with `await sleep(waitMs(iteration))` as the first statement of the
+  // `for` body. A container cannot have started in the instant after
+  // `provision` returned, so polling here would be a guaranteed-wasted provider
+  // read on every supervision, and the cadence would shift by one interval —
+  // which §16.6 forbids.
+  //
+  // ⚠️ IT SITS AFTER THE TERMINAL CHECKS, NOT BEFORE THEM. On a genuine first
+  // pass `elapsed` is a few hundred milliseconds and neither can fire, so the
+  // order is unobservable there. It is observable in one state: the row was
+  // DELETED while the boot memo survived, so a later pass re-creates it with
+  // the session already past its deadline. Deferring first would spend one more
+  // interval watching a container that must be torn down; the deadline is
+  // unconditional, so it goes first.
+  if (row.created) {
+    deferRun(
+      new Date(now().getTime() + hooks.waitMs(1)),
+      `${key.kind} supervision ${key.subject}: booted, first poll pending`,
+    );
+  }
+
+  // ── 6 · ONE POLL, OUTSIDE EVERY TRANSACTION ───────────────────────────────
   // Outside, for the reason `lib/jobs/engine/worker.ts` gives about the claim: a
   // provider read takes seconds, Prisma cannot nest interactive transactions,
   // and holding one across it would pin a pooled connection for the duration.
@@ -244,40 +484,30 @@ export async function advanceSupervision<V, O>(
     // container nothing tears down is the failure every guarantee in the two
     // supervisors exists to prevent, and this is the arm a step reachable only
     // from the loop's two normal exits could never cover (§13.4).
-    await terminate(runId, key.subject, 'failed', state, null, hooks);
+    await terminate(runId, key.subject, 'failed', state, null, hooks, store);
     throw err;
   }
 
   if (polled.done) {
-    return terminate(runId, key.subject, 'completed', state, polled.verdict, hooks);
+    return terminate(runId, key.subject, 'completed', state, polled.verdict, hooks, store);
   }
 
-  // ── 4 · ADVANCE AND DEFER ─────────────────────────────────────────────────
-  // ⚠️ LOCK AND RE-READ BEFORE THE WRITE. The poll number this pass writes is
-  // derived from the one it read, and two workers can legitimately hold one run
-  // at once: `reclaimExpiredLeases` hands it to a second while the first is
-  // still inside a provider call it has not returned from. Without the lock both
-  // read N and both write N+1, so the ceiling silently stops bounding anything.
-  // With it, the loser observes the winner's row and declines to advance —
-  // its poll was a wasted read, which is the correct price.
-  const nextPollAt = new Date(now().getTime() + hooks.waitMs(state.pollNumber));
-  await withSystemContext(async (tx) => {
-    const locked = await jobSupervisionRepository.findByRunAndSubjectForUpdate(
-      runId,
-      key.subject,
-      tx,
-    );
-    if (!locked || locked.pollNumber !== row.pollNumber || locked.state !== 'watching') return;
-    await jobSupervisionRepository.advance(
-      runId,
-      key.subject,
-      {
-        startedAt: polled.startedAt,
-        consecutiveReadFailures: polled.consecutiveReadFailures,
-        nextPollAt,
-      },
-      tx,
-    );
+  // ── 7 · ADVANCE AND DEFER ─────────────────────────────────────────────────
+  // ⚠️ THE STORE LOCKS AND RE-READS BEFORE THE WRITE. The poll number this pass
+  // writes is derived from the one it read, and two workers can legitimately
+  // hold one run at once: `reclaimExpiredLeases` hands it to a second while the
+  // first is still inside a provider call it has not returned from. Without the
+  // lock both read N and both write N+1, so the ceiling silently stops bounding
+  // anything. With it, the loser observes the winner's row and declines to
+  // advance — its poll was a wasted read, which is the correct price.
+  // `waitMs(n)` is the wait BEFORE poll n, so the pass that just performed poll
+  // n owes the wait before poll n+1. Getting this off by one would silently
+  // re-phase the whole backoff.
+  const nextPollAt = new Date(now().getTime() + hooks.waitMs(state.pollNumber + 1));
+  await store.advanceIfUnchanged(runId, key.subject, row.pollNumber, {
+    startedAt: polled.startedAt,
+    consecutiveReadFailures: polled.consecutiveReadFailures,
+    nextPollAt,
   });
 
   // ⚠️ THE TAIL, OUTSIDE EVERY `try` IN THIS FILE. Nothing here can intercept
@@ -305,20 +535,10 @@ async function terminate<V, O>(
   state: SupervisionPollState,
   verdict: V | null,
   hooks: SupervisionHooks<V, O>,
+  store: SupervisionStore,
 ): Promise<SupervisionSettled<O>> {
-  const won = await withSystemContext(async (tx) => {
-    const locked = await jobSupervisionRepository.findByRunAndSubjectForUpdate(runId, subject, tx);
-    if (!locked || locked.state !== 'watching') return false;
-    await jobSupervisionRepository.markState(runId, subject, 'settling', tx);
-    return true;
-  });
-
+  const won = await store.claimTerminal(runId, subject);
   const outcome = await hooks.settle(reason, state, verdict);
-
-  if (won) {
-    await withSystemContext((tx) =>
-      jobSupervisionRepository.markState(runId, subject, 'settled', tx),
-    );
-  }
+  if (won) await store.markSettled(runId, subject);
   return { status: 'settled', reason, outcome, raced: !won };
 }

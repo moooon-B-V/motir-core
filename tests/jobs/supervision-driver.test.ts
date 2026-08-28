@@ -139,6 +139,25 @@ async function passDefers(
 }
 
 describe('one pass = one poll', () => {
+  it('the pass that OPENS a supervision waits and polls NOTHING — the cadence is boot, wait, poll', async () => {
+    const { run, workspaceId } = await makeRun();
+    const at = new Date('2026-08-28T12:00:00.000Z');
+    const r = recorder({
+      poll: () => ({ done: false, startedAt: null, consecutiveReadFailures: 0 }),
+      waitMs: (n) => n * 3_000,
+      now: () => at,
+    });
+
+    const defer = await passDefers(run.id, KEY(at, workspaceId), r.hooks);
+
+    // Both loops this replaces open their body with `await sleep(waitMs(1))`,
+    // and a container cannot have started in the instant after `provision`
+    // returned. Polling here would be a wasted read on every supervision AND
+    // would re-phase the backoff, which §16.6 forbids.
+    expect(r.polls).toHaveLength(0);
+    expect(defer.resumeAt.getTime()).toBe(at.getTime() + 3_000);
+  });
+
   it('polls exactly ONCE and settles NOTHING on the defer path', async () => {
     const { run, workspaceId } = await makeRun();
     const bootedAt = new Date();
@@ -146,6 +165,7 @@ describe('one pass = one poll', () => {
       poll: () => ({ done: false, startedAt: null, consecutiveReadFailures: 0 }),
     });
 
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
     const defer = await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks);
 
     // ⚠️ THE NEGATIVE. A `finally` around the old loop would have called the
@@ -167,14 +187,17 @@ describe('one pass = one poll', () => {
       now: () => at,
     });
 
+    await passDefers(run.id, KEY(at, workspaceId), r.hooks); // the opening wait
     const defer = await passDefers(run.id, KEY(at, workspaceId), r.hooks);
 
-    expect(defer.resumeAt.getTime()).toBe(at.getTime() + 3_000);
+    // `waitMs(n)` is the wait BEFORE poll n, so a pass that has just done poll 1
+    // owes `waitMs(2)`.
+    expect(defer.resumeAt.getTime()).toBe(at.getTime() + 6_000);
     const row = await readRow(run.id);
     expect(row!.pollNumber).toBe(1);
     expect(row!.startedAt?.toISOString()).toBe(observed.toISOString());
     expect(row!.consecutiveReadFailures).toBe(2);
-    expect(row!.nextPollAt.getTime()).toBe(at.getTime() + 3_000);
+    expect(row!.nextPollAt.getTime()).toBe(at.getTime() + 6_000);
     expect(row!.state).toBe('watching');
   });
 
@@ -191,10 +214,11 @@ describe('one pass = one poll', () => {
       }),
     });
 
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < 4; i += 1) {
       await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks);
     }
 
+    // Four passes: the opening wait, then polls 1, 2 and 3.
     expect(r.polls.map((p) => p.pollNumber)).toEqual([1, 2, 3]);
     // The third pass was HANDED the second's observation — the whole reason the
     // row exists, since a defer checkpoints nothing.
@@ -208,6 +232,7 @@ describe('the terminal transitions', () => {
     const { run, workspaceId } = await makeRun();
     const r = recorder({ poll: () => ({ done: true, verdict: 'exit-0' }) });
 
+    await passDefers(run.id, KEY(new Date(), workspaceId), r.hooks); // the opening wait
     const result = await advanceSupervision(run.id, KEY(new Date(), workspaceId), r.hooks);
 
     expect(result).toEqual({
@@ -247,9 +272,10 @@ describe('the terminal transitions', () => {
       maxPolls: 3,
     });
 
-    // Three passes, three polls — each a SEPARATE invocation, which under the
-    // old in-memory counter would have reset the count every time.
-    for (let i = 0; i < 3; i += 1) await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks);
+    // Four passes — the opening wait plus three polls — each a SEPARATE
+    // invocation, which under the old in-memory counter would have reset the
+    // count every time.
+    for (let i = 0; i < 4; i += 1) await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks);
     const result = await advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks);
 
     expect(r.polls).toHaveLength(3);
@@ -264,7 +290,9 @@ describe('the terminal transitions', () => {
       poll: () => Promise.reject(boom) as Promise<never>,
     });
 
-    await expect(advanceSupervision(run.id, KEY(new Date(), workspaceId), r.hooks)).rejects.toBe(
+    const bootedAt = new Date();
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
+    await expect(advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks)).rejects.toBe(
       boom,
     );
     expect(r.settles.map((s) => s.reason)).toEqual(['failed']);
@@ -287,8 +315,10 @@ describe('the terminal transitions', () => {
       now: () => new Date('2026-08-28T12:20:00.000Z'),
     });
 
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
     await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks);
 
+    expect(r.polls).toHaveLength(1);
     expect(r.settles).toHaveLength(0);
     expect((await readRow(run.id))!.state).toBe('watching');
   });
@@ -309,6 +339,7 @@ describe('two passes racing on one supervision', () => {
       },
     });
 
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
     const results = await Promise.allSettled([
       advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks),
       advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks),
@@ -333,6 +364,7 @@ describe('two passes racing on one supervision', () => {
       },
     });
 
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
     const [a, b] = await Promise.all([
       advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks),
       advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks),
@@ -376,10 +408,14 @@ describe('the fan-out', () => {
       poll: () => ({ done: false, startedAt: null, consecutiveReadFailures: 0 }),
     });
 
-    await passDefers(run.id, { ...KEY(bootedAt, workspaceId), subject: 'project-a' }, r.hooks);
-    await passDefers(run.id, { ...KEY(bootedAt, workspaceId), subject: 'project-a' }, r.hooks);
-    await passDefers(run.id, { ...KEY(bootedAt, workspaceId), subject: 'project-b' }, r.hooks);
+    for (let i = 0; i < 3; i += 1) {
+      await passDefers(run.id, { ...KEY(bootedAt, workspaceId), subject: 'project-a' }, r.hooks);
+    }
+    for (let i = 0; i < 2; i += 1) {
+      await passDefers(run.id, { ...KEY(bootedAt, workspaceId), subject: 'project-b' }, r.hooks);
+    }
 
+    // Each subject pays its own opening wait, then polls independently.
     expect((await readRow(run.id, 'project-a'))!.pollNumber).toBe(2);
     expect((await readRow(run.id, 'project-b'))!.pollNumber).toBe(1);
   });

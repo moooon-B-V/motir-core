@@ -516,22 +516,40 @@ describe('§3 the guards', () => {
     // a test that reads the tree can say so. A second supervision loop would pass
     // every behavioural test in the repository while re-creating the exact defect
     // the collapse removed: two compositions kept in agreement by hand.
-    const loops = (paths: string[]) =>
+    //
+    // ⚠️ AMENDED ON THE RECORD (MOTIR-3828), and NOT relaxed — the count for the
+    // index fleet moves from ONE to ZERO because the loop has left those files
+    // entirely. `docs/decisions/job-queue-foundation.md` §16 makes a supervision
+    // a state machine over RUNS: `advanceSupervision`
+    // (`lib/jobs/supervision/driver.ts`) does one poll and defers, so there is
+    // no `for (let iteration` anywhere in the index path any more.
+    //
+    // The PROPERTY this test is named for is unchanged and is now asserted from
+    // both sides, which is strictly stronger than the count it replaces: the
+    // fleet files hold NO supervision loop, and exactly ONE call site drives the
+    // shared machine. A copy-pasted second composition fails whichever form it
+    // takes — a loop that grew back, or a second consumer of the driver.
+    //
+    // The CI fleet is still on the old shape and still expects its ONE loop;
+    // MOTIR-3829 is the card that converts it, and it owns flipping this arm.
+    const linesMatching = (paths: string[], re: RegExp) =>
       paths.flatMap((p) =>
         readFileSync(p, 'utf8')
           .split('\n')
           .map((line, i) => ({ p, i: i + 1, line }))
-          .filter((r) => /for \(let iteration/.test(r.line)),
+          .filter((r) => re.test(r.line)),
       );
+    const loops = (paths: string[]) => linesMatching(paths, /for \(let iteration/);
+    const drivers = (paths: string[]) => linesMatching(paths, /\badvanceSupervision[(<]/);
 
-    expect(
-      loops([
-        'lib/services/codeGraphIndexDispatchService.ts',
-        'lib/jobs/indexFleetSteps.ts',
-        'lib/jobs/definitions/codeGraphIndex.ts',
-        'lib/jobs/definitions/codeGraphRefresh.ts',
-      ]),
-    ).toHaveLength(1);
+    const INDEX_FILES = [
+      'lib/services/codeGraphIndexDispatchService.ts',
+      'lib/jobs/indexFleetSteps.ts',
+      'lib/jobs/definitions/codeGraphIndex.ts',
+      'lib/jobs/definitions/codeGraphRefresh.ts',
+    ];
+    expect(loops(INDEX_FILES)).toHaveLength(0);
+    expect(drivers(INDEX_FILES)).toHaveLength(1);
     expect(
       loops(['lib/services/ciRunnerBootService.ts', 'lib/jobs/definitions/ciRunnerFleet.ts']),
     ).toHaveLength(1);

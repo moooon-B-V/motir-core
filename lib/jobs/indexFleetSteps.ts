@@ -4,6 +4,8 @@ import type {
   SupervisionSteps,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
+import { withSystemContext } from '@/lib/workspaces/context';
+import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
 import type {
@@ -24,10 +26,10 @@ import type {
 //     ↓   (the three no-op verdicts return here, exactly as before)
 //         assert-fleet-configured        the gate, BEFORE anything is spent
 //   for each projectId of target.projectIds:
-//           codeGraphIndexDispatchService.runIndexContainer(…, { steps })
+//           codeGraphIndexDispatchService.advanceIndexContainer(runId, …, { steps })
 //             step  index-admit:<pid>    the CAP — the whole backoff, memoized once
 //             step  index-boot:<pid>     mint + resolve + provision
-//                   …then an ordinary loop: await, poll, await, poll…
+//                   …then ONE poll, and a DEFER of this very run (MOTIR-3828)
 //             step  index-settle:<pid>   teardown + the typed outcome
 //   step  cancel-offboarding
 //
@@ -224,11 +226,29 @@ export async function runIndexFleetSteps(
 /**
  * Dispatch one container per project for this repo, and supervise each to its end.
  *
- * ⚠️ IT NO LONGER CONTAINS THE SUPERVISION — that is the collapse. The loop, the
- * admission backoff and the teardown all live in
- * `codeGraphIndexDispatchService.runIndexContainer`, which this drives through
- * the step seam. What is left here is what is genuinely the JOB's: the per-repo
- * fan-out over projects, and turning a dispatch outcome into the ledger contract.
+ * ⚠️ IT NO LONGER CONTAINS THE SUPERVISION — that was MOTIR-3484's collapse. The
+ * admission backoff and the teardown live in
+ * `codeGraphIndexDispatchService`, which this drives through the step seam. What
+ * is left here is what is genuinely the JOB's: the per-repo fan-out over
+ * projects, and turning a dispatch outcome into the ledger contract.
+ *
+ * ⚠️ AND THIS `for` LOOP IS NOW A CURSOR RATHER THAN A LOOP (MOTIR-3828), which
+ * is the second loop in this path and the one that gets missed. A pass calls
+ * `advanceIndexContainer` per project in order, and:
+ *
+ *   • a project that has ALREADY SETTLED replays — its `index-admit`,
+ *     `index-boot` and `index-settle` memos answer from `job_step` and the
+ *     driver's own row reads `settled`, so it performs NO provider read at all;
+ *   • the first project that has NOT settled advances by exactly one poll and
+ *     THROWS `JobRunDefer`, which unwinds out of this loop and hands the run
+ *     back to the queue.
+ *
+ * So a pass costs a handful of memo reads plus ONE `describe`, whatever the
+ * fan-out's width, and the next project's admission is asked for only once its
+ * predecessor has settled — which is the sequencing the old `for` body had, now
+ * expressed across runs. `docs/decisions/job-queue-foundation.md` §16.3 is the
+ * arithmetic; the `(runId, subject)` key on `job_supervision` is what makes the
+ * cursor expressible at all.
  */
 async function indexEveryProject(
   ctx: JobContext,
@@ -262,14 +282,19 @@ async function indexEveryProject(
       dispatchId,
     };
 
-    // ⚠️ THE CAP IS INSIDE, BEFORE ANY CONTAINER IS BOOTED. `runIndexContainer`
-    // queues for admission first and `bootIndexContainer` REQUIRES the ticket it
-    // hands back, so the global and per-workspace bounds are structural rather
-    // than conventional — a type error, not a review comment.
-    const outcome: IndexDispatchOutcome = await services.codeGraphIndexDispatch.runIndexContainer(
-      dispatchInput,
-      { steps },
-    );
+    // ⚠️ THE CAP IS INSIDE, BEFORE ANY CONTAINER IS BOOTED.
+    // `advanceIndexContainer` queues for admission first and
+    // `bootIndexContainer` REQUIRES the ticket it hands back, so the global and
+    // per-workspace bounds are structural rather than conventional — a type
+    // error, not a review comment.
+    //
+    // ⚠️ IT ADVANCES ONE POLL AND USUALLY THROWS `JobRunDefer` (MOTIR-3828), so
+    // this `for` body normally does not complete — see the fan-out block above
+    // this function for what that means for the loop.
+    const outcome: IndexDispatchOutcome =
+      await services.codeGraphIndexDispatch.advanceIndexContainer(ctx.runId, dispatchInput, {
+        steps,
+      });
 
     // ⚠️ ONLY EXIT 0 INDEXED. `verdict.indexed` is true for that and nothing
     // else — an unobserved exit, a torn-down-but-unclassified run and a failed
@@ -317,6 +342,19 @@ async function finishIndexRun(
       repoRefs: [target.repoRef],
     }),
   }));
+
+  // ⚠️ AND THE SUPERVISION ROWS GO (MOTIR-3826/3828). Every project has settled
+  // by the time this line is reached — the loop above throws otherwise — so
+  // `job_supervision` holds nothing but history for this run, and the outcome it
+  // could tell anyone is already in `index-settle:<pid>`'s memo and in the run's
+  // own `job_run` row. The table tracks LIVE supervisions; a second copy of a
+  // settled one is a copy that ages.
+  //
+  // It reaches the repository through `withSystemContext` for the same reason
+  // `lib/jobs/engine/step.ts` does: this is job-runtime code, running with no
+  // workspace context bound, and without `app.system_admin` the policy hides
+  // every untenanted row.
+  await withSystemContext((tx) => jobSupervisionRepository.deleteByRun(ctx.runId, tx));
 
   // The ledger's row: ONE per repo, with ONE `output.repoRef`, reached only when
   // EVERY project's container exited 0.
