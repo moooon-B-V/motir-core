@@ -89,6 +89,7 @@ export const MIGRATED_TO_ENGINE = [
   'status-derivation/requested',
   'status-derivation/transitioned',
   'system.abandoned-plan-sweep',
+  'system.account-erasure-sweep',
   'system.attachment-gc',
   'system.auto-plan-cadence-tick',
   'system.automation-retention-sweep',
