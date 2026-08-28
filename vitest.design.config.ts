@@ -50,12 +50,6 @@ export default defineConfig({
       'tests/design-asset-addresses.test.ts',
       'tests/reader-facing-noun.test.ts',
       'tests/brand/waveBand.test.ts',
-      // `design-assets-uploader` (MOTIR-2668) splits the REAL
-      // `design/work-items/design-notes.md` into its `##` sections, because the
-      // reason the published note is scoped to sections at all is a property of
-      // that actual file. A design PR that restructures it can break this spec,
-      // which is precisely what this lane is for.
-      'tests/design-assets-uploader.test.ts',
       // `design-ink-contrast` (MOTIR-3014) is the ink-contrast guard pointed at
       // `design/**`. It is the spec this lane most obviously exists for: the
       // asset it rules on is only ever edited by a `design/*` PR, and the code
