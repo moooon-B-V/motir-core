@@ -305,6 +305,73 @@ describe('ONE pull request delivering N cards — the merge closes all N (MOTIR-
   });
 });
 
+describe('a delivery row the tenant context cannot follow resolves to NOTHING, never a fabricated card', () => {
+  it('drops a delivery naming a card in ANOTHER workspace', async () => {
+    // The corrupt pairing the delivery table's own migration declined to carry
+    // forward: *"a pull request whose repository belongs to a different workspace
+    // than the card it names is corrupt, and this backfill declines to carry that
+    // corruption forward"*. The resolver declines it too, and this asserts WHICH
+    // way it declines — an empty set rather than an item nobody in this tenant may
+    // see.
+    //
+    // ⚠️ IT IS REACHABLE PRECISELY BECAUSE THE TWO TABLES ARE ARMED DIFFERENTLY
+    // (MOTIR-3721). `work_item_delivery` now carries the `system_admin` arm, so
+    // the link read is admitted; `work_item` does not, so the card read is gated
+    // on the bound workspace alone. A resolver that trusted the link read would
+    // hand its caller a cross-tenant item; this one keeps only the rows the tenant
+    // context actually returned.
+    const s = await makeScenario('cross-tenant@example.com');
+    await pr(prPayload({ action: 'opened', number: 801, headRef: 'subtask/cross' }));
+    const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 801 } });
+
+    // A card in a DIFFERENT workspace.
+    const other = await usersService.createUser({
+      email: 'other-tenant@example.com',
+      password: PASSWORD,
+      name: 'Other',
+    });
+    const { workspace: otherWorkspace } = await workspacesService.createWorkspace({
+      name: 'Other',
+      ownerUserId: other.id,
+    });
+    const otherProject = await projectsService.createProject({
+      workspaceId: otherWorkspace.id,
+      actorUserId: other.id,
+      name: 'Other',
+      identifier: 'OTHR',
+    });
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: otherProject.id, kind: 'task', title: 'not yours' },
+      { userId: other.id, workspaceId: otherWorkspace.id },
+    );
+
+    // Written through `adminDb` on purpose: `link_pull_request` refuses a
+    // cross-workspace target, so this state cannot be reached through the door —
+    // only by a row that predates the check or by corruption.
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: s.workspace.id,
+        workItemId: foreign.id,
+        githubPullRequestId: row.id,
+        repoId: row.repoId,
+      },
+    });
+
+    const resolved = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, s.workspace.id);
+      return resolveChangeRequestWorkItemSet({
+        workspaceId: s.workspace.id,
+        headRef: 'subtask/cross',
+        githubPullRequestId: row.id,
+        tx,
+      });
+    });
+
+    expect(resolved.kind).toBe('linked');
+    expect(resolved.items).toEqual([]);
+  });
+});
+
 describe('the TENANT resolves from a delivery row, before any workspace is bound (MOTIR-3721 AC 2)', () => {
   it('re-evaluates a card whose ONLY association is a delivery row', async () => {
     // ⚠️ THE ASSERTION THAT MATTERS IS *NOT EMPTY*. `reevaluateItem` opens
