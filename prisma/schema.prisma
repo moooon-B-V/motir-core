@@ -1016,10 +1016,10 @@ model Workspace {
   /// NO `@@index`: the read rides `workspace_membership`'s existing
   /// `@@index([userId])` join, and an index on a two-valued boolean would be
   /// dead weight.
-  requiresTwoFactor  Boolean            @default(false) @map("requires_two_factor")
+  requiresTwoFactor Boolean @default(false) @map("requires_two_factor")
 
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships                 WorkspaceMembership[]
@@ -2183,6 +2183,9 @@ model WorkItem {
   // FK-`@relation` rule.
   repositories         WorkItemRepo[]
   deliveries           WorkItemDelivery[]
+  // The CI feedback comment this card carries per (change request, head commit)
+  // — MOTIR-3770. Cascade: a deleted card's feedback rows are not a fact.
+  ciFeedbackComments   GithubCiFeedbackComment[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -3063,11 +3066,11 @@ enum SprintState {
 // success — what lets a run's summary (e.g. the attachment-GC's scanned/
 // deleted/failed counts) live on the ledger row itself, not only in Inngest.
 model JobRun {
-  id          String      @id @default(cuid())
-  workspaceId String?     @map("workspace_id")
-  functionId  String      @map("function_id")
-  eventName   String      @map("event_name")
-  eventId     String      @map("event_id")
+  id             String       @id @default(cuid())
+  workspaceId    String?      @map("workspace_id")
+  functionId     String       @map("function_id")
+  eventName      String       @map("event_name")
+  eventId        String       @map("event_id")
   /// WHICH ENGINE RAN THIS (Bug MOTIR-3683) — declared by the writer, never
   /// inferred. Both lanes write this one ledger, and the lane used to be read
   /// out of `event_id`'s FORMAT (a cuid meant the engine, a ULID meant Inngest).
@@ -3076,9 +3079,9 @@ model JobRun {
   /// migration is verified with — and 30 such rows existed, written by the very
   /// defect this column is part of fixing. A row's lane is a fact its writer
   /// knows for certain; this is where it says so.
-  lane        JobRunLane
-  attempt     Int
-  status      JobRunStatus
+  lane           JobRunLane
+  attempt        Int
+  status         JobRunStatus
   startedAt      DateTime     @default(now()) @map("started_at")
   finishedAt     DateTime?    @map("finished_at")
   durationMs     Int?         @map("duration_ms")
@@ -3861,15 +3864,22 @@ model Comment {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workItem        WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  author          User             @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  parent          Comment?         @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies         Comment[]        @relation("CommentReplies")
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem        WorkItem                  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author          User                      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parent          Comment?                  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[]                 @relation("CommentReplies")
   mentions        CommentMention[]
   // CI feedback (Subtask 7.10.6 / MOTIR-894): the check-run rows whose feedback
   // comment THIS is — so a re-run updates it in place. SetNull on delete.
+  // ⚠️ That column is now a MIRROR of the first delivered card's comment; the
+  // source of truth is `ciFeedbackFor` below (MOTIR-3770).
   githubCheckRuns GithubCheckRun[]
+  // The (change request, head commit, card) THIS comment is the CI feedback for
+  // — MOTIR-3770. CASCADE, deliberately: deleting the comment must leave no
+  // dangling id for the next delivery to edit, which is the property that keeps
+  // a webhook retry loop from forming.
+  ciFeedbackFor   GithubCiFeedbackComment[]
 
   // The paged list read (newest-first cursor walk, 5.1.2) + the thread read.
   @@index([workItemId, createdAt])
@@ -5535,10 +5545,13 @@ model GithubPullRequest {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  repo       GithubRepo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  workItem   WorkItem?          @relation(fields: [workItemId], references: [id], onDelete: SetNull)
-  checkRuns  GithubCheckRun[]
-  deliveries WorkItemDelivery[]
+  repo               GithubRepo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  workItem           WorkItem?                 @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  checkRuns          GithubCheckRun[]
+  deliveries         WorkItemDelivery[]
+  // One per (head commit, delivered card) — THE feedback comment for that pair
+  // (MOTIR-3770).
+  ciFeedbackComments GithubCiFeedbackComment[]
 
   @@unique([repoId, number])
   @@index([repoId])
@@ -5629,6 +5642,15 @@ model GithubCheckRun {
   conclusion        String
   /// The feedback `Comment` posted for this check, updated in place on a re-run.
   /// Null until the first terminal (success/failure) delivery posts one.
+  ///
+  /// ⚠️ SUPERSEDED AS THE SOURCE OF TRUTH by `GithubCiFeedbackComment`
+  /// (MOTIR-3770), and kept as a WRITTEN MIRROR of the FIRST delivered card's
+  /// comment while the readers of both live side by side — the EXPAND half of
+  /// `docs/decisions/ci-feedback-comment-per-card.md`. A scalar can hold ONE id,
+  /// so a pull request delivering N cards could comment on one of them; the
+  /// per-card table holds N. Read the table; this column exists so a rollback is
+  /// a code revert and so an instance still running the previous build cannot
+  /// open a SECOND comment during a deploy window.
   feedbackCommentId String?  @map("feedback_comment_id")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -5639,6 +5661,61 @@ model GithubCheckRun {
   @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])
   @@map("github_check_run")
+}
+
+/// THE CI feedback comment for one `(change request, head commit, work item)`
+/// (MOTIR-3770), specified by `docs/decisions/ci-feedback-comment-per-card.md`.
+///
+/// The comment's KEY is unchanged from MOTIR-2946 — one comment per change
+/// request per head commit, carrying the AGGREGATE over that commit's whole check
+/// set — and this table adds the third coordinate that key always implied and
+/// nothing could store: WHICH CARD it was posted on. A pull request delivering N
+/// cards is N rows, one comment each, and that is the whole shape.
+///
+/// It replaces `github_check_run.feedback_comment_id` as the source of truth. That
+/// column is a nullable scalar on a table whose grain is one row PER CHECK, so it
+/// held one id replicated across every check row at the commit — which is one id
+/// however many cards the delivery reached, and a second delivered card therefore
+/// showed no CI verdict at all while its `ciState` said otherwise (MOTIR-3721
+/// AC 6, the half that shipped unmet).
+///
+/// ⚠️ `onDelete: Cascade` ON THE COMMENT IS LOAD-BEARING, and it is what an array
+/// column could not have offered. The id this table hands the edit path must be
+/// LIVE: a person deleting a feedback comment takes its row with it, so the next
+/// terminal conclusion at that commit finds nothing recorded and posts a fresh
+/// comment. A dangling id would instead throw inside the delivery's transaction,
+/// and a webhook the host then retries for ever is a far worse failure than a
+/// duplicated comment.
+///
+/// Tenancy is the `github_check_run` policy one table over — the `system_admin`
+/// arm, else a join through `github_pull_request → github_repo` — because this
+/// row hangs off the same pull request and carries no tenant discriminator of its
+/// own. (`work_item_delivery` carries `workspace_id` instead because it is read
+/// BEFORE a tenant is bound; this table is only ever read inside the CI-feedback
+/// path, which has already resolved and bound one.)
+model GithubCiFeedbackComment {
+  id            String   @id @default(cuid())
+  /// FK → GithubPullRequest.id — the change request the verdict is about.
+  pullRequestId String   @map("pull_request_id")
+  /// The head commit the check set ran on. A new commit is a new comment, which
+  /// is the identity MOTIR-2946 settled.
+  commitSha     String   @map("commit_sha")
+  /// The delivered card the comment was posted ON — the coordinate the scalar
+  /// could not carry.
+  workItemId    String   @map("work_item_id")
+  /// The `Comment` itself. Cascade, so a deleted comment leaves no dangling id.
+  commentId     String   @map("comment_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  workItem    WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  comment     Comment           @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([pullRequestId, commitSha, workItemId])
+  @@index([workItemId])
+  @@index([commentId])
+  @@map("github_ci_feedback_comment")
 }
 
 /// The SOURCE a set of issues is imported FROM (Story 7.16 · MOTIR-939). Live

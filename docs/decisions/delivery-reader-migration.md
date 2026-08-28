@@ -92,6 +92,18 @@ one service-level cardinality cap"_ is amended on the record; it is not drift,
 because every one of the seven predates the card (all are on
 `origin/main` at the ref the card itself measured).
 
+**⚠️ AND S2 IS TWO ACTS, ONLY ONE OF WHICH FITS THIS SHAPE — this row is where the
+enumeration stops one level short of the claim built on it (MOTIR-3770).** The
+`ciState` write became a loop in MOTIR-3721 because it needs no storage of its own.
+The CI COMMENT could not: its identity is a nullable scalar carrying a real foreign
+key on `github_check_run`, so N cards need N LIVE ids and one column holds one.
+That is a STORAGE question, and this section never reaches it — it enumerates the
+CONSUMERS of the projection, not what each of them writes to, which is a different
+set and a strictly coarser one. Settled separately in
+[`ci-feedback-comment-per-card.md`](./ci-feedback-comment-per-card.md), which adds
+`github_ci_feedback_comment`, keys it on the comment's own identity, and leaves the
+scalar WRITTEN as a mirror until a CONTRACT card drops it.
+
 ---
 
 ## 1 · Q1 — what resolves the TENANT once the column is gone
