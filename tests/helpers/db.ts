@@ -55,6 +55,12 @@ export async function truncateAuthTables(): Promise<void> {
 // that worker picks up next — which surfaces as a failure in an unrelated suite,
 // nowhere near the diff that caused it.
 export async function truncateJobRuns(): Promise<void> {
+  // `job_supervision` (MOTIR-3826) is named EXPLICITLY even though it would be
+  // reached by the `CASCADE` from `job_queue` — the same call this list already
+  // makes for `job_step`. A truncate list that relies on a cascade is one FK
+  // change away from silently stopping, and a supervision row that leaks into
+  // the next test is a row the sweep's `listStalled` will find.
+  //
   // `email_delivery` (MOTIR-3513) joins this list rather than getting its own
   // helper: it is written by the `email.send` job on the same lane as these
   // rows, and it carries the same untenanted case — a password-reset delivery
@@ -62,7 +68,7 @@ export async function truncateJobRuns(): Promise<void> {
   // it. Any suite that sends an email writes one, so clearing it here is what
   // keeps those rows from leaking into the next test.
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_run", "job_run_dlq", "job_event", "job_queue", "job_step", "email_delivery" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "job_run", "job_run_dlq", "job_event", "job_queue", "job_step", "job_supervision", "email_delivery" RESTART IDENTITY CASCADE',
   );
 }
 

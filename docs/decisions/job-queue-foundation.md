@@ -1459,17 +1459,27 @@ rows already mean. Do not add a defer arm to `executeWithLedger`.
 
 ### §16.2 — A NEW TABLE, `job_supervision`, and only for the PER-POLL state
 
-**DECIDED: a new table, `job_supervision`, keyed `(run_id, key)`**, where `key` names the UNIT OF WORK
-the supervision is about — `index:<projectId>`, `ci-runner:<intentId>` — never a loop position. That
-is §13.1 limb 4 applied to a row instead of a step id, and it matters for the same reason: the index
-fleet fans out over `target.projectIds`, so ONE run holds one supervision per project.
+**DECIDED: a new table, `job_supervision`, keyed `(run_id, subject)`**, where `subject` names the UNIT
+OF WORK the supervision is about — the `projectId` for the index fleet, the intent id for the CI fleet
+— never a loop position. That is §13.1 limb 4 applied to a row instead of a step id, and it matters
+for the same reason: the index fleet fans out over `target.projectIds`, so ONE run holds one
+supervision per project. `subject` is also what BUILDS the step ids a later reader resolves a session
+out of (`index-boot:<subject>`), which is how the sweep in §16.7 tears a container down without
+invoking the handler at all.
 
-**What the row carries, and nothing else:** the poll number, `started_at` as OBSERVED from the
-provider, `consecutive_read_failures`, the deadline the supervision must be torn down by, which
-project of the fan-out is in flight, when it last ADVANCED, and its own terminal state with the
-outcome it settled to. The container handle, `bootedAt`, the credential expiry and the `slotRef` keep
-riding `index-boot`'s / `boot-runner`'s memo, so re-attachment is bought exactly where it is bought
-today (§13.2) and this section buys it nowhere twice.
+**What the row carries, and nothing else:** `run_id` · `subject` · `kind` (which supervisor) ·
+`poll_number` · `started_at` as OBSERVED from a SUCCESSFUL provider read · `consecutive_read_failures`
+· `next_poll_at` (the instant the run was deferred to, and the sweep's predicate) · `state`
+(`watching` / `settling` / `settled`) · `workspace_id` · `created_at` / `updated_at`.
+
+**And what it deliberately does NOT carry.** The container handle, `bootedAt`, `queuedAt`, the
+credential expiry, the admission ticket and the `slotRef` keep riding `index-boot`'s / `boot-runner`'s
+memo, so re-attachment is bought exactly where it is bought today (§13.2) and this section buys it
+nowhere twice. **Nor does it carry anything DERIVABLE from those two**: the supervision DEADLINE is
+`bootedAt + indexTimeoutMs`, and the CI fleet's `bootLatencyMs` is `started_at − session.queuedAt`, so
+both are recomputed on the pass that needs them. And it carries no OUTCOME: what a settled supervision
+returned is already `index-settle:<subject>`'s memo and the run's own `job_run` row, and a second copy
+here would be a copy that ages.
 
 **The three alternatives, and why each fails:**
 
@@ -1541,24 +1551,25 @@ which is the one the old mechanism had no way to fail.
 §13.4's table, re-run for this change. `memo` = stays a `step.run`; `row` = moves to
 `job_supervision`; `gone` = ceases to exist.
 
-| loop  | today's call site / state                                                 | disposition | why                                                                                                                                                                                                              |
-| ----- | ------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| index | `resolve-target`                                                          | **memo**    | §13.1 limb 2, unchanged — its `projectIds` are the identity every later id is keyed by, and now also the identity `job_supervision.key` is built from                                                            |
-| index | `index-admit:<pid>`                                                       | **memo**    | a CLAIM (§13.1 limb 1) with the backoff inside it, and §13.3(c)'s ordering obligation is what keeps it there. **Not converted to a defer loop — see §16.6**                                                      |
-| index | `index-boot:<pid>`                                                        | **memo**    | provisions a container, and its memo is what re-attaches a resumed pass to the same one. The session, `bootedAt`, `slotRef` and the credential expiry keep riding it                                             |
-| index | `index-settle:<pid>`                                                      | **memo**    | tears down, meters, releases the slot. Reached ONLY from a terminal transition (§16.4); still memoized, so a pass after it replays the outcome rather than tearing down twice                                    |
-| index | `cancel-offboarding`                                                      | **memo**    | unchanged — a write, and the run's last act                                                                                                                                                                      |
-| index | the poll ITERATION counter                                                | **row**     | §13.3(a) demoted it to a per-PASS runaway guard because a restart reset it. A pass is now one poll, so a per-pass counter bounds nothing: the count moves to the row and becomes a real total-poll ceiling again |
-| index | `startedAt` (observed)                                                    | **row**     | the state §13.3(b) proved cannot be a memo, in a home that can hold it                                                                                                                                           |
-| index | `consecutiveReadFailures`                                                 | **row**     | carried between polls today in `IndexPollResult`; polls are now in different processes                                                                                                                           |
-| index | which project of the fan-out                                              | **row**     | the `for` loop over `target.projectIds` is control flow that a pass must resume INTO rather than replay through, and the sweep (§16.7) has to know which container is live without invoking the handler at all   |
-| index | the in-process `await sleep(...)`                                         | **gone**    | replaced by `run_at`. **The interval VALUE is `indexPollWaitMs(iteration)`, unchanged** (§16.6)                                                                                                                  |
-| index | the `finally`                                                             | **gone**    | §16.4 — teardown becomes a terminal transition                                                                                                                                                                   |
-| CI    | `boot-runner`                                                             | **memo**    | admits, claims, mints a JIT registration, provisions — four limb-1 effects, and the memo is the re-attachment                                                                                                    |
-| CI    | `settle-runner`                                                           | **memo**    | tears down, de-registers, meters, settles the intent. Terminal transitions only                                                                                                                                  |
-| CI    | the poll counter, `startedAt`, `bootLatencyMs`, `consecutiveReadFailures` | **row**     | the same four facts under different names — `PollResult` carries `bootLatencyMs` where `IndexPollResult` does not, which is why the column is nullable and the driver treats the state as opaque to itself       |
-| CI    | the in-process `await sleep(...)`                                         | **gone**    | replaced by `run_at`, at `pollWaitMs(iteration)`, unchanged                                                                                                                                                      |
-| CI    | the `finally`                                                             | **gone**    | §16.4                                                                                                                                                                                                            |
+| loop  | today's call site / state                                | disposition | why                                                                                                                                                                                                                            |
+| ----- | -------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| index | `resolve-target`                                         | **memo**    | §13.1 limb 2, unchanged — its `projectIds` are the identity every later id is keyed by, and now also the identity `job_supervision.key` is built from                                                                          |
+| index | `index-admit:<pid>`                                      | **memo**    | a CLAIM (§13.1 limb 1) with the backoff inside it, and §13.3(c)'s ordering obligation is what keeps it there. **Not converted to a defer loop — see §16.6**                                                                    |
+| index | `index-boot:<pid>`                                       | **memo**    | provisions a container, and its memo is what re-attaches a resumed pass to the same one. The session, `bootedAt`, `slotRef` and the credential expiry keep riding it                                                           |
+| index | `index-settle:<pid>`                                     | **memo**    | tears down, meters, releases the slot. Reached ONLY from a terminal transition (§16.4); still memoized, so a pass after it replays the outcome rather than tearing down twice                                                  |
+| index | `cancel-offboarding`                                     | **memo**    | unchanged — a write, and the run's last act                                                                                                                                                                                    |
+| index | the poll ITERATION counter                               | **row**     | §13.3(a) demoted it to a per-PASS runaway guard because a restart reset it. A pass is now one poll, so a per-pass counter bounds nothing: the count moves to the row and becomes a real total-poll ceiling again               |
+| index | `startedAt` (observed)                                   | **row**     | the state §13.3(b) proved cannot be a memo, in a home that can hold it                                                                                                                                                         |
+| index | `consecutiveReadFailures`                                | **row**     | carried between polls today in `IndexPollResult`; polls are now in different processes                                                                                                                                         |
+| index | which project of the fan-out                             | **row**     | it IS the `subject`: the `for` loop over `target.projectIds` is control flow a pass must resume INTO rather than replay through, and the sweep (§16.7) has to know which container is live without invoking the handler at all |
+| index | the in-process `await sleep(...)`                        | **gone**    | replaced by `run_at`. **The interval VALUE is `indexPollWaitMs(iteration)`, unchanged** (§16.6)                                                                                                                                |
+| index | the `finally`                                            | **gone**    | §16.4 — teardown becomes a terminal transition                                                                                                                                                                                 |
+| CI    | `boot-runner`                                            | **memo**    | admits, claims, mints a JIT registration, provisions — four limb-1 effects, and the memo is the re-attachment                                                                                                                  |
+| CI    | `settle-runner`                                          | **memo**    | tears down, de-registers, meters, settles the intent. Terminal transitions only                                                                                                                                                |
+| CI    | the poll counter, `startedAt`, `consecutiveReadFailures` | **row**     | the same three facts the index fleet keeps, under the same names                                                                                                                                                               |
+| CI    | `bootLatencyMs`                                          | **neither** | DERIVED, not stored: `pollContainerOnce` computes it as `startedAt − session.queuedAt`, one field from the row and one from the boot memo, so a column would be a third copy of a fact two places already carry                |
+| CI    | the in-process `await sleep(...)`                        | **gone**    | replaced by `run_at`, at `pollWaitMs(iteration)`, unchanged                                                                                                                                                                    |
+| CI    | the `finally`                                            | **gone**    | §16.4                                                                                                                                                                                                                          |
 
 **`system.ci-runner-boot`'s `retryPolicy: 'none'` is untouched and must be RE-PROVEN, not inherited.**
 A defer refunds its attempt exactly as `reclaimExpiredLeases` and `releaseClaims` do, so a
