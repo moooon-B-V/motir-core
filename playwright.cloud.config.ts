@@ -153,7 +153,13 @@ export default defineConfig({
       // timeout under CI load — the original test-1 flake. The nine specs moving
       // in here were authored against a pre-built server for exactly that
       // reason, so the lane they move into has to be one too.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
+      // ⚠️ `build:worker` IS PART OF THE SERVER COMMAND, and this lane needs it
+      // (MOTIR-3418). `globalSetup` starts the engine's worker from the SHIPPED
+      // bundle at `.worker/worker.mjs` — never the TypeScript source — so a lane
+      // that does not build it fails in globalSetup before a single spec runs.
+      // The main config's command has carried this since MOTIR-3427; this one did
+      // not need it while the executor was a second `webServer`.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       // Generous: now covers a full `next build` before the server binds.

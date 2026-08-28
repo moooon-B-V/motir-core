@@ -212,26 +212,18 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
 // this lane uniquely proved was the real worker PROCESS, and the `latest`
 // scenario above still proves that.
 
-test('a scheduled job NOT routed to the engine produces no engine rows at all', async ({
-  page,
-}) => {
-  // The negative direction, driven through the real product: with the routing
-  // cleared, the shared worker's scheduler must leave every one of the fourteen
-  // alone. This is the guard protecting every job the production cutover has not
-  // moved yet, and it is why the switch defaults to Inngest.
-  await signUp(page, OPERATOR_EMAIL);
-
-  // ⚠️ A BOUNDED WINDOW, and the one place this spec waits on a clock rather than
-  // a signal — deliberately, because the assertion is a NEGATIVE and there is no
-  // authoritative signal for "the scheduler ticked and correctly did nothing".
-  // Eight seconds is chosen against the worker's own IDLE_MAX_MS of 5 s, so at
-  // least one full scheduler tick has certainly happened; anything longer is cost
-  // without evidence, on a lane whose leg balance is load-bearing
-  // (`tests/e2e/shard-plan.ts`).
-  await page.waitForTimeout(8_000);
-
-  expect(await adminDb.jobQueueRun.count({ where: { scheduledFor: { not: null } } })).toBe(0);
-
-  await gotoSystemTab(page);
-  await expect(page.getByText('No job runs yet')).toBeVisible();
-});
+// ⚠️ A SCENARIO STOOD HERE AND ITS SUBJECT IS GONE (MOTIR-3418).
+//
+// "a scheduled job NOT routed to the engine produces no engine rows at all": with
+// the routing cleared it waited out one full scheduler tick (8 s, chosen against
+// the worker's own `IDLE_MAX_MS` of 5 s) and asserted `scheduled_for` was null on
+// every queue row and the System tab read "No job runs yet". It was the guard
+// protecting every cron the production cutover had not moved, and the reason the
+// switch defaulted to the old lane.
+//
+// A registered cron is scheduled now, full stop — there is nothing for it to be
+// left alone in favour of. The positive scenarios above still prove the real
+// worker PROCESS turns a cron expression into a run, which is what this lane
+// uniquely contributed; the scheduler's own dispositions are covered over
+// synthetic definitions with an injected clock in
+// `tests/jobs/engine-scheduler.test.ts`, which is the better tier for them.

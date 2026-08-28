@@ -199,23 +199,28 @@ describe('§2a dispatch totality, derived from the registry', () => {
     // all. There is no switch left; what the section was really protecting — that
     // a job's TRIGGER is what selects it, derived from the registry rather than
     // from a hand-written list — is asserted directly.
+    //
+    // ⚠️ AND IT IS ONE DISPATCH PER TRIGGER, NOT ONE PER PAIR. The first draft
+    // dispatched every OTHER trigger inside the loop to prove each job was
+    // enqueued by nothing else — ~400 dispatches with a truncate between them,
+    // which passed locally and TIMED OUT at 15 s on CI, where the box is roughly
+    // twenty times slower. The pairwise sweep was never buying anything either:
+    // the enqueued set for a trigger is asserted EXACTLY, so a job appearing
+    // under a trigger that is not its own already fails on that trigger's own
+    // dispatch.
     const { workspaceId } = await makeWorkspace();
-    // One representative per distinct trigger keeps the run bounded while still
-    // deriving the set from the registry rather than naming ids.
-    const byTrigger = new Map<string, string>();
-    for (const d of eventJobs()) if (d.trigger) byTrigger.set(d.trigger, d.id);
+    const byTrigger = new Map<string, string[]>();
+    for (const d of eventJobs()) {
+      if (!d.trigger) continue;
+      byTrigger.set(d.trigger, [...(byTrigger.get(d.trigger) ?? []), d.id]);
+    }
 
-    for (const [trigger, jobId] of byTrigger) {
+    for (const [trigger, expected] of byTrigger) {
       await truncateJobRuns();
       const result = await dispatchEventToEngine(trigger, { workspaceId });
-      expect(result.enqueued, `dispatching ${trigger} did not enqueue ${jobId}`).toContain(jobId);
-      // …and the job is enqueued by NO other event in the registry.
-      for (const other of byTrigger.keys()) {
-        if (other === trigger) continue;
-        await truncateJobRuns();
-        const off = await dispatchEventToEngine(other, { workspaceId });
-        expect(off.enqueued, `${jobId} enqueued on ${other}`).not.toContain(jobId);
-      }
+      expect(result.enqueued.slice().sort(), `dispatching ${trigger}`).toEqual(
+        expected.slice().sort(),
+      );
     }
   });
 

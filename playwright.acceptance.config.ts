@@ -175,7 +175,13 @@ export default defineConfig({
       // ONLY the test seams (Secure cookies / `/api/_test` 404 gate / 'file'
       // email — see lib/e2eProdHarness.ts). This lane seeds via `/api/_test`, so
       // it MUST set the flag. `prisma generate` guards a fresh worktree.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
+      // ⚠️ `build:worker` IS PART OF THE SERVER COMMAND, and this lane needs it
+      // (MOTIR-3418). `globalSetup` starts the engine's worker from the SHIPPED
+      // bundle at `.worker/worker.mjs` — never the TypeScript source — so a lane
+      // that does not build it fails in globalSetup before a single spec runs.
+      // The main config's command has carried this since MOTIR-3427; this one did
+      // not need it while the executor was a second `webServer`.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       // Generous: now covers a full `next build` (minutes) before the server binds.
