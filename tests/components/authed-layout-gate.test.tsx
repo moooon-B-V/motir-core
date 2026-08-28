@@ -96,6 +96,9 @@ vi.mock('@/lib/permissions/catalog', () => ({}));
 
 vi.mock('@/components/ui/Toast', () => ({ ToastProvider: () => null }));
 vi.mock('@/components/ui/AppLayout', () => ({ AppLayout: () => null }));
+vi.mock('@/app/(authed)/_components/AccountDeletionBanner', () => ({
+  AccountDeletionBanner: () => null,
+}));
 vi.mock('@/components/ui/SidebarDrawer', () => ({ SidebarDrawer: () => null }));
 vi.mock('@/components/planning/PlanWithAIFab', () => ({ PlanWithAIFab: () => null }));
 vi.mock('@/app/(authed)/_components/TopNav', () => ({ TopNav: () => null }));
@@ -125,6 +128,9 @@ vi.mock('@/app/(authed)/_components/build-in-public/BuildingInPublicHeaderLink',
 }));
 
 import AuthedLayout from '@/app/(authed)/layout';
+import { AppLayout } from '@/components/ui/AppLayout';
+import { AccountDeletionBanner } from '@/app/(authed)/_components/AccountDeletionBanner';
+import { findFirst } from '../helpers/serverPageHarness';
 
 beforeEach(() => {
   started.length = 0;
@@ -182,6 +188,33 @@ describe('the authed layout gate (MOTIR-3433)', () => {
 
     release?.();
     await pending;
+  });
+
+  it('⚠️ mounts the account-deletion banner in the shell — ONCE, for every authed route', async () => {
+    // MOTIR-3704. Design DECISION 4 requires the cancel door on EVERY page —
+    // *"a grace period is only reachable if the reader can find it"*, and a
+    // reader who changes their mind on day nine opens the app rather than
+    // Settings › Data & privacy. Mounting it here is what makes that a
+    // property of the shell instead of something each route must remember, so
+    // the assertion is that the LAYOUT fills the slot, not that some page does.
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue', email: 'y@example.com' } });
+
+    const pending = AuthedLayout({ children: null });
+    await Promise.resolve();
+    await Promise.resolve();
+    release?.();
+
+    // The layout is CALLED, not rendered (this file's own preamble), so the
+    // property lives in the element tree it returned rather than in a render.
+    const shell = findFirst<{ banner?: { type?: unknown; props?: { userId?: string } } }>(
+      await pending,
+      AppLayout,
+    );
+    expect(shell).toBeTruthy();
+    expect(shell!.props.banner?.type).toBe(AccountDeletionBanner);
+    // It is given the SIGNED-IN reader's id — a banner resolved for anybody
+    // else would show one person's deletion to another.
+    expect(shell!.props.banner?.props?.userId).toBe('u1');
   });
 
   it('⚠️ the 2FA gate does NOT run for a request with no session', async () => {

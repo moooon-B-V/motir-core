@@ -2423,9 +2423,69 @@
             "manageMembers": "Organization › Members",
             "disabledReason": "Available once every organization you own has another owner.",
             "workspaces": "Workspaces are <b>not</b> a block. {count, plural, one {You are the only member of one of them, so it cannot be left behind — it is deleted with your account, and the confirmation lists it.} other {You are the only member of # of them, so they cannot be left behind — they are deleted with your account, and the confirmation lists them.}} To keep one, invite somebody to it first."
+          },
+          "confirm": {
+            "title": "Delete your Motir account?",
+            "body": "Exactly what happens to everything attached to {email}. Some of it belongs to other people; some of it Motir is required to keep.",
+            "typeLabel": "Type {email} to confirm",
+            "helper": "Your email address is your account's name — typing it is the last check that this is the account you meant.",
+            "button": "Delete my account",
+            "cancel": "Cancel",
+            "schedule": "<b>Nothing is erased today.</b> Your account closes now and is erased on <b>{date}</b>. Sign in before then and the deletion is cancelled.",
+            "error": "We couldn't schedule the deletion. Try again in a moment.",
+            "blockedError": "One organization you own still needs another owner before your account can be deleted."
+          },
+          "ledger": {
+            "deleted": "Deleted",
+            "deletedWhy": "Yours alone",
+            "anonymised": "Anonymised, not deleted",
+            "anonymisedWhy": "Part of someone else's project",
+            "kept": "Kept",
+            "keptWhy": "Required by law",
+            "identity": {
+              "name": "Your profile and how you sign in",
+              "desc": "Name, email, avatar, preferences, passkeys, two-factor, API tokens."
+            },
+            "soleWorkspaces": {
+              "name": "Workspaces where you are the only member",
+              "desc": "{names}. Nobody else can open {count, plural, one {it} other {them}}, so {count, plural, one {it goes} other {they go}} with you. To keep one, invite somebody to it first."
+            },
+            "soleWorkspacesWork": {
+              "name": "The work inside them",
+              "desc": "{projects, plural, one {# project} other {# projects}}, with their attachments and history."
+            },
+            "comments": {
+              "name": "Comments in projects other people share",
+              "desc": "Your name comes off; the comment stays, because it is part of a conversation others took part in."
+            },
+            "workItems": {
+              "name": "Work items you reported or were assigned there",
+              "desc": "The item stays with its project; the attribution goes."
+            },
+            "billing_records": {
+              "name": "Invoices and tax records",
+              "desc": "For as long as Dutch tax law requires — generally seven years. Erasure does not reach a record we are obliged to hold."
+            },
+            "backups": {
+              "name": "Backups, until they rotate",
+              "desc": "Overwritten on their own schedule, and never restored to active use."
+            }
+          },
+          "grace": {
+            "title": "Your account will be erased on {date}",
+            "body": "<b>{daysLeft}</b>. Until then nothing has changed: you are signed in, your workspaces are open, and your team sees no difference. Cancel and the countdown stops — there is no penalty and no second confirmation.",
+            "cancel": "Cancel deletion",
+            "daysLeft": "{days, plural, =0 {Less than a day left} one {# day left} other {# days left}}",
+            "exportSubtitle": "Still available, and worth doing now — after {date} there is nothing left to export.",
+            "cancelled": "Your deletion is cancelled. Nothing will be erased.",
+            "error": "We couldn't cancel the deletion. Try again in a moment."
           }
         },
-        "mailbox": "This pane is not the only route. Anything the product cannot do for you — a correction, a restriction, an objection, or a question about any of it — goes to <b>{mailbox}</b>, which the Privacy Policy publishes and a person answers."
+        "mailbox": "This pane is not the only route. Anything the product cannot do for you — a correction, a restriction, an objection, or a question about any of it — goes to <b>{mailbox}</b>, which the Privacy Policy publishes and a person answers.",
+        "banner": {
+          "scheduled": "Your account is scheduled for deletion on {date}. Everything still works until then.",
+          "cancel": "Cancel deletion"
+        }
       },
       "notifications": {
         "heading": "Notifications",

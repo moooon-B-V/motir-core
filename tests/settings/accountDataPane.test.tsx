@@ -51,10 +51,19 @@ const deletionWrites = vi.hoisted(() => ({
   cancelAccountDeletionIfScheduled: vi.fn(() => {
     throw new Error('the pane must not cancel a deletion');
   }),
-  findOpenDeletion: vi.fn(() => {
-    throw new Error('the scheduled state is MOTIR-3704, not this card');
-  }),
 }));
+
+// ⚠️ A READ, AND IT IS NO LONGER A THROW (amended by MOTIR-3704). This stub
+// used to raise *"the scheduled state is MOTIR-3704, not this card"*, which was
+// true when MOTIR-1136 wrote it and is the card now running: the pane reads the
+// open request so it can render EITHER the delete card or the scheduled state.
+// It is deliberately NOT a member of `deletionWrites` above — that object is
+// *"every WRITE the erasure flow owns"*, and folding a read into it would make
+// the *"never invokes the delete write"* assertion below quietly weaker the
+// moment the pane started calling it. `null` here = no deletion scheduled,
+// which is what every case in THIS suite is about; the scheduled state has its
+// own suite (`accountDeletionBanner.test.tsx`).
+const findOpenDeletion = vi.hoisted(() => vi.fn(async () => null));
 const { assertNotLastOwner } = vi.hoisted(() => ({
   assertNotLastOwner: vi.fn(() => {
     throw new Error('the pane must READ the block, not call the guard and catch its error');
@@ -78,6 +87,9 @@ vi.mock('next-intl/server', async () => {
   const { createTranslator } = await import('next-intl');
   const messages = (await import('@/messages/en.json')).default;
   return {
+    // `getLocale` joins the mock with MOTIR-3704: the pane now formats the
+    // erasure date, and a date is a function of the locale.
+    getLocale: async () => 'en',
     getTranslations: async (namespace: string) =>
       createTranslator({ locale: 'en', messages, namespace } as never),
   };
@@ -89,7 +101,7 @@ vi.mock('@/lib/services/dataExportService', () => ({
   dataExportService: { getLatestExportForUser },
 }));
 vi.mock('@/lib/services/accountDeletionService', () => ({
-  accountDeletionService: deletionWrites,
+  accountDeletionService: { ...deletionWrites, findOpenDeletion },
 }));
 vi.mock('@/lib/services/organizationsService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/organizationsService')>()),
@@ -141,6 +153,7 @@ beforeAll(async () => {
   getSession.mockResolvedValue({ user: { id: 'warm', email: 'warm@example.com' } });
   previewAccountErasure.mockResolvedValue(emptyPreview());
   getLatestExportForUser.mockResolvedValue(null);
+  findOpenDeletion.mockResolvedValue(null);
   await renderPane();
 }, 120_000);
 
@@ -149,6 +162,7 @@ beforeEach(() => {
   getSession.mockResolvedValue({ user: { id: 'u1', email: 'reader@example.com' } });
   previewAccountErasure.mockResolvedValue(emptyPreview());
   getLatestExportForUser.mockResolvedValue(null);
+  findOpenDeletion.mockResolvedValue(null);
 });
 
 afterEach(cleanup);

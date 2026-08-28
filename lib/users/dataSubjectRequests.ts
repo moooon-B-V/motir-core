@@ -67,6 +67,33 @@ export function erasureDueAt(requestedAt: Date): Date {
 }
 
 /**
+ * Whole days from `now` until `iso`, floored at `0`.
+ *
+ * The countdown the scheduled state and the app-wide banner render
+ * (*"29 days left"*). It lives here beside the window it counts down for the
+ * same reason the window does: the alternative is each of the two cancel doors
+ * doing its own millisecond arithmetic, and two surfaces that disagree about
+ * how many days are left is exactly the drift one named helper prevents.
+ *
+ * ⚠️ MEASURED FROM THE ROW'S OWN DEADLINE, never from `requestedAt + the
+ * constant`. `erasureDueAt` is persisted at create so a later change to
+ * {@link ACCOUNT_ERASURE_WINDOW_DAYS} cannot move a deadline somebody has
+ * already been shown; recomputing the countdown from the constant would
+ * reintroduce exactly that.
+ *
+ * FLOORED AT ZERO because a due date in the past is a real state — the erasure
+ * has fallen due and the sweep has not run yet — and *"-1 days left"* is not
+ * something to tell a reader who can still cancel.
+ *
+ * `now` is injectable (and defaulted) so a test owns the clock rather than
+ * asserting a window against wall-clock.
+ */
+export function daysUntil(iso: string, now: Date = new Date()): number {
+  const ms = new Date(iso).getTime() - now.getTime();
+  return ms <= 0 ? 0 : Math.floor(ms / DAY_MS);
+}
+
+/**
  * When an archive BUILT at `builtAt` stops being downloadable.
  *
  * Measured from the BUILD, never from the request: an export that took an hour
