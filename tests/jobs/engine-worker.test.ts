@@ -80,6 +80,20 @@ async function readRun(id: string): Promise<JobQueueRun> {
 
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
+/** Poll an authoritative read until it holds, or fail — never a fixed sleep. */
+async function until(
+  predicate: () => boolean | Promise<boolean>,
+  what: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`timed out waiting for: ${what}`);
+}
+
 describe('the claim — two workers, one queue', () => {
   it('NEVER executes the same run twice under genuine concurrency', async () => {
     const ws = await makeWorkspace();
@@ -338,6 +352,112 @@ describe('failure, retry and the durable yield', () => {
     await w.settled();
     expect((await readRun(good)).state).toBe('succeeded');
     expect((await readRun(bad)).state).toBe('pending'); // retrying
+  });
+});
+
+describe("the worker's own defaults and lifecycle (coverage floor, MOTIR-3766)", () => {
+  // ⚠️ THESE ARE FIXTURES, NOT AN IGNORE DIRECTIVE. The story gate's coverage
+  // rule is to SORT the uncovered arms: an arm a fixture can reach gets one, and
+  // only an arm that is unreachable by construction gets a directive. Every arm
+  // below is reachable in one line, which is why none of them is ignored.
+
+  it('defaults the workerId and the logger when the caller supplies neither', async () => {
+    const ws = await makeWorkspace();
+    const runId = await enqueue(ws);
+    // No `workerId`, no `logger` — the two `??` defaults in the constructor.
+    const w = new JobWorker({ execute: async () => {} });
+
+    expect(w.workerId).toMatch(/^worker-[0-9a-f-]{36}$/);
+    expect(await w.tick()).toBe(1);
+    await w.settled();
+    const row = await readRun(runId);
+    expect(row.state).toBe('succeeded');
+    // The default logger is `console`, and a green run never reaches it — which
+    // is why constructing it is the whole assertion. The claim itself released
+    // its `claimed_by` when the run settled, so the id is asserted above.
+    expect(row.claimedBy).toBeNull();
+  });
+
+  it('start() is IDEMPOTENT — a second call does not start a second loop or heartbeat', async () => {
+    const w = new JobWorker({ workerId: 'twice', logger: silent, execute: async () => {} });
+    w.start();
+    w.start(); // the `if (this.running) return` arm
+    await w.shutdown();
+    // The real assertion is the absence of a leak: a second heartbeat interval
+    // would survive the single `clearInterval` in `shutdown()` and hold the
+    // process open. `unref` hides that from the runner, so assert the contract
+    // rather than the timer — a second loop would also claim concurrently.
+    expect(w.inFlightCount).toBe(0);
+  });
+
+  it("the HEARTBEAT renews this worker's leases on its own cadence", async () => {
+    const ws = await makeWorkspace();
+    const runId = await enqueue(ws);
+    let release!: () => void;
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    const w = new JobWorker({
+      workerId: 'beating',
+      logger: silent,
+      // A tiny renew cadence so the interval callback actually fires inside the
+      // test — the callback, its `withSystemContext` and its `.catch` are the
+      // three functions a `tick()`-only test never reaches. The drain window is
+      // small because the run is held open on purpose.
+      timings: { renewMs: 20, leaseMs: 60_000, drainTimeoutMs: 100 },
+      execute: async () => held,
+    });
+
+    w.start();
+    await until(async () => (await readRun(runId)).state === 'running', 'the run to be claimed');
+    const first = (await readRun(runId)).leaseExpiresAt;
+    await until(async () => {
+      const next = (await readRun(runId)).leaseExpiresAt;
+      return first !== null && next !== null && next.getTime() > first.getTime();
+    }, 'the heartbeat to push the lease forward');
+
+    release();
+    await w.shutdown();
+  });
+
+  it('`waitForSlot` resolves ONCE — the invariant behind its defensive guard', async () => {
+    // The arm `worker.ts` carries a `v8 ignore` on. It cannot be reached from
+    // outside, so what is asserted is the property that makes it unreachable:
+    // a waiter is woken exactly once, and `releaseSlot` drains the set.
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws), await enqueue(ws)];
+    let settles = 0;
+    const w = new JobWorker({
+      workerId: 'one-slot',
+      logger: silent,
+      timings: { poolSize: 1, claimBatch: 5, idleMinMs: 5, idleMaxMs: 20 },
+      execute: async () => {
+        settles += 1;
+        await new Promise((r) => setTimeout(r, 15));
+      },
+    });
+
+    w.start();
+    try {
+      await until(async () => {
+        const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+        return rows.every((r) => r.state === 'succeeded');
+      }, 'a pool of ONE to drain three runs through repeated slot waits');
+    } finally {
+      await w.shutdown();
+    }
+    // Three runs through one slot means the loop waited for a slot and was woken
+    // by a settle at least twice — and each run executed exactly once, which is
+    // what a double-resolve would break.
+    expect(settles).toBe(3);
+  });
+
+  it('serializeWorkerFailure keeps an Error that carries NO stack', () => {
+    const bare = new Error('no stack here');
+    // Some runtimes and some thrown values arrive without one; the `?:` arm that
+    // handles it is otherwise unreached.
+    Object.defineProperty(bare, 'stack', { value: undefined });
+    expect(serializeWorkerFailure(bare)).toEqual({ message: 'no stack here' });
   });
 });
 

@@ -4,6 +4,9 @@ import type { PlatformSignalDTO, PlatformSignalId } from '@/lib/dto/platformHeal
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { platformHealthService } from '@/lib/services/platformHealthService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
+import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
+import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -52,6 +55,7 @@ beforeEach(async () => {
   await truncateAuthTables();
   currentPrincipal = await seedStaff();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -252,6 +256,195 @@ describe('⚠️ an unreachable probe never reads as a zero', () => {
   });
 });
 
+describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
+  // The story gate adopts this file into the per-file coverage gate, so the arms
+  // the happy board never reaches get fixtures. Every one of them is a real
+  // reading an operator can meet, and each is driven the way this file already
+  // drives the schedule probe — a spy on the collaborator, or a stubbed env var,
+  // never a mock of the service under test.
+
+  it('an unreachable DATABASE reports no latency and no region', async () => {
+    vi.spyOn(databaseHealthRepository, 'ping').mockRejectedValue(new Error('connection refused'));
+
+    const database = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(database.state).toBe('unreachable');
+    expect(Object.keys(database.values)).toEqual(['reason']);
+    expect(database.values).not.toHaveProperty('ms'); // never a zero-millisecond ping
+  });
+
+  it('an unreachable DLQ probe reports no failure COUNT', async () => {
+    vi.spyOn(jobRunDlqRepository, 'countActiveSince').mockRejectedValue(new Error('gone'));
+
+    const failed = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'failedJobs',
+    );
+    expect(failed.state).toBe('unreachable');
+    expect(failed.values).not.toHaveProperty('count');
+  });
+
+  it('dead letters in the window read DEGRADED, with the count', async () => {
+    vi.spyOn(jobRunDlqRepository, 'countActiveSince').mockResolvedValue(3);
+
+    const failed = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'failedJobs',
+    );
+    expect(failed).toMatchObject({ state: 'degraded', values: { count: 3 } });
+  });
+
+  it('an unreachable LEDGER read is distinguishable from a check that never ran', async () => {
+    // ⚠️ THREE OUTCOMES, NOT TWO — the service's own header. This is the first:
+    // the probe threw. `never` (the read returned null) is the ordinary state of
+    // a fresh database and is covered by the six-signals block above.
+    vi.spyOn(jobRunRepository, 'findLatestByEventName').mockRejectedValue(new Error('gone'));
+
+    const last = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'lastHealthCheck',
+    );
+    expect(last).toMatchObject({ state: 'unreachable', values: { reason: 'probeFailed' } });
+  });
+
+  it('overdue crons read DEGRADED and the list carries them', async () => {
+    const judgedAgainst = new Date('2026-08-28T09:00:00.000Z');
+    vi.spyOn(jobScheduleHealthService, 'check').mockResolvedValue({
+      entries: [
+        {
+          functionId: 'system.daily-health-check',
+          cron: '0 9 * * *',
+          lastRunAt: null,
+          judgedAgainst,
+          overdue: true,
+        },
+      ],
+      overdue: [
+        {
+          functionId: 'system.daily-health-check',
+          cron: '0 9 * * *',
+          lastRunAt: null,
+          judgedAgainst,
+          overdue: true,
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof jobScheduleHealthService.check>>);
+
+    const health = await platformHealthService.read(currentPrincipal);
+    expect(signal(health.signals, 'schedules')).toMatchObject({
+      state: 'degraded',
+      values: { overdue: 1, total: 1 },
+    });
+    expect(health.overdue[0]).toMatchObject({
+      functionId: 'system.daily-health-check',
+      lastRunAt: null,
+    });
+  });
+
+  it('a deployment the platform does not manage reports notManaged, not a blank card', async () => {
+    vi.stubEnv('FLY_APP_NAME', '');
+
+    const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
+    expect(hosting).toMatchObject({ state: 'unreachable', values: { reason: 'notManaged' } });
+    expect(hosting.linkOut).toBeNull(); // a self-hosted instance has no console to link to
+  });
+
+  it('a managed deployment missing its region or machine renders an em-dash, never an empty string', async () => {
+    vi.stubEnv('FLY_APP_NAME', 'motir-core-test');
+    vi.stubEnv('FLY_REGION', '');
+    vi.stubEnv('FLY_MACHINE_ID', '');
+
+    const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
+    expect(hosting).toMatchObject({
+      state: 'healthy',
+      values: { app: 'motir-core-test', region: '—', machineId: '—' },
+      linkOut: 'https://fly.io/apps/motir-core-test',
+    });
+  });
+
+  it('a build with NO Sentry DSN says notConfigured — a different sentence from noReadCredential', async () => {
+    // The two `unreachable` reasons mean opposite things to an operator: this
+    // deployment does not report errors at all, versus it reports them and this
+    // console cannot read the count yet.
+    vi.stubEnv('SENTRY_DSN', '');
+
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toMatchObject({ state: 'unreachable', values: { reason: 'notConfigured' } });
+  });
+
+  it('a NEON url yields the region out of the HOST and the console link', async () => {
+    // The region is a READING of the connection actually open, not a lookup in a
+    // decision record — a deployment pointed elsewhere would still say `iad` if
+    // this came from an ADR.
+    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@ep-cool-1234-us-east-1.aws.neon.tech/db');
+
+    const database = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(database.values['region']).toBe('us-east-1');
+    expect(database.linkOut).toBe('https://console.neon.tech/app/projects');
+  });
+
+  it('a Neon host the region pattern does not match renders the RAW HOST, still the truth', async () => {
+    // ⚠️ ASSERTED AS THE BEHAVIOUR, NOT AS A WISH. `databaseRegion`'s pattern
+    // wants the region joined by a DASH (`…-us-east-1.aws.neon.tech`); a host
+    // that separates it with a DOT does not match, and the accessor falls back to
+    // the host — which its own comment calls "still the truth". Asserting a region
+    // here would be asserting a regex this file does not own.
+    vi.stubEnv('DATABASE_URL', 'postgresql://u:p@ep-cool-1234-pooler.us-east-1.aws.neon.tech/db');
+
+    const database = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(database.values['region']).toBe('ep-cool-1234-pooler.us-east-1.aws.neon.tech');
+    expect(database.linkOut).toBe('https://console.neon.tech/app/projects');
+  });
+
+  it('a MALFORMED or absent DATABASE_URL degrades to an em-dash rather than throwing', async () => {
+    vi.stubEnv('DATABASE_URL', 'not-a-url-at-all');
+    const malformed = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(malformed.values['region']).toBe('—');
+
+    vi.stubEnv('DATABASE_URL', '');
+    const absent = signal((await platformHealthService.read(currentPrincipal)).signals, 'database');
+    expect(absent.values['region']).toBe('—');
+    expect(absent.linkOut).toBeNull();
+  });
+
+  it('a SLOW database ping reads DEGRADED, with the real latency beside it', async () => {
+    // 500ms is not an SLO and is not presented as one — it is the point past
+    // which "reachable" stops being the useful answer during an incident, so the
+    // measured number is rendered beside the verdict and the operator judges it.
+    vi.spyOn(databaseHealthRepository, 'ping').mockImplementation(
+      async () => new Promise((r) => setTimeout(r, 520)) as Promise<never>,
+    );
+
+    const database = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(database.state).toBe('degraded');
+    expect(Number(database.values['ms'])).toBeGreaterThan(500);
+  });
+
+  it('a non-Neon (or absent) DATABASE_URL yields no region and no console link', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgresql://user:pw@db.example.com:5432/app');
+
+    const database = signal(
+      (await platformHealthService.read(currentPrincipal)).signals,
+      'database',
+    );
+    expect(database.values['region']).toBe('db.example.com'); // the raw host is still the truth
+    expect(database.linkOut).toBeNull(); // never a console that is not this deployment's
+  });
+});
 describe('the audit trail', () => {
   it('records ONE `health.read` row per read, against the operator', async () => {
     await platformHealthService.read(currentPrincipal);

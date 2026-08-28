@@ -296,6 +296,15 @@ export default defineConfig({
         'lib/repositories/jobQueueRepository.ts',
         'lib/repositories/jobStepRepository.ts',
         'lib/repositories/jobEventRepository.ts',
+        // Story MOTIR-3758 · Subtask MOTIR-3766 — the story gate adopts the
+        // platform-health service, which this story extended with the queue
+        // backlog reading (`readQueueHealth`) that `/api/health/queue` serves.
+        // It was NOT gated before, and a file an external monitor depends on is
+        // exactly the wrong place for coverage to be nobody's business. MEASURED
+        // on this branch over `tests/platform`: 100 statements / 95.45 branches /
+        // 100 functions / 100 lines. Pinned at the project's 90, not at the
+        // measurement, so ordinary churn does not fail the build.
+        'lib/services/platformHealthService.ts',
         // Story MOTIR-3416 · Subtask MOTIR-3472 — the SCHEDULED cutover's own new
         // surface. `lib/jobs/engine/scheduler.ts` needs no entry: the glob above
         // is a glob precisely so a new engine file joins the gate without anyone
@@ -1885,6 +1894,8 @@ export default defineConfig({
         'lib/repositories/jobQueueRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/jobStepRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/jobEventRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3766 — measured at 100 / 95.45 / 100 / 100; see the `include` note.
+        'lib/services/platformHealthService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workspaces/membershipGate.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-2643 — MEASURED before being pinned, on this branch, with
         // `tests/acceptance-video-diagnostics.test.ts`: 90.9 branches / 100

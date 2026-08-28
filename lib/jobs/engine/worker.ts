@@ -411,6 +411,11 @@ export class JobWorker {
     return new Promise<void>((resolve) => {
       let done = false;
       const finish = (): void => {
+        /* v8 ignore next -- defensive: `finish` removes itself from `slotWaiters`
+           AND clears its timer in one synchronous step, and `releaseSlot` calls
+           each waiter once, so no second call can reach this. The guard stays
+           because the invariant is a property of THOSE two call sites rather than
+           of this closure; the test *`waitForSlot` resolves ONCE* pins it. */
         if (done) return;
         done = true;
         clearTimeout(timer);
