@@ -10,7 +10,6 @@ import { db } from '@/lib/db';
 import { resolveBaseUrl, resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendAuthEmail } from '@/lib/auth/authMail';
 import { assertAccountNotSuspended } from '@/lib/auth/accountSuspension';
-import { cancelDeletionOnSignIn } from '@/lib/auth/accountDeletionCancellation';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
@@ -275,16 +274,24 @@ export const auth = betterAuth({
         before: async (session) => {
           await assertAccountNotSuspended(session.userId);
         },
-        // ⚠️ SIGNING IN CANCELS A SCHEDULED ACCOUNT DELETION (Story 8.4 ·
-        // MOTIR-3700). It sits on the same seam as the suspension guard above,
-        // for the same reason — every way in ends here and none of them shares
-        // an endpoint — but on `after` rather than `before`: the suspension has
-        // to REFUSE a session, while this is a consequence of one that
-        // succeeded. Best-effort by design; the reasoning, and why the window
-        // exists at all, is in `lib/auth/accountDeletionCancellation.ts`.
-        after: async (session) => {
-          await cancelDeletionOnSignIn(session.userId);
-        },
+        // ⚠️ SIGNING IN DOES NOT CANCEL A SCHEDULED ACCOUNT DELETION, AND
+        // THERE IS DELIBERATELY NO `after` HOOK HERE (MOTIR-3742).
+        //
+        // MOTIR-3700 hung a `cancelDeletionOnSignIn` off `session.create.after`
+        // and argued — correctly — that this is the ONE seam every sign-in path
+        // funnels through. What that argument could not see is what the cancel
+        // COMPOSED with: scheduling revokes every session, so the next thing the
+        // reader does is sign in, and an auto-cancel there took the deletion
+        // back before any page rendered. The two DRAWN cancel doors (MOTIR-3704:
+        // the pane's scheduled state and the app-wide banner) were then
+        // reachable only when the cancel itself had thrown, and somebody signing
+        // in once to collect their export lost their deletion silently.
+        //
+        // So the cancel is now the deliberate act the design draws, and the
+        // banner — mounted once in `app/(authed)/layout.tsx`, hence on every
+        // authed page whichever door the reader came in through — is what gives
+        // the placement guarantee the seam argument wanted.
+        // `docs/decisions/account-deletion-cancel-path.md` is the record.
       },
     },
     user: {
