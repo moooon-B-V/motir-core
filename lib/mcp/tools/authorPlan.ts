@@ -22,6 +22,7 @@ import {
   presentMcpPlan,
   presentMcpPlanAppend,
 } from '../payloads/workLoop';
+import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { isTempRef } from '@/lib/plans/refs';
 import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { projectKeyField } from './readyFilters';
@@ -212,9 +213,12 @@ const proposedFieldsSchema = z
     descriptionMd: z.string().optional().describe('Markdown body — WHAT to do.'),
     explanationMd: z.string().optional().describe('Markdown body — WHY it matters.'),
     type: z
-      .string()
+      .enum(WORK_ITEM_TYPES)
       .optional()
-      .describe('Leaf work type (code / design / test / decision / manual / …).'),
+      .describe(
+        'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum, so ' +
+          'anything else is refused here rather than 500ing at approve.',
+      ),
     priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']).optional(),
     executor: z.enum(['coding_agent', 'human']).optional(),
     storyPoints: z
@@ -270,10 +274,13 @@ const patchSchema = z
       ),
     priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']).nullable().optional(),
     type: z
-      .string()
+      .enum(WORK_ITEM_TYPES)
       .nullable()
       .optional()
-      .describe('Leaf work type (code / design / test / decision / manual / …).'),
+      .describe(
+        'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum. An ' +
+          'explicit `null` clears it.',
+      ),
     storyPoints: z
       .number()
       .nullable()
@@ -447,10 +454,13 @@ const updatePlanItemInputSchema = {
       'Markdown body — WHY it matters. Send `null` to clear it; omit to leave it as it is.',
     ),
   type: z
-    .string()
+    .enum(WORK_ITEM_TYPES)
     .nullable()
     .optional()
-    .describe('Leaf work type (code / design / test / decision / manual / …); `null` clears it.'),
+    .describe(
+      'Leaf work type. A CLOSED set: these fourteen members ARE the schema enum; `null` ' +
+        'clears it.',
+    ),
   priority: z
     .enum(['lowest', 'low', 'medium', 'high', 'highest'])
     .nullable()
