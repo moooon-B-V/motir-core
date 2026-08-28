@@ -27,8 +27,7 @@
 // loaded runner into a flake.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { resetDatabase, db, truncateJobTables } from './_helpers/db-reset';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
 import { startSignedOut } from './_helpers/shell-session';
@@ -37,7 +36,7 @@ const PASSWORD = 'jobs-flow-spec-pass-123';
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
+  await truncateJobTables();
   await clearEmailFault();
 });
 

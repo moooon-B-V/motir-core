@@ -13,15 +13,14 @@
 // workspace filter).
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { resetDatabase, db, truncateJobTables } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 
 const USER_EMAIL = 'e2e-jobs@example.com';
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
+  await truncateJobTables();
 });
 
 test.afterAll(async () => {

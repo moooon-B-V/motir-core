@@ -38,8 +38,7 @@
 // dashboard.
 
 import { expect, test, type Page } from '@playwright/test';
-import { adminDb, resetDatabase } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { adminDb, resetDatabase, truncateJobTables } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
 
 // Every direct-DB call is `adminDb`, the owner client — post-condition
@@ -69,10 +68,7 @@ const OPERATOR_EMAIL = process.env['PLATFORM_ADMIN_EMAIL'] ?? 'sched-platform-ad
 const CATCH_UP_JOB = 'system.attachment-gc';
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
-  await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
-  );
+  await truncateJobTables();
 });
 
 test.afterEach(async () => {

@@ -36,8 +36,7 @@
 // the substrate, not a shortcut: the same three attempts still run.
 
 import { expect, test, type Page } from '@playwright/test';
-import { adminDb, resetDatabase } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { adminDb, resetDatabase, truncateJobTables } from './_helpers/db-reset';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
 import { startSignedOut } from './_helpers/shell-session';
@@ -60,10 +59,7 @@ const PILOT_JOB = 'email.send';
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
-  await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
-  );
+  await truncateJobTables();
   await clearEmailFault();
   // Route the pilot onto the new engine for THIS spec only.
 });

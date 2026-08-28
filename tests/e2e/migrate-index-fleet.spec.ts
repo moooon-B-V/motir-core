@@ -39,8 +39,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { selectedOrchestratorProvider } from '@/lib/orchestrator';
 import type { MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
-import { resetDatabase, db } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { resetDatabase, db, truncateJobTables } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
 import {
   E2E_INDEX_REPOS,
@@ -60,7 +59,7 @@ const [STOREFRONT, BILLING_API, SHARED_UI] = E2E_INDEX_REPOS;
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
+  await truncateJobTables();
 });
 
 test.afterAll(async () => {
