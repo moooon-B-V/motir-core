@@ -13,6 +13,7 @@ import { presentWorkItemDetail, workItemDetailSchema } from '@/lib/api/v1/workIt
 import { presentMcpWorkItem, presentMcpReadyDispatch } from '@/lib/mcp/payloads/workItems';
 import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
 import { adminDb } from '../helpers/adminDb';
+import { linkPrByIdentifier } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
 
 // STORY GATE for MOTIR-2725 — the repository SET (Subtask MOTIR-2417).
@@ -107,6 +108,21 @@ function prPayload(o: {
   };
 }
 
+// The EXPLICIT link, written before the delivery that asserts on it. Since
+// MOTIR-3674 the `Some change (KEY)` title above names the card to a reader and
+// to nothing else — an unlinked delivery resolves `no_work_item` and moves
+// nothing. Every test here is about the completion GATE, so the link is setup
+// and the gate assertions are unchanged.
+const link = (identifier: string, repo: typeof CORE, number: number) =>
+  linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: repo.name,
+    number,
+    headRef: `subtask/${identifier}-change`,
+    baseRef: repo.defaultBranch,
+  });
+
 describe('1 — the write→read SEAM: one card, real Postgres, three consumers', () => {
   it('a two-element set written through the service reads back, in order, on every shape', async () => {
     const fx = await scenario('seam@example.com');
@@ -150,11 +166,13 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
     );
     await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
 
-    const open = (repo: typeof CORE, n: number) =>
-      githubWebhookService.handleEvent(
+    const open = async (repo: typeof CORE, n: number) => {
+      await link(item.identifier, repo, n);
+      return githubWebhookService.handleEvent(
         'pull_request',
         prPayload({ action: 'opened', identifier: item.identifier, repo, number: n }),
       );
+    };
     const merge = (repo: typeof CORE, n: number) =>
       githubWebhookService.handleEvent(
         'pull_request',
@@ -198,6 +216,7 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
       fx.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await link(item.identifier, CORE, 1);
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: item.identifier, repo: CORE, number: 1 }),
@@ -310,6 +329,7 @@ describe('4 — optionality is STRUCTURAL, not incidental', () => {
     expect(row!.targetRepos).toEqual([]);
     expect(await workItemsService.listRepoDelivery(item.id, row!.targetRepos, fx.ctx)).toEqual([]);
 
+    await link(item.identifier, CORE, 9);
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: item.identifier, repo: CORE, number: 9 }),

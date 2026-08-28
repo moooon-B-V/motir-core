@@ -5,6 +5,7 @@ import {
   seedGithubInstallation,
 } from './_helpers/github-seed';
 import { E2E_REPO, E2E_REPO_SECOND } from './_helpers/github-const';
+import { linkPr } from './_helpers/pr-link';
 import { signUp } from './_helpers/shell-session';
 import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
@@ -250,6 +251,15 @@ test('a card that ships in two repositories holds until BOTH have merged', async
     await expect(card.getByRole('button', { name: /add repositor/i })).toHaveCount(0);
     await beat();
   });
+
+  // Both pull requests are LINKED to the card before either is delivered.
+  // Since MOTIR-3674 the title naming `twoRepo.identifier` associates nothing —
+  // an unlinked delivery resolves `no_work_item` — so the link is what makes the
+  // repository-set hold below a statement about the SET rather than about the
+  // parse that used to find it.
+  const headRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-set`;
+  await linkPr(page, { workItemId: twoRepo.id, repo: E2E_REPO, number: 5101, headRef });
+  await linkPr(page, { workItemId: twoRepo.id, repo: E2E_REPO_SECOND, number: 5102, headRef });
 
   // ── 4 — the first merge, and the HOLD. The product change. ────────────────
   await chapter('Merge the FIRST repository — the card holds', async () => {

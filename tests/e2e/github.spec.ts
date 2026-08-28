@@ -35,6 +35,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { linkPr } from './_helpers/pr-link';
 import { projectsService } from '@/lib/services/projectsService';
 import {
   checkSuitePayload,
@@ -213,10 +214,24 @@ test('@smoke PR opened → the linked item goes Implemented; merged → Done (si
   expect(unsigned.status(), 'unsigned webhook is rejected').toBe(401);
   expect(await statusOf(page, item.id)).toBe('in_progress');
 
-  // PR OPENED (title references the item key) → `implemented`. An open pull
-  // request says the code is pushed; CI is what makes the card reviewable
-  // (MOTIR-2999), and no check has reported here. The 200 + result body is the
-  // committed-state signal; the page loads after it.
+  // ⚠️ THE LINK IS WHAT ASSOCIATES THE PULL REQUEST, not the title. MOTIR-3674
+  // retired the parse, so the `feat: ${item.identifier} …` title below names the
+  // card to a READER and to nothing else — delivered unlinked it resolves
+  // `no_work_item` and moves nothing, which is that story's first acceptance
+  // criterion. What this test is about is the lifecycle a LINKED pull request
+  // drives, so the link is setup and every assertion after it is unchanged.
+  const wireHeadRef = `subtask/${item.identifier.toLowerCase()}-wire-the-status-sync`;
+  await linkPr(page, {
+    workItemId: item.id,
+    repo: E2E_REPO,
+    number: 4101,
+    headRef: wireHeadRef,
+  });
+
+  // PR OPENED → `implemented`. An open pull request says the code is pushed; CI
+  // is what makes the card reviewable (MOTIR-2999), and no check has reported
+  // here. The 200 + result body is the committed-state signal; the page loads
+  // after it.
   const opened = await postSignedWebhook(
     page.request,
     'pull_request',
@@ -275,6 +290,10 @@ test('@smoke failing check on a linked PR → the verification-failed feedback s
   await transition(page, item.id, 'in_progress');
 
   const headRef = `subtask/${item.identifier.toLowerCase()}-verify-the-ci-signal`;
+  // Linked first — see the note in the sync test above. The CI feedback this
+  // test is about reaches the card THROUGH the link, so without it there is no
+  // card to give feedback on.
+  await linkPr(page, { workItemId: item.id, repo: E2E_REPO, number: 4202, headRef });
   const opened = await postSignedWebhook(
     page.request,
     'pull_request',
