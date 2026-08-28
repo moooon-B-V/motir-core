@@ -1,4 +1,4 @@
-import { Bell, KeyRound, Languages, Palette, ShieldCheck, User } from 'lucide-react';
+import { Bell, Database, KeyRound, Languages, Palette, ShieldCheck, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The account-settings navigation REGISTRY (Story 7.8 · Subtask 7.8.12) — ONE
@@ -31,13 +31,24 @@ import type { LucideIcon } from 'lucide-react';
 // the command palette) and is unit-testable in isolation. `icon` is the lucide
 // COMPONENT (not a rendered element); the consumer renders `<entry.icon />`.
 
-export type AccountSettingsNavGroup = 'general' | 'preferences' | 'security';
+export type AccountSettingsNavGroup = 'general' | 'preferences' | 'security' | 'data';
 
-/** Rail order of the groups (General → Preferences → Security). */
+/**
+ * Rail order of the groups (General → Preferences → Security → Data).
+ *
+ * `data` is FOURTH and LAST, and that placement is the design's own argument
+ * (`design/settings/design-notes.md` → `Data & privacy` → *The ACCESS PATH*):
+ * the rail renders groups in array order, so an entry appended to `general`
+ * would land SECOND overall — an irreversible account action three rows above
+ * the language picker. A fourth group ordered last is the only shape this
+ * registry offers that puts account deletion at the BOTTOM, where every mirror
+ * product puts it. It costs one member on the union above and one i18n key.
+ */
 export const ACCOUNT_SETTINGS_NAV_GROUP_ORDER: AccountSettingsNavGroup[] = [
   'general',
   'preferences',
   'security',
+  'data',
 ];
 
 export interface AccountSettingsNavEntry {
@@ -149,6 +160,24 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
     // command-palette action id (`account-settings-apiTokens`), the `labelKey`
     // indexes `settings.account.nav.apiTokens`, and neither is a surface a
     // reader ever sees — that story renames the LABEL, not the key.
+  },
+  {
+    id: 'data',
+    group: 'data',
+    href: '/settings/account/data',
+    icon: Database,
+    labelKey: 'data',
+    // Story 8.4 · Subtask MOTIR-1136 — the `Data › Data & privacy` pane: export
+    // your personal data, and close your account. This row is the pane's ONLY
+    // door (`design/settings/account-data.mock.html` draws it active in panels
+    // 1, 4, 5 and 6), and the reason it opens a FOURTH group rather than joining
+    // `general` is recorded on ACCOUNT_SETTINGS_NAV_GROUP_ORDER above.
+    //
+    // Landed in the SAME commit as `app/(authed)/settings/account/data/page.tsx`,
+    // which is what keeps the route↔registry totality assertion in
+    // `tests/settings/accountSettingsNav.test.ts` green by construction — the
+    // same move 7.8.3 (API tokens), 7.3.58 (Appearance) and 8.11 (Two-factor)
+    // each made.
   },
 ];
 
