@@ -54,6 +54,9 @@ beforeEach(() => {
   vi.stubGlobal('fetch', (input: string, init?: { method?: string }) => {
     const url = String(input);
     calls.push({ url, method: init?.method ?? 'GET' });
+    // A stored run's status read — always terminal, which is what makes
+    // `resumeRun()` below a one-mount entry into `reload()`.
+    if (url.startsWith('/api/ai/jobs/')) return Promise.resolve(json({ status: 'succeeded' }));
     if (url.includes('/convention')) {
       const repoKey = new URL(url, 'http://t').searchParams.get('repoKey') ?? '';
       return Promise.resolve(json(surface(repoKey, conventionDerived(repoKey))));
@@ -65,11 +68,12 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
-function render(overrides: { loadError?: string | false } = {}) {
+function render() {
   return renderWithIntl(
     <CodeHealthClient
       projectId="proj_1"
@@ -79,21 +83,44 @@ function render(overrides: { loadError?: string | false } = {}) {
       initialSelectedRepoKey={REPOS[0]!}
       initialSelectedAudit={null}
       initialConventions={[]}
-      loadError={overrides.loadError ?? false}
     />,
   );
 }
 
-async function clickRetry() {
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-  });
+const RUN_KEY = 'motir:code-health:reaudit-run:proj_1';
+
+/**
+ * Mount into a landed run, which is how `reload()` is actually reached.
+ *
+ * These paths used to get there by seeding the island with a whole-surface
+ * `loadError` and clicking the strip's Retry — a prop that could never be set
+ * (MOTIR-3719) and is now gone. A run fired before the reader left the page and
+ * finished while they were away is the real entry, and it is the one MOTIR-2223
+ * built: the resume resolves the stored job ids, sees them terminal, and
+ * re-reads every surface exactly once. Same function under test, reached the way
+ * production reaches it.
+ *
+ * The call log is CLEARED afterwards, so each assertion below measures the
+ * reload's own fan-out and not the status reads that triggered it.
+ */
+async function resumeRun() {
+  localStorage.setItem(
+    RUN_KEY,
+    JSON.stringify({
+      repos: REPOS.map((repoKey) => ({
+        repoKey,
+        auditJobId: `job_audit_${repoKey}`,
+        conventionJobId: `job_conv_${repoKey}`,
+      })),
+    }),
+  );
+  render();
+  await act(async () => {});
 }
 
 describe('CodeHealthClient — per-repo reads (MOTIR-2123)', () => {
   it('reload() refetches the WHOLE convention set — one scoped request per repo', async () => {
-    render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
-    await clickRetry();
+    await resumeRun();
 
     const conventionCalls = calls.filter((c) => c.url.includes('/convention'));
     expect(
@@ -102,8 +129,7 @@ describe('CodeHealthClient — per-repo reads (MOTIR-2123)', () => {
   });
 
   it('reloads EVERY repo’s audit, each scoped — never an unscoped fetch (MOTIR-2207)', async () => {
-    render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
-    await clickRetry();
+    await resumeRun();
 
     // One summary read PER connected repo: the list needs every repo's
     // `healthSummary` + `total`, so a reload that refreshed only the first
@@ -116,13 +142,16 @@ describe('CodeHealthClient — per-repo reads (MOTIR-2123)', () => {
     expect(scoped.every((u) => u.searchParams.get('findingsLimit') === '1')).toBe(true);
     // Both endpoints REQUIRE the param — an unscoped read is a 400, not a
     // first-repo default (motir-ai `requireQuery`).
-    expect(calls.every((c) => c.url.includes('repoKey='))).toBe(true);
+    const boundaryCalls = calls.filter(
+      (c) => c.url.includes('/convention') || c.url.includes('/audit'),
+    );
+    expect(boundaryCalls.length).toBeGreaterThan(0);
+    expect(boundaryCalls.every((c) => c.url.includes('repoKey='))).toBe(true);
   });
 
   it('renders one convention card per repo after a reload, dropping only the underived ones', async () => {
     conventionDerived = (repoKey) => repoKey !== 'moooon/motir-core';
-    render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
-    await clickRetry();
+    await resumeRun();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Convention' }));

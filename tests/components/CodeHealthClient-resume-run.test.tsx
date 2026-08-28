@@ -107,7 +107,6 @@ function render() {
       initialSelectedRepoKey={REPOS[0]!}
       initialSelectedAudit={null}
       initialConventions={[]}
-      loadError={false}
     />,
   );
 }

@@ -52,6 +52,16 @@ export interface CodeHealthSurfaces {
 // (`NotProjectAdminError` / `ProjectNotFoundError`) come from `assertCanManage`
 // and are a statement about the CALLER, not about one repo — swallowing them
 // per repo would turn the admin-only screen into five broken rows.
+//
+// ⚠️ AND THIS CONTAINMENT IS TOTAL, WHICH IS WHY THE PAGE NO LONGER KEEPS A
+// WHOLE-SURFACE `loadError` (MOTIR-3719). These two functions are the page's
+// ONLY `aiConventionService` call sites, and every path through
+// `loadCodeHealthSurfaces` — `repoRefs.length === 0`, `=== 1`, `> 1`, and the
+// selected-repo re-read — goes through one of them. So a `MotirAiError` cannot
+// reach the caller's `catch`, and the arm that used to sit there was dead from
+// the moment MOTIR-2207 landed. `design/coding-convention/design-notes.md`
+// Panel 7 §6 draws the answer that survives: the row's own `unavailable` state,
+// and the page "does not fall into the whole-page `loadError`".
 async function readRepoAudit(
   projectId: string,
   svcCtx: { userId: string; workspaceId: string },
@@ -249,11 +259,19 @@ export default async function CodeHealthPage() {
   let initialSelectedRepoKey: string | null = null;
   let initialSelectedAudit: CodeAuditSurfaceDTO | null = null;
   let initialConventions: ConventionSurfaceDTO[] = [];
-  // Reached only by a failure that is NOT one repo's read — those are contained
-  // per repo above and surface as that row's own state.
-  let loadError: string | false = false;
 
   // Resolve connected repos for per-repo convention/audit scoping (MOTIR-1662).
+  //
+  // ⚠️ THIS READ REACHES NO motir-ai CLIENT, and it is said here because the
+  // module path (`lib/ai/codeContext`) says the opposite (MOTIR-3719).
+  // `resolveCodeContext` is a `withWorkspaceContext` transaction over two Prisma
+  // repositories — the persisted installation-grant mirror (MOTIR-891) — and its
+  // whole import closure is `@/lib/db` plus `@/generated/prisma/client`. Every
+  // `MotirAiError` in this codebase is constructed in `lib/ai/motirAiClient.ts`
+  // (and one site in `projectLessonsService`), none of which it can reach. So it
+  // is issued outside the `try` deliberately: there is no motir-ai failure for
+  // that `try` to catch here, and moving it inside would only widen the
+  // project-gate arm over a read that does not raise one.
   const code = await resolveCodeContext({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
@@ -276,11 +294,11 @@ export default async function CodeHealthPage() {
           </div>
         );
       }
-      if (err instanceof MotirAiError) {
-        loadError = `${err.code}: ${err.message}`;
-      } else {
-        throw err;
-      }
+      // Everything else is a genuine server error and is RETHROWN. There is no
+      // `MotirAiError` arm here: the per-repo containment above absorbs every
+      // one of them (see the note on `readRepoAudit`), so such an arm could
+      // never execute (MOTIR-3719).
+      throw err;
     }
   }
 
@@ -294,7 +312,6 @@ export default async function CodeHealthPage() {
         initialSelectedRepoKey={initialSelectedRepoKey}
         initialSelectedAudit={initialSelectedAudit}
         initialConventions={initialConventions}
-        loadError={loadError}
       />
     </div>
   );

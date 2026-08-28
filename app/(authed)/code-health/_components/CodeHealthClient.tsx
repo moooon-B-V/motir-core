@@ -160,7 +160,6 @@ export function CodeHealthClient({
   initialSelectedRepoKey,
   initialSelectedAudit,
   initialConventions,
-  loadError,
 }: {
   projectId: string;
   /** The connected repos this page would audit (`owner/name`), resolved by the
@@ -175,7 +174,6 @@ export function CodeHealthClient({
   /** The selected repo's report, read at the FULL findings page size. */
   initialSelectedAudit: CodeAuditSurfaceDTO | null;
   initialConventions: ConventionSurfaceDTO[];
-  loadError: string | false;
 }) {
   const t = useTranslations('codeHealth');
   const [tab, setTab] = useState<Tab>('audit');
@@ -218,9 +216,14 @@ export function CodeHealthClient({
   // from `error` on purpose: it is a resting state the audit tab draws, not a
   // failure, and the rose strip would tell the user their audit broke.
   const [pollExhausted, setPollExhausted] = useState(false);
-  const [error, setError] = useState<string | null>(
-    loadError ? `${t('errorLoad')} — ${loadError}` : null,
-  );
+  // The rose strip's message. Always starts EMPTY: this island is seeded from a
+  // successful server read, and a motir-ai failure during that read is contained
+  // as the failing repo's OWN row state, never as a whole-surface banner
+  // (MOTIR-2207; MOTIR-3719 removed the `loadError` prop that used to seed this,
+  // because nothing could ever set it). Everything below still writes here — a
+  // `reload()` whose convention read fails, a findings page that fails, a
+  // re-audit that fails or outlives its poll window.
+  const [error, setError] = useState<string | null>(null);
   const pageSeq = useRef(0);
   const reauditSeq = useRef(0);
   // ⚠️ The ONE-POST latch, and it must be a REF. `reauditing` is `useState`, so

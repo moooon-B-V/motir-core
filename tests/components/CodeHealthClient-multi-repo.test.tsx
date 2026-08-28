@@ -144,7 +144,6 @@ function render(
             : (audits.find((a) => a.repoKey === selected)?.surface ?? null)
       }
       initialConventions={[]}
-      loadError={false}
     />,
     { now: NOW },
   );

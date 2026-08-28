@@ -11,12 +11,20 @@ import type { CodeAuditFindingDTO, CodeAuditSurfaceDTO } from '@/lib/dto/codeHea
 // floor is measured on the file, not on the diff: a path nothing exercises is a
 // path the next change to the run breaks silently.
 //
-// Covered here: the load-error strip and its retry, a project with NO connected
+// Covered here: the error strip and its retry, a project with NO connected
 // repo (both at seed time and as a stored report whose repos were later
 // disconnected), findings pagination (success · failure), the convention tab,
 // the deepen dismiss/re-open flags, a re-audit whose POST fails, and both ends
 // of the 60-second poll window (State D on a first audit, the pending strip on
 // a RE-audit).
+//
+// ⚠️ THE STRIP IS REACHED THROUGH A LANDED RUN, NOT THROUGH A SEEDED PROP
+// (MOTIR-3719). These cases used to hand the island a whole-surface `loadError`
+// and click the strip's Retry. Nothing could ever set that prop — every
+// `MotirAiError` on the server page is contained as the failing repo's OWN row
+// — so it is gone, and the strip is now seeded the way production seeds it: a
+// run that finished while the reader was away lands on mount, `reload()` runs,
+// and its convention read fails.
 
 const REPOS = ['moooon/motir-ai', 'moooon/motir-core'];
 
@@ -116,7 +124,6 @@ function render(
   over: {
     repoRefs?: string[];
     initialAudit?: CodeAuditSurfaceDTO | null;
-    loadError?: string | false;
     /** Whose report is on screen. Defaults to the first connected repo; set it
      *  explicitly to seed a report for a repo that is no longer connected. */
     selectedRepoKey?: string | null;
@@ -145,9 +152,39 @@ function render(
       initialSelectedRepoKey={selected}
       initialSelectedAudit={initialAudit}
       initialConventions={[]}
-      loadError={over.loadError ?? false}
     />,
   );
+}
+
+const RUN_KEY = 'motir:code-health:reaudit-run:proj_1';
+
+/**
+ * Put the rose strip on screen the way production does.
+ *
+ * A run fired before the reader left the page lands while they are away; the
+ * resume resolves its job ids, sees them terminal, and calls `reload()` — whose
+ * convention read fails here, which is the one thing that writes the strip
+ * (`setError(t('errorLoad'))`). Retry then re-enters the same `reload()`.
+ *
+ * `conventionOk` is left FALSE on return: a case that wants the retry to
+ * succeed flips it itself, which keeps the two outcomes visible at the
+ * assertion rather than buried in the helper.
+ */
+async function renderWithStrip(over: Parameters<typeof render>[0] = {}) {
+  localStorage.setItem(
+    RUN_KEY,
+    JSON.stringify({
+      repos: (over.repoRefs ?? REPOS).map((repoKey) => ({
+        repoKey,
+        auditJobId: `job_audit_${repoKey}`,
+        conventionJobId: `job_conv_${repoKey}`,
+      })),
+    }),
+  );
+  conventionOk = false;
+  const result = render(over);
+  await act(async () => {});
+  return result;
 }
 
 const click = async (name: string | RegExp) => {
@@ -157,10 +194,11 @@ const click = async (name: string | RegExp) => {
 };
 
 describe('CodeHealthClient — the island’s remaining paths', () => {
-  it('a server-side load error renders the strip, and Retry re-reads both surfaces', async () => {
-    render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
+  it('a failed convention read renders the strip, and Retry re-reads both surfaces', async () => {
+    await renderWithStrip();
     expect(screen.getByText(/Couldn’t load code health/)).toBeTruthy();
 
+    conventionOk = true;
     auditReply = () => Promise.resolve(json(surface()));
     await click('Retry');
 
@@ -170,8 +208,8 @@ describe('CodeHealthClient — the island’s remaining paths', () => {
   });
 
   it('a Retry whose read FAILS puts the strip back rather than blanking the page', async () => {
-    render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
-    conventionOk = false;
+    await renderWithStrip();
+    // `conventionOk` stays false — the retry hits the same failure.
     await click('Retry');
 
     expect(
@@ -180,11 +218,15 @@ describe('CodeHealthClient — the island’s remaining paths', () => {
   });
 
   it('a project with NO connected repo reads nothing at all — there is no repoKey to scope by', async () => {
-    render({ repoRefs: [], loadError: 'MOTIR_AI_UNAVAILABLE: down' });
-    await click('Retry');
+    // The landed run still resolves — it was fired when repos WERE connected —
+    // so `reload()` runs with an empty repo set, which is the case this pins.
+    await renderWithStrip({ repoRefs: [] });
 
-    // Both boundary reads REQUIRE a repoKey, so an unscoped fetch would be a 400.
-    expect(calls).toHaveLength(0);
+    // Both boundary reads REQUIRE a repoKey, so an unscoped fetch would be a
+    // 400. `reload()` issues neither, and there is no strip to retry from: the
+    // no-repo arm returns before anything can fail.
+    expect(calls.filter((c) => !c.url.startsWith('/api/ai/jobs/'))).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(screen.getByText('No codebase to analyze yet')).toBeTruthy();
   });
 
@@ -214,7 +256,8 @@ describe('CodeHealthClient — the island’s remaining paths', () => {
   });
 
   it('the Convention tab renders one card per repo the reload derived', async () => {
-    render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
+    await renderWithStrip();
+    conventionOk = true;
     await click('Retry');
     await click('Convention');
 

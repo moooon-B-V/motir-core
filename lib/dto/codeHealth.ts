@@ -133,8 +133,10 @@ export interface CodeAuditSurfaceDTO {
 //                             store has nothing for this repo. Never an error.
 //   surface === null        → "Couldn't load this report". This repo's read
 //                             REJECTED. It degrades THIS row only — its
-//                             siblings' reports still render and the page does
-//                             not fall into the whole-page `loadError`.
+//                             siblings' reports still render, and there is no
+//                             whole-page failure state for it to fall into:
+//                             MOTIR-3719 removed the page's `loadError`, which
+//                             this containment had made unreachable.
 export interface RepoAuditSurfaceDTO {
   repoKey: string;
   surface: CodeAuditSurfaceDTO | null;
