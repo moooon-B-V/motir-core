@@ -121,11 +121,21 @@ async function seedTenant(options: { withRunnerGroup?: boolean; email?: string }
   } satisfies Fixture;
 }
 
+/** The per-call `jobId` counter, shared by every helper in this file that writes
+ *  an intent. `@@unique([runId, runAttempt, jobId])` is the constraint, and both
+ *  helpers below hold `runAttempt` fixed — so a `jobId` drawn at random was the
+ *  only thing keeping two seeded rows apart, at a birthday rate the suite paid
+ *  for as a rare unattributable flake (MOTIR-3845). A counter is unique by
+ *  construction; one counter for both helpers means their bases cannot meet
+ *  either. */
+let jobSeq = 0;
+
 /** One pending intent, exactly as MOTIR-1920's handler writes it. */
 async function seedIntent(
   fx: Fixture,
   overrides: { jobId?: string; projectId?: string | null } = {},
 ) {
+  jobSeq += 1;
   return adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: fx.workspaceId,
@@ -134,7 +144,7 @@ async function seedIntent(
       installationId: '556677',
       runId: '7001',
       runAttempt: 1,
-      jobId: overrides.jobId ?? String(44000 + randomInt(900)),
+      jobId: overrides.jobId ?? String(44_000 + jobSeq),
       jobName: 'build',
       workflowName: 'CI',
       repoOwner: MOTIR_ORG,
@@ -1112,6 +1122,7 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
     fx: Fixture,
     overrides: { projectId?: string | null; jobId?: string; githubRunnerId?: number | null } = {},
   ) {
+    jobSeq += 1;
     const intent = await adminDb.ciRunnerProvisioningIntent.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -1120,7 +1131,7 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
         installationId: '556677',
         runId: `orphan-${randomToken(6)}`,
         runAttempt: 1,
-        jobId: overrides.jobId ?? String(45_000 + randomInt(900)),
+        jobId: overrides.jobId ?? String(45_000 + jobSeq),
         jobName: 'build',
         workflowName: 'CI',
         repoOwner: MOTIR_ORG,
