@@ -2,7 +2,11 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { deliverySetIsGreen } from '@/lib/workItems/deliverySet';
+import {
+  deliverySetIsGreen,
+  deliveryStateForPromotion,
+  repoCannotReportChecks,
+} from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
@@ -102,6 +106,15 @@ const TARGET_STATUS = 'in_review';
  * Development pill shows and MOTIR-3697's `deliveries` field publishes, at the
  * latest recorded sha. A second opinion here would drift from what a person
  * reads on the card it is deciding about.
+ *
+ * ── ONE AMENDMENT, AND IT IS THE PROMOTION'S ALONE (MOTIR-3823) ───────────
+ * `derivePrCiState`'s `null` means "no check rows", which is true of a
+ * repository with NO CI and of one that has not reported YET. The first counts
+ * as green and the second must withhold, so this function asks a second question
+ * — of the REPOSITORY, since the pull request cannot tell them apart — and maps
+ * the member through `deliveryStateForPromotion` before the set is judged. The
+ * derivation itself is untouched: every surface that renders `null` as "no CI
+ * pill" keeps doing so.
  */
 async function everyDeliveryIsGreen(
   item: { id: string; sessionBranch: string | null },
@@ -115,11 +128,46 @@ async function everyDeliveryIsGreen(
       : Promise.resolve([]),
   ]);
 
-  const byId = new Map<string, { checkRuns: GithubCheckRun[] }>();
+  const byId = new Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>();
   for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
   for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
 
-  return deliverySetIsGreen([...byId.values()].map((pr) => derivePrCiState(pr.checkRuns)));
+  const members = [...byId.values()].map((pr) => ({
+    repoId: pr.repoId,
+    state: derivePrCiState(pr.checkRuns),
+  }));
+
+  // ⚠️ THE SECOND QUESTION, ASKED ONLY OF THE MEMBERS THAT NEED IT (MOTIR-3823).
+  // `derivePrCiState` returns `null` both for a repository that has no CI and for
+  // one that has simply not reported yet, and the promotion must read those two
+  // oppositely: the first is green, the second withholds. The follow-up is asked
+  // of the REPOSITORY (`repoCannotReportChecks`), because the pull request cannot
+  // tell them apart. A set with no `null` in it — nearly every card — pays
+  // nothing: `silentRepoIds` is empty and the read is skipped entirely.
+  const silentRepoIds = [...new Set(members.filter((m) => m.state === null).map((m) => m.repoId))];
+  const [reporting, mergedSilent] = await Promise.all([
+    githubPullRequestRepository.listRepoIdsWithAnyCheckRun(silentRepoIds, tx),
+    githubPullRequestRepository.listRepoIdsWithAMergedPullRequestWithoutChecks(silentRepoIds, tx),
+  ]);
+  const hasReported = new Set(reporting);
+  const hasMergedSilently = new Set(mergedSilent);
+  // A repository neither read returns has no history at all, so it falls to
+  // `hasEverReportedACheck: false, hasMergedWithoutAnyCheck: false` — which
+  // `repoCannotReportChecks` reads as ABLE to report, and which withholds. Every
+  // unknown here takes that direction.
+  const cannotReport = new Set(
+    silentRepoIds.filter((repoId) =>
+      repoCannotReportChecks({
+        repoId,
+        hasEverReportedACheck: hasReported.has(repoId),
+        hasMergedWithoutAnyCheck: hasMergedSilently.has(repoId),
+      }),
+    ),
+  );
+
+  return deliverySetIsGreen(
+    members.map((m) => deliveryStateForPromotion(m.state, cannotReport.has(m.repoId))),
+  );
 }
 
 /**

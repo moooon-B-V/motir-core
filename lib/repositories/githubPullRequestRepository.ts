@@ -265,6 +265,52 @@ export const githubPullRequestRepository = {
     });
   },
 
+  /**
+   * Which of these repositories has EVER recorded a check run (MOTIR-3823) —
+   * the first half of the CI-green promotion's *can this repository report?*
+   * question.
+   *
+   * `distinct` on the repository rather than a count: the question is existence,
+   * and a repository with ten thousand reporting pull requests must not pay to
+   * say so. Read inside the promotion's transaction, so it takes `tx`.
+   */
+  async listRepoIdsWithAnyCheckRun(
+    repoIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (repoIds.length === 0) return [];
+    const rows = await tx.githubPullRequest.findMany({
+      where: { repoId: { in: [...repoIds] }, checkRuns: { some: {} } },
+      select: { repoId: true },
+      distinct: ['repoId'],
+    });
+    return rows.map((row) => row.repoId);
+  },
+
+  /**
+   * Which of these repositories has a pull request that reached MERGE without
+   * ever recording a check run (MOTIR-3823) — the second half, and the one that
+   * is EVIDENCE rather than the absence of it.
+   *
+   * A merged pull request had its whole lifetime to produce a check and produced
+   * none, which is what separates *this repository has no CI* from *this
+   * repository has not run CI yet*. The interpretation is
+   * `repoCannotReportChecks` in `lib/workItems/deliverySet.ts`; this read
+   * supplies a fact and decides nothing.
+   */
+  async listRepoIdsWithAMergedPullRequestWithoutChecks(
+    repoIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (repoIds.length === 0) return [];
+    const rows = await tx.githubPullRequest.findMany({
+      where: { repoId: { in: [...repoIds] }, merged: true, checkRuns: { none: {} } },
+      select: { repoId: true },
+      distinct: ['repoId'],
+    });
+    return rows.map((row) => row.repoId);
+  },
+
   /** One PR by its internal id, with its repo + parent installation (the
    *  workspace-tenancy chain the explicit-link service validates) + check rows
    *  (the returned DTO). Read guarding a write → takes `tx`. Null when absent. */
