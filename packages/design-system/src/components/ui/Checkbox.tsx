@@ -32,6 +32,15 @@ import { cn } from '../../utils/cn';
  *
  * @example
  * <Checkbox checked={held} onChange={setHeld} label="Add comments" />
+ *
+ * @example
+ * // A box whose meaning is not set-membership passes its own state clause.
+ * <Checkbox
+ *   checked={done}
+ *   onChange={setDone}
+ *   label="Open the DNS panel"
+ *   stateLabels={{ checked: 'Done', unchecked: 'Not done' }}
+ * />
  */
 export interface CheckboxProps {
   checked: boolean;
@@ -47,6 +56,23 @@ export interface CheckboxProps {
   labelVisible?: boolean;
   id?: string;
   className?: string;
+  /**
+   * The state clause the accessible name carries, when *held / not held* is the
+   * wrong vocabulary for what this box composes.
+   *
+   * ⚠️ THE DEFAULT IS SET-MEMBERSHIP, AND THAT IS NOT UNIVERSAL. This primitive
+   * was built for the role editor, where a box genuinely means *this permission
+   * is part of the set I am composing* — so `checkboxStateLabel` says **Held /
+   * Not held**, and for that surface it is exactly right. A box that means
+   * *this step is finished* (`Done / Not done`) or *this option is on* reads
+   * wrongly under a screen reader with that clause, and the wording is the only
+   * thing carrying the state: the fill is colour, which 1.4.1 does not let us
+   * lean on.
+   *
+   * Optional and defaulted, so every existing call site keeps the wording it
+   * has and only a caller with different semantics has to think about it.
+   */
+  stateLabels?: { checked: string; unchecked: string };
 }
 
 /** The state clause the accessible name carries — never a colour, always words. */
@@ -62,7 +88,13 @@ export function Checkbox({
   labelVisible,
   id,
   className,
+  stateLabels,
 }: CheckboxProps) {
+  const stateClause = stateLabels
+    ? checked
+      ? stateLabels.checked
+      : stateLabels.unchecked
+    : checkboxStateLabel(checked);
   return (
     <button
       type="button"
@@ -70,7 +102,7 @@ export function Checkbox({
       id={id}
       aria-checked={checked}
       aria-disabled={disabled || undefined}
-      aria-label={`${label}, ${checkboxStateLabel(checked)}`}
+      aria-label={`${label}, ${stateClause}`}
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
       className={cn(
