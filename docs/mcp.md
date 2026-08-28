@@ -1333,8 +1333,9 @@ of its own: a `research` card's findings document, a `review`'s notes, a
 The **repository stays the source of truth** for anything that also lives in one.
 The attachment is the card's view of that file, never a second home for it.
 
-⚠️ **Not for a design asset.** A design result has its own publisher and its own
-panel on the work item, and `text/html` is refused here — the three layers that
+⚠️ **Not for a design asset.** A design result has its own publisher
+(`publish_design_result`, below) and its own panel on the work item, and
+`text/html` is refused here — the three layers that
 make HTML safe to serve belong to that lifecycle. The rule, in the form a prompt
 author can act on: _a deliverable a LIFECYCLE owns goes through that lifecycle's
 publisher; everything else goes through this tool. If you are unsure, the test is
@@ -1374,6 +1375,94 @@ card, and this is a permission the token `motir auth login` mints **does** carry
 so a dispatched run can call it. (Worth checking for any tool you write: a
 permission outside that grant produces a tool that works perfectly for an
 interactive operator and not at all for the agent it was built for.)
+
+#### `publish_design_result`
+
+Put the **design result on a design work item** — the note sections you changed,
+the `*.mock.html` mock and the `.png` export, in ONE call. It is the last step of
+a design card and the deliverable a reviewer actually opens: the pull request is
+not it, and a card whose panel is empty reads as a design nobody did.
+
+⚠️ **Nothing else publishes it.** There is no CI lane, no check and no background
+job behind this call. A design card that commits its three files and never makes
+it looks _identical_ to one that succeeded — files written, commit landed, pull
+request open, checks green, and an empty panel. **The confirmation is the
+evidence `id` this call returns.**
+
+The **repository stays the source of truth**. The published result is the card's
+VIEW of assets that are still committed, never a replacement for them, and
+`sourcePath` is what records where each published copy came from.
+
+⚠️ **It replaced a CI script, and the reason is worth one paragraph** because it
+is the argument for declaring rather than inferring. Until MOTIR-3797 the
+publisher was `scripts/upload-design-assets.mjs`, which resolved its target card
+from the branch ref and then the pull-request title, and its file set from a
+diff. Two consequences: a pull request that touched `design/**` in passing
+published those assets onto whichever card its own branch happened to name,
+under a green check; and the script had to BE PRESENT in whatever repository the
+design landed in — met in one of four, with a SHA-pinned copy in a second and a
+seventeen-day-stale fork in a third. **A stale copy is green**: nothing imports
+it, nothing type-checks it, no check compares it to anything. The three
+inferences are now three declarations, and the file is in no repository at all.
+`docs/decisions/design-result.md` AMENDMENT 2 is the record.
+
+| Input             | Type   | Required | Notes                                                                                                                       |
+| ----------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `key`             | string | yes      | The work item this result belongs to, e.g. `"ACME-7"`. A LEAF — see the refusals.                                           |
+| `assets`          | array  | yes      | The files, at least one. Normally three; each entry is the object below.                                                    |
+| `noteMd`          | string | no       | The `##` SECTIONS this work changed, as Markdown — never the whole area note.                                               |
+| `commitSha`       | string | no       | The commit the assets were published from. Also the **idempotency key**.                                                    |
+| `producedByKey`   | string | no       | The work item whose pull request produced this result.                                                                      |
+| `withinParentKey` | string | no       | On a PARENT-RUN publish: the container whose branch this belongs to. Asserts the target is one of its children; not stored. |
+
+Each `assets[]` entry:
+
+| Field           | Type   | Required | Notes                                                                                               |
+| --------------- | ------ | -------- | --------------------------------------------------------------------------------------------------- |
+| `kind`          | string | yes      | `"mock"` for the `*.mock.html`, `"image"` for the `.png`, `"note_file"` for the complete note text. |
+| `sourcePath`    | string | yes      | The path the file has IN THE REPOSITORY, e.g. `"design/work-items/detail.png"`.                     |
+| `contentType`   | string | yes      | `text/html`, `image/png` or `text/markdown`. Anything else is refused.                              |
+| `contentBase64` | string | yes      | The file's bytes, base64-encoded.                                                                   |
+
+**The three kinds are a closed set** (`mock` / `image` / `note_file`), mirroring
+the `design_asset_kind` column. `note_file` carries the COMPLETE note text as a
+file while `noteMd` carries only the sections you wrote — which is what makes the
+64 KiB cap on `noteMd` a rendering bound rather than a data-loss one. Over that
+size it is truncated at a `##` boundary for display and the result says so.
+
+⚠️ **`text/html` has exactly ONE entrance and this is it.** A design mock is HTML
+rendered to a signed-in user, so its safety rests on the design-asset allowlist
+being reachable through this path and nowhere else. `attach_file` still refuses
+`text/html` with a 415, and that refusal stays correct
+(`docs/decisions/design-result.md` §5, `docs/decisions/attachment-api-door.md` §3).
+
+Bytes arrive base64-encoded because MCP carries JSON, not multipart. A payload
+that is not valid base64 is **refused rather than salvaged**: `Buffer.from(s,
+'base64')` discards characters outside the alphabet instead of failing, so an
+unchecked decode would publish a corrupt mock under a real evidence id that only
+fails when a reviewer opens the panel. The refusal names WHICH asset, so a
+three-asset publish does not have to be bisected.
+
+**Output** — `structuredContent`: `id` (the evidence id — quote it on the card),
+`workItemKey`, `assetCount`, `noteTruncated`, `createdAt`.
+
+**Refusals** — every one comes from the shipped design-evidence service, so this
+tool and the HTTP publish route answer one rule:
+
+| Refusal                         | When                                                                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_BASE64`                | An asset's `contentBase64` is not valid base64. Names the `sourcePath`.                                                                                                   |
+| container target                | `key` names an epic / story / task with children. A design result belongs to the LEAF that produced it.                                                                   |
+| not a child                     | `withinParentKey` is given and `key` is not one of that container's children. One transposed digit once addressed 126 artifacts to a manual billing task in another epic. |
+| disallowed media type           | A `contentType` outside `text/html` / `image/png` / `text/markdown`.                                                                                                      |
+| oversize file                   | An asset over the per-file upload cap. The surviving mint-then-PUT route is the door for one that genuinely does not fit.                                                 |
+| unknown / cross-workspace `key` | A 404, indistinguishable from a work item the token cannot reach.                                                                                                         |
+
+**Permission** — `work_item:edit`. The same key `attach_file` asserts, and one
+the token `motir auth login` mints **does** carry — so a dispatched run can
+actually call it. Moving the publish from CI to the agent therefore added no
+credential and no trust; it only stopped requiring a script to be present in the
+repository.
 
 #### `link_work_items`
 
