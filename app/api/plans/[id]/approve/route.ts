@@ -11,6 +11,7 @@ import {
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotInExpectedStatusError,
+  PlanProposalRepoPinMovedError,
   PlanRefGraphError,
   PlanTargetImmutableError,
   UnresolvedPlanRefError,
@@ -64,6 +65,17 @@ export async function POST(
       return NextResponse.json(
         { code: err.code, reason: err.reason, planItemId: err.planItemId, error: err.message },
         { status: 400 },
+      );
+    }
+    // A proposal's repo pin MOVED between approve's pre-transaction resolution and
+    // the transaction that materializes it (MOTIR-3604) — 409, like the two
+    // arms above and for the same reason: nothing is malformed, the proposal set
+    // moved under the approve. The transaction rolled back, so the correction
+    // stands and re-pressing Approve applies it.
+    if (err instanceof PlanProposalRepoPinMovedError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, error: err.message },
+        { status: 409 },
       );
     }
     if (err instanceof PlanTargetImmutableError) {

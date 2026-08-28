@@ -211,6 +211,47 @@ export class PlanItemUnknownTargetRepoRoleError extends Error {
 }
 
 /**
+ * A proposal's `targetRepo` MOVED between approve's pre-transaction resolution
+ * and the transaction that materializes it (Bug MOTIR-3604,
+ * `agent-authored-plans.md` AMENDMENT 9 D4).
+ *
+ * `approvePlan` resolves every pin against the project's repository domain
+ * BEFORE its transaction opens — the domain read opens its own workspace context
+ * and cannot nest inside the write lock. The transaction then re-reads the
+ * proposal set FRESH. AMENDMENT 8's correction door (`correctProposal`) is legal
+ * on a `planned` plan, so a correction landing in that window leaves the two
+ * disagreeing, and the card materializes with the pin its proposal no longer
+ * holds — or with none.
+ *
+ * → 409, not 422. Nothing is malformed: the plan and the correction are both
+ * valid and the proposal set simply moved under the approve, which is the same
+ * thing {@link PlanTargetImmutableError} and {@link PlanNotInExpectedStatusError}
+ * say. The transaction rolls back, so the correction stands, the plan is still
+ * `planned`, and re-pressing Approve resolves the NEW pin and succeeds. One
+ * retry for a reviewer is the trade against a card pinned to the wrong
+ * repository — a wrong answer nothing downstream can detect, because the plan's
+ * own record reads correct.
+ */
+export class PlanProposalRepoPinMovedError extends Error {
+  readonly code = 'PLAN_PROPOSAL_REPO_PIN_MOVED' as const;
+  constructor(
+    /** The PlanItem whose pin moved. */
+    readonly planItemId: string,
+    /** That proposal, as its author can recognise it. */
+    readonly proposalLabel: string,
+    /** The spelling the pre-transaction snapshot resolved, or `undefined` when
+     *  the snapshot carried no pin for this proposal at all. */
+    readonly resolvedFrom: string | null | undefined,
+    /** The spelling the FRESH proposal authors now, same encoding. */
+    readonly authoredNow: string | null | undefined,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PlanProposalRepoPinMovedError';
+  }
+}
+
+/**
  * The op a plan may hold at most one of per existing target. `add` is absent
  * deliberately: an `add` has no target until materialize (its `workItemId` is
  * null), which is exactly why the unique index constrains real targets only.

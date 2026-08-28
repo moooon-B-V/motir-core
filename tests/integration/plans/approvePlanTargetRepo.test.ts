@@ -1,11 +1,12 @@
 import { type GithubRepo } from '@/generated/prisma/client';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
+import { projectRepoProposalService } from '@/lib/services/projectRepoProposalService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
-import { PlanItemUnknownTargetRepoError } from '@/lib/plans/errors';
+import { PlanItemUnknownTargetRepoError, PlanProposalRepoPinMovedError } from '@/lib/plans/errors';
 import type { ProposalInput } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
@@ -506,5 +507,201 @@ describe('the pin survives the plan READ-BACK', () => {
     const modify = read.items.find((i) => i.op === 'modify')!;
     expect(add.proposedFields?.targetRepo).toBe('acme-api');
     expect(modify.patch?.targetRepo).toBe('acme-web');
+  });
+});
+
+// ── The CORRECTION door, inside approve's own pre-transaction window (MOTIR-3604) ──
+//
+// `approvePlan` resolves every proposal's pin BEFORE its transaction opens, and
+// then awaits `proposeRepositorySet` — so there is a real window between the
+// resolution and the write. AMENDMENT 8's correction door (`correctProposal`) is
+// legal on a `planned` plan and reaches straight into it: the transaction re-reads
+// the proposal set FRESH and materializes it, but pins from the STALE map.
+//
+// The hook below is not a contrivance to open a window that would otherwise be
+// theoretical — it is the shipped ordering, driven at the one point a test can
+// reach it.
+describe('approvePlan — a correction that moves a pin inside the pre-transaction window', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Drive `correct` inside approve's window — after `repoPins` is resolved and
+   *  before the transaction opens — then let the real proposal run. */
+  function correctInsideApproveWindow(correct: () => Promise<unknown>): void {
+    const real = projectRepoProposalService.proposeRepositorySet.bind(projectRepoProposalService);
+    vi.spyOn(projectRepoProposalService, 'proposeRepositorySet').mockImplementation(
+      async (...args: Parameters<typeof projectRepoProposalService.proposeRepositorySet>) => {
+        await correct();
+        return real(...args);
+      },
+    );
+  }
+
+  it('REFUSES, naming the proposal — the stale pin never reaches a work item', async () => {
+    // The reproduction this card was filed on, now the assertion that the drop
+    // cannot happen. Before the fix this same window materialized the item with
+    // `acme-web` while its proposal read `acme-api` (`expected 'acme-web' to be
+    // 'acme-api'`); the refusal is what makes the pre-transaction resolution safe.
+    const fx = await makeWorkItemFixture();
+    await twoRepoProject(fx);
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Moved half', kind: 'task', targetRepo: 'acme-web' } },
+    ]);
+    const proposal = await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'add' } });
+
+    correctInsideApproveWindow(() =>
+      plansService.correctProposal(planId, proposal.id, { targetRepo: 'acme-api' }, fx.ctx),
+    );
+
+    const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanProposalRepoPinMovedError);
+    const moved = err as PlanProposalRepoPinMovedError;
+    expect(moved.code).toBe('PLAN_PROPOSAL_REPO_PIN_MOVED');
+    expect(moved.planItemId).toBe(proposal.id);
+    // The refusal names the proposal a reviewer of a hundred-item plan has to find,
+    // and both spellings, so the message says what to re-read.
+    expect(moved.proposalLabel).toContain('Moved half');
+    expect(moved.resolvedFrom).toBe('acme-web');
+    expect(moved.authoredNow).toBe('acme-api');
+
+    // NOTHING MATERIALIZED — asserted on the work-item side, which is where the
+    // defect was visible: no row carries the pin its proposal no longer holds.
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+  });
+
+  it('ROLLS BACK — the plan stays `planned`, the correction stands, and the retry applies it', async () => {
+    const fx = await makeWorkItemFixture();
+    await twoRepoProject(fx);
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Moved half', kind: 'task', targetRepo: 'acme-web' } },
+    ]);
+    const proposal = await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'add' } });
+
+    correctInsideApproveWindow(() =>
+      plansService.correctProposal(planId, proposal.id, { targetRepo: 'acme-api' }, fx.ctx),
+    );
+    await expect(plansService.approvePlan(planId, fx.ctx)).rejects.toBeInstanceOf(
+      PlanProposalRepoPinMovedError,
+    );
+
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+      'planned',
+    );
+    const stored = await adminDb.planItem.findUniqueOrThrow({ where: { id: proposal.id } });
+    expect((stored.proposedFields as { targetRepo?: string }).targetRepo).toBe('acme-api');
+    expect(stored.workItemId).toBeNull();
+
+    // …and the refusal costs exactly one retry: with the window hook gone, the
+    // SAME plan approves and materializes the pin the correction left behind.
+    vi.restoreAllMocks();
+    await plansService.approvePlan(planId, fx.ctx);
+    expect((await materializedItem(planId)).targetRepo).toBe('acme-api');
+  });
+
+  it('REFUSES a `modify` whose patch GAINED a pin in the window — the drop is silent there too', async () => {
+    // The `modify` half, and the one that is hardest to see: `applyModify` re-pins
+    // only when `repoPins.has(item.id)`, so a pin that ARRIVED after the snapshot
+    // was resolved is not a wrong pin — it is no write at all, and the card keeps
+    // whatever it had.
+    const fx = await makeWorkItemFixture();
+    await twoRepoProject(fx);
+    const existing = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Unpinned so far' },
+      fx.ctx,
+    );
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Late pin' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: existing.id, patch: { priority: 'high' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    const proposal = await adminDb.planItem.findFirstOrThrow({ where: { planId: plan.id } });
+
+    correctInsideApproveWindow(() =>
+      plansService.correctProposal(
+        plan.id,
+        proposal.id,
+        { patch: { priority: 'high', targetRepo: 'acme-api' } },
+        fx.ctx,
+      ),
+    );
+
+    const err = await plansService.approvePlan(plan.id, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanProposalRepoPinMovedError);
+    expect((err as PlanProposalRepoPinMovedError).resolvedFrom).toBeUndefined();
+    expect((err as PlanProposalRepoPinMovedError).authoredNow).toBe('acme-api');
+    // The target is untouched — the refusal rolled the whole approve back.
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } });
+    expect(row.targetRepo).toBeNull();
+    expect(row.priority).not.toBe('high');
+  });
+
+  it('`targetRepoRole` does NOT have this shape — the ROLE is read fresh, inside the transaction', async () => {
+    // The card's own out-of-scope note, CONFIRMED rather than assumed (MOTIR-3604
+    // AC 6). A role travels in `proposedFields` / `patch` on the FRESH row and is
+    // resolved to a reference inside the transaction (`proposalRepoRef`), so a
+    // correction landing in the same window is HONOURED, not dropped — which is
+    // why the check above is scoped to the pin and this needs no refusal.
+    //
+    // The pre-transaction pass over roles (`resolveProposedRepoRoles`) validates
+    // the vocabulary and collects §0.1.1's derivation signal from the snapshot,
+    // and that too has no reachable window: every door a role can arrive or move
+    // through asserts it at its OWN boundary — `validateProposal` at the append,
+    // `correctProposal` on a `modify`'s patch — and `CorrectProposalInput` carries
+    // no `targetRepoRole` for an `add` at all.
+    const fx = await makeWorkItemFixture();
+    await twoRepoProject(fx);
+    const existing = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Roled' },
+      fx.ctx,
+    );
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Role move' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: existing.id, patch: { targetRepoRole: 'web' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    const proposal = await adminDb.planItem.findFirstOrThrow({ where: { planId: plan.id } });
+
+    correctInsideApproveWindow(() =>
+      plansService.correctProposal(
+        plan.id,
+        proposal.id,
+        { patch: { targetRepoRole: 'api' } },
+        fx.ctx,
+      ),
+    );
+
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const refs = await adminDb.workItemRepo.findMany({
+      where: { workItemId: existing.id },
+      include: { projectRepo: true },
+    });
+    expect(refs.map((r) => r.projectRepo.name)).toEqual(['acme-api']);
+  });
+
+  it('does NOT refuse a correction that leaves the pin alone', async () => {
+    // The check must not turn every in-window correction into a refusal — only the
+    // ones that move the thing the snapshot resolved. A retitle is the common case
+    // and it approves normally.
+    const fx = await makeWorkItemFixture();
+    await twoRepoProject(fx);
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Before', kind: 'task', targetRepo: 'acme-web' } },
+    ]);
+    const proposal = await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'add' } });
+
+    correctInsideApproveWindow(() =>
+      plansService.correctProposal(planId, proposal.id, { title: 'After' }, fx.ctx),
+    );
+
+    await plansService.approvePlan(planId, fx.ctx);
+    const row = await materializedItem(planId);
+    expect(row.title).toBe('After');
+    expect(row.targetRepo).toBe('acme-web');
   });
 });
