@@ -126,9 +126,14 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
   test.setTimeout(120_000);
   await signUp(page, OPERATOR_EMAIL);
 
-  // Route the daily sweep onto the engine MID-SPEC, through the file override the
-  // switch documents. Its 03:30 fire has already passed with nothing scheduling
-  // it, so a `latest` disposition owes exactly that fire, now.
+  // The daily sweep runs on the engine because the engine is the only lane there
+  // is — MOTIR-3418 retired Inngest, and `lib/jobs/engine/ledger.ts` writes
+  // `lane: 'engine'` unconditionally. (This comment used to describe a mid-spec
+  // `routeJobsToEngine(CATCH_UP_JOB)` call routing the job through a file
+  // override; that helper went with the switch it drove and the comment
+  // outlived it. Corrected under Bug MOTIR-3738, whose own root-cause analysis
+  // was written from it.) Its 03:30 fire has already passed with nothing
+  // scheduling it, so a `latest` disposition owes exactly that fire, now.
 
   // ── the tick enqueued the MISSED fire ────────────────────────────────────
   // The authoritative signal is the committed row, never a sleep.
@@ -151,17 +156,64 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
   expect(queued.scheduledFor!.getUTCMinutes()).toBe(30);
 
   // ── the worker claimed it and the handler ran ────────────────────────────
+  // Polled BY ID — the row asserted just above — rather than by `jobId` again
+  // (Bug MOTIR-3738). Re-selecting by the job id lets some other run for the
+  // same job answer for this one, which is the defect the ledger read below
+  // carries in full.
   await expect
     .poll(
       async () =>
-        (await adminDb.jobQueueRun.findFirst({ where: { jobId: CATCH_UP_JOB } }))?.state ??
-        'missing',
+        (await adminDb.jobQueueRun.findUnique({ where: { id: queued.id } }))?.state ?? 'missing',
       { timeout: 60_000, intervals: [500] },
     )
     .toBe('succeeded');
 
   // ── the LEDGER carries the scheduled provenance three consumers read ─────
-  const ledger = await adminDb.jobRun.findFirstOrThrow({ where: { functionId: CATCH_UP_JOB } });
+  // ⚠️ NAME THE ROW — DO NOT TAKE THE FIRST ONE (Bug MOTIR-3738). The two reads
+  // above are single-valued by CONSTRAINT: `job_queue` carries
+  // `@@unique([jobId, scheduledFor])` and `@@unique([eventId, jobId])`, so one
+  // fire of one job is one row. **`job_run` carries no uniqueness whatsoever** —
+  // every index on it is non-unique — so `findFirst({ where: { functionId } })`
+  // is a pick from a set whose size nothing guarantees. It fails against a
+  // correct product, and it would equally PASS against a broken one whenever
+  // some other row happened to read `succeeded`.
+  //
+  // And polling it would NOT fix it. `JobWorker.settle` awaits `execute()` —
+  // which awaits the `job-run:succeeded` step — BEFORE `markSucceeded` flips the
+  // queue row, so a queue row reading `succeeded` proves THIS run's ledger row
+  // already committed `succeeded`. A `running` row read here is therefore a
+  // DIFFERENT row, and a different row never moves.
+  //
+  // The determinate key is the one the writer used: `ledgerIdentity()`
+  // (`lib/jobs/engine/ledger.ts`) records `eventId: run.eventId || run.id` and
+  // the lane it wrote. A scheduled run has no triggering event — asserted above —
+  // so the ledger row's `event_id` is the QUEUE ROW's id.
+  const ledgerEventId = queued.eventId || queued.id;
+  const ledgerRows = await adminDb.jobRun.findMany({
+    where: { functionId: CATCH_UP_JOB },
+    orderBy: { startedAt: 'desc' },
+  });
+  const forThisRun = ledgerRows.filter(
+    (row) => row.lane === 'engine' && row.eventId === ledgerEventId,
+  );
+  // A second row for this function is NAMED here rather than silently picked:
+  // the message enumerates every row the table held, so the next reader sees
+  // which run answered instead of a bare `"running" !== "succeeded"`.
+  expect(
+    forThisRun,
+    `expected exactly ONE engine-lane job_run row for queue run ${queued.id}; job_run held ` +
+      JSON.stringify(
+        ledgerRows.map((row) => ({
+          id: row.id,
+          lane: row.lane,
+          eventId: row.eventId,
+          attempt: row.attempt,
+          status: row.status,
+          startedAt: row.startedAt.toISOString(),
+        })),
+      ),
+  ).toHaveLength(1);
+  const ledger = forThisRun[0]!;
   expect(ledger.eventName).toBe(`scheduled.${CATCH_UP_JOB}`);
   expect(ledger.status).toBe('succeeded');
 
