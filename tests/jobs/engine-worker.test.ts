@@ -323,6 +323,62 @@ describe('failure, retry and the durable yield', () => {
   });
 });
 
+describe('the CLAIM is bounded by its LIMIT (bug MOTIR-3769)', () => {
+  // ⚠️ EVERY ASSERTION HERE GOES THROUGH `withSystemContext`, AND THAT IS THE
+  // POINT. The defect is invisible as the database OWNER: without a policy qual
+  // on `job_queue` the planner evaluates the locking sub-select once and the
+  // bound holds. Under `motir_app` — the role production connects as, and the
+  // suite's only connection — the qual changes the cost model, the sub-select
+  // becomes the re-scanned inner side of a nested loop, and the limit bounds
+  // each re-scan instead of the statement. Measured before the fix: three due
+  // rows, `limit = 1`, THREE claimed. `AS MATERIALIZED` is what makes it a bound.
+  //
+  // No existing test caught it because none asserted the claim's CARDINALITY —
+  // `claims OLDEST-DUE first` drives three ticks at `claimBatch: 1` and checks
+  // the execution ORDER, which is identical either way.
+
+  it('claims EXACTLY the limit and leaves the rest untouched', async () => {
+    const ws = await makeWorkspace();
+    const t = Date.now();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++)
+      ids.push(await enqueue(ws, { runAt: new Date(t - 5_000 + i * 100) }));
+
+    const claimed = await withSystemContext((tx) =>
+      jobQueueRepository.claimDueRuns('bounded-claim', 2, 60_000, tx),
+    );
+    expect(claimed).toHaveLength(2);
+    // Oldest-due first survives the fix — the bound did not cost the ordering.
+    expect(claimed.map((c) => c.id)).toEqual(ids.slice(0, 2));
+
+    const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(rows.filter((r) => r.state === 'running')).toHaveLength(2);
+    const untouched = rows.filter((r) => r.state === 'pending');
+    expect(untouched).toHaveLength(3);
+    // Not merely unclaimed — UNTOUCHED. An over-claim spends an attempt on every
+    // row it takes, so the attempt counter is the second, independent witness.
+    expect(untouched.every((r) => r.attempts === 0 && r.claimedBy === null)).toBe(true);
+  });
+
+  it('claims everything due when the limit is larger than the queue', async () => {
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws)];
+    const claimed = await withSystemContext((tx) =>
+      jobQueueRepository.claimDueRuns('roomy-claim', 10, 60_000, tx),
+    );
+    expect(claimed.map((c) => c.id).sort()).toEqual([...ids].sort());
+  });
+
+  it('spends exactly ONE attempt per row it claims', async () => {
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws), await enqueue(ws)];
+    await withSystemContext((tx) => jobQueueRepository.claimDueRuns('attempts', 1, 60_000, tx));
+    const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(rows.filter((r) => r.attempts === 1)).toHaveLength(1);
+    expect(rows.filter((r) => r.attempts === 0)).toHaveLength(2);
+  });
+});
+
 describe('graceful shutdown', () => {
   it('SIGTERM drains: NO run is left `running` with no live claimant', async () => {
     const ws = await makeWorkspace();

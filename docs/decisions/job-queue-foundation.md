@@ -1108,6 +1108,36 @@ describes it:**
 **So the accepted bound on 2026-08-28 was: one worker × one 35-minute supervisor ⇒ no capacity for
 anything else.** Every number above is a consequence of that one sentence.
 
+#### ⚠️ §15.1a — CORRECTED: `CLAIM_BATCH` was never a BOUND, it was a preference (Bug [MOTIR-3769])
+
+The table above reads `CLAIM_BATCH = 5` off `worker.ts`, and that is what the constant says. **What
+the claim STATEMENT did with it is a different fact, and it was measured after §15 was first
+written.** `claimDueRuns` was `UPDATE "job_queue" AS q … FROM ( SELECT "id" … FOR UPDATE SKIP LOCKED
+LIMIT n ) AS due …`, and **a `LIMIT` inside a `FROM`-subquery is a planner preference rather than a
+guarantee**: PostgreSQL may plan that sub-select as the inner, re-scanned side of a nested loop, at
+which point the limit bounds each re-scan instead of the statement. Under the runtime role
+(`motir_app`, `rolbypassrls = false`) that is the plan it picks, because the policy qual on `q`
+changes the cost model and the join order with it — three due rows and `limit = 1` claimed **three**.
+As the database owner the same statement claims one, which is why the suite was green: no test
+asserted the claim's CARDINALITY.
+
+**Two things follow, and the second is a caution rather than a finding.**
+
+- **The prose in §15.3 that says "four unrelated runs were claimed beside it" describes the INTENT of
+  `CLAIM_BATCH = 5`, not a measured cardinality.** Whatever was claimed in the 10:15:16 tick was
+  bounded by what was DUE at that instant, not by five. The 2026-08-28 readings in §15.1 are
+  unaffected — every one of them is a count of rows in a state, not of a batch — and the defect §15.3
+  names is unaffected too: `Promise.all` over the claimed set detains that set whatever its size, and
+  a larger set makes it worse rather than better.
+- **⚠️ IT IS NOT ESTABLISHED THAT PRODUCTION PICKED THAT PLAN.** A plan is a function of statistics
+  and table size, and production's `job_queue` is nothing like a three-row test table. What is
+  established is that the bound was planner-dependent rather than guaranteed, and that at least one
+  plan PostgreSQL legitimately chooses ignores it. Do not re-derive an outage from this paragraph.
+
+The fix is `WITH due AS MATERIALIZED ( … )`, which forces exactly one evaluation and says out loud
+what the statement always meant. `claimDueRuns`'s own header carries it as the FOURTH load-bearing
+property of the claim, beside `FOR UPDATE`, `SKIP LOCKED` and the single-statement write.
+
 ### §15.2 — §14.1 is NOT re-opened, and the distinction is what keeps this section honest
 
 A thirteen-minute cascade delay reads as a fairness problem, and the obvious remedy for a fairness
@@ -1277,7 +1307,7 @@ it to 1 removes the coupling by removing the batch, at the price of one claim ro
 which is a real cost on the hot path and buys nothing that §15.3 does not buy better. **Under §15.3
 the batch stops being the coupling at all**, and `CLAIM_BATCH` reverts to what it always should have
 been — an amortiser for the claim round-trip — where **5 is defensible and no evidence exists to move
-it**. The number that now wants deciding is the POOL size, whose floor is the count of long-running
+it** (and, since [MOTIR-3769], is actually enforced — see §15.1a). The number that now wants deciding is the POOL size, whose floor is the count of long-running
 supervisors that may legitimately be in flight at once plus headroom for the fast lane.
 
 ### §15.7 — What §15 does not settle
@@ -1308,5 +1338,6 @@ supervisors that may legitimately be in flight at once plus headroom for the fas
 [MOTIR-3672]: https://app.motir.co/items/MOTIR-3672
 [MOTIR-3759]: https://app.motir.co/items/MOTIR-3759
 [MOTIR-3760]: https://app.motir.co/items/MOTIR-3760
+[MOTIR-3769]: https://app.motir.co/items/MOTIR-3769
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss
