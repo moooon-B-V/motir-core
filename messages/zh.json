@@ -5850,6 +5850,7 @@
       "noMatches": "没有匹配的拉取请求",
       "noMatchesHint": "仓库在“设置 → 工作区 → GitHub”中同步。",
       "linkedTo": "已关联到 {key}",
+      "deliversN": "交付 {count} 个工作项",
       "linkedManually": "手动关联",
       "linkAction": "关联",
       "notConnected": "此工作区尚未连接 GitHub。请在“设置 → 工作区 → GitHub”中进行连接。",

@@ -41,6 +41,10 @@ import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchL
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
 import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
 import { LINK_PULL_REQUEST_TOOL_NAME, registerLinkPullRequest } from './tools/linkPullRequest';
+import {
+  UNLINK_PULL_REQUEST_TOOL_NAME,
+  registerUnlinkPullRequest,
+} from './tools/unlinkPullRequest';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
@@ -119,6 +123,7 @@ export const MCP_TOOL_NAMES = [
   REINFORCE_LESSON_TOOL_NAME,
   ATTACH_FILE_TOOL_NAME,
   LINK_PULL_REQUEST_TOOL_NAME,
+  UNLINK_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   WHOAMI_TOOL_NAME,
@@ -252,6 +257,11 @@ export function registerMcpTools(
   // knows with certainty. The branch/title parse stays as the fallback for a
   // pull request opened outside a run.
   registerLinkPullRequest(target, resolveContext);
+  // The pull-request UNLINK door (MOTIR-3756) — the correction the link tool has
+  // never had. Registered beside it rather than folded into it because a delivery
+  // is a ROW now: a re-link ADDS and the mistaken row stays, so removal is its own
+  // operation and not a side effect of the fix.
+  registerUnlinkPullRequest(target, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(target, resolveContext);
   // The SEMANTIC query (MOTIR-3101) — a second tool BESIDE the substring search,

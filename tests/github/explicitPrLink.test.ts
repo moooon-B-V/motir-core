@@ -269,8 +269,8 @@ describe('githubPullRequestService.searchLinkCandidates (MOTIR-1596)', () => {
     // Searching from itemB: both match "rate"; #30 carries the takeover chip.
     let results = await githubPullRequestService.searchLinkCandidates(itemB.id, 'rate', s.ctx);
     const byNumber = Object.fromEntries(results.map((r) => [r.number, r]));
-    expect(byNumber[30]?.linkedTo).toBe(itemA.identifier);
-    expect(byNumber[40]?.linkedTo).toBeNull();
+    expect(byNumber[30]?.linkedTo).toEqual([itemA.identifier]);
+    expect(byNumber[40]?.linkedTo).toEqual([]);
 
     // Search by NUMBER also resolves.
     results = await githubPullRequestService.searchLinkCandidates(itemB.id, '40', s.ctx);
@@ -281,6 +281,87 @@ describe('githubPullRequestService.searchLinkCandidates (MOTIR-1596)', () => {
     results = await githubPullRequestService.searchLinkCandidates(itemB.id, 'rate', s.ctx);
     expect(results.map((r) => r.number)).not.toContain(40);
     expect(results.map((r) => r.number)).toContain(30);
+  });
+
+  // MOTIR-3756 — `linkedTo` is the DELIVERY SET, and the two things that depend
+  // on its being a set are asserted here: what the chip renders at n ≥ 2, and the
+  // self-exclusion, which is a CONTAINS test and not an equality.
+  it('a candidate delivering several cards carries every identifier, oldest link first', async () => {
+    const s = await makeScenario({
+      email: 'candidate-set@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    const [first, second, asking] = [
+      await workItemsService.createWorkItem(
+        { projectId: s.project.id, kind: 'task', title: 'First carried' },
+        s.ctx,
+      ),
+      await workItemsService.createWorkItem(
+        { projectId: s.project.id, kind: 'task', title: 'Second carried' },
+        s.ctx,
+      ),
+      await workItemsService.createWorkItem(
+        { projectId: s.project.id, kind: 'task', title: 'The asking card' },
+        s.ctx,
+      ),
+    ];
+    const pr = await ingestPr({
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+      number: 55,
+      headBranch: 'motir/auto-abc',
+      title: 'Session run carrying several cards',
+    });
+    // Linked in order, so "oldest link first" has something to be true OF.
+    await githubPullRequestService.linkPullRequest(first.id, pr, s.ctx);
+    await githubPullRequestService.linkPullRequest(second.id, pr, s.ctx);
+
+    const results = await githubPullRequestService.searchLinkCandidates(
+      asking.id,
+      'Session run',
+      s.ctx,
+    );
+    const candidate = results.find((r) => r.number === 55);
+    // BOTH, in link order — the singular column names only the SECOND link, so a
+    // reader on the column would have shown one identifier and the wrong one.
+    expect(candidate?.linkedTo).toEqual([first.identifier, second.identifier]);
+  });
+
+  it('a candidate is dropped when its delivery set CONTAINS the current item, not only when it equals it', async () => {
+    const s = await makeScenario({
+      email: 'candidate-contains@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    const asking = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'The asking card' },
+      s.ctx,
+    );
+    const other = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A sibling on the same run' },
+      s.ctx,
+    );
+    const pr = await ingestPr({
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+      number: 56,
+      headBranch: 'motir/auto-def',
+      title: 'Session run delivering the asker among others',
+    });
+    // The ASKER is linked FIRST and the sibling SECOND, so the singular column —
+    // which moves on each link — ends up naming the SIBLING. Under the old
+    // `row.workItemId !== currentItemId` filter this candidate survived and the
+    // picker offered the asking card its own pull request as a fresh one.
+    await githubPullRequestService.linkPullRequest(asking.id, pr, s.ctx);
+    await githubPullRequestService.linkPullRequest(other.id, pr, s.ctx);
+
+    const results = await githubPullRequestService.searchLinkCandidates(
+      asking.id,
+      'Session run',
+      s.ctx,
+    );
+    expect(results.map((r) => r.number)).not.toContain(56);
   });
 
   it('a short query returns [] (the type-to-search prompt)', async () => {

@@ -86,8 +86,43 @@ appears on any prior table.
 | S6  | `proseGraphAdvisoryService.ts:522,599`        | projects `workItemId` onto `CoveringChange`, then `m.workItemId !== id`                                                                                                                                      | **Q4's REAL predicate** — see §4                                                                                                  |
 | S7  | `pullRequestBaseRefBackfillService.ts:221`    | `candidate.workItemId` → `touchedWorkItemIds` → `reevaluateItems`                                                                                                                                            | **R5's consumer** — see §5                                                                                                        |
 
+### B′ · AMENDMENT (MOTIR-3756) — command B was itself short, by TWO
+
+**This section's own re-measurement repeated, one notch smaller, the mistake it
+was written to correct.** Command B enumerates `(pr|existingPr|existing|candidate|row|target|m)\.workItemId`
+— a LITERAL dot. TypeScript's optional-chaining operator is `?.`, which that
+pattern cannot match, so every read of the form `x?.workItemId` was invisible to
+it. Re-measured on `origin/main` `17a3aba23` while building EXPAND-2:
+
+```bash
+git grep -nE "\?\.workItemId" origin/main -- lib app packages components scripts
+```
+
+| #   | site                                          | what it does                                                                          | disposition                             |
+| --- | --------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------- |
+| S8  | `githubPullRequestService.ts:277`             | `const previousWorkItemId = existing?.workItemId ?? null` — the source of `movedFrom` | **CONTRACT** — it reports on W1's move  |
+| S9  | `historicalPullRequestBackfillService.ts:286` | `if (existing?.workItemId != null)` — the sweep's STICKY-LINK guard                   | **CONTRACT** — it guards W1/W2's column |
+
+**Total: 19 sites (8 repository readers + 2 repository writers + 9 service
+reads), plus the cardinality cap of §2.** Both new rows are attached to the two
+WRITERS rather than to a reader that must move: `movedFrom` describes the FK move
+`setWorkItemLink` performs, and the sticky-link guard exists so the sweep does not
+overwrite a stored link. Neither can retire before the column does, so **neither
+changes EXPAND-2's scope** — but the CONTRACT card must expect nineteen sites and
+not seventeen, which is the whole reason this amendment is on the record rather
+than in a pull-request body.
+
+**And the takeaway is the section's own, applied to itself:** the claim quantifies
+over _every site that reads the column_; the command enumerated _every site that
+reads it through a plain dot_. A number with its COMMAND beside it is what let a
+later reader ask whether the command's set was the claim's set — which is exactly
+what happened, and is the argument for printing the command rather than only the
+ref.
+
+---
+
 **Total: 17 sites (8 repository readers + 2 repository writers + 7 service
-reads), plus the cardinality cap of §2.** MOTIR-3721's _"nine reader sites plus
+reads), plus the cardinality cap of §2** — amended to 19 by B′ above. MOTIR-3721's _"nine reader sites plus
 one service-level cardinality cap"_ is amended on the record; it is not drift,
 because every one of the seven predates the card (all are on
 `origin/main` at the ref the card itself measured).
@@ -364,7 +399,7 @@ pull request that moves R7:
   re-resolved by the next webhook event"_ — that argument died with the
   title/branch parse (MOTIR-3674): nothing re-resolves an unlinked pull request
   any more. `unlinkPullRequest` already ships on the service and the item page
-  reaches it; MOTIR-3721 adds the MCP tool.
+  reaches it; **MOTIR-3756** adds the MCP tool (§6 assigns it to EXPAND-2, and that assignment is the one that holds — this sentence named the wrong card).
 
 **A design-notes amendment is a required deliverable of the picker card, not a
 scope note** — a mock whose prose argues from a retired mechanism is how the next

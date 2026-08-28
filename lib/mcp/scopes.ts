@@ -263,6 +263,12 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // scope, not an item edit; `work_items:write` is the nearest bucket and the
   // real gate is the PERMISSION (`work_item:edit`, in `toolPermissions.ts`).
   link_pull_request: 'work_items:write',
+  // `unlink_pull_request` (MOTIR-3756). A WRITE for the same reason and under the
+  // same bucket as its sibling — it removes a delivery row. This legacy table has
+  // no integration-link axis finer than `integration`, which is the MERGE report's
+  // scope rather than an item edit, and the real gate is the PERMISSION
+  // (`work_item:edit`, in `toolPermissions.ts`) — the same key the link asserts.
+  unlink_pull_request: 'work_items:write',
   expand_item: 'work_items:write',
   append_plan_turn: 'work_items:write',
   submit_plan_session: 'work_items:write',

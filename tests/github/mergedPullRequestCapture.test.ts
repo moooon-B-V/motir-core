@@ -584,14 +584,9 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
     });
   }
 
-  async function query(
-    s: Awaited<ReturnType<typeof makeScenario>>,
-    paths: string[],
-    since: Date,
-    exclude: string | null,
-  ) {
+  async function query(s: Awaited<ReturnType<typeof makeScenario>>, paths: string[], since: Date) {
     return withWorkspaceContext(s.ctx, (tx) =>
-      githubPullRequestRepository.findTouchingPaths(s.workspace.id, paths, since, exclude, tx),
+      githubPullRequestRepository.findTouchingPaths(s.workspace.id, paths, since, tx),
     );
   }
 
@@ -603,7 +598,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
 
     expect(found.map((r) => r.number)).toEqual([101]);
@@ -618,7 +612,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
 
     expect(found).toEqual([]);
@@ -632,7 +625,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
 
     expect(found).toEqual([]);
@@ -653,7 +645,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
 
     expect(found.map((r) => r.number)).toEqual([104]);
@@ -673,7 +664,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2030-01-01T00:00:00Z'),
-      null,
     );
 
     expect(found.map((r) => r.number)).toEqual([109]);
@@ -690,7 +680,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
 
     expect(found).toEqual([]);
@@ -705,7 +694,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
 
     expect(found.map((r) => r.number).sort()).toEqual([111, 112]);
@@ -713,7 +701,16 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
     expect(found.find((r) => r.number === 112)!.mergedAt).toBeNull();
   });
 
-  it('omits the row linked to `excludeWorkItemId`, and KEEPS an unlinked one', async () => {
+  // MOTIR-3756 — this test used to be *"omits the row linked to
+  // `excludeWorkItemId`, and KEEPS an unlinked one"*, and it was the ONLY caller
+  // of that parameter: the one production caller passed `null`, because the
+  // exclusion is a per-SUBJECT fact and `buildSubsumptionIndex` widens the query
+  // to a whole batch. The parameter is deleted rather than ported to the delivery
+  // table (ADR `docs/decisions/delivery-reader-migration.md` §4), so the test is
+  // RETARGETED at what the accessor now promises: it returns every touching row
+  // and excludes nothing. The exclusion itself is asserted where it actually
+  // runs, over the delivery SET, in `tests/workItems/proseAdvisories.test.ts`.
+  it('excludes NOTHING — a linked row and an unlinked one both come back', async () => {
     const s = await makeScenario('accessor-exclude@example.com');
     await seedPr(s.repo.id, 105, { workItemId: s.item.id });
     await seedPr(s.repo.id, 106, { workItemId: null });
@@ -722,13 +719,13 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      s.item.id,
     );
 
-    // The asking card's own merge is not evidence that someone else shipped its
-    // deliverable; an UNLINKED merge touched the paths just the same, and the
-    // missing link is a fact about the tracker, not about the repository.
-    expect(found.map((r) => r.number)).toEqual([106]);
+    // The KEEP half of the retired parameter's argument survives and is now
+    // trivially true: an UNLINKED merge touched the paths just the same, and the
+    // missing link is a fact about the tracker, not about the repository. With no
+    // exclusion clause there is nothing that could drop it.
+    expect(found.map((r) => r.number).sort()).toEqual([105, 106]);
   });
 
   it('is scoped to the workspace, and an empty path set reads nothing', async () => {
@@ -746,7 +743,6 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       s,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
     expect(mine.map((r) => r.number)).toEqual([107]);
 
@@ -754,11 +750,10 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       other,
       ['lib/services/workflowsService.ts'],
       new Date('2026-08-12T00:00:00Z'),
-      null,
     );
     expect(theirs.map((r) => r.number)).toEqual([108]);
 
     // No paths to ask about is not "match everything" — it is nothing to match.
-    expect(await query(s, [], new Date('2026-08-12T00:00:00Z'), null)).toEqual([]);
+    expect(await query(s, [], new Date('2026-08-12T00:00:00Z'))).toEqual([]);
   });
 });

@@ -185,15 +185,43 @@ this also avoids the combobox-in-dialog clipping class entirely):
   NOT `-muted` — the AA sidebar-caption lesson at 12px) + the PR-state `Pill`
   (same tone table as Panel 3). Candidates = the workspace's ingested PRs
   across its selected repos, searched by title / number / repo.
-- **Already-linked PRs are listed, annotated, and pickable — the explicit
-  takeover.** A PR linked elsewhere shows a neutral chip **"Linked to
-  MOTIR-<n>"** in place of its state pill; picking it MOVES the link (single
-  FK — `workItemId` points at one item). This IS the mis-link correction path:
-  there is deliberately **no per-row unlink** — an unlinked PR would just be
-  re-resolved by the next webhook event for it, so "unlink" would silently
-  fight the auto-resolver; moving the link from the RIGHT item is stable.
-  (MOTIR-1596 encodes: re-link allowed, no confirm dialog — the annotation makes
-  the move explicit before the pick.)
+- **PRs that already deliver other cards are listed, annotated, and pickable.**
+  A candidate already delivering work shows a neutral chip in place of its state
+  pill, on the LENGTH of its delivery set: **exactly one** → **"Linked to
+  MOTIR-<n>"** (unchanged copy, unchanged `development.linkedTo` key);
+  **two or more** → **"Delivers <n> work items"** (`development.deliversN`).
+  Zero → the PR-state `Pill`, unchanged. Not a LIST — an unbounded string in a
+  fixed-width Combobox row is a layout problem dressed as a copy decision — and
+  not a cap, which is a list with a truncation rule that buys nothing a count
+  does not. The chip's job is to say _this pull request is already spoken for_,
+  and a count says that at every n.
+
+  **⚠️ AMENDED (MOTIR-3756). This bullet used to read: _"picking it MOVES the
+  link (single FK — `workItemId` points at one item). This IS the mis-link
+  correction path: there is deliberately no per-row unlink — an unlinked PR would
+  just be re-resolved by the next webhook event for it."_ BOTH halves of that
+  argument are now false, and the old text is quoted rather than deleted because
+  a mock whose prose argues from a retired mechanism is how the next reader
+  re-derives the retired mechanism.**
+  - **Picking it ADDS, it does not move.** The association is a row in
+    `work_item_delivery`, not a scalar FK, so a pick records a second delivery
+    and leaves the first standing. **The chip therefore stops being a takeover
+    WARNING and becomes INFORMATION**: one pull request delivering several cards
+    is the ordinary shape of a `motir auto` run, not a collision. Nothing is
+    taken from another card by picking, so there is nothing to warn about — which
+    is also why the chip needed no confirm step before and needs none now.
+  - **Re-linking is consequently NOT the correction path, and a per-row unlink
+    EXISTS.** The old argument — that an unlink would be undone by the next
+    webhook delivery — died with the title/branch parse (MOTIR-3674): nothing
+    re-resolves an unlinked pull request any more. `unlinkPullRequest` ships on
+    the service, this surface's row menu reaches it, and MOTIR-3756 adds the
+    `unlink_pull_request` MCP tool for an agent that mis-linked one. Correcting a
+    mis-link means REMOVING the wrong delivery; linking the right card only adds
+    a second one beside it.
+
+  (MOTIR-1596 encodes: pick allowed, no confirm dialog — unchanged, and now for a
+  simpler reason than the one it was written for.)
+
 - **Actions:** `Button` **sm primary "Link"** (disabled until a pick) +
   **sm ghost "Cancel"** (collapses the form) — `LinkAddForm`'s exact button row.
 - **After Link:** the form collapses and the row appears in the card
@@ -268,33 +296,33 @@ check) and label. Every tint carries the hue in the **background** with
 
 ## Per-element `--el-*` colour roles
 
-| Element                                     | Token(s)                                                                                                                                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Page / body                                 | `--el-page-bg` · `--el-page-text`                                                                                                                                                          |
-| Settings sidebar                            | `--el-sidebar-bg` · `--el-sidebar-border` · active row `--el-sidebar-item-bg-active`                                                                                                       |
-| Nav icons                                   | `--el-icon-muted` (idle) · `--el-icon-active` (active row)                                                                                                                                 |
-| Card surface / border                       | `--el-card` · `--el-border` · `--el-border-soft` (dividers)                                                                                                                                |
-| Primary text / secondary / muted / subtitle | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-subtitle`                                                                                                             |
-| Eyebrow / section labels                    | `--el-text-eyebrow`                                                                                                                                                                        |
-| Identifier (MOTIR-891)                      | `--el-text-identifier`                                                                                                                                                                     |
-| Primary button ("Connect / Reconnect")      | fill `--el-accent` · ink `--el-accent-text`                                                                                                                                                |
-| Secondary button ("Manage on GitHub")       | text `--el-text` · border `--el-button-border`                                                                                                                                             |
-| Disconnect (danger-ghost)                   | text `--el-danger` · border `--el-border`                                                                                                                                                  |
-| Grant-row icon badge                        | `--el-card-icon-bg` / `--el-card-icon-fg`                                                                                                                                                  |
-| PR-state / CI-state / sync-state pills      | tints `--el-tint-{sky,mint,rose,peach}` + `--el-text-strong`; neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                     |
-| Switch (repo sync)                          | track on `--el-switch-on` · off `--el-muted` + `--el-border-strong` · knob `--el-switch-knob`                                                                                              |
-| Branch chip (`main`)                        | `--el-code-bg` / `--el-code-text`                                                                                                                                                          |
-| PR row surface                              | `--el-surface` + `--el-border`                                                                                                                                                             |
-| Danger callout (revoked)                    | bg `--el-danger-surface` · text `--el-danger-surface-text` · left rule + icon `--el-danger`                                                                                                |
-| "Verified" pill                             | `--el-tint-mint` + `--el-text-strong`                                                                                                                                                      |
-| Type pill (Subtask)                         | `color-mix(--el-type-subtask 16%, --el-surface)` + dot `--el-type-subtask` + `--el-text-strong`                                                                                            |
-| GitHub avatar fallback                      | `--el-avatar-fallback`                                                                                                                                                                     |
-| "+ Link pull request" door (Panel 5)        | text `--el-link` · radius `--radius-control`                                                                                                                                               |
-| Link form box (LinkAddForm)                 | bg `--el-surface-soft` · border `--el-border` · radius `--radius-card` · field eyebrow `--el-text-eyebrow`                                                                                 |
-| Combobox search input                       | bg `--el-page-bg` · border `--el-border` · radius `--radius-input` · height `--height-control` · placeholder `--el-text-muted`                                                             |
-| Combobox popover / option rows              | popover `--el-page-bg` + `--radius-card` + `--shadow-elevated`; option `--radius-control` + `--spacing-control-*`, active `--el-option-active-bg`; option meta `--el-text-identifier` (AA) |
-| "Linked to MOTIR-n" takeover chip           | neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                                                                                   |
-| Typed-error banner (form)                   | bg `--el-tint-rose` · text `--el-text-strong` · icon `--el-danger` (finding #35)                                                                                                           |
+| Element                                                       | Token(s)                                                                                                                                                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Page / body                                                   | `--el-page-bg` · `--el-page-text`                                                                                                                                                          |
+| Settings sidebar                                              | `--el-sidebar-bg` · `--el-sidebar-border` · active row `--el-sidebar-item-bg-active`                                                                                                       |
+| Nav icons                                                     | `--el-icon-muted` (idle) · `--el-icon-active` (active row)                                                                                                                                 |
+| Card surface / border                                         | `--el-card` · `--el-border` · `--el-border-soft` (dividers)                                                                                                                                |
+| Primary text / secondary / muted / subtitle                   | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-subtitle`                                                                                                             |
+| Eyebrow / section labels                                      | `--el-text-eyebrow`                                                                                                                                                                        |
+| Identifier (MOTIR-891)                                        | `--el-text-identifier`                                                                                                                                                                     |
+| Primary button ("Connect / Reconnect")                        | fill `--el-accent` · ink `--el-accent-text`                                                                                                                                                |
+| Secondary button ("Manage on GitHub")                         | text `--el-text` · border `--el-button-border`                                                                                                                                             |
+| Disconnect (danger-ghost)                                     | text `--el-danger` · border `--el-border`                                                                                                                                                  |
+| Grant-row icon badge                                          | `--el-card-icon-bg` / `--el-card-icon-fg`                                                                                                                                                  |
+| PR-state / CI-state / sync-state pills                        | tints `--el-tint-{sky,mint,rose,peach}` + `--el-text-strong`; neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                     |
+| Switch (repo sync)                                            | track on `--el-switch-on` · off `--el-muted` + `--el-border-strong` · knob `--el-switch-knob`                                                                                              |
+| Branch chip (`main`)                                          | `--el-code-bg` / `--el-code-text`                                                                                                                                                          |
+| PR row surface                                                | `--el-surface` + `--el-border`                                                                                                                                                             |
+| Danger callout (revoked)                                      | bg `--el-danger-surface` · text `--el-danger-surface-text` · left rule + icon `--el-danger`                                                                                                |
+| "Verified" pill                                               | `--el-tint-mint` + `--el-text-strong`                                                                                                                                                      |
+| Type pill (Subtask)                                           | `color-mix(--el-type-subtask 16%, --el-surface)` + dot `--el-type-subtask` + `--el-text-strong`                                                                                            |
+| GitHub avatar fallback                                        | `--el-avatar-fallback`                                                                                                                                                                     |
+| "+ Link pull request" door (Panel 5)                          | text `--el-link` · radius `--radius-control`                                                                                                                                               |
+| Link form box (LinkAddForm)                                   | bg `--el-surface-soft` · border `--el-border` · radius `--radius-card` · field eyebrow `--el-text-eyebrow`                                                                                 |
+| Combobox search input                                         | bg `--el-page-bg` · border `--el-border` · radius `--radius-input` · height `--height-control` · placeholder `--el-text-muted`                                                             |
+| Combobox popover / option rows                                | popover `--el-page-bg` + `--radius-card` + `--shadow-elevated`; option `--radius-control` + `--spacing-control-*`, active `--el-option-active-bg`; option meta `--el-text-identifier` (AA) |
+| Delivery chip ("Linked to MOTIR-n" · "Delivers n work items") | neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` — ONE grammar for both arms, which is why the count arm needs no new token and no re-export                       |
+| Typed-error banner (form)                                     | bg `--el-tint-rose` · text `--el-text-strong` · icon `--el-danger` (finding #35)                                                                                                           |
 
 Shape flows only through element-semantic tokens: `--radius-card` (cards/panels),
 `--radius-control` (repo/PR rows, nav rows, icon badges), `--radius-badge`

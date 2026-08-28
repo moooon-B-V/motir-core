@@ -2,6 +2,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -464,8 +465,11 @@ interface CoveringChange {
   state: 'merged' | 'open';
   /** When it merged — null for the OPEN arm, which has not. */
   mergedAt: Date | null;
-  /** The work item this pull request is LINKED to, or null. */
-  workItemId: string | null;
+  /** Every work item this pull request DELIVERS (MOTIR-3756) — its delivery set,
+   *  EMPTY for a pull request that delivers nothing, which is the new spelling of
+   *  the `workItemId: null` this replaced. Consumed by {@link subsumptionAdvisory}
+   *  as a CONTAINS test, never as an equality. */
+  workItemIds: string[];
   /** The paths it touched, as a set, for a per-path hit test. */
   paths: ReadonlySet<string>;
 }
@@ -474,15 +478,26 @@ interface CoveringChange {
  * The pull requests — merged OR open — that could cover ANY subject in this batch
  * — **ONE query for the whole batch**, not one per subject.
  *
- * `findTouchingPaths` (MOTIR-2922, widened by MOTIR-3230) takes a single `since` and a single
- * `excludeWorkItemId`, and both of those are per-SUBJECT facts: each card has
- * its own filing instant, and each excludes its OWN pull requests. Issuing the
- * query per subject would be N round-trips for a `validate_work_item` over a
- * subtree of thirty cards. So the query is widened to the UNION of every
- * subject's paths with the EARLIEST `since` and no exclusion, and both
- * per-subject clauses are re-applied in memory in {@link subsumptionAdvisory} —
- * where they are exact comparisons on columns the rows already carry, not
- * approximations of the SQL.
+ * `findTouchingPaths` (MOTIR-2922, widened by MOTIR-3230) takes a single `since`,
+ * and that is a per-SUBJECT fact: each card has its own filing instant, and each
+ * excludes its OWN pull requests. Issuing the query per subject would be N
+ * round-trips for a `validate_work_item` over a subtree of thirty cards. So the
+ * query is widened to the UNION of every subject's paths with the EARLIEST
+ * `since`, and both per-subject clauses are applied in memory in
+ * {@link subsumptionAdvisory} — where they are exact comparisons on values the
+ * rows already carry, not approximations of the SQL.
+ *
+ * ⚠️ THE EXCLUSION HAS ONE SPELLING NOW, AND IT IS THE IN-MEMORY ONE
+ * (MOTIR-3756, ADR §4). The accessor also carried an `excludeWorkItemId`
+ * parameter that this caller — its only production caller — passed `null` to, for
+ * exactly the reason above. It has been DELETED rather than ported to the delivery
+ * table: porting it would have settled the set semantics of a predicate no caller
+ * runs, and left the predicate that does run to be improvised at the comparison
+ * below.
+ *
+ * The delivery sets are read here, in ONE batched query keyed on the pull-request
+ * ids this read returned, because the link is a second table now and no `include`
+ * on `github_pull_request` reaches it.
  *
  * Costs NOTHING for the common batch: a body naming no file path contributes no
  * paths, and an empty union skips the read entirely — the same
@@ -511,15 +526,34 @@ async function buildSubsumptionIndex(
   }, null);
   if (since === null) return [];
 
-  const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    githubPullRequestRepository.findTouchingPaths(ctx.workspaceId, [...union], since, null, tx),
+  const { rows, deliveredIdsByPr } = await withWorkspaceServiceContext(
+    ctx.workspaceId,
+    async (tx) => {
+      const found = await githubPullRequestRepository.findTouchingPaths(
+        ctx.workspaceId,
+        [...union],
+        since,
+        tx,
+      );
+      const deliveries = await workItemDeliveryRepository.listByPullRequests(
+        found.map((row) => row.id),
+        tx,
+      );
+      const byPr = new Map<string, string[]>();
+      for (const d of deliveries) {
+        const ids = byPr.get(d.githubPullRequestId);
+        if (ids) ids.push(d.workItemId);
+        else byPr.set(d.githubPullRequestId, [d.workItemId]);
+      }
+      return { rows: found, deliveredIdsByPr: byPr };
+    },
   );
   const changes = rows.flatMap<CoveringChange>((row) => {
     const common = {
       reference: `${row.repo.owner}/${row.repo.name}#${row.number}`,
       repoName: row.repo.name,
       title: row.title,
-      workItemId: row.workItemId,
+      workItemIds: deliveredIdsByPr.get(row.id) ?? [],
       paths: new Set(row.changedPaths),
     };
     // The OPEN arm is keyed on the row's own state rather than on `mergedAt`
@@ -564,7 +598,20 @@ async function buildSubsumptionIndex(
  *
  * Two narrowings applied here rather than in SQL, both exact:
  *  - **The card's OWN pull requests never cover it.** A card whose branch is
- *    open is doing its work, not having it done for it.
+ *    open is doing its work, not having it done for it. Since MOTIR-3756 that is
+ *    a **CONTAINS** test over the pull request's DELIVERY SET, not an equality
+ *    against the one card a singular FK named — and the difference is exactly a
+ *    pull request delivering the asker PLUS other cards, which is the shape the
+ *    delivery table exists to allow. A `motir auto` session pull request carrying
+ *    twelve cards is twelve cards' OWN pull request; under an is-exactly reading
+ *    it would be reported back to each of them as evidence that somebody else had
+ *    already shipped their deliverable, which is precisely the false positive this
+ *    narrowing was written to suppress. Stated as a rule: such a pull request is
+ *    SUPPRESSED for every card it delivers and REPORTED to every card it does not.
+ *    The cost is accepted and named in ADR §4 — two cards on one session pull
+ *    request no longer warn each other about a shared path, which they cannot
+ *    usefully do anyway, because the finding *somebody is changing this path right
+ *    now* is answered by *you are*.
  *  - **`mergedAt` must be strictly after the card's `createdAt`** — on the MERGED
  *    arm only. A merge that predates the card is the substrate it was written
  *    against, which is the opposite finding. **The OPEN arm carries no such test
@@ -596,7 +643,7 @@ function subsumptionAdvisory(
   const carried = new Set(subject.targetRepos.map((r) => r.toLowerCase()));
   const candidates = changes.filter(
     (m) =>
-      m.workItemId !== id &&
+      !m.workItemIds.includes(id) &&
       // The ordering clause is the MERGED arm's alone — see the rule above. An
       // open pull request has no instant to compare and needs none.
       (m.state === 'open' || (m.mergedAt !== null && m.mergedAt > createdAt)) &&

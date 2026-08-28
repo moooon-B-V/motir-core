@@ -47,9 +47,26 @@ export const githubPullRequestService = {
    * project whose repos Motir CREATED has no installation of its own, and
    * asking the old question would have made this picker permanently
    * "not connected" for it. An
-   * empty/short query returns `[]` (the picker prompts "type to search"). PRs
-   * already linked to the CURRENT item are dropped (they're already shown);
-   * a PR linked to ANOTHER item is kept with its `linkedTo` takeover chip.
+   * empty/short query returns `[]` (the picker prompts "type to search").
+   *
+   * ⚠️ THE SELF-EXCLUSION IS A **CONTAINS** TEST, over the DELIVERY SET
+   * (MOTIR-3756, ADR `docs/decisions/delivery-reader-migration.md` §3). It used to
+   * be `row.workItemId !== currentItemId` — scalar inequality against the one item
+   * the FK named — which dropped a candidate only when the current item happened to
+   * be the item that column pointed at. A pull request DELIVERING the current item
+   * alongside three others named at most one of them, so the picker offered the
+   * page's own pull request back to it as a fresh candidate. The question is
+   * unchanged in words and now true in fact: *does this pull request already
+   * deliver me?*
+   *
+   * It is deliberately the same predicate as the subsumption advisory's
+   * (`proseGraphAdvisoryService`), and the two are written to agree: both ask
+   * whether an id is IN a delivery set, neither asks whether a set is exactly one
+   * id.
+   *
+   * A candidate that survives carries `linkedTo` — every card it already delivers,
+   * oldest link first. The chip the picker renders from it is INFORMATION rather
+   * than a takeover warning: picking a candidate ADDS a delivery row.
    */
   async searchLinkCandidates(
     currentItemId: string,
@@ -67,12 +84,50 @@ export const githubPullRequestService = {
     if (connected.length === 0) throw new GithubNotConnectedError();
 
     if (query.trim().length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
-    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      githubPullRequestRepository.searchCandidates(ctx.workspaceId, query, PR_CANDIDATE_LIMIT, tx),
-    );
+    // ONE transaction for both reads: the delivery table's only tenant gate is an
+    // RLS policy on `app.workspace_id`, so a read outside the bound context comes
+    // back EMPTY rather than raising — every candidate would then look unlinked.
+    const { rows, deliveredBy } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const found = await githubPullRequestRepository.searchCandidates(
+        ctx.workspaceId,
+        query,
+        PR_CANDIDATE_LIMIT,
+        tx,
+      );
+      // ONE batched read for all ten candidates, not one per row.
+      const deliveries = await workItemDeliveryRepository.listByPullRequests(
+        found.map((row) => row.id),
+        tx,
+      );
+      const byPr = new Map<string, string[]>();
+      for (const d of deliveries) {
+        const ids = byPr.get(d.githubPullRequestId);
+        if (ids) ids.push(d.workItemId);
+        else byPr.set(d.githubPullRequestId, [d.workItemId]);
+      }
+      // Identifiers are resolved separately and TOLERANTLY, the same shape
+      // `resolveDeliveredWorkItems` uses: a delivery whose target this tenant
+      // context cannot see must shorten the chip's count, never fabricate an
+      // item. The `Map` preserves the read's (pull request, link age) order.
+      const targets = await workItemRepository.findByIds(
+        [...new Set(deliveries.map((d) => d.workItemId))],
+        tx,
+      );
+      const identifierById = new Map(targets.map((t) => [t.id, t.identifier]));
+      return { rows: found, deliveredBy: { byPr, identifierById } };
+    });
+
     return rows
-      .filter((row) => row.workItemId !== currentItemId)
-      .map(toPullRequestLinkCandidateDto);
+      .filter((row) => !(deliveredBy.byPr.get(row.id) ?? []).includes(currentItemId))
+      .map((row) =>
+        toPullRequestLinkCandidateDto(
+          row,
+          (deliveredBy.byPr.get(row.id) ?? []).flatMap((id) => {
+            const identifier = deliveredBy.identifierById.get(id);
+            return identifier ? [identifier] : [];
+          }),
+        ),
+      );
   },
 
   /**
@@ -365,6 +420,85 @@ export const githubPullRequestService = {
       // the pull request unlinked again, and the check has to say so. Post-commit
       // and best-effort, for the same reason.
       if (result.removed) await refreshLinkCheckForPullRequest(pullRequestId);
+      return result;
+    });
+  },
+
+  /**
+   * Remove ONE delivery link addressed by GITHUB COORDINATES — `(owner/name,
+   * number)` — the correction door an AGENT can reach (MOTIR-3756).
+   *
+   * ── Why it is not {@link unlinkPullRequest} with a different lookup ────────
+   * Exactly the asymmetry {@link linkPullRequestByCoordinates} documents, in the
+   * other direction. The item page addresses a pull request by Motir's internal
+   * cuid because it is rendering a row it already read; an agent that mis-linked
+   * one seconds ago knows it as `owner/name#number` and nothing else. Requiring
+   * the cuid would make the correction unreachable by the actor who makes the
+   * mistake, which is the whole population this door is for.
+   *
+   * ── Why a coordinate that names NOTHING is a not-found, not a no-op ───────
+   * An unknown repository or an unknown number raises rather than answering
+   * `removed: false`. The two answers look alike and mean opposite things: *there
+   * is no such pull request* is almost always a typo in the argument, and
+   * reporting it as a successful nothing lets the caller believe a mis-link was
+   * corrected while it stands. `removed: false` is reserved for the one case that
+   * really is benign — the pull request exists, the item exists, and they were
+   * simply not linked (a retry, or a correction somebody else already made).
+   *
+   * ── What it does NOT touch ────────────────────────────────────────────────
+   * `github_pull_request.work_item_id`, for the reason the sibling arm states: the
+   * column is the legacy scalar, and clearing it here would take a delivery's
+   * status sync away from a card whose OTHER links are good.
+   */
+  async unlinkPullRequestByCoordinates(
+    input: {
+      /** The work item to unlink — already resolved and known to the caller. */
+      workItemId: string;
+      /** Its project, for the permission assertion. */
+      projectId: string;
+      owner: string;
+      name: string;
+      number: number;
+    },
+    ctx: ServiceContext,
+  ): Promise<{ removed: boolean; pullRequestId: string }> {
+    // The key this tool DECLARES — the same one `link_pull_request` asserts, and
+    // asserted here rather than left to the MCP gate alone, for the same reason:
+    // the gate says what the TOKEN may reach, this says what its owner may do to
+    // this project. Undoing a link is editing the card the link was made against.
+    await projectAccessService.assertPermission(input.projectId, ctx, 'work_item:edit');
+
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(input.workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId)
+        throw new WorkItemNotFoundError(input.workItemId);
+
+      const repo = await githubRepoRepository.findConnectedByWorkspaceAndName(
+        ctx.workspaceId,
+        input.owner,
+        input.name,
+        tx,
+      );
+      if (!repo) throw new GithubRepoNotFoundError(`${input.owner}/${input.name}`);
+
+      const pr = await githubPullRequestRepository.findByRepoAndNumber(repo.id, input.number, tx);
+      if (!pr)
+        throw new GithubPullRequestNotFoundError(`${input.owner}/${input.name}#${input.number}`);
+
+      // EXACTLY ONE row: the repository's `deleteMany` is keyed on the
+      // `(work_item_id, github_pull_request_id)` unique pair, so the pair it names
+      // is the only row it can reach. A pull request delivering four cards loses
+      // the one named here and keeps the other three, which is the difference
+      // between a correction and a retraction.
+      const count = await workItemDeliveryRepository.remove(input.workItemId, pr.id, tx);
+      return { removed: count > 0, pullRequestId: pr.id };
+    }).then(async (result) => {
+      // The same post-commit refresh both other arms do (MOTIR-3675): removing the
+      // LAST delivery makes the pull request unlinked again and its check has to
+      // say so. Best-effort — the removal is the durable fact, the check a view of
+      // it, and a host that refuses the write must never turn a recorded removal
+      // into an error the caller sees.
+      if (result.removed) await refreshLinkCheckForPullRequest(result.pullRequestId);
       return result;
     });
   },
