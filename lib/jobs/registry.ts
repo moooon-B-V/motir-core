@@ -45,6 +45,7 @@ import { planDriftOnTransitioned } from './definitions/planDrift';
 import { migrateOnboardingSweep } from './definitions/migrateOnboardingSweep';
 import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 import { planTargetLockSweep } from './definitions/planTargetLockSweep';
+import { supervisionSweep } from './definitions/supervisionSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { jobRunReap } from './definitions/jobRunReap';
 import { dataExportBuild } from './definitions/dataExportBuild';
@@ -109,6 +110,7 @@ export const jobDefinitions = [
   migrateOnboardingSweep,
   workItemEmbeddingRequested,
   planTargetLockSweep,
+  supervisionSweep,
   abandonedPlanSweep,
   jobRunReap,
   dataExportBuild,

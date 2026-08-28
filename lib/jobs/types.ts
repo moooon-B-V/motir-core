@@ -457,6 +457,13 @@ export interface JobEventDataMap {
    *  the ones whose producer is gone, so a dead generation can no longer pause a
    *  project's auto-plan cadence for good. Cross-tenant by design. */
   'system.abandoned-plan-sweep': SystemScheduledData;
+  /** The abandoned-SUPERVISION sweep (Story MOTIR-3778 · MOTIR-3830) — settles a
+   *  container supervision whose chain of self-rescheduling passes stopped, so a
+   *  container Motir is no longer watching is torn down, metered and its
+   *  admission slot released rather than left to the 70-minute fleet reaper,
+   *  which does none of the three for an index container. Cross-tenant by
+   *  design: the fleet spans tenants because the infrastructure bill does. */
+  'system.supervision-sweep': SystemScheduledData;
   'system.job-run-reap': SystemScheduledData;
   /** The personal-data export retention sweep (Story 8.4 · MOTIR-3701) —
    *  deletes each archive's blob once its seven-day window has run out and
