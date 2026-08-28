@@ -24,6 +24,7 @@ import {
   type RoadmapLevelData,
   type RoadmapScope,
 } from '@/lib/planning/roadmapClient';
+import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 
 // The WORK-ITEM consumer of the reusable `ProjectRoadmapCanvas` (Subtask 7.20.2 /
 // MOTIR-1194) — the adapter the persistent roadmap (MOTIR-1011) + the planning
@@ -139,6 +140,17 @@ export interface WorkItemRoadmapProps {
    *  different thing to say about an empty first level than "nothing here yet"
    *  (the read did not come back). Absent → the canvas's own copy. */
   emptyRoot?: ReactNode;
+  /**
+   * THE LEVEL SEAM (MOTIR-3835), threaded straight through to the canvas and
+   * consumed by ONE mount: the full-page `/roadmap`, whose level is its URL
+   * (MOTIR-3836). All three are absent by default, so the item page's rooted
+   * Children-panel mount (MOTIR-2287) is untouched — a canvas rooted inside the
+   * item you are already reading has no level worth addressing, and its host page
+   * owns its own URL.
+   */
+  initialTrail?: readonly CanvasCrumb[];
+  controlledTrail?: readonly CanvasCrumb[];
+  onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
 }
 
 export function WorkItemRoadmap({
@@ -158,6 +170,9 @@ export function WorkItemRoadmap({
   locatable = true,
   fullScreenable = true,
   emptyRoot,
+  initialTrail,
+  controlledTrail,
+  onLevelChange,
 }: WorkItemRoadmapProps) {
   const t = useTranslations('roadmap.canvas');
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
@@ -426,6 +441,9 @@ export function WorkItemRoadmap({
         // children" must show them even when there is exactly one, because the
         // descent would then be showing something else's children entirely.
         autoDescendSingleParent={!rooted}
+        initialTrail={initialTrail}
+        controlledTrail={controlledTrail}
+        onLevelChange={onLevelChange}
         rootLabel={rootLabel ?? t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? t('ariaWorkItem')}
         warningLegend={

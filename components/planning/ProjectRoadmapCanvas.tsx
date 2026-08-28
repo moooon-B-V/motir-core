@@ -207,11 +207,13 @@ export interface ProjectRoadmapCanvasProps {
    * A CONTROLLED level (MOTIR-3835) — the consumer moving the canvas IN PLACE.
    *
    * `initialTrail` above is a SEED, read once, and it is right about that: where
-   * the canvas SITS is the user's. This prop is the opposite contract, and a
-   * consumer opts into exactly one of them: while it is supplied, the level is
-   * the CONSUMER's, and the canvas adopts any value that differs from where it
-   * currently is. `undefined` (the default) leaves the canvas uncontrolled;
-   * `[]` names the root level.
+   * the canvas SITS is the user's. This prop is the other half, and the two
+   * COMPOSE — the seed decides where the canvas opens, this decides where it is
+   * moved to afterwards. While it is supplied the level is the CONSUMER's, and
+   * the canvas adopts any value that differs from where it currently is.
+   * `undefined` (the default) leaves the canvas uncontrolled; `[]` names the
+   * root level. Passing both, agreeing at mount, is the ordinary case: the
+   * arrival costs no adoption, and every later move is one.
    *
    * Adoption happens DURING RENDER — React's adjust-state-when-an-input-changes
    * pattern, the same one `remappedFocus` and `prevTargetSig` use — never a

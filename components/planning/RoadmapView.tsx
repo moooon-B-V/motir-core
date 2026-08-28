@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
@@ -10,6 +10,7 @@ import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
 import type { RoadmapScope } from '@/lib/planning/roadmapClient';
+import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 
 // The roadmap page's CLIENT shell (Subtask MOTIR-1382 / Story MOTIR-1379) — it owns
 // the SCOPE state and renders the header scope toggle, because the page is a Server
@@ -55,6 +56,13 @@ export interface RoadmapViewProps {
    *  project's onboarding-ran marker (MOTIR-1264); forwarded to the canvas, which
    *  draws it in the WHOLE-PROJECT scope only (it is the project road's origin). */
   showPlanningOrigin: boolean;
+  /**
+   * The ARRIVAL LEVEL, resolved from `?item=` by the server page (MOTIR-3836) —
+   * `ancestors ++ [the item]`, so its LAST crumb is the level the canvas opens on.
+   * `[]` (the default shape) is the project root, which is also what an
+   * unresolvable `?item=` produces.
+   */
+  initialTrail?: readonly CanvasCrumb[];
 }
 
 export function RoadmapView({
@@ -65,6 +73,7 @@ export function RoadmapView({
   sprintName,
   sprintGoal,
   showPlanningOrigin,
+  initialTrail = [],
 }: RoadmapViewProps) {
   const t = useTranslations('roadmap');
   const pathname = usePathname();
@@ -90,6 +99,71 @@ export function RoadmapView({
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+  // ── THE LEVEL IS THE URL (MOTIR-3836) ──────────────────────────────────────
+  //
+  // The level has TWO movers, and the whole problem is telling them apart. The
+  // CANVAS moves itself (a drill, Back, a crumb click) and reports; the BROWSER
+  // moves the URL under us (Back/forward). One piece of state holds where this
+  // view believes the canvas is, and it is what the canvas is handed back.
+  //
+  // ⚠️ THE DISCRIMINATOR IS THE `popstate` EVENT, NOT A COMPARISON. Deriving the
+  // level from `?item=` on every render — the shape `scope` uses one block above,
+  // and the obvious thing to copy — is WRONG here, and wrong in a way that only
+  // shows up under timing: a shallow write does not update `useSearchParams`
+  // synchronously, so between the canvas reporting a drill and Next syncing the
+  // param there is at least one render in which the URL still names the OLD
+  // level. A render-time comparison reads that as "the URL moved" and yanks the
+  // reader straight back out of the level they just opened. A stale URL and a
+  // genuine Back are indistinguishable from the params alone — they differ only
+  // in the EVENT — so this listens for the event.
+  //
+  // The TRAIL for a key comes from a session cache rather than a fetch, because
+  // every entry Back can reach within this mount is one this view itself pushed:
+  // the cache is seeded with the server-resolved arrival and written on every
+  // level change. A key it does not know — reachable only by hand-editing the
+  // address bar without a reload — falls back to the ROOT level and does NOT
+  // fetch, the same silent fallback the server applies to an unresolvable
+  // `?item=`.
+  const seededKey = initialTrail[initialTrail.length - 1]?.crumbKey ?? null;
+  const trailCacheRef = useRef<Map<string, readonly CanvasCrumb[]>>(
+    new Map(seededKey === null ? [] : [[seededKey, initialTrail]]),
+  );
+  const [levelTrail, setLevelTrail] = useState<readonly CanvasCrumb[]>(initialTrail);
+
+  // A level the READER moved to. The canvas has already moved, so this records it
+  // and writes the address: `shallowPush` (MOTIR-3434), a real history entry so
+  // browser Back steps back through the levels (MOTIR-1549 is why it is a push and
+  // not a replace), and never `router.push` / `router.refresh`, which would re-run
+  // the page's server reads to produce nothing this body uses. `?scope=` is carried
+  // across the write — the two params are independent view state on one route.
+  const handleLevelChange = useCallback(
+    (trail: readonly CanvasCrumb[]) => {
+      const key = trail[trail.length - 1]?.crumbKey ?? null;
+      if (key !== null) trailCacheRef.current.set(key, trail);
+      setLevelTrail(trail);
+      const next = new URLSearchParams(searchParams.toString());
+      if (key === null) next.delete('item');
+      else next.set('item', key);
+      const qs = next.toString();
+      shallowPush(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, searchParams],
+  );
+
+  // BROWSER BACK / FORWARD. The effect only SUBSCRIBES; the state write happens in
+  // the event handler, so this is not a `setState` in an effect. It reads
+  // `window.location` rather than `useSearchParams`, because the event is the
+  // authority for what the address bar now says and the hook may not have caught
+  // up yet — the same reason this is an event listener at all.
+  useEffect(() => {
+    function onPopState() {
+      const key = new URLSearchParams(window.location.search).get('item');
+      setLevelTrail(key === null ? [] : (trailCacheRef.current.get(key) ?? []));
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const changeScope = (next: RoadmapScope) => {
     // A scope switch remounts the canvas and supersedes any in-flight refresh, so
     // clear the loading state (the remounted canvas won't fire onRefreshSettled).
@@ -106,6 +180,15 @@ export function RoadmapView({
     // this toggle once used a replace). The new `?scope=` re-derives `scope`; no
     // local state to set (the URL is the source of truth, and Next keeps
     // `useSearchParams` in sync with `history.pushState`).
+    //
+    // ⚠️ A SCOPE SWITCH DROPS `?item=` (MOTIR-3836), always. The canvas REMOUNTS on
+    // its `key={scope}` and lands at the new scope's own root, so carrying the old
+    // level across would name a level the reader is not on. Keeping it would need
+    // to know whether that level exists in the new scope, which is a read this
+    // surface deliberately does not make — the sprint slice re-roots at the topmost
+    // in-sprint members (MOTIR-1381), so the question is not answerable from the
+    // client. Dropping it is the honest answer and it matches what the reader sees.
+    setLevelTrail([]);
     shallowPush(next === 'sprint' ? `${pathname}?scope=sprint` : pathname);
   };
 
@@ -200,6 +283,13 @@ export function RoadmapView({
             ariaLabel={ariaLabel}
             refreshSignal={refreshSignal}
             onRefreshSettled={handleRefreshSettled}
+            // THE LEVEL SEAM (MOTIR-3835), consumed here and nowhere else. The seed
+            // decides where the canvas OPENS — so a cold arrival costs no adoption —
+            // and the controlled trail moves it afterwards, which is what makes
+            // browser Back land in place instead of remounting the canvas.
+            initialTrail={initialTrail}
+            controlledTrail={levelTrail}
+            onLevelChange={handleLevelChange}
           />
         )}
       </div>
