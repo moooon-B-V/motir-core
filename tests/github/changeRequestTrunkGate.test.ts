@@ -7,7 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
-import { linkPrByIdentifier } from '../helpers/prLink';
+import { deliveredItemIds, linkPrByIdentifier } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1873 — THE TRUNK GATE. A merge only completes a work item when it landed
@@ -204,8 +204,9 @@ describe('the trunk gate — a merge completes an item only on the default branc
 
     // The PR row still records the truth about the merge itself — the gate changes
     // what the CARD says, never what the change request did.
-    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 1688 } });
-    expect(prRow).toMatchObject({ state: 'closed', merged: true, workItemId: s.item.id });
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 1688 } });
+    expect(prRow).toMatchObject({ state: 'closed', merged: true });
+    expect(await deliveredItemIds(prRow.id)).toEqual([s.item.id]);
 
     // The item never reached `done` at all — not even briefly. The trail ends at
     // the PR-opened hop, and every hop on it came from `workItemsService` (a raw

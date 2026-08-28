@@ -19,6 +19,13 @@
   mechanism sketched in Story MOTIR-693 (9.2 Design approval gate) — deploying a
   mock to an ephemeral preview host so an iframe has a URL — is **superseded by
   this record**; see §7.
+- **Amended by:** **AMENDMENT 1** (MOTIR-3750, 2026-08-28 — §1's note arm
+  matches a suffix) and **AMENDMENT 2** (MOTIR-3780, 2026-08-28 — the publish
+  door is the MCP tool; **§6 is superseded in full** and §1 keeps its
+  classification table while losing its producer). **Read both before treating
+  §1 or §6 as current.** The title still names "the CI trigger" because that is
+  what this record decided and every citation of it lands here; AMENDMENT 2 is
+  where it stops being true.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md`): a decision record is a markdown
@@ -110,6 +117,12 @@ name:
 > (MOTIR-3750, 2026-08-28).** Read that amendment before treating the exact
 > basename as the contract — it is the row that changed, and the reason it
 > changed is the reason it looked right.
+
+> ⚠️ **And the PRODUCER of this set is no longer CI — AMENDMENT 2 below
+> (MOTIR-3780, 2026-08-28).** The table still says what an asset classifies AS;
+> it no longer says who classifies it. A diff is not what determines the
+> published set any more: the **agent declares it**, and the note arrives as
+> sections the agent names rather than sections a diff computed.
 
 A path **deleted** by the PR publishes nothing for that file.
 
@@ -295,6 +308,15 @@ open-in-new-tab remain as escapes.
 
 ### 6. The CI trigger and its auth
 
+> ⚠️ **SUPERSEDED IN FULL by AMENDMENT 2 below (MOTIR-3780, 2026-08-28).** The
+> CI trigger is retired: there is no `design-guards` publish step, no
+> `id-token: write` on that job for this purpose, and no publisher script in any
+> repository. **The table below is kept as the record of what was decided and
+> why** — several of its rows are the reasoning AMENDMENT 2 had to answer for
+> rather than reasoning it discarded, and §6a's two defect fixes are the case
+> for retiring the mechanism rather than repairing it a third time. Read it as
+> history; implement AMENDMENT 2.
+
 | Knob                         | Value                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Host**                     | A step in `ci.yml`'s **existing `design-guards` job** — NOT a new workflow. That job already runs on every PR and already exists to read `design/**`.                                                                                                                                                                                                                                                           |
@@ -351,6 +373,215 @@ in.
 (the base it was merged with — needs no ancestry, which matters in this job's
 depth-1 clone where `merge-base` may have no shared history); else
 `git merge-base`; else the supplied base, logged rather than silent.
+
+### AMENDMENT 2 (MOTIR-3780, 2026-08-28): the publish door is the MCP tool — §1's producer, and §6 in full
+
+**What changed.** The design result is published by the **agent that drew the
+asset, through an MCP tool** (`publish_design_result`), not by a CI script
+reading a diff. §6 is superseded in full and §1 keeps its classification table
+while losing its producer. Everything else in this record is untouched — see
+_What does NOT change_ below, which is a list rather than a sentence because the
+temptation on a change this size is to sweep the neighbours out with it.
+
+**Why the CI shape could not be repaired in place.** The publisher is a file,
+and a file has to BE in whatever repository the design lands in. Measured on each
+default branch on 2026-08-28: `motir-core` carries the original in-tree;
+`motir-marketing` `curl`s a copy **pinned to a SHA** (`6e71acf21`), so
+AMENDMENT 1's own fix — merged hours earlier — can never reach it;
+`nextjs-prisma-vercel-starter` carries a **hard fork** frozen at `1b4fbe0`
+(2026-08-11), 438 lines against motir-core's 977, missing `resolveDiffBase`,
+`headParents`, `NotALeafError`, `NotAChildError`, `attributeChangedPaths`,
+`parseCommitCardKey` and `partitionAssetsByCard`; and a customer's own
+repository carries nothing at all. **The starter's copy still runs the two-dot
+`git diff` that §6a(b) fixed**, so a scaffolded repository publishes assets it
+did not author onto whichever card its branch names, into a tenant with no
+withdrawal route.
+
+That is not a discipline problem, and this is the property worth recording:
+**a stale copy is GREEN.** Nothing imports it, nothing type-checks it against an
+interface, no check compares it to anything, and the specs that cover the
+original (`vitest.design.config.ts`) do not travel with it. Every signal
+available was correct for seventeen days.
+
+**Why the tool is the right door and not a new capability.**
+`DESIGN_PUBLISH_PERMISSION` is `work_item:edit` (`lib/tokens/grant.ts`) and
+`CLI_TOKEN_GRANT` (`lib/mcp/toolPermissions.ts`) already carries it — a fact
+`lib/mcp/tools/attachFile.ts` already states in a comment. So no credential and
+no trust is added. The script exists to answer three questions the agent already
+knows the answer to — which card, which files, which sections — and each is an
+INFERENCE the tool replaces with a DECLARATION. §6a is two defects in a row in
+exactly those inferences.
+
+---
+
+#### Q1 — the HTTP publish routes SURVIVE, as a deliberately-supported public surface
+
+`POST /api/work-items/[id]/design-evidence/upload-token` and
+`POST …/design-evidence` **stay**, and this paragraph is the record that says so.
+
+**Measured, on `origin/main` after AMENDMENT 1.** Their only non-test callers
+today are `scripts/upload-design-assets.mjs:646` and `:686` — the script this
+story deletes — plus two PROSE references that instruct an agent to POST them
+(`CLAUDE.md:654`, `lib/dispatch/promptTemplate.ts:276`), both of which MOTIR-3783
+and MOTIR-3791 rewrite to name the tool. **After this story, their internal
+caller count is zero, and that is the expected steady state, not a defect.**
+
+**This is exactly the shape `kind-story.md`'s CALLER TEST names as an ORPHANED
+DELIVERABLE** — _"a service or route whose only callers are its own routes"_ —
+so the record has to name the intended consumer or the next sweep is right to
+delete them. **The intended consumer is any publisher that is not an MCP
+client:** a customer's own CI, a design tool, a script, a `curl`. The governing
+split is the one already in force — `/api/mcp` is the door for AGENTS, the
+versioned REST surface is the door for CLIENTS — and deleting these routes would
+make design publishing MCP-only, a narrowing nobody asked for and one that would
+land hardest on exactly the self-hosted and customer-owned cases this story
+exists to serve.
+
+**They earn a second keep from Q3 below**, which is the stronger reason: they are
+the overflow valve for an asset too large to travel base64 inside one JSON-RPC
+call. A record that keeps a route only "for a future consumer" ages badly; this
+one has a named, measured, in-tree job.
+
+**What does NOT survive with them:** nothing here re-decides §6's auth. Both
+routes keep `authenticateCiPublisher` and `authenticateGithubOidc` exactly as
+they are — those are shared with the acceptance-video publisher, which is
+untouched by this story and would fail silently if either were narrowed.
+
+#### Q2 — the AGENT supplies the sections, and here is what that gives up
+
+§1 decided diff-hunk → nearest enclosing `##` because _"the diff is already the
+ground truth and needs nothing from the author"_. **The tool has no diff, so the
+agent names the sections it wrote.**
+
+**What the heuristic bought, stated plainly because it is a real loss:
+it could not be forgotten.** A diff-driven publish needs nothing from the author
+and therefore cannot be skipped by an author who is tired at the end of a long
+run. Declaration can be. **This record does not pretend otherwise** — it accepts
+a mechanism that CAN be forgotten in exchange for one that can BE ABSENT, and the
+second failure is worse: a forgotten call is one card missing its result, while
+an absent publisher is every card in a repository missing every result, silently,
+for as long as nobody looks.
+
+**Three mitigations, all of which must exist for this trade to hold:**
+
+1. **The tool's own description** is the instruction an agent reads at the moment
+   it can act on it — the same lever `link_pull_request` uses for the same class
+   of forgettable-but-load-bearing call.
+2. **`WHAT_TO_DO.design` in the dispatch prompt** names the call as a step of the
+   design flow (MOTIR-3783), and `run.md` does the same for the runbook.
+3. **`CLAUDE.md`'s existing silent-failure warning is RETARGETED, not deleted**
+   (MOTIR-3791). It exists because the CI publish used to fail silently while
+   everything else looked perfect. That risk does not disappear with CI — **it
+   moves**, and the new shape is identical from the outside: files written,
+   commit landed, pull request open, checks green, card empty.
+
+**What stops an agent shipping the whole note.** Measured on `origin/main`:
+`design/work-items/design-notes.md` is **396,091 bytes across 35 `##`
+sections** (the largest of
+several; `design/ai-planning/design-notes.md` is 222,619 and
+`design/projects/design-notes.md` 196,863). _"Send the note"_ is therefore not an
+acceptable fallback, and the existing **64 KiB `noteMd` cap** (§1) is what
+enforces it — unchanged by this amendment, and now doing a second job it was not
+designed for. The cap remains a RENDERING bound rather than a data-loss bound
+because the `note_file` companion still carries the complete text.
+
+> ⚠️ **The card's own figure was stale and is corrected here.** MOTIR-3781 was
+> authored against _"303 KB across 29 sections"_. The file is 396,091 bytes
+> across 35 sections. The conclusion is unchanged and strengthened.
+
+#### Q3 — bytes in the call, and the measured ceiling that makes it safe
+
+**DECISION: the assets travel base64 INSIDE the tool call**, mirroring
+`attach_file`'s `contentBase64`, one call per publish. This follows the parent
+story's own acceptance criterion — _note, mock and `.png` in ONE tool call_ —
+and it is the shape that works in a repository Motir has never seen, which is the
+whole point of the change.
+
+**The measurement, which is the one thing a later reader cannot re-derive**
+(`git ls-tree -r -l origin/main -- design/`, 2026-08-28):
+
+| quantity                                     | value                                                                                                                                                                             |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| largest `design/**/*.png`                    | **5,198,426 B = 4.96 MiB** — `design/public-projects/public-projects.png`                                                                                                         |
+| the same, base64                             | **6,931,236 B = 6.61 MiB**                                                                                                                                                        |
+| next four                                    | `shell/navigation-pending.png` 5,192,740 · `coding-convention/convention.png` 5,020,622 · `coding-convention/convention.dark.png` 4,827,418 · `ai-chat/ask-answers.png` 4,203,196 |
+| population                                   | **192 files, 253,419,444 B total, 1,319,892 B mean**                                                                                                                              |
+| `MAX_UPLOAD_BYTES` (`lib/blob/allowlist.ts`) | **10 MiB, PER FILE**                                                                                                                                                              |
+| raw bytes that fit base64 under that cap     | **7.5 MiB**                                                                                                                                                                       |
+
+**So the ceiling the chosen shape imposes is 7.5 MiB of raw asset per file, and
+today's largest asset is 4.96 MiB — 1.51× headroom.** A typical publish (one
+note section, one ~48 KB mock, one 1.3 MiB mean `.png`) is under 2 MiB encoded.
+A worst-case publish today is ≈ 6.7 MiB encoded in one request body.
+
+> ⚠️ **The card's premise was wrong by 3.6×, and this is why AC 4 asked for a
+> measurement.** MOTIR-3781 was authored against _"~1.4 MB
+> (`design/org-admin/org-admin.png`), ~1.9 MB base64"_. The real largest is
+> **4.96 MiB / 6.61 MiB base64**. A shape sized against 1.9 MiB would have looked
+> like it had 5× headroom when it has 1.5×.
+
+**Rejected: mint-then-PUT for the general case.** It keeps large binaries off the
+JSON-RPC channel and it matches the surviving routes — both real advantages — but
+it costs 1 + N round trips, it re-introduces a multi-step protocol an agent can
+abandon halfway (leaving a minted target and no registration), and it contradicts
+the one-call criterion. The single-call shape is chosen for the **usual** case on
+the measured distribution, not for the extreme.
+
+**And the extreme has a named door rather than a hope.** The tool **refuses** an
+asset over `MAX_UPLOAD_BYTES` with a message naming the measured headroom and
+pointing at the mint-then-PUT routes Q1 keeps. That is the second, load-bearing
+reason those routes survive: **the single-call shape is only safe because the
+multi-call shape still exists.** If a future asset exceeds 7.5 MiB raw, nothing
+is stuck and no decision has to be reopened — and if that becomes routine rather
+than exceptional, THAT is the trigger to revisit this answer, not a smaller
+number chosen defensively today.
+
+#### What does NOT change
+
+Listed rather than implied, because the risk on an amendment this size is that a
+neighbour is swept out with the mechanism:
+
+`designEvidenceService` and every path under it · the `Design result` panel ·
+the blob posture and §5's three `text/html` layers in full · the **64 KiB
+`noteMd` cap** and the `note_file` companion · `ALLOWED_DESIGN_ASSET_TYPES` and
+its deliberate exclusion from `ALLOWED_UPLOAD_TYPES` (an HTML file on the
+attachments panel is **still a 415**) · the withdrawal route from MOTIR-3215 ·
+§2's no-entitlement axis · §3's leaf-owns-the-result rule and its
+`NotALeafError` refusal · §4's retention, supersede and idempotency ·
+`authenticateCiPublisher` / `authenticateGithubOidc` · the `design-guards` CI
+**job** and every `design/**` guard it runs (`design-three-file-set`,
+`design-asset-addresses`, `design-ink-contrast`, `design-dark-parity`,
+`orb-glyph-contrast`) · and the three-file authoring rule itself — the repository
+stays the source of truth, and the published result remains the card's VIEW of an
+asset that is still committed.
+
+**Only the CALLER moves.**
+
+#### The ORDER, and why the reverse leaves no publish path at all
+
+**The tool ships → the deployed tenant is verified → then the lanes are
+deleted.** Not negotiable, and it is the reason the retirement is a separate
+story (`blocked_by` MOTIR-3780) rather than four more subtasks here.
+
+**Merged is not deployed.** A card ends at _pull request opened_; the merge
+starts a deploy that finishes minutes later, and `app.motir.co`'s `tools/list` is
+the only thing that says whether the door exists yet. Delete three publish lanes
+against a tenant that does not yet serve the tool and there is **no publish path
+in any repository at all** — briefly, silently, with nothing red anywhere to say
+so. This project has already lived that exact window once: `update_plan_proposal`
+and `withdraw_plan_proposal` were on `main` while the tenant's `tools/list` still
+answered fifty tools carrying neither, and passes that planned around them
+stranded work they could not fix.
+
+**The ordering is carried by a CONTAINER edge, and that placement is itself a
+decision.** It was first written as a `verification` leaf inside this story
+blocking three retirement leaves — which cannot work: those retirements could
+only be written after a deployment produced by the merge of the very pull request
+they would have had to be committed on, and a container's pull request may not
+open while its children are un-landed. The gate now lives in the sibling story,
+and the sibling story is `blocked_by` this one, so `readiness.blockedByAncestor`
+holds every retirement until the tool has actually shipped. Recorded as planning
+bug MOTIR-3794.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 

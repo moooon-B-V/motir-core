@@ -102,15 +102,13 @@ async function payload(caller: V1ProjectCaller, key: string): Promise<V1Dispatch
 
 /** A MERGED pull request onto that repository's own default branch.
  *
- *  ⚠️ BOTH HALVES OF THE LINK (MOTIR-3721): the completion facts the classifier
- *  reads come from `work_item_delivery`, and every row carrying the legacy column
- *  carries a delivery row too — the migration backfilled all of them and both live
- *  writers write the pair. */
+ *  ⚠️ THE LINK IS THE DELIVERY ROW (MOTIR-3757): the completion facts the
+ *  classifier reads come from `work_item_delivery`, and since the drop that is the
+ *  only place a link can be written. */
 async function mergedPr(repoId: string, workItemId: string, baseRef: string, number: number) {
   const row = await adminDb.githubPullRequest.create({
     data: {
       repoId,
-      workItemId,
       number,
       state: 'closed',
       merged: true,

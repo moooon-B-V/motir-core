@@ -91,7 +91,6 @@ async function addPr(
       headRef: `subtask/PROD-1-${randomToken(4)}`,
       baseRef: opts.baseRef === undefined ? 'main' : opts.baseRef,
       title: opts.title ?? null,
-      workItemId: null,
       provider: 'github',
     },
     select: { id: true },

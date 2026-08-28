@@ -9,7 +9,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { linkPrByIdentifier } from '../helpers/prLink';
+import { deliveredItemIds, linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · MOTIR-896 — the CUSTOM-WORKFLOW no-match branch of the PR →
 // status sync (the one enumerated 7.7.4 case no per-subtask test covers): a
@@ -180,9 +180,8 @@ describe('githubWebhookService — custom workflow with NO matching status (MOTI
 
     // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887). `github_pull_request`
     // is armed, so this one worked before the move.
-    const pr = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
-    expect(pr).not.toBeNull();
-    expect(pr!.workItemId).toBe(item.id);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    expect(await deliveredItemIds(pr.id)).toEqual([item.id]);
   });
 
   it('PR merged with no done-category status → no_matching_status no-op (the done lifecycle)', async () => {

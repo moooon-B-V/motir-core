@@ -20,6 +20,25 @@ import { adminDb } from './adminDb';
 // before GitHub's delivery arrives). Calling after an `opened` delivery works
 // too, but then the card has already failed to move on that delivery.
 
+/**
+ * Every work-item id a pull-request ROW delivers, oldest link first.
+ *
+ * The test-side counterpart of the link helpers above, and it exists because
+ * MOTIR-3757 dropped `github_pull_request.work_item_id`: a suite that used to
+ * assert `prRow.workItemId` is asserting a column that no longer exists, and the
+ * fact it was reaching for lives in `work_item_delivery`. Reading through
+ * `adminDb` deliberately — the assertion is about what is STORED, not about what
+ * a bound reader can see, which its own RLS suite covers.
+ */
+export async function deliveredItemIds(githubPullRequestId: string): Promise<string[]> {
+  const rows = await adminDb.workItemDelivery.findMany({
+    where: { githubPullRequestId },
+    orderBy: { createdAt: 'asc' },
+    select: { workItemId: true },
+  });
+  return rows.map((r) => r.workItemId);
+}
+
 export interface LinkPrArgs {
   /** The work item the pull request delivers. */
   workItemId: string;
