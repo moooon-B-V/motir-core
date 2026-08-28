@@ -15,13 +15,16 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // plan staleness detection (Story 7.21). Real Postgres (no mocks), per CLAUDE.md.
 // Proves the rule set over a fixture for EACH reason:
 //   • parent_removed   — a proposed add's real parent archived after plannedAt;
-//   • siblings_added   — the parent gained a child after plannedAt the add has
-//                        no dependency relation with;
 //   • blocker_removed  — a real blocked_by target of the add archived;
 //   • base_revision_drift — a modify/remove target edited (latest revision id
 //                        moved off the proposal's baseRevision) or archived.
 // Plus: an unchanged tree returns all-clear; the service is a PURE read (writes
 // nothing, never blocks); and it is tenant-scoped (404-not-403 cross-tenant).
+//
+// ⚠️ AND ONE NEGATIVE, which is the whole of MOTIR-3777: an `add` that declared
+// NO edges is all-clear however many unrelated cards land under its parent. The
+// retired `siblings_added` rule asserted the opposite here, and it was the only
+// rule keyed on something the proposal had not named.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -94,24 +97,44 @@ describe('planStalenessService — per-reason detection', () => {
     expect(v.reasons).toEqual([{ code: 'parent_removed', parentId }]);
   });
 
-  it('siblings_added: the parent gained a child after plannedAt the add has no dependency relation with', async () => {
+  // ── MOTIR-3777 — an EDGE-LESS `add` is not stale because its parent is busy ──
+  //
+  // The regression this card exists for. `siblingsAddedRule` asked one question —
+  // *did this parent gain a live child after `plannedAt`?* — and never read the
+  // sibling: not its kind, not its subject, not its edges. Its one excuse clause
+  // (`.filter((c) => !declaredBlockers.has(c.id))`) was unreachable on the
+  // generation path, because a proposal cannot name an id that did not exist when
+  // it was written and `findChildrenCreatedAfter` returns only ids younger than
+  // `plannedAt`. So on a busy parent the badge measured how busy the parent was.
+  //
+  // The predicate is now the one the reviewer already reasons with: a proposal is
+  // out of date when something IT NAMED has moved. A proposal that named nothing
+  // is self-contained.
+  it('an add with NO declared edges is all-clear however many unrelated siblings land under its parent', async () => {
     const fx = await makeWorkItemFixture();
-    const parentId = await seed(fx, 'Parent story', 'story');
+    const parentId = await seed(fx, 'Busy epic', 'story');
     const { planId, items } = await plannedPlan(fx, [
       {
         op: 'add',
         proposedFields: { title: 'Proposed child', kind: 'subtask' },
         parentRef: parentId,
+        // The shape of the live reproduction: no dependency edge at all.
+        blockedByRefs: [],
       },
     ]);
 
-    // A NEW sibling lands under the same parent after the plan was generated.
-    const newSibling = await seed(fx, 'Newcomer', 'subtask', parentId);
+    // Three unrelated cards land under the same parent after the plan was
+    // generated — the production fixture exactly (MOTIR-653 gained three
+    // out-of-band dogfooding bugs within four hours of the plan being drafted).
+    await seed(fx, 'Unrelated bug 1', 'subtask', parentId);
+    await seed(fx, 'Unrelated bug 2', 'subtask', parentId);
+    await seed(fx, 'Unrelated bug 3', 'subtask', parentId);
 
     const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
     const v = verdictFor(result.items, items[0]!.id);
-    expect(v.stale).toBe(true);
-    expect(v.reasons).toEqual([{ code: 'siblings_added', siblingIds: [newSibling] }]);
+    expect(v.reasons).toEqual([]);
+    expect(v.stale).toBe(false);
+    expect(result.stale).toBe(false);
   });
 
   it('blocker_removed: a real blocked_by target of the add is archived', async () => {
@@ -189,8 +212,7 @@ describe('planStalenessService — per-reason detection', () => {
     expect(v.stale).toBe(true);
     // The verdict is a REASON LIST, not a boolean: a single item carries BOTH
     // reasons, concatenated in the fixed `RULES` order (parent_removed before
-    // blocker_removed). `siblings_added` does NOT fire — its rule short-circuits
-    // once the parent is removed.
+    // blocker_removed).
     expect(v.reasons).toEqual([
       { code: 'parent_removed', parentId },
       { code: 'blocker_removed', blockerIds: [blockerId] },
@@ -272,11 +294,15 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
   // `planned`, so on a decided plan that question cannot be asked again and
   // every warning is advice about a choice nobody can make.
   //
-  // Worse than useless, in fact: the warning an approved plan shows is CAUSED
-  // by the approval. `findChildrenCreatedAfter` has no exclusion for the items
-  // the plan itself materialized, and `isRealRef` drops every intra-plan
-  // `planItem:` edge, so N proposals under one committed parent each see the
-  // other N−1 as unexplained new siblings.
+  // Worse than useless, in fact: the warning an approved plan showed was CAUSED
+  // by the approval. The retired `siblings_added` rule (MOTIR-3777) read the
+  // parent's post-`plannedAt` children with no exclusion for the items the plan
+  // itself materialized, and `isRealRef` drops every intra-plan `planItem:` edge,
+  // so N proposals under one committed parent each saw the other N−1 as
+  // unexplained new siblings. The status guard below is what MOTIR-3165 added and
+  // is untouched; the rule that produced the noise is now gone one layer in, so
+  // this case would pass on its own — which is exactly why it stays. It asserts
+  // the GUARD, and a guard is not proven by a rule set that happens to be quiet.
 
   it('an APPROVED plan is all-clear — its own materialized siblings do not flag it', async () => {
     const fx = await makeWorkItemFixture();
@@ -318,20 +344,28 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
   });
 
-  it('a plan still PLANNED is unaffected — the rule set fires exactly as before', async () => {
+  // Re-expressed for MOTIR-3777 (AC5): this case guards MOTIR-3165's STATUS
+  // boundary — an undecided plan still gets a verdict — and it used to prove that
+  // with `siblings_added`, the one reason MOTIR-3777 retired. The boundary is
+  // unchanged, so the case survives on a reason that survives: the proposal's own
+  // parent is archived, which a `planned` plan must still be told about.
+  it('a plan still PLANNED is unaffected — the surviving rules fire exactly as before', async () => {
     const fx = await makeWorkItemFixture();
     const parentId = await seed(fx, 'Live parent', 'story');
     const { planId, items } = await plannedPlan(fx, [
       { op: 'add', proposedFields: { title: 'Child', kind: 'subtask' }, parentRef: parentId },
     ]);
 
+    // A newcomer under the same parent — the drift that used to flag this plan,
+    // and now must not — followed by the drift that genuinely does.
     await seed(fx, 'Newcomer', 'subtask', parentId);
+    await workItemsService.archiveWorkItem(parentId, fx.ctx);
 
     const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
     expect(result.stale).toBe(true);
-    expect(
-      verdictFor(result.items, items[0]!.id).reasons.some((r) => r.code === 'siblings_added'),
-    ).toBe(true);
+    expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([
+      { code: 'parent_removed', parentId },
+    ]);
   });
 
   it('the verdict NAMES the work item it is about, once the add has one', async () => {
@@ -369,10 +403,9 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     ]);
 
     // Tenant B independently makes, in ITS OWN tree, exactly the mutations that
-    // WOULD flag staleness if they touched A's tree: a new sibling lands under a
-    // parent, and a parent is archived. The staleness reads are workspace-scoped
-    // (`findByIdsInWorkspace` / `findChildrenCreatedAfter`), so none of B's churn
-    // can leak into A's verdict.
+    // WOULD flag staleness if they touched A's tree: a parent is archived. The
+    // staleness reads are workspace-scoped (`findByIdsInWorkspace`), so none of
+    // B's churn can leak into A's verdict.
     const bParent = await seed(b, 'B parent', 'story');
     await seed(b, 'B newcomer', 'subtask', bParent);
     await workItemsService.archiveWorkItem(bParent, b.ctx);

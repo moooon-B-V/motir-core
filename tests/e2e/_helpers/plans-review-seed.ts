@@ -14,8 +14,13 @@
 // Staleness is COMPUTED on read (never stored). To make a `planned` plan stale
 // deterministically we mutate the committed tree AFTER `markPlanned`:
 //   • parent_removed — archive the real parent a proposed `add` hangs under.
-//   • siblings_added — create a new child under the real parent of a proposed
-//     `add`, after `plannedAt`, that the add declares no dependency on.
+//
+// ⚠️ AND ONE MUTATION THAT MUST *NOT* FLAG ANYTHING (MOTIR-3777): a new child
+// lands under the OTHER proposal's still-living parent, after `plannedAt`, that
+// the proposal declares no dependency on. That used to raise `siblings_added` —
+// a warning about somebody else's work, on the one surface whose whole purpose
+// is to be trustworthy about a decision. The rule is retired and the fixture
+// keeps the mutation, so the spec can assert the ABSENCE at the browser.
 
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -38,10 +43,12 @@ export interface PlansReviewSeed {
   userId: string;
   workspaceId: string;
   projectId: string;
-  /** A `planned` plan made STALE (parent_removed + siblings_added) — the one the
-   *  spec reviews + approves-anyway. Its two proposed adds, by title: */
+  /** A `planned` plan made STALE (parent_removed) — the one the spec reviews +
+   *  approves-anyway. Its two proposed adds, by title: */
   stalePlan: PlanRef;
-  staleProposalSiblings: string; // proposed add under a LIVE parent → siblings_added
+  /** Under a LIVE parent that GAINS an unrelated child after `plannedAt` — and
+   *  is therefore NOT stale (MOTIR-3777). The negative half of the fixture. */
+  cleanProposalUnderBusyParent: string;
   staleProposalOrphan: string; // proposed add under an archived parent → parent_removed
   /** A `planned`, NON-stale plan the spec declines. */
   declinePlan: PlanRef;
@@ -97,7 +104,7 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
     ctx,
   );
 
-  const staleProposalSiblings = 'Onboarding wizard';
+  const cleanProposalUnderBusyParent = 'Onboarding wizard';
   const staleProposalOrphan = 'Settings revamp';
   const stale = await plansService.createPlan(
     projectId,
@@ -109,7 +116,7 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
     [
       {
         op: 'add',
-        proposedFields: { title: staleProposalSiblings, kind: 'subtask' },
+        proposedFields: { title: cleanProposalUnderBusyParent, kind: 'subtask' },
         parentRef: livingParent.id,
       },
       {
@@ -123,7 +130,8 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
   await plansService.markPlanned(stale.id, ctx);
 
   // Drift the committed tree AFTER plannedAt:
-  //   • a new sibling under the living parent → `siblings_added` on the first add;
+  //   • a new sibling under the living parent → NOTHING on the first add, which
+  //     declared no edge to it (MOTIR-3777);
   //   • archive the doomed parent → `parent_removed` on the second add.
   await workItemsService.createWorkItem(
     { projectId, kind: 'subtask', title: 'Late onboarding addition', parentId: livingParent.id },
@@ -158,7 +166,7 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
     workspaceId: ctx.workspaceId,
     projectId,
     stalePlan: { id: stale.id },
-    staleProposalSiblings,
+    cleanProposalUnderBusyParent,
     staleProposalOrphan,
     declinePlan: { id: decline.id },
     declineProposal,

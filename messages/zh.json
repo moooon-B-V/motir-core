@@ -212,7 +212,6 @@
     "staleBadge": "已过期",
     "staleSummary": "{n} 个工作项可能已过期",
     "staleParentRemoved": "父项在生成后已被移除",
-    "staleSiblingsAdded": "生成后新增了同级工作项",
     "staleBlockerRemoved": "某个阻塞项已被移除",
     "staleDrift_edited": "生成后已更改",
     "staleDrift_archived": "目标已归档",

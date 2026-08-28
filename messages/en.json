@@ -212,7 +212,6 @@
     "staleBadge": "Out of date",
     "staleSummary": "{n, plural, one {# item may be out of date} other {# items may be out of date}}",
     "staleParentRemoved": "Parent removed since planned",
-    "staleSiblingsAdded": "New sibling items since planned",
     "staleBlockerRemoved": "A blocker was removed",
     "staleDrift_edited": "Changed since planned",
     "staleDrift_archived": "Target was archived",

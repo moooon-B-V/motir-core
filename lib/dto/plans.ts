@@ -534,31 +534,32 @@ export type PlanStatusCountsDto = Record<PlanStatusDto, number>;
 // Computed at REVIEW time from the CURRENT work-item tree + the plan's
 // `plannedAt`. The committed tree can change between when a plan is generated
 // and when the user reviews it, so a proposed item can DRIFT: its parent was
-// archived, new siblings appeared under its parent (its build-sequence context
-// is outdated), a blocker it references was removed, or — for modify/remove —
-// the target changed since the patch's `baseRevision`. A PURE READ that WARNS;
-// it NEVER blocks approve. The 7.4.5 plan-detail (MOTIR-847) + 7.21.1 plans-list
+// archived, a blocker it references was removed, or — for modify/remove — the
+// target changed since the patch's `baseRevision`. A PURE READ that WARNS; it
+// NEVER blocks approve. The 7.4.5 plan-detail (MOTIR-847) + 7.21.1 plans-list
 // (MOTIR-1338) UIs bind to these.
 
 /** The reason a proposed PlanItem is flagged stale. A REASON LIST (not a
  *  boolean) so a single item can carry several, and the set is EXTENSIBLE as
  *  the rule set grows — `add` items get the structural reasons; `modify`/`remove`
- *  items get `base_revision_drift`. */
-export type StaleReasonCode =
-  | 'parent_removed'
-  | 'siblings_added'
-  | 'blocker_removed'
-  | 'base_revision_drift';
+ *  items get `base_revision_drift`.
+ *
+ *  ⚠️ EVERY MEMBER IS KEYED ON SOMETHING THE PROPOSAL ITSELF NAMED (MOTIR-3777):
+ *  its parent, its declared blockers, its modify/remove target. `siblings_added`
+ *  — *the parent gained a child after `plannedAt`* — was the one member that was
+ *  not, and it is RETIRED: it read the parent's child count rather than the
+ *  proposal, so on a busy parent it fired within minutes of every plan, for
+ *  reasons that were always about somebody else's work. A proposal that named
+ *  nothing is self-contained, and nothing that happens beside it can make it
+ *  wrong. A new member is welcome here — one keyed on the parent's traffic is
+ *  not. */
+export type StaleReasonCode = 'parent_removed' | 'blocker_removed' | 'base_revision_drift';
 
 /** One staleness reason, carrying the specifics the review UI shows. */
 export type StaleReason =
   /** `add`: the proposal's (real) parent is archived/deleted — it would be
    *  orphaned on approve. */
   | { code: 'parent_removed'; parentId: string }
-  /** `add`: the parent gained these children AFTER `plannedAt` that the
-   *  proposal has no dependency relation with — its build-sequence context is
-   *  outdated. */
-  | { code: 'siblings_added'; siblingIds: string[] }
   /** `add`: these (real) `blocked_by` targets of the proposal are now
    *  archived/deleted — a dangling dependency. */
   | { code: 'blocker_removed'; blockerIds: string[] }
