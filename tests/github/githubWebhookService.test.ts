@@ -486,12 +486,17 @@ describe('githubWebhookService — pull_request → status sync', () => {
   it('GRANDFATHERS a row the retired parse linked — `linked_manually` is not the condition', async () => {
     // The 1026 production rows the parse wrote carry `linked_manually: false`.
     // Gating the resolve on that flag would orphan every one of them on its next
-    // delivery, overwriting `work_item_id` with null. The condition is the STORED
-    // LINK, so the row keeps driving the sync — and keeps its flag, which now
-    // records only HOW the link was made.
+    // delivery. The condition is the STORED LINK, so the row keeps driving the
+    // sync — and keeps its flag, which now records only HOW the link was made.
+    //
+    // ⚠️ THE STORED LINK IS THE DELIVERY ROW NOW (MOTIR-3721), and the
+    // grandfathering is unchanged BECAUSE of that: `work_item_delivery`'s
+    // migration carried all 1096 stored links into the table, parse-written rows
+    // included, for exactly this reason. The fixture writes both halves because
+    // every migrated database has both.
     const s = await makeScenario('grandfathered@example.com');
     const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: REPO_PROVIDER_ID } });
-    await adminDb.githubPullRequest.create({
+    const row = await adminDb.githubPullRequest.create({
       data: {
         provider: 'github',
         repoId: repo.id,
@@ -503,6 +508,14 @@ describe('githubWebhookService — pull_request → status sync', () => {
         title: `Some change (${s.item.identifier})`,
         workItemId: s.item.id,
         linkedManually: false,
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: repo.workspaceId,
+        workItemId: s.item.id,
+        githubPullRequestId: row.id,
+        repoId: repo.id,
       },
     });
 

@@ -1,4 +1,5 @@
 import type { Prisma, WorkItemDelivery } from '@/generated/prisma/client';
+import type { LinkedChangeRequestCompletionFact } from '@/lib/repositories/githubPullRequestRepository';
 
 // Single Prisma operations on the `work_item_delivery` table — the ONE association
 // between a work item and a pull request, many-to-many in both directions (Story
@@ -107,6 +108,140 @@ export const workItemDeliveryRepository = {
       include: WITH_CHECKS,
       orderBy: { createdAt: 'asc' },
     });
+  },
+
+  /**
+   * The WORKSPACE that owns a card's deliveries, or null when it has none
+   * (MOTIR-3721, moving `githubPullRequestRepository.findWorkspaceIdByWorkItem`).
+   *
+   * This is the re-evaluation path's TRUSTED workspace resolution: the only way a
+   * caller holding just a work-item id can learn the tenant it must bind before
+   * touching `work_item`, a table with no `system_admin` arm (MOTIR-2880). The
+   * delivery row carries `workspace_id` DIRECTLY, so unlike the connection-tier
+   * read it replaces there is no join at all — and RLS does not traverse foreign
+   * keys, so a join would not have helped anyway (ADR §1 measured exactly that).
+   *
+   * ⚠️ IT IS ADMITTED ONLY BECAUSE THIS TABLE CARRIES THE `app.system_admin` ARM
+   * (migration `20260828120000_work_item_delivery_system_arm`). Without it the read
+   * returns an EMPTY LIST inside `withSystemContext` and raises nothing, which is
+   * this module's own stated worst failure. The arm and this method ship together.
+   *
+   * Oldest link first, matching the read it replaces — a card's deliveries all
+   * belong to one workspace, so the order decides nothing; it is kept so a
+   * multi-row card resolves deterministically.
+   */
+  async findWorkspaceIdByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.workItemDelivery.findFirst({
+      where: { workItemId },
+      select: { workspaceId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return row?.workspaceId ?? null;
+  },
+
+  /**
+   * Count a card's OTHER delivering pull requests (excluding `excludePrId`) that
+   * are still OPEN (MOTIR-3721, moving
+   * `githubPullRequestRepository.countOtherOpenByWorkItem`).
+   *
+   * The status sync uses it so a merge only COMPLETES the card when it is the
+   * card's LAST open delivering pull request: a cross-repo card must not flip Done
+   * while a sibling is still open (MOTIR-1604). A read guarding the transition
+   * write → takes `tx`.
+   */
+  async countOtherOpenByWorkItem(
+    workItemId: string,
+    excludePrId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.workItemDelivery.count({
+      where: {
+        workItemId,
+        githubPullRequestId: { not: excludePrId },
+        pullRequest: { is: { state: 'open' } },
+      },
+    });
+  },
+
+  /**
+   * Count a card's delivering pull requests that are still OPEN (MOTIR-3721,
+   * moving `githubPullRequestRepository.countOpenByWorkItem`).
+   *
+   * The re-evaluation path (MOTIR-3034) uses it where the sync uses
+   * {@link countOtherOpenByWorkItem}: there a delivery is being decided and the
+   * DELIVERING row must be excluded from its own gate, here there is no delivery
+   * at all, so every open sibling counts. Deliberately a second method rather than
+   * a nullable exclusion on the first — the two callers ask different questions,
+   * and a nullable argument would make WHICH one a property of a call site.
+   */
+  async countOpenByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workItemDelivery.count({
+      where: { workItemId, pullRequest: { is: { state: 'open' } } },
+    });
+  },
+
+  /**
+   * A card's deliveries, as the COMPLETION facts the repository-SET gate decides
+   * on (MOTIR-3721, moving
+   * `githubPullRequestRepository.listCompletionFactsByWorkItem`): which repository
+   * each landed in, whether it merged, which branch it targeted, and that
+   * repository's own default branch.
+   *
+   * Reads the repository off the DELIVERY row rather than the pull request's,
+   * which is the same repository by construction (`link_pull_request` stores the
+   * pull request's own `repo_id`) and is the column this table carries precisely
+   * so the gate can compare each member against its own default branch without a
+   * join per member.
+   *
+   * Takes a REQUIRED `tx`: it guards a status WRITE and must run inside the sync's
+   * resolve transaction, under the row lock already taken, so concurrent
+   * redeliveries serialize on it exactly as the shipped gates do.
+   */
+  async listCompletionFactsByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LinkedChangeRequestCompletionFact[]> {
+    const rows = await tx.workItemDelivery.findMany({
+      where: { workItemId },
+      select: {
+        repo: { select: { name: true, defaultBranch: true } },
+        pullRequest: { select: { merged: true, baseRef: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => ({
+      repoName: r.repo.name,
+      repoDefaultBranch: r.repo.defaultBranch,
+      merged: r.pullRequest.merged,
+      baseRef: r.pullRequest.baseRef,
+    }));
+  },
+
+  /**
+   * Every card delivered by ANY of `githubPullRequestIds`, de-duplicated
+   * (MOTIR-3721 — the consumer half of the base-ref backfill's candidate read).
+   *
+   * The backfill fills a `base_ref` on N pull requests and then re-evaluates every
+   * card those merges could have completed. It used to take the card ids off the
+   * candidate rows' own link column, which is exactly the projection this card
+   * moves; over the delivery table the answer is a set per pull request, so the
+   * read is batched rather than run per candidate.
+   */
+  async listWorkItemIdsByPullRequests(
+    githubPullRequestIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (githubPullRequestIds.length === 0) return [];
+    const rows = await tx.workItemDelivery.findMany({
+      where: { githubPullRequestId: { in: [...githubPullRequestIds] } },
+      select: { workItemId: true },
+      distinct: ['workItemId'],
+      orderBy: { workItemId: 'asc' },
+    });
+    return rows.map((r) => r.workItemId);
   },
 
   /**

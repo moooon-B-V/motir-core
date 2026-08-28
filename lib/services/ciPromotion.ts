@@ -144,19 +144,16 @@ export async function promoteDeliveredCardsOnGreen(args: {
     if (!pr) return [];
     if (derivePrCiState(pr.checkRuns) !== 'passing') return [];
 
-    const linked = pr.workItemId ? await workItemRepository.findById(pr.workItemId, tx) : null;
+    // ⚠️ THE PULL REQUEST, NOT A CARD READ OFF IT (MOTIR-3721). This used to
+    // resolve the pull request's own link column and hand the resolver a single
+    // `linked` ref, which
+    // capped an explicitly-linked pull request at ONE promoted card whatever its
+    // delivery set held — the cap lived in a `| null` parameter, not in a column,
+    // which is why no grep of the link column ever found it (ADR §2).
     const set = await resolveChangeRequestWorkItemSet({
       workspaceId: args.workspaceId,
       headRef: pr.headRef,
-      linked: linked
-        ? {
-            id: linked.id,
-            identifier: linked.identifier,
-            projectId: linked.projectId,
-            status: linked.status,
-            targetRepos: linked.targetRepos,
-          }
-        : null,
+      githubPullRequestId: pr.id,
       tx,
     });
     // Only the cards at `implemented`. A sibling a human moved back to In

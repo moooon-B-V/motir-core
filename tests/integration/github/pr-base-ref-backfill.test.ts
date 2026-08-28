@@ -110,7 +110,15 @@ async function heldItem(fx: WorkItemFixture, repos: string[], title = 'Ships som
 
 /** A mirror row as it exists for a merge Motir recorded BEFORE `base_ref` existed:
  *  merged, closed, linked — and no base. This is not a contrived shape; it is
- *  every row written before the MOTIR-2729 migration. */
+ *  every row written before the MOTIR-2729 migration.
+ *
+ *  ⚠️ IT WRITES BOTH HALVES OF THE LINK (MOTIR-3721), because the database does:
+ *  the `work_item_delivery` migration's pass 1 carried EVERY non-null
+ *  `github_pull_request.work_item_id` into a delivery row, so a row of this
+ *  vintage carries both today. The readers moved onto the delivery table, so a
+ *  fixture that wrote only the column would be describing a state that no longer
+ *  exists on any migrated database — and would test the absence of a link rather
+ *  than the backfill. */
 async function preColumnMergedRow(args: {
   repoId: string;
   number: number;
@@ -119,7 +127,7 @@ async function preColumnMergedRow(args: {
   state?: string;
   merged?: boolean;
 }) {
-  return adminDb.githubPullRequest.create({
+  const row = await adminDb.githubPullRequest.create({
     data: {
       provider: 'github',
       repoId: args.repoId,
@@ -133,6 +141,18 @@ async function preColumnMergedRow(args: {
       linkedManually: false,
     },
   });
+  if (args.workItemId) {
+    const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: args.repoId } });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: repo.workspaceId,
+        workItemId: args.workItemId,
+        githubPullRequestId: row.id,
+        repoId: args.repoId,
+      },
+    });
+  }
+  return row;
 }
 
 /** Serve `GET /repos/{o}/{n}/pulls/{number}` for every number in the map; any
