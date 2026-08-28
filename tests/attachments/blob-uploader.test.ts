@@ -41,6 +41,7 @@ const {
   signedDownloadUrl,
   mintPrivateUploadToken,
   headPrivateBlob,
+  getPrivateBlobBytes,
   deleteAttachmentBlob,
   deletePublicAsset,
 } = await import('@/lib/blob/uploader');
@@ -67,7 +68,7 @@ interface Seen {
 
 let seen: Seen[] = [];
 /** Per-request canned responses, keyed by `<METHOD> <bucket>/<key>`. */
-let responses: Map<string, { statusCode: number; headers?: Record<string, string> }>;
+let responses: Map<string, { statusCode: number; headers?: Record<string, string>; body?: string }>;
 
 /**
  * Replace the client's transport. Everything above it — serialization, the
@@ -92,7 +93,10 @@ function installFakeTransport(): void {
           statusCode: canned.statusCode,
           reason: '',
           headers: { etag: '"abc"', ...(canned.headers ?? {}) },
-          body: Readable.from([]),
+          // A canned BODY where the case needs one — the GET path reads bytes
+          // back, so an always-empty stream could not tell a correct read from
+          // one that returns nothing.
+          body: Readable.from(canned.body === undefined ? [] : [Buffer.from(canned.body)]),
         },
       };
     },
@@ -305,6 +309,44 @@ describe('headPrivateBlob — the authoritative metadata read', () => {
   it('returns null for an object that is not there', async () => {
     responses.set('HEAD motir-private/acceptance/missing.webm', { statusCode: 404 });
     expect(await headPrivateBlob('acceptance/missing.webm')).toBeNull();
+  });
+});
+
+describe('getPrivateBlobBytes — the one private reader that is not a browser', () => {
+  // Every other private read here mints a presigned URL and lets the BROWSER
+  // fetch it. The personal-data export (MOTIR-3701) packages a reader's uploaded
+  // files into an archive on the server, so it needs the bytes in process.
+  it('returns the BYTES the store serves, from the private bucket', async () => {
+    responses.set('GET motir-private/attachments/w1/report.pdf', {
+      statusCode: 200,
+      headers: { 'content-type': 'application/pdf' },
+      body: 'PDF-BYTES',
+    });
+
+    const bytes = await getPrivateBlobBytes('attachments/w1/report.pdf');
+
+    expect(bytes).toBeInstanceOf(Buffer);
+    expect(bytes!.toString()).toBe('PDF-BYTES');
+    expect(seen[0]).toMatchObject({ method: 'GET', bucket: 'motir-private' });
+  });
+
+  it('returns null when the store answers with no body at all', async () => {
+    // ⚠️ THE ONE PLACE THIS SUITE STUBS `send` INSTEAD OF THE TRANSPORT, and the
+    // reason is that the real transport CANNOT produce this shape: the S3
+    // deserializer always attaches a stream to a 200, so the `Body` guard is
+    // unreachable through a signed round trip. It is still worth having —
+    // `GetObjectOutput.Body` is optional in the SDK's own types — so it is
+    // covered here rather than deleted to satisfy a metric. `vi.restoreAllMocks`
+    // in `afterEach` puts the client back.
+    vi.spyOn(s3Client(), 'send').mockResolvedValueOnce({} as never);
+    expect(await getPrivateBlobBytes('attachments/w1/bodyless.pdf')).toBeNull();
+  });
+
+  it('returns null for an object that is not there, rather than throwing', async () => {
+    // The export packages what it can and records what it could not: a row whose
+    // object was GC'd must not fail the whole archive.
+    responses.set('GET motir-private/attachments/w1/gone.pdf', { statusCode: 404 });
+    expect(await getPrivateBlobBytes('attachments/w1/gone.pdf')).toBeNull();
   });
 });
 
