@@ -28,8 +28,10 @@ A gold FILL **cannot carry white text at AA**. So the accent-text
 (`--color-primary-foreground`, the label on the CTA) is **Binance's near-black
 `#181A20`**, not `#fff` — which is Binance's own black-on-yellow treatment.
 Dark-on-gold clears AA at ~9.6:1 (light) / ~13.6:1 (dark). `--color-primary` (the
-gold used AS text/icon on a surface) is a darkened gold (`#8a6a00`) chosen to
-pass AA on the page.
+gold used AS text/icon on a surface) is a darkened gold (`#7d6000`) chosen to
+pass AA on the page **and on the palette's own pastel tints** — it was `#8a6a00`
+until MOTIR-3774, which cleared the page by 5.07:1 and failed
+`--el-tint-lavender` at 4.00:1.
 
 ## How it re-skins (token mapping)
 
@@ -46,7 +48,7 @@ axis's job, enforced by `tests/theme/paletteRegistry.test.ts`.
 | Role group          | Amber / Binance (light → dark)                                                                             |
 | ------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Text scale          | Binance cool-grey ink — `#181a20` → `#eaecef`; secondary `#4a5159` → `#b7bdc6`; signature grey `#848e9c`   |
-| Accent (CTA)        | Binance Gold fill `#f0b90b` → `#fcd535` with **dark labels** `#181a20`; gold `#8a6a00` → `#fcd535` as text |
+| Accent (CTA)        | Binance Gold fill `#f0b90b` → `#fcd535` with **dark labels** `#181a20`; gold `#7d6000` → `#fcd535` as text |
 | Surfaces            | white over cool graphite (light, derived) → the authentic trading floor `#0b0e11` / "Shark" `#1e2329`      |
 | Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#eaecf0` → `#07090c`                        |
 | Borders             | cool graphite hairlines — `#e6e8eb` → `#2b3139`                                                            |
@@ -77,7 +79,8 @@ numerically and by the rendered specimen. Notable margins:
 - Primary ink on canvas — **17.4:1** (light) / **16.4:1** (dark).
 - Secondary `--el-text-secondary` on surface — **7.4:1** / **8.4:1**.
 - Captions `--el-text-muted` on surface — **5.3:1** / **5.1:1**.
-- Gold `--el-accent-on-surface` — **5.1:1** (light) / **13.6:1** (dark); **dark
+- Gold `--el-accent-on-surface` — **5.9:1** (light) / **13.9:1** (dark), and
+  **4.7:1** / **11.6:1** on `--el-tint-lavender`; **dark
   ink** on the gold `--el-accent` fill — **9.6:1** / **13.6:1** (the yellow trap).
 - Link on the soft surface — **5.4:1** / **7.9:1**.
 - White on the (darkened) sell-red danger fill (light) — **5.0:1**; dark ink on

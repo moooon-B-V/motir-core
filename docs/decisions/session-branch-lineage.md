@@ -343,6 +343,45 @@ uncommented `sessionBranch` field, and `blockerReadiness.ts`'s header — becaus
 a reader who lands on any of them re-derives a decision that has been made and
 reversed. That card was re-scoped to exactly that on 2026-08-28.
 
+> **⚠️ AMENDMENT — the field is NOT uncommented (MOTIR-3807, 2026-08-28).** The
+> sentence above, and MOTIR-3735's deliverable 2 that it fed, both said
+> `prisma/schema.prisma`'s `sessionBranch` _"carries no comment saying what it
+> is"_. **It carries a twelve-line one, at the very ref this document pins every
+> one of its own numbers to:**
+>
+> ```
+> $ git show 17a3aba23:prisma/schema.prisma | sed -n '1979,1991p'
+>   // Integration branch (Story 7.8 · Subtask 7.8.11) — the session branch this
+>   // item's work currently sits on after a run integrated it (status moved to
+>   // `in_review` via `mark_integrated`). NON-NULL ⇔ the item is integrated-
+>   // awaiting-review: its work is mergeable so it UNBLOCKS dependents (the
+>   // integrated-dep readiness rule, keyed on THIS field, not the status key …).
+>   // CLEARED back to NULL the moment the item reaches a `done`-category status
+>   // (the chokepoint is `applyStatusTransition`; `complete_session` is the bulk
+>   // close-out after the human merges the session PR). Indexed for the
+>   // `complete_session` lookup …
+>   sessionBranch         String?
+> ```
+>
+> That comment already states the field's meaning, the readiness rule keyed on
+> it, the `done`-clears invariant and the reason for the index — three of the
+> four things deliverable 2 asked to be written from scratch. **So the deliverable
+> was never _author a comment_; it was _extend the comment that is there_, with
+> the retirement answer and a pointer to this document**, which is what shipped.
+>
+> **How the claim survived a verified ref: `:1991` is the line the DECLARATION
+> sits on, and a Prisma field's documentation sits ABOVE it.** A reader who opens
+> the file at the coordinate sees `sessionBranch String?` and nothing else, so
+> the claim was checked against a COORDINATE rather than against the thing the
+> sentence is about — `git grep -n <symbol>` returns the one line guaranteed not
+> to contain the prose. Read the block (`-B`), never the coordinate.
+>
+> **This is the FOURTH occurrence of the class §0 above exists to name**, after
+> MOTIR-3733, MOTIR-3753 and §0's own re-measurement — and it was committed
+> inside the document that documents the class, in the same pass. That is the
+> strongest available evidence that _be more careful about measurements_ is not
+> the fix; the rule is now in the authoring corpus as the SOURCE limb.
+
 ---
 
 ## Consequences

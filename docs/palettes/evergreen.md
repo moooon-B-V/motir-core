@@ -46,7 +46,7 @@ from the emerald greens.
 | Role group          | Evergreen (light)                                                                                                                                                       |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Text scale          | cooled forest-charcoal ink hierarchy — `--el-text` `#14201b` → `-secondary` `#42534a` → `-faint`                                                                        |
-| Accent (CTA)        | emerald — `--el-accent` fill `#0c7a52` (white label) + `--el-accent-on-surface` `#0c7a52`                                                                               |
+| Accent (CTA)        | emerald — `--el-accent` fill `#0c7a52` (white label) + `--el-accent-on-surface` `#0b714c`                                                                               |
 | Highlight           | violet `#8257e6` — `--el-highlight` (decorative; epic / design type hue)                                                                                                |
 | Surfaces            | cooled green-grey over a white canvas — `--el-surface` `#eef3f0`, `--el-surface-soft` `#f6faf8`                                                                         |
 | Recessed canvas     | planning board — recessed below the page and `--el-surface` — `--el-canvas` `#e4ebe7` (dark `#080d0a`)                                                                  |
@@ -96,6 +96,8 @@ Every text-on-surface, CTA, link, and chip pairing passes **WCAG AA** (≥4.5:1
 for text; ≥3:1 for large/UI) in **both** light and dark — verified by rendering
 the token specimen, not by eye (the `--el-*` AA + design-mockup render
 checklist). Highlights: emerald CTA white-on-`#0c7a52` = 5.36:1; emerald accent
-text `#0c7a52` on white = 5.36:1; link `#0a6ebd` on the soft hovered-row surface
+text `#0b714c` on white = 6.03:1 (and 4.72:1 on `--el-tint-lavender`, the
+accent family's own tint — MOTIR-3774 deepened the INK from `#0c7a52`, which
+was 4.19:1 there, and left the CTA FILL where it was); link `#0a6ebd` on the soft hovered-row surface
 = 5.01:1; and in dark, bright-emerald text `#3ddc97` on the forest canvas =
 10.65:1 with dark label text on the emerald fill = 10.67:1.

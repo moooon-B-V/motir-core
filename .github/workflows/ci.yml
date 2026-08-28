@@ -183,7 +183,20 @@ jobs:
             # Anything that is NOT docs / design / plan-seed makes this a code
             # change. Written as "no exclusion matched" so a path nobody
             # anticipated counts as code — the fail-open direction again.
+            #
+            # ⚠️ `content/` IS APP CODE, AND IT IS NAMED FIRST BECAUSE `case` IS
+            # FIRST-MATCH-WINS (MOTIR-3806). `content/legal/*.md` is not prose
+            # ABOUT the application — it is data the application parses and
+            # renders (`lib/legal/documents.ts`), and its front-matter `version`
+            # drives the re-consent gate. The blanket `*.md` swallowed it, so a
+            # legal-document-only pull request set `app=false` and skipped the
+            # whole Vitest lane — including the seven `tests/legal/` suites that
+            # exist to guard exactly that file class. Observed on PR #2427, the
+            # first-ever revision of a published legal document. Stated as a
+            # positive exception ahead of the exclusion rather than by rewriting
+            # the glob, so the fail-open shape above is left intact.
             case "$f" in
+              content/*) app=true ;;
               docs/*|design/*|scripts/plan-seed/*|*.md) ;;
               *) app=true ;;
             esac
