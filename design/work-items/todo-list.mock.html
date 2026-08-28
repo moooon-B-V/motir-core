@@ -990,6 +990,50 @@
         background: var(--el-muted, var(--color-muted));
       }
       /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
       .cmdBox {
         display: flex;
         align-items: center;
@@ -1247,6 +1291,17 @@
         <path d="M9 13v2" />
       </symbol>
       <symbol
+        id="i-chevron"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
         id="i-user"
         viewBox="0 0 24 24"
         fill="none"
@@ -1459,6 +1514,159 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">1b</span>The row, face one-and-a-half — a step carrying its
+          INSTRUCTIONS, collapsed and expanded.
+        </h2>
+        <p class="panelNote">
+          A to-do is one operation, and performing one operation still takes instructions —
+          <em>go to the dashboard, find the setting, create the token</em>. Those live in
+          <span class="font-mono">notesMd</span> (optional Markdown) beside the one-line
+          <span class="font-mono">text</span>, never as three more tickable rows:
+          <strong>navigation is not an operation</strong>, and nobody ticks
+          <em>&ldquo;found the setting&rdquo;</em>. The tickable unit is the one where
+          <em>done</em> is unambiguous.
+        </p>
+        <p class="panelNote">
+          <strong>Collapsed by default, and the chevron is the tell.</strong> It renders only on a
+          row that HAS notes, so a list of ten rows reads as ten lines and the reader expands the
+          one they are on — which is the whole answer to
+          <em>&ldquo;a body makes the list un-scannable&rdquo;</em>: it is a rendering question, not
+          a schema one. <strong>This is a FIELD, not a second work item</strong> — it has no status,
+          no assignee, no dependencies, no sprint and nothing that dispatches it (ADR §1,
+          <em>Instructions</em>).
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >1 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Create a restricted Stripe key</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <button type="button" class="notesToggle" aria-expanded="false">
+                      <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                      >Instructions
+                    </button>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Add the key to Fly secrets</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <button type="button" class="notesToggle isOpen" aria-expanded="true">
+                      <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                      >Instructions
+                    </button>
+                    <div class="notesBody">
+                      <ol>
+                        <li>Open the <a href="#">Fly dashboard</a> for <code>motir-core</code>.</li>
+                        <li>Secrets &rarr; <strong>New secret</strong>.</li>
+                        <li>
+                          Name it <code>STRIPE_RESTRICTED_KEY</code> and paste the value from the
+                          step above.
+                        </li>
+                      </ol>
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">
+fly secrets set STRIPE_RESTRICTED_KEY=rk_live_… --app motir-core</pre
+                      >
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Confirm the deploy picked it up</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+          <p class="mt-3 text-\[12px\] text-\(--el-text-secondary\)">
+            Row one has notes and is collapsed — one line, with the chevron as the only tell. Row
+            two is the same row expanded, and shows that instructions and a copyable command are
+            INDEPENDENT: a step may have either, both, or neither. Row three has neither.
+          </p>
         </div>
       </section>
 
