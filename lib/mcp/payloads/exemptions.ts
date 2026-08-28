@@ -84,15 +84,15 @@ export const EXEMPT_TOOLS = {
     'written and both counters stand — a caller reading the payload structurally must be able ' +
     'to tell that from a fresh record without parsing the prose (MOTIR-3553).',
   link_pull_request:
-    'Returns the DECLARED LINK — `{ key, created, movedFrom, pullRequest: { repo, number, url, ' +
+    'Returns the DECLARED LINK — `{ key, created, pullRequest: { repo, number, url, ' +
     'title, state, ci, linkedManually } }`. The row is a `LinkedPullRequestDto`, the shape the ' +
     'item detail page’s Development section renders, and no `/api/v1` operation returns a ' +
     'change request at all — the linking table is reached only through the webhook, the ' +
-    'detail-page picker and now this tool. `created` and `movedFrom` have no v1 counterpart ' +
-    'either, and both are load-bearing rather than decorative: `created` says the row existed ' +
-    'only because this call wrote it (no delivery had arrived), and `movedFrom` names the item ' +
-    'the SINGULAR FK was taken off, so a caller cannot read a move as an addition ' +
-    '(MOTIR-3526).',
+    'detail-page picker and now this tool. `created` has no v1 counterpart either, and it is ' +
+    'load-bearing rather than decorative: it says the row existed only because this call wrote ' +
+    'it (no delivery had arrived) (MOTIR-3526). ⚠️ `movedFrom` is GONE (MOTIR-3757): it named ' +
+    'the item a singular foreign key had been taken off, and with that column dropped a link ' +
+    'ADDS rather than moving, so there is no move to report — a caller that read it can stop.',
   unlink_pull_request:
     'Returns WHAT WAS REMOVED — `{ key, removed, pullRequest }`, where `pullRequest` is the ' +
     '`owner/name#number` coordinate the caller addressed. Exempt for the same reason its sibling ' +

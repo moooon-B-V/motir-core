@@ -566,10 +566,12 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
       state?: string;
       mergedAt?: Date | null;
       changedPaths?: string[];
-      workItemId?: string | null;
+      /** Every card this pull request DELIVERS — `work_item_delivery` rows, the
+       *  only association a pull request has since MOTIR-3757. */
+      delivers?: string[];
     },
   ) {
-    return adminDb.githubPullRequest.create({
+    const row = await adminDb.githubPullRequest.create({
       data: {
         repoId,
         number,
@@ -579,9 +581,15 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
         title: `PR ${number}`,
         mergedAt: opts.mergedAt === undefined ? new Date('2026-08-15T12:00:00Z') : opts.mergedAt,
         changedPaths: opts.changedPaths ?? ['lib/services/workflowsService.ts'],
-        workItemId: opts.workItemId ?? null,
       },
     });
+    const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoId } });
+    for (const workItemId of opts.delivers ?? []) {
+      await adminDb.workItemDelivery.create({
+        data: { workspaceId: repo.workspaceId, workItemId, githubPullRequestId: row.id, repoId },
+      });
+    }
+    return row;
   }
 
   async function query(s: Awaited<ReturnType<typeof makeScenario>>, paths: string[], since: Date) {
@@ -712,8 +720,8 @@ describe('findTouchingPaths — the single read the subsumption check consumes',
   // runs, over the delivery SET, in `tests/workItems/proseAdvisories.test.ts`.
   it('excludes NOTHING — a linked row and an unlinked one both come back', async () => {
     const s = await makeScenario('accessor-exclude@example.com');
-    await seedPr(s.repo.id, 105, { workItemId: s.item.id });
-    await seedPr(s.repo.id, 106, { workItemId: null });
+    await seedPr(s.repo.id, 105, { delivers: [s.item.id] });
+    await seedPr(s.repo.id, 106, {});
 
     const found = await query(
       s,

@@ -2155,7 +2155,6 @@ model WorkItem {
   // PR→work-item link the status sync (MOTIR-892) + CI loop (MOTIR-894) drive.
   // SetNull on delete (PR history survives). Modelled both sides per the
   // FK-`@relation` rule.
-  githubPullRequests   GithubPullRequest[]
   // Import idempotency map rows pointing at this work item (Story 7.16 ·
   // MOTIR-939): the `(project, source, externalId) → workItem` mapping a re-run
   // resolves through. CASCADE on delete — if the work item is deleted its
@@ -5512,17 +5511,20 @@ model GithubPullRequest {
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
   title                 String?
-  /// Nullable link to the work item this PR resolves. SetNull on delete so the
-  /// PR row (history) survives a work-item deletion with a null link.
-  workItemId            String?   @map("work_item_id")
-  /// Whether `workItemId` was set by the EXPLICIT item→PR link affordance
-  /// (MOTIR-1596, design/github Panel 5) rather than the MOTIR-892 auto-resolver.
-  /// A manual link is the manual OVERRIDE of the resolver: it is STICKY — the
-  /// webhook (`handlePullRequest`) never overwrites a `linkedManually` row's
-  /// `workItemId` from the branch/title parse, so a PR whose branch never names
-  /// the key stays linked (and drives status sync) across later PR events. A
-  /// takeover (moving the link to another item) keeps this true; the auto-
-  /// resolver only ever writes rows where this is false.
+  /// Whether this pull request's association with a work item was DECLARED by a
+  /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
+  ///
+  /// ⚠️ KEPT, and deliberately, while the scalar it used to qualify is GONE
+  /// (MOTIR-3757). It qualified `work_item_id`: a manual link was the STICKY
+  /// override of the MOTIR-892 branch/title resolver, so the webhook never
+  /// overwrote one. That resolver was retired by MOTIR-3674 — an explicit
+  /// `work_item_delivery` row is now the ONLY association a pull request has, so
+  /// there is nothing left to be sticky AGAINST. What still reads it is stated
+  /// exactly, because "nothing reads it" would be false: the Development section
+  /// RENDERS it, the sync PRESERVES it across a delivery, and the historical
+  /// sweep COMPARES it for idempotence. No gate branches on it. It survives as
+  /// the provenance of the rows already written; retiring it is its own decision,
+  /// which nobody has made.
   linkedManually        Boolean   @default(false) @map("linked_manually")
   /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
   /// (MOTIR-2922). Null on every row that has not merged — and on merged rows
@@ -5546,7 +5548,6 @@ model GithubPullRequest {
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
   repo               GithubRepo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  workItem           WorkItem?                 @relation(fields: [workItemId], references: [id], onDelete: SetNull)
   checkRuns          GithubCheckRun[]
   deliveries         WorkItemDelivery[]
   // One per (head commit, delivered card) — THE feedback comment for that pair
@@ -5555,7 +5556,6 @@ model GithubPullRequest {
 
   @@unique([repoId, number])
   @@index([repoId])
-  @@index([workItemId])
   @@map("github_pull_request")
 }
 

@@ -139,6 +139,51 @@ set and a strictly coarser one. Settled separately in
 `github_ci_feedback_comment`, keys it on the comment's own identity, and leaves the
 scalar WRITTEN as a mirror until a CONTRACT card drops it.
 
+### B″ · AMENDMENT (MOTIR-3757) — the CONTRACT card's own measurements, and both were short again
+
+**The drop is the moment the compiler can enumerate the set, and it found two
+sites neither command could see.** Commands A and B match the TEXT `workItemId`;
+Prisma's `githubPullRequests` back-relation reads the same column under a
+different name, so:
+
+| #   | site                                                  | what it is                                                                     |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| S10 | `workItemRepository.findProvenanceBackfillCandidates` | `select: { githubPullRequests: { … take: 1 } }` — the relation, not the column |
+| S11 | `workItemsService:2591`                               | `hasLinkedPr: row.githubPullRequests.length > 0` — S10's consumer              |
+
+Both moved to `deliveries` and the VALUE is unchanged for every row, because pass
+1 of the EXPAND migration wrote one delivery per stored link. **Total: 21 sites.**
+The takeaway is §0's own, one notch further out again: a column is reachable by a
+third route neither command enumerated — an ORM relation — and the enumeration
+that finally closed it was `tsc` after the drop, not a grep before it.
+
+**⚠️ AND `tsc` IS NOT TOTAL EITHER — FIVE MORE SITES ONLY THE SUITE FOUND.** Two
+kinds, neither of which the compiler can see and neither of which either grep
+matched:
+
+- **Three `expect(prRow).toMatchObject({ …, workItemId })` assertions** — in
+  `changeRequestTrunkGate`, `changeRequestArtifactEvidenceGate` and
+  `gitlabWebhookService`. `toMatchObject` takes a plain object literal, so an
+  extra key naming a column that no longer exists is a type-correct expression
+  that fails at run time. A green `tsc` says nothing about them.
+- **Two suites that REPLAY shipped migration SQL** naming the column —
+  `clear-cancelled-manual-provenance` (its part-4 `NOT EXISTS`) and this story's
+  own `deliveryLinks` (backfill pass 1). `migrate deploy` is unaffected, because
+  each runs at its own position in the sequence; a replay against a
+  fully-migrated database raises `42703`.
+
+So the honest enumeration order for a column drop is **grep → `tsc` → the suite**,
+and only the third is total. Saying so is worth more than the count: a reader who
+stops at a green `tsc` has done two thirds of the check.
+
+**And the `SINGULAR` sweep §6 measured at `6e71acf21` as 12 hits / 10 files is
+16 hits / 11 files at `ae490d52e`**, the four new ones added by MOTIR-3751 and
+MOTIR-3756 themselves (three in THIS file, one in `unlinkPullRequest.ts`). The
+false positives are **four**, not three: `packages/cli/src/ciWatch.ts:49` — named
+in §6 as a site in the sweep — is `pluralize`'s grammatical singular and has
+nothing to do with the foreign key. A hit list is a measurement with a ref, and
+this one was read as a work list two cards later.
+
 ---
 
 ## 1 · Q1 — what resolves the TENANT once the column is gone
@@ -544,7 +589,7 @@ Every member of this half fails where a person can see it.
 **CONTRACT** · drop `github_pull_request.work_item_id`; W1/W2 retire with it;
 `prisma migrate diff --exit-code` clean; the `SINGULAR` phrase sweep — measured
 `git grep -n "SINGULAR" origin/main -- lib app packages docs` returns **12 hits
-across 10 files** (`app/api/v1/…/plan-session/route.ts:19`,
+across 10 files** (re-measured at **16 across 11** when CONTRACT ran — § B″) (`app/api/v1/…/plan-session/route.ts:19`,
 `docs/decisions/change-request-cardinality.md:92`,
 `docs/decisions/public-api-conventions.md:1526`,
 `docs/decisions/work-item-delivery-links.md:260`,
@@ -602,7 +647,8 @@ database actually breaks.
 - `docs/decisions/work-item-delivery-links.md` — the table, and the Q2 reader
   list this file re-measures. Read it as the source of the SHORT inventory.
 - `docs/decisions/change-request-cardinality.md` — superseded; its _"KEEP THE
-  SINGULAR FK"_ is one of the twelve `SINGULAR` hits CONTRACT disposes of.
+  SINGULAR FK"_ is one of the `SINGULAR` hits CONTRACT disposes of (twelve when
+  §6 measured them, sixteen when CONTRACT ran — see § B″).
 - `docs/decisions/unlinked-pull-request-check.md`,
   `docs/decisions/repo-set-completion-repair.md` — the check and the repair path
   §1 is about.

@@ -212,7 +212,7 @@ async function fetchPage(
  *
  * ⚠️ MERGED ONLY — the decision the card left open, resolved against the
  * classifier as it actually ships. `classifyImplementationSource` stamps `byok`
- * on `row.hasLinkedPr`, and `hasLinkedPr` is `githubPullRequests.length > 0`
+ * on `row.hasLinkedPr`, and `hasLinkedPr` is `deliveries.length > 0`
  * (workItemsService) — it does NOT read `merged`. So the card's alternative
  * ("mirror both and let the classifier keep gating on the merged state") rests
  * on a gate that does not exist: mirroring closed-unmerged PRs would stamp
