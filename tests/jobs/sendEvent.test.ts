@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { inngest } from '@/lib/jobs/client';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { WorkItemTransitionedData } from '@/lib/jobs/types';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // `sendEvent` is the canonical post-commit event emit. Its transport (the
 // Inngest enqueue) is BEST-EFFORT: every caller emits AFTER its transaction has
@@ -24,16 +24,20 @@ const PAYLOAD: WorkItemTransitionedData = {
 describe('sendEvent', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('enqueues the event through the inngest client on the happy path', async () => {
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  it('enqueues the event through the engine dispatcher on the happy path', async () => {
+    const send = spyOnJobDispatch();
     await sendEvent('work-item/transitioned', PAYLOAD);
-    expect(send).toHaveBeenCalledWith({ name: 'work-item/transitioned', data: PAYLOAD });
+    // ⚠️ THREE ARGUMENTS, NOT ONE ENVELOPE (MOTIR-3418). The vendor client took
+    // `{ name, data }`; the dispatcher takes the name, the payload and the
+    // resolved idempotency key separately — so the call shape changed even though
+    // the caller's contract did not.
+    expect(send).toHaveBeenCalledWith('work-item/transitioned', PAYLOAD, {
+      idempotencyKey: null,
+    });
   });
 
   it('is BEST-EFFORT: a transport failure resolves (does NOT throw) and is logged', async () => {
-    vi.spyOn(inngest, 'send').mockRejectedValue(
-      new Error('Inngest API Error: 404 Event key not found'),
-    );
+    spyOnJobDispatch().mockRejectedValue(new Error('the queue is unreachable'));
     const errLog = vi.spyOn(console, 'error').mockImplementation(() => {});
     // The committed mutation must not be undone — resolving (not throwing) is the contract.
     await expect(sendEvent('work-item/transitioned', PAYLOAD)).resolves.toBeUndefined();
@@ -41,7 +45,7 @@ describe('sendEvent', () => {
   });
 
   it('still THROWS on a missing workspaceId — a programming error, not a transport one', async () => {
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
     await expect(
       sendEvent('work-item/transitioned', { ...PAYLOAD, workspaceId: '' }),
     ).rejects.toThrow(/requires an explicit workspaceId/);

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
@@ -40,7 +40,7 @@ import {
 // system.code-graph-index — THE DURABLE STEP SHAPE (MOTIR-2027) — and
 // system.code-graph-refresh, which drives the SAME one since MOTIR-2057.
 //
-// Driven IN-PROCESS via @inngest/test against a REAL Postgres, on the `fake`
+// Driven IN-PROCESS via the in-process JobTestEngine against a REAL Postgres, on the `fake`
 // orchestrator, with only the two externals stubbed (GitHub's tarball redirect,
 // motir-ai's run-credential mint).
 //
@@ -59,13 +59,13 @@ import {
 //     (`docs/decisions/code-graph-index-fleet.md` §6).
 //   • And no repo tarball ever enters the function again (§2).
 //
-// @inngest/test hands back a mocked `ctx`, so `ctx.step.run` is a spy and the
+// the in-process JobTestEngine hands back a mocked `ctx`, so `ctx.step.run` is a spy and the
 // step ids it was called with are directly assertable — the closest thing to
 // observing the executor's checkpoints from a unit test.
 //
 // ⚠️ THERE ARE NO `step.sleep` CALLS LEFT TO PRE-FULFIL (MOTIR-3484). This note
 // used to explain that an un-stubbed sleep is re-found forever by
-// `InngestTestEngine` and `execute()` never resolves, so `sleepSteps()` supplied
+// `JobTestEngine` and `execute()` never resolves, so `sleepSteps()` supplied
 // their state. The waits are ordinary `await`s inside the dispatch service now,
 // and the problem is the mirror image: at the SHIPPED cadence a four-poll test
 // would sleep 45 real seconds. `driveIndexFleetFast()` (in the shared fixture)
@@ -158,7 +158,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     const composed = vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer');
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -232,7 +232,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
         return realPoll(session, previous, options);
       });
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -271,7 +271,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     // the second. Both are asserted below as ABSENCE, which is the stronger form
     // of "was not called".
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -314,7 +314,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
       stubIndexFleet();
       containerExitsWith(0);
 
-      const engine = new InngestTestEngine({ function: codeGraphIndex });
+      const engine = new JobTestEngine({ function: codeGraphIndex });
       const { result } = await engine.execute({
         events: [indexEvent(installationId, workspaceId)],
       });
@@ -348,7 +348,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
     stubIndexFleet();
     containerExitsWith(0);
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -375,7 +375,7 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     const { workspaceId } = await seedWorkspace('cgf-noinst', 1);
     stubIndexFleet();
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent('inst-gone', workspaceId)],
     });
@@ -397,7 +397,7 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     const { workspaceId, installationId } = await seedWorkspace('cgf-noproj', 0);
     stubIndexFleet();
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -417,7 +417,7 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     const { installationId } = await seedWorkspace('cgf-nows', 1);
     stubIndexFleet();
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, error, ctx } = (await engine.execute({
       events: [indexEvent(installationId, 'ws-gone')],
     })) as { result?: unknown; error?: unknown; ctx: Parameters<typeof stepIds>[0] };
@@ -474,7 +474,7 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     containerExitsWith(0);
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, error, ctx } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     })) as { result?: unknown; error?: unknown; ctx: Parameters<typeof stepIds>[0] };
@@ -499,7 +499,7 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     const { workspaceId, installationId } = await seedGitlabWorkspace('cgf-gitlab-led', 1);
     stubIndexFleet();
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     await engine.execute({ events: [indexEvent(installationId, workspaceId)] });
 
     const runs = await indexRuns();
@@ -520,7 +520,7 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     stubIndexFleet();
     containerExitsWith(0);
 
-    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const engine = new JobTestEngine({ function: codeGraphRefresh });
     const { result, error } = (await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
     })) as { result?: unknown; error?: unknown };
@@ -541,7 +541,7 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     stubIndexFleet();
     containerExitsWith(0);
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -561,7 +561,7 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     stubIndexFleet();
     containerExitsWith(0);
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -603,7 +603,7 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     });
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
       steps: [{ id: 'resolve-target', handler: () => resolved }],
@@ -635,8 +635,8 @@ describe('a container that did not index FAILS the run', () => {
       stubIndexFleet();
       containerExitsWith(code);
 
-      const engine = new InngestTestEngine({ function: codeGraphIndex });
-      // `@inngest/test` CAPTURES a handler throw onto `error` (serialized, so the
+      const engine = new JobTestEngine({ function: codeGraphIndex });
+      // `the in-process JobTestEngine` CAPTURES a handler throw onto `error` (serialized, so the
       // subclass name flattens to `Error`) rather than rejecting `execute()`.
       const { result, error } = (await engine.execute({
         events: [indexEvent(installationId, workspaceId)],
@@ -666,7 +666,7 @@ describe('a container that did not index FAILS the run', () => {
     stubIndexFleet();
     containerExitsWith(30);
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -690,7 +690,7 @@ describe('a container that did not index FAILS the run', () => {
       failureDetail: 'the container never started',
     });
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, error } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     })) as { result?: unknown; error?: { message?: string } };
@@ -711,7 +711,7 @@ describe('a container that did not index FAILS the run', () => {
     stubIndexFleet();
     fakeOrchestrator.failNextProvision('no capacity in iad');
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, error } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     })) as { result?: unknown; error?: { message?: string } };
@@ -743,7 +743,7 @@ describe('an unconfigured index fleet fails the run loudly', () => {
     }
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, error, ctx } = (await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     })) as { result?: unknown; error?: { message?: string }; ctx: Parameters<typeof stepIds>[0] };
@@ -809,7 +809,7 @@ describe('the admission cap queues, and nothing is dropped', () => {
       })
       .mockImplementation(real);
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -843,7 +843,7 @@ describe('the admission cap queues, and nothing is dropped', () => {
     containerExitsWith(0);
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
     });
@@ -870,7 +870,7 @@ describe('the admission cap queues, and nothing is dropped', () => {
       detail: 'the fleet is at its in-flight ceiling (24/24: CI runners 24)',
     });
 
-    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const engine = new JobTestEngine({ function: codeGraphIndex });
     const { error } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
       // Enough sleeps for the whole waiting budget.
@@ -924,7 +924,7 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
       outcome: 'admitted',
     });
 
-    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const engine = new JobTestEngine({ function: codeGraphRefresh });
     const { error } = await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
       // Enough sleeps for the whole waiting budget — the second run WAITS, and
@@ -966,7 +966,7 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
       return again;
     });
 
-    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const engine = new JobTestEngine({ function: codeGraphRefresh });
     const { result } = await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
     });
@@ -1001,20 +1001,18 @@ describe('the job definition carries NO concurrency number', () => {
   //     applies to a keyed cap just as much — it would cap supervisors, not
   //     containers. Fairness for this job lives in admission control.
   it('leaves concurrency to the orchestrator’s admission cap, and keeps the retry policy', () => {
-    // Read off the SHIPPED function object — the config Inngest was actually
-    // constructed with — rather than re-invoking `defineJob` with the options a
-    // test believes the definition passes.
-    const config = (codeGraphIndex as unknown as { opts: Record<string, unknown> }).opts as {
-      id?: string;
-      retries?: number;
-      concurrency?: { limit: number };
-    };
-
-    expect(config.id).toBe('system.code-graph-index');
-    expect(config.concurrency).toBeUndefined();
-    // `idempotent` = 5 attempts = 4 Inngest retries. Re-indexing converges: a
-    // re-dispatched container rebuilds the same graph over the same key.
-    expect(config.retries).toBe(4);
+    // Read off the SHIPPED definition — what the module actually declared —
+    // rather than re-invoking `defineJob` with the options a test believes it
+    // passes. (It used to come off the vendor function object's `opts`; the
+    // declaration is the registration now.)
+    expect(codeGraphIndex.id).toBe('system.code-graph-index');
+    // There is no `concurrency` option left to carry (MOTIR-3418): no job
+    // declared one and the engine never read it, so `defineJob` dropped it. The
+    // assertion is therefore about the OPTION rather than about this job's value.
+    expect(Object.hasOwn(codeGraphIndex, 'concurrency')).toBe(false);
+    // `idempotent` = 5 total attempts. Re-indexing converges: a re-dispatched
+    // container rebuilds the same graph over the same key.
+    expect(codeGraphIndex.maxAttempts).toBe(5);
   });
 
   // Where the number went. Both are read from config so an operator can move
@@ -1057,7 +1055,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     // that carried them under the 180 s deadline (removed by MOTIR-2138). Both
     // are asserted below as absence — see the two checks at the end.
 
-    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const engine = new JobTestEngine({ function: codeGraphRefresh });
     const { result, ctx } = await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
     });
@@ -1101,7 +1099,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     stubIndexFleet();
     containerExitsWith(30);
 
-    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const engine = new JobTestEngine({ function: codeGraphRefresh });
     const { result, error } = (await engine.execute({
       events: [refreshEventFor({ installationId, workspaceId })],
     })) as { result?: unknown; error?: { message?: string } };
@@ -1120,22 +1118,15 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
   }, 30_000);
 
   it('keeps the per-repo DEBOUNCE, and carries no concurrency number', () => {
-    // Read off the SHIPPED function object — the config Inngest was actually
-    // constructed with. A debounce is executor-side (Inngest holds the run), so
-    // coalescing itself cannot be driven in-process; what a test CAN pin is that
-    // the config survived the move, which is exactly what a path swap risks
-    // dropping.
-    const config = (codeGraphRefresh as unknown as { opts: Record<string, unknown> }).opts as {
-      id?: string;
-      retries?: number;
-      concurrency?: { limit: number };
-      debounce?: { key: string; period: string; timeout?: string };
-    };
-
-    expect(config.id).toBe('system.code-graph-refresh');
+    // Read off the SHIPPED definition — what the module actually declared.
+    // Coalescing happens at ENQUEUE (`lib/jobs/engine/dispatcher.ts`), which
+    // `tests/jobs/engine-debounce.test.ts` drives directly; what THIS test pins is
+    // that the declaration survived the move, which is exactly what a path swap
+    // risks dropping.
+    expect(codeGraphRefresh.id).toBe('system.code-graph-refresh');
     // A push storm still coalesces: same key (installation + repo), same 2m
     // window, same 15m cap on the total deferral.
-    expect(config.debounce).toEqual({
+    expect(codeGraphRefresh.debounce).toEqual({
       key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
       period: '2m',
       timeout: '15m',
@@ -1143,9 +1134,10 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     // `concurrency: 2` is GONE (MOTIR-2057), for MOTIR-1990's three reasons — a
     // stepped supervisor holds its slot for the container's whole life, an
     // unkeyed limit IS the starvation this job suffered, and its scale-to-zero
-    // premise moved to the containers. The cap lives in admission control now.
-    expect(config.concurrency).toBeUndefined();
-    expect(config.retries).toBe(4);
+    // premise moved to the containers. The cap lives in admission control now —
+    // and since MOTIR-3418 there is no option to carry one at all.
+    expect(Object.hasOwn(codeGraphRefresh, 'concurrency')).toBe(false);
+    expect(codeGraphRefresh.maxAttempts).toBe(5);
   });
 
   it('leaves the first index UNCHANGED — same step sequence, and no debounce on it', async () => {
@@ -1158,10 +1150,10 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     stubIndexFleet();
     containerExitsWith(0);
 
-    const indexRun = await new InngestTestEngine({ function: codeGraphIndex }).execute({
+    const indexRun = await new JobTestEngine({ function: codeGraphIndex }).execute({
       events: [indexEventFor({ installationId, workspaceId, eventId: 'evt-parity-index' })],
     });
-    const refreshRun = await new InngestTestEngine({ function: codeGraphRefresh }).execute({
+    const refreshRun = await new JobTestEngine({ function: codeGraphRefresh }).execute({
       events: [refreshEventFor({ installationId, workspaceId, eventId: 'evt-parity-refresh' })],
     });
 
@@ -1184,8 +1176,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
 
     // And the difference between them stays exactly one thing: the first index
     // must run PROMPTLY on install, so it must never grow a debounce window.
-    const indexConfig = (codeGraphIndex as unknown as { opts: Record<string, unknown> }).opts;
-    expect(indexConfig['debounce']).toBeUndefined();
+    expect(codeGraphIndex.debounce).toBeUndefined();
   }, 30_000);
 });
 

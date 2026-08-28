@@ -5,12 +5,10 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import { inngest } from '@/lib/jobs/client';
 import { JobWorker } from '@/lib/jobs/engine/worker';
 import { executeWithLedger } from '@/lib/jobs/engine/ledger';
 import { createStepApi, JobStepYield } from '@/lib/jobs/engine/step';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
-import { JOB_ENGINE_JOBS_ENV, routedToEngine } from '@/lib/jobs/engine/cutover';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
@@ -33,19 +31,15 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 //
 // Real Postgres throughout, no mocks.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -82,7 +76,6 @@ describe('§2 the seam — sendEvent → dispatcher → job_queue → worker →
       seen.push(ctx.event.data);
       return { handled: true };
     });
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     // The REAL emit surface every service calls. Not the dispatcher directly.
     await sendEvent(jobId as never, { workspaceId: ws, subject: 'hello' } as never);
@@ -122,7 +115,6 @@ describe('§2 the seam — sendEvent → dispatcher → job_queue → worker →
     seq += 1;
     const jobId = `seam.drift.${seq}`;
     defineJob({ id: jobId as never }, () => ({ ok: true }));
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     await withSystemContext((tx) =>
       jobQueueRepository.create(
@@ -431,58 +423,10 @@ describe('§3c the engine stays behind the seam (import boundary)', () => {
   });
 });
 
-describe('§3d a job absent from the cutover configuration still routes to Inngest', () => {
-  it('protects the 23 jobs this story does not move', async () => {
-    delete process.env[JOB_ENGINE_JOBS_ENV];
-    const ws = await makeWorkspace();
-    seq += 1;
-    const jobId = `default.lane.${seq}`;
-    defineJob({ id: jobId as never }, () => ({ ok: true }));
-
-    const sent: string[] = [];
-    const original = inngest.send.bind(inngest);
-    // Spying on the transport is the only way to observe WHICH lane an emit took
-    // without a live Inngest; the assertion is about routing, not delivery.
-    (inngest as unknown as { send: unknown }).send = async (e: { name: string }) => {
-      sent.push(e.name);
-      return { ids: [] };
-    };
-    try {
-      await sendEvent(jobId as never, { workspaceId: ws } as never);
-    } finally {
-      (inngest as unknown as { send: unknown }).send = original;
-    }
-
-    expect(routedToEngine(jobId)).toBe(false);
-    // It went to Inngest…
-    expect(sent).toEqual([jobId]);
-    // …and NOT onto the new engine. No queue row, no event row.
-    expect(await adminDb.jobQueueRun.count({ where: { jobId } })).toBe(0);
-    expect(await adminDb.jobEvent.count({ where: { name: jobId } })).toBe(0);
-  });
-
-  it('the guard GOES RED once the id IS routed — the same assertion, inverted', async () => {
-    const ws = await makeWorkspace();
-    seq += 1;
-    const jobId = `moved.lane.${seq}`;
-    defineJob({ id: jobId as never }, () => ({ ok: true }));
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
-
-    const sent: string[] = [];
-    const original = inngest.send.bind(inngest);
-    (inngest as unknown as { send: unknown }).send = async (e: { name: string }) => {
-      sent.push(e.name);
-      return { ids: [] };
-    };
-    try {
-      await sendEvent(jobId as never, { workspaceId: ws } as never);
-    } finally {
-      (inngest as unknown as { send: unknown }).send = original;
-    }
-
-    // Now on the engine, and the Inngest transport is skipped entirely because
-    // this event has no subscriber left on that lane.
-    expect(await adminDb.jobQueueRun.count({ where: { jobId } })).toBe(1);
-    expect(sent).toEqual([]);
-  });
-});
+// ⚠️ §3d STOOD HERE AND ITS SUBJECT IS GONE (MOTIR-3418). It asserted the
+// cutover switch's safety default in BOTH directions — a job absent from
+// `MOTIR_POSTGRES_JOB_IDS` still emitted to the old lane and wrote no queue row,
+// and the same assertion inverted once the id WAS routed. Both halves observed
+// which of two lanes an emit took, and there is one lane now: every emit writes a
+// `job_event` + `job_queue` row, which is what §2's end-to-end seam above
+// already proves.

@@ -285,7 +285,7 @@ describe('the lane runs the reconciliation BEFORE the index repair', () => {
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: 'evt-indexed',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'succeeded',
         finishedAt: new Date(),

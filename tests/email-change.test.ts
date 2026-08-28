@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { emailChangeRequestRepository } from '@/lib/repositories/emailChangeRequestRepository';
 import {
@@ -13,7 +12,7 @@ import {
 import { AuthEmailUnavailableError } from '@/lib/auth/authMail';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
-import { captureEmailEvents } from './helpers/jobs';
+import { captureEmailEvents, spyOnJobDispatch } from './helpers/jobs';
 
 // Subtask 8.8.22 — verified email-change flow + the uniqueness race.
 //
@@ -134,9 +133,7 @@ describe('requestEmailChange', () => {
     // can phrase as "try again".
     const me = await makeUser('me@example.com');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const spy = vi
-      .spyOn(inngest, 'send')
-      .mockRejectedValueOnce(new Error('inngest unreachable') as never);
+    const spy = spyOnJobDispatch().mockRejectedValueOnce(new Error('inngest unreachable') as never);
 
     await expect(usersService.requestEmailChange(me.id, 'new@example.com')).rejects.toBeInstanceOf(
       AuthEmailUnavailableError,

@@ -131,6 +131,15 @@ export const STRUCTURAL_GUARD_SPECS = [
   // file could satisfy the whole-tree rule or the purity rule, never both, so
   // the walk moved and the equivalence tests stayed in the sharded run.
   'tests/twoFactorPredicateOneImplementation.test.ts',
+  // ── tests/jobs/ — the vendor-retirement guard (MOTIR-3418) ────────────────
+  // Same profile as `abandonedPath` one entry up: it asks a WHOLE-TREE question
+  // (does any tracked file still import the retired job runtime, does any shipped
+  // path still read one of its environment variables) and answers it with
+  // `git ls-files` / `git grep`, which is a REF-based read rather than a walk of
+  // a working tree somebody is mid-edit in. It opens no database and imports
+  // nothing from `lib/` or `app/`, so it carries no coverage into the merged
+  // report.
+  'tests/jobs/inngest-retired.test.ts',
 ] as const;
 
 /**

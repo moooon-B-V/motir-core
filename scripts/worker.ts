@@ -9,30 +9,19 @@
  * no loop and no timer, and rides the claim loop this file already starts (see
  * `lib/jobs/engine/scheduler.ts` for why the poll, and not a `setTimeout` chain,
  * is the right driver). It adds no process, no machine and no environment
- * variable — routing is still `MOTIR_POSTGRES_JOB_IDS`.
+ * variable.
  *
- * As of MOTIR-3716 it also REPORTS the lane reconciliation once, at start-up —
- * the checked-in declaration (`lib/jobs/engine/census.ts`) against the live
- * `MOTIR_POSTGRES_JOB_IDS`. This process is the one that would silently stop
- * running a drifted job, so it is the cheapest place to say so, and it says so
- * AFTER the registry import below for the ordinary reason: the declaration is
- * only meaningful beside the set of jobs this image actually knows.
+ * It briefly also REPORTED a lane reconciliation at start-up (MOTIR-3716) — the
+ * checked-in lane declaration against the live `MOTIR_POSTGRES_JOB_IDS`. Both went
+ * with the second lane in MOTIR-3418: there is one engine now, so there is nothing
+ * to route and nothing to reconcile.
  *
- * ⚠️ IT WARNS AND CONTINUES — it does not refuse to start, and that is not
- * timidity. The deploy window in which the code is ahead of the secret is
- * REQUIRED: `fly secrets set` restarts the machines on the CURRENT release, so
- * routing an id whose job is not in the running image routes it nowhere, and
- * deploy-then-route is the only correct order (`docs/jobs.md`'s image trap). A
- * boot gate here would turn every routine release into an outage. The LOUD
- * surface is `system.daily-health-check`, a whole day later, by which time a
- * difference is no longer a deploy window.
- *
- * ⚠️ AND IT IS THE SECOND, LOUDER REASON THE REGISTRY IMPORT BELOW IS LOAD-BEARING.
+ * ⚠️ THE REGISTRY IMPORT BELOW IS LOAD-BEARING.
  * `JobScheduler.start()` REFUSES an empty registry rather than scheduling nothing
- * in silence, so deleting that import now fails the process at start-up with a
- * named diagnosis instead of at run time with `UnknownEngineJobError`.
+ * in silence, so deleting that import fails the process at start-up with a named
+ * diagnosis instead of at run time with `UnknownEngineJobError`.
  *
- * ⚠️ THE REGISTRY IMPORT IS LOAD-BEARING AND LOOKS UNUSED. `lib/jobs/engine/registry.ts`
+ * ⚠️ IT LOOKS UNUSED AND IT IS NOT. `lib/jobs/engine/registry.ts`
  * is populated by `defineJob` as each definition MODULE is evaluated, so it holds
  * only the jobs something has imported. `lib/jobs/registry.ts` imports all 24
  * definition files, which is why importing it — for its side effect, not its
@@ -59,8 +48,7 @@ import { JobWorker } from '@/lib/jobs/engine/worker';
 import { JobScheduler } from '@/lib/jobs/engine/scheduler';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
-import { logLaneReconciliation } from '@/lib/jobs/engine/census';
-// Side-effect import: evaluates all 24 definition modules so `defineJob` has
+// Side-effect import: evaluates every definition module so `defineJob` has
 // registered every job. See the warning above — this is not an unused import.
 import '@/lib/jobs/registry';
 
@@ -133,8 +121,7 @@ async function main(): Promise<void> {
   await installE2ESeams();
 
   // The triggering event's payload lives on `job_event`; a cron run has no event
-  // and gets an empty payload, mirroring what a scheduled Inngest run hands a
-  // handler today.
+  // and gets an empty payload.
   const payloadFor = async (run: { eventId: string | null }): Promise<unknown> => {
     if (!run.eventId) return {};
     const event = await withSystemContext((tx) =>
@@ -142,12 +129,6 @@ async function main(): Promise<void> {
     );
     return event?.data ?? {};
   };
-
-  // The LANE REPORT (MOTIR-3716). Before the loop, so it is at the top of the
-  // log a person opens when a job "stopped running", and never fatal — see the
-  // header. `logLaneReconciliation` cannot throw; it is a set difference over a
-  // module constant and one environment variable.
-  logLaneReconciliation();
 
   // Armed BEFORE the worker starts, so an empty registry refuses at start-up
   // rather than after the first claim — `main`'s catch turns the throw into a

@@ -1,13 +1,11 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { defineJob } from '@/lib/jobs/defineJob';
-import { inngest } from '@/lib/jobs/client';
 import { JobWorker } from '@/lib/jobs/engine/worker';
 import { JobScheduler } from '@/lib/jobs/engine/scheduler';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { engineScheduledJobs, type EngineJobDefinition } from '@/lib/jobs/engine/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { CATCH_UP_POLICY_NAMES, type CatchUpPolicy } from '@/lib/jobs/catchUp';
@@ -42,18 +40,13 @@ import '@/lib/jobs/registry';
 //
 // Real Postgres throughout, no mocks.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
-
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -62,10 +55,6 @@ afterAll(async () => {
 });
 
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
-
-function routeToEngine(...jobIds: string[]): void {
-  process.env[JOB_ENGINE_JOBS_ENV] = jobIds.join(',');
-}
 
 /** A fixture scheduled definition. The ids are real ones — routing keys on them. */
 function def(over: Partial<EngineJobDefinition> = {}): EngineJobDefinition {
@@ -134,7 +123,6 @@ describe('§1 the arms of the story’s own code nothing else reaches', () => {
     // is contrived and it is the honest way to reach a defensive branch whose
     // whole point is that the thrown value is not an Error — which nothing in our
     // own code produces and any dependency may.
-    routeToEngine('system.attachment-gc');
     const hostile = def();
     Object.defineProperty(hostile, 'cron', {
       get() {
@@ -153,7 +141,6 @@ describe('§1 the arms of the story’s own code nothing else reaches', () => {
     // `scheduledJobs` is injectable and `EngineJobDefinition` types both fields as
     // optional, so an event-triggered definition CAN reach this loop. It must be
     // ignored rather than scheduled at an invented instant.
-    routeToEngine('system.attachment-gc', 'system.rate-limit-sweep');
     const outcome = await schedulerOver(
       [def({ cron: undefined }), def({ id: 'system.rate-limit-sweep', catchUp: undefined })],
       FIRE,
@@ -167,7 +154,6 @@ describe('§1 the arms of the story’s own code nothing else reaches', () => {
     // fields are in range) and `previousFireAtOrBefore` returns null after walking
     // its whole horizon. Nothing is owed, and nothing is written; the alternative
     // is a crash on a legal expression.
-    routeToEngine('system.attachment-gc');
     const outcome = await schedulerOver([def({ cron: '0 0 30 2 *' })], FIRE).tick();
     expect(outcome.enqueued).toEqual([]);
     expect(outcome.failed).toEqual([]);
@@ -210,7 +196,6 @@ describe('§2a the seam — scheduler → repository → claim → ledger', () =
     // with the scheduler's own code. This drives a real tick, a real claim and the
     // real ledger wrapper, and reads the LEDGER row back.
     const jobId = gateJobId();
-    routeToEngine(jobId);
     const handled: string[] = [];
     // A SYNTHETIC id (see the helper's warning) — the runner resolves the handler
     // by id, so a fixture proves the seam exactly as a shipped job would, without
@@ -254,7 +239,6 @@ describe('§2b a SCHEDULED run that throws reaches the DLQ and is replayable', (
     // (PRODECT_FINDINGS #39). The hook here is the loop's, so the assertion is
     // about the loop.
     const jobId = gateJobId();
-    routeToEngine(jobId);
     defineJob({ id: jobId as never, cron: '* * * * *', catchUp: 'latest', retries: 0 }, () => {
       throw new Error('the sweep exploded');
     });
@@ -324,7 +308,6 @@ describe('§2c the declared disposition reaches the tick', () => {
     for (const policy of policies) {
       await truncateJobRuns();
       const jobId = 'system.attachment-gc';
-      routeToEngine(jobId);
       // Seed a watermark three fires back, so "N fires behind" is a real state
       // rather than an empty table.
       await withSystemContext((tx) =>
@@ -375,7 +358,6 @@ describe('§3a TWO WORKERS DO NOT DOUBLE-FIRE A TICK', () => {
     // against one warm pool — the same argument `claimDueRuns`' header makes about
     // its own claim.
     const jobId = gateJobId();
-    routeToEngine(jobId);
     const executions: string[] = [];
     defineJob({ id: jobId as never, cron: '* * * * *', catchUp: 'latest' }, () => {
       executions.push(jobId);
@@ -410,43 +392,13 @@ describe('§3a TWO WORKERS DO NOT DOUBLE-FIRE A TICK', () => {
   });
 });
 
-describe('§3b a routed CRON job does not ALSO run on Inngest', () => {
-  it('the defineJob guard declines a cron-triggered invocation of a routed job', async () => {
-    // The switch's existing tests cover the EVENT path. A cron job reaches the
-    // handler by a different trigger, and the negative direction — "it declines" —
-    // is what makes "runs there and does not also run here" true rather than
-    // hoped for. Without it, a migrated cron job would run on both engines.
-    const jobId = gateJobId();
-    let handlerRan = false;
-    const fn = defineJob({ id: jobId as never, cron: '0 9 * * *', catchUp: 'latest' }, () => {
-      handlerRan = true;
-      return { ok: true };
-    });
-
-    routeToEngine(jobId);
-    const ctx = {
-      event: { name: `scheduled.${jobId}`, data: {}, id: undefined },
-      runId: 'cron-run-1',
-      attempt: 0,
-      step: { run: async (_id: string, f: () => unknown) => f() },
-    };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (fn as any).fn(ctx);
-
-    expect(result).toEqual({ skipped: 'routed-to-postgres-engine', jobId });
-    expect(handlerRan).toBe(false);
-    // No ledger row either: the guard returns BEFORE `recordStart`, so a migrated
-    // job leaves no Inngest-side trace to confuse the dashboard.
-    expect(await adminDb.jobRun.count({ where: { functionId: jobId } })).toBe(0);
-
-    // The CONTROL: unrouted, the same invocation runs the handler. Without it the
-    // assertion above would pass against a guard that declines everything.
-    delete process.env[JOB_ENGINE_JOBS_ENV];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (fn as any).fn({ ...ctx, runId: 'cron-run-2' });
-    expect(handlerRan).toBe(true);
-  });
-});
+// ⚠️ §3b STOOD HERE — "a routed CRON job does not ALSO run on Inngest"
+// (MOTIR-3418 removed it). It reached inside the built vendor function and
+// invoked its handler directly to prove the cutover guard declined a cron
+// invocation of a migrated job, with an unrouted CONTROL beside it. There is no
+// second engine for a cron job to also run on: `lib/jobs/engine/scheduler.ts` is
+// the only thing that turns a cron expression into a run, and §3a above proves
+// two schedulers do not double-fire one tick.
 
 describe('§3c the fourteen schedule constants are unchanged', () => {
   it('every registered cron equals the NAMED CONSTANT its definition module exports', async () => {
@@ -502,7 +454,6 @@ describe('§3d jobScheduleHealthService still judges a MIGRATED job', () => {
     // produced carries exactly that. Get the name wrong and every migrated job
     // reads as permanently overdue — the tripwire firing on the tripwire.
     const jobId = gateJobId();
-    routeToEngine(jobId);
     defineJob({ id: jobId as never, cron: '30 3 * * *', catchUp: 'latest' }, () => ({ swept: 0 }));
 
     const fire = new Date(Date.UTC(2026, 7, 25, 3, 30, 0));
@@ -526,21 +477,10 @@ describe('§3d jobScheduleHealthService still judges a MIGRATED job', () => {
   });
 });
 
-describe('§3e the scheduler never touches the Inngest config', () => {
-  it('a scheduled definition syncs the same config it did before this story', () => {
-    // `fn.opts` is what a job SYNCS with. `catchUp` describes a scheduler Inngest
-    // does not have, so a key appearing here would be a change to a deployed
-    // registration for no reader.
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        { id: gateJobId() as never, cron: '30 3 * * *', catchUp: 'latest' },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
-      expect(Object.keys(config ?? {}).sort()).toEqual(['id', 'onFailure', 'retries', 'triggers']);
-    } finally {
-      spy.mockRestore();
-    }
-  });
-});
+// ⚠️ §3e STOOD HERE — "the scheduler never touches the Inngest config"
+// (MOTIR-3418 removed it). It asserted that a scheduled definition SYNCED exactly
+// the four keys it always had, so that `catchUp` — an option describing a
+// scheduler the vendor did not have — could not leak into a deployed
+// registration for no reader. Nothing is synced anywhere now, and `catchUp` is a
+// first-class member of the engine's own registration; the assertion that
+// replaces it is in `tests/jobs/engine-units.test.ts`.

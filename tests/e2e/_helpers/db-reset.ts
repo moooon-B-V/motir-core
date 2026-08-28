@@ -5,6 +5,9 @@
 // import-and-call so Playwright callers always go through this module —
 // if the reset surface needs to grow (e.g. seed data, clear outbox file)
 // we extend here without touching the Vitest helper.
+// Load the job registry in THIS process — see the file for why the emit path
+// cannot do it itself here.
+import './job-registry';
 import { rmSync } from 'node:fs';
 import { db } from '@/lib/db';
 import { adminDb } from '@/tests/helpers/adminDb';

@@ -6,7 +6,6 @@ import { manifestSubscribers } from './manifest';
 import { ensureJobManifestLoaded } from './subscribers';
 import { resolveIdempotencyKey } from './idempotency';
 import { debouncedRunAt, resolveDebounceKey } from './debounce';
-import { routedToEngine, routedJobIds } from './cutover';
 import { notifyQueuedJob } from './notify';
 import type { JobManifestEntry } from './manifest';
 
@@ -129,46 +128,35 @@ export async function dispatchEventToEngine(
 ): Promise<DispatchResult> {
   const log = opts?.logger ?? console;
 
-  // ⚠️ NOTHING ROUTED ⇒ NOTHING TO RESOLVE, and therefore nothing to LOAD.
+  // ⚠️ THE MANIFEST LOAD IS EXPENSIVE AND IT LANDS ON A REQUEST PATH. Emitting is
+  // POST-COMMIT and `createWorkItem` AWAITS it, so the first dispatch in a fresh
+  // process sits inside a user's mutation: **6224 ms** measured, against 0 ms for
+  // every dispatch after it. The bill is the SERVICE BAG the definitions reach
+  // through `defineJob` — `lib/jobs/services.ts` alone is 8808 ms, against 3 ms
+  // for the manifest module and 158 ms for the registry once services are warm.
   //
-  // The subscriber set exists only to be filtered by `routedToEngine`, so when
-  // the routing set is empty the answer is "enqueue nothing" whatever the
-  // manifest says. Returning here is not an optimisation of a correct path — it
-  // IS the correct path, one step earlier.
+  // ⚠️ THERE USED TO BE A GUARD ABOVE THIS LINE AND ITS PREMISE IS GONE
+  // (MOTIR-3418). While two substrates ran side by side, an empty
+  // `MOTIR_POSTGRES_JOB_IDS` meant "enqueue nothing", so a deployment that had not
+  // cut over could return before the load and pay nothing at all. With one lane
+  // there is no such state: every emit has to resolve its subscribers, so every
+  // process pays the load once, on its first emit. That is the cost of the
+  // migration finishing, not a regression — production has paid it since the
+  // event jobs were routed (MOTIR-3463).
   //
-  // It matters because loading the manifest is expensive and lands somewhere
-  // costly. Emitting is POST-COMMIT on a request path and `createWorkItem`
-  // AWAITS it, so the load would sit inside a user's mutation: the first
-  // dispatch in a fresh process measured **6224 ms** (the second, 0 ms), and
-  // `tests/integration/work-items/revisions.test.ts` went red on a one-second
-  // freshness window it had always met. The bill is the SERVICE BAG the
-  // definitions reach through `defineJob` — `lib/jobs/services.ts` alone is
-  // 8808 ms, against 3 ms for the manifest module and 158 ms for the registry
-  // once services are warm.
-  //
-  // So before any job is cut over — which is the state of every deployment today
-  // and of every test that does not set the routing set — the emit path pays
-  // NOTHING. The load happens on the first emit AFTER an operator routes a job,
-  // which is the one moment it is actually needed.
-  //
-  // ⚠️ AND IT MUST STAY BEFORE THE LOAD, not after. Warming eagerly instead was
-  // tried twice and is unsafe here: calling it during module evaluation, and
-  // then from a `setTimeout(0)`, both re-entered a module graph that was still
-  // initializing — vite-node resolves imports through promises, so a macrotask
-  // interleaves with graph evaluation — and eleven job suites failed to load
-  // with `ReferenceError: Cannot access '__vite_ssr_import_3__' before
-  // initialization`. The same temporal-dead-zone shape ADR §12 measured at build
-  // time, one level down.
-  if (routedJobIds().size === 0) {
-    return { eventId: null, enqueued: [], alreadyEnqueued: [], coalesced: [], failed: [] };
-  }
-
+  // ⚠️ AND IT MUST NOT BE "FIXED" BY WARMING EAGERLY. That was tried twice —
+  // during module evaluation, and from a `setTimeout(0)` — and both re-entered a
+  // module graph that was still initializing (vite-node resolves imports through
+  // promises, so a macrotask interleaves with graph evaluation): eleven job suites
+  // failed to load with `ReferenceError: Cannot access '__vite_ssr_import_3__'
+  // before initialization`. The same temporal-dead-zone shape ADR §12 measured at
+  // build time, one level down.
   // The manifest is populated by evaluating the definition modules, and nothing
   // on a request path does that on its own — without this the subscriber set
-  // reads empty and the cutover switch cannot move anything (MOTIR-3458).
-  // Memoised: one dynamic import per process, a resolved promise thereafter.
+  // reads empty and NOTHING IS ENQUEUED AT ALL (MOTIR-3458). Memoised: one
+  // dynamic import per process, a resolved promise thereafter.
   await ensureJobManifestLoaded();
-  const subscribers = manifestSubscribers(name).filter((d) => routedToEngine(d.id));
+  const subscribers = manifestSubscribers(name);
   if (subscribers.length === 0) {
     return { eventId: null, enqueued: [], alreadyEnqueued: [], coalesced: [], failed: [] };
   }
@@ -333,34 +321,4 @@ async function enqueueDebounced(
     if (!isUniqueViolation(err)) throw err;
     return attempt();
   }
-}
-
-/**
- * Does this event have at least one subscriber still on Inngest?
- *
- * `sendEvent` uses it to decide whether the Inngest transport is still needed
- * for this event at all. Once every subscriber of an event has moved, the
- * `inngest.send()` for it is dead weight — and once EVERY event's has, the
- * retirement story removes the transport.
- */
-export function hasInngestSubscribers(name: string): boolean {
-  const subs = manifestSubscribers(name);
-  // ⚠️ AN EVENT WITH NO REGISTERED SUBSCRIBER STILL GOES TO INNGEST — the safe
-  // default, kept deliberately.
-  //
-  // It USED TO BE LOAD-BEARING FOR THE WRONG REASON, and the correction is worth
-  // stating rather than deleting. This comment previously read: "the registry is
-  // complete only for definition modules that have been EVALUATED, and
-  // `sendEvent` is called from request paths that may not have imported them."
-  // That was true, and it meant this arm was silently taken on EVERY production
-  // emit — the manifest was empty, so every event read as "still on Inngest"
-  // while the engine enqueued nothing. The safe default was doing the whole job,
-  // and it hid the fact that nothing else was (MOTIR-3458; ADR §12).
-  //
-  // `sendEvent` now loads `./subscribers` explicitly, so an empty set here means
-  // what it says: no job subscribes to this event. The default stays because that
-  // case is still real — an event may legitimately ship before its consumer — and
-  // routing it to the lane that has always carried it remains the safe direction.
-  if (subs.length === 0) return true;
-  return subs.some((d) => !routedToEngine(d.id));
 }

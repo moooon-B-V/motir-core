@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
 import { adminDb } from '../helpers/adminDb';
 
@@ -93,7 +93,7 @@ function submittedRepoRefs(): (string | null | undefined)[] {
 }
 
 function runIndex(args: { installationId: string; workspaceId: string; projectIds: string[] }) {
-  return new InngestTestEngine({ function: codeGraphIndex }).execute({
+  return new JobTestEngine({ function: codeGraphIndex }).execute({
     events: [
       indexEventFor({
         installationId: args.installationId,

@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { backlogService } from '@/lib/services/backlogService';
 import type { WorkItemEmbeddingRequestedData } from '@/lib/jobs/types';
@@ -9,6 +8,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { captureEventPayloads } from '../helpers/jobs';
 
 // WHEN the embedding job is enqueued (Story MOTIR-2694 · Subtask MOTIR-2696, ADR
 // §3 + §6.3.1) — the EMIT GATE, asserted from the write path rather than from the
@@ -42,15 +42,8 @@ afterAll(async () => {
 
 /** Capture every `work-item/embedding.requested` publish (and block the network). */
 function captureEmbeddingEvents(): WorkItemEmbeddingRequestedData[] {
-  const events: WorkItemEmbeddingRequestedData[] = [];
-  vi.spyOn(inngest, 'send').mockImplementation((async (payload: unknown) => {
-    for (const entry of Array.isArray(payload) ? payload : [payload]) {
-      const evt = entry as { name?: string; data?: WorkItemEmbeddingRequestedData };
-      if (evt?.name === 'work-item/embedding.requested' && evt.data) events.push(evt.data);
-    }
-    return { ids: [] as string[] };
-  }) as typeof inngest.send);
-  return events;
+  return captureEventPayloads<WorkItemEmbeddingRequestedData>('work-item/embedding.requested')
+    .events;
 }
 
 async function scenario(): Promise<{ fx: WorkItemFixture; ctx: ServiceContext }> {

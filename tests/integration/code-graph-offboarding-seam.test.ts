@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { CODE_GRAPH_RETENTION_WINDOW_MS, OFFBOARD_ALL_REPOS } from '@/lib/codeGraph/offboarding';
@@ -79,7 +79,7 @@ async function queueRows() {
 
 /** Drive the sweep through its REAL job handler — never the service or repository. */
 async function runSweepJob() {
-  const engine = new InngestTestEngine({ function: codeGraphOffboardSweep });
+  const engine = new JobTestEngine({ function: codeGraphOffboardSweep });
   const { result } = await engine.execute();
   return result as { due: number; offboarded: number; failed: number; remaining: number };
 }

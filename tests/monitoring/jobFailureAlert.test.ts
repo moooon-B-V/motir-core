@@ -73,9 +73,17 @@ describe('alertTerminalJobFailure — the signal that leaves the database', () =
     expect(options['level']).toBe('error');
   });
 
-  it('names the ENGINE, because the two lanes fail for different reasons', () => {
-    // Mid-cutover a job can run on either lane, and "it only fails on the engine"
-    // is the first thing worth knowing about a failure that started this week.
+  it('names the ENGINE the WRITER declares, never one inferred from the failure', () => {
+    // ⚠️ THIS USED TO SAY "the two lanes fail for different reasons" — true
+    // mid-cutover, when a job could run on either and "it only fails on the
+    // engine" was the first thing worth knowing about a new failure. There is one
+    // lane since MOTIR-3418, and every alert therefore tags `engine`.
+    //
+    // The assertion stays, driven with the OTHER member, because that is what it
+    // is actually about: the tag is whatever the caller DECLARES, not something
+    // derived from the error. `JobRunLane` keeps `inngest` for the historical rows
+    // that carry it, so a reader querying Sentry for the old lane still gets the
+    // same answer the ledger gives.
     const [, options] = alertFor(new Error('boom'), { engine: 'inngest' });
     expect((options['tags'] as Record<string, string>)['job_engine']).toBe('inngest');
   });

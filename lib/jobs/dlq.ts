@@ -1,9 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { inngest } from './client';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
 import type { JobRunDlqDTO } from '@/lib/dto/jobs';
-import { routedToEngine } from './engine/cutover';
 import { engineJob } from './engine/registry';
 import { resolveIdempotencyKey } from './engine/idempotency';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
@@ -28,22 +26,22 @@ import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 // re-emitted the event AS-IS, including its original idempotency key. But an
 // operator replays a dead-lettered job precisely when they've fixed a transient
 // failure and want it to run NOW — and the original key is, by definition, still
-// inside Inngest's dedup window, so the runtime DROPPED the re-emit and nothing
+// inside the dedup window, so the runtime DROPPED the re-emit and nothing
 // re-ran. Worse, the dashboard's Replay button still stamped `replayedAt` and
-// toasted success, so the no-op was invisible. So replay now RE-SHAPES the key:
-// the re-emitted event carries `{original}:replay:{dlqId}`, distinct from the
-// original, so Inngest treats it as a new run and actually executes it. The new
-// key is derived from the DLQ row id (not a timestamp), so a double-click of
-// Replay on the SAME row still dedups to one re-run (no double-delivery), while
-// a genuinely new failure — a new dlq row — replays independently. A job with no
-// idempotency key is unaffected (it already replayed unconditionally).
+// toasted success, so the no-op was invisible. So replay RE-SHAPES the key: the
+// re-emitted event carries `{original}:replay:{dlqId}`, distinct from the
+// original, so it is treated as a new run and actually executes. The new key is
+// derived from the DLQ row id (not a timestamp), so a double-click of Replay on
+// the SAME row still dedups to one re-run (no double-delivery), while a genuinely
+// new failure — a new dlq row — replays independently. A job with no idempotency
+// key is unaffected (it already replayed unconditionally).
 //
-// Why the raw client and not `sendEvent`: dlq.ts lives in lib/jobs/** so it may
-// import the Inngest SDK. The stored `eventData` is dynamic jsonb (it can be ANY
-// job's payload, including system/cron jobs that never go through `sendEvent`),
-// so it bypasses `sendEvent`'s compile-time event typing. Re-validating an
-// untyped payload against the runtime workspace guard adds no safety — the
-// original send already satisfied the workspace-scoping invariant.
+// Why it enqueues directly and not through `sendEvent`: the stored `eventData` is
+// dynamic jsonb (it can be ANY job's payload, including system/cron jobs that
+// never go through `sendEvent`), so it bypasses `sendEvent`'s compile-time event
+// typing. Re-validating an untyped payload against the runtime workspace guard
+// adds no safety — the original send already satisfied the workspace-scoping
+// invariant.
 
 /**
  * Replay a dead-lettered job by re-emitting its original event, then stamping
@@ -59,68 +57,52 @@ export async function replayDLQ(
   }
   const originalData = (row.eventData ?? {}) as Record<string, unknown>;
 
-  // ── REPLAY ROUTES BY THE SAME SWITCH AS EVERYTHING ELSE (MOTIR-3424) ────────
-  // The dashboard's Replay button must re-run the job on whichever engine that
-  // job now lives on. Re-emitting to Inngest for a job that has MOVED would land
-  // the event at a handler that declines to execute it (`defineJob`'s guard), so
-  // the operator would see a success toast and a `replayedAt` stamp for a run
-  // that never happened — the exact silent no-op MOTIR-1.6.6 fixed once already
-  // for the idempotency window, wearing different clothes.
-  //
-  // The engine's replay is a fresh `job_event` + `job_queue` pair rather than a
-  // reset of the dead run: the original run's step ledger records work that DID
+  // ⚠️ A REPLAY IS A FRESH `job_event` + `job_queue` PAIR, never a reset of the
+  // dead run (MOTIR-3424). The original run's step ledger records work that DID
   // complete, and re-running the same row would skip precisely the steps an
   // operator is replaying in order to re-do. A new run starts clean.
   //
   // It runs in the CALLER's transaction, exactly as the stamp below does — this
   // function owns neither the transaction nor the RLS context.
-  // ⚠️ THE REPLAY KEY IS RE-SHAPED ON *BOTH* ARMS (MOTIR-3459). It always was on
-  // the Inngest arm — see the header — and until engine-side dedup existed the
-  // engine arm had nothing to be dropped by. It does now: replaying with the
-  // ORIGINAL key would hit the `(job_id, idempotency_key)` partial unique index,
-  // be swallowed as "already enqueued", and hand the operator a success toast
-  // and a `replayedAt` stamp for a run that never happened — the same silent
-  // no-op this function's own header says it exists to prevent, wearing
-  // different clothes.
+  //
+  // ⚠️ THE REPLAY KEY IS RE-SHAPED (MOTIR-3459): replaying with the ORIGINAL key
+  // would hit the `(job_id, idempotency_key)` partial unique index, be swallowed
+  // as "already enqueued", and hand the operator a success toast and a
+  // `replayedAt` stamp for a run that never happened — the same silent no-op this
+  // function's own header says it exists to prevent, wearing different clothes.
+  //
+  // (This used to be one of TWO arms, chosen by the per-job cutover switch. The
+  // switch and its other arm went with MOTIR-3418; the reshape did not, because
+  // it was never the vendor's dedup window it was protecting against here.)
   const replayData = reshapeReplayKey(originalData, dlqId);
 
-  if (routedToEngine(row.functionId)) {
-    const def = engineJob(row.functionId);
-    const event = await jobEventRepository.create(
-      {
-        name: row.eventName,
-        data: (replayData ?? {}) as Prisma.InputJsonValue,
-        workspaceId: row.workspaceId,
-        idempotencyKey:
-          typeof replayData['idempotencyKey'] === 'string' ? replayData['idempotencyKey'] : null,
-      },
-      tx,
-    );
-    await jobQueueRepository.create(
-      {
-        jobId: row.functionId,
-        eventId: event.id,
-        eventName: row.eventName,
-        workspaceId: row.workspaceId,
-        runAt: new Date(),
-        // A job whose definition module has not been evaluated in THIS process
-        // still has to be replayable, so fall back to the default policy's budget
-        // rather than refusing. `transient`'s 3 is what `defineJob` would have
-        // resolved for a job that declared nothing.
-        maxAttempts: def?.maxAttempts ?? 3,
-        idempotencyKey: resolveIdempotencyKey(def?.idempotency, replayData, row.functionId),
-      },
-      tx,
-    );
-    const replayedOnEngine = await jobRunDlqRepository.update(
-      dlqId,
-      { replayedAt: new Date() },
-      tx,
-    );
-    return toJobRunDlqDTO(replayedOnEngine);
-  }
-
-  await inngest.send({ name: row.eventName, data: replayData });
+  const def = engineJob(row.functionId);
+  const event = await jobEventRepository.create(
+    {
+      name: row.eventName,
+      data: (replayData ?? {}) as Prisma.InputJsonValue,
+      workspaceId: row.workspaceId,
+      idempotencyKey:
+        typeof replayData['idempotencyKey'] === 'string' ? replayData['idempotencyKey'] : null,
+    },
+    tx,
+  );
+  await jobQueueRepository.create(
+    {
+      jobId: row.functionId,
+      eventId: event.id,
+      eventName: row.eventName,
+      workspaceId: row.workspaceId,
+      runAt: new Date(),
+      // A job whose definition module has not been evaluated in THIS process
+      // still has to be replayable, so fall back to the default policy's budget
+      // rather than refusing. `transient`'s 3 is what `defineJob` would have
+      // resolved for a job that declared nothing.
+      maxAttempts: def?.maxAttempts ?? 3,
+      idempotencyKey: resolveIdempotencyKey(def?.idempotency, replayData, row.functionId),
+    },
+    tx,
+  );
   const replayed = await jobRunDlqRepository.update(dlqId, { replayedAt: new Date() }, tx);
   return toJobRunDlqDTO(replayed);
 }
@@ -131,9 +113,6 @@ export async function replayDLQ(
  * Suffixing with the DLQ row id makes each replay of the same dead run its own
  * key while keeping the original readable in it. Only when the stored payload
  * actually carries a string key; otherwise the payload is returned untouched.
- *
- * Extracted from the Inngest arm (MOTIR-3459) so BOTH lanes reshape identically
- * — the engine arm needs it now that `(job_id, idempotency_key)` is enforced.
  */
 function reshapeReplayKey(data: Record<string, unknown>, dlqId: string): Record<string, unknown> {
   return typeof data['idempotencyKey'] === 'string'

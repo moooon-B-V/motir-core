@@ -1,12 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import {
   mentionNotifyOnCommentCreated,
   mentionNotifyOnWorkItemMentioned,
 } from '@/lib/jobs/definitions/mentionNotify';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
 import { mentionNotificationEmail } from '@/lib/emailTemplates/mentionNotification';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
@@ -30,7 +30,7 @@ import { captureEmailEvents } from '../helpers/jobs';
 //      access, vanish-tolerant on deleted comment/issue, dedup, idempotency
 //      keys per source × user);
 //   2. the two registered jobs driving the fan-out in-process via
-//      @inngest/test (job_run bookkeeping included);
+//      the in-process JobTestEngine (job_run bookkeeping included);
 //   3. the mentionNotification template contract (pure render, unredacted
 //      link, excerpt with @Name not raw tokens, locale arms).
 
@@ -246,8 +246,8 @@ describe('mentionNotificationsService.fanOut — description mentions', () => {
 
 describe('mentionNotify jobs — in-process runs', () => {
   it('registers both consumers in the job registry', () => {
-    expect(jobFunctions).toContain(mentionNotifyOnCommentCreated);
-    expect(jobFunctions).toContain(mentionNotifyOnWorkItemMentioned);
+    expect(jobDefinitions).toContain(mentionNotifyOnCommentCreated);
+    expect(jobDefinitions).toContain(mentionNotifyOnWorkItemMentioned);
   });
 
   it('drives the comment-created event end-to-end: fan-out runs, email.send enqueued, run recorded', async () => {
@@ -263,7 +263,7 @@ describe('mentionNotify jobs — in-process runs', () => {
       authorId: s.fx.ownerId,
       mentionedUserIds: [s.member.id],
     };
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: mentionNotifyOnCommentCreated,
       events: [{ name: 'work-item/comment.created', data }],
     });
@@ -287,7 +287,7 @@ describe('mentionNotify jobs — in-process runs', () => {
     const comment = await commentsService.addComment(s.issueId, { bodyMd: 'No tags.' }, s.fx.ctx);
     capture.events.length = 0;
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: mentionNotifyOnCommentCreated,
       events: [
         {

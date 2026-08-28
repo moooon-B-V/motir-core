@@ -7,7 +7,6 @@ import { JobWorker } from '@/lib/jobs/engine/worker';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
-import { JOB_ENGINE_JOBS_ENV, routedToEngine } from '@/lib/jobs/engine/cutover';
 import { engineJob, engineJobs } from '@/lib/jobs/engine/registry';
 import { manifestSubscribers } from '@/lib/jobs/engine/manifest';
 import { parseEventExpression, resolveEventExpression } from '@/lib/jobs/engine/eventExpression';
@@ -24,7 +23,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // The REAL registry, for its side effect — every definition module evaluated, so
 // the totality guards below walk the shipped set rather than a fixture.
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 
 // THE STORY GATE for the CONTAINER-SUPERVISOR cutover
 // (Story MOTIR-3417 · Subtask MOTIR-3486).
@@ -52,8 +51,6 @@ import { jobFunctions } from '@/lib/jobs/registry';
 //
 // Real Postgres throughout, no mocks except the two the repo already allows.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
-
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 /** The three jobs this story moves. Named once — every guard below reads it. */
@@ -62,10 +59,6 @@ const SUPERVISORS = [
   'system.code-graph-refresh',
   'system.ci-runner-boot',
 ] as const;
-
-function routeToEngine(...jobIds: string[]): void {
-  process.env[JOB_ENGINE_JOBS_ENV] = jobIds.join(',');
-}
 
 /**
  * ⚠️ EVERY `defineJob` BELOW REGISTERS A SYNTHETIC ID, NEVER A REAL ONE.
@@ -83,14 +76,11 @@ function gateJobId(): string {
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -173,11 +163,17 @@ describe('§2a debounce → worker: the claimed run carries the LAST event', () 
     // said. A refresh indexes the repo at its default branch, so a coalesced run
     // that executed the first push's payload would index a superseded head.
     const jobId = gateJobId();
+    // ⚠️ ITS OWN TRIGGER, NOT A REAL EVENT (MOTIR-3418). The probe used to
+    // subscribe to a real event and be isolated by the per-job cutover switch —
+    // only the routed id was enqueued. With one lane a dispatch enqueues EVERY
+    // subscriber, so a shared trigger would enqueue the real consumers too and the
+    // worker's tick would claim four runs instead of one.
+    const trigger = `${jobId}.pushed`;
     const seen: unknown[] = [];
     defineJob(
       {
         id: jobId as never,
-        trigger: 'work-item/embedding.requested',
+        trigger: trigger as never,
         debounce: { key: 'event.data.repoName', period: '2m' },
       },
       (ctx) => {
@@ -185,10 +181,9 @@ describe('§2a debounce → worker: the claimed run carries the LAST event', () 
         return { ok: true };
       },
     );
-    routeToEngine(jobId);
 
     for (const head of ['sha-1', 'sha-2', 'sha-3']) {
-      await dispatchEventToEngine('work-item/embedding.requested', {
+      await dispatchEventToEngine(trigger, {
         workspaceId: null,
         repoName: 'motir-core',
         head,
@@ -266,7 +261,7 @@ describe('§2b collapse → ledger: the row a supervised run leaves behind', () 
 
   it('a run that indexed writes ONE succeeded row carrying ONE repoRef', async () => {
     // The ledger contract MOTIR-3417 refuses to let this story change, driven
-    // through the REAL worker rather than through `@inngest/test`. The shape is
+    // through the REAL worker rather than through `the in-process JobTestEngine`. The shape is
     // `runIndexFleetSteps`'s return value, which `executeWithLedger` serializes
     // into `job_run.output` exactly as `defineJob` does on the other lane.
     const jobId = gateJobId();
@@ -488,21 +483,17 @@ describe('§3 the guards', () => {
     ).toBe('i1/moooon/motir-core');
   });
 
-  it('the three supervisors are reachable on BOTH lanes, and default to Inngest', () => {
-    // The switch's default-to-Inngest safety property, on the three ids this
-    // story moves. With the routing set empty they run where they always have —
-    // which is the state of production when this merges.
-    delete process.env[JOB_ENGINE_JOBS_ENV];
-    for (const id of SUPERVISORS) {
-      expect(engineJob(id), id).toBeDefined();
-      expect(routedToEngine(id), id).toBe(false);
-    }
-    routeToEngine(...SUPERVISORS);
-    for (const id of SUPERVISORS) expect(routedToEngine(id), id).toBe(true);
+  it('the three supervisors are REGISTERED and reachable from the emit path', () => {
+    // ⚠️ THIS ASSERTED A SWITCH (MOTIR-3418 removed that half). It checked the
+    // default-to-the-old-lane safety property on the three ids this story moved,
+    // then flipped the routing set and checked they moved. There is one lane now,
+    // so what remains is the half that was never about the migration: the three
+    // are in the engine registry, and the emit path can actually reach them.
+    for (const id of SUPERVISORS) expect(engineJob(id), id).toBeDefined();
 
     // ⚠️ AND THEY ARE ALL EVENT-TRIGGERED, so the emit path can actually reach
     // them. A supervisor registered with no trigger would be invisible to
-    // `manifestSubscribers` and the switch would move nothing.
+    // `manifestSubscribers` and nothing would ever enqueue it.
     for (const id of SUPERVISORS) {
       const def = engineJob(id)!;
       expect(def.trigger, id).toBeDefined();
@@ -555,16 +546,14 @@ describe('§3 the guards', () => {
     // keeps its optionals as `T | undefined` REQUIRED precisely so a registration
     // cannot silently drop one, and this is the runtime half of that.
     //
-    // ⚠️ THE SHIPPED SET IS DERIVED FROM `jobFunctions`, NOT FROM A PREFIX FILTER.
+    // ⚠️ THE SHIPPED SET IS DERIVED FROM `jobDefinitions`, NOT FROM A PREFIX FILTER.
     // `registerEngineJob` writes to MODULE state, so the registry in a given
     // worker also holds every synthetic job any earlier test file defined —
     // including this file's own. A prefix filter would work today and would fail
-    // the first time somebody names a fixture differently; `jobFunctions` is the
-    // array the serve route actually mounts, so intersecting with it names the
-    // real population by construction.
-    const shipped = new Set(
-      jobFunctions.map((fn) => (fn as unknown as { opts: { id: string } }).opts.id),
-    );
+    // the first time somebody names a fixture differently; `jobDefinitions` is the
+    // array `lib/jobs/registry.ts` actually collects, so intersecting with it
+    // names the real population by construction.
+    const shipped = new Set(jobDefinitions.map((d) => d.id));
     const registered = engineJobs().filter((d) => shipped.has(d.id));
     expect(registered.length).toBe(shipped.size);
     for (const def of registered) {

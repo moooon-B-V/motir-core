@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../../helpers/jobs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -144,7 +144,7 @@ async function createAndEmbed(
     { projectId: fx.projectId, kind: 'task', ...input },
     fx.ctx,
   );
-  const { result } = await new InngestTestEngine({
+  const { result } = await new JobTestEngine({
     function: workItemEmbeddingRequested,
     events: [{ name: 'work-item/embedding.requested', data: requestedSince(from) }],
   }).execute();

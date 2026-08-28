@@ -1,6 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -13,6 +12,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Graph-COMPLETE conformance guard over the default workflow (Subtask 2.6.2),
 // consolidating what `transition-validation.test.ts` only SAMPLES. Everything
@@ -58,7 +58,7 @@ let openItemId: string;
 beforeAll(async () => {
   // Stub the Inngest publish: updateStatus now emits `work-item/transitioned`
   // post-commit (Subtask 5.4.5), and the test env has no Inngest key.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
   const user = await usersService.createUser({
     email: 'tc@example.com',

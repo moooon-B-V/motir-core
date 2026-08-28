@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -11,6 +10,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Story-5.2 closer (Subtask 5.2.8, Principle #18): the CROSS-CUTTING lifecycle
 // walk the per-subtask tests don't own — one file is born, lives through every
@@ -121,7 +121,7 @@ beforeEach(async () => {
   vi.mocked(deleteAttachmentBlob).mockReset();
   vi.mocked(deleteAttachmentBlob).mockResolvedValue(undefined);
   vi.mocked(putAttachment).mockClear();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

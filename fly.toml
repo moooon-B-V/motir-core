@@ -146,9 +146,12 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
   # COST: +$11.83/mo (a second `shared-cpu-2x` 2 GB, Fly pricing 2026-08-13),
   # taking the running pair to $23.66/mo. And NO database cost — every
   # `setInterval` in this repo is in a `'use client'` module, and scheduled work
-  # arrives via Inngest over HTTP, which reaches one machine whether or not a
-  # second is warm. Amendment 7 §21 is the standing argument against ever adding
-  # an in-process poll here: it would re-price this line.
+  # is claimed by the `worker` process group below rather than by these machines,
+  # so a second app machine costs no extra database traffic whether or not it is
+  # warm. Amendment 7 §21 is the standing argument against ever adding an
+  # in-process poll HERE: it would re-price this line. (Before MOTIR-3418 the same
+  # sentence read "scheduled work arrives via Inngest over HTTP, which reaches one
+  # machine" — the conclusion is unchanged; only the mechanism moved in-house.)
   min_machines_running = 2
 
   # ⚠️ `requests` IS the right signal for this app and the NUMBERS ARE NOT

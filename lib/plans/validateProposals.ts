@@ -26,6 +26,7 @@
 // tree byte-identical, so every check completes before the first write.
 
 import { assertValidParent, isIssueType, type IssueType } from '@/lib/issues/parentRules';
+import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import { isTempRef, tempRefId, TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
@@ -46,8 +47,11 @@ export interface ProposalNode {
   /** A real work-item id, an intra-plan `planItem:<id>` temp-ref, or null. */
   parentRef: string | null;
   blockedByRefs: string[];
-  /** `add` only — the gate reads just the proposed `kind`. */
-  proposedFields: { kind?: string | null } | null;
+  /**
+   * `add` only — the gate reads the two CLOSED-SET columns it can reject before
+   * a write: the proposed `kind` and the proposed `type` (MOTIR-3654).
+   */
+  proposedFields: { kind?: string | null; type?: string | null } | null;
   /** `modify` only — the gate reads just the edge refs. */
   patch: { blockedByAdd?: string[] | null; blockedByRemove?: string[] | null } | null;
 }
@@ -105,6 +109,33 @@ function issueKindOf(item: ProposalNode): IssueType {
     );
   }
   return kind;
+}
+
+/**
+ * The proposed `type`, checked against the fourteen `WorkItemType` members, or a
+ * typed rejection (MOTIR-3654).
+ *
+ * The twin of `issueKindOf` above, owed by this module's own header argument:
+ * the approved set can be edited between generation and approve
+ * (`updateProposal`), so the proposal is NOT trusted here and core re-checks.
+ * `kind` had that arm from the start; `type` did not, and the asymmetry is the
+ * whole defect — an out-of-enum `type` passed `validate_plan` cleanly and then
+ * raised a `PrismaClientValidationError` from inside `materialize`.
+ *
+ * A null / absent `type` is legal (a leaf may be untyped, and a container may
+ * not carry one at all), so only a PRESENT non-member is a violation. The
+ * message lists the legal members, because the caller correcting this is
+ * usually an agent that can act on a list and cannot act on a refusal.
+ */
+function assertProposedTypeKnown(item: ProposalNode): void {
+  const type = item.proposedFields?.type;
+  if (type == null || type === '') return;
+  if (isWorkItemType(type)) return;
+  throw new PlanGrammarError(
+    'unknown_type',
+    item.id,
+    `Proposal ${item.id} proposes type "${String(type)}", which is not a valid work type. Legal members: ${WORK_ITEM_TYPES.join(', ')}.`,
+  );
 }
 
 /**
@@ -344,6 +375,11 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //    matrix every human create/move is gated on. Independent of whatever the
   //    planner self-checked, and of any human edit through `updateProposal`.
   for (const item of adds) {
+    // 3a. The proposed `type` is a member of the schema enum (MOTIR-3654). Runs
+    //     BEFORE the parent grammar for the same reason step 1 runs before step
+    //     2: a malformed plan should fail with the most specific reason, and a
+    //     bad `type` is a property of the proposal alone — it needs no graph.
+    assertProposedTypeKnown(item);
     const childKind = issueKindOf(item);
     const parentKind = effectiveParentKind(item, addsById, liveById);
     try {

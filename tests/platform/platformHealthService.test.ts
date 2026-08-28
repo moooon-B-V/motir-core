@@ -72,12 +72,13 @@ describe('the event name the "last health check" card reads', () => {
   let declaredId: string;
   beforeAll(async () => {
     const { dailyHealthCheck } = await import('@/lib/jobs/definitions/dailyHealthCheck');
-    // ⚠️ `fn.opts.id`, NOT `fn.id`. `id` on the constructed function is a METHOD
-    // (it prefixes the app id); `opts` is what Inngest KEPT of the config the
-    // definition declared, which is the string `defineJob` builds the synthetic
-    // event name from. Reading the method would have produced a passing-looking
-    // comparison against a function body.
-    declaredId = (dailyHealthCheck as unknown as { opts: { id: string } }).opts.id;
+    // ⚠️ IT USED TO READ `fn.opts.id`, NOT `fn.id` (MOTIR-3418). On the vendor's
+    // constructed function object `id` was a METHOD that prefixed the app id, and
+    // `opts` was what the SDK kept of the declared config — so reading the method
+    // produced a passing-looking comparison against a function body. `defineJob`
+    // returns the declaration now, and `id` on it is the plain string the ledger's
+    // synthetic event name is built from.
+    declaredId = dailyHealthCheck.id;
   }, 60_000);
 
   it('is the synthetic name `defineJob` records the cron under', async () => {
@@ -173,7 +174,7 @@ describe('the six signals', () => {
         functionId: 'system.daily-health-check',
         eventName: 'scheduled.system.daily-health-check',
         eventId: 'evt_1',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 1,
         status: 'succeeded',
         startedAt: ranAt,
@@ -191,7 +192,7 @@ describe('the six signals', () => {
         functionId: 'system.daily-health-check',
         eventName: 'scheduled.system.daily-health-check',
         eventId: 'evt_2',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 1,
         status: 'failed',
         startedAt: new Date('2026-08-26T09:00:00.000Z'),

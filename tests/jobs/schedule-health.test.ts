@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 // Importing the registry is what evaluates every definition module, which is
 // what populates the schedule table via `defineJob`. The coverage test below
 // depends on that having happened; so does production, where the serve route
 // does the same import.
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobSchedules, registerSchedule } from '@/lib/jobs/schedules';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import {
@@ -38,7 +38,7 @@ async function recordScheduledRun(functionId: string, startedAt: Date): Promise<
       // check groups on.
       eventName: `scheduled.${functionId}`,
       eventId: `evt-${functionId}-${startedAt.getTime()}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       status: 'succeeded',
       startedAt,
@@ -66,27 +66,19 @@ describe('the schedule table', () => {
     // fault being defended against. So the assertion lives here.
     const registered = new Set(jobSchedules().map((s) => s.functionId));
 
-    // Read the cron ids straight off the built Inngest function configs, which
-    // is an INDEPENDENT source from the table under test.
-    const cronJobIds = jobFunctions
-      .map((fn) => {
-        const cfg = (
-          fn as unknown as { opts?: { id?: string; triggers?: Array<{ cron?: string }> } }
-        ).opts;
-        const isCron = cfg?.triggers?.some((t) => typeof t.cron === 'string') ?? false;
-        return isCron ? cfg?.id : undefined;
-      })
-      .filter((id): id is string => typeof id === 'string');
+    // Read the cron ids straight off the shipped definitions, which is an
+    // INDEPENDENT source from the table under test. (It used to read them off the
+    // vendor function objects' `opts.triggers`, and the ids there were
+    // app-prefixed — `prodect-core-system.foo` — so this loop stripped the prefix.
+    // A definition carries the bare id, so there is nothing to strip.)
+    const cronJobIds = jobDefinitions.filter((d) => d.cron !== undefined).map((d) => d.id);
 
-    // Guard the guard: if the SDK ever renames its internals, this test would
-    // pass vacuously on an empty list. Motir has had cron jobs since 1.6.4.
+    // Guard the guard: this test would pass vacuously on an empty list. Motir has
+    // had cron jobs since 1.6.4.
     expect(cronJobIds.length).toBeGreaterThan(0);
 
     for (const id of cronJobIds) {
-      // The ids Inngest builds are app-prefixed (`prodect-core-system.foo`),
-      // while the table keys on the bare job id.
-      const bare = id.replace(/^prodect-core-/, '');
-      expect(registered, `cron job ${bare} is missing from the schedule table`).toContain(bare);
+      expect(registered, `cron job ${id} is missing from the schedule table`).toContain(id);
     }
   });
 
@@ -184,7 +176,7 @@ describe('jobScheduleHealthService.check', () => {
         functionId: 'system.ci-actions-gate-sweep',
         eventName: 'system.ci-actions-gate-sweep',
         eventId: 'evt-replay',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'succeeded',
         startedAt: new Date('2026-08-01T22:00:00Z'),
@@ -218,7 +210,7 @@ describe('system.daily-health-check', () => {
       await recordScheduledRun(functionId, justNow);
     }
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
     const payload = result as { ok: boolean; check: string; schedules: { overdue: unknown[] } };
@@ -235,13 +227,13 @@ describe('system.daily-health-check', () => {
     // dailyHealthCheck.ts and this test goes green-to-red: that is the
     // mutation-check that the alarm is actually wired to something.
     //
-    // `@inngest/test` CAPTURES a handler throw onto `error` rather than
+    // `the in-process JobTestEngine` CAPTURES a handler throw onto `error` rather than
     // rejecting `execute()`, and hands it back SERIALIZED (a plain
     // `{ name, message, stack }`, the same round-trip the real executor does) —
     // so assert on the shape, not on `instanceof Error`, and assert `result` is
     // absent. (`rejects.toThrow` here would pass vacuously in the healthy case
     // and fail confusingly in the broken one.)
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result, error } = (await engine.execute()) as {
       result?: unknown;
       error?: { name?: string; message?: string };
@@ -282,7 +274,14 @@ describe('system.daily-health-check', () => {
     // do about it without opening a database.
     expect(error.message).toContain('system.code-graph-index');
     expect(error.message).toContain('last run never');
-    expect(error.message).toContain('PUT /api/inngest');
+    // ⚠️ THIS USED TO ASSERT `PUT /api/inngest` — the re-sync an operator ran when
+    // a stale vendor app registry had stranded a cron (MOTIR-1970). There is no
+    // registry to re-sync (MOTIR-3418), so an overdue verdict now means a dead
+    // worker or a stalled scheduler, and the message names the two commands that
+    // distinguish them. The assertion is that it still says what to DO, which is
+    // the property the original line was protecting.
+    expect(error.message).toContain('worker process group');
+    expect(error.message).toContain('[job-scheduler]');
     expect(error.name).toBe('ScheduledJobsOverdueError');
   });
 });

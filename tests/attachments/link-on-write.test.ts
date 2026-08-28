@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Attachment, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
@@ -11,6 +10,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Link-on-write integration tests (Story 5.2 · Subtask 5.2.3) against a REAL
 // Postgres: the embeds-are-attachments rule across every body-write path —
@@ -23,7 +23,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

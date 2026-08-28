@@ -68,10 +68,6 @@ const USING_CUSTOM_ORIGIN = Boolean(process.env['E2E_BASE_URL']) || Boolean(proc
 const BASE_URL = process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3100'}`;
 const PORT = new URL(BASE_URL).port || '3100';
 
-const INNGEST_PORT = process.env['INNGEST_PORT'] ?? '8388';
-const INNGEST_BASE_URL = `http://localhost:${INNGEST_PORT}`;
-const INNGEST_CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
-
 // The boundary the mock intercepts — an unresolvable host, so a missing intercept
 // fails loud instead of silently escaping to a real network.
 const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
@@ -102,11 +98,14 @@ const { privateKey: E2E_STUDIO_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
 
-// Seed helpers call services that emit post-commit Inngest events; point the
-// runner's SDK at this lane's executor so a seed-level emit publishes (mirrors
-// the main config). Config-module scope runs before workers fork; they inherit it.
-process.env['INNGEST_DEV'] ??= '1';
-process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
+// ⚠️ THE EXECUTOR IS THE ENGINE'S OWN WORKER (MOTIR-3418). This lane used to
+// boot a vendor dev server as a second `webServer` and point the runner's SDK
+// at it, because seed helpers call services that emit post-commit and a
+// key-less SDK threw. An emit is a row in this run's database now, and the
+// thing that EXECUTES it is `startJobWorker` in `globalSetup` below — without
+// which `email.send` never delivers and every `waitForEmail` in this lane hangs.
+// Config-module scope runs before workers fork; they inherit it.
+process.env['E2E_JOB_WORKER'] ??= '1';
 // The cloud gate the billing surfaces read — also set for the runner process so
 // seed-side service reads see the same cloud state the server does.
 process.env['MOTIR_CLOUD'] ??= 'true';
@@ -121,6 +120,12 @@ export default defineConfig({
   // decision, same stub, as vitest.config.ts and the acceptance config; the Next
   // build still enforces the real boundary.
   tsconfig: './tsconfig.node.json',
+  // ⚠️ ADDED BY MOTIR-3418, AND THE LANE DOES NOT WORK WITHOUT IT. `globalSetup`
+  // starts the Postgres engine's worker (and `globalTeardown` drains it) — the
+  // executor that replaced the vendor dev server this config used to boot as a
+  // second `webServer`. It is not a `webServer` entry because it binds no port.
+  globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   // Raised from 30s/5s by MOTIR-2849: the nine promoted specs are long journeys
   // (the repository-set one alone drives nine), and they were authored against
   // the acceptance lane's 90s/20s budget. Lowering their budget as part of a
@@ -148,7 +153,13 @@ export default defineConfig({
       // timeout under CI load — the original test-1 flake. The nine specs moving
       // in here were authored against a pre-built server for exactly that
       // reason, so the lane they move into has to be one too.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
+      // ⚠️ `build:worker` IS PART OF THE SERVER COMMAND, and this lane needs it
+      // (MOTIR-3418). `globalSetup` starts the engine's worker from the SHIPPED
+      // bundle at `.worker/worker.mjs` — never the TypeScript source — so a lane
+      // that does not build it fails in globalSetup before a single spec runs.
+      // The main config's command has carried this since MOTIR-3427; this one did
+      // not need it while the executor was a second `webServer`.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       // Generous: now covers a full `next build` before the server binds.
@@ -209,18 +220,8 @@ export default defineConfig({
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         MOTIR_BASE_URL: BASE_URL,
         E2E_DISABLE_RATE_LIMIT: '1',
-        INNGEST_DEV: '1',
-        INNGEST_BASE_URL,
         E2E_DISABLE_DEV_INDICATOR: '1',
       },
-    },
-    {
-      command: `${INNGEST_CLI_BIN} dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
-      url: INNGEST_BASE_URL,
-      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
-      timeout: 120_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
     },
   ],
 });

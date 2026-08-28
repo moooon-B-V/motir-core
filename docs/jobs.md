@@ -1,77 +1,99 @@
 # Background jobs
 
-Motir runs background work on [Inngest](https://www.inngest.com/) — durable,
-event-driven functions with built-in retries and step memoization. This
-document covers the runtime landed in Subtask 1.6.2: the client, the
-`defineJob` / `sendEvent` wrappers, the `job_run` ledger, and how to add a job —
-plus the cross-cutting patterns added in 1.6.4: named **retry policies**, the
-**dead-letter queue** + replay, and **scheduled (cron) jobs**.
+Motir runs background work on **its own Postgres-backed job engine** — durable
+runs, step memoization, retries, a scheduler and a dead-letter queue, all in
+tables this repository owns and a worker process it ships. This document covers
+the runtime: the `defineJob` / `sendEvent` seam, the `job_run` ledger, how to add
+a job, and the cross-cutting patterns — named **retry policies**, the
+**dead-letter queue** + replay, **scheduled (cron) jobs**, event-level
+**idempotency** and **debounce**.
 
-> The operator dashboard that renders the ledger + DLQ (with a UI "Replay"
-> button) arrives in Subtask 1.6.5. Until then the DLQ + `replayDLQ` are
-> reachable programmatically / via the runbook below.
+> ⚠️ **THE SUBSTRATE CHANGED, AND MOST OF THIS DOCUMENT DID NOT** (Epic
+> MOTIR-3413; the retirement is MOTIR-3418). Until 2026-08-27 the runtime was
+> [Inngest](https://www.inngest.com/) — a hosted, event-driven function platform
+> — and `defineJob` was a wrapper around `inngest.createFunction`. The AUTHORING
+> surface is deliberately unchanged: the same options, the same `ctx.step`
+> contract, the same 24 job definitions, not one of them edited by the migration.
+> What changed is who executes them.
+>
+> Sections below that MEASURE the old scheduler are kept and marked **HISTORICAL**
+> where they explain why an option is written the way it is. They describe a
+> platform this repository no longer runs on, and a reader should treat them as a
+> record rather than as behaviour to rely on.
 
 ## Runtime overview
 
 ```
-emit:   route/service ──sendEvent("x.y", { workspaceId, … })──▶ Inngest
-run:    Inngest ──POST /api/inngest──▶ serve route ──▶ defineJob wrapper ──▶ your handler
-ledger: defineJob writes a job_run row: running ─▶ succeeded | failed (+ DLQ on exhaustion)
+emit:   route/service ──sendEvent("x.y", { workspaceId, … })──▶ job_event + job_queue rows
+run:    worker (fly.toml `worker` group) ──claim──▶ runner ──▶ your handler
+ledger: executeWithLedger writes a job_run row: running ─▶ succeeded | failed (+ DLQ on exhaustion)
 ```
 
-- **Serve route** — `app/api/inngest/route.ts`. The single endpoint the Inngest
-  control plane (cloud) or the local `inngest-cli dev` server syncs and invokes
-  functions through. Exports `GET` (probe), `PUT` (registration), `POST`
-  (invocation). It mounts the functions in `lib/jobs/registry.ts`.
-- **Client** — `lib/jobs/client.ts`. The one `new Inngest({ id: "prodect-core" })`
-  singleton. Everything composes `defineJob` / `sendEvent` on top of it. (The
-  app id deliberately kept the pre-rebrand spelling — it identifies the synced
-  Inngest Cloud app; changing it needs a dashboard re-sync pass, not a rename.)
+- **The emit seam** — `lib/jobs/sendEvent.ts`. Writes ONE `job_event` row and one
+  `job_queue` row per subscribing job, inside `withSystemContext`. Best-effort by
+  contract: every caller emits POST-COMMIT, so a failure is logged rather than
+  turning a saved change into a 500.
+- **The worker** — `scripts/worker.ts`, bundled by `pnpm build:worker` and run by
+  `fly.toml`'s `worker` process group. It claims runs (`SELECT … FOR UPDATE SKIP
+LOCKED`), runs the scheduler's tick, executes handlers through the ledger, and
+  drains on SIGTERM.
+- **The registry** — `lib/jobs/registry.ts` imports every definition module, which
+  is what populates `lib/jobs/engine/registry.ts` (handlers), the manifest (the
+  handler-free view the emit path reads) and the schedule table. Adding a job
+  means adding it there; there is nothing to register with anyone.
 - **The 4-layer rule still holds.** No file outside `lib/jobs/**` and
-  `app/api/inngest/**` may import the `inngest` SDK directly (enforced by an
-  ESLint `no-restricted-imports` rule). Routes/services emit events via
-  `sendEvent`; job handlers receive the injected service-layer bag and call
-  services exactly as a route would.
+  `scripts/worker.ts` may import the engine's internals (enforced by an ESLint
+  `no-restricted-imports` rule). Routes/services emit events via `sendEvent`; job
+  handlers receive the injected service-layer bag and call services exactly as a
+  route would.
 
 ## Environment
 
-| Var                   | Where          | Notes                                                                                               |
-| --------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
-| `INNGEST_DEV=1`       | local dev only | Forces dev mode; without it the serve route 500s locally. Set by `pnpm dev:inngest`. UNSET in prod. |
-| `INNGEST_EVENT_KEY`   | prod           | Authenticates `sendEvent`. Blank locally / in tests.                                                |
-| `INNGEST_SIGNING_KEY` | prod           | Verifies control-plane requests. Read automatically by the SDK. Blank locally.                      |
+**There is nothing to configure.** The engine needs the database the app already
+has (`DATABASE_URL`, plus `DATABASE_URL_UNPOOLED` for the `LISTEN` connection —
+a transaction-mode pooler cannot hold a session, which is bug MOTIR-3454) and the
+`worker` process group in `fly.toml`. No API key, no account, no third-party
+service.
 
-In production both keys are **Fly secrets on the `motir-core` app**, set with
-`fly secrets set` and readable back only as digests (`fly secrets list`). Their
-values come from the Inngest dashboard. There is no preview scope any more: the
-only deploy this repository makes is the production release in `ci.yml`'s
-`deploy` job. See "Cloud wiring" below.
+> ⚠️ **HISTORICAL.** This section used to carry three variables —
+> `INNGEST_DEV`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` — and, during the
+> migration, a fourth: `MOTIR_POSTGRES_JOB_IDS`, the per-job cutover switch that
+> chose which of the two engines each job ran on. All four went with MOTIR-3418.
+> If you find one set on a deployment, it is inert and can be unset.
 
 ## Local development
 
 ```bash
-pnpm dev:inngest      # next dev with INNGEST_DEV=1, app on :3000
-# in a second terminal:
-npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+pnpm dev              # the app on :3000 — emits write job_queue rows
+pnpm build:worker && node .worker/worker.mjs   # the executor, in a second terminal
 ```
 
-The dev server discovers functions via the serve route and gives you a local
-dashboard (`http://localhost:8288`) to trigger events and inspect runs. We run
-the CLI via `npx` rather than a devDependency: pnpm 11 mis-execs the
-`.bin/inngest-cli` shim and blocks its native postinstall build (PRODECT_FINDINGS
-#30, sharp edges #3/#4), and the CLI is a local-only tool — never imported,
-never in CI/prod.
+An emit is a database write, so `pnpm dev` alone is enough to see events
+enqueued; nothing runs them until a worker is up. The E2E lane does the same
+thing — `tests/e2e/_helpers/job-worker-process.ts` starts the worker as a child
+of the Playwright runner, which is why `globalSetup` is where it lives.
+
+> ⚠️ **HISTORICAL.** This used to be `pnpm dev:inngest` plus a second terminal
+> running `inngest-cli dev -u http://localhost:3000/api/inngest`, which gave a
+> local dashboard on `:8288`. The in-app equivalent is
+> `/settings/workspace/jobs` (below), which is the surface an operator uses in
+> production too.
 
 ## `defineJob(options, handler)`
 
-The canonical way to define a job — `lib/jobs/defineJob.ts`. Wraps
-`inngest.createFunction` and adds the run-ledger bookkeeping automatically.
+The canonical way to define a job — `lib/jobs/defineJob.ts`. It REGISTERS the
+definition (with the engine registry, the emit-path manifest and, for a cron, the
+schedule table) and returns it. It is a registration rather than a wrapper: the
+run-ledger bookkeeping lives in `lib/jobs/engine/ledger.ts`, around every run the
+worker executes. (Until MOTIR-3418 it also built an `inngest.createFunction`
+carrying a second copy of that bookkeeping — the copy is what went, not the
+ledger.)
 
 ```ts
 import { defineJob } from '@/lib/jobs/defineJob';
 
 export const sendInvoice = defineJob(
-  { id: 'invoice.send', retryPolicy: 'transient', concurrency: 5 },
+  { id: 'invoice.send', retryPolicy: 'transient' },
   async (ctx, services) => {
     const { workspaceId, invoiceId } = ctx.event.data;
     await services.workspaces.something(workspaceId);
@@ -82,65 +104,68 @@ export const sendInvoice = defineJob(
 
 **Options**
 
-| Field         | Default                  | Meaning                                                                                                                                                                                                                                                      |
-| ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`          | —                        | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.                                                                                                                                  |
-| `retryPolicy` | `'transient'`            | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`.                                                                                                                             |
-| `retries`     | —                        | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                                                                                                                                                           |
-| `concurrency` | —                        | Concurrency constraint(s): a bare limit, or Inngest's `{ limit, key?, scope? }`, or an array of them. See **Concurrency** below.                                                                                                                             |
-| `idempotency` | —                        | Event-payload-keyed dedup template, honoured by **both** runtimes — Inngest's windowed event dedup on the Inngest lane, a partial UNIQUE index on the Postgres engine. See **Event-level idempotency on the Postgres engine** and the `email.send` exemplar. |
-| `cron`        | —                        | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                                                                                                                                               |
-| `catchUp`     | — (REQUIRED with `cron`) | What a missed tick does: `all` / `latest` / `skip`. A `cron` job that omits it does not type-check, and a job without a `cron` may not supply it. See **Scheduled jobs** below.                                                                              |
+| Field         | Default                  | Meaning                                                                                                                                                                                      |
+| ------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | —                        | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.                                                                  |
+| `retryPolicy` | `'transient'`            | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`.                                                             |
+| `retries`     | —                        | Raw count of ADDITIONAL attempts after the first (escape hatch; prefer `retryPolicy`). Passing both throws.                                                                                  |
+| `idempotency` | —                        | Event-payload-keyed dedup template, enforced by a partial UNIQUE index on `(job_id, idempotency_key)`. See **Event-level idempotency on the Postgres engine** and the `email.send` exemplar. |
+| `cron`        | —                        | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                                                                               |
+| `catchUp`     | — (REQUIRED with `cron`) | What a missed tick does: `all` / `latest` / `skip`. A `cron` job that omits it does not type-check, and a job without a `cron` may not supply it. See **Scheduled jobs** below.              |
 
 **Handler signature** — `(ctx, services) => result`:
 
-- `ctx` — the Inngest context: `ctx.event` (`.name`, `.data`, `.id`),
-  `ctx.step` (durable step tools), `ctx.runId`, `ctx.attempt`, `ctx.logger`.
+- `ctx` — the engine context (`JobContext` in `lib/jobs/defineJob.ts`):
+  `ctx.event` (`.name`, `.data`, `.id`), `ctx.step` (durable step tools),
+  `ctx.runId` (the `job_queue` row id) and `ctx.attempt` (zero-indexed). Those
+  four are the whole surface, and `tests/jobs/engine-runner.test.ts` asserts it
+  against the tree — a handler reaching for a fifth member fails a test rather
+  than throwing inside a background job.
 - `services` — the injected service-layer bag (`lib/jobs/services.ts`):
   `workspaces`, `workspaceInvites`, `projects`, `workItems`, `users`, `email`.
   Use these instead of importing service singletons directly, so handlers stay
   testable with a stubbed bag.
 - The return value becomes the run's resolved output.
 
-**Run ledger.** Around every handler, `defineJob` writes one `job_run` row:
-`running` at start → `succeeded` on return. On a throw, the row stays `running`
-across retries; once the retry budget is exhausted Inngest invokes the
-function's **`onFailure` handler**, which flips the row to `failed` and writes a
+**Run ledger.** Around every handler, `executeWithLedger` writes one `job_run`
+row: `running` at start → `succeeded` on return. On a throw, the row stays
+`running` across retries; once the retry budget is exhausted the worker calls
+`recordEngineTerminalFailure`, which flips the row to `failed` and writes a
 dead-letter row (see **Dead-letter queue**). So a job that's mid-retry reads as
-in-flight, not prematurely failed. The writes run inside `step.run(...)`, so
-they execute exactly once per run even when the handler replays across step
+in-flight, not prematurely failed. The writes run inside `step.run(...)`, so they
+execute exactly once per run even when the handler replays across step
 boundaries — one row per run, not one per replay (the `job-run:start` step's
 result is reused across retries too). This is the read path the operator
-dashboard (1.6.5) renders without calling Inngest's API. `workspace_id` is null
-for system jobs. On success the row also records the handler's JSON-safe
-return value in its `output` column (5.2.7) — a run's summary (e.g. the
-attachment-GC's `{ scanned, deleted, failed }`) is readable from our ledger,
-not only from Inngest's dashboard; a non-JSON-safe return degrades to a NULL
-`output`, never a failed run.
+dashboard (1.6.5) renders. `workspace_id` is null for system jobs. On success the
+row also records the handler's JSON-safe return value in its `output` column
+(5.2.7) — a run's summary (e.g. the attachment-GC's
+`{ scanned, deleted, failed }`) is readable from the ledger; a non-JSON-safe
+return degrades to a NULL `output`, never a failed run.
 
-> **Why `onFailure`, not a try/catch (1.6.6).** The dead-letter write used to
-> live in a `try/catch` around the handler, on the "final attempt" branch. On
-> the **real Inngest executor** a `step.run` scheduled from a catch block _after_
-> the step that terminally failed is never executed — the run is already
+> **Why a SEPARATE terminal hook, not a try/catch (1.6.6).** The dead-letter
+> write used to live in a `try/catch` around the handler, on the "final attempt"
+> branch. On a real durable executor a `step.run` scheduled from a catch block
+> _after_ the step that terminally failed is never executed — the run is already
 > finalizing as failed — so the failed/DLQ rows silently never got written in
 > production (only the in-process unit harness, which runs the catch
-> synchronously, made it look like they did). `onFailure` is Inngest's
-> first-class "run exactly once after all retries are exhausted" hook, so the
-> write is reliable. It's a **separate** invocation from the failed run, so it
-> carries the original event but not the row id — `jobRunsService`
-> correlates back to the `running` row by `(functionId, eventId)` (the
-> `@@index([eventId])` exists for this). See `PRODECT_FINDINGS.md` #39.
+> synchronously, made it look like they did). The engine settles a run whose
+> `attempts` have reached `maxAttempts` and calls `recordEngineTerminalFailure`
+> once, from the worker, outside the handler — the same shape the vendor's
+> `onFailure` hook had, for the same reason. It carries the original event but not
+> the row id, so `jobRunsService` correlates back to the `running` row by
+> `(functionId, eventId)` (the `@@index([eventId])` exists for this). See
+> `PRODECT_FINDINGS.md` #39, and MOTIR-3683 for the cron correlation key.
 
 The ledger tables (`job_run`, `job_run_dlq`) are **workspace-scoped by RLS**
 (1.6.4): a tenant sees only its own workspace's rows. The runtime writes them
-under a trusted **system-admin context** (`withSystemContext`) so the wrapper —
+under a trusted **system-admin context** (`withSystemContext`) so the ledger —
 which has no workspace context — can record rows for any/no workspace, and
 operator tooling can see untenanted `system.*` runs. See the
 `add_job_run_dlq_and_rls` migration for the policy.
 
 ## `sendEvent(name, data)`
 
-The only way to emit an event — `lib/jobs/sendEvent.ts`. Wraps `inngest.send`
+The only way to emit an event — `lib/jobs/sendEvent.ts`. Wraps the engine's dispatcher
 and enforces the **workspace-scoping invariant**: every event carries an
 **explicit** `workspaceId`. The field is required by each event's payload type
 (a forgotten id is a compile error) and re-checked at runtime, where `undefined`
@@ -170,8 +195,8 @@ driven by the in-process test harness. The ones that are EMITTED go through
 
 ## The emit seam — every event goes through one of three doors (MOTIR-3456)
 
-**Nothing outside `lib/jobs/` calls `inngest.send`.** There are exactly three
-ways to emit an event, all in `lib/jobs/sendEvent.ts`:
+**Nothing outside `lib/jobs/` reaches the engine.** There are exactly three ways
+to emit an event, all in `lib/jobs/sendEvent.ts`:
 
 | door                              | for                                                | on a transport failure |
 | --------------------------------- | -------------------------------------------------- | ---------------------- |
@@ -179,11 +204,14 @@ ways to emit an event, all in `lib/jobs/sendEvent.ts`:
 | `sendSystemEvent(name, data)`     | `system.*` events                                  | swallowed + logged     |
 | `dispatchSystemEvent(name, data)` | `system.*`, for a caller that must SEE the failure | **rethrown**           |
 
-**Why the rule exists, in one line: the per-job cutover switch is read in that
-module, so an emitter that bypasses it is an emitter the switch cannot route.**
-A job named in `MOTIR_POSTGRES_JOB_IDS` whose event was sent straight through the
-client is enqueued on neither lane — the engine never hears about it and
-`defineJob`'s Inngest handler declines to run it.
+**Why the rule exists, in one line: that module is the ONE description of what
+emitting means, so an emitter that bypasses it is an emitter no change to that
+description reaches.** When the rule was written the thing being bypassed was the
+per-job cutover switch, and four `system.*` emitters that reached the queue
+directly were enqueued on neither engine. The switch is gone (MOTIR-3418); what a
+bypass skips today is the explicit-tenant assertion and the post-commit
+best-effort contract — so a notification's transport failure becomes a 500 on a
+request whose write already committed, which is PROD-443 exactly.
 
 **The strict door is not an inconsistency.** Two callers legitimately need the
 failure rather than a log line: `ciRunnerFleet`'s provision sweep emits inside a
@@ -194,20 +222,19 @@ dispatched must not silently change WHETHER a caller finds out that it failed.
 
 **Two things enforce this, and they cover different halves.**
 
-- **ESLint** — `INNGEST_CLIENT_RESTRICTION` in `eslint.config.mjs` refuses an
-  import of `@/lib/jobs/client` from outside `lib/jobs/**`, `scripts/worker.ts`,
-  `app/api/inngest/**` and `scripts/experiments/**` (the measurement harnesses,
-  which exist to drive the vendor directly). ⚠️ Note it restricts OUR CLIENT, not just the
-  `inngest` package. The older `INNGEST_RESTRICTION` guards the package, and for
-  a long time it guarded the door nobody uses: four `system.*` emitters bypassed
-  the switch under a green lint run because they imported our own thin wrapper
-  one file over.
+- **ESLint** — `JOB_ENGINE_RESTRICTION` in `eslint.config.mjs` refuses an import
+  of `@/lib/jobs/engine/*` from outside `lib/jobs/**` and `scripts/worker.ts`.
+  ⚠️ It names OUR module graph rather than a package, and that is the lesson from
+  the rule it replaced: `INNGEST_CLIENT_RESTRICTION` existed only because the
+  package-level rule beside it guarded a door nobody used — every bypassing
+  emitter imported `@/lib/jobs/client`, our own thin wrapper, which was not the
+  vendor SDK and so was never restricted. A boundary that can be walked around by
+  importing one file over is a convention, not a guard.
 - **A guard test** — `tests/jobs/emit-seam.test.ts` asserts on the TypeScript AST
-  that `inngest.send` is CALLED in exactly two files (`sendEvent.ts` and
-  `dlq.ts`). ESLint cannot cover this half: one of the original bypasses lived
-  INSIDE `lib/jobs/**`, where the import is legitimate. The test counts calls
-  rather than grepping the string, because the tree carries `inngest.send()` in
-  several comments and one seed fixture.
+  that `dispatchEventToEngine` is CALLED in exactly one file (`sendEvent.ts`).
+  ESLint cannot cover this half: one of the original bypasses lived INSIDE
+  `lib/jobs/**`, where the import is legitimate. The test counts calls rather than
+  grepping the name, because the tree names the function in several comments.
 
 If one of these fails, it is telling you the switch cannot reach your job — the
 fix is a door above, not a disable comment.
@@ -247,31 +274,27 @@ await sendEvent('email.send', {
   Templates stay pure render functions in `lib/emailTemplates/`.
 - **Durability.** The single `step.run('send', …)` persists the send result, so
   a retry of a different step never re-delivers.
-- **Idempotency — THREE layers, and `idempotency` does not mean "Inngest".** The
-  job is configured with `idempotency: 'event.data.idempotencyKey'`, so a
-  retried Server Action that re-fires the same token collapses to one delivery.
-  That one declaration is read by two different runtimes, and a third mechanism
-  sits underneath both of them:
+- **Idempotency — TWO layers, at two different boundaries.** The job is
+  configured with `idempotency: 'event.data.idempotencyKey'`, so a retried Server
+  Action that re-fires the same token collapses to one delivery:
 
-  | layer                                        | lives in                                                          | applies when                                                                   | window                                                         |
-  | -------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-  | Inngest's event-level dedup                  | the Inngest runtime, server-side                                  | `email.send` is on the **Inngest lane** — absent from `MOTIR_POSTGRES_JOB_IDS` | Inngest's own dedup **window**                                 |
-  | `job_queue_job_idempotency_key` (MOTIR-3459) | the **Postgres engine** — `lib/jobs/engine/idempotency.ts`        | `email.send` is on the **engine lane** — named in `MOTIR_POSTGRES_JOB_IDS`     | **unbounded**: a partial UNIQUE on `(job_id, idempotency_key)` |
-  | Resend's `Idempotency-Key` header            | the **provider adapter** — `resendIdempotencyKey`, `lib/email.ts` | `EMAIL_PROVIDER=resend` — i.e. production                                      | Resend's own, per request                                      |
+  | layer                                        | lives in                                                          | window                                                         |
+  | -------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------- |
+  | `job_queue_job_idempotency_key` (MOTIR-3459) | the **job engine** — `lib/jobs/engine/idempotency.ts`             | **unbounded**: a partial UNIQUE on `(job_id, idempotency_key)` |
+  | Resend's `Idempotency-Key` header            | the **provider adapter** — `resendIdempotencyKey`, `lib/email.ts` | Resend's own, per request                                      |
 
-  **The first two never compose — the cutover switch routes a job to exactly one
-  lane.** `sendEvent` picks the lane and `defineJob`'s Inngest handler returns
-  `{ skipped: 'routed-to-postgres-engine' }` for a job that has moved
-  (`lib/jobs/engine/cutover.ts`; **Cutting a job over to the Postgres engine**
-  below). So "the dedup window" for a given deployment is whichever lane that job
-  is on, and the two windows are not the same window: Inngest's expires, the
-  index does not — a deliberate divergence argued in
-  **Event-level idempotency on the Postgres engine**.
+  > ⚠️ **HISTORICAL — there used to be a THIRD, and it was a different KIND of
+  > mechanism.** The vendor ran its own server-side event dedup over the same
+  > declaration, with an expiring WINDOW rather than a permanent index, and while
+  > both engines ran the per-job cutover switch decided which of the two applied —
+  > they never composed, because a job was on exactly one lane. That is why
+  > **Event-level idempotency on the Postgres engine** below argues the unbounded
+  > index as a DIVERGENCE rather than a port: the index does not expire, and that
+  > was a decision, not an oversight.
 
-  **The third one DOES stack on top of whichever lane is live**, and it is the
-  only layer that is a property of the DESTINATION rather than of the queue: it
-  collapses two accepted sends of the same key at Resend even when both reached
-  the provider.
+  **The provider layer STACKS on the queue's**, and it is the only one that is a
+  property of the DESTINATION rather than of the queue: it collapses two accepted
+  sends of the same key at Resend even when both reached the provider.
 
   **⚠️ And the provider layer is absent locally and in E2E.**
   `resendIdempotencyKey` is called only from `resendProvider()`; `consoleProvider`
@@ -282,9 +305,9 @@ await sendEvent('email.send', {
   looks deduped here is not evidence that the queue deduped it.
 
   **What is tested where.** The in-process unit harness runs the handler directly
-  and does **not** simulate Inngest's dedup, so the unit tests on that lane assert
-  the _wiring_ (the config carries the expression) and the _caller contract_ (the
-  key is supplied), not the runtime drop. The ENGINE lane's drop **is** tested —
+  and does **not** dedup, so the unit tests assert the _wiring_ (the definition
+  carries the expression) and the _caller contract_ (the key is supplied), not the
+  drop. The ENGINE's drop **is** tested —
   including a concurrent duplicate against real Postgres — in
   `tests/jobs/engine-idempotency.test.ts`. The key is also recorded on the
   `job_run` row.
@@ -311,22 +334,25 @@ await sendEvent('email.send', {
    a default is how a cron job added later inherits a catch-up disposition nobody
    chose for it. Decide it deliberately — the three answers and the argument for
    picking between them are in **Scheduled jobs**.
-5. **Test it** with `@inngest/test`'s `InngestTestEngine` against the real
+5. **Test it** with `JobTestEngine` (`tests/helpers/jobs.ts`) against the real
    Postgres (see `tests/jobs/scheduled.test.ts` for a cron job,
    `tests/jobs/dlq.test.ts` for the failure/DLQ path). For an **event-triggered**
    job pass the real event explicitly via `events: [{ name, data }]`; for a
-   **cron** job omit `events` so the engine uses the direct-invoke path (a cron
-   job has no event trigger to match).
+   **cron** job omit `events` and the harness synthesizes `scheduled.<id>`. Its
+   `step` is in-memory — a spec that needs the DURABLE semantics (a memo surviving
+   a retry, a `sleep` that yields and re-enqueues) is testing the ENGINE and
+   belongs in `tests/jobs/engine-*.test.ts` against the real runner.
 
 ## Retry policies
 
 A job declares its retry **intent** with a named policy (`lib/jobs/retries.ts`)
 rather than a magic count, so the choice is self-documenting and visible in the
 operator dashboard. Each policy is defined in terms of total **attempts**
-(including the first); the module translates that to Inngest's `retries` value
-(`retries = maxAttempts − 1`). Inngest applies exponential backoff between
-attempts automatically — the policies differ by their attempt **budget**, not by
-a hand-tuned curve.
+(including the first), which is what `job_queue.max_attempts` stores; `defineJob`
+does the one translation from a `retries` count of ADDITIONAL attempts
+(`maxAttempts = retries + 1`). The engine applies exponential backoff between
+attempts — the policies differ by their attempt **budget**, not by a hand-tuned
+curve.
 
 | Policy       | Attempts | When to pick it                                                                                                 |
 | ------------ | -------- | --------------------------------------------------------------------------------------------------------------- |
@@ -343,105 +369,33 @@ job specifies neither, it gets `transient`. On the **final** failed attempt the
 run dead-letters (below); `none` therefore dead-letters on the very first
 failure.
 
-## Concurrency — a bare limit is a GLOBAL lane every tenant queues in
+## Concurrency — HISTORICAL (the option is gone)
 
-`concurrency` accepts three shapes, all of them Inngest's own:
-
-```ts
-concurrency: 4                                        // a bare limit
-concurrency: { limit: 1, key: 'event.data.workspaceId' }  // one sub-queue per tenant
-concurrency: [                                        // both at once
-  { limit: 1, key: 'event.data.workspaceId' },        // no tenant monopolizes
-  { limit: 4 },                                       // total capacity
-]
-```
-
-`key` is a CEL expression evaluated against the triggering event; each distinct
-value gets its own sub-queue. `scope` (`'fn'` | `'env'` | `'account'`) widens
-the limit beyond this one function; the default `'fn'` is almost always what a
-job wants. An ARRAY means every constraint must admit a run before it starts.
-
-**Reach for the keyed form whenever the job is triggered by a multi-tenant event
-stream.** A bare number is a single lane for the whole environment, so one
-workspace's backlog delays every other workspace's first run — the shape that
-made a stranger's five-repo index queue land on someone else's onboarding
-spinner (MOTIR-1982; before that card, `defineJob` typed the option as `number`
-and emitted `{ limit: n }`, so no job in this repo could express anything else).
-
-### The fairness claim is MEASURED, not assumed
-
-The two-constraint idiom only buys fairness if the scheduler **skips over** a
-key-blocked run to a runnable one instead of head-of-line blocking behind it.
-That is a property of Inngest's scheduler, not of our config, so it was measured
-rather than reasoned about — `scripts/experiments/inngest-concurrency-fairness.mjs`
-saturates one tenant and times how long an unrelated tenant waits.
-
-Workload: 20 events for tenant A, then 1 for tenant B; handler holds 500 ms;
-`inngest-cli` 1.27.0 dev server, SDK 4.5.0. Time is measured from enqueue.
-
-| Constraint                                  | Tenant B's wait (3 trials) | A's backlog drains |
-| ------------------------------------------- | -------------------------- | ------------------ |
-| `{ limit: 2 }` (today's bare number)        | 2.0 s / 3.0 s / 5.0 s      | ~6.1 s             |
-| `[{ limit: 1, key: tenant }, { limit: 2 }]` | 0.27 s / 0.35 s / 0.71 s   | ~11.7 s            |
-
-**The scheduler interleaves.** With the keyed constraint B started in the first
-wave every time, while A — correctly — took nearly twice as long to drain,
-because its own key holds it to one slot. The bystander's wait stopped scaling
-with the flooder's backlog, which is the entire point. Without a key, B waited
-through a third to five-sixths of a queue it had nothing to do with.
-
-Two things the numbers do NOT say, so don't read them in:
-
-- **This was the dev server, not Inngest Cloud.** The cloud scheduler is a
-  different implementation and was not measured. The keyed config is
-  unambiguously correct either way (it is Inngest's documented contract); what
-  remains unverified is only the exact interleaving latency in production.
-- **Order within a key is not FIFO.** The dev server started tenant A's events
-  out of order (A5, A4, A2, A3, A1). A job that needs per-key ORDERING must get
-  it from somewhere else — a concurrency key bounds parallelism, it does not
-  sequence.
-
-To re-run it: start `pnpm inngest-cli dev -u http://localhost:3987/api/inngest
---no-discovery --port 8388` (any free ports — a sibling dev server on 8288 will
-silently take the default and the harness will talk to the wrong one), then
-`LAB_MODE=keyed|global INNGEST_DEV=1 INNGEST_BASE_URL=http://localhost:8388 node
-scripts/experiments/inngest-concurrency-fairness.mjs`.
-
-### A WAIT is not an OCCUPANCY — a sleeping run holds no slot (MEASURED)
-
-The constraint above only binds a run that is **executing code**. A run parked in
-`ctx.step.sleep`, `step.sleepUntil`, `step.waitForEvent` or `step.invoke`
-occupies **nothing** — which is what makes the durable poll loop in
-`lib/jobs/indexFleetSteps.ts` affordable, and what makes an Inngest-level cap on
-a container supervisor meaningless.
-
-This corpus asserted the OPPOSITE for a month, in a comment, and a whole bug's
-mechanism was built on it (MOTIR-3245). It is now measured, because the
-disagreement was between two comments and a third citation would not have settled
-it — `scripts/experiments/inngest-sleep-concurrency.mjs` runs three events
-through `concurrency: { limit: 1 }` where the only variable is HOW each run holds
-for 8 s:
-
-| Arm                                      | When each run first executed code | Spread     |
-| ---------------------------------------- | --------------------------------- | ---------- |
-| `step.run` that awaits 8 s **(control)** | 241 ms / 8 328 ms / 16 429 ms     | 16 188 ms  |
-| `step.sleep(8 s)`                        | 315 ms / 465 ms / 609 ms          | **294 ms** |
-
-Two trials each, reproducing to within milliseconds. Under `sleep` all three runs
-also _finished_ inside 8.6 s; had the sleep held the slot the third could not have
-finished before ~24 s, which is exactly what the control did.
-
-**The control is the load-bearing half.** Without an arm that demonstrably DOES
-occupy the limit, a prompt start is equally well explained by the limit never
-applying — so a measurement of this shape without a control proves nothing.
-
-Consequence for any stepped supervisor: its occupancy is the **sum of its
-`step.run`s**, not its wall-clock life. A 30-minute index is ~128 sub-second
-steps, releasing the slot between every one — so the worst a queued run waits
-behind it is one poll. `docs/decisions/job-lane-occupancy.md` carries the
-arithmetic, the pool's scope, and which remedies the answer rules out.
-
-Same caveat as the row above: **this is the dev server, not Inngest Cloud.**
+> ⚠️ **THE `concurrency` OPTION NO LONGER EXISTS** (MOTIR-3418). It was the
+> vendor's own — `number | ConcurrencyOption | ConcurrencyOption[]`, a `limit`
+> with an optional CEL `key` that gave each distinct value its own sub-queue —
+> and `defineJob` forwarded it essentially verbatim (MOTIR-1982 widened it to do
+> so, after the wrapper spent a year silently discarding `key` and `scope`).
+>
+> It is gone because **no job declared one by the time the engine took over**, and
+> the engine never read the field: a forwarded option nothing consumes is a lie in
+> a type signature. Removing it is not a decision to run jobs unbounded — it is
+> the removal of a control that had already stopped working. The two jobs whose
+> comments still discuss concurrency (`system.code-graph-index`,
+> `system.code-graph-refresh`) each say in their own words why they carry none: a
+> per-run cap bounds POLLS, not live containers, and the real bound is the fleet's
+> admission cap.
+>
+> **What bounds work today** is the worker pool: `fly.toml`'s `worker` process
+> group, its machine count, and each worker's claim batch. That is a deployment
+> number rather than a per-job one, and `docs/decisions/job-lane-occupancy.md`
+> carries the argument — including the measurement that motivated the whole epic,
+> where a five-slot hosted account was oversubscribed by a single status change
+> with four consumers.
+>
+> **If a job ever needs a real per-job or per-tenant limit**, it is an engine
+> feature to add against `job_queue` (a claim predicate, not a config key), not a
+> field to re-introduce on `defineJob`.
 
 ## Debounce — coalescing is REAL; the `timeout` cap and an unresolvable KEY are not
 
@@ -457,14 +411,15 @@ debounce: { key: "event.data.installationId + '/' + event.data.repoOwner", perio
 below. The documented limits: `period` is at least 1 second and at most 7 days,
 and debounce does not combine with batching.
 
-> ⚠️ **THIS SECTION IS ABOUT WHICH LANE A JOB IS ON (amended 2026-08-26,
-> MOTIR-3488).** Everything from "What the SCHEDULER actually does" down is a
-> measurement of **INNGEST's** executor — it is history, it is why the option is
-> written the way it is, and it stays. The **Postgres engine implements the
-> option itself** (MOTIR-3483), and the two do not behave identically: the engine
-> is stricter in one place and safer in another. **§ The engine's debounce**,
-> below the Inngest material, is that half. Read the one for the lane your job is
-> actually routed to.
+> ⚠️ **EVERYTHING FROM "What the SCHEDULER actually does" DOWN IS HISTORICAL**
+> (amended 2026-08-26 MOTIR-3488; re-marked by MOTIR-3418). It is a measurement of
+> the **retired vendor's** executor, taken against its dev server, and it stays
+> because it is why the option is written the way it is — in particular why an
+> unresolvable key is a REFUSAL here rather than a silent merge. It is not
+> behaviour to rely on: nothing in this repository runs on that executor.
+>
+> **The behaviour that IS current is § The engine's debounce**, below it. There is
+> one lane now, so there is no lane to choose between.
 
 ### What the SCHEDULER actually does — MEASURED, not assumed
 
@@ -545,40 +500,46 @@ than wrong.)
 
 ### What this does NOT say
 
-- **This was the dev server — the one CI's E2E lane and every self-hosted
-  deployment runs — not Inngest Cloud.** Production uses Cloud, whose scheduler
-  is a different implementation and was NOT measured: a controlled probe needs
-  the production account's `INNGEST_EVENT_KEY`, which is a Fly secret, and firing
-  probe events into the production environment is human-gated (see "Cloud
-  wiring"). Inngest's own documentation states the coalescing contract without
-  distinguishing environments, and documents nothing about an unresolvable key —
-  so for Cloud the first row of the table is a documented promise and the two ✗
-  rows are UNKNOWN, not known-good.
+- **This was the DEV SERVER — the one CI's E2E lane and every self-hosted
+  deployment ran — not the vendor's cloud.** Production used the cloud, whose
+  scheduler was a different implementation and was NEVER measured: a controlled
+  probe needed the production account's event key, and firing probe events into
+  the production environment was human-gated. The vendor's own documentation
+  stated the coalescing contract without distinguishing environments, and
+  documented nothing about an unresolvable key — so for the cloud the first row
+  of the table was a documented promise and the two ✗ rows were UNKNOWN rather
+  than known-good. **That gap is now permanent** (MOTIR-3418): the account is
+  closed and the probe cannot be run, which is the strongest argument for having
+  written the numbers down.
 - **A dev-only defect is still a defect.** Two of the three findings above bite
   exactly where nobody is watching: self-hosted runs on this scheduler, and CI's
   E2E lane is the only place any test can observe a debounce at all.
 
-### The guard
+### The guard — HISTORICAL
 
-`tests/jobs/debounce-burst.test.ts` boots the pinned `inngest-cli` and asserts
-the first three rows of that table against the real scheduler — one run for a
-same-key burst, one run PER distinct key, and the keyless collapse pinned as a
-characterization so a change upstream surfaces here. **Any job that grows a
-`debounce` belongs in it**: a scheduler that drops runs then fails the build
+`tests/jobs/debounce-burst.test.ts` booted the pinned CLI and asserted the first
+three rows of that table against the real scheduler — one run for a same-key
+burst, one run PER distinct key, and the keyless collapse pinned as a
+characterization so a change upstream surfaced here. **It was deleted with the
+dependency it drove** (MOTIR-3418); the current guard is
+`tests/jobs/engine-debounce.test.ts`, and any job that grows a `debounce` belongs
+in THAT one — a scheduler that drops runs then fails the build
 instead of a story. It also asserts that `system.code-graph-refresh`'s key names
 only fields `CodeGraphRefreshData` makes required, which is the compile-time half
 of the unresolvable-key rule.
 
-To re-run the standalone probe: start `node_modules/inngest-cli/bin/inngest dev
--u http://localhost:3988/api/inngest --no-discovery --port 8488
---connect-gateway-port 8489 --connect-gateway-grpc-port 50252
---connect-executor-grpc-port 50253` (any free ports — a sibling dev server on
-8288 will silently take the default and the harness will talk to the wrong one),
-then `LAB_MODE=same-key|distinct-keys|absent-key|no-debounce INNGEST_DEV=1
-INNGEST_BASE_URL=http://localhost:8488 node
-scripts/experiments/inngest-debounce-coalescing.mjs`. `LAB_SEND=serial|parallel|batch`
-selects how the burst is delivered and `LAB_GAP_MS` spaces it out — the two knobs
-the last four rows of the table turn.
+The standalone probe that produced the table (`LAB_MODE=…
+scripts/experiments/inngest-debounce-coalescing.mjs`, driven against a
+throwaway dev server) was **deleted by MOTIR-3418** along with the package it
+imported, and so was `tests/jobs/debounce-burst.test.ts`, which booted the
+pinned CLI to assert the first three rows against the real scheduler. Neither
+could be run again: the dependency is not installed and the account is closed.
+The numbers are preserved above BECAUSE they cannot be re-measured — that is
+what makes them worth keeping rather than a link to a script.
+
+**The engine's debounce has its own guard**, `tests/jobs/engine-debounce.test.ts`,
+which drives the real dispatcher against a real Postgres and counts the runs a
+burst produces. Any job that grows a `debounce` belongs in it.
 
 ### The ENGINE's debounce — the same option, implemented by us (MOTIR-3483)
 
@@ -631,10 +592,10 @@ merged) — the opposite of Inngest's behaviour, and the safe direction: losing
 coalescing costs money, merging loses events.
 
 **The guard** is `tests/jobs/engine-debounce.test.ts`, against real Postgres —
-including the concurrent first arrival, which a serial test cannot see.
-`tests/jobs/debounce-burst.test.ts` (the Inngest-side guard above) is its sibling,
-not its replacement: the two lanes are measured separately because they are two
-implementations.
+including the concurrent first arrival, which a serial test cannot see. It used to
+have a sibling rather than a predecessor (`tests/jobs/debounce-burst.test.ts`,
+above), because two implementations had to be measured separately; there is one
+implementation now, and this is its guard.
 
 ## Wall clock — the step is the unit, and every I/O call needs a deadline
 
@@ -649,17 +610,16 @@ This rule read: _"The platform timeout applies to an INVOCATION, i.e. to a step 
 A handler that does everything in one `step.run` has opted out of checkpointing
 entirely: it must fit end-to-end in a single invocation, and if it doesn't, it is
 killed mid-flight on **every** attempt and burns its whole budget getting
-nowhere."_ **That was true, and it was true of VERCEL.** `app/api/inngest/route.ts`
-declares `maxDuration = 300`, which is a Next.js route-segment directive the
-DEPLOYMENT PLATFORM enforces; motir-core has run as a long-lived Fly process
-since MOTIR-2384 (`Dockerfile` ends `CMD ["node", "server.js"]`), and the
-Postgres job engine's worker is its own process group with a renewed lease. A
-long-running handler is not killed by anything of ours.
+nowhere."_ **That was true, and it was true of VERCEL.** The retired serve route
+declared `maxDuration = 300`, a Next.js route-segment directive the DEPLOYMENT
+PLATFORM enforced; motir-core has run as a long-lived Fly process since
+MOTIR-2384 (`Dockerfile` ends `CMD ["node", "server.js"]`), and the job engine's
+worker is its own process group with a renewed lease. A long-running handler is
+not killed by anything of ours.
 
 **What is true now, and it is a different sentence:**
 
-- **On the POSTGRES ENGINE**, a run may span half an hour and that is the
-  documented NORMAL case — `lib/jobs/engine/worker.ts` says so, renewing a 60 s
+- **A run may span half an hour and that is the documented NORMAL case** — `lib/jobs/engine/worker.ts` says so, renewing a 60 s
   lease every 20 s so a long run and a dead worker stay distinguishable. A step
   is what survives a WORKER RESTART: `step.run` memoizes a completed operation in
   `job_step`, and a reclaim re-invokes the handler from the top and replays it.
@@ -667,19 +627,20 @@ long-running handler is not killed by anything of ours.
   a second time, what would exist twice?"** —
   `docs/decisions/job-queue-foundation.md` §13 states the rule and tables the
   per-call-site disposition for both container supervisors.
-- **On the INNGEST lane**, the executor still re-invokes the handler at each step
-  boundary, so rule 4 below (code outside a step runs once per PASS) is unchanged
-  and still bites. What has gone is the CEILING, not the checkpointing.
+- **Rule 4 below (code outside a step runs once per PASS) is unchanged and still
+  bites**, because a reclaim replays the handler from the top. What has gone is
+  the CEILING, not the checkpointing.
 
-**2 · `/api/inngest` still declares `maxDuration = 300`, and nothing of ours
-enforces it.** Every job is invoked through that one route. The declaration is
-kept — it is the honest statement of what a SERVERLESS deployment of this app
-would get, and MOTIR-1974 declared it precisely so the number would be reviewed
-rather than inherited — but read it as a property of a platform we left, not as a
-budget any step must fit inside today. The one place it is still asserted against
-is `tests/ciFleet/fleetTimeBudgets.test.ts`, deliberately: rule 3's inequality
-needs SOME ceiling to be stated against, and re-choosing that number is its own
-work item rather than a side effect of this amendment.
+**2 · THERE IS NO CEILING ANY MORE — the declaration that stated one is deleted**
+(MOTIR-3418). `maxDuration = 300` lived on the serve route every job was invoked
+through, and MOTIR-1974 declared it explicitly so the number would be reviewed
+rather than inherited from a platform default. The route is gone with the vendor,
+and with it the only thing in this repository that named an invocation budget.
+`tests/ciFleet/fleetTimeBudgets.test.ts` used to assert the fleet's deadlines
+against it and now asserts them against each other — the ordering and the
+one-step-is-small property survive; the absolute number does not, and **do not
+re-introduce one**: a hardcoded `300` would assert the constants against a bound
+nothing enforces, which reads as a live constraint and is not.
 
 **3 · Every network call a job makes carries a deadline.** `fetch` has none of
 its own: an unresponsive dependency is waited on until the platform kills the
@@ -741,19 +702,18 @@ body that is not inside a `step.run` — once for every step boundary the run
 crosses. The count is therefore a property of the run's step TOPOLOGY, not of
 the handler: adding one bookkeeping step adds one execution of every un-stepped
 line, silently, in an unrelated card's diff. And the value the FUNCTION returns
-is the last pass's, so an un-stepped body that is not idempotent also makes
-Inngest's reported run output disagree with the `job_run` row (which memoized
-the first pass's).
+is the last pass's, so an un-stepped body that is not idempotent also makes the
+run's reported output disagree with the `job_run` row (which memoized the first
+pass's).
 
 Almost always the fix is to wrap the work in a step. **This paragraph used to
-continue: _"When the work is LONGER than `maxDuration` — rule 2's ceiling on one
+continue: *"When the work is LONGER than `maxDuration` — rule 2's ceiling on one
 step — the answer is still steps: split it into short ones and let the RUN span
-the time, waiting between them with `step.sleep`."_ On the Inngest lane that is
-still the shape. It is no longer an answer to a CEILING** (rule 1), and on the
-Postgres engine it is the wrong instrument: a `step.sleep` there is a
-`JobStepYield`, a re-enqueue, a re-claim and a replay of every earlier step, so a
-loop that polls _N_ times costs on the order of _N²_ memo lookups. **Split for
-DURABILITY, not for duration** — around the operations whose repetition would
+the time, waiting between them with `step.sleep`."* There is no ceiling to answer
+(rule 1), and on this engine `step.sleep` is the wrong instrument for it: a sleep
+is a `JobStepYield`, a re-enqueue, a re-claim and a replay of every earlier step,
+so a loop that polls *N* times costs on the order of *N²* memo lookups. **Split
+for DURABILITY, not for duration\*\* — around the operations whose repetition would
 leave something existing twice.
 
 `system.ci-runner-boot` is the worked example, and it is worth reading as a
@@ -818,15 +778,15 @@ dashboard — so when you are watching a long job, watch `job_run_dlq`, not
 
 ## Dead-letter queue
 
-When a job exhausts its retry budget, the wrapper writes a row to `job_run_dlq`
-**in the same transaction** that flips the `job_run` to `failed` — so a failed
+When a job exhausts its retry budget, `recordEngineTerminalFailure` writes a row
+to `job_run_dlq` **in the same transaction** that flips the `job_run` to `failed` — so a failed
 run and its replayable record always land together. The DLQ row captures
 everything needed to replay: the `function_id`, the original `event_name` +
 full `event_data` payload, the serialized `failure`, the `attempts` count, and
 `first_failed_at` / `last_failed_at`. This is the durable operator surface
-(the 1.6.5 dashboard's DLQ tab reads it); Inngest's own failure view stays
-available for deep tracing but is **not** the source of truth for operator
-action.
+(the 1.6.5 dashboard's DLQ tab reads it). It used to sit beside a vendor failure
+view that was available for deep tracing and was never the source of truth for
+operator action; there is one surface now, and it is this one.
 
 **Operator runbook.**
 
@@ -844,11 +804,14 @@ action.
 **Idempotency on replay (1.6.6).** A replay re-emits the original event but
 **re-shapes its idempotency key** to `{original}:replay:{dlqId}`. This is
 deliberate: an operator replays precisely when they've fixed a transient failure
-and want the job to run **now** — but the original key is, by definition, still
-inside Inngest's dedup window, so re-emitting it unchanged (the 1.6.4 behavior)
-was silently **dropped**, while the dashboard still toasted success and stamped
-`replayed_at`. Re-keying makes the replay a genuinely new event that actually
-runs, so the Replay button does what it says. The new key is derived from the
+and want the job to run **now** — but the original key is, by definition, already
+deduped, so re-emitting it unchanged (the 1.6.4 behaviour) was silently
+**dropped**, while the dashboard still toasted success and stamped `replayed_at`.
+Re-keying makes the replay a genuinely new run that actually executes, so the
+Replay button does what it says. (It was the vendor's expiring window that
+dropped it then; it is the `(job_id, idempotency_key)` index that would drop it
+now — the same silent no-op wearing different clothes, which is why the re-shape
+survived the migration.) The new key is derived from the
 **DLQ row id**, so a double-click of Replay on the same row still dedups to one
 re-run (no double-delivery), while a genuinely new failure replays
 independently. A job with **no** idempotency key was always replayed
@@ -856,10 +819,11 @@ unconditionally and is unaffected. See `PRODECT_FINDINGS.md` #40.
 
 ## Event-level idempotency on the Postgres engine (MOTIR-3459)
 
-`defineJob`'s `idempotency` option is an Inngest CEL template evaluated against
-the triggering event. **`email.send` is the only job in the tree that declares
-one**, as `'event.data.idempotencyKey'`. Inngest evaluates it server-side; the
-engine evaluates it itself, in `lib/jobs/engine/idempotency.ts`.
+`defineJob`'s `idempotency` option is an expression evaluated against the
+triggering event. **`email.send` is the only job in the tree that declares one**,
+as `'event.data.idempotencyKey'`. The engine evaluates it in
+`lib/jobs/engine/idempotency.ts`. (The syntax is the vendor's CEL subset, kept so
+that not one of the 24 definitions had to change when the engine took over.)
 
 **Which templates the resolver accepts.** Exactly one form: `event.data.<field>`,
 one level deep. **Anything else THROWS at registration** — as the definition
@@ -884,10 +848,10 @@ with a race in the middle, and the race here is two clicks on one button. This i
 the same pattern the dispatcher already applies to its `(event_id, job_id)`
 constraint.
 
-### ⚠️ Engine dedup is UNBOUNDED where Inngest's is WINDOWED — chosen, not inherited
+### ⚠️ Engine dedup is UNBOUNDED where the vendor's was WINDOWED — chosen, not inherited
 
 **This is a real difference in observable behaviour, and it was decided rather
-than absorbed.** Inngest dedupes same-key events inside a window; a unique
+than absorbed.** The vendor deduped same-key events inside a window; a unique
 constraint dedupes forever.
 
 Forever is the better behaviour for the keys actually in use — a password-reset
@@ -905,203 +869,48 @@ engine arm. The engine arm had nothing to be dropped by until dedup existed;
 replaying with the original key would now be swallowed as a duplicate and hand
 the operator a success toast for a run that never happened.
 
-## Cutting a job over to the Postgres engine — the operator's view
+## Cutting a job over — HISTORICAL (there is one lane)
 
-**`MOTIR_POSTGRES_JOB_IDS` is a comma-separated set of `defineJob` ids.** An id
-in the set runs on the Postgres engine; an id absent from it runs on Inngest.
-Absent is the default, which is a safety property: a job nobody has thought about
-cannot be silently migrated, because the only way onto the new engine is for
-someone to name it.
-
-- **It is read LIVE**, on every emit (`lib/jobs/engine/cutover.ts`), not captured
-  at module load. A change takes effect without a deploy.
-- **Rolling back is removing the id.** Same one-line change, same immediacy. That
-  reversibility is what the whole migration is built on.
-
-### ⚠️ "A change takes effect without a deploy" is true of the SWITCH and false of a NEW JOB
-
-The bullet above is about the ENV VAR, and it is exact: `routedToEngine` re-reads
-`process.env` on every call, so moving an id between lanes needs no deploy. It is
-also the sentence that makes the following trap invisible.
-
-**`fly secrets set` restarts the machines on the CURRENT RELEASE, not on `main`.**
-The scheduler and the dispatcher both iterate the ENGINE REGISTRY, and the
-registry is whatever the running IMAGE's `lib/jobs/definitions` evaluated to. So
-routing an id whose job is not in that image routes it **nowhere**: the scheduler
-never sees a definition to compute a fire for, `defineJob`'s Inngest guard never
-runs because Inngest has no such function registered either, and the job has no
-timer on either lane. Nothing errors. The secret reads back byte-for-byte correct
-from every machine, which is the reassuring measurement that does not answer the
-question.
-
-**Measured on 2026-08-27** (MOTIR-3682): `system.public-follow-digest-tick` and
-`public-follow/digest` were routed at 10:32Z and 10:44Z. Both were absent from the
-running image, because the last deploy was **v166 at 01:50Z** and the pull request
-that added them merged at 07:07Z — releases v167–v172 were all `secrets set`
-restarts on that same image. `plan-drift/transitioned`, routed in the same edit,
-WAS in the image and did start running. Same command, same secret, two different
-outcomes, and only one of them visible from the secret.
-
-**So confirm the job is in the RUNNING IMAGE before reading the ledger for it:**
-
-```bash
-# the deployed image, and whether it knows the job at all
-fly ssh console -a motir-core -C "sh -c \"grep -rlm1 '<the job id>' /app/worker; echo \$FLY_IMAGE_REF\""
-# a hit  → routing it takes effect on the next scheduler tick
-# nothing → it has not deployed yet; the ledger will stay empty and that is not a bug
-```
-
-An empty `job_run` for a freshly-routed id has two causes that look identical —
-_the job has not fired yet_ and _the job is not in the image_ — and the grep above
-is what separates them.
-
-### The CENSUS — and why the safety default is not enough on its own
-
-**The default protects a forgotten job from being MIGRATED. It does nothing to
-make a forgotten job VISIBLE**, and while this migration was in flight three jobs
-joined the codebase and were routed by nobody: `system.public-follow-digest-tick`
-and `public-follow/digest` (#2344), and `plan-drift/transitioned` (#2309). Every
-cutover card had scoped itself by counting the population — _"the 20
-event-triggered jobs"_, _"the 14 SCHEDULED jobs"_ — and every count was correct on
-the day it was taken. Nothing noticed the counts and the codebase coming apart;
-two of the three were found by hand while fixing the first.
-
-So **`lib/jobs/engine/census.ts`** holds a **census** — two checked-in lists,
-`MIGRATED_TO_ENGINE` and `DELIBERATELY_ON_INNGEST`, that between them name
-**every** registered job — and `tests/jobs/every-job-declares-its-lane.test.ts`
-(#2348) asserts it is TOTAL over the engine registry in both directions. A job
-cannot then join the codebase without someone stating its lane: the build fails,
-by name, on the pull request that adds it. `DELIBERATELY_ON_INNGEST` going EMPTY
-is the condition MOTIR-3418 (_"Retire Inngest"_) is premised on, and the honest
-way to check that premise.
-
-**As of MOTIR-3489 that list IS empty.** Its last three entries were the
-container supervisors — `system.code-graph-index`, `system.code-graph-refresh`,
-`system.ci-runner-boot` — and they moved to `MIGRATED_TO_ENGINE` with the card
-that also carried the operator half. Nothing is deliberately on the old lane any
-more, so MOTIR-3418's premise now holds and is asserted rather than assumed
-(`tests/jobs/lane-reconciliation.test.ts`). An entry coming BACK is still legal
-and still needs its reason; what the emptiness records is that on 2026-08-27 no
-job needed one.
-
-(The lists lived INSIDE that test file until MOTIR-3716. They moved into shipped
-code for one reason: a constant a test owns cannot be read by the running
-process, so nothing could ever compare it to the secret. See the next section.)
-
-**⚠️ THE CENSUS IS A DECLARATION; THE SECRET IS THE DEPLOYMENT.** No test can
-read production, and none should: CI would go red for an operator action taken
-minutes earlier and green when somebody changed production rather than the code.
-So changing a job's lane is TWO edits plus a read-back, and doing one without the
-other is a drift — **now reported, no longer silent; see _What reports the drift_
-below**:
-
-```bash
-# 1. the declaration — move the id between the two lists, and ship it.
-# 2. the deployment — set the secret:
-fly secrets set -a motir-core "MOTIR_POSTGRES_JOB_IDS=<the full list>"
-# 3. the read-back — from inside a machine, NOT from the console:
-fly ssh console -a motir-core -C "node -e \"console.log(process.env.MOTIR_POSTGRES_JOB_IDS)\""
-```
-
-**⚠️ Step 2 is READ-MODIFY-WRITE on a value two people can be editing.** The
-secret is one string, `fly secrets set` replaces it whole, and there is no
-compare-and-swap. Two sessions appending an id each will lose one of them — on
-2026-08-27 two runs raced on exactly this and the second append re-added an id the
-first had already written, leaving a duplicate. That one was harmless
-(`parseRoutedJobIds` builds a `Set`), and a LOST id would not have been. Read the
-value immediately before you write, write once, and read it back.
-
-### What reports the drift, and what an operator does when it fires (MOTIR-3716)
-
-For a long stretch the paragraph above ended at _"keep them equal by hand"_,
-which is a way of saying nothing kept them equal. **Four jobs drifted in ~34
-hours** — `system.public-follow-digest-tick` (MOTIR-3682),
-`plan-drift/transitioned` + `public-follow/digest` (MOTIR-3688) and
-`system.job-run-reap` (MOTIR-3709) — each found by a person running `comm` by
-hand against a value read from inside a machine, at roughly half an hour a time.
-MOTIR-3709 is the one that proves the census alone cannot close this: its author
-DID declare the lane in the pull request that added the job, because the build
-made them, and the job was still on the wrong lane the next morning.
-
-**`reconcileLanes()` (`lib/jobs/engine/census.ts`) now computes the two-way
-difference** between the declared engine set and `routedJobIds()`, and reports
-both directions separately:
-
-| direction                | what it means                                                                                                                                                                                                                                                       |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **declared, not routed** | the job runs on **Inngest** while a reviewed file says it runs on the engine. The silent one: the scheduler gives it no timer, `defineJob`'s Inngest guard does NOT skip it, so it runs daily and apparently fine. All four measured instances were this direction. |
-| **routed, not declared** | **production is ahead of review** — a typo in the secret, an id whose job was renamed or deleted, or a lane change nobody shipped. Reported separately because a one-way check reproduces this very defect, mirrored.                                               |
-
-**It is read in two places, and only one of them is loud:**
-
-- **The WORKER, once at start-up** (`scripts/worker.ts` →
-  `logLaneReconciliation()`). WARNs and continues. It **cannot** fail start-up,
-  and that is deliberate: the deploy window in which the code is ahead of the
-  secret is REQUIRED (the image trap above — deploy first, route second), and a
-  boot gate would turn every routine release into an outage. The worker is the
-  process that would silently stop running a drifted job, so it is the cheapest
-  place to say so.
-- **`system.daily-health-check`, daily at 09:00.** A non-empty difference throws
-  `JobLaneDriftError`, which **dead-letters the run** — so the drift appears as a
-  row on `/settings/workspace/jobs` → DLQ, whose detail panel renders the
-  message. A difference that has survived until the next morning is not a deploy
-  window. The verdict is recorded on the `job_run` result on a GREEN tick too, so
-  `in_sync` reads as an assertion rather than as the absence of noise.
-
-**Two quiet verdicts, kept apart on purpose.** `not_applicable` means the
-test-only file override (`MOTIR_POSTGRES_JOB_IDS_FILE`) is armed, so there is no
-deployment to compare against — the whole E2E lane. `not_cut_over` means the
-secret names nothing at all: every job on Inngest, the switch's safety default,
-and a legitimate steady state for an install that never started the migration.
-It is quiet — dead-lettering daily over a migration somebody chose not to run
-would teach an operator the row is noise — but it is its own NAMED verdict,
-because an unconfigured deployment reading as "nothing to check" is the exact
-shape this reconciliation exists to end.
-
-**⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES.** The message names every id and which
-direction it is in. Then, in order:
-
-1. **Confirm the job is in the RUNNING IMAGE** — the `fly ssh console` grep two
-   sections up. A freshly-merged job that has not deployed yet is
-   declared-but-not-routed and routing it would route it NOWHERE; wait for the
-   deploy.
-2. **Declared-but-not-routed, and deployed** → add the id to the secret, with the
-   read-modify-write discipline stated above (read the value immediately before
-   you write, write once, read it back).
-3. **Routed-but-not-declared** → decide which side is right. Ship the declaration
-   if the routing was intended; remove the id from the secret if it was a typo or
-   names a job that no longer exists.
-4. **Re-read the secret from inside a machine** and confirm the next daily tick
-   goes green — or trigger the health check and read its result.
-
-**How to confirm a job actually moved.** Two tables, both for that job id:
-
-- `job_queue` — a row per enqueued run (`job_id`, `event_id`, `state`).
-- `job_run` — the ledger row the operator dashboard renders (`function_id`,
-  `started_at`, `status`).
-
-A `job_queue` row with no `job_run` row means it was enqueued and not yet
-claimed; neither means the event never reached the engine at all.
-
-**⚠️ What the INNGEST dashboard shows for a migrated job, and why it is not a
-failure.** The Inngest function stays registered — the serve route mounts every
-job, and an event with a SPLIT subscriber set still reaches Inngest for the
-subscribers that have not moved. So Inngest keeps delivering to the migrated job,
-and `defineJob`'s guard returns immediately:
-
-```json
-{ "skipped": "routed-to-postgres-engine", "jobId": "email.send" }
-```
-
-**That is the system working correctly.** It returns a marker rather than
-`undefined` for exactly this reason: a silent no-op on that dashboard is
-indistinguishable from a job that broke, and the obvious response to "it looks
-like it did not run" is to roll back something that was fine.
+> ⚠️ **THIS SECTION DESCRIBED A MIGRATION THAT IS FINISHED** (MOTIR-3418 removed
+> the mechanism). It is summarised rather than deleted because the FAILURE MODES it
+> documented were paid for four times and generalise past the switch that produced
+> them.
+>
+> **What it was.** `MOTIR_POSTGRES_JOB_IDS`, a comma-separated set of `defineJob`
+> ids on the `motir-core` Fly app. An id in the set ran on the Postgres engine; an
+> id absent from it ran on the vendor, and ABSENT was the default — a safety
+> property, because the only way onto the new engine was for someone to name a
+> job. `lib/jobs/engine/cutover.ts` read it live on every routing decision, so a
+> job moved, and moved back, without a deploy.
+>
+> **The three things it cost, each worth carrying forward:**
+>
+> 1. **A DECLARATION IS HALF A CHANGE.** The census (`lib/jobs/engine/census.ts`)
+>    listed each job's intended lane in reviewed code; the SECRET decided the
+>    actual one. Four jobs drifted in ~34 hours (MOTIR-3682, MOTIR-3688,
+>    MOTIR-3709) — each declared correctly and never deployed, each running on the
+>    wrong engine while every code-side signal read green. The fix was
+>    `reconcileLanes()`, a start-up warning plus a daily dead-letter (MOTIR-3716).
+>    **The general form: when a property is split across a pull request and an
+>    operator action, something in the running process has to compare the two.**
+> 2. **ROUTING AN ID THE IMAGE DOES NOT HAVE ROUTES IT NOWHERE.** `fly secrets
+set` restarts the machines on the CURRENT release, not on `main`, so
+>    deploy-then-route was the only correct order and the window where code led
+>    the secret was REQUIRED rather than tolerated. **The general form: a
+>    configuration read at boot is about the image that is running.**
+> 3. **A NEW JOB WAS NEVER COVERED BY EITHER.** A job added after the last wave
+>    was absent from the secret by construction, so it silently stayed on the old
+>    lane. That is the class the three bugs above all belong to, and it is exactly
+>    the class a per-job switch creates.
+>
+> **None of it applies now.** A job runs on the engine because there is nowhere
+> else; adding one to `lib/jobs/registry.ts` and deploying is the whole operation.
 
 ## Operator dashboard
 
 `/settings/workspace/jobs` (Subtask 1.6.5) is the in-app surface for the ledger
-above — no one needs Inngest's own dashboard for day-to-day operation. It's a
+above, and since MOTIR-3418 it is the ONLY one — there is no vendor dashboard to
+fall back to. It's a
 workspace-settings sub-page (a "Job runs" link under the sidebar's Settings
 group) backed by `lib/services/jobsDashboardService.ts`.
 
@@ -1142,14 +951,12 @@ export const dailyHealthCheck = defineJob(
 ```
 
 **There IS a scheduler now, and it is not a service.** This line used to read
-_"Inngest's cron trigger means there's no separate scheduler service to run"_, and
-the constraint it described has gone rather than the sentence having been wrong:
-on the Postgres engine a **tick inside the existing worker process**
+_"the hosted cron trigger means there's no separate scheduler service to run"_,
+and the constraint it described has gone rather than the sentence having been
+wrong: a **tick inside the existing worker process**
 (`lib/jobs/engine/scheduler.ts`) turns a cron expression into a `job_queue` row.
 It adds no machine, no process and no environment variable — which is why the
-correction is worth stating rather than deleting. A job still on Inngest is still
-scheduled by Inngest, exactly as before; which engine fires a given job is the
-per-job cutover switch's answer (`MOTIR_POSTGRES_JOB_IDS`), not this document's.
+correction is worth stating rather than deleting.
 
 ### Where the scheduler runs, and the guard that makes that safe
 
@@ -1225,95 +1032,67 @@ its `{ scanned, deleted, failed }` summary persisted as the run's `output`.
 
 Cron jobs live in the `system.*` namespace (untenanted — `workspace_id` is null)
 and are **not** emitted via `sendEvent`. The cron syntax is standard 5-field
-(`min hour day month weekday`); see the
-[Inngest cron docs](https://www.inngest.com/docs/features/inngest-functions/cron).
+(`min hour day month weekday`), parsed by `lib/jobs/cron.ts` and evaluated in
+**UTC** — `previousFireAtOrBefore` is the one function that turns an expression
+into an instant, and every fire the scheduler owes is computed from the clock
+against it rather than from "one interval since the last tick".
 
-## Cloud wiring (human-gated)
+## The schedule-health probe — the failure mode to know about (MOTIR-1970)
 
-Going live in production requires steps a coding agent can't do (dashboard
-access, secrets, an Inngest account). Tracked in PRODECT_FINDINGS #30 and as a
-dedicated manual Subtask:
+`system.daily-health-check` runs the **schedule-health probe**
+(`lib/services/jobScheduleHealthService.ts`). It walks every registered cron job
+and fails the run when one has missed more than one consecutive tick,
+dead-lettering with the offenders named in the message — which lands on
+`/settings/workspace/jobs` → DLQ, the surface a person actually opens. Cron jobs
+are the tripwire because they are the only ones whose silence is unambiguous: an
+event-triggered job that never ran may simply never have been triggered.
 
-1. Take `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` from the Inngest
-   dashboard and set them as Fly secrets on the app:
-   `fly secrets set INNGEST_SIGNING_KEY=… INNGEST_EVENT_KEY=… -a motir-core`.
-   Setting a secret triggers a release, so the app restarts holding them.
-2. Confirm both are present — `fly secrets list -a motir-core` shows names and
-   digests, never values.
-3. Register the functions and then **watch a real run**: the deploy does this
-   itself (step 1 of "Registration" below), and
-   `gh workflow run inngest-sync.yml` is the manual lane. A green sync only
-   proves the registration was accepted; only a `job_run` row proves invocation.
+**What an overdue verdict means now: a dead worker or a stalled scheduler.**
+Check `fly status -a motir-core` for the `worker` process group, then the worker
+log's `[job-scheduler]` lines. A cron expression edited to one that never fires
+looks identical from here, so check the definition too.
 
-⚠️ **Do NOT install the official Inngest↔Vercel integration.** It was installed
-by MOTIR-66 and **removed by MOTIR-2503** when the app moved to Fly, and it must
-not come back: it holds `read-write:deployment` on the Vercel account and
-rewrites the Inngest app's registered URL to whatever Vercel deployment it last
-probed. That is the direct cause of the month-long silent outage described
-below. Registration belongs to `.github/actions/inngest-sync` and to the custom
-domain, which is the only URL Inngest can actually reach.
+`system.daily-health-check` declares `catchUp: 'latest'` for a reason that feeds
+back into its own probe: under `skip`, a routine worker restart spanning 09:00
+would leave it two ticks stale and its first act the next day would be to report
+ITSELF overdue — a fault manufactured by the schedule rather than observed.
 
-## Registration — the failure mode to know about (MOTIR-1970)
+### ⚠️ HISTORICAL — the fault this probe was BUILT for, and why it cannot recur
 
-**Inngest only invokes functions it has been TOLD about.** The registration is a
-`PUT` to `/api/inngest`; adding a job to `lib/jobs/registry.ts` and deploying is
-not enough on its own. When the cloud's registered function list falls behind the
-deployed build, every function added since is **dead, silently**: the event is
-accepted, `inngest.send()` succeeds, **no run is created**, no `job_run` row is
-written, and nothing errors anywhere. A dead job is indistinguishable from a job
-nobody triggered.
+The probe was written for a **stale app registry**, and that failure mode went
+with the vendor (MOTIR-3418). It is recorded here because it cost a month and
+because the shape recurs whenever a second system holds a copy of what this one
+knows.
+
+**The vendor only invoked functions it had been TOLD about.** Registration was a
+`PUT` to `/api/inngest`; adding a job to `lib/jobs/registry.ts` and deploying was
+not enough on its own. When the cloud's registered function list fell behind the
+deployed build, every function added since was **dead, silently**: the event was
+accepted, the send succeeded, no run was created, no `job_run` row was written,
+and nothing errored anywhere. A dead job was indistinguishable from a job nobody
+triggered.
 
 That happened. Production ran from 2026-07-02 to 2026-08-01 with five jobs
 consuming nothing — `system.code-graph-index`, `system.code-graph-refresh`,
 `system.auto-plan-cadence-tick`, `system.ci-minutes-reconcile`,
-`system.ci-actions-gate-sweep`. **Root cause:** the Inngest↔Vercel integration
+`system.ci-actions-gate-sweep`. **Root cause:** the vendor's Vercel integration
 probed the per-deployment `motir-core-<hash>.vercel.app` URL, and the Vercel
 project ran Deployment Protection at `all_except_custom_domains`, so that URL
 answered with a 302 into Vercel's SSO login. The probe never reached the app.
-Only the custom domain `app.motir.co` was exempt. (This was MOTIR-66 recurring —
-that card fixed the PREVIEW probe with a protection-bypass secret; production
-deployment URLs were never covered.)
+Only the custom domain `app.motir.co` was exempt. (MOTIR-66 recurring — that card
+fixed the PREVIEW probe with a protection-bypass secret; production deployment
+URLs were never covered.) Two mechanisms then closed it: a deploy-time sync step
+that failed the job on a non-200, and this probe.
 
-That integration is **gone** — uninstalled by MOTIR-2503 after the move to Fly,
-which is why the section above tells you not to reinstall it. The two mechanisms
-below are what replaced it, and they are what this repository relies on now.
+**It cannot recur, and the reason is structural rather than careful.** There is no
+second registry: `scripts/worker.ts` imports `lib/jobs/registry.ts` out of the
+image it is running, so a job is registered by being deployed and cannot be
+registered any other way. The deploy-time sync step, the manual
+`inngest-sync.yml` workflow and the composite action it called are all deleted.
 
-Two mechanisms now close it, and they are deliberately independent:
-
-1. **Deploy-time sync** — `ci.yml`'s `deploy` job PUTs
-   `https://app.motir.co/api/inngest` as a step after the Fly release is live,
-   and **fails the job** if the PUT does not return 200. Motir issues its own
-   sync, against the domain protection does not cover, and a failure is a red
-   check rather than silence. (`.github/workflows/inngest-sync.yml` is the same
-   sync on a manual trigger, for the deploys CI does not make; both call
-   `.github/actions/inngest-sync`. It fired on Vercel's `deployment_status`
-   until MOTIR-2390 — an event Fly does not raise.)
-2. **Runtime detection** — `system.daily-health-check` now runs the
-   **schedule-health probe** (`lib/services/jobScheduleHealthService.ts`). It
-   walks every registered cron job and fails the run when one has missed more
-   than one consecutive tick, dead-lettering with the offenders named in the
-   message. Cron jobs are the tripwire because they are the only ones whose
-   silence is unambiguous — an event-triggered job that never ran may simply
-   never have been triggered.
-
-   ⚠️ **AND THE SAME SILENCE MEANS SOMETHING DIFFERENT FOR A MIGRATED JOB.** The
-   probe is UNCHANGED and everything above stays true for every job still on
-   Inngest. For a job routed to the Postgres engine there is no app registry to go
-   stale, so an overdue verdict means **a dead worker or a stalled scheduler**
-   instead. Same probe, same one-tick tolerance, different diagnosis — check the
-   `worker` process before the Inngest sync. (This is also why
-   `system.daily-health-check` declares `catchUp: 'latest'`: under `skip`, a
-   routine worker restart spanning 09:00 would leave the probe two ticks stale
-   and its first act the next day would be to report ITSELF overdue — a fault
-   manufactured by the schedule rather than observed.)
-
-The probe lives in `system.daily-health-check` **specifically because that job is
-old** (2026-06-01) and is therefore registered in any stale sync the cloud could
-still be holding: an OLD job checking on NEW ones. A checker defined alongside
-the jobs it watches would be stranded by the very fault it exists to report — so
-do not move it to a newer job, and do not re-declare that job under a new id.
-
-**To re-sync by hand:** `curl -X PUT https://app.motir.co/api/inngest`. A 200 with
-`{"modified": true}` means the registry actually changed. Re-syncing after a long
-gap activates every dormant job at once, including crons with real side effects —
-check what has been dormant before firing it.
+**The probe stays where it is.** It lives in `system.daily-health-check`
+specifically because that job is OLD (2026-06-01) — under the old fault, an old
+job checking on new ones was the only checker a stale sync could not strand. That
+particular argument has expired with the fault, but the placement is still right
+for a plainer reason: this job already has a loud, human-visible failure surface,
+and a new checker would need one built for it.

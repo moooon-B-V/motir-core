@@ -2,7 +2,6 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { previousFireAtOrBefore } from '../cron';
 import { engineScheduledJobs, type EngineJobDefinition } from './registry';
-import { routedToEngine } from './cutover';
 import { notifyQueuedJob } from './notify';
 
 // THE SCHEDULER (Story MOTIR-3416 · Subtask MOTIR-3471) — the half of the engine
@@ -180,10 +179,6 @@ export class JobScheduler {
 
     const now = this.now();
     for (const def of this.scheduledJobs()) {
-      // Read LIVE per job, exactly as the dispatcher does: the switch's default
-      // is Inngest, and a job nobody has routed must not be scheduled here even
-      // though it is in the registry.
-      if (!routedToEngine(def.id)) continue;
       try {
         await this.scheduleOne(def, now, result);
       } catch (err) {

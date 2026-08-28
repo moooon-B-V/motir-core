@@ -40,7 +40,6 @@ import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
-import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
 import { startSignedOut } from './_helpers/shell-session';
 
 // ⚠️ EVERY DIRECT-DB CALL HERE IS `adminDb`, THE OWNER CLIENT — not the runtime
@@ -67,7 +66,6 @@ test.beforeEach(async () => {
   );
   await clearEmailFault();
   // Route the pilot onto the new engine for THIS spec only.
-  await routeJobsToEngine(PILOT_JOB);
 });
 
 test.afterEach(async () => {
@@ -75,7 +73,6 @@ test.afterEach(async () => {
   // routing set hands the next spec a server behaving differently from the one
   // it was written against — and `jobs-flow.spec.ts` asserts the opposite lane.
   await clearEmailFault();
-  await clearJobRouting();
 });
 
 test.afterAll(async () => {
@@ -337,48 +334,18 @@ test('the runs table renders its EMPTY-FOR-THIS-FILTER state', async ({ page }) 
   await expect(page.getByText('No job runs yet')).toBeVisible();
 });
 
-test('a job NOT routed to the engine still runs on Inngest — the 23 this story does not move', async ({
-  page,
-}) => {
-  // Through the OLD engine, so it inherits the Inngest dev server's pace.
-  test.setTimeout(150_000);
-  // The negative direction, driven through the real product rather than asserted
-  // in a unit test: with the routing cleared, the same invite must produce NO
-  // engine rows at all. This is the guard protecting every job the story leaves
-  // alone, and it is the reason the switch defaults to Inngest.
-  await clearJobRouting();
-
-  const owner = 'pge-inngest-owner@example.com';
-  const invitee = 'pge-inngest-invitee@example.com';
-  await signUp(page, owner);
-  const workspaceId = await workspaceIdFor(owner);
-
-  await sendInvite(page, invitee);
-
-  // It ran — the ledger has its row…
-  //
-  // ⚠️ THE LEDGER IS ASSERTED FIRST, AND WITH A GENEROUS BUDGET, because this is
-  // the one scenario that goes through INNGEST. Its dev server has to receive the
-  // event, match the function and invoke it over HTTP, which on a cold lane takes
-  // appreciably longer than this engine's claim loop — the routed scenarios above
-  // settle in seconds. Waiting on the email first (a 10s default) timed out here
-  // while the run was still perfectly healthy, which reads as a product failure
-  // and is a budget mistake.
-  await expect
-    .poll(
-      async () =>
-        adminDb.jobRun.count({
-          where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' },
-        }),
-      { timeout: 90_000, intervals: [1_000] },
-    )
-    .toBe(1);
-
-  // …and the email actually landed, which by now is already true.
-  const email = await waitForEmail(invitee, { timeoutMs: 30_000 });
-  expect(email.subject).toContain('invited to join');
-
-  // …and it did NOT touch the new engine. No event row, no queue row.
-  expect(await adminDb.jobEvent.count()).toBe(0);
-  expect(await adminDb.jobQueueRun.count()).toBe(0);
-});
+// ⚠️ A SCENARIO STOOD HERE AND ITS SUBJECT IS GONE (MOTIR-3418).
+//
+// "a job NOT routed to the engine still runs on Inngest — the 23 this story does
+// not move": it cleared the routing, sent the same invite, and asserted the
+// email arrived, the ledger carried a `succeeded` row, and the engine's own
+// tables were EMPTY — no `job_event`, no `job_queue`. It was the negative
+// direction of the cutover switch driven through the real product, and it needed
+// a 150 s budget because the vendor's dev server had to receive the event, match
+// the function and invoke it over HTTP.
+//
+// There is no second lane for a job to run on instead, so the assertion cannot be
+// written. What it protected — that a job's runs reach the ledger and the operator
+// surface, and that the email actually lands — is the POSITIVE scenario above,
+// which drives the same invite through the same seam and now covers every job
+// rather than the one that had been routed.

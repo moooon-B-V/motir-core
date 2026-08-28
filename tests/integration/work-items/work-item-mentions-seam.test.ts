@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { usersService } from '@/lib/services/usersService';
@@ -12,6 +11,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, createTestProject } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { spyOnJobDispatch } from '../../helpers/jobs';
 
 // Story 5.8 · Subtask 5.8.7 — the work-item-mention → relates_to → render
 // INTEGRATION SEAM (real Postgres). The integration-seam rule: drive the REAL
@@ -35,7 +35,7 @@ import { truncateAuthTables } from '../../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

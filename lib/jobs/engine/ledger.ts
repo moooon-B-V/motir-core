@@ -4,7 +4,6 @@ import { alertTerminalJobFailure } from '@/lib/monitoring/jobFailureAlert';
 import { engineJob } from './registry';
 import { buildEngineContext, UnknownEngineJobError } from './runner';
 import { jobServices } from '../services';
-import type { JobContext } from '../defineJob';
 
 // LEDGER + DLQ PARITY (Story MOTIR-3414 · Subtask MOTIR-3424) — the engine
 // writes the same `job_run` and `job_run_dlq` rows the Inngest wrapper writes,
@@ -118,16 +117,17 @@ export async function executeWithLedger(run: JobQueueRun, eventData: unknown): P
       functionId: identity.functionId,
       eventName: identity.eventName,
       eventId: identity.eventId,
-      // The lane, DECLARED (MOTIR-3683) — this file is the engine's half of the
-      // ledger, so the answer is a fact rather than something to infer from the
-      // shape of the id above.
+      // The lane, DECLARED (MOTIR-3683). It reads `engine` unconditionally now
+      // that there is one — the column and its `inngest` member survive because
+      // rows written before MOTIR-3418 legitimately carry it, and a historical
+      // fact is not a fact to rewrite.
       lane: 'engine',
       attempt: ctx.attempt,
       idempotencyKey: (eventData as { idempotencyKey?: string } | null)?.idempotencyKey ?? null,
     }),
   );
 
-  const result = await def.handler(ctx as unknown as JobContext, jobServices);
+  const result = await def.handler(ctx, jobServices);
 
   // `recordStart` returns null when the run's tenant vanished before the row
   // could be written (MOTIR-1545) — there is no row to flip, so skip the success
@@ -144,8 +144,7 @@ export async function executeWithLedger(run: JobQueueRun, eventData: unknown): P
  * THE AFTER-ALL-RETRIES-EXHAUSTED HOOK — the engine's `onFailure`.
  *
  * Writes the `failed` ledger row AND the dead-letter row, in one transaction,
- * by calling the same `jobRunsService.recordTerminalFailure` the Inngest wrapper
- * calls. Invoked by the worker's settle path when `attempts >= maxAttempts`, and
+ * by calling `jobRunsService.recordTerminalFailure`. Invoked by the worker's settle path when `attempts >= maxAttempts`, and
  * from nowhere else — see the header for why it is not a `catch`.
  */
 export async function recordEngineTerminalFailure(
@@ -179,12 +178,12 @@ export async function recordEngineTerminalFailure(
     // The DLQ row stores the ORIGINAL event payload so a replay can re-emit it.
     eventData: (eventData ?? {}) as Prisma.InputJsonValue,
     // Total attempts including the first — `job_queue.attempts` already counts
-    // that way, unlike Inngest's `retries`, which counts the additional ones.
+    // that way, unlike a `retries` option, which counts the additional ones.
     attempts: run.attempts,
   });
 }
 
-/** Serialize an unknown thrown value into the ledger's failure shape. Mirrors `defineJob`'s own. */
+/** Serialize an unknown thrown value into the ledger's failure shape. */
 function serializeFailure(err: unknown): { message: string; stack?: string; code?: string } {
   if (err instanceof Error) {
     const failure: { message: string; stack?: string; code?: string } = { message: err.message };

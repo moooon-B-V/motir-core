@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -11,6 +10,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Story-level ARCHITECTURE / CONTRACT guards for the repository set (Story
@@ -111,7 +111,7 @@ describe('the index chain got no new code', () => {
     // A repo-set-specific field bolted onto the job — or a key renamed on one
     // side — fails here, which no per-subtask suite can see because each knows
     // only its own producer.
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
 
     await enqueueReposMissingFirstIndex({
       installationId: '556677',
@@ -129,7 +129,7 @@ describe('the index chain got no new code', () => {
     });
 
     expect(send).toHaveBeenCalledTimes(1);
-    const shipped = send.mock.calls[0]![0] as { name: string; data: Record<string, unknown> };
+    const shipped = dispatchedEvents(send)[0]! as { name: string; data: Record<string, unknown> };
     expect(shipped.name).toBe('system.code-graph-index');
     // The exact contract the establish run must also satisfy — asserted in the
     // story-gate suite, which drives a real establish and reads these same keys.

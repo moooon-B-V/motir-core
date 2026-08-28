@@ -7,22 +7,24 @@ import { createStepApi } from './step';
 // The RUNNER (Story MOTIR-3414 · Subtask MOTIR-3421) — the bridge from a
 // `job_queue` row to the handler a `defineJob` call declared.
 //
-// It is small, and the only interesting thing in it is the SHAPE OF THE CONTEXT
-// it synthesizes.
-//
-// ===========================================================================
-// Why there is exactly one cast in this file
-// ===========================================================================
-// `JobContext` is INFERRED FROM THE INNGEST SDK:
+// It is small, and the only interesting thing in it used to be A CAST.
+// `JobContext` was INFERRED FROM THE INNGEST SDK:
 //
 //   type JobContext = Parameters<Parameters<typeof inngest.createFunction>[1]>[0]
 //
-// (`lib/jobs/defineJob.ts`). It is a large structural type carrying fields no
-// engine could supply without depending on Inngest's internals — which is
-// precisely the coupling this epic exists to remove.
+// — a large structural type carrying fields no engine could supply without
+// depending on the vendor's internals, which is precisely the coupling the epic
+// existed to remove. So this file built the four members handlers actually read
+// and cast once, here, at the boundary.
 //
-// Measured on `origin/main@165f1485`, handlers in this tree touch FOUR of its
-// members and no others:
+// ⚠️ THE CAST IS GONE WITH THE SDK (Story MOTIR-3418), and its absence is the
+// point rather than a tidy-up. `JobContext` is now DECLARED in
+// `lib/jobs/defineJob.ts` as the shape this function builds, so the type a
+// handler is written against and the object it receives are one declaration.
+// There is nothing left to claim and nothing left to be wrong about.
+//
+// The four members are still measured rather than assumed — on
+// `origin/main@165f1485`, handlers in this tree touched exactly these:
 //
 //   $ grep -rho 'ctx\.[a-zA-Z]*' lib/jobs/ --include='*.ts' | sort | uniq -c
 //        63 ctx.step
@@ -30,26 +32,16 @@ import { createStepApi } from './step';
 //        11 ctx.runId
 //         3 ctx.attempt
 //
-// So the engine builds those four and casts ONCE, here, at the boundary. The
-// alternative — widening `JobContext` to a union of Inngest's type and ours —
-// was rejected because it would change the type every handler is written
-// against, and the whole point of MOTIR-3422's shim is that the 58 `step.run`
-// call sites do not learn the engine changed.
-//
-// ⚠️ THE CAST IS A CLAIM, AND THE CLAIM IS TESTED. `tests/jobs/engine-runner.test.ts`
-// asserts the four-member surface against the tree, so a handler that starts
-// using a FIFTH member of `ctx` fails a test here rather than throwing
-// `undefined is not a function` inside a background job in production — which is
-// the failure mode a cast normally buys you and the reason this one is confined
-// to a single line with a guard behind it.
+// `tests/jobs/engine-runner.test.ts` asserts that surface against the tree, so a
+// handler that starts reading a FIFTH member fails a test rather than throwing
+// `undefined is not a function` inside a background job in production.
 
-/** The context members the engine supplies. Everything a handler in this tree actually reads. */
-export interface EngineJobContext {
-  event: { name: string; data: unknown; id?: string };
-  step: ReturnType<typeof createStepApi>;
-  runId: string;
-  attempt: number;
-}
+/**
+ * The context members the engine supplies. Everything a handler in this tree
+ * actually reads — and, since MOTIR-3418, the only definition of it: this is an
+ * ALIAS of `JobContext` rather than a parallel shape a cast bridges.
+ */
+export type EngineJobContext = JobContext;
 
 /** Thrown when a claimed run names a job id nothing has registered. */
 export class UnknownEngineJobError extends Error {
@@ -102,5 +94,5 @@ export async function runQueuedJob(run: JobQueueRun, eventData: unknown): Promis
   const def = engineJob(run.jobId);
   if (!def) throw new UnknownEngineJobError(run.jobId);
   const ctx = buildEngineContext(run, eventData);
-  return def.handler(ctx as unknown as JobContext, jobServices);
+  return def.handler(ctx, jobServices);
 }
