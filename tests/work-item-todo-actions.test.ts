@@ -364,6 +364,31 @@ describe('error translation', () => {
     expect((await addTodoAction({ workItemId: cardId, text: 'mine' })).ok).toBe(true);
   });
 
+  it('EVERY action rethrows an unrecognised error — not just the add path', async () => {
+    const { cardId } = await scenario();
+    const seeded = await addTodoAction({ workItemId: cardId, text: 'A step' });
+    if (!seeded.ok) throw new Error('setup failed');
+
+    // One arm per action. A bug that returns `{ ok: false, error: 'Something
+    // went wrong' }` is a bug nobody ever reports, so the rethrow is the
+    // behaviour — and it has to hold on all five, not only the one that was
+    // easiest to test.
+    const boom = new Error('a bug nobody has a message for');
+    const cases: [keyof typeof workItemTodosService, () => Promise<unknown>][] = [
+      ['updateTodo', () => updateTodoAction({ todoId: seeded.todo.id, text: 'x' })],
+      ['moveTodo', () => moveTodoAction({ todoId: seeded.todo.id, toIndex: 0 })],
+      ['setTodoDone', () => setTodoDoneAction({ todoId: seeded.todo.id, done: true })],
+      ['deleteTodo', () => deleteTodoAction({ todoId: seeded.todo.id })],
+    ];
+    for (const [method, call] of cases) {
+      const spy = vi
+        .spyOn(workItemTodosService, method as 'updateTodo')
+        .mockRejectedValueOnce(boom);
+      await expect(call(), `${method} must rethrow`).rejects.toThrow(boom);
+      spy.mockRestore();
+    }
+  });
+
   it('an UNRECOGNISED error is RETHROWN, not flattened into a generic message', async () => {
     const { cardId } = await scenario();
     const boom = new Error('a bug nobody has a message for');

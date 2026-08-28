@@ -1,4 +1,8 @@
-import { Prisma, type WorkItem, type WorkItemTodo } from '@/generated/prisma/client';
+// TYPE-only: every use below is `Prisma.TransactionClient` or an input type,
+// so the service names the client's TYPES and imports none of its VALUES —
+// which is what makes the 4-layer boundary true rather than nominal, and is
+// what `work-item-todos-gate.test.ts`'s import guard asserts.
+import type { Prisma, WorkItem, WorkItemTodo } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';

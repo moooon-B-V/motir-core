@@ -384,6 +384,24 @@ export default defineConfig({
         //
         // The COMPONENT is the piece worth gating: MOTIR-3647 mounts this same
         // file at the workspace tier, so a regression here breaks two surfaces.
+        // Story MOTIR-3808 · Subtask MOTIR-3816 — the to-do list's whole
+        // surface, measured before being pinned below.
+        //
+        // ⚠️ THE TWO `app/` ENTRIES ARE `app/**`, NOT THEIR LITERAL PATHS. They
+        // live under `app/(authed)/items/[key]/`, and `(` is GROUPING SYNTAX to
+        // picomatch — the literal path matches no file, the entry gates nothing,
+        // and the threshold beside it passes vacuously (MOTIR-2449, the note at
+        // the head of this block). Measured through the `app/**` form:
+        // TodoListSection 99.35 / 90.58 / 100 / 100, and the service+repository+
+        // mapper+DTO group 98.58 / 94.59 / 100 / 98.40.
+        'lib/repositories/workItemTodoRepository.ts',
+        'lib/services/workItemTodosService.ts',
+        'lib/dto/workItemTodos.ts',
+        'lib/mappers/workItemTodoMappers.ts',
+        'lib/workItemTodos/limits.ts',
+        'lib/workItemTodos/errors.ts',
+        'app/**/items/[key]/todoActions.ts',
+        'app/**/items/[key]/_components/TodoListSection.tsx',
         'app/**/_components/RequireTwoFactorCard.tsx',
         'app/**/organization/security/actions.ts',
         // Story MOTIR-1215 · Subtask MOTIR-3647 — the workspace tier's action and
@@ -1675,6 +1693,56 @@ export default defineConfig({
         },
         // Story MOTIR-1215 · Subtask MOTIR-3646 — both measured at 100 on all
         // four axes on this branch before pinning.
+        // Story MOTIR-3808 · MOTIR-3816 — pinned at the project floor after
+        // measuring each on this branch (see the `include` note above).
+        'lib/repositories/workItemTodoRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/workItemTodosService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/dto/workItemTodos.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/workItemTodoMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItemTodos/limits.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItemTodos/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/items/[key]/todoActions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/items/[key]/_components/TodoListSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'app/**/_components/RequireTwoFactorCard.tsx': {
           lines: 90,
           functions: 90,
