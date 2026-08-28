@@ -127,18 +127,17 @@ one of those.
 | `id`                      | `String @id @default(cuid())` | the row                                                                                     |
 | `workspaceId`             | `String`                      | **on the row**, because RLS does not traverse foreign keys (`work_item_delivery` precedent) |
 | `workItemId`              | `String`                      | the card this list belongs to; `onDelete: Cascade`                                          |
-| `text`                    | `String @db.VarChar(200)`     | **plain text, single line.** Not `@db.Text`, not Markdown                                   |
-| `commandText`             | `String? @db.VarChar(500)`    | nullable; present ⇒ this row is a command row (§5)                                          |
+| `text`                    | `String @db.Text`             | **plain text, single line.** Not Markdown. Capped at 200 by the SERVICE — see below         |
+| `commandText`             | `String? @db.Text`            | nullable; present ⇒ this row is a command row (§5); capped at 500 by the service            |
 | `executor`                | `Executor`                    | `coding_agent` \| `human`; declarative (§2)                                                 |
 | `position`                | `String`                      | the shipped opaque fractional index (`lib/workItems/positioning.ts`)                        |
 | `doneAt`                  | `DateTime?`                   | null ⇒ not done. The done STATE is `doneAt != null` — there is no separate boolean          |
 | `doneById`                | `String?`                     | who ticked it; `onDelete: SetNull` (a departing member must not vaporise the tick)          |
 | `createdAt` / `updatedAt` | `DateTime`                    | house convention                                                                            |
 
-**THE GRANULARITY BAR IS A NUMBER, AND IT IS ENFORCED IN THE COLUMN.**
+**THE GRANULARITY BAR IS A NUMBER, AND THE SERVICE IS WHERE IT IS ENFORCED.**
 
-- **`text` ≤ 200 characters**, as `@db.VarChar(200)` **and** a service-level
-  rejection with a typed error. 200 is chosen against the operations the story
+- **`text` ≤ 200 characters**, enforced by the SERVICE with a typed error. 200 is chosen against the operations the story
   itself names — _"change 1 setting in the UI"_, _"run one cli command"_ — which
   run 40–90 characters with room for a qualifier; it is comfortably above every
   honest one-operation line and comfortably below a paragraph. A step that does
@@ -146,9 +145,30 @@ one of those.
 - **`commandText` ≤ 500 characters.** A real command with flags and a URL runs
   long; the cap exists to keep a shell script out of the field, not to keep a
   `curl` out.
-- **Both caps live in ONE exported constant pair** the migration, the Prisma
-  model, the service validator and the client input all read, so the number
-  cannot drift between the column and the message that explains it.
+- **Both caps live in ONE exported constant pair** (`lib/workItemTodos/limits.ts`)
+  that the service validator, the DTO's documented contract, the error message a
+  user reads and every test read, so the number has exactly one home.
+
+**⚠️ WHERE THE CAP IS ENFORCED — THE COLUMN IS `TEXT`, NOT `VARCHAR(200)`, AND
+THAT IS THE DECIDED FORM.** An earlier revision of this record specified
+`@db.VarChar(200)` _in addition to_ the service check, on the reasoning that a
+column width is a backstop the service cannot bypass. It was corrected while
+MOTIR-3813 was being built, for two reasons that only became concrete at the
+keyboard:
+
+- **A width overflow surfaces as a raw Prisma `P2000`, not as a typed domain
+  error.** The 4-layer contract requires the service to throw a typed error the
+  caller translates; a `VARCHAR` would give two different failures for one
+  condition, and the one a user is most likely to hit would be the untyped one.
+- **A second home for the number is a second place for it to drift.** The whole
+  point of the constant pair is that the bar has one definition. Encoding 200
+  into a migration as well makes widening the bar a migration, and makes
+  disagreeing with it silent.
+
+The bar is not weaker for living in one place — the service is the table's only
+writer — and `tests/integration/work-items/work-item-todos.test.ts` asserts the
+rejection AT the cap, one past it, and on the EDIT path as well as the create
+path.
 
 **Why the cap is a CONSTRAINT and not advice.** _"One operation"_ stated in a
 design note is a bar the first tired author walks past. Stated as a column width
@@ -307,7 +327,7 @@ looking — which is more than a diff entry would give them.
 
 ### §5 — The command is its OWN nullable column, never parsed out of the text
 
-`commandText String? @db.VarChar(500)`. **Non-null ⇒ this row is a command row**
+`commandText String? @db.Text`, capped at 500 by the service. **Non-null ⇒ this row is a command row**
 and renders its command with a copy button; null ⇒ it is a plain step.
 
 **Rejected: deriving the command by parsing `text`** (a backtick span, a leading
@@ -346,9 +366,9 @@ surface; both already ship, and neither is invented here.
 
 Inherits, as a column definition it transcribes rather than decides:
 
-- **The nine fields of §1**, with `text` at `@db.VarChar(200)` and
-  `commandText` at `@db.VarChar(500)`, and the exported constant pair those two
-  numbers live in.
+- **The nine fields of §1**, both text columns as `TEXT`, with the two caps
+  enforced by the service out of the exported constant pair those numbers live
+  in (`lib/workItemTodos/limits.ts`).
 - **`doneAt` as the state** — no `isDone` boolean.
 - **`workspaceId` on the row**, `workspace` and `workItem` FKs both
   `onDelete: Cascade`, `doneById` `onDelete: SetNull`.

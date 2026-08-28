@@ -179,6 +179,11 @@ model User {
   // projectMemberships).
   authoredComments            Comment[]                 @relation("CommentAuthor")
   commentMentions             CommentMention[]
+  // To-dos this user TICKED (Story MOTIR-3808 · MOTIR-3813). SetNull, NOT
+  // Cascade: a departing member must not vaporise the record that a step was
+  // completed — the tick survives, its attribution does not. Same reasoning as
+  // `Attachment.uploader`'s SetNull one tier over.
+  completedWorkItemTodos      WorkItemTodo[]            @relation("WorkItemTodoCompletedBy")
   // Back-relations for Component + Watcher (Subtask 5.4.1). A user is the
   // default assignee of many components (SetNull: a departed user clears the
   // default, never blocks) and watches many issues (Cascade: a watcher row
@@ -1053,6 +1058,10 @@ model Workspace {
   // Cascade with the workspace (a deleted workspace frees its keys).
   projectKeyAliases           ProjectKeyAlias[]
   comments                    Comment[]
+  // Work-item to-do rows (Story MOTIR-3808 · MOTIR-3813). Tenanted on the ROW,
+  // the `comments` shape — a direct child of `work_item` carries its own
+  // `workspace_id` because RLS does not traverse foreign keys.
+  workItemTodos               WorkItemTodo[]
   labels                      Label[]
   components                  Component[]
   customFieldDefinitions      CustomFieldDefinition[]
@@ -2186,6 +2195,10 @@ model WorkItem {
   // The CI feedback comment this card carries per (change request, head commit)
   // — MOTIR-3770. Cascade: a deleted card's feedback rows are not a fact.
   ciFeedbackComments   GithubCiFeedbackComment[]
+  // The card's own TO-DO LIST (Story MOTIR-3808 · MOTIR-3813) — the ordered
+  // steps of its work, each one operation. Cascade with the card, exactly as
+  // `comments` does: a deleted card's steps are not a fact about anything.
+  todos                WorkItemTodo[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -3912,6 +3925,67 @@ model CommentMention {
   // serves the by-comment lookup).
   @@index([mentionedUserId])
   @@map("comment_mention")
+}
+
+/// ONE STEP of a work item's own work (Story MOTIR-3808 · Subtask MOTIR-3813),
+/// specified by `docs/decisions/work-item-todo-list.md`.
+///
+/// A to-do is ONE OPERATION — *change this one setting*, *run this one command*
+/// — and deliberately NOT a small work item: a short plain-text line with
+/// state, no Markdown body, no criteria of its own. The bar is a NUMBER
+/// (`TODO_TEXT_MAX_LENGTH`) the service rejects past with a typed error, so it
+/// is a constraint rather than advice (ADR §1).
+///
+/// ⚠️ TENANCY IS ON THE ROW, and which of the schema's two shapes applies is
+/// decided by the tier, not by taste. `Comment` is a DIRECT child of
+/// `work_item` and carries its own `workspace_id`, gated on it by RLS;
+/// `CommentMention` is a GRANDCHILD and reaches tenancy through its parent. A
+/// to-do is a direct child, so it takes the comment's shape — and it has to,
+/// because RLS does not traverse foreign keys.
+///
+/// `executor` is the SHIPPED `Executor` enum, reused rather than mirrored, and
+/// it is DECLARATIVE: it records who an operation is FOR and authorizes nothing
+/// (ADR §2). A person may tick an agent's step; an agent's step with nothing
+/// able to run it renders as the agent's with no run control, never disabled.
+/// Nullable exactly as `work_item.executor` is, and seeded from the parent
+/// card's own value at create.
+///
+/// `position` is the SAME opaque fractional index `work_item.position` and
+/// `workflow_status.position` use (`lib/workItems/positioning.ts`), so a
+/// reorder is a ONE-ROW write rather than a renumber of everything below it.
+///
+/// `doneAt` IS the done state — there is no `isDone` boolean beside it, because
+/// two columns encoding one fact can disagree (`doneAt` set with `isDone false`
+/// would be representable and meaningless). `doneById` is SetNull so a
+/// departing member cannot erase the record that a step was completed.
+model WorkItemTodo {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  workItemId  String    @map("work_item_id")
+  /// The step, in plain text. One operation. Capped by the service at
+  /// `TODO_TEXT_MAX_LENGTH` — see the model note on why the number is a
+  /// constraint and `lib/workItemTodos/limits.ts` for its single home.
+  text        String    @db.Text
+  /// The command this step runs, when it runs one — its OWN column, never
+  /// parsed out of `text` (ADR §5). Non-null ⇔ the row is copyable; a parse
+  /// would break on the first sentence containing a backtick, and silently.
+  commandText String?   @map("command_text") @db.Text
+  executor    Executor?
+  position    String    @db.Text
+  doneAt      DateTime? @map("done_at")
+  doneById    String?   @map("done_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  doneBy    User?     @relation("WorkItemTodoCompletedBy", fields: [doneById], references: [id], onDelete: SetNull)
+
+  // The list read, already in display order — the section reads a card's whole
+  // list ordered by `position`, so the index serves it without a sort.
+  @@index([workItemId, position])
+  @@index([workspaceId])
+  @@map("work_item_todo")
 }
 
 /// A project-scoped label (Story 5.4 · Subtask 5.4.1) — the folksonomy row.
