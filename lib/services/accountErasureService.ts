@@ -1,6 +1,7 @@
 import { accountRepository } from '@/lib/repositories/accountRepository';
 import { apiTokenRepository } from '@/lib/repositories/apiTokenRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
+import { dataExportRequestRepository } from '@/lib/repositories/dataExportRequestRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { passkeyRepository } from '@/lib/repositories/passkeyRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -51,8 +52,10 @@ import {
 // preview counts are gated on DIFFERENT ones:
 //
 //   `workspace` / `workspace_membership` / `organization` /
-//   `organization_membership`  → an `app.user_id` arm, so ONE `withUserContext`
-//                                answers "which tenants is this reader in?"
+//   `organization_membership` / `data_export_request`
+//                              → an `app.user_id` arm, so ONE `withUserContext`
+//                                answers "which tenants is this reader in?" and
+//                                "how many archives do they hold?"
 //   `project` / `work_item` / `comment`
 //                              → `app.workspace_id` ONLY, so each workspace's
 //                                counts need that workspace bound
@@ -115,9 +118,16 @@ export const accountErasureService = {
       twoFactorRepository.findByUserId(userId),
     ]);
 
-    // ── The tenants the reader is in, and their API tokens ───────────────────
+    // ── The tenants the reader is in, their API tokens, their exports ────────
     // One bound transaction: every table here carries an `app.user_id` arm.
-    const { workspaces, ownedOrganizations, apiTokens } = await withUserContext(
+    //
+    // ⚠️ `data_export_request` BELONGS IN THIS TRANSACTION AND NOWHERE ELSE.
+    // Its policy (`data_export_request_owner_or_system`) reads `app.user_id`,
+    // that GUC is transaction-local, and the repository's own header states the
+    // consequence: a singleton read returns ZERO ROWS while raising nothing, so
+    // a reader with a real archive would be told on a consent surface that they
+    // have never asked for one.
+    const { workspaces, ownedOrganizations, apiTokens, dataExports } = await withUserContext(
       userId,
       async (tx) => ({
         workspaces: await workspaceMembershipRepository.findWorkspacesByUser(userId, tx),
@@ -126,6 +136,10 @@ export const accountErasureService = {
           tx,
         ),
         apiTokens: await apiTokenRepository.countByUser(userId, tx),
+        // EVERY status, matching `deleteAllForUser`'s own predicate — the
+        // number the ledger renders has to be the number the sweep deletes
+        // (Bug MOTIR-3747).
+        dataExports: await dataExportRequestRepository.countByUserId(userId, tx),
       }),
     );
 
@@ -193,6 +207,7 @@ export const accountErasureService = {
         passkeys,
         twoFactorEnrolments: twoFactor === null ? 0 : 1,
         apiTokens,
+        dataExports,
         soleMemberWorkspaces: soleMember.map((i) => i.workspace),
         projects: sum(soleMember.map((i) => i.projects)),
         workItems: sum(soleMember.map((i) => i.workItems)),
