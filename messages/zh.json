@@ -5779,6 +5779,11 @@
       "error": "连接 GitHub 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitHub。",
       "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库。",
+      "repos_updated": "仓库访问权限已更新。Motir会读取你在GitHub上选择的仓库，无需再做任何操作。",
+      "install_unbound": "已在GitHub上安装Motir GitHub App，但安装并非从此工作区发起，因此尚未与它关联。请从这里重新发起安装以完成关联。",
+      "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
+      "install_forbidden": "你不是发起此次安装的工作区的成员，因此未连接任何内容。",
+      "install_provider_error": "Motir无法连接GitHub以完成App的关联，请重试。",
       "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。"
     },
     "connect": {

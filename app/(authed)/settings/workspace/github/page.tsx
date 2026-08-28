@@ -8,6 +8,7 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubAppInstallUrl, githubInstallationManageUrl } from '@/lib/github/appLinks';
 import { encodeInstallState } from '@/lib/github/installState';
+import { GITHUB_BANNER_TONE, type GithubBannerStatus } from '@/lib/github/bannerStatus';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
@@ -35,17 +36,11 @@ import { DisconnectButton } from './_components/DisconnectButton';
 
 const OAUTH_START_PATH = '/api/github/oauth/start';
 
-// The OAuth callback (MOTIR-1498) redirects back with ?github=<status>. Map each
-// terminal outcome to a banner tone + a `github.banner.*` message key.
-const BANNER_TONE: Record<string, 'success' | 'danger' | 'info'> = {
-  connected: 'success',
-  installed: 'success',
-  denied: 'danger',
-  state_error: 'danger',
-  error: 'danger',
-  install_error: 'danger',
-  not_configured: 'info',
-};
+// The OAuth callback (MOTIR-1498) and the App setup handler (MOTIR-1588) redirect
+// back with ?github=<status>, which this page renders as a banner. The status →
+// tone map lives beside the status list in `lib/github/bannerStatus.ts` so the
+// routes, the tone and the `github.banner.*` copy are checked against ONE
+// declaration (MOTIR-3755).
 
 interface GithubSettingsPageProps {
   searchParams: Promise<{ github?: string }>;
@@ -76,7 +71,12 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
 
   const sp = await searchParams;
   const bannerStatus = sp.github;
-  const bannerTone = bannerStatus ? BANNER_TONE[bannerStatus] : undefined;
+  // An unrecognised ?github= value renders no banner at all — the map is the
+  // allow-list, so a hand-typed status cannot reach `t('banner.<anything>')`.
+  const bannerTone =
+    bannerStatus && bannerStatus in GITHUB_BANNER_TONE
+      ? GITHUB_BANNER_TONE[bannerStatus as GithubBannerStatus]
+      : undefined;
   // Carry a signed state through the install round-trip so GitHub echoes it back
   // to the setup handler (MOTIR-1588), which binds the installation to this
   // workspace. Encoded per-request from the acting user + workspace.
