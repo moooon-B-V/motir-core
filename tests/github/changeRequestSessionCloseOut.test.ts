@@ -8,6 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-3007 — MERGING A SESSION-BRANCH PULL REQUEST CLOSES EVERY CARD IT CARRIES.
 //
@@ -286,6 +287,17 @@ describe('the single-card path is untouched', () => {
     await workItemsService.updateStatus(item.id, 'in_progress', ctx);
 
     const headRef = `subtask/${item.identifier}-an-ordinary-card`;
+    // MOTIR-3674 — an ORDINARY pull request is one with a LINK, which is what
+    // distinguishes it from the session-branch shape the rest of this file is
+    // about. The key in the ref is a label.
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: REPO.name,
+      number: 8,
+      headRef,
+      title: `feat: a change (${item.identifier})`,
+    });
     await open(headRef, `feat: a change (${item.identifier})`, 8);
     // An OPEN pull request means `implemented` since MOTIR-3005 — the code
     // exists and CI has not spoken for it.

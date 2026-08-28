@@ -11,6 +11,7 @@ import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepos
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · MOTIR-896 — the webhook state machine's GUARD arms (the malformed
 // / unknown / unresolvable deliveries) the per-subtask suites leave uncovered.
@@ -172,6 +173,20 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** MOTIR-3674 — the link that used to come from the head ref. Every case below
+ *  that means *this pull request delivers ACME-1* calls this first; the ones
+ *  about an UNRESOLVABLE delivery deliberately do not. */
+async function linkDefaultPr(identifier = 'ACME-1', number = 7) {
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `feat/${identifier}-a-change`,
+    title: `Some change (${identifier})`,
+  });
+}
+
 describe('githubWebhookService — malformed deliveries are typed no-ops (MOTIR-896)', () => {
   it('a non-object body is ignored as malformed', async () => {
     expect(await githubWebhookService.handleEvent('pull_request', null)).toEqual({
@@ -316,6 +331,7 @@ describe('githubWebhookService — unresolvable deliveries against a real instal
 
   it('a failing check_run flips the linked item to ciState failing with the failure summary', async () => {
     const { item } = await makeScenario('edge-e@example.com');
+    await linkDefaultPr();
     await githubWebhookService.handleEvent('pull_request', prPayload({ action: 'opened' }));
 
     const result = await githubWebhookService.handleEvent(
@@ -362,6 +378,7 @@ describe('githubWebhookService — unresolvable deliveries against a real instal
 describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () => {
   it('a PR with NO title still resolves via the head ref', async () => {
     const { item } = await makeScenario('edge-t@example.com');
+    await linkDefaultPr();
     const payload = prPayload({ action: 'opened' }) as {
       pull_request: Record<string, unknown>;
     };
@@ -381,6 +398,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
 
   it('a bound member DENIED on a private project → the transition retries as the owner', async () => {
     const { user, workspace, project, item } = await makeScenario('edge-v@example.com');
+    await linkDefaultPr();
     // A private project admits only explicit project members; the bound author
     // is a workspace member but NOT a project member, so the authority throws
     // ProjectAccessDeniedError and the sync retries as the owner (the
@@ -444,10 +462,13 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
     expect(comments).toHaveLength(0);
   });
 
-  it('dedupes repeated key candidates and skips unknown project prefixes, still resolving the item', async () => {
+  // ⚠️ REPLACED by MOTIR-3674. This case covered `parseKeyCandidates`'s two
+  // arms — skip a prefix that resolves to no project, dedupe a key that appears
+  // in BOTH the head ref and the title. Neither function exists now, and the
+  // delivery it describes is the exact shape the card retires: a title that
+  // MENTIONS keys, one of them the card's own. It must resolve nothing.
+  it('a delivery whose head ref AND title name the key resolves nothing unlinked (MOTIR-3674)', async () => {
     const { item } = await makeScenario('edge-f@example.com');
-    // `ZZZ-9` matches no project (the continue arm); `ACME-1` appears in BOTH
-    // the head ref and the title (the dedupe arm); the item still resolves.
     const result = await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({
@@ -456,16 +477,13 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
         title: 'Fixes ZZZ-9 ACME-1 (ACME-1)',
       }),
     );
-    expect(result).toMatchObject({
-      event: 'pull_request',
-      outcome: 'transitioned',
-      workItemId: item.id,
-      toStatus: 'implemented',
-    });
+    expect(result).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
+    expect(await statusOf(item.id)).toBe('in_progress');
   });
 
   it('a PR payload with NO author attributes the transition to the workspace owner', async () => {
     const { user, item } = await makeScenario('edge-g@example.com');
+    await linkDefaultPr();
     const result = await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', user: null }),
@@ -480,6 +498,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
 
   it('an author with a BOUND identity but no workspace membership falls back to the owner', async () => {
     const { user, item } = await makeScenario('edge-h@example.com');
+    await linkDefaultPr();
     // A real user with a bound GitHub identity — but NOT a member of the
     // installation's workspace (the L611 false arm).
     const outsider = await usersService.createUser({
@@ -515,6 +534,9 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
 
   it('no owner and no bound author → access_denied (nothing can author the move)', async () => {
     const { user, workspace, item } = await makeScenario('edge-i@example.com');
+    // Linked FIRST, while the owner still exists — this case is about who may
+    // author the TRANSITION, not about the association (MOTIR-3674).
+    await linkDefaultPr();
     // Degenerate state: the workspace owner's membership is gone (system-level
     // removal) and the PR author is unbound — no principal can author the move.
     await adminDb.$transaction(async (tx) => {

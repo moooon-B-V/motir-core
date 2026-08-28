@@ -418,8 +418,14 @@ describe('block 2 — the webhook CONVERGES on the declared link rather than fig
 });
 
 // ── BLOCK 3 ───────────────────────────────────────────────────────────────
-describe('block 3 — the branch/title PARSE still resolves, untouched', () => {
-  it('a pull request that names its key and was never linked resolves as before, linked_manually = false', async () => {
+// ⚠️ INVERTED by MOTIR-3674 (story MOTIR-3672). This block asserted the parse
+// SURVIVED as the fallback for a pull request opened outside a run — *"which is
+// what keeps the fallback a fallback"*. There is no fallback: an explicit link
+// is the only association a pull request has, so the same delivery now stores a
+// row with a NULL link and moves nothing. The block is kept, pointed the other
+// way, because the case it covers is the one most likely to be re-derived.
+describe('block 3 — there is NO branch/title parse; an unlinked pull request links nothing', () => {
+  it('a pull request that names its key and was never linked resolves to NOTHING', async () => {
     const s = await makeScenario({
       email: 'parse-intact@example.com',
       identifier: 'PRS',
@@ -427,7 +433,9 @@ describe('block 3 — the branch/title PARSE still resolves, untouched', () => {
       repoHostId: '930001',
       installationId: INST_A,
     });
-    const item = await makeItem(s, 'Resolved by the parse');
+    const item = await makeItem(s, 'Named but not linked');
+    const itemStatusBefore = (await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } }))
+      .status;
 
     await githubWebhookService.handleEvent(
       'pull_request',
@@ -443,10 +451,14 @@ describe('block 3 — the branch/title PARSE still resolves, untouched', () => {
     const row = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 5 },
     });
-    expect(row.workItemId).toBe(item.id);
-    // The discriminator: this link came from the PARSE, so it is NOT sticky —
-    // which is what keeps the fallback a fallback.
+    // The row is mirrored — the pull request is a fact about the repository — and
+    // it names no card. The key in the branch and the title is a LABEL.
+    expect(row.workItemId).toBeNull();
     expect(row.linkedManually).toBe(false);
+    // And the card is untouched: a pull request that merely MENTIONS a key is
+    // exactly the case the retirement is about.
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(after.status).toBe(itemStatusBefore);
   });
 });
 

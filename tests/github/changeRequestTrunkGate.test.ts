@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
+import { linkPrByIdentifier } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1873 — THE TRUNK GATE. A merge only completes a work item when it landed
@@ -99,6 +100,18 @@ function prPayload(opts: {
 /** Open the PR (so the item sits at Implemented, as it does in reality) and then
  *  merge it into `baseRef`. Returns the merge delivery's result. */
 async function openThenMergeInto(identifier: string, baseRef: string, number = 1688) {
+  // MOTIR-3674 — the link is the only association a pull request has; the key in
+  // the branch is a label. A run writes this the moment `gh pr create` returns,
+  // which is before the `opened` delivery lands, so it goes here.
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${identifier}-a-change`,
+    baseRef,
+    title: `Some change (${identifier})`,
+  });
   const opened = await githubWebhookService.handleEvent(
     'pull_request',
     prPayload({ action: 'opened', identifier, baseRef, number }),
@@ -141,6 +154,20 @@ afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
 });
+
+/** MOTIR-3674 — the link for a case that builds its deliveries by hand rather
+ *  than through `openThenMergeInto`. */
+async function linkOne(identifier: string, number: number, baseRef: string) {
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${identifier}-a-change`,
+    baseRef,
+    title: `Some change (${identifier})`,
+  });
+}
 
 describe('the trunk gate — a merge completes an item only on the default branch', () => {
   it('merged into the DEFAULT branch → Done (today’s behaviour, regression-guarded)', async () => {
@@ -234,6 +261,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
       merged: true,
     });
 
+    await linkOne(s.item.identifier, 1688, 'subtask/ACME-9-sibling-work');
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({
@@ -258,6 +286,8 @@ describe('the trunk gate — a merge completes an item only on the default branc
     // MOTIR-1604's gate would also hold this item; the trunk gate answers first and
     // says why, because "no path to the trunk" is not partial completion, it is none.
     const s = await makeScenario('trunk-vs-1604@example.com');
+    await linkOne(s.item.identifier, 4001, 'main');
+    await linkOne(s.item.identifier, 4002, 'subtask/ACME-9-sibling-work');
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: s.item.identifier, baseRef: 'main', number: 4001 }),
@@ -282,6 +312,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
   it('a closed-UNMERGED PR on a non-default base is untouched by the gate (still the abandoned-work path)', async () => {
     // The gate is scoped to the merged→Done decision. Nothing else moves.
     const s = await makeScenario('trunk-unmerged@example.com');
+    await linkOne(s.item.identifier, 1688, 'subtask/ACME-9-sibling-work');
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({

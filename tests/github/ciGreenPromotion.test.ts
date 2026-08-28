@@ -5,11 +5,13 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { promoteDeliveredCardsOnGreen, promoteIfCiAlreadyGreen } from '@/lib/services/ciPromotion';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-3006 — CI GREEN IS WHAT MAKES A CARD REVIEWABLE.
 //
@@ -131,6 +133,17 @@ async function cardWithPr(
     s.ctx,
   );
   await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+  // MOTIR-3674 — the link is the only association a pull request has; the key in
+  // the branch is a label. A run writes it the moment `gh pr create` returns,
+  // which is before the `opened` delivery lands.
+  await linkPrByIdentifier({
+    identifier: item.identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${item.identifier}-work`,
+    title: `A change (subtask/${item.identifier}-work)`,
+  });
   await openPr(`subtask/${item.identifier}-work`, number);
   expect(await statusOf(item.id)).toBe('implemented');
   return item;
@@ -145,6 +158,19 @@ afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
 });
+
+/** MOTIR-3674 — the link for a case that opens its pull request directly rather
+ *  than through `cardWithPr`. */
+async function linkOne(identifier: string, number: number) {
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${identifier}-work`,
+    title: `A change (subtask/${identifier}-work)`,
+  });
+}
 
 describe('a terminal GREEN promotes the cards a pull request delivers', () => {
   it('moves a single-card pull request from implemented to in_review', async () => {
@@ -282,6 +308,7 @@ describe('everything that is not a terminal green promotes nothing', () => {
       s.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await linkOne(item.identifier, 17);
     await openPr(`subtask/${item.identifier}-work`, 17);
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     expect(await statusOf(item.id)).toBe('in_progress');
@@ -303,6 +330,7 @@ describe('the LATCH — a card that arrives at implemented AFTER the green', () 
       s.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await linkOne(item.identifier, 18);
     await openPr(`subtask/${item.identifier}-work`, 18);
     // Put it back to in_progress: the pull-request delivery moved it to
     // implemented, and this test is about the card NOT being there when CI reports.
@@ -354,6 +382,7 @@ describe('the LATCH — a card that arrives at implemented AFTER the green', () 
       s.ctx,
     );
     await workItemsService.updateStatus(failing.id, 'in_progress', s.ctx);
+    await linkOne(failing.identifier, 20);
     await openPr(`subtask/${failing.identifier}-work`, 20);
     await workItemsService.updateStatus(failing.id, 'in_progress', s.ctx);
     await ci({ conclusion: 'failure', headSha: 'sha1', prNumbers: [20] });
@@ -366,6 +395,7 @@ describe('the LATCH — a card that arrives at implemented AFTER the green', () 
       s.ctx,
     );
     await workItemsService.updateStatus(pending.id, 'in_progress', s.ctx);
+    await linkOne(pending.identifier, 21);
     await openPr(`subtask/${pending.identifier}-work`, 21);
     await workItemsService.updateStatus(pending.id, 'in_progress', s.ctx);
     await ci({ conclusion: null, status: 'in_progress', headSha: 'sha1', prNumbers: [21] });
@@ -378,6 +408,7 @@ describe('the LATCH — a card that arrives at implemented AFTER the green', () 
       s.ctx,
     );
     await workItemsService.updateStatus(superseded.id, 'in_progress', s.ctx);
+    await linkOne(superseded.identifier, 22);
     await openPr(`subtask/${superseded.identifier}-work`, 22);
     await workItemsService.updateStatus(superseded.id, 'in_progress', s.ctx);
     await ci({ conclusion: 'success', headSha: 'sha-old', prNumbers: [22] });
@@ -422,6 +453,7 @@ describe('idempotence — the two edges never promote twice', () => {
       s.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await linkOne(item.identifier, 24);
     await openPr(`subtask/${item.identifier}-work`, 24);
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
 
@@ -566,22 +598,23 @@ describe('a row that is GONE by the time the promotion runs', () => {
 // carefully as the changed one: over a set of ONE, "every" and "some" agree, and
 // almost every card in the tree is that case.
 
-/** Record a SECOND pull request as delivering `workItemId` — the many-to-many
- *  link the singular column cannot express (MOTIR-3657's table). */
+/** Record a SECOND pull request as delivering `workItemId`.
+ *
+ *  ⚠️ MOTIR-3674 — this goes through the REAL link door now. It used to insert a
+ *  `work_item_delivery` row directly, which was a faithful fixture only while the
+ *  title parse ALSO stamped `github_pull_request.work_item_id` from the branch:
+ *  the promotion path reads the union of the delivery table, the scalar and the
+ *  session branch, and the direct insert supplied only the first. With the parse
+ *  gone, a state with a delivery row and a null scalar is one nothing produces —
+ *  `link_pull_request` writes both — so building it here would test a shape that
+ *  cannot occur and miss the one that does. */
 async function alsoDelivers(
   s: Awaited<ReturnType<typeof makeScenario>>,
   workItemId: string,
   prNumber: number,
 ) {
   const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: prNumber } });
-  await adminDb.workItemDelivery.create({
-    data: {
-      workspaceId: s.workspace.id,
-      workItemId,
-      githubPullRequestId: pr.id,
-      repoId: pr.repoId,
-    },
-  });
+  await githubPullRequestService.linkPullRequest(workItemId, pr.id, s.ctx);
   return pr;
 }
 

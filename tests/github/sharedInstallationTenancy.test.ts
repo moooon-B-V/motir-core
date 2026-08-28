@@ -21,6 +21,7 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 import type { NormalizedWorkflowRunEvent } from '@/lib/git/types';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-1931 — Motir's PROVISIONING-ORG mirror is PER-WORKSPACE.
 //
@@ -397,6 +398,17 @@ describe('inbound deliveries route by REPO, not by installation', () => {
       b.ctx,
     );
     await workItemsService.updateStatus(itemB.id, 'in_progress', b.ctx);
+
+    // MOTIR-3674 — link B's pull request to B's card. The point of the case is
+    // that the delivery routes by REPO, and the link is what it routes TO.
+    await linkPrByIdentifier({
+      identifier: itemB.identifier,
+      owner: MOTIR_ORG,
+      name: 'bravo-web',
+      number: 7,
+      headRef: `feat/${itemB.identifier}-a-change`,
+      title: `Some change (${itemB.identifier})`,
+    });
 
     // A delivery on TENANT B's repo, over the SHARED installation id.
     const result = await githubWebhookService.handleEvent(

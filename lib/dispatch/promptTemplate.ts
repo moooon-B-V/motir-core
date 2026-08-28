@@ -745,6 +745,10 @@ function siblingDir(repo: string, index: number): string {
  * the branch and the title as a LABEL, for a human reading a list. Do not
  * restore the title rule from the paragraph above — its reasoning is preserved
  * here precisely so the next reader does not re-derive it.
+ *
+ * ⚠️ AND `resolveChangeRequestWorkItem` NO LONGER EXISTS (MOTIR-3674): the parse
+ * is retired at both its call sites, so the title is not even a fallback now.
+ * An unlinked pull request associates with nothing at all.
  */
 function multiRepoPrBlocks(
   src: DispatchPromptSource,

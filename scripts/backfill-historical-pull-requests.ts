@@ -93,9 +93,9 @@ function printReport(report: HistoricalPrBackfillReport): void {
     console.log(
       `${TAG}   ${repo.repoRef} (workspace ${repo.workspaceId}, ${repo.pages} page(s)): ` +
         `${repo.scanned} closed PR(s) scanned, ` +
-        `${repo.resolved} resolved to an item, ${repo.unresolvable} unresolvable, ` +
+        `${repo.unattributed} mirrored unattributed, ` +
         `${dryRun ? 'would write' : 'wrote'} ${repo.written} row(s), ` +
-        `${repo.unchanged} already current, ${repo.skippedManualLink} manual link(s) preserved.`,
+        `${repo.unchanged} already current, ${repo.skippedLinked} existing link(s) preserved.`,
     );
     if (repo.truncated) {
       console.error(

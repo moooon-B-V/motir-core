@@ -8,6 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-2729 — THE REPOSITORY-SET GATE, the third completion gate and the reason
 // the repository SET exists.
@@ -122,11 +123,24 @@ function prPayload(opts: {
   };
 }
 
-const open = (identifier: string, repo: RepoSpec, number: number, baseRef?: string) =>
-  githubWebhookService.handleEvent(
+const open = async (identifier: string, repo: RepoSpec, number: number, baseRef?: string) => {
+  // MOTIR-3674 — the link is the only association a pull request has; the key in
+  // the branch is a label. A run writes it the moment `gh pr create` returns,
+  // which is before the `opened` delivery lands.
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: repo.name,
+    number,
+    headRef: `subtask/${identifier}-a-change`,
+    baseRef: baseRef ?? repo.defaultBranch ?? 'main',
+    title: `Some change (${identifier})`,
+  });
+  return githubWebhookService.handleEvent(
     'pull_request',
     prPayload({ action: 'opened', identifier, repo, number, baseRef }),
   );
+};
 
 const merge = (identifier: string, repo: RepoSpec, number: number, baseRef?: string) =>
   githubWebhookService.handleEvent(
@@ -234,9 +248,17 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     await open(item.identifier, CORE, 1);
     const result = await merge(item.identifier, CORE, 1);
 
-    expect(result).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    // ⚠️ The DIAGNOSIS moved with MOTIR-3674 and the design is unchanged. Both
+    // pull requests are LINKED now (the parse that used to associate them is
+    // gone), so each carries a `work_item_delivery` row and the delivery-set
+    // gate — more specific, evaluated first (`work-item-delivery-links.md` Q3)
+    // — answers before the repository-set gate is asked. Its note names the same
+    // fact in the pull request's own terms: this one merged somewhere that is
+    // not its repository's trunk. The HOLD is identical, which is the property
+    // this case exists for.
+    expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     expect(await statusOf(item.id)).toBe('implemented');
-    expect((await commentBodies(item.id)).at(-1)).toContain('motir-ai');
+    expect((await commentBodies(item.id)).at(-1)).toContain('Merged, but not onto the trunk');
   });
 
   it('holds on a merged row whose base is UNKNOWN, and says that rather than naming a branch', async () => {
@@ -256,7 +278,10 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     await open(item.identifier, CORE, 1);
     const result = await merge(item.identifier, CORE, 1);
 
-    expect(result).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    // Same gate shift as the case above (MOTIR-3674): linked deliveries mean the
+    // delivery-set gate answers first. It carries the SAME unknown-base wording,
+    // which is what this case is really pinning.
+    expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     expect(await statusOf(item.id)).toBe('implemented');
     const note = (await commentBodies(item.id)).at(-1)!;
     // UNKNOWN in both directions: it must not claim the repository is outstanding
@@ -311,9 +336,13 @@ describe('the gate ABSTAINS wherever the product behaves as it does today', () =
     await open(item.identifier, AI, 2);
     const result = await merge(item.identifier, CORE, 1);
 
-    // Both gates hold here. `deferred_open_pr` names an artifact the reader can go
-    // and look at, which is strictly more actionable than "motir-ai has no merge".
-    expect(result).toMatchObject({ outcome: 'deferred_open_pr' });
+    // ⚠️ THREE gates hold here now (MOTIR-3674). With both pull requests linked,
+    // `deferred_incomplete_delivery_set` is the most specific of them and is
+    // evaluated first: it names the still-open pull request AND says what would
+    // complete the item, which is what `deferred_open_pr` was preferred for over
+    // "motir-ai has no merge". The ordering is `work-item-delivery-links.md` Q3's.
+    expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
+    expect((await commentBodies(item.id)).at(-1)).toContain('Still open');
     expect(await statusOf(item.id)).toBe('implemented');
   });
 });

@@ -9,6 +9,7 @@ import { githubInstallationRepository } from '@/lib/repositories/githubInstallat
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.23 · MOTIR-1479 — the GitLab webhook state machine's GUARD arms
 // (mirroring `tests/github/githubWebhookEdges.test.ts` / MOTIR-896): the
@@ -287,28 +288,39 @@ describe('gitlabWebhookService — unresolvable deliveries against a real connec
     expect(result).toEqual({ event: 'pull_request', outcome: 'no_work_item' });
   });
 
-  it('dedupes repeated key candidates and skips unknown project prefixes', async () => {
+  // ⚠️ REPLACED by MOTIR-3674. This case asserted that a source branch naming
+  // `ACME-1` resolved to that card even when the TITLE named an unknown prefix —
+  // i.e. that the parse deduped its candidates and skipped prefixes that resolve
+  // to no project. There is no parse to test: the same delivery now resolves
+  // nothing at all, and that is what is asserted instead. The dedupe logic went
+  // with `parseKeyCandidates`.
+  it('a source branch naming a REAL key resolves NOTHING without a link (MOTIR-3674)', async () => {
     const { item } = await makeScenario('edge-f@example.com');
     const result = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
       mrPayload({
         action: 'open',
         identifier: 'ZZZ-9',
-        sourceBranch: 'feat/ACME-1-a-change',
+        sourceBranch: `feat/${item.identifier}-a-change`,
       }),
     );
-    expect(result).toMatchObject({
-      event: 'pull_request',
-      outcome: 'transitioned',
-      workItemId: item.id,
-      toStatus: 'implemented',
-    });
+    expect(result).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
+    expect(await statusOf(item.id)).toBe('in_progress');
   });
 });
 
 describe('gitlabWebhookService — concurrent redelivery + degenerate states (MOTIR-1479)', () => {
   it('is idempotent under concurrent redelivery of the same MR (race-safe)', async () => {
     const s = await makeScenario('edge-race@example.com');
+    // MOTIR-3674 — the link, not the branch, is what makes this MR this card's.
+    await linkPrByIdentifier({
+      identifier: s.item.identifier,
+      owner: 'octocat',
+      name: 'acme',
+      number: 7,
+      headRef: `subtask/${s.item.identifier}-a-change`,
+      title: `Some change (${s.item.identifier})`,
+    });
     const payload = mrPayload({ action: 'open', identifier: s.item.identifier });
 
     const [a, b] = await Promise.all([
@@ -350,6 +362,16 @@ describe('gitlabWebhookService — concurrent redelivery + degenerate states (MO
 
   it('no workspace owner → access_denied (nothing can author the move)', async () => {
     const { user, workspace, item } = await makeScenario('edge-z@example.com');
+    // Linked FIRST, while the owner still exists — the link is a fact about the
+    // delivery, and this test is about who may author the TRANSITION (MOTIR-3674).
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'octocat',
+      name: 'acme',
+      number: 7,
+      headRef: `subtask/${item.identifier}-a-change`,
+      title: `Some change (${item.identifier})`,
+    });
     // Degenerate: remove the owner's membership — no principal can author the
     // transition. GitLab always uses owner (no bound identity), so this is the
     // only degenerate-author arm.

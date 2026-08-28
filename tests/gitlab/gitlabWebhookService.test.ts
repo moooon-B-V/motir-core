@@ -10,6 +10,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.23 · MOTIR-1475 — the GitLab inbound webhook MR → work-item status sync,
 // against a real Postgres (the motir-core convention). Proves GitLab MR hooks drive
@@ -146,11 +147,27 @@ async function ciStateOf(workItemId: string): Promise<string | null> {
  *  and linked to the work item by the source branch — mirrors reality: the MR opens
  *  (link) → then its pipeline runs against it. Returns the MR iid. */
 async function openMr(identifier: string, iid = 7): Promise<number> {
+  await linkMr(identifier, iid);
   await gitlabWebhookService.handleEvent(
     'Merge Request Hook',
     mrPayload({ action: 'open', identifier, iid }),
   );
   return iid;
+}
+
+/** MOTIR-3674 — the link is the only association a change request has; the key
+ *  in the source branch is a label now. `linkPrByIdentifier` writes the same row
+ *  `link_pull_request` writes, whichever host the mirror came from. */
+async function linkMr(identifier: string, iid = 7, sourceBranch?: string, targetBranch = 'main') {
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'octocat',
+    name: 'acme',
+    number: iid,
+    headRef: sourceBranch ?? `subtask/${identifier}-a-change`,
+    baseRef: targetBranch,
+    title: `Some change (${identifier})`,
+  });
 }
 
 async function latestRevision(workItemId: string) {
@@ -173,6 +190,7 @@ afterAll(async () => {
 describe('gitlabWebhookService — merge_request → status sync', () => {
   it('opened → implemented, merged → done, closed-unmerged → in_progress', async () => {
     const s = await makeScenario('mr@example.com');
+    await linkMr(s.item.identifier);
 
     const opened = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
@@ -229,6 +247,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
 
   it('is idempotent: re-delivering the same opened MR is a noop', async () => {
     const s = await makeScenario('idem@example.com');
+    await linkMr(s.item.identifier);
     const payload = mrPayload({ action: 'open', identifier: s.item.identifier });
     await gitlabWebhookService.handleEvent('Merge Request Hook', payload);
     const again = await gitlabWebhookService.handleEvent('Merge Request Hook', payload);
@@ -283,6 +302,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     // inherits the gate and this test is what proves the wiring (a provider-shaped
     // fix would have missed it, which is the sweep the card asked for).
     const s = await makeScenario('gitlab-stacked@example.com');
+    await linkMr(s.item.identifier);
     await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
       mrPayload({ action: 'open', identifier: s.item.identifier }),

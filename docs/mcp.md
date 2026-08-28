@@ -1138,17 +1138,26 @@ opening one, once per pull request. The caller is the first party that knows the
 answer with certainty, and it knows it before GitHub's own webhook does.
 
 **Why this exists.** Until this tool, an executing agent could only put
-`MOTIR-<n>` in the branch or the title and hope
-`changeRequestStatusSync.resolveChangeRequestWorkItem` parsed it back out. That
-guess fails in both directions, and both have been measured on live cards: a
-title that DROPS the key is invisible to the completion gate, so a card is held
-open by work that has already shipped; a title that merely MENTIONS one closes
-that card whether or not the pull request delivered it.
+`MOTIR-<n>` in the branch or the title and hope the sync's own resolver parsed it
+back out. That guess failed in both directions, and both were measured on live
+cards: a title that DROPS the key is invisible to the completion gate, so a card
+is held open by work that has already shipped; a title that merely MENTIONS one
+closes that card whether or not the pull request delivered it.
 
-**The parse is not retired.** It remains the FALLBACK for a pull request opened
-outside a run — by a person, by Dependabot, by a script — where a guess is the
-only thing available and is a reasonable one. What changed is which mechanism is
-**primary**: the link is a stored fact and the sync prefers it, so a merge moves
+⚠️ **THE PARSE IS RETIRED** (MOTIR-3674, story MOTIR-3672). This paragraph used
+to say the parse remained the FALLBACK for a pull request opened outside a run —
+by a person, by Dependabot, by a script — where a guess was the only thing
+available and was a reasonable one. That conservatism is what MOTIR-3672
+revisited: a parse is not a weaker link, it answers a DIFFERENT question (_this
+text mentions this card_, not _this pull request delivers this card_), and
+keeping it as a fallback kept the wrong answer available on exactly the path
+nobody watches. An explicit link is now the ONLY association a pull request has,
+at both call sites — the live delivery and the historical backfill — and a pull
+request nobody links carries a FAILING CHECK rather than a silent guess
+(`docs/decisions/unlinked-pull-request-check.md`). A link already stored by the
+retired parse is HONOURED, not orphaned: the sync reads
+`github_pull_request.work_item_id` whatever wrote it. The link is a stored fact
+and the sync reads nothing else, so a merge moves
 the card whether or not any title ever named it.
 
 ⚠️ **It MOVES the link; it does not add one.** A work item's pull-request link is

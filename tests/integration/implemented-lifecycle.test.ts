@@ -9,6 +9,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-3008 — THE STORY'S INTEGRATION SEAMS.
 //
@@ -141,6 +142,17 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** MOTIR-3674 — the link that used to come from the head ref. */
+async function linkOne(identifier: string, number: number) {
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${identifier}-work`,
+  });
+}
+
 describe('the two-writer race — the agent and the webhook both say "finished"', () => {
   it('lands at implemented when the AGENT writes first', async () => {
     const s = await makeScenario('race-agent-first@example.com');
@@ -153,6 +165,7 @@ describe('the two-writer race — the agent and the webhook both say "finished"'
     // The agent reports…
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
     // …and the PR-opened delivery arrives a moment later.
+    await linkOne(item.identifier, 30);
     const delivery = await openPr(`subtask/${item.identifier}-work`, 30);
 
     expect(await statusOf(item.id)).toBe('implemented');
@@ -169,6 +182,7 @@ describe('the two-writer race — the agent and the webhook both say "finished"'
     );
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
 
+    await linkOne(item.identifier, 31);
     await openPr(`subtask/${item.identifier}-work`, 31);
     expect(await statusOf(item.id)).toBe('implemented');
 
@@ -188,6 +202,7 @@ describe('the two-writer race — the agent and the webhook both say "finished"'
     const before = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
 
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+    await linkOne(item.identifier, 32);
     await openPr(`subtask/${item.identifier}-work`, 32);
 
     expect(await adminDb.workItemRevision.count({ where: { workItemId: item.id } })).toBe(
@@ -213,6 +228,7 @@ describe('the full forward path, hop by hop', () => {
     expect(await statusOf(item.id)).toBe('implemented');
 
     // The pull request opens — same state, no move.
+    await linkOne(item.identifier, 33);
     await openPr(head, 33);
     expect(await statusOf(item.id)).toBe('implemented');
 
@@ -236,6 +252,7 @@ describe('the full forward path, hop by hop', () => {
       s.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await linkOne(item.identifier, 34);
     await openPr(`subtask/${item.identifier}-work`, 34);
 
     await ci({ conclusion: 'failure', headSha: 'sha1', number: 34 });
@@ -300,6 +317,7 @@ describe('cross-tenant isolation on the delivery paths', () => {
     // The installation + repo the delivery names belongs to the SECOND tenant
     // (the last `persistInstallation` wins the provider repo id), so the first
     // tenant's identically-keyed card must not move.
+    await linkOne(others.identifier, 36);
     await openPr(`subtask/${others.identifier}-work`, 36);
 
     expect(await statusOf(others.id)).toBe('implemented');

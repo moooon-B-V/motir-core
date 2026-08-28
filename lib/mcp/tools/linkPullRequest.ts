@@ -21,16 +21,25 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 // shipped; a title that merely MENTIONS a key closes that card whether or not it
 // delivered it.
 //
-// The parse is NOT retired and this tool does not touch it. It stays as the
-// FALLBACK for a pull request opened outside a run — by a person, by Dependabot,
-// by a script — where a guess is the only thing available and is a reasonable
-// one. What changes is which mechanism is PRIMARY.
+// ⚠️ AMENDED (MOTIR-3674, story MOTIR-3672): **THE PARSE IS RETIRED.** This
+// paragraph used to end *"the parse is NOT retired and this tool does not touch
+// it — it stays as the FALLBACK for a pull request opened outside a run"*, and
+// that conservatism is what MOTIR-3672 revisited. The parse is not a weaker
+// version of this tool; it answers a DIFFERENT question — *this text mentions
+// this card*, not *this pull request delivers this card* — so keeping it as a
+// fallback kept the wrong answer available on exactly the path nobody watches.
+// An explicit link is now the ONLY association a pull request has, at both call
+// sites (the live delivery and the historical backfill), and a pull request
+// nobody links carries a FAILING CHECK rather than a silent guess
+// (`docs/decisions/unlinked-pull-request-check.md`).
 //
 // ── The model was already right; only the door was missing ────────────────
-// `github_pull_request.work_item_id` is the link, `linked_manually` is its
-// stickiness flag, and `syncChangeRequestStatus` already PREFERS a sticky link
-// over the parse (`lib/services/changeRequestStatusSync.ts` — the
-// `existingPr?.linkedManually && existingPr.workItemId` short-circuit). Motir
+// `github_pull_request.work_item_id` is the link, `linked_manually` records HOW
+// it was made, and `syncChangeRequestStatus` already PREFERRED a sticky link
+// over the parse (`lib/services/changeRequestStatusSync.ts`). Since MOTIR-3674
+// there is nothing to prefer it over: the sync reads the stored link and stops,
+// and `linked_manually` is no longer part of that condition — a row the parse
+// linked historically is honoured exactly as an explicit one is. Motir
 // simply never gave the one actor who knows the answer a way to write it down: a
 // human can, from the detail page's "+ Link pull request" picker; the agent that
 // just ran `gh pr create` could not.

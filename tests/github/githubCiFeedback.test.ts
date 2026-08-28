@@ -9,6 +9,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · Subtask 7.10.6 / MOTIR-894 — the CI feedback loop, against a real
 // Postgres (the motir-core convention). Covers: a check_suite / check_run
@@ -71,6 +72,21 @@ async function makeScenario(email: string) {
  *  item (a non-matching head ref). Returns the PR number + head branch. */
 async function openPr(identifier: string | null, number: number) {
   const headBranch = identifier ? `feat/${identifier}-work` : 'feat/no-match-branch';
+  // MOTIR-3674 — the link is the only association a pull request has; the key in
+  // the branch is a label. A run writes it the moment `gh pr create` returns,
+  // which is before the `opened` delivery lands.
+  // `identifier: null` still means "resolves to no work item" — it just gets
+  // there by not being linked rather than by not being named.
+  if (identifier) {
+    await linkPrByIdentifier({
+      identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number,
+      headRef: headBranch,
+      title: identifier,
+    });
+  }
   await githubWebhookService.handleEvent('pull_request', {
     action: 'opened',
     installation: { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } },

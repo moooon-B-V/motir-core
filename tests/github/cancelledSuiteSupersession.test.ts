@@ -11,6 +11,7 @@ import { derivePrCiState } from '@/lib/github/prCiState';
 import { liveCheckRows } from '@/lib/github/checkSuites';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-3209 — A CANCELLED RUN MUST NOT DECIDE A CARD'S CI VERDICT.
 //
@@ -105,6 +106,17 @@ async function cardWithPr(
     s.ctx,
   );
   await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+  // MOTIR-3674 — the link is the only association a pull request has; the key in
+  // the branch is a label. A run writes it the moment `gh pr create` returns,
+  // which is before the `opened` delivery lands.
+  await linkPrByIdentifier({
+    identifier: item.identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${item.identifier}-work`,
+    title: `A change (subtask/${item.identifier}-work)`,
+  });
   await openPr(`subtask/${item.identifier}-work`, number);
   expect(await statusOf(item.id)).toBe('implemented');
   return item;

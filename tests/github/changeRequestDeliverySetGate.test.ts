@@ -272,14 +272,21 @@ describe('the delivery-SET gate — a card is done when EVERY delivery has lande
 });
 
 describe('the gate ABSTAINS wherever the product behaves as it does today', () => {
-  it('a card with NO delivery links completes on the first merge, exactly as before', async () => {
+  // ⚠️ REWRITTEN by MOTIR-3674. This case used to say *no `declare` — the title
+  // parse is what associates this one, as it always did*, and it was the gate's
+  // abstain arm for a card whose association came from text. There is no such
+  // card any more: with the parse retired, a pull request nobody declared
+  // delivers nothing, so the delivery never reaches the gate at all. What the
+  // abstain arm still has to cover is a card whose link was written by
+  // `mark_integrated` rather than `link_pull_request` — asserted below — and
+  // this case now pins the honest consequence for the unlinked one.
+  it('a card whose pull request was never declared is not completed by its merge at all', async () => {
     const s = await makeScenario('no-links@example.com', [CORE]);
-    // No `declare` — the title parse is what associates this one, as it always did.
     await open(s.item.identifier, CORE, 1);
     const result = await merge(s.item.identifier, CORE, 1);
 
-    expect(result).toMatchObject({ outcome: 'transitioned' });
-    expect(await statusOf(s.item.id)).toBe('done');
+    expect(result).toMatchObject({ outcome: 'no_work_item' });
+    expect(await statusOf(s.item.id)).toBe('in_progress');
   });
 
   it('a card with ONE delivery link completes on that delivery’s merge', async () => {
