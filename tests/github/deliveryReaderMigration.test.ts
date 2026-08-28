@@ -194,13 +194,11 @@ describe('ONE pull request delivering N cards — the merge closes all N (MOTIR-
     await pr(prPayload({ action: 'opened', number: 501, headRef: BRANCH }));
     for (const card of cards) await link(s, card.id, { number: 501, headRef: BRANCH });
 
-    // ⚠️ THE LINKS ARE THE WHOLE SET, and the scalar column proves they cannot be
-    // read off it: `link_pull_request` MOVES the column and ADDS a delivery row,
-    // so after three calls the column names the LAST card and the table names all
-    // three. That asymmetry is the defect this card removes, expressed as a
-    // fixture rather than as a sentence.
+    // ⚠️ THE LINKS ARE THE WHOLE SET. Three calls, three delivery rows, one pull
+    // request. The scalar this asymmetry was written against is gone (MOTIR-3757),
+    // so what used to be a demonstration that the two disagreed is now simply the
+    // shape: `link_pull_request` ADDS, and there is nothing left for it to move.
     const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 501 } });
-    expect(row.workItemId).toBe(cards[2]!.id);
     expect(await adminDb.workItemDelivery.count({ where: { githubPullRequestId: row.id } })).toBe(
       3,
     );
@@ -398,14 +396,11 @@ describe('the TENANT resolves from a delivery row, before any workspace is bound
     expect(await statusOf(card.id)).toBe('done');
 
     // Back to In Review — through the workflow's own legal hops, never a raw
-    // write — and CLEAR the legacy column, so the delivery row is the only record
-    // that this card has a change request at all.
+    // write. The delivery row is the ONLY record that this card has a change
+    // request at all; the legacy column this case used to clear by hand no longer
+    // exists (MOTIR-3757), so the state it was arranging is now simply the state.
     await workItemsService.updateStatus(card.id, 'in_progress', s.ctx);
     await workItemsService.updateStatus(card.id, 'in_review', s.ctx);
-    await adminDb.githubPullRequest.updateMany({
-      where: { number: 601 },
-      data: { workItemId: null },
-    });
     expect(await adminDb.workItemDelivery.count({ where: { workItemId: card.id } })).toBe(1);
 
     const result = await repoSetCompletionService.reevaluateItem(card.id, { dryRun: false });
@@ -432,21 +427,28 @@ describe('the TENANT resolves from a delivery row, before any workspace is bound
   });
 });
 
-describe('the column is NOT dropped, and both writers still write it (MOTIR-3721 AC 7)', () => {
-  it('`link_pull_request` sets it (W1) and a delivery leaves it exactly as it stands (W2)', async () => {
+describe('the column IS dropped, and `linked_manually` is not (MOTIR-3757 AC 7)', () => {
+  // ⚠️ THE PREDECESSOR OF THIS BLOCK ASSERTED THE OPPOSITE — *"the column is NOT
+  // dropped, and both writers still write it (MOTIR-3721 AC 7)"* — and it was
+  // right for its card, whose whole argument was that the EXPAND step drops
+  // nothing so the rollback stays a code revert. This is the CONTRACT step: the
+  // column goes, both writers go with it, and the one thing that must NOT go is
+  // `linked_manually`, which qualified the link and outlives it as provenance.
+  it('a link stamps `linked_manually` and a later delivery preserves it', async () => {
     const s = await makeScenario('column@example.com');
-    const card = await makeCard(s, 'still written');
+    const card = await makeCard(s, 'still stamped');
     await pr(prPayload({ action: 'opened', number: 701, headRef: 'subtask/col' }));
     await link(s, card.id, { number: 701, headRef: 'subtask/col' });
 
-    // W1 — the manual-link write, unchanged.
+    // The declared-not-inferred stamp, which is all that is left of W1.
     const afterLink = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 701 } });
-    expect(afterLink.workItemId).toBe(card.id);
     expect(afterLink.linkedManually).toBe(true);
+    expect(
+      await adminDb.workItemDelivery.count({ where: { githubPullRequestId: afterLink.id } }),
+    ).toBe(1);
 
-    // W2 — a later delivery upserts the row's state fields and PRESERVES the
-    // link column and its manual flag. The sync stopped READING the column; it
-    // did not start clearing it, which is what makes the rollback a code revert.
+    // A later delivery upserts the row's state fields and PRESERVES the flag. It
+    // reaches no association at all now: the link lives in another table.
     await pr(
       prPayload({
         action: 'closed',
@@ -459,9 +461,23 @@ describe('the column is NOT dropped, and both writers still write it (MOTIR-3721
     const afterDelivery = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { number: 701 },
     });
-    expect(afterDelivery.workItemId).toBe(card.id);
     expect(afterDelivery.linkedManually).toBe(true);
     expect(afterDelivery.merged).toBe(true);
+    expect(
+      await adminDb.workItemDelivery.count({ where: { githubPullRequestId: afterDelivery.id } }),
+    ).toBe(1);
+  });
+
+  it('`github_pull_request` no longer has a `work_item_id` column at all', async () => {
+    // The drop asserted where it happened. A green suite proves the readers
+    // moved; only this proves the column went, and only this catches a
+    // `migrate resolve` that skipped the migration on some environment.
+    const columns = await adminDb.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'github_pull_request'`;
+    const names = columns.map((c) => c.column_name);
+    expect(names).not.toContain('work_item_id');
+    expect(names).toContain('linked_manually');
   });
 });
 
@@ -486,11 +502,14 @@ describe('the Development surface reads the delivery set (MOTIR-3756 AC 5)', () 
     await link(s, childA.id, { number: 810, headRef: 'motir/auto-run-1' });
     await link(s, childB.id, { number: 810, headRef: 'motir/auto-run-1' });
 
-    // The column now names the LAST link — so a reader on the column shows this
-    // pull request to childB and to NOBODY else. Asserted rather than assumed,
-    // because it is what makes the three assertions below non-trivial.
+    // Three delivery rows for one pull request. A reader on the retired scalar
+    // would have shown this pull request to childB and to NOBODY else — that is
+    // what made the three assertions below non-trivial, and the fixture now states
+    // it as the set rather than as the disagreement.
     const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 810 } });
-    expect(row.workItemId).toBe(childB.id);
+    expect(await adminDb.workItemDelivery.count({ where: { githubPullRequestId: row.id } })).toBe(
+      3,
+    );
 
     for (const card of [parent, childA, childB]) {
       const listed = await workItemsService.listLinkedPullRequests(card.id, s.ctx);
@@ -570,9 +589,9 @@ describe('`unlink_pull_request` — the mis-link-then-correct path (MOTIR-3756 A
     expect(row.state).toBe('open');
   });
 
-  it('leaves `github_pull_request.work_item_id` exactly as it stands (AC 7 holds through the unlink)', async () => {
+  it('leaves the mirrored pull request exactly as it stands (the unlink is not a retraction)', async () => {
     const s = await makeScenario('unlink-column@example.com');
-    const card = await makeCard(s, 'A card whose column survives its unlink');
+    const card = await makeCard(s, 'A card whose pull request survives its unlink');
     await pr(prPayload({ action: 'opened', number: 822, headRef: 'subtask/col2' }));
     await link(s, card.id, { number: 822, headRef: 'subtask/col2' });
 
@@ -587,11 +606,12 @@ describe('`unlink_pull_request` — the mis-link-then-correct path (MOTIR-3756 A
       s.ctx,
     );
 
-    // The delivery is gone and the column is not — clearing it here would take a
-    // status sync away from a card whose OTHER links are perfectly good, and its
-    // drop is the CONTRACT card's.
+    // The delivery is gone and the MIRROR ROW is not: unlinking corrects an
+    // association, it does not retract the pull request. (This case used to add
+    // that the legacy column was left standing; MOTIR-3757 dropped it, so the
+    // only thing left to leave alone is the row itself.)
     expect(await workItemsService.listLinkedPullRequests(card.id, s.ctx)).toEqual([]);
-    const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 822 } });
-    expect(row.workItemId).toBe(card.id);
+    await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 822 } });
+    expect(await adminDb.workItemDelivery.count({ where: { workItemId: card.id } })).toBe(0);
   });
 });

@@ -1155,38 +1155,38 @@ nobody watches. An explicit link is now the ONLY association a pull request has,
 at both call sites — the live delivery and the historical backfill — and a pull
 request nobody links carries a FAILING CHECK rather than a silent guess
 (`docs/decisions/unlinked-pull-request-check.md`). A link already stored by the
-retired parse is HONOURED, not orphaned: the sync reads
-`github_pull_request.work_item_id` whatever wrote it. The link is a stored fact
-and the sync reads nothing else, so a merge moves
-the card whether or not any title ever named it.
+retired parse is HONOURED, not orphaned: every one of the 1096 stored links was
+carried into `work_item_delivery` by MOTIR-3657's backfill, which is why
+MOTIR-3757 could drop the column without losing one. The link is a stored fact
+and the sync reads nothing else, so a merge moves the card whether or not any
+title ever named it.
 
-⚠️ **It writes TWO links, and they behave differently.** The link a work item
-**carries** is a single FK (`github_pull_request.work_item_id`), so a second call
-naming a DIFFERENT work item takes the link off the first — the result's
-`movedFrom` names it, so a caller cannot read a move as an addition. The same
-call ALSO inserts a row in `work_item_delivery`, a join table recording every
-`(work item, pull request)` pair, which one pull request may fill for **several**
-work items — the direction the FK cannot express, and the one a `motir auto` or
-parent run actually produces. The Development panel lists the union of both.
+⚠️ **It writes ONE link, and the link is a SET.** The call inserts a row in
+`work_item_delivery`, a join table recording every `(work item, pull request)`
+pair. One pull request may fill it for **several** work items — the shape a
+`motir auto` or parent run actually produces — and one work item may be filled by
+several pull requests. A second call naming a DIFFERENT work item therefore
+**ADDS** a row; it takes nothing off the first, and nothing is unlinked except by
+`unlink_pull_request`. The Development panel lists that set.
 
-⚠️ **The completion gate and the status sync still read the SINGULAR link**, so
-the FK is the one that decides today. That has a consequence worth stating
-plainly, because getting it wrong is silent:
+> **ONE pull request delivering a parent and its children can be declared either
+> way.** Link the PARENT once and the merge cascades DOWN to the children on its
+> own (`childStatusCascadeService`); or link each card the pull request actually
+> delivers and the merge closes all of them, because the completion gate and the
+> status sync read the delivery set. Linking the parent is the shorter of the two
+> and stays correct as children are added.
 
-> **ONE pull request delivering a parent and its children is linked to the
-> PARENT, once.** Link the children instead and each call walks the link off the
-> last; the merge closes only whichever card it happened to end on, and every
-> sibling is stranded at `implemented`. The merge cascades DOWN from the parent
-> on its own (`childStatusCascadeService`). The `movedFrom` in the FIRST call's
-> result — naming the parent — is the tell that this has started.
-
-**MOTIR-3721** moves `countOtherOpenByWorkItem`,
-`listCompletionFactsByWorkItem` and `findBySessionBranch` onto the delivery
-table and drops the two scalars; the paragraph above is what changes when it
-lands. (It supersedes an earlier note here naming MOTIR-3659 as that owner —
-MOTIR-3659 shipped the delivery-set gate but deliberately left the readers on
-the column, so that the question had one source while both were written. See
-ADR `docs/decisions/work-item-delivery-links.md` Q2.)
+⚠️ **THIS PARAGRAPH USED TO SAY THE OPPOSITE, and the reversal is the point.**
+Until MOTIR-3721 / MOTIR-3757 the association a work item carried was a single
+`github_pull_request.work_item_id`, the readers decided on it, and linking the
+children in turn walked that one column down the chain — the merge closed
+whichever card the last call landed on and stranded every sibling at
+`implemented`. That is why the instruction was _link the PARENT, once_ as a rule
+rather than as a preference. The readers moved to the delivery table
+(MOTIR-3721 · MOTIR-3756), the column was dropped (MOTIR-3757), and with it the
+`movedFrom` field a link result used to carry. A reader who remembers the old
+rule is not reading a stale copy: it was true, and it is not any more. See ADR
+`docs/decisions/delivery-reader-migration.md`.
 
 > **⚠️ AMENDED 2026-08-28 (MOTIR-3735) — ONE scalar is dropped, not two.**
 > `github_pull_request.work_item_id` is the one that goes; its readers and its
@@ -1230,10 +1230,10 @@ deliberately asymmetric:
 | **a row already** | **only** the link — your ref/title arguments are ignored, because a delivery has already spoken for those fields      |
 
 The division of authority is what keeps the two from fighting: **you are
-authoritative about the LINK, the webhook is authoritative about STATE.**
-`linked_manually` is that boundary, and it already existed — every later delivery
-refreshes `state` / `merged` / `headRef` / `baseRef` / `title` and leaves
-`work_item_id` alone.
+authoritative about the LINK, the webhook is authoritative about STATE.** They no
+longer need a boundary marker, because they write different tables: a later
+delivery refreshes `state` / `merged` / `headRef` / `baseRef` / `title` on the
+pull-request row and reaches no delivery link at all.
 
 Put the key in the BRANCH anyway: a human reads a branch list, and the
 design-result publisher finds its card from any resolvable key in the ref. It is
@@ -1256,9 +1256,9 @@ resolved by preferring one, because picking arbitrarily would link a real pull
 request that is not the one the caller meant, under a success message.
 
 **Output** — `structuredContent`: `key`, `created` (the row existed only because
-this call wrote it), `movedFrom` (the item the link was taken off, or null), and
-`pullRequest` — the same `LinkedPullRequestDto` the item page's Development
-section renders.
+this call wrote it), and `pullRequest` — the same `LinkedPullRequestDto` the item
+page's Development section renders. (`movedFrom` was removed by MOTIR-3757 along
+with the column whose move it reported; a link adds, so there is no move.)
 
 An unknown or cross-workspace **repository** (`GITHUB_REPO_NOT_FOUND`) and an
 unknown item key are both refused with no existence leak — the repository is
@@ -1280,8 +1280,9 @@ and the wrong association ceased to exist, because there was only ever one. A
 delivery is a ROW. Linking the right card ADDS a second row and leaves the
 mistaken one exactly where it was — and the completion gate counts a card's
 delivering pull requests, so that row holds the card open on a pull request that
-will never merge for it. The `movedFrom` in a link result tells you the FK moved;
-it says nothing about the row.
+will never merge for it. Nothing in a link result signals this, and since
+MOTIR-3757 there is not even a `movedFrom` to misread as one: the only thing that
+removes a delivery is this tool.
 
 ⚠️ **It removes EXACTLY ONE delivery — the pair you name**, which is what makes it
 a correction rather than a retraction:
@@ -1298,10 +1299,9 @@ while it stands. `removed: false` is reserved for the benign case: the pull requ
 exists, the item exists, and they were simply not linked — a retry, or a correction
 somebody else already made.
 
-It leaves `github_pull_request.work_item_id` alone. That column is the legacy
-scalar, its drop is its own card, and clearing it here would take a delivery's
-status sync away from a card whose OTHER links are perfectly good. It also leaves
-the pull request itself alone: state, title and checks are the webhook's to say.
+It leaves the pull-request row itself alone: state, title and checks are the
+webhook's to say, and there is no association stored on that row for this tool to
+clear (MOTIR-3757 dropped the last one).
 
 | Input        | Type   | Required | Notes                                                                                 |
 | ------------ | ------ | -------- | ------------------------------------------------------------------------------------- |

@@ -2,6 +2,17 @@
 
 **Status:** accepted · **Date:** 2026-08-27 · **Card:** MOTIR-3656 (story MOTIR-3655)
 
+> **⚠️ WHAT ACTUALLY LANDED, since this file says "retires both scalars" and only
+> ONE of them was retired.** `github_pull_request.work_item_id` is **dropped**
+> (MOTIR-3757, 2026-08-28) — its readers moved to `work_item_delivery` under
+> [`delivery-reader-migration.md`](./delivery-reader-migration.md), and every one
+> of the 1096 stored links was carried across by this file's own backfill, so the
+> drop lost none of them. `work_item.session_branch` is **NOT** dropped:
+> [`session-branch-lineage.md`](./session-branch-lineage.md) (MOTIR-3734) asked
+> the same question of that column and answered it the other way — it is the
+> integration LINEAGE rather than an association, and it stays. Read the table
+> below as the decision as it was written, not as a description of the schema.
+
 > **⚠️ THIS SUPERSEDES `change-request-cardinality.md`** (accepted 2026-08-26,
 > MOTIR-3527 under story MOTIR-3525), which asked the same question and answered
 > it the other way. That file is marked superseded and points here. The reversal

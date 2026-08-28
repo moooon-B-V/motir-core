@@ -114,15 +114,9 @@ async function seedMerge(
     /** `undefined` takes the default merge instant; an explicit `null` is the
      *  pre-capture row, and the OPEN arm's rows (MOTIR-3230). */
     mergedAt?: Date | null;
-    workItemId?: string | null;
-    /** Every card this pull request DELIVERS (MOTIR-3756). Defaults to
-     *  `[workItemId]`, which is the shape both live writers produce: the column
-     *  and a delivery row are written together, and the exclusion the advisory
-     *  applies reads the ROW. A fixture that writes only the column describes a
-     *  state no migrated database has — the delivery table's own migration
-     *  backfilled every such row — and would assert against a set the product
-     *  never sees. Pass it explicitly for the multi-card case the column cannot
-     *  express at all. */
+    /** Every card this pull request DELIVERS (MOTIR-3756) — the delivery rows, and
+     *  since MOTIR-3757 the only association a pull request has. The exclusion the
+     *  advisory applies reads exactly these. */
     delivers?: string[];
     title?: string | null;
     merged?: boolean;
@@ -139,10 +133,9 @@ async function seedMerge(
       title: opts.title === undefined ? 'Bind the READ surface for motir_app' : opts.title,
       mergedAt: opts.mergedAt === undefined ? SWEEP_MERGED : opts.mergedAt,
       changedPaths: opts.changedPaths,
-      workItemId: opts.workItemId ?? null,
     },
   });
-  const delivers = opts.delivers ?? (opts.workItemId ? [opts.workItemId] : []);
+  const delivers = opts.delivers ?? [];
   if (delivers.length > 0) {
     const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoId } });
     for (const workItemId of delivers) {
@@ -257,7 +250,7 @@ describe('the three clauses of the rule, one negative case each', () => {
     await seedMerge(repo.id, {
       number: 2059,
       changedPaths: ['lib/services/workflowsService.ts'],
-      workItemId: card.id,
+      delivers: [card.id],
     });
 
     expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
@@ -285,9 +278,8 @@ describe('the three clauses of the rule, one negative case each', () => {
     await seedMerge(repo.id, {
       number: 2416,
       changedPaths: ['lib/services/workflowsService.ts'],
-      // The column names ONE of them — as it must, being a scalar. The delivery
-      // rows name all three, and it is the rows the predicate reads.
-      workItemId: a.id,
+      // Three delivery rows for one pull request — the shape the retired scalar
+      // could not express at all, and the one the predicate reads.
       delivers: [a.id, b.id, c.id],
     });
 
@@ -832,7 +824,7 @@ describe('the OPEN arm — a pull request touching the path RIGHT NOW', () => {
       merged: false,
       mergedAt: null,
       changedPaths: ['lib/services/workflowsService.ts'],
-      workItemId: card.id,
+      delivers: [card.id],
     });
 
     expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);

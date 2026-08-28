@@ -36,9 +36,52 @@ const MIGRATION_SQL = readFileSync(
  * `DO $$ … $$` block, so it goes to the server whole — no statement splitting
  * (a `;` inside the block body would corrupt a split, and the `$$` delimiters
  * make comment-stripping unsafe).
+ *
+ * ── ⚠️ WHY THIS RECONSTRUCTS A DROPPED COLUMN (MOTIR-3757) ─────────────────
+ * Part 4 of the migration's predicate is
+ * `NOT EXISTS (SELECT 1 FROM github_pull_request pr WHERE pr.work_item_id = wi.id)`,
+ * and that column no longer exists: the association moved to `work_item_delivery`
+ * and the scalar was dropped. `migrate deploy` is unaffected — this migration runs
+ * at its own position in the sequence, years of migrations before the drop — but
+ * a SUITE that replays the shipped SQL against a fully-migrated database now
+ * raises `42703 column pr.work_item_id does not exist`.
+ *
+ * The alternative was to retire the replay and keep a text-level pin, which would
+ * have traded ten behavioural assertions about a shipped data repair for a
+ * `toContain`. So the historical SCHEMA is reconstructed instead, from the data
+ * that replaced it: add the column, fill it from the delivery table (the exact
+ * inverse of the EXPAND migration's own pass 1), run the shipped SQL unmodified,
+ * drop the column again. The migration under test is byte-for-byte the file that
+ * shipped; what is rebuilt around it is the world it ran in.
+ *
+ * The add/fill/drop is INSIDE this one function, in a `finally`, so the column
+ * never survives a single call — a sibling file in the same worker database must
+ * not be able to observe it, and one of them asserts its absence.
  */
 async function runMigration(): Promise<void> {
-  await adminDb.$executeRawUnsafe(MIGRATION_SQL);
+  await adminDb.$executeRawUnsafe(
+    'ALTER TABLE "github_pull_request" ADD COLUMN IF NOT EXISTS "work_item_id" TEXT',
+  );
+  try {
+    // The inverse of `20260827094500_work_item_delivery` pass 1. A pull request
+    // delivering N cards had ONE of them in the column; which one is immaterial
+    // to a `NOT EXISTS` correlated on the card, so `min()` is a deterministic
+    // choice rather than an arbitrary one.
+    await adminDb.$executeRawUnsafe(`
+      UPDATE "github_pull_request" pr
+         SET "work_item_id" = d."work_item_id"
+        FROM (
+          SELECT "github_pull_request_id" AS pr_id, min("work_item_id") AS "work_item_id"
+            FROM "work_item_delivery"
+           GROUP BY "github_pull_request_id"
+        ) d
+       WHERE d.pr_id = pr."id"`);
+    await adminDb.$executeRawUnsafe(MIGRATION_SQL);
+  } finally {
+    await adminDb.$executeRawUnsafe(
+      'ALTER TABLE "github_pull_request" DROP COLUMN IF EXISTS "work_item_id"',
+    );
+  }
 }
 
 async function truncateAll(): Promise<void> {
@@ -81,7 +124,9 @@ async function seedItem(
   return item;
 }
 
-/** A connected repo + a PR row pointing at `workItemId` (the byok evidence). */
+/** A connected repo + a pull request DELIVERING `workItemId` (the byok evidence).
+ *  The delivery row is that evidence since MOTIR-3757 dropped
+ *  `github_pull_request.work_item_id`; the classifier's answer is unchanged. */
 async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: number) {
   const inst = await adminDb.githubInstallation.create({
     data: {
@@ -104,7 +149,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: 
       provider: 'github',
     },
   });
-  await adminDb.githubPullRequest.create({
+  const pr = await adminDb.githubPullRequest.create({
     data: {
       provider: 'github',
       repoId: repo.id,
@@ -112,7 +157,14 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: 
       state: 'closed',
       merged: true,
       headRef: 'subtask/MOTIR-1',
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: fx.workspaceId,
       workItemId,
+      githubPullRequestId: pr.id,
+      repoId: repo.id,
     },
   });
 }
@@ -141,8 +193,12 @@ describe('clear_cancelled_manual_provenance — clears exactly the rows the bug 
     await seedItem(fx, 'Cancelled but agent-reported', { implementationSource: 'byok' });
 
     // The MIGRATION's own SQL, replayed as the owner (MOTIR-2753) — a `DO` block is DDL-
-    // adjacent and the runtime role must never be able to run one.
-    const affected = await adminDb.$executeRawUnsafe(MIGRATION_SQL);
+    // adjacent and the runtime role must never be able to run one. Through
+    // `runMigration`, which reconstructs the column part 4 reads (see its header).
+    await runMigration();
+    // A `DO` block returns no row count, so this is 0 by construction — kept as
+    // the statement of that fact rather than deleted.
+    const affected = 0;
     // A `DO` block returns no row count of its own, so assert the effect: three
     // cleared, and nothing else touched. (The block RAISEs the same number as a
     // NOTICE, which is what a release log shows the operator.)
@@ -216,7 +272,7 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
     expect(await stampOf(worked.id)).toBe('manual');
   });
 
-  it('a cancelled row with a linked GithubPullRequest keeps its stamp (real PR evidence)', async () => {
+  it('a cancelled row with a DELIVERING pull request keeps its stamp (real PR evidence)', async () => {
     const fx = await makeWorkItemFixture();
     const withPr = await seedItem(fx, 'Shipped a PR, then cancelled', {});
     await linkPullRequest(fx, withPr.id, 41);
@@ -238,7 +294,7 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
     expect(await stampOf(other.id)).toBe('manual');
   });
 
-  it('an unlinked PR row (workItemId null) shields nothing', async () => {
+  it('a pull request that delivers NOTHING shields nothing', async () => {
     const fx = await makeWorkItemFixture();
     const inst = await adminDb.githubInstallation.create({
       data: {
@@ -269,7 +325,6 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
         state: 'open',
         merged: false,
         headRef: 'subtask/unresolved',
-        workItemId: null,
       },
     });
     const abandoned = await seedItem(fx, 'Cancelled beside an unlinked PR', {});
