@@ -188,6 +188,20 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+// ⚠️ A DECLARED-BUT-UNMERGED CARD RESTS AT `implemented`, NOT `in_progress`, and
+// that is the point of `declare` rather than a changed expectation. Every case
+// below opens its pull requests ANONYMOUSLY — the delivery names no card and
+// correctly moves nothing (MOTIR-3674) — and then declares them. Declaring an
+// OPEN pull request applies the sync that delivery could not
+// (`resyncLinkedPullRequest`), which is what `implemented` means since
+// MOTIR-2999: the code is pushed and no build has spoken for it.
+//
+// The gate's claim is untouched, and it is the one worth stating: the card is
+// not `done`. `implemented` is a step BEFORE the gate, reached by declaring the
+// work; completion is what the gate withholds until every delivery has landed.
+// The two neighbours in the abstain describe pin both sides of that boundary —
+// a card that was never declared still rests at `in_progress`, and a card with
+// one declared delivery still completes on its merge.
 describe('the delivery-SET gate — a card is done when EVERY delivery has landed', () => {
   it('HOLDS a two-delivery card when the first merges and the second has not', async () => {
     const s = await makeScenario('two-deliveries@example.com', [CORE, AI]);
@@ -201,7 +215,7 @@ describe('the delivery-SET gate — a card is done when EVERY delivery has lande
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     // The STATUS and the OUTCOME are asserted separately on purpose: the two came
     // apart in the incident this story exists for.
-    expect(await statusOf(s.item.id)).toBe('in_progress');
+    expect(await statusOf(s.item.id)).toBe('implemented');
   });
 
   it('NAMES the outstanding delivery on the card, so the hold is not a mystery', async () => {
@@ -246,7 +260,7 @@ describe('the delivery-SET gate — a card is done when EVERY delivery has lande
 
     const first = await merge(s.item.identifier, AI, 2, 'trunk', true);
     expect(first).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
-    expect(await statusOf(s.item.id)).toBe('in_progress');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     const second = await merge(s.item.identifier, CORE, 1, undefined, true);
     expect(second).toMatchObject({ outcome: 'transitioned' });
@@ -265,7 +279,7 @@ describe('the delivery-SET gate — a card is done when EVERY delivery has lande
     const result = await merge(s.item.identifier, CORE, 1, undefined, true);
 
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
-    expect(await statusOf(s.item.id)).toBe('in_progress');
+    expect(await statusOf(s.item.id)).toBe('implemented');
     const notes = await commentBodies(s.item.id);
     expect(notes.join('\n')).toContain('not onto the trunk');
   });
@@ -313,7 +327,7 @@ describe('the gate ABSTAINS wherever the product behaves as it does today', () =
     const result = await merge(s.item.identifier, CORE, 1, 'release/2.x', true);
 
     expect(result).toMatchObject({ outcome: 'deferred_non_default_base' });
-    expect(await statusOf(s.item.id)).toBe('in_progress');
+    expect(await statusOf(s.item.id)).toBe('implemented');
   });
 });
 
@@ -330,6 +344,6 @@ describe('the hold is idempotent under redelivery', () => {
     await merge(s.item.identifier, CORE, 1, undefined, true);
 
     expect(await commentBodies(s.item.id)).toHaveLength(1);
-    expect(await statusOf(s.item.id)).toBe('in_progress');
+    expect(await statusOf(s.item.id)).toBe('implemented');
   });
 });
