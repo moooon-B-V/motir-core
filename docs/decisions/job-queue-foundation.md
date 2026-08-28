@@ -1257,6 +1257,13 @@ guard that distinguishes the two before it owes anything else.
 2. **Stop looping** — make a supervision a state machine over RUNS rather than a loop inside one, so
    each run does exactly one poll and re-enqueues itself. The claim is then held for the duration of
    one provider read. That is a redesign of where supervision state lives, and it is [MOTIR-3778].
+   **⚠️ THAT REDESIGN IS NOW DECIDED, IN §16 (MOTIR-3824), and the two sentences above are the whole
+   of what this section knew about it.** §16 settles the four questions it left open — the same
+   `job_queue` row deferred forward rather than a new run per poll, a new `job_supervision` table for
+   the per-poll state, teardown as a terminal transition, and the suspension guard the paragraph
+   below demands. **Nothing in §15.4 is withdrawn by it:** the yield is still falsified, the poll is
+   still what re-executes, and §16.3 is careful to keep the memo traffic LINEAR rather than restore
+   the shape [MOTIR-3484] deleted. §15.5's trigger still decides WHEN it is scheduled.
 
 **DECIDED: the supervisor KEEPS its claim.** The occupancy stands as [MOTIR-3488] priced it, and
 §15.5 names what bounds it. What the 2026-08-28 outage actually needed is §15.3, which is shipped:
@@ -1390,6 +1397,235 @@ supervisors that may legitimately be in flight at once plus headroom for the fas
 - **Whether supervision should stop being a loop at all.** [MOTIR-3778] carries the
   self-rescheduling shape — one poll per run, the session in a durable row — with the measurement
   that would schedule it. §15.5 names the trigger; this section does not decide it.
+  **⚠️ ANSWERED: §16 (MOTIR-3824) decides it.** The sentence above stays true of §15 — it is what
+  this section left open, and the record of who left it — but the question is no longer open in the
+  document. §16 fixes the shape; §15.5's trigger is untouched and still decides WHEN it is built.
+
+## §16 — A supervision DEFERS its own run: the per-poll state leaves the memo ledger, and teardown becomes a terminal transition (MOTIR-3824)
+
+**Amendment, 2026-08-28.** §15.4 named this redesign as one of the two shapes that DO release a
+worker slot, and deliberately did not decide it; §15.7 says so in as many words — _"Whether
+supervision should stop being a loop at all. [MOTIR-3778] carries the self-rescheduling shape."_ This
+section is where it stops being a sketch. **It ships no behaviour**; it fixes the shape the code cards
+of [MOTIR-3778] build to, in §13.4's format, so a conversion applies a decision rather than re-derives
+one.
+
+**Evidence pinned at:** `motir-core` `origin/main` @ `4466ea7f`. Every code fact below was read there.
+
+**The question, in four parts.** For a supervision that must watch a container for tens of minutes
+without holding a worker slot for the duration:
+
+1. **How does a run hand itself back?** A new run per poll, or the SAME `job_queue` row deferred
+   forward.
+2. **Where does the per-poll state live?** A new table, the queue row's payload, or an existing fleet
+   row.
+3. **What replaces the `finally`?** Teardown reached from the `done` verdict, the deadline and a
+   failure.
+4. **What is the guard §15.4 says is owed before anything else** — the one that keeps a suspension
+   from being read as a path out of the loop, which would tear down the container on the first poll.
+
+### §16.1 — The SAME row, deferred. Not a new run per poll
+
+**DECIDED: a supervision hands ITSELF back — `job_queue` row unchanged, `run_at` moved forward, claim
+released, attempt refunded.** The mechanism ships already:
+`jobQueueRepository.rescheduleAt` writes `state: 'pending'`, an arbitrary `runAt`, `claimedBy: null`
+and `leaseExpiresAt: null`, with an optional `refundAttempt` that decrements `attempts`; and
+`JobWorker.settle`'s `isJobStepYield` arm already calls it exactly that way. What [MOTIR-3825] adds is
+a second SIGNAL into that arm, not a second mechanism.
+
+**Keeping the same row is load-bearing twice over, and both are properties of files rather than
+preferences:**
+
+- **The admission slot's identity survives.** `lib/jobs/indexFleetSteps.ts` derives
+  `dispatchId = ctx.event.id ?? ctx.runId`, and §13.2 records that `buildEngineContext` sets both from
+  the queue row, stable for the life of the run. `codeGraphIndexAdmissionService.admit` returns
+  `already_held` when `held.ownerRef` matches the asking `dispatchId` (§13.3(c)). **A fresh run per
+  poll is a fresh `dispatchId`, so every poll would ask for admission as a stranger** — deferred behind
+  its own live container, or granted a second slot beside it. That is [MOTIR-2160] re-opened, and
+  [MOTIR-2160] was a bug about a slot released while a live container was still spending it.
+- **The one-`job_run`-per-run guarantee survives.** `lib/jobs/engine/ledger.ts` writes the ledger row
+  inside `ctx.step.run('job-run:start', …)`, so it is memoized on `(run_id, step_id)`. One row per
+  QUEUE ROW, across every retry and every resume. **A fresh run per poll writes ~122 ledger rows per
+  thirty-minute index**, and `docs/decisions/code-graph-index-fleet.md` §6's contract — ONE
+  `succeeded` `job_run` per repo carrying ONE `output.repoRef` — is read by
+  `jobRunRepository.listSucceededCodeGraphIndexRepoRefs` to build the indexed set. It would not
+  survive the arithmetic.
+
+**And the ledger needs NO change to keep that, which is a finding rather than an omission.**
+`executeWithLedger` writes `job-run:start` (memoized), calls the handler, and writes
+`job-run:succeeded` (memoized) only if the handler RETURNS. A deferral is a THROW, so the success row
+is not written on a suspended pass and IS written on the pass that settles — which is what the two
+rows already mean. Do not add a defer arm to `executeWithLedger`.
+
+### §16.2 — A NEW TABLE, `job_supervision`, and only for the PER-POLL state
+
+**DECIDED: a new table, `job_supervision`, keyed `(run_id, key)`**, where `key` names the UNIT OF WORK
+the supervision is about — `index:<projectId>`, `ci-runner:<intentId>` — never a loop position. That
+is §13.1 limb 4 applied to a row instead of a step id, and it matters for the same reason: the index
+fleet fans out over `target.projectIds`, so ONE run holds one supervision per project.
+
+**What the row carries, and nothing else:** the poll number, `started_at` as OBSERVED from the
+provider, `consecutive_read_failures`, the deadline the supervision must be torn down by, which
+project of the fan-out is in flight, when it last ADVANCED, and its own terminal state with the
+outcome it settled to. The container handle, `bootedAt`, the credential expiry and the `slotRef` keep
+riding `index-boot`'s / `boot-runner`'s memo, so re-attachment is bought exactly where it is bought
+today (§13.2) and this section buys it nowhere twice.
+
+**The three alternatives, and why each fails:**
+
+| home                        | verdict      | why                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the step ledger**         | **REJECTED** | §13.3(b) rejected `index-started:<pid>` BY NAME: a `step.run` under a fixed id freezes its FIRST answer for the life of the run, so a `startedAt` observed before the container started pins `null` for ever. The per-poll state is precisely the state that must CHANGE between passes, which is the one thing a memo cannot do                                                                                                                                            |
+| **the queue row's payload** | **REJECTED** | `job_queue` has no payload column; the payload is `job_event.data`, and `JobEvent.runs` is a LIST — one event fans out to every subscribing job (§12). A per-poll write there is a write into state another job's run is reading. It is also the DLQ's replay payload (`recordEngineTerminalFailure` stores `eventData` so a replay can re-emit it), so mutating it corrupts the one record a replay depends on                                                             |
+| **an existing fleet row**   | **REJECTED** | `prisma/schema.prisma` carries `CiRunnerProvisioningIntent` (durable, per CI intent) and, for the index fleet, `CiFleetAdmissionLock` (a lock scope, primary key `fleet` / `project:<id>`) and `FleetInFlightSlot` (a capacity slot). **There is no per-dispatch row for the index fleet at all**, so "an existing row" can serve one supervisor and not the other — and one shared row is what makes the two conversions the SAME conversion (the story's sixth criterion) |
+
+**The table is SYSTEM-SCOPED with a denormalised `workspace_id`, exactly as `job_step` is** — the
+supervisors span tenants because the infrastructure bill does, and the column is there so the tenancy
+predicate needs no join. It is not a tenancy boundary.
+
+### §16.3 — The step ledger is NOT cleared on a defer, and that is what keeps the reads LINEAR
+
+**DECIDED: a defer leaves `job_step` untouched.** [MOTIR-3763]'s N(N+1)/2 came from an un-memoized
+POLL sitting in CONTROL FLOW that every later pass re-executed. **A handler that advances ONCE and
+returns has no such control flow.** A pass re-reads the memos it needs, performs exactly one poll, and
+defers. §15.4a states the same thing from the other side: memo traffic is linear in the CHECKPOINT
+count, and it was the ordinary calls between checkpoints that exploded.
+
+The arithmetic, for a thirty-minute index over two projects (`projectsIndexed: 2`, the shipped
+production figure in §15.1) at the unchanged cadence of ~122 polls:
+
+| shape                                                     | orchestrator reads | `job_step` reads               |
+| --------------------------------------------------------- | ------------------ | ------------------------------ |
+| today — one long run, an in-process `await` between polls | 122                | ~7 (once)                      |
+| §15.4's falsified yield, with the poll left un-memoized   | **7 503**          | ~366                           |
+| **§16 — advance once, defer**                             | **122**            | ~7 per pass, ~854 over the run |
+
+The third row is the one to read carefully: **the memo traffic is not free, it is LINEAR** — a
+constant number of memo reads per pass, times the pass count — which is exactly what §13.2 refused the
+per-poll-`step.run` shape for failing to be (it was quadratic). Nothing here restores the shape
+[MOTIR-3484] deleted.
+
+**Clearing the ledger on a defer was considered and is REJECTED, twice over.** It would destroy
+`index-boot`'s memo, which is the ONLY thing that buys re-attachment to a live container — the run
+would provision a second billed container on its second poll, which is the exact failure the whole
+fleet is built around not having. And it would re-run `resolve-target`, whose `projectIds` §13.1
+limb 2 forbids re-deriving mid-run because every later step id is keyed by them.
+
+### §16.4 — Teardown is a TERMINAL TRANSITION, and a DEFER reaches none of them
+
+This is question 4, and §15.4 is right that it is owed before anything else.
+
+> **THE INVARIANT.** A supervision's teardown is reachable ONLY from an explicit terminal transition.
+> There are exactly three — the `done` verdict, the DEADLINE, and a FAILURE thrown from inside the
+> pass — and each owes its own test. **A DEFER is a SUSPENSION and reaches none of them.**
+
+**Why it has to be an invariant and not a flag.** Both supervisors today reach teardown through a
+`finally` (`runIndexContainer`'s `steps.run('index-settle:<pid>')`, `runIntent`'s
+`steps.run('settle-runner')`). §15.4 recorded what that costs a shape that suspends by throwing: _"a
+yielding poll loop would have called `settleIndexContainer` on its first suspension and torn down the
+container it was watching."_ **A defer is a throw too.** So the conversion may not keep a `finally` and
+add a `catch` that re-throws deferrals past it — that is the same defect with a guard bolted on, and
+the guard is one edit away from being wrong for ever.
+
+**The structural form the driver takes ([MOTIR-3827]):** there is NO `try`/`finally` around the pass.
+Teardown lives in one private terminal transition, called from three named places, and the defer is
+thrown from the driver's tail — outside every `try` in the file. A shape with no `finally` cannot tear
+down on a suspension, whatever a later reader believes about the signal.
+
+§13.4 required this guarantee be RE-PROVEN per exit path rather than inherited when the mechanism last
+changed. It changes again, so it is owed again — plus a FOURTH test that a defer performs no teardown,
+which is the one the old mechanism had no way to fail.
+
+### §16.5 — The per-call-site disposition
+
+§13.4's table, re-run for this change. `memo` = stays a `step.run`; `row` = moves to
+`job_supervision`; `gone` = ceases to exist.
+
+| loop  | today's call site / state                                                 | disposition | why                                                                                                                                                                                                              |
+| ----- | ------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| index | `resolve-target`                                                          | **memo**    | §13.1 limb 2, unchanged — its `projectIds` are the identity every later id is keyed by, and now also the identity `job_supervision.key` is built from                                                            |
+| index | `index-admit:<pid>`                                                       | **memo**    | a CLAIM (§13.1 limb 1) with the backoff inside it, and §13.3(c)'s ordering obligation is what keeps it there. **Not converted to a defer loop — see §16.6**                                                      |
+| index | `index-boot:<pid>`                                                        | **memo**    | provisions a container, and its memo is what re-attaches a resumed pass to the same one. The session, `bootedAt`, `slotRef` and the credential expiry keep riding it                                             |
+| index | `index-settle:<pid>`                                                      | **memo**    | tears down, meters, releases the slot. Reached ONLY from a terminal transition (§16.4); still memoized, so a pass after it replays the outcome rather than tearing down twice                                    |
+| index | `cancel-offboarding`                                                      | **memo**    | unchanged — a write, and the run's last act                                                                                                                                                                      |
+| index | the poll ITERATION counter                                                | **row**     | §13.3(a) demoted it to a per-PASS runaway guard because a restart reset it. A pass is now one poll, so a per-pass counter bounds nothing: the count moves to the row and becomes a real total-poll ceiling again |
+| index | `startedAt` (observed)                                                    | **row**     | the state §13.3(b) proved cannot be a memo, in a home that can hold it                                                                                                                                           |
+| index | `consecutiveReadFailures`                                                 | **row**     | carried between polls today in `IndexPollResult`; polls are now in different processes                                                                                                                           |
+| index | which project of the fan-out                                              | **row**     | the `for` loop over `target.projectIds` is control flow that a pass must resume INTO rather than replay through, and the sweep (§16.7) has to know which container is live without invoking the handler at all   |
+| index | the in-process `await sleep(...)`                                         | **gone**    | replaced by `run_at`. **The interval VALUE is `indexPollWaitMs(iteration)`, unchanged** (§16.6)                                                                                                                  |
+| index | the `finally`                                                             | **gone**    | §16.4 — teardown becomes a terminal transition                                                                                                                                                                   |
+| CI    | `boot-runner`                                                             | **memo**    | admits, claims, mints a JIT registration, provisions — four limb-1 effects, and the memo is the re-attachment                                                                                                    |
+| CI    | `settle-runner`                                                           | **memo**    | tears down, de-registers, meters, settles the intent. Terminal transitions only                                                                                                                                  |
+| CI    | the poll counter, `startedAt`, `bootLatencyMs`, `consecutiveReadFailures` | **row**     | the same four facts under different names — `PollResult` carries `bootLatencyMs` where `IndexPollResult` does not, which is why the column is nullable and the driver treats the state as opaque to itself       |
+| CI    | the in-process `await sleep(...)`                                         | **gone**    | replaced by `run_at`, at `pollWaitMs(iteration)`, unchanged                                                                                                                                                      |
+| CI    | the `finally`                                                             | **gone**    | §16.4                                                                                                                                                                                                            |
+
+**`system.ci-runner-boot`'s `retryPolicy: 'none'` is untouched and must be RE-PROVEN, not inherited.**
+A defer refunds its attempt exactly as `reclaimExpiredLeases` and `releaseClaims` do, so a
+thirty-poll supervision must still cost ONE attempt — otherwise the one job in the tree whose budget is
+exactly one dead-letters on its second poll. That is a test against the real settle path, in the shape
+`tests/jobs/ci-runner-fleet.test.ts` already uses for the reclaim.
+
+### §16.6 — What does NOT move
+
+- **No poll CADENCE, backoff or budget changes.** Every value in `INDEX_FLEET_TIME_BUDGETS`,
+  `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is untouched, and `indexPollWaitMs` /
+  `pollWaitMs` are called with the same argument and produce the same number. **The wait changes WHERE
+  it is spent, not how long it is** — §13.5 and §15.7 both drew that boundary and this section inherits
+  it rather than moving it.
+- **No `DefineJobOptions` member and no predicate in `claimDueRuns`.** §14.1's refusal stands, and
+  §15.2's test settles which side this change is on: it adds neither.
+  `tests/jobs/defineJob-options-are-read.test.ts` and `tests/jobs/engine-schema.test.ts`'s no-`Sort`
+  plan assertion pass unchanged.
+- **The admission cap and `lib/ciFleet/limits.ts`.** A different resource, and a regression there costs
+  money (§13.5, unchanged).
+- **`POOL_SIZE`, `CLAIM_BATCH` and the worker machine count.** Freeing supervisor slots may make a
+  smaller pool defensible; that is a measurement taken after this ships, not a deliverable of it.
+- **⚠️ THE ADMISSION BACKOFF STAYS AN IN-PROCESS LOOP INSIDE `index-admit:<pid>` — decided here rather
+  than left to a conversion to notice.** It can wait a little under an hour
+  (`INDEX_ADMISSION_BUDGETS.maxAttempts` = 60), so it plainly holds a claim for a long time and reads
+  like exactly the thing this section removes. Three reasons it is not:
+  1. **§13.3(c)'s ordering obligation is bought by the MEMO.** A resume that re-asked admission after
+     the settle step had released the slot would be granted a FRESH slot, replay boot and settle from
+     their memos, and never release the new one — a slot leaked until its TTL, on a path where nothing
+     looks wrong. Converting the backoff to a defer loop needs a second mechanism for that guarantee,
+     and inventing one is not this story's scope.
+  2. **Nothing is being SUPERVISED.** No container exists, nothing is billed, and there is no per-poll
+     state to have a home for. This section is about the cost of WATCHING a container.
+  3. **It only waits when the fleet is at its cap**, which is the state in which the freed slot could
+     not have started another index for this repo anyway.
+     A measurement showing admission waits contending the pool is the trigger to revisit; it is not
+     what 2026-08-28 measured, and it is named in §16.8.
+
+### §16.7 — A chain that stops advancing is a NEW reachable state, and this story owes the sweep
+
+The in-process `finally` covers this today: whatever kills the loop, the same process tears the
+container down on the way out. **After §16.4 there is no such process.** A run that dead-letters, or a
+`job_supervision` row whose owning run stops coming back for any reason, leaves a live container with
+nothing watching it — and the only remaining backstop is the Fly reaper at
+`DEFAULT_REAP_AFTER_MS = DEFAULT_JOB_TIMEOUT_MS + 10 min` = **70 minutes**, which destroys the machine
+with no attributable intent, writes no usage row, and never releases its `fleet_in_flight_slot`.
+
+**DECIDED: [MOTIR-3778] ships its own sweep**, keyed on `job_supervision.last_advanced_at` rather than
+on the container's age — because the question is _"has this chain stopped?"_ and the container's age
+answers _"is this old?"_, which is a different question with a correct answer of "yes" for every
+healthy thirty-minute index. Its threshold must sit comfortably above the largest poll interval
+(`MAX_POLL_INTERVAL_MS` is 15 s for the index fleet and 30 s for CI) and comfortably below the
+70 minutes above; it performs the same terminal transition as any other teardown, so it releases the
+slot, meters the usage and settles the intent or session by CALLING the same code rather than
+reimplementing it.
+
+### §16.8 — What §16 does not settle
+
+- **WHEN this ships.** §15.5's trigger is unchanged and is a MEASUREMENT: a queue-depth or
+  oldest-pending-age alert firing while the pool is full of supervisions, or a fourth long-running
+  supervisor arriving. [MOTIR-3765] wires that alert. Tidiness is not the trigger.
+- **The admission backoff** (§16.6). Revisit on a measurement that admission waits contend the pool.
+- **`POOL_SIZE` after the fact.** Named above; a measurement, not a deliverable.
+- **What a refresh COSTS.** [MOTIR-3759]'s, unchanged from §15.7.
+- **A completion CALLBACK instead of polling.** §15.6.1 rejected it on orphan detection, and that
+  reasoning is untouched by this section: a callback that may be lost needs the poll loop as its
+  correctness path, and a poll loop is what this section re-homes rather than removes.
 
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
@@ -1404,5 +1640,16 @@ supervisors that may legitimately be in flight at once plus headroom for the fas
 [MOTIR-3769]: https://app.motir.co/items/MOTIR-3769
 [MOTIR-3763]: https://app.motir.co/items/MOTIR-3763
 [MOTIR-3778]: https://app.motir.co/items/MOTIR-3778
+[MOTIR-2160]: https://app.motir.co/items/MOTIR-2160
+[MOTIR-3765]: https://app.motir.co/items/MOTIR-3765
+[MOTIR-3824]: https://app.motir.co/items/MOTIR-3824
+[MOTIR-3825]: https://app.motir.co/items/MOTIR-3825
+[MOTIR-3826]: https://app.motir.co/items/MOTIR-3826
+[MOTIR-3827]: https://app.motir.co/items/MOTIR-3827
+[MOTIR-3828]: https://app.motir.co/items/MOTIR-3828
+[MOTIR-3829]: https://app.motir.co/items/MOTIR-3829
+[MOTIR-3830]: https://app.motir.co/items/MOTIR-3830
+[MOTIR-3831]: https://app.motir.co/items/MOTIR-3831
+[MOTIR-3832]: https://app.motir.co/items/MOTIR-3832
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss
