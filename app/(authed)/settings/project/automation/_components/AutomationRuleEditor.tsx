@@ -471,7 +471,7 @@ function RowError({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className="mt-1 flex items-center gap-1.5 font-sans text-xs text-(--el-danger-text)"
+      className="mt-1 flex items-center gap-1.5 font-sans text-xs text-(--el-danger-on-surface)"
     >
       <TriangleAlert className="size-3.5 shrink-0 text-(--el-danger)" aria-hidden />
       {children}

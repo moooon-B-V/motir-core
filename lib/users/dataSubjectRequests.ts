@@ -92,3 +92,19 @@ export function dataExportExpiresAt(builtAt: Date): Date {
  * copy of the path. One value, every reader.
  */
 export const DATA_PRIVACY_PANE_PATH = '/settings/account/data';
+
+/**
+ * The mailbox a reader is routed to when the product cannot do it for them.
+ *
+ * Design DECISION 2 sends the export's FAILED state here — the Art. 12(3) path
+ * for the case the automated build cannot deliver inside the promised month —
+ * and the pane's standing callout names it as the route for a correction, a
+ * restriction, an objection, or a question. `content/legal/privacy.md` publishes
+ * the same address, and `lib/emailTemplates/` and the export archive's own
+ * README write it into what they produce.
+ *
+ * It lives here with the two windows for the reason they do: a promise the
+ * Privacy Policy makes and a surface that repeats it must not each carry their
+ * own copy of it.
+ */
+export const DATA_PRIVACY_MAILBOX = 'privacy@motir.co';

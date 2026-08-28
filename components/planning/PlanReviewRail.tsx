@@ -251,7 +251,7 @@ export function PlanReviewRail({
       {/* The decision GATE (or the decided outcome). */}
       <div className="mt-auto flex flex-col gap-2">
         {errorCode ? (
-          <p role="alert" className="text-xs font-medium text-(--el-danger-text)">
+          <p role="alert" className="text-xs font-medium text-(--el-danger-on-surface)">
             {/* The REFUSAL that beats the optimistic hold gets its own sentence
                 (Part XII §C). A lease can be taken between the render and the
                 click, so the disabled state is a courtesy and the server's answer

@@ -2302,6 +2302,8 @@
       "dlqTableCaption": "Dead-letter queue",
       "replay": "Replay",
       "replayTooltip": "Only a workspace owner can replay jobs",
+      "alreadyReplayedToastTitle": "Already replayed",
+      "alreadyReplayedToastDesc": "This entry was replayed earlier — nothing new was queued.",
       "replayedToastTitle": "Job replayed",
       "replayedToastDesc": "The original event was re-emitted.",
       "replayErrorTitle": "Could not replay",
@@ -2342,7 +2344,8 @@
         "group": {
           "general": "General",
           "preferences": "Preferences",
-          "security": "Security"
+          "security": "Security",
+          "data": "Data"
         },
         "profile": "Profile",
         "language": "Language",
@@ -2350,7 +2353,81 @@
         "appearance": "Appearance",
         "twoFactor": "Two-factor",
         "apiTokens": "Tokens",
+        "data": "Data & privacy",
         "soon": "Soon"
+      },
+      "data": {
+        "title": "Data & privacy",
+        "subtitle": "Take a copy of your data, or close your account for good. Both are yours to do here, without asking anyone.",
+        "export": {
+          "title": "Export your data",
+          "subtitle": "A copy of everything in your account, in a format you can read and load somewhere else. This is your right of access and your right to portability — one file serves both.",
+          "what": {
+            "profile": {
+              "name": "Your profile and account",
+              "desc": "Name, email, avatar, language and appearance preferences, sign-in methods, the sessions and tokens you hold (their names and scopes — never their secrets).",
+              "value": "JSON"
+            },
+            "workspaces": {
+              "name": "Your workspaces and projects",
+              "desc": "Every workspace you are a member of, with its projects, work items, comments, sprints, boards and saved filters — as far as your access reaches.",
+              "value": "JSON"
+            },
+            "files": {
+              "name": "Your files",
+              "desc": "Attachments and images you uploaded, under their original names, in a files/ folder the JSON points into.",
+              "value": "as uploaded"
+            }
+          },
+          "format": "Format <b>JSON + your files, in one .zip</b> — structured, commonly used and machine-readable, which is what lets one export answer both rights",
+          "window": "Answered within <b>one month</b>, usually within minutes",
+          "requestTitle": "Request an export",
+          "requestDesc": "Motir builds the file in the background and emails you when it is ready.",
+          "cta": "Request export",
+          "retry": "Try again",
+          "download": "Download",
+          "filename": "motir-export.zip",
+          "preparing": {
+            "pill": "In progress",
+            "headline": "Preparing — requested {requested}.",
+            "body": "We'll email {email} when it's ready — you can close this page."
+          },
+          "ready": {
+            "pill": "Ready",
+            "headline": "Ready — built {built}.",
+            "body": "Available until {until}."
+          },
+          "failed": {
+            "pill": "Failed",
+            "headline": "Something went wrong while building your export.",
+            "body": "Nothing was sent, and nothing in your account changed. Try again, or write to {mailbox} and a person will build it for you."
+          },
+          "expired": {
+            "pill": "Expired",
+            "headline": "This export is no longer available.",
+            "body": "A built export is kept for {days} days, and this one has passed that. Request it again and Motir will build you a fresh copy."
+          },
+          "expiry": "Each Download makes a fresh, private link that expires after five minutes, so the file cannot be shared by forwarding a URL.",
+          "retention": "Request it again any time — the copy above is kept for {days} days.",
+          "error": "We couldn't start your export. Try again in a moment."
+        },
+        "delete": {
+          "title": "Delete your account",
+          "subtitle": "Closing your account starts a {days}-day countdown. Until it runs out you can sign in and stop it; after that the erasure cannot be undone.",
+          "rowTitle": "Delete account",
+          "rowDesc": "Motir will show you exactly what is deleted, what is anonymised and what it has to keep, before you confirm.",
+          "cta": "Delete account",
+          "blocked": {
+            "pill": "Action needed",
+            "title": "One thing has to be handed over first. Motir will not quietly leave an organization without an owner, and it will not delete one out from under the people in it.",
+            "body": "<b>You are the only owner of an organization that other people belong to.</b> Give someone else the owner role and this page unblocks itself — you do not need to ask anyone at Motir.",
+            "orgRow": "{count, plural, one {# member} other {# members}} · you are the only owner",
+            "manageMembers": "Organization › Members",
+            "disabledReason": "Available once every organization you own has another owner.",
+            "workspaces": "Workspaces are <b>not</b> a block. {count, plural, one {You are the only member of one of them, so it cannot be left behind — it is deleted with your account, and the confirmation lists it.} other {You are the only member of # of them, so they cannot be left behind — they are deleted with your account, and the confirmation lists them.}} To keep one, invite somebody to it first."
+          }
+        },
+        "mailbox": "This pane is not the only route. Anything the product cannot do for you — a correction, a restriction, an objection, or a question about any of it — goes to <b>{mailbox}</b>, which the Privacy Policy publishes and a person answers."
       },
       "notifications": {
         "heading": "Notifications",

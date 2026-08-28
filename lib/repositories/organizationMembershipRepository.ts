@@ -287,4 +287,28 @@ export const organizationMembershipRepository = {
       throw err;
     }
   },
+
+  /**
+   * Drop every organization membership this user holds — the erasure sweep's
+   * org arm (MOTIR-3702).
+   *
+   * ⚠️ IT DOES NOT CONSULT `assertNotLastOwner`, AND THAT GUARD IS STILL
+   * HONOURED — one tier up, as a READ. `accountErasureService.previewAccountErasure`
+   * computes the block (sole owner of a SHARED organization) and the sweep
+   * REFUSES to erase a blocked account at all, leaving the request scheduled for
+   * a later tick. So by the time this runs, either no organization the user owns
+   * has other members, or the ownership has been handed over. Re-deriving the
+   * verdict here would need every owned org's owner count on a transaction bound
+   * to `app.user_id`, which cannot see them (`organization_membership` narrows to
+   * the reader's OWN rows).
+   *
+   * Removed in the sweep's LAST step, after the workspace deletes, for the
+   * reason `workspaceMembershipRepository.deleteAllByUser` carries: the
+   * workspace-delete gate resolves through the ORG tier, so dropping this row
+   * first makes that delete refuse.
+   */
+  async deleteAllByUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.organizationMembership.deleteMany({ where: { userId } });
+    return count;
+  },
 };

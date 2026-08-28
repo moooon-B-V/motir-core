@@ -70,6 +70,7 @@ import {
   PlanNotGeneratingError,
   NoPlanForWorkItemError,
   PlanApproveTimedOutError,
+  PlanItemFieldRejectedError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
   PlanRevisionInFlightError,
@@ -1068,7 +1069,9 @@ async function materialize(
       backlogRank,
     };
 
-    const created = await workItemRepository.create(data, tx);
+    const created = await workItemRepository
+      .create(data, tx)
+      .catch((err: unknown) => translateFieldRejection(err, item.id));
 
     // THE REPOSITORY REFERENCE (Story MOTIR-2732 · MOTIR-3033). This path builds
     // its create-input by hand and calls the repository directly, bypassing
@@ -1799,6 +1802,53 @@ async function releasePlanTargetLocks(
  * less work in the transaction — not to raise this.
  */
 const APPROVE_TX_BUDGET = { timeoutMs: 30_000, maxWaitMs: 10_000 } as const;
+
+/**
+ * The field name Prisma's validation message points its `~~~~` marker at, or
+ * null (MOTIR-3654).
+ *
+ * `PrismaClientValidationError` renders the offending argument as an indented
+ * `field: value` line with a squiggle underneath it and then states
+ * `Invalid value for argument \`type\``. The trailing sentence is the reliable
+ * half — it is one fixed phrase with the column in backticks — so that is what
+ * is read, and everything else about the rendering is ignored.
+ *
+ * ⚠️ PARSED, NEVER ASSERTED. This is a human-readable message with no stability
+ * contract, so a miss returns null and the caller still raises a typed 422
+ * naming the PROPOSAL. Do not grow this into anything a failed match can break.
+ */
+function fieldFromPrismaValidationMessage(message: string): string | null {
+  return /Invalid value for argument `([A-Za-z_][A-Za-z0-9_]*)`/.exec(message)?.[1] ?? null;
+}
+
+/**
+ * Translate a `PrismaClientValidationError` raised by one proposal's insert into
+ * {@link PlanItemFieldRejectedError}, naming the proposal (MOTIR-3654).
+ *
+ * The bug this closes: a proposal carrying `type: "migration"` — a value no
+ * schema check refused, because the plan door's `type` was a bare `z.string()`
+ * while every enum beside it was a `z.enum` — reached `prisma.workItem.create()`
+ * and threw from inside the transaction. That escaped the route's error map to a
+ * bare 500 with an empty body, so the only move available was pressing Approve
+ * again. The two doors in front of this (the tool schemas, and
+ * `validatePlanProposals`' `unknown_type` arm) are where a bad value SHOULD be
+ * caught; this is the containment for anything that still gets through.
+ *
+ * Only the validation class is translated. A `PrismaClientKnownRequestError`
+ * still reaches {@link translateApproveTimeout} and the service's own typed
+ * errors pass through untouched, exactly as `containPrismaFailure` is careful to
+ * do one layer up.
+ */
+function translateFieldRejection(err: unknown, planItemId: string): never {
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    throw new PlanItemFieldRejectedError(
+      planItemId,
+      fieldFromPrismaValidationMessage(err.message),
+      err.message,
+    );
+  }
+  throw err;
+}
 
 /**
  * Translate Prisma's P2028 into {@link PlanApproveTimedOutError} (MOTIR-3396).

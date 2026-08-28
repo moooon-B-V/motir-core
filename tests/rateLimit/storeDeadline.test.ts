@@ -372,6 +372,18 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'input, not one a limiter reached. (MOTIR-1162)',
   ],
   [
+    'tests/components/DataExportCard.test.tsx',
+    'A component test that DOUBLES the Server Action wholesale (`vi.mock` of ' +
+      '`app/(authed)/settings/account/data/actions`), so `requestDataExportAction` is a ' +
+      '`vi.fn()` and `consumeRateLimit` → `consumeSharedRateLimit` → the Postgres counter ' +
+      'are never reached. The `RATE_LIMITED` it asserts is a RESULT the test wrote, to check ' +
+      'that the export card surfaces a refusal as a toast and stays IDLE rather than ' +
+      'advancing to `preparing` — the same shape as `retryAfterPluralisation.test.ts` at the ' +
+      'top of this list. The real store path for that action is production code with no ' +
+      'test of its own yet; the limit itself is `account:data-export` in ' +
+      '`lib/rateLimit/keys.ts`. (MOTIR-1136)',
+  ],
+  [
     'tests/password-reset.test.ts',
     'The 429 here is Better-Auth’s OWN limiter — `rateLimit.customRules` in ' +
       '`lib/auth/index.ts`, bound to `/request-password-reset` — reached by calling ' +

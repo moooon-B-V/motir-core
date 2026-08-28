@@ -12,7 +12,7 @@ export async function DangerZoneCard() {
   return (
     <Card
       header={
-        <h2 className="font-sans text-base font-semibold text-(--el-danger-text)">
+        <h2 className="font-sans text-base font-semibold text-(--el-danger-on-surface)">
           {t('settings.dangerZone')}
         </h2>
       }

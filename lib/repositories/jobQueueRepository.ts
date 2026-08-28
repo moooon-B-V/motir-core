@@ -269,6 +269,45 @@ export const jobQueueRepository = {
   },
 
   /**
+   * ⚠️ INSERT ONE RUN, OR REPORT THAT ONE ALREADY EXISTS — WITHOUT RAISING
+   * (MOTIR-3730). The same "a duplicate enqueue is not an error" reading
+   * `dispatchEventToEngine` and {@link enqueueScheduled} already apply to their
+   * own constraints, in the ONE form that is usable inside a transaction the
+   * CALLER owns and goes on using.
+   *
+   * `createManyAndReturn` + `skipDuplicates` is Prisma's `INSERT … ON CONFLICT
+   * DO NOTHING`: the violation is absorbed by Postgres and no error is ever
+   * thrown, so the enclosing transaction stays healthy. The row comes back when
+   * this call created it, and `null` when the unique already held.
+   *
+   * ⚠️ THE `try/catch` FORM CANNOT BE USED HERE, AND ITS FAILURE IS SILENT.
+   * A raised `P2002` aborts the whole enclosing Postgres transaction: every
+   * later statement answers `25P02 current transaction is aborted`, and a
+   * `COMMIT` on an aborted transaction rolls back and reports success. The two
+   * callers that DO catch it are safe only because each wraps its insert in its
+   * own one-statement `withSystemContext` transaction — a property of their call
+   * sites, not of the pattern. `workItemLinkRepository.createIfAbsent` records
+   * the same reasoning for the same reason.
+   *
+   * DO NOTHING rather than an upsert: the existing row is a real pending or
+   * running job, and this call has nothing better to say about it.
+   *
+   * ⚠️ NO CONFLICT TARGET, deliberately — `ON CONFLICT DO NOTHING` with no
+   * target covers EVERY constraint on the table, which is what a caller means by
+   * "already enqueued": `(event_id, job_id)`, `(job_id, scheduled_for)` and the
+   * PARTIAL unique `(job_id, idempotency_key)` alike. The partial one could not
+   * be named as a target through Prisma anyway — it is not in the datamodel
+   * (`@@unique` takes no `WHERE`; see the index's own migration).
+   */
+  async createIfAbsent(
+    data: Prisma.JobQueueRunCreateManyInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobQueueRun | null> {
+    const rows = await tx.jobQueueRun.createManyAndReturn({ data: [data], skipDuplicates: true });
+    return rows[0] ?? null;
+  },
+
+  /**
    * ⚠️ THE DEBOUNCE CANDIDATE, LOCKED (MOTIR-3483) — the PENDING, unclaimed run
    * this event should coalesce into, or null when there is none.
    *

@@ -139,4 +139,20 @@ export const apiTokenRepository = {
   ): Promise<ApiToken> {
     return tx.apiToken.update({ where: { id: tokenId }, data: { lastUsedAt } });
   },
+
+  /**
+   * Delete every personal access token this user holds — the erasure sweep's
+   * DELETE group (MOTIR-3702). The bulk twin of {@link remove}, and safe for the
+   * same two reasons it is: `api_token` is a leaf (no migration carries a
+   * `REFERENCES "api_token"`), and `api_token_owner_or_system` is `FOR ALL`, so
+   * the owner binding the erasure already holds admits the DELETE.
+   *
+   * A live bearer credential outlasting the account it authenticates is the
+   * failure this closes: nothing else in the erasure would revoke it, and the
+   * MCP surface it opens does not consult `user.email`.
+   */
+  async deleteAllForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.apiToken.deleteMany({ where: { userId } });
+    return count;
+  },
 };

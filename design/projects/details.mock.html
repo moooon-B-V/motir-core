@@ -194,7 +194,7 @@
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-danger: var(--color-destructive);
-        --el-danger-text: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
@@ -650,7 +650,7 @@
         gap: 6px;
         margin-top: 7px;
         font-size: 12px;
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
         line-height: 1.4;
       }
       .input-err svg {
@@ -780,7 +780,7 @@
       }
       .btn-danger-ghost {
         background: transparent;
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
         border-color: var(--el-border-strong);
       }
       .btn[disabled],

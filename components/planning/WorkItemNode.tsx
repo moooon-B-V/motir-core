@@ -305,7 +305,7 @@ export function WorkItemNode({
           {crossBlocked ? (
             <span
               data-testid="cross-blocked-flag"
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
+              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-on-surface)"
             >
               <Flag className="size-3" aria-hidden="true" />
               {t(crossBlockedSprint ? 'node.blockerNotInSprint' : 'node.blockedElsewhere')}
@@ -482,7 +482,7 @@ export function GhostAnchor({
       }}
       className="overflow-hidden rounded-(--radius-card) border border-dashed border-(--el-danger) p-(--spacing-card-padding)"
     >
-      <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-(--el-danger-text)">
+      <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-(--el-danger-on-surface)">
         <ArrowUpRight className="size-3.5" aria-hidden="true" />
         {identifier}
       </span>

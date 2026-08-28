@@ -49,6 +49,7 @@ import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { jobRunReap } from './definitions/jobRunReap';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
+import { accountErasureSweep } from './definitions/accountErasureSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -112,4 +113,5 @@ export const jobDefinitions = [
   jobRunReap,
   dataExportBuild,
   dataExportExpirySweep,
+  accountErasureSweep,
 ];

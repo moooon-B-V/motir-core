@@ -391,23 +391,25 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
 
 ### The token map (what to reach for)
 
-| Need                                        | `--el-*` token                                                                     |
-| ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| primary text / ink                          | `--el-text`                                                                        |
-| emphasis, AA text on a tint                 | `--el-text-strong`                                                                 |
-| secondary copy                              | `--el-text-secondary`                                                              |
-| muted / caption                             | `--el-text-muted`                                                                  |
-| tertiary / footer · faint label             | `--el-text-tertiary` · `--el-text-faint` (⚠️ see below)                            |
-| text on an ink/accent fill                  | `--el-text-inverted`                                                               |
-| CTA accent FILL · its text · pressed        | `--el-accent` · `--el-accent-text` · `--el-accent-pressed`                         |
-| accent AS text / icon on a page surface     | `--el-accent-on-surface`                                                           |
-| brand-pink decorative highlight             | `--el-highlight`                                                                   |
-| section surface · quieter · faint fill      | `--el-surface` · `--el-surface-soft` · `--el-muted`                                |
-| border · soft · strong                      | `--el-border` · `--el-border-soft` · `--el-border-strong`                          |
-| link · pressed                              | `--el-link` · `--el-link-pressed`                                                  |
-| danger/success/warning/info (+ danger text) | `--el-danger` / `--el-success` / `--el-warning` / `--el-info` (`--el-danger-text`) |
-| pastel tints                                | `--el-tint-{peach,rose,mint,lavender,sky,yellow}`                                  |
-| **issue-type hue (by kind)**                | `--el-type-{epic,story,task,bug,subtask}`                                          |
+| Need                                    | `--el-*` token                                                |
+| --------------------------------------- | ------------------------------------------------------------- |
+| primary text / ink                      | `--el-text`                                                   |
+| emphasis, AA text on a tint             | `--el-text-strong`                                            |
+| secondary copy                          | `--el-text-secondary`                                         |
+| muted / caption                         | `--el-text-muted`                                             |
+| tertiary / footer · faint label         | `--el-text-tertiary` · `--el-text-faint` (⚠️ see below)       |
+| text on an ink/accent fill              | `--el-text-inverted`                                          |
+| CTA accent FILL · its text · pressed    | `--el-accent` · `--el-accent-text` · `--el-accent-pressed`    |
+| accent AS text / icon on a page surface | `--el-accent-on-surface`                                      |
+| brand-pink decorative highlight         | `--el-highlight`                                              |
+| section surface · quieter · faint fill  | `--el-surface` · `--el-surface-soft` · `--el-muted`           |
+| border · soft · strong                  | `--el-border` · `--el-border-soft` · `--el-border-strong`     |
+| link · pressed                          | `--el-link` · `--el-link-pressed`                             |
+| danger/success/warning/info FILL        | `--el-danger` / `--el-success` / `--el-warning` / `--el-info` |
+| ink ON a danger fill ⚠️ nothing else    | `--el-danger-text` (see the danger rule below)                |
+| danger AS text / icon on a page surface | `--el-danger-on-surface`                                      |
+| pastel tints                            | `--el-tint-{peach,rose,mint,lavender,sky,yellow}`             |
+| **issue-type hue (by kind)**            | `--el-type-{epic,story,task,bug,subtask}`                     |
 
 ### Rules
 
@@ -441,6 +443,45 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
   `--el-text-secondary`, which clears AA everywhere in both themes. A design
   mock is NOT authority here: the roles asset specified faint on surface and
   had to be corrected.
+
+- ⚠️ **`--el-danger-text` IS NOT A DANGER TEXT TOKEN. It is the ink FOR a
+  danger FILL, and it is legal ONLY on an element that also carries
+  `bg-(--el-danger)` (MOTIR-3663).** It resolves to
+  `--color-destructive-foreground`, which every palette defines as whatever
+  contrasts with its red fill — white, or in a dark-first palette a near-black.
+  Painted on a page instead, measured across all ten palettes:
+
+  | theme | what it does                                                                                                                                                                                                         |
+  | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | light | **1.00–1.04:1 in ALL TEN palettes** — the ink and the page are the same white                                                                                                                                        |
+  | dark  | **1.00:1 in six** (amber · candy · citrine · evergreen · garnet · sienna)                                                                                                                                            |
+  | dark  | 18.59–19.44:1 in the other four (base · cobalt · graphite · spectrum) — legible, and still the bug: it renders near-white, indistinguishable from `--el-text`, so the **danger SIGNAL is lost rather than the text** |
+
+  On the `--el-danger-surface` tint it is 1.14–1.29:1 in all twenty. Its one
+  correct use in the whole tree is `Button`'s danger variant,
+  `bg-(--el-danger) text-(--el-danger-text)`.
+
+- ✅ **Danger text on a surface takes `--el-danger-on-surface`** —
+  `color-mix(in srgb, var(--el-danger) 70%, var(--el-text))`, the palette's own
+  danger hue pulled toward that theme's body ink until it is readable. It is
+  **≥ 4.77:1 on the page, `--el-surface`, `--el-surface-soft`, `--el-muted`,
+  `--el-tint-rose` and `--el-danger-surface`, in all 20 palette × theme
+  combinations**, so it is right whichever surface the element lands on — the
+  same property that makes `--el-text-secondary` the answer on the grey inks.
+  **Raw `--el-danger` is NOT that token**: it is 4.25 / 4.11 / 4.24:1 on the
+  DARK page in the base, cobalt and graphite palettes, and under AA on most
+  tints. For a big label or a glyph beside one, putting the hue in the
+  **border + glyph** and keeping the label on `--el-text` is still the better
+  composition (graphics need only 3:1) — `DeviceApproval` is the worked example.
+
+  Both rules are enforced, at zero, over `components/**`, `app/**`, `lib/**`,
+  the design system's `src/**` (`tests/theme/inkContrastLint.test.ts`'s danger
+  arm) **and over `design/**`** (`tests/design-ink-contrast.test.ts`). The
+design-side arm matters most: MOTIR-1553's root cause was a MOCK that
+specified `--el-danger-text`for a row-menu Delete, which was then copied into
+two components and shipped invisible. **Unlike the two grey arms, the danger
+arm grants no`aria-hidden` / disabled exemption\*\* — 1.4.3 not measuring a
+  hidden glyph does not make a white-on-white one visible.
 
 - ❌ `text-foreground` / `bg-surface` / `text-muted-foreground` /
   `border-border` / `bg-primary` and friends — Tier-0 utilities, forbidden

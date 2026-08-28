@@ -171,6 +171,12 @@ comment or `defineJob`'s plumbing. `defineJob` supported `{ limit, key?, scope? 
 deleted the option outright rather than porting it: a forwarded constraint no job declares and no
 engine reads is a lie in a type signature.
 
+> ⚠️ **AND IT IS NOT COMING BACK — the decision is recorded rather than left to be re-derived from
+> the deletion.** `docs/decisions/job-queue-foundation.md` §14 (MOTIR-3731) settles that the
+> Postgres engine will not grow a claim-time per-job limit, and §14.3 is the table of what a job
+> wanting serialisation should reach for instead. The count in the paragraph above is exactly the
+> shape §14 is careful about: it was true when it was taken and false eight hours later.
+
 So there was no function-level, env-scoped or account-scoped limit this deployment configured. The
 only ceiling in play was the **account-level capacity the vendor applied to the environment by
 plan**, shared by all 24 functions and partitioned by nothing.

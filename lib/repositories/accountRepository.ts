@@ -143,4 +143,20 @@ export const accountRepository = {
       data: { password: passwordHash },
     });
   },
+
+  /**
+   * Delete every `account` row this user holds — the CREDENTIALS arm of the
+   * erasure sweep's DELETE group (MOTIR-3702). One row per sign-in method: the
+   * argon2id password hash and every OAuth provider linkage, each carrying the
+   * provider's own identifier for the person.
+   *
+   * No `tx` needed for RLS (`account` has row level security disabled, the
+   * `countByUserId` posture), but one is REQUIRED here because this is a write
+   * inside the erasure's single locked transaction — every deletion that
+   * erasure performs commits or rolls back together.
+   */
+  async deleteAllForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.account.deleteMany({ where: { userId } });
+    return count;
+  },
 };

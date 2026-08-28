@@ -5,6 +5,7 @@ import { plansService } from '@/lib/services/plansService';
 import {
   PlanApproveTimedOutError,
   PlanGrammarError,
+  PlanItemFieldRejectedError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
   PlanItemUnknownTargetRepoRoleError,
@@ -114,6 +115,24 @@ export async function POST(
       return NextResponse.json(
         { code: err.code, planId: err.planId, itemCount: err.itemCount, error: err.message },
         { status: 503 },
+      );
+    }
+    // A proposal carried a value the `work_item` schema rejects, and the ORM said
+    // so from inside materialize (MOTIR-3654) — 422, the same status the other two
+    // malformed-proposal arms above get, because it means the same thing: fix the
+    // proposal, not the request. The transaction rolled back, so the tree is
+    // byte-identical and the key counter has not advanced.
+    //
+    // This is the arm the P2028 comment directly above predicted one failure over:
+    // without it a `PrismaClientValidationError` falls through to the rethrow and
+    // the caller gets a bare 500 with an empty body — which reads as "something is
+    // broken" and led to Approve being pressed twice on the plan that produced
+    // this bug. `planItemId` says WHICH proposal, and `field` (when Prisma's
+    // message yields it) says which column.
+    if (err instanceof PlanItemFieldRejectedError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, field: err.field, error: err.message },
+        { status: 422 },
       );
     }
     throw err;

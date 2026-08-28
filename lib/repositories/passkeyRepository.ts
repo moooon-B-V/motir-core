@@ -43,4 +43,26 @@ export const passkeyRepository = {
   async countByUserId(userId: string, tx?: Prisma.TransactionClient): Promise<number> {
     return (tx ?? db).passkey.count({ where: { userId } });
   },
+
+  /**
+   * Delete every passkey this user holds — the erasure sweep's DELETE group
+   * (MOTIR-3702).
+   *
+   * ⚠️ THE ONE WRITE ON THIS REPOSITORY, AND WHY THE READ-ONLY RULE ABOVE
+   * SURVIVES IT. That rule refuses a SECOND write path onto the WebAuthn
+   * ceremony — registering, renaming and revoking one credential, which
+   * Better-Auth owns end to end and which has to agree with the browser about
+   * the ceremony to stay correct. This write is not in that conversation: it
+   * removes the whole set for an account that is being erased, at a moment when
+   * there is no ceremony and no browser, and it has no Better-Auth endpoint to
+   * compete with (the adapter offers no delete-all). `twoFactorRepository
+   * .deleteByUserId` is the same exception on the same footing.
+   *
+   * `tx` REQUIRED: it is a write, and it belongs to the erasure's single
+   * transaction.
+   */
+  async deleteAllForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.passkey.deleteMany({ where: { userId } });
+    return count;
+  },
 };

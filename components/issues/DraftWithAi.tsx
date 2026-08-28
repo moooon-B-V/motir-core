@@ -137,7 +137,10 @@ export function DraftErrorNotice({ onRetry, onDismiss, errorCode }: DraftErrorNo
   }
   return (
     <Card tint="rose" className="flex items-start gap-2.5 p-3" role="alert">
-      <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-(--el-danger-text)" aria-hidden />
+      <TriangleAlert
+        className="mt-0.5 h-5 w-5 shrink-0 text-(--el-danger-on-surface)"
+        aria-hidden
+      />
       <div className="flex flex-col gap-1.5">
         <span className="text-(--el-text-strong) text-sm font-medium">{t('errorTitle')}</span>
         <span className="text-(--el-text-strong) text-xs">{t('errorBody')}</span>

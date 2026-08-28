@@ -770,7 +770,7 @@ function CanceledBanner({ t }: { t: T }) {
     <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)">
       <X
         className="mt-0.5 h-4 w-4 shrink-0"
-        style={{ color: 'var(--el-danger-text)' }}
+        style={{ color: 'var(--el-danger-on-surface)' }}
         aria-hidden
       />
       <p className="font-sans text-xs text-(--el-text-strong)">{t('canceled.banner')}</p>

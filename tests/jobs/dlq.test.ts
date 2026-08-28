@@ -258,6 +258,7 @@ describe('replayDLQ', () => {
     const dlqId = await seedDlqRow('dlq-key-3');
 
     const result = await withSystemContext((tx) => replayDLQ(dlqId, tx));
+    expect(result.outcome).toBe('replayed');
 
     // ⚠️ READ OFF THE ROWS, NOT OFF A SPY (MOTIR-3418). A replay used to be a
     // re-SEND through the transport, so a spy on it was the observation. It is a
@@ -277,44 +278,65 @@ describe('replayDLQ', () => {
     expect(sent.to).toBe('dlq@example.com');
 
     // The row is stamped (auditable replay).
-    expect(result.replayedAt).not.toBeNull();
+    expect(result.entry.replayedAt).not.toBeNull();
     const reread = await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } });
     expect(reread!.replayedAt).not.toBeNull();
   });
 
-  it('replaying the SAME row twice REFUSES the second — the dedup index is the mechanism', async () => {
+  it('replaying the SAME row twice REPORTS the second as already-replayed — it does not throw', async () => {
     const dlqId = await seedDlqRow('dlq-key-4');
 
-    await withSystemContext((tx) => replayDLQ(dlqId, tx));
+    const first = await withSystemContext((tx) => replayDLQ(dlqId, tx));
+    expect(first.outcome).toBe('replayed');
+    const firstStamp = first.entry.replayedAt;
 
-    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS, AND THE INVERSION IS A
-    // DEFECT REPORT RATHER THAN A DECISION (MOTIR-3418 surfaced it; the bug filed
-    // against it is MOTIR-3730). It used to read "a double-click dedups, no
-    // double-send", asserting that BOTH replays were emitted and the runtime
-    // silently collapsed them to one delivery. That was the VENDOR arm: its
-    // dedup window swallowed the second send server-side and the operator saw two
-    // success toasts.
-    //
-    // The engine arm — the only arm since the cutover, and the only arm at all
-    // since this story — enqueues by INSERT, and the second insert hits the
-    // `(job_id, idempotency_key)` partial unique index and RAISES. So the second
-    // click surfaces a P2002 to the dashboard's Server Action rather than a
-    // second toast. Both are defensible operator experiences and neither was
-    // chosen: the arm was written for the case where the row was NOT already
-    // replayed, and `dispatchEventToEngine` — which treats exactly this violation
-    // as "already enqueued" — is one file over.
-    //
-    // It is asserted rather than fixed here because this story's scope boundary
-    // forbids changing what a job does; the fix belongs to the card that shipped
-    // the arm. What matters for THIS file is that the dedup engages at all, which
-    // the throw proves more directly than a row count would.
-    await expect(withSystemContext((tx) => replayDLQ(dlqId, tx))).rejects.toMatchObject({
-      code: 'P2002',
-    });
+    // ⚠️ THE DEDUP IS THE MECHANISM AND IT IS UNCHANGED (MOTIR-3730). The replay
+    // key is derived from the DLQ row id, so a second click derives the SAME key
+    // and the `(job_id, idempotency_key)` partial unique refuses the insert —
+    // exactly as designed, so a double-click cannot double-deliver. What changed
+    // is what the caller is TOLD: the violation is absorbed at the INSERT and
+    // reported, instead of surfacing as a raw `P2002` out of the dashboard's
+    // Server Action.
+    const second = await withSystemContext((tx) => replayDLQ(dlqId, tx));
+    expect(second.outcome).toBe('already-replayed');
 
-    // ONE queued run, carrying the re-shaped key.
+    // ONE queued run, carrying the re-shaped key — nothing new was enqueued.
     const queued = await adminDb.jobQueueRun.findMany({ where: { jobId: 'email.send' } });
     expect(queued).toHaveLength(1);
     expect(queued[0]!.idempotencyKey).toBe(`dlq-key-4:replay:${dlqId}`);
+
+    // AND no orphan event: the second attempt writes its `job_event` before it
+    // can know the run is a duplicate (the run carries the FK), so the no-op arm
+    // removes it. One replay, one event.
+    const events = await adminDb.jobEvent.findMany({ where: { name: 'email.send' } });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.id).toBe(queued[0]!.eventId);
+
+    // The stamp still records the replay that actually enqueued — a no-op must
+    // not tell an operator their second click did something.
+    const reread = await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } });
+    expect(reread!.replayedAt?.toISOString()).toBe(firstStamp);
+    expect(second.entry.replayedAt).toBe(firstStamp);
+  });
+
+  it("leaves the CALLER's transaction usable — the no-op arm never aborts it", async () => {
+    const dlqId = await seedDlqRow('dlq-key-5');
+    await withSystemContext((tx) => replayDLQ(dlqId, tx));
+
+    // ⚠️ THIS IS THE REGRESSION GUARD, and it is why the fix could not be a
+    // `try/catch` on `P2002` (MOTIR-3730). A raised unique violation aborts the
+    // whole enclosing Postgres transaction — every later statement answers
+    // `25P02 current transaction is aborted`, and the COMMIT then rolls back and
+    // reports success. `replayDLQ` runs inside the transaction the dashboard
+    // service opens and goes on using, so the caller has to be able to keep
+    // working after an already-replayed answer.
+    const outcome = await withSystemContext(async (tx) => {
+      const result = await replayDLQ(dlqId, tx);
+      // A statement AFTER the duplicate, on the SAME transaction.
+      const stillUsable = await tx.jobRunDlq.count();
+      return { result, stillUsable };
+    });
+    expect(outcome.result.outcome).toBe('already-replayed');
+    expect(outcome.stillUsable).toBe(1);
   });
 });

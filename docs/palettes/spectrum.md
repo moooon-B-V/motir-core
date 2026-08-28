@@ -95,7 +95,7 @@ axis — is what makes "style × palette" a product of two independent choices, 
 
 ## Accessibility
 
-Every text-on-surface, white-on-fill, link, and chip-tint pairing clears **WCAG
+Every text-on-surface, ink-on-fill, link, and chip-tint pairing clears **WCAG
 AA** (≥4.5; ≥3.0 for icon/UI hues) in **both** light and dark — verified
 numerically and by a rendered specimen, never eyeballed (the `--el-*` AA +
 design-mockup render checklist). Notable margins:
@@ -107,6 +107,16 @@ design-mockup render checklist). Notable margins:
 - Violet `--el-accent-on-surface` on a surface — **6.5:1** / **6.5:1**; white on
   the `--el-accent` fill — **7.4:1** / **5.6:1**.
 - Link on a page surface — **5.2:1** / **9.2:1**.
-- White on the danger fill — **~4.7:1** (light); danger reads AS text on the
-  dark canvas — **~5.5:1**.
+- Ink on the danger fill — white `#ffffff` **4.80:1** (light) / near-black
+  `#14111f` **5.46:1** (dark). ⚠️ **The dark half was `#ffffff` at 3.40:1 until
+  MOTIR-3664** — the only one of ten palettes × two themes under AA. Note what
+  this bullet said while that was true: it gave the light fill pairing and then,
+  in the slot where the dark one belonged, a **different** measurement — _danger
+  reads AS text on the dark canvas, ~5.5:1_. Both numbers were correct and the
+  claim above ("every ink-on-fill pairing clears AA in both themes") was
+  therefore never actually made for the pairing that failed. A substituted
+  measurement reads as a discharged one.
+- Danger as a border/glyph hue (the 3:1 bar, and the reason the fix moved the INK
+  rather than `--color-destructive`) — **3.99–4.80:1** light / **5.03–5.68:1**
+  dark, across page / surface / soft surface / canvas. Unmoved by MOTIR-3664.
 - `--el-text-strong` on every candy tint — **≥10.9:1** both themes.

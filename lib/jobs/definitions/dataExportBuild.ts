@@ -28,13 +28,15 @@ import { defineJob } from '../defineJob';
 // is ever in flight, enforced by a row lock rather than by a scheduler's
 // admission. The option was belt to that braces.
 //
-// **What is genuinely lost is the belt, and it is filed rather than papered
-// over: MOTIR-3731.** The Postgres engine has no per-job concurrency at all — it
-// claims `CLAIM_BATCH` due runs per tick with `FOR UPDATE SKIP LOCKED` and reads
-// no per-job limit — so a `concurrency` on a definition would have been an
-// accepted-and-ignored field, which is worse than an absent one. Do not
-// re-declare it here; if a second, weaker guard is wanted, it is an engine
-// feature against `job_queue`'s claim predicate.
+// **What is genuinely lost is the belt, and the decision not to rebuild it is
+// recorded: `docs/decisions/job-queue-foundation.md` §14 (MOTIR-3731).** The
+// Postgres engine has no per-job concurrency at all — it claims `CLAIM_BATCH`
+// due runs per tick with `FOR UPDATE SKIP LOCKED` and reads no per-job limit —
+// and §14 decides it will not grow one, because a claim-time admission decision
+// carries a liveness obligation (`motir-ai`'s equivalent wedges a whole session
+// on one abandoned `running` row) to buy a weaker guarantee than the row lock
+// above already gives. Do NOT re-declare a `concurrency` here: `defineJob` does
+// not accept one, and §14.3 is the table of what to reach for instead.
 export const dataExportBuild = defineJob(
   {
     id: 'account/data-export.requested',

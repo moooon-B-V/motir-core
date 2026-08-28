@@ -71,7 +71,7 @@
         --el-type-manual: #a4a097; /* --color-stone — the shipped manual hue */
         /* derived, token-only (no invented hex): the danger flag surfaces */
         --el-danger-surface: color-mix(in srgb, var(--el-danger) 13%, var(--el-page-bg));
-        --el-danger-text: color-mix(in srgb, var(--el-danger) 70%, var(--el-text-strong));
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --radius-card: 12px;
         --radius-badge: 9999px;
         --radius-control: 6px;
@@ -304,7 +304,7 @@
         padding: 2px 7px;
         border-radius: var(--radius-badge);
         background: var(--el-danger-surface);
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
         font-size: 10.5px;
         font-weight: 700;
         white-space: nowrap;
