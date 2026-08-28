@@ -1988,6 +1988,17 @@ model WorkItem {
   // human merges the session PR). Indexed for the `complete_session` lookup
   // (every item recorded on a branch) — a plain `String?` matching this table's
   // camelCase, no-`@map` columns.
+  // ⚠️ KEPT — and deliberately NOT replaced by `work_item_delivery`. This is the
+  // INTEGRATION LINEAGE: a PRE-pull-request fact, written by `mark_integrated`
+  // before any pull request exists. A delivery row is a POST-pull-request fact —
+  // `work_item_delivery.github_pull_request_id` is NOT NULL — so no such row
+  // exists in the window this column is written and read in, and on the
+  // scoped-run lane that window is the entire run. Outside it, the head ref a
+  // delivery joins to is the BLOCKER'S OWN feature branch, and this column's
+  // null-ness is what tells the two cases apart. So the readiness reads above
+  // cannot be moved onto the delivery table; `work-item-delivery-links.md` Q2
+  // once scheduled this column for removal and is amended.
+  // See docs/decisions/session-branch-lineage.md.
   sessionBranch         String?
   // Per-item REPO ATTRIBUTION (Story 7.9 · MOTIR-1804, the rebuilt half of the
   // cancelled 7.7.3) — WHICH repo this item's work ships in, as the bare repo

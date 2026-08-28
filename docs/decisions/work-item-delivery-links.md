@@ -40,6 +40,14 @@ It **retires both scalars**:
 | `work_item.session_branch`         | many cards → ONE branch, matched by name | rows             |
 | `github_pull_request.work_item_id` | many PRs → ONE card                      | rows             |
 
+> **⚠️ AMENDED IN PLACE 2026-08-28 by [MOTIR-3735](motir:cmtcmw8da0091hwn84oyi5ulj)
+> — it retires ONE of them.** `github_pull_request.work_item_id` is retired, by
+> MOTIR-3757. **`work_item.session_branch` is NOT**: it answers a READINESS
+> question no delivery row can be asked before a pull request exists, and
+> [`session-branch-lineage.md`](./session-branch-lineage.md) (MOTIR-3734,
+> 2026-08-28) reversed that half. Q2's amendment note below carries the detail.
+> The row above is left as written.
+
 The many-to-many comes **entirely from the rows**. N cards linking to the same
 pull-request row is N rows, and that is how one pull request delivers N cards;
 one card linking to two pull-request rows is two rows, and that is how a card
@@ -160,6 +168,42 @@ behavioural change, not a reordering.
 
 ## Q2 — when the two scalars go
 
+> **⚠️ AMENDED IN PLACE 2026-08-28 by [MOTIR-3735](motir:cmtcmw8da0091hwn84oyi5ulj),
+> after [MOTIR-3734](motir:cmtcmw8af0090hwn8dcp7tpjj) merged
+> ([motir-core#2423](https://github.com/moooon-B-V/motir-core/pull/2423)) as
+> [`session-branch-lineage.md`](./session-branch-lineage.md).** This section says
+> BOTH scalars go. **That is correct for `github_pull_request.work_item_id` and
+> WRONG for `work_item.session_branch`, which is NOT retired.** Read
+> `session-branch-lineage.md` before acting on any row below that names it. Three
+> corrections, marked ⚠️¹ ⚠️² ⚠️³ where they bite:
+>
+> 1. **⚠️¹ The two `work_item.session_branch` reader rows are true as HISTORY —
+>    MOTIR-3658 and MOTIR-3659 did move those two readers — and they were never
+>    the whole set.** Three more read the column and appear in no table in this
+>    file: `findBlockerStates`, `findBlockerStatesForItems` and
+>    `findBlockerSessionBranchesForItems`
+>    (`lib/repositories/workItemLinkRepository.ts:229,266,417`). The first two
+>    decide READINESS, and `work_item_delivery` structurally cannot answer them:
+>    its `github_pull_request_id` is a NOT NULL FK, so no delivery row exists in
+>    the window `mark_integrated` writes into — and on the scoped-run lane
+>    (`openPrEagerly` is `motir auto` only) that window is the entire run
+>    (`session-branch-lineage.md` §1.2).
+> 2. **⚠️² The last row — _"the columns themselves | both | a follow-up card, once
+>    this table is empty"_ — holds for `github_pull_request.work_item_id` only**
+>    (that follow-up is MOTIR-3757, scoped by
+>    [`delivery-reader-migration.md`](./delivery-reader-migration.md)).
+>    `work_item.session_branch` is dropped by no card: it keeps its writer, its
+>    `@@index([sessionBranch])` and all six repository sites
+>    (`session-branch-lineage.md` §4).
+> 3. **⚠️³ The sentence _"Its `sessionBranch` argument goes with the column it
+>    writes"_ is WITHDRAWN.** The column stays, so the argument stays.
+>    `mark_integrated` is unchanged.
+>
+> **The original text below is left exactly as it was written** — the record is
+> what was decided and then corrected, not a rewrite. On any conflict
+> `session-branch-lineage.md` is newer and wins; this note exists because nothing
+> in this file pointed at it.
+
 **Both stay live-but-unread for the whole of MOTIR-3655, and are dropped by a
 FOLLOW-UP card.** A column drop in the same migration as its replacement leaves
 no state in which the old readers are still correct, and the rollback for a bad
@@ -170,13 +214,13 @@ link row, and each reader is moved to the table one card at a time.
 
 | reader                                                                           | of                                 | moved by                                       |
 | -------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------- |
-| `findBySessionBranch` → `resolveChangeRequestWorkItemSet`'s `session_branch` arm | `work_item.session_branch`         | MOTIR-3659                                     |
-| `closeOutSession` / `completeSession`                                            | `work_item.session_branch`         | MOTIR-3658                                     |
+| `findBySessionBranch` → `resolveChangeRequestWorkItemSet`'s `session_branch` arm | `work_item.session_branch` ⚠️¹     | MOTIR-3659                                     |
+| `closeOutSession` / `completeSession`                                            | `work_item.session_branch` ⚠️¹     | MOTIR-3658                                     |
 | `countOtherOpenByWorkItem` / `countOpenByWorkItem`                               | `github_pull_request.work_item_id` | MOTIR-3659                                     |
 | `listCompletionFactsByWorkItem`                                                  | `github_pull_request.work_item_id` | MOTIR-3659                                     |
 | the Development surface                                                          | `github_pull_request.work_item_id` | MOTIR-3660                                     |
 | `ciPromotion`                                                                    | `resolveChangeRequestWorkItemSet`  | MOTIR-3685                                     |
-| **the columns themselves**                                                       | both                               | **a follow-up card, once this table is empty** |
+| **the columns themselves** ⚠️²                                                   | both                               | **a follow-up card, once this table is empty** |
 
 **One reader is NEW rather than moved.** `workItemsService.listDeliverySet`
 (MOTIR-3697) reads the table and nothing else — there is no scalar it could have
@@ -188,7 +232,7 @@ it is literally the verdict the Development pill shows rather than a second
 derivation that agrees today — which is the property MOTIR-3685's watch loop is
 built on and its acceptance criterion forbids breaking.
 
-### `mark_integrated` SURVIVES, minus its `sessionBranch` argument
+### `mark_integrated` SURVIVES, minus its `sessionBranch` argument ⚠️³
 
 It is not made redundant by `link_pull_request`, and the two do not overlap once
 the link is a row:
@@ -203,6 +247,13 @@ the link is a row:
 Its `sessionBranch` argument goes with the column it writes. Two tools, two
 distinct meanings, no second way to say the same thing — which is the state
 MOTIR-1965 argued for and the one this decision is trying to reach.
+
+> **⚠️³ WITHDRAWN 2026-08-28 — the heading's _"minus its `sessionBranch`
+> argument"_ and the sentence that opens this paragraph.** The column is kept
+> (`session-branch-lineage.md`), so the argument is kept and `mark_integrated`'s
+> signature does not change. The rest of this subsection — the two doors, and why
+> the two tools do not overlap — stands unchanged and is in fact §1.2's own
+> reasoning, quoted back at this file.
 
 ---
 
