@@ -5855,6 +5855,7 @@
       "noMatches": "No matching pull requests",
       "noMatchesHint": "Repositories sync in Settings → Workspace → GitHub.",
       "linkedTo": "Linked to {key}",
+      "deliversN": "Delivers {count} work items",
       "linkedManually": "linked manually",
       "linkAction": "Link",
       "notConnected": "GitHub isn't connected for this workspace. Connect it in Settings → Workspace → GitHub.",

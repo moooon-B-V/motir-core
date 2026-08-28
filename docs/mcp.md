@@ -235,7 +235,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **53 tools**.
+`initialize` handshake and registers **54 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1257,6 +1257,60 @@ resolved from the repo row's own workspace, never through its installation
 Requires the work-item edit permission (`work_item:edit`) — linking a pull
 request to a card is editing that card. It is already in the CLI's fixed grant,
 so a dispatched agent can call it.
+
+#### `unlink_pull_request`
+
+**Undo ONE `link_pull_request`** — remove the delivery recorded between this work
+item and this pull request. It is the correction door, and nothing else is.
+
+**Why re-linking is not a correction.** While the association was a single FK, a
+mis-link fixed itself: linking the pull request to the right card MOVED the column
+and the wrong association ceased to exist, because there was only ever one. A
+delivery is a ROW. Linking the right card ADDS a second row and leaves the
+mistaken one exactly where it was — and the completion gate counts a card's
+delivering pull requests, so that row holds the card open on a pull request that
+will never merge for it. The `movedFrom` in a link result tells you the FK moved;
+it says nothing about the row.
+
+⚠️ **It removes EXACTLY ONE delivery — the pair you name**, which is what makes it
+a correction rather than a retraction:
+
+- every OTHER card the same pull request delivers keeps its own delivery — a
+  session pull request carrying twelve cards loses one and still delivers eleven;
+- this card keeps every other pull request that delivers it — unlinking one
+  repository of a multi-repo card does not retract the others.
+
+⚠️ **An unknown repository or number is REFUSED, not answered as a no-op.** A typo
+in the coordinate and a link that was never there are opposite facts, and reporting
+the first as a successful nothing lets a caller believe a mis-link was corrected
+while it stands. `removed: false` is reserved for the benign case: the pull request
+exists, the item exists, and they were simply not linked — a retry, or a correction
+somebody else already made.
+
+It leaves `github_pull_request.work_item_id` alone. That column is the legacy
+scalar, its drop is its own card, and clearing it here would take a delivery's
+status sync away from a card whose OTHER links are perfectly good. It also leaves
+the pull request itself alone: state, title and checks are the webhook's to say.
+
+| Input        | Type   | Required | Notes                                                                                 |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------- |
+| `key`        | string | yes      | Work item identifier.                                                                 |
+| `url`        | string | \*       | The full pull-request URL.                                                            |
+| `repository` | string | \*       | `"owner/name"` as the repository is connected (case-insensitive). Goes with `number`. |
+| `number`     | number | \*       | The pull-request number. Goes with `repository`.                                      |
+
+\* The same two address forms `link_pull_request` takes, cross-checked the same
+way: give `url`, or `repository` + `number`, and if both are given they must AGREE
+(`INVALID_PULL_REQUEST_REF`).
+
+**Output** — `structuredContent`: `key`, `removed` (whether a row was actually
+taken out), and `pullRequest` — the `owner/name#number` coordinate you addressed.
+
+Requires the work-item edit permission (`work_item:edit`) — **the same key
+`link_pull_request` asserts**, deliberately: undoing a link is editing the card the
+link was made against, and a correction door a token cannot reach while it can
+reach the door that creates the mistake would be worse than no door at all. It is
+already in the CLI's fixed grant.
 
 #### `attach_file`
 

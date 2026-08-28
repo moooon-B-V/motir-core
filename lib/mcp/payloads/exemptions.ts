@@ -93,6 +93,15 @@ export const EXEMPT_TOOLS = {
     'only because this call wrote it (no delivery had arrived), and `movedFrom` names the item ' +
     'the SINGULAR FK was taken off, so a caller cannot read a move as an addition ' +
     '(MOTIR-3526).',
+  unlink_pull_request:
+    'Returns WHAT WAS REMOVED — `{ key, removed, pullRequest }`, where `pullRequest` is the ' +
+    '`owner/name#number` coordinate the caller addressed. Exempt for the same reason its sibling ' +
+    'is: no `/api/v1` operation returns a change request at all, so there is no shared component ' +
+    'to derive from. ⚠️ `removed` is load-bearing rather than decorative — `false` means the ' +
+    'pull request and the item both EXIST and were simply not linked (a retry, or a correction ' +
+    'already made), which a caller must be able to tell from a real removal without parsing the ' +
+    'prose. An unknown repository or number does not reach this payload at all; it raises ' +
+    '(MOTIR-3756).',
   delete_sprint:
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +

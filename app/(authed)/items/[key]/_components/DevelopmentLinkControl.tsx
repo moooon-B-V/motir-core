@@ -161,17 +161,25 @@ export function LinkPullRequestForm() {
       // NOT -muted (the AA sidebar-caption lesson at 12px).
       secondary: `${c.repo} · #${c.number}`,
       icon: <Glyph className="h-4 w-4 text-(--el-icon-muted)" />,
-      // A PR already linked ELSEWHERE shows the neutral takeover chip in place of
-      // its state pill — picking it MOVES the link (design Panel 5b). Otherwise
-      // the PR-state pill (the shared tone table — no new token).
-      trailing: c.linkedTo ? (
-        <Pill tone="neutral">{t('development.linkedTo', { key: c.linkedTo })}</Pill>
-      ) : (
-        <Pill {...meta.pill}>
-          <Glyph className="h-3 w-3" aria-hidden />
-          {t(`development.prState.${c.state}`)}
-        </Pill>
-      ),
+      // A PR that already DELIVERS other cards shows a neutral chip in place of
+      // its state pill (design Panel 5b, amended by MOTIR-3756). Three arms, on
+      // the LENGTH of the delivery set: none → the PR-state pill; exactly one →
+      // the unchanged "Linked to {key}" copy under its unchanged key; two or more
+      // → the COUNT. Not a list — an unbounded string in a fixed-width Combobox
+      // row is a layout problem dressed as a copy decision — and not a cap, which
+      // is a list with a truncation rule that buys nothing a count does not.
+      // Picking it ADDS a delivery row; the chip is information, not a warning.
+      trailing:
+        c.linkedTo.length === 1 ? (
+          <Pill tone="neutral">{t('development.linkedTo', { key: c.linkedTo[0]! })}</Pill>
+        ) : c.linkedTo.length > 1 ? (
+          <Pill tone="neutral">{t('development.deliversN', { count: c.linkedTo.length })}</Pill>
+        ) : (
+          <Pill {...meta.pill}>
+            <Glyph className="h-3 w-3" aria-hidden />
+            {t(`development.prState.${c.state}`)}
+          </Pill>
+        ),
     };
   });
 

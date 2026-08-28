@@ -86,7 +86,6 @@ export type GithubPullRequestWithInstallation = GithubPullRequestWithContext & {
  *  identifier (the neutral "Linked to MOTIR-<n>" takeover chip). */
 export type GithubPullRequestCandidate = GithubPullRequest & {
   repo: GithubRepo;
-  workItem: { identifier: string } | null;
 };
 
 /** A PR row with just its repo — what a path-intersection reader needs to name
@@ -215,15 +214,31 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
-  /** A work item's linked PRs, newest-updated first, with the repo + check rows
-   *  the Development surface renders (MOTIR-1579). Read-only path → `db`. */
+  /** A work item's DELIVERING PRs, newest-updated first, with the repo + check
+   *  rows the Development surface renders (MOTIR-1579, moved to the delivery set
+   *  by MOTIR-3756).
+   *
+   *  The `where` is a relation filter on `work_item_delivery` rather than the
+   *  singular column, so a pull request delivering this card AND others is listed
+   *  here exactly once — which is the shape the column could not express and the
+   *  reason the Development surface came back SHORT: a `motir auto` pull request
+   *  carrying twelve cards named one of them in the FK and was invisible to the
+   *  other eleven.
+   *
+   *  ⚠️ `tx` is REQUIRED, and that is the point rather than tidiness. This read
+   *  now crosses a table whose ONLY tenant gate is an RLS policy on
+   *  `app.workspace_id`; through the bare `db` singleton the delivery subquery
+   *  matches nothing and the answer is an EMPTY LIST rather than an error —
+   *  indistinguishable from "this card has no pull requests", which is by a wide
+   *  margin the worse failure. Requiring the transaction turns that into a type
+   *  error at the call site (`workItemDeliveryRepository`'s own header states the
+   *  same rule for the same reason). */
   async listByWorkItemWithContext(
     workItemId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<GithubPullRequestWithContext[]> {
-    const client = tx ?? db;
-    return client.githubPullRequest.findMany({
-      where: { workItemId },
+    return tx.githubPullRequest.findMany({
+      where: { deliveries: { some: { workItemId } } },
       include: { repo: true, checkRuns: true },
       orderBy: { updatedAt: 'desc' },
     });
@@ -266,9 +281,16 @@ export const githubPullRequestRepository = {
   /** Candidate PRs for the explicit-link picker (MOTIR-1596): the workspace's
    *  ingested PRs (installation → repo → PR), matched by title / repo owner+name
    *  / number, newest-updated first, bounded to `take`. Includes each PR's repo
-   *  and — when already linked — the target item's identifier (the takeover
-   *  chip). Read-only path → `db`; `workspaceId` is the explicit tenant gate
-   *  (finding #26 — RLS is inert under the dev/CI superuser). */
+   *  Read-only path → `db`; `workspaceId` is the explicit tenant gate
+   *  (finding #26 — RLS is inert under the dev/CI superuser).
+   *
+   *  ⚠️ NO WORK-ITEM INCLUDE (MOTIR-3756). It used to carry
+   *  `workItem: { select: { identifier: true } }` — the single item the FK named,
+   *  which the picker rendered as the "Linked to MOTIR-n" takeover chip. A
+   *  candidate now delivers a SET, so the identifiers come from
+   *  `workItemDeliveryRepository.listByPullRequests` in one batched read beside
+   *  this one; an `include` cannot express it, because the relation the FK
+   *  declares is the singular one being retired. */
   async searchCandidates(
     workspaceId: string,
     query: string,
@@ -290,7 +312,7 @@ export const githubPullRequestRepository = {
       // provisioning installation, which is bound to no workspace, so the old
       // join would never have matched it.
       where: { repo: { is: { workspaceId } }, OR: match },
-      include: { repo: true, workItem: { select: { identifier: true } } },
+      include: { repo: true },
       orderBy: { updatedAt: 'desc' },
       take,
     });
@@ -358,11 +380,20 @@ export const githubPullRequestRepository = {
    *  the second usually goes on to FIX it off the default branch, in ignorance —
    *  two green pull requests that cancel when both merge.
    *
-   *  `excludeWorkItemId` drops the card doing the asking: a card's own merged PR
-   *  touching its own paths is the ordinary case and is not evidence that someone
-   *  ELSE already shipped its deliverable. Rows linked to NO work item are KEPT —
-   *  an unlinked merge touched the paths just the same, and the link is a fact
-   *  about the tracker rather than about the repository.
+   *  ⚠️ THERE IS NO EXCLUSION CLAUSE, and there never effectively was one
+   *  (MOTIR-3756, ADR `docs/decisions/delivery-reader-migration.md` §4). This
+   *  accessor carried an `excludeWorkItemId` parameter whose sole production
+   *  caller passed `null`: `buildSubsumptionIndex` widens the query to the UNION
+   *  of a whole batch's paths, so a per-SUBJECT clause cannot be expressed in the
+   *  SQL at all and is re-applied in memory at
+   *  `proseGraphAdvisoryService.subsumptionAdvisory`. Deleting the parameter
+   *  leaves ONE spelling of the exclusion, in the layer that actually runs it.
+   *
+   *  The argument the parameter's own note made SURVIVES and becomes trivially
+   *  true: rows linked to NO work item are KEPT — an unlinked merge touched the
+   *  paths just the same, and the link is a fact about the tracker rather than
+   *  about the repository. With no exclusion clause there is nothing that could
+   *  drop them.
    *
    *  `workspaceId` is the explicit tenant gate on the REPO row (MOTIR-1931, and
    *  finding #26 — RLS is inert under the dev/CI superuser), never a join through
@@ -373,7 +404,6 @@ export const githubPullRequestRepository = {
     workspaceId: string,
     paths: string[],
     since: Date,
-    excludeWorkItemId: string | null,
     tx?: Prisma.TransactionClient,
   ): Promise<GithubPullRequestWithRepo[]> {
     if (paths.length === 0) return [];
@@ -382,10 +412,13 @@ export const githubPullRequestRepository = {
       where: {
         repo: { is: { workspaceId } },
         changedPaths: { hasSome: paths },
-        // The two arms and the exclusion as SEPARATE `AND` members rather than two
-        // sibling `OR` keys: an object literal carries one `OR`, so writing both at
-        // this level would silently drop whichever was declared first. `AND` is the
-        // only spelling under which each clause is independently true.
+        // The two arms under an explicit `AND` member rather than beside the
+        // `OR` above: an object literal carries one `OR`, so writing both at this
+        // level would silently drop whichever was declared first. `AND` is the
+        // only spelling under which each clause is independently true — and it is
+        // kept with one member rather than flattened, because the recency arms and
+        // the path/tenant clauses are two independent predicates and collapsing
+        // them is how the second `OR` was lost in the first place.
         AND: [
           {
             OR: [
@@ -403,13 +436,6 @@ export const githubPullRequestRepository = {
               { state: 'open', merged: false },
             ],
           },
-          // Spelled as an explicit OR rather than `{ workItemId: { not: id } }`,
-          // because whether a Prisma `not` on a NULLABLE column keeps or drops the
-          // null rows is a version-dependent detail, and the answer here has to be
-          // KEEP. Stating it removes the dependency.
-          ...(excludeWorkItemId
-            ? [{ OR: [{ workItemId: null }, { workItemId: { not: excludeWorkItemId } }] }]
-            : []),
         ],
       },
       include: { repo: true },

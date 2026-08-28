@@ -339,6 +339,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           headRef: 'subtask/rogue',
           baseRef: 'main',
         },
+        // MOTIR-3756 — the UNLINK door, aimed the same way and for the same
+        // reason: the ITEM key must read as not-found before the repository is
+        // looked at, so a non-member learns neither that A's card exists nor
+        // which repositories A has connected, and no row is removed from A.
+        unlink_pull_request: { key: item1, repository: 'acme/web', number: 7 },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },
@@ -782,6 +787,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           headRef: 'subtask/scoped',
           baseRef: 'main',
         },
+        // MOTIR-3756 — the caller's OWN item. A write-scoped tool like its
+        // sibling, so the read-only-token loop asserts it is REFUSED at the scope
+        // gate; the default-token loop asserts only that the GATE passes it,
+        // which it does before the (unconnected) repository is ever resolved.
+        unlink_pull_request: { key: item1, repository: 'acme/web', number: 7 },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },

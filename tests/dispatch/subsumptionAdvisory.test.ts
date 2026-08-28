@@ -115,12 +115,21 @@ async function seedMerge(
      *  pre-capture row, and the OPEN arm's rows (MOTIR-3230). */
     mergedAt?: Date | null;
     workItemId?: string | null;
+    /** Every card this pull request DELIVERS (MOTIR-3756). Defaults to
+     *  `[workItemId]`, which is the shape both live writers produce: the column
+     *  and a delivery row are written together, and the exclusion the advisory
+     *  applies reads the ROW. A fixture that writes only the column describes a
+     *  state no migrated database has — the delivery table's own migration
+     *  backfilled every such row — and would assert against a set the product
+     *  never sees. Pass it explicitly for the multi-card case the column cannot
+     *  express at all. */
+    delivers?: string[];
     title?: string | null;
     merged?: boolean;
     state?: string;
   },
 ) {
-  return adminDb.githubPullRequest.create({
+  const pr = await adminDb.githubPullRequest.create({
     data: {
       repoId,
       number: opts.number,
@@ -133,6 +142,16 @@ async function seedMerge(
       workItemId: opts.workItemId ?? null,
     },
   });
+  const delivers = opts.delivers ?? (opts.workItemId ? [opts.workItemId] : []);
+  if (delivers.length > 0) {
+    const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoId } });
+    for (const workItemId of delivers) {
+      await adminDb.workItemDelivery.create({
+        data: { workspaceId: repo.workspaceId!, workItemId, githubPullRequestId: pr.id, repoId },
+      });
+    }
+  }
+  return pr;
 }
 
 /** Create a card and BACKDATE its `createdAt` — "merged after this card was
@@ -242,6 +261,44 @@ describe('the three clauses of the rule, one negative case each', () => {
     });
 
     expect(subsumptions(await buildDispatchProseAdvisories(card, fx.ctx))).toEqual([]);
+  });
+
+  // MOTIR-3756 — the CONTAINS reading, and the case that separates it from the
+  // equality it replaced (ADR `docs/decisions/delivery-reader-migration.md` §4).
+  //
+  // A `motir auto` session pull request carrying three cards is THREE cards' own
+  // pull request. Under the old `m.workItemId !== id` reading it was reported back
+  // to two of them as evidence that somebody else had already shipped their
+  // deliverable — precisely the false positive the exclusion exists to suppress —
+  // because the column could name only one of the three. The two directions are
+  // asserted together, in one fixture, because either alone would pass under a
+  // predicate that is wrong in the other.
+  it('a pull request delivering three cards is suppressed for ALL THREE and reported to a fourth', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'MOTIR' });
+    const repo = await connectRepo(fx);
+    const [a, b, c, outsider] = await Promise.all([
+      makeCard(fx, 'Carried card A', MOTIR_2757_BODY),
+      makeCard(fx, 'Carried card B', MOTIR_2757_BODY),
+      makeCard(fx, 'Carried card C', MOTIR_2757_BODY),
+      makeCard(fx, 'A card on the same path', MOTIR_2757_BODY),
+    ]);
+    await seedMerge(repo.id, {
+      number: 2416,
+      changedPaths: ['lib/services/workflowsService.ts'],
+      // The column names ONE of them — as it must, being a scalar. The delivery
+      // rows name all three, and it is the rows the predicate reads.
+      workItemId: a.id,
+      delivers: [a.id, b.id, c.id],
+    });
+
+    for (const carried of [a, b, c]) {
+      expect(subsumptions(await buildDispatchProseAdvisories(carried, fx.ctx))).toEqual([]);
+    }
+    // …and the card it does NOT deliver still gets the finding, so the widening
+    // suppresses a false positive rather than the check.
+    const reported = subsumptions(await buildDispatchProseAdvisories(outsider, fx.ctx));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]!.pullRequest).toContain('#2416');
   });
 
   // ⚠️ AMENDED ON THE RECORD, NOT DELETED (MOTIR-3230). This read `an OPEN pull

@@ -464,3 +464,134 @@ describe('the column is NOT dropped, and both writers still write it (MOTIR-3721
     expect(afterDelivery.merged).toBe(true);
   });
 });
+
+// ─────────────────────── EXPAND-2 (MOTIR-3756) ─────────────────────────────
+//
+// The readers whose failure is VISIBLE — a Development list that comes back
+// SHORT, and the correction door a set makes necessary. They share this file
+// because they share the ADR and the fixture; what they do not share is the
+// acceptance instrument, which is why they are a different card: these are
+// found by USING the product, and MOTIR-3721's are found by nobody.
+
+describe('the Development surface reads the delivery set (MOTIR-3756 AC 5)', () => {
+  it('lists a pull request that delivers this card ALONGSIDE others, for every card it delivers', async () => {
+    const s = await makeScenario('development-surface@example.com');
+    const parent = await makeCard(s, 'The parent a session PR delivers');
+    const childA = await makeCard(s, 'Child A, on the same session branch');
+    const childB = await makeCard(s, 'Child B, on the same session branch');
+    await pr(prPayload({ action: 'opened', number: 810, headRef: 'motir/auto-run-1' }));
+    // One pull request, three deliveries — the shape a scoped run produces, and
+    // the shape the singular column could name only one third of.
+    await link(s, parent.id, { number: 810, headRef: 'motir/auto-run-1' });
+    await link(s, childA.id, { number: 810, headRef: 'motir/auto-run-1' });
+    await link(s, childB.id, { number: 810, headRef: 'motir/auto-run-1' });
+
+    // The column now names the LAST link — so a reader on the column shows this
+    // pull request to childB and to NOBODY else. Asserted rather than assumed,
+    // because it is what makes the three assertions below non-trivial.
+    const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 810 } });
+    expect(row.workItemId).toBe(childB.id);
+
+    for (const card of [parent, childA, childB]) {
+      const listed = await workItemsService.listLinkedPullRequests(card.id, s.ctx);
+      expect(listed.map((p) => p.number)).toEqual([810]);
+    }
+  });
+
+  it('lists EVERY pull request delivering one card — the cross-repository shape', async () => {
+    const s = await makeScenario('development-multi@example.com');
+    const card = await makeCard(s, 'A card delivered by two pull requests');
+    await pr(prPayload({ action: 'opened', number: 811, headRef: 'parent/MOTIR-x' }));
+    await pr(prPayload({ action: 'opened', number: 812, headRef: 'parent/MOTIR-x' }));
+    await link(s, card.id, { number: 811, headRef: 'parent/MOTIR-x' });
+    await link(s, card.id, { number: 812, headRef: 'parent/MOTIR-x' });
+
+    const listed = await workItemsService.listLinkedPullRequests(card.id, s.ctx);
+    expect(listed.map((p) => p.number).sort()).toEqual([811, 812]);
+  });
+});
+
+describe('`unlink_pull_request` — the mis-link-then-correct path (MOTIR-3756 AC 6)', () => {
+  it('removes EXACTLY ONE delivery: the wrong card loses it, every other card keeps it', async () => {
+    const s = await makeScenario('unlink-correct@example.com');
+    const wrong = await makeCard(s, 'The card the run linked by mistake');
+    const right = await makeCard(s, 'The card the pull request actually delivers');
+    const bystander = await makeCard(s, 'Another card on the same session pull request');
+    await pr(prPayload({ action: 'opened', number: 820, headRef: 'motir/auto-run-2' }));
+
+    // The mistake, and the "correction" that is not one: linking the RIGHT card
+    // ADDS a delivery and leaves the wrong row exactly where it was.
+    await link(s, wrong.id, { number: 820, headRef: 'motir/auto-run-2' });
+    await link(s, bystander.id, { number: 820, headRef: 'motir/auto-run-2' });
+    await link(s, right.id, { number: 820, headRef: 'motir/auto-run-2' });
+    expect((await workItemsService.listLinkedPullRequests(wrong.id, s.ctx)).length).toBe(1);
+
+    const removed = await githubPullRequestService.unlinkPullRequestByCoordinates(
+      {
+        workItemId: wrong.id,
+        projectId: s.project.id,
+        owner: 'moooon',
+        name: 'motir-core',
+        number: 820,
+      },
+      s.ctx,
+    );
+    expect(removed.removed).toBe(true);
+
+    // Exactly one row gone.
+    expect(await workItemsService.listLinkedPullRequests(wrong.id, s.ctx)).toEqual([]);
+    expect(
+      (await workItemsService.listLinkedPullRequests(right.id, s.ctx)).map((p) => p.number),
+    ).toEqual([820]);
+    expect(
+      (await workItemsService.listLinkedPullRequests(bystander.id, s.ctx)).map((p) => p.number),
+    ).toEqual([820]);
+  });
+
+  it('answers `removed: false` for a pair that was never linked, and leaves the pull request alone', async () => {
+    const s = await makeScenario('unlink-noop@example.com');
+    const card = await makeCard(s, 'A card that never linked it');
+    await pr(prPayload({ action: 'opened', number: 821, headRef: 'subtask/never' }));
+
+    const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
+      {
+        workItemId: card.id,
+        projectId: s.project.id,
+        owner: 'moooon',
+        name: 'motir-core',
+        number: 821,
+      },
+      s.ctx,
+    );
+    expect(result.removed).toBe(false);
+    // The pull request row itself is untouched — state, title and checks are the
+    // webhook's to say, and so is the legacy column.
+    const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 821 } });
+    expect(row.state).toBe('open');
+  });
+
+  it('leaves `github_pull_request.work_item_id` exactly as it stands (AC 7 holds through the unlink)', async () => {
+    const s = await makeScenario('unlink-column@example.com');
+    const card = await makeCard(s, 'A card whose column survives its unlink');
+    await pr(prPayload({ action: 'opened', number: 822, headRef: 'subtask/col2' }));
+    await link(s, card.id, { number: 822, headRef: 'subtask/col2' });
+
+    await githubPullRequestService.unlinkPullRequestByCoordinates(
+      {
+        workItemId: card.id,
+        projectId: s.project.id,
+        owner: 'moooon',
+        name: 'motir-core',
+        number: 822,
+      },
+      s.ctx,
+    );
+
+    // The delivery is gone and the column is not — clearing it here would take a
+    // status sync away from a card whose OTHER links are perfectly good, and its
+    // drop is the CONTRACT card's.
+    expect(await workItemsService.listLinkedPullRequests(card.id, s.ctx)).toEqual([]);
+    const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 822 } });
+    expect(row.workItemId).toBe(card.id);
+  });
+});
