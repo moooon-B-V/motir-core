@@ -104,6 +104,27 @@ describe('classifyDesignPath', () => {
     expect(classifyDesignPath('design/README.md')).toBeNull();
   });
 
+  // MOTIR-3750. The three arms used to disagree: the mock and the export matched
+  // on SUFFIX and the note on an EXACT basename, so a per-surface note published
+  // nothing while its own `.mock.html` and `.png` siblings published normally —
+  // silently, and only for the WORDS. Two such files exist (motir-core's
+  // `design/org-admin/create-workspace.design-notes.md`, motir-marketing's
+  // `landing.design-notes.md`), because a shared basename is what `CLAUDE.md`'s
+  // three-file rule literally asks for.
+  it('accepts a per-surface `<surface>.design-notes.md` as a note, like the mock and the export', () => {
+    expect(classifyDesignPath('design/org-admin/create-workspace.design-notes.md')).toBe('note');
+    expect(classifyDesignPath('design/marketing/landing.design-notes.md')).toBe('note');
+    // The area-level note is unaffected — this widens, it does not replace.
+    expect(classifyDesignPath('design/org-admin/design-notes.md')).toBe('note');
+  });
+
+  it('requires the `.` separator — a basename merely ENDING in the literal is not a note', () => {
+    expect(classifyDesignPath('design/work-items/xdesign-notes.md')).toBeNull();
+    expect(classifyDesignPath('design/work-items/-design-notes.md')).toBeNull();
+    // Still not a note just for living under an area or ending in `.md`.
+    expect(classifyDesignPath('design/work-items/design-notes.markdown')).toBeNull();
+  });
+
   it('maps each kind to the content type the allowlist expects', () => {
     expect(contentTypeFor('mock')).toBe('text/html');
     expect(contentTypeFor('image')).toBe('image/png');
@@ -141,6 +162,34 @@ describe('collectChangedDesignFiles', () => {
     const out = collectChangedDesignFiles({ base: 'base', git: () => '', exists, cwd: ROOT });
     expect(out.assets).toEqual([]);
     expect(out.notes).toEqual([]);
+  });
+
+  // MOTIR-3750 — the whole point of the classifier widening, measured where it
+  // bites: a per-surface note used to arrive in `ignored` beside its own mock
+  // and export, so the card got the pictures and none of the words.
+  it('collects a per-surface note as a NOTE, beside the area note, never as ignored', () => {
+    const withPerSurfaceNote = [
+      'design/org-admin/create-workspace.mock.html',
+      'design/org-admin/create-workspace.png',
+      'design/org-admin/create-workspace.design-notes.md',
+      'design/org-admin/design-notes.md',
+    ].join('\n');
+    const out = collectChangedDesignFiles({
+      base: 'base',
+      git: () => withPerSurfaceNote,
+      exists: () => true,
+      cwd: ROOT,
+    });
+
+    expect(out.notes).toEqual([
+      'design/org-admin/create-workspace.design-notes.md',
+      'design/org-admin/design-notes.md',
+    ]);
+    expect(out.ignored).toEqual([]);
+    expect(out.assets).toEqual([
+      { kind: 'mock', sourcePath: 'design/org-admin/create-workspace.mock.html' },
+      { kind: 'image', sourcePath: 'design/org-admin/create-workspace.png' },
+    ]);
   });
 });
 

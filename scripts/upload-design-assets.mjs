@@ -332,11 +332,47 @@ export function resolveDiffBase({ base, git = runGit, cwd = process.cwd() }) {
   return { base, source: 'event-base' };
 }
 
-/** Which asset kind a path is, or null when it is not a publishable artifact. */
+/**
+ * Which asset kind a path is, or null when it is not a publishable artifact.
+ *
+ * ⚠️ THE NOTE ARM MATCHES A SUFFIX, NOT AN EXACT BASENAME (MOTIR-3750). It used
+ * to read `path.basename(filePath) === NOTES_BASENAME`, which made the three
+ * arms disagree with each other: the mock and the export match on SUFFIX, so
+ * `landing.mock.html` and `landing.png` publish while `landing.design-notes.md`
+ * classified as `null`, landed in `ignored`, and was never published. **The
+ * failure is silent and PARTIAL** — the card gets the pictures and none of the
+ * words, under a green check, with a real evidence id.
+ *
+ * The name that loses is the one `CLAUDE.md` § *Design assets — THREE files per
+ * surface* literally prescribes: *"you MUST land all three, with a shared
+ * basename"*, and then exempts the note in a parenthesis. So a per-surface note
+ * beside a per-surface mock and export is what the headline rule asks for, and
+ * two authors wrote one — `design/org-admin/create-workspace.design-notes.md`
+ * (2026-06-13) and motir-marketing's `landing.design-notes.md` (2026-08-28) —
+ * ten weeks apart, in two repositories.
+ *
+ * ⚠️ THE ALTERNATIVE — rename the non-conforming file and guard the convention —
+ * WAS REJECTED ON SHIPPED REALITY. `design/org-admin/` already carries BOTH
+ * `design-notes.md` (the area index) AND `create-workspace.design-notes.md`, so
+ * the rename is a content MERGE, not a `git mv`; and it leaves the trap armed
+ * for the next author, whose words vanish exactly as these did. Widening the
+ * reader costs one predicate and cannot fail silently.
+ *
+ * **The per-area convention is UNCHANGED and still enforced.**
+ * `tests/design-three-file-set.test.ts` requires every area shipping an asset to
+ * carry a `design-notes.md`; this arm only stops discarding a note somebody
+ * wrote beside it. Publishing several notes from one pull request has been
+ * supported since MOTIR-3145 (`buildPublishSet` emits EVERY note, each as its
+ * own `note_file`).
+ *
+ * The separator is load-bearing: `<surface>.design-notes.md` publishes,
+ * `xdesign-notes.md` does not.
+ */
 export function classifyDesignPath(filePath) {
   if (filePath.endsWith('.mock.html')) return 'mock';
   if (filePath.endsWith('.png')) return 'image';
-  if (path.basename(filePath) === NOTES_BASENAME) return 'note';
+  const basename = path.basename(filePath);
+  if (basename === NOTES_BASENAME || basename.endsWith(`.${NOTES_BASENAME}`)) return 'note';
   return null;
 }
 
