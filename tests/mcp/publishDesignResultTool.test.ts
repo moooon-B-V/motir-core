@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { randomBytes } from 'node:crypto';
 
 // The blob STORE is the only thing faked, and it is faked as a STORE rather than
 // as two independent stubs: `recordFromPathnames` HEADs every object it is asked
@@ -9,20 +10,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // media type the service acts on are the ones the bytes actually had.
 const store = new Map<string, { size: number; contentType: string }>();
 
+// ⚠️ THE FAKE APPLIES THE SAME RANDOM SUFFIX THE REAL HELPER DOES, and that is
+// not a detail. `putObject` calls `withRandomSuffix(pathname)` and
+// `putPrivateAttachment` RETURNS the key it actually wrote, so a caller that
+// registers the pathname it ASKED for names an object that does not exist. A
+// fake returning `{ pathname }` unchanged reproduces the helper's contract
+// WRONGLY and therefore agrees with that bug — which is exactly what happened
+// here: these suites were green while the E2E failed on
+// `DESIGN_EVIDENCE_BLOB_MISSING`. A fake that lies about a contract is worse
+// than no fake.
 vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/blob/uploader')>()),
-  putPrivateAttachment: vi.fn(
-    async (pathname: string, body: Buffer | ArrayBuffer | Blob, contentType: string) => {
-      const size =
-        body instanceof Blob
-          ? body.size
-          : Buffer.isBuffer(body)
-            ? body.byteLength
-            : body.byteLength;
-      store.set(pathname, { size, contentType });
-      return { pathname };
-    },
-  ),
+  putPrivateAttachment: vi.fn(async (pathname: string, body: Buffer, contentType: string) => {
+    const dot = pathname.lastIndexOf('.');
+    const suffix = randomBytes(5).toString('hex');
+    const written =
+      dot <= pathname.lastIndexOf('/')
+        ? `${pathname}-${suffix}`
+        : `${pathname.slice(0, dot)}-${suffix}${pathname.slice(dot)}`;
+    store.set(written, { contentType, size: body.byteLength });
+    return { pathname: written };
+  }),
   headPrivateBlob: vi.fn(async (pathname: string) => store.get(pathname) ?? null),
   deleteAttachmentBlob: vi.fn(async () => {}),
 }));

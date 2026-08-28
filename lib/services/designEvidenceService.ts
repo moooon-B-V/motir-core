@@ -615,9 +615,23 @@ export const designEvidenceService = {
       }
       if (asset.bytes.byteLength > perFileLimit) throw new FileTooLargeError(perFileLimit);
 
-      const pathname = `${prefix}${nonce}-${index}-${basenameOf(asset.sourcePath)}`;
-      await putPrivateAttachment(pathname, asset.bytes, asset.contentType);
-      uploaded.push({ kind: asset.kind, sourcePath: asset.sourcePath, pathname });
+      // ⚠️ REGISTER THE KEY THE STORE ACTUALLY WROTE, never the one asked for.
+      // `putPrivateAttachment` returns the object key, and `putObject` appends a
+      // random suffix to it before writing — so the requested pathname names no
+      // object, and registering it makes the very next step
+      // (`recordFromPathnames`'s authoritative `head`) fail with
+      // `DESIGN_EVIDENCE_BLOB_MISSING`. The suffix is still under this item's
+      // design prefix, so the prefix check is unaffected.
+      const written = await putPrivateAttachment(
+        `${prefix}${nonce}-${index}-${basenameOf(asset.sourcePath)}`,
+        asset.bytes,
+        asset.contentType,
+      );
+      uploaded.push({
+        kind: asset.kind,
+        sourcePath: asset.sourcePath,
+        pathname: written.pathname,
+      });
     }
 
     // Address the item by ID: it is already resolved, and re-resolving by the
