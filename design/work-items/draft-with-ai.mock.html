@@ -115,7 +115,7 @@
         --el-border-strong: var(--color-hairline-strong);
         --el-link: var(--color-link);
         --el-danger: var(--color-destructive);
-        --el-danger-text: #b42318;
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --el-warning: var(--color-warning);
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
@@ -147,7 +147,6 @@
         --color-tint-sky: #1a2a3a;
         --color-tint-yellow: #332d16;
         --color-link: #58a6ff;
-        --el-danger-text: #ff8a80;
         --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
         --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
         --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
@@ -624,7 +623,7 @@
       }
       .notice.is-error .ni {
         background: var(--el-tint-rose);
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
       }
       .notice-t {
         font-size: 14px;

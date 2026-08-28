@@ -154,7 +154,7 @@
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-danger: var(--color-destructive);
-        --el-danger-text: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
@@ -805,7 +805,7 @@
         background: var(--el-tint-rose);
       }
       .banner-danger svg {
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
       }
       .banner-info {
         background: var(--el-tint-sky);
@@ -1213,7 +1213,7 @@
       }
       .state.err .ico {
         background: var(--el-tint-rose);
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
       }
       .state.blocked .ico {
         background: var(--el-tint-yellow);
@@ -2372,7 +2372,7 @@
             <!-- (c) error -->
             <div class="state">
               <span class="ico" style="background: var(--el-tint-rose)">
-                <svg viewBox="0 0 24 24" style="color: var(--el-danger-text)">
+                <svg viewBox="0 0 24 24" style="color: var(--el-danger-on-surface)">
                   <use href="#i-alert" />
                 </svg>
               </span>

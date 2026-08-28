@@ -102,6 +102,30 @@ export const FAINT_CLASS = 'text-(--el-text-faint)';
 export const MUTED_CLASS = 'text-(--el-text-muted)';
 
 /**
+ * The DANGER arm's ink, as the bare TOKEN rather than as a class — MOTIR-3663.
+ *
+ * The two grey arms key on `text-(--el-…)` because that is the only shape they
+ * occur in. This one does not: the tree wrote it as a Tailwind utility twelve
+ * times, as an inline `style={{ color: 'var(--el-danger-text)' }}` once, and
+ * inside a `cva` variants STRING (with no JSX element anywhere near it) at the
+ * one site where it is correct. Keying on the class would have missed the
+ * inline site and, more importantly, would have made the one legal use
+ * unreachable — so the needle is the token and the fill test below is what
+ * separates the two.
+ */
+export const DANGER_TOKEN = '--el-danger-text';
+export const DANGER_CLASS = 'text-(--el-danger-text)';
+
+/**
+ * The fill `--el-danger-text` is the ink FOR. This is the whole rule, and it is
+ * narrower and more mechanical than either grey arm's: there is no surface walk
+ * and no measured table to consult, because no background other than this one
+ * makes the pairing legal.
+ */
+export const DANGER_FILL_CLASS = 'bg-(--el-danger)';
+export const DANGER_FILL_TOKEN = '--el-danger';
+
+/**
  * What "a tinted surface" IS, as a colour rather than as a name: the three
  * `--color-*` fills MOTIR-2455 measured `--el-text-muted` at 4.12–4.34:1 on.
  * Every `--el-*` that resolves to one of them paints the same pixels and so
@@ -211,7 +235,7 @@ export interface InkFinding {
   file: string;
   line: number;
   /** Which measured ink this finding is about. */
-  ink: 'faint' | 'muted';
+  ink: 'faint' | 'muted' | 'danger';
   verdict: Verdict;
   /** Why the scanner ruled the way it did — quoted verbatim in the failure. */
   reason: string;
@@ -883,7 +907,74 @@ export function scanSource(fileName: string, text: string): InkFinding[] {
     }
   }
 
+  for (const finding of scanDanger(source, fileName)) findings.push(finding);
+
   return findings;
+}
+
+/**
+ * The DANGER arm — MOTIR-3663.
+ *
+ * `--el-danger-text` resolves to `--color-destructive-foreground`: the ink for a
+ * bright danger FILL, which every palette defines as whatever contrasts with
+ * that fill. So the rule has no surface walk and no measured table in it:
+ *
+ *   `--el-danger-text` is legal only where the SAME element (or, for a variants
+ *   string with no element, the same class literal) also paints `bg-(--el-danger)`.
+ *
+ * Anything else paints the fill's ink onto a page, which measures 1.00:1 in the
+ * light theme of all ten palettes and 1.00:1 in six of the ten dark ones. The
+ * four dark palettes where it is legible are not a partial pass — there it
+ * renders near-white, indistinguishable from `--el-text`, so the danger SIGNAL
+ * is lost rather than the text.
+ *
+ * ── Why this arm has no 1.4.3 grants, unlike the other two ──────────────────
+ * The grey arms exempt a decorative glyph and a disabled control, because there
+ * the ink is a legitimate choice that 1.4.3 simply does not measure. Here the
+ * ink is WRONG on any background but one: an `aria-hidden` glyph painted
+ * `--el-danger-text` on a page is invisible, and 1.4.3 not measuring it does not
+ * make it visible. Four of the fourteen sites this arm was turned on over were
+ * exactly that — hidden glyphs, correctly marked, painting white on white. So
+ * the exemption that is right for a contrast THRESHOLD is wrong for a token
+ * MISUSE, and reusing it here would have cleared four real defects.
+ */
+function scanDanger(source: ts.SourceFile, fileName: string): InkFinding[] {
+  const findings: InkFinding[] = [];
+
+  for (const node of classLiterals(source, DANGER_TOKEN)) {
+    const carrier = owningElement(node);
+    // The scope the fill has to appear in. With an element, that is everything
+    // the element paints — its `className` and its inline `style`, so the two
+    // spellings of one background agree. Without one (a `cva` variants object,
+    // a class constant), it is the literal itself, which is the only thing that
+    // travels with the ink to whatever element consumes it.
+    const scope = carrier
+      ? `${classBlob(carrier)} ${attributesOf(carrier).get('style') ?? ''}`
+      : node.getText();
+
+    if (paintsUnprefixed(scope, DANGER_FILL_CLASS) || paintsBackgroundToken(scope)) continue;
+
+    findings.push({
+      file: fileName,
+      line: lineAt(source, node.getStart(source)),
+      ink: 'danger',
+      verdict: 'violation',
+      element: carrier ? tagNameOf(carrier) : null,
+      reason: carrier
+        ? `<${tagNameOf(carrier)}> takes --el-danger-text without bg-(--el-danger), so it paints the danger fill's ink onto a page — 1.00:1 in every palette's light theme`
+        : "this class string carries --el-danger-text without bg-(--el-danger), so wherever it lands it paints the danger fill's ink onto a page",
+      snippet: snippetOf(source, node),
+    });
+  }
+
+  return findings;
+}
+
+/** Does this scope declare `--el-danger` as a BACKGROUND, in either spelling? */
+function paintsBackgroundToken(scope: string): boolean {
+  return new RegExp(
+    `background(?:-?[Cc]olor)?\\s*:\\s*['"\`]?\\s*var\\(\\s*${escapeForRegExp(DANGER_FILL_TOKEN)}\\s*\\)`,
+  ).test(scope);
 }
 
 /**

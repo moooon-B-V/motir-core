@@ -37,7 +37,7 @@ export function PlanEditsReviewDock({
     if (!state.errorCode) return null;
     return (
       <div className="flex flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-5 shadow-(--shadow-card)">
-        <p role="alert" className="text-sm text-(--el-danger-text)">
+        <p role="alert" className="text-sm text-(--el-danger-on-surface)">
           {state.errorCode === 'out_of_credits'
             ? t('creditsError')
             : state.errorCode === 'EMPTY'
@@ -132,7 +132,7 @@ export function PlanEditsReviewDock({
 
       {state.errorCode ? (
         <div className="shrink-0 border-t border-(--el-border) px-5 py-3">
-          <p role="alert" className="text-xs font-medium text-(--el-danger-text)">
+          <p role="alert" className="text-xs font-medium text-(--el-danger-on-surface)">
             {state.errorCode === 'immutable'
               ? t('immutableRejection')
               : state.errorCode === 'decided'

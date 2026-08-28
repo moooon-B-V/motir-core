@@ -154,7 +154,10 @@ export function PublicChangelog({
           role="alert"
           className="mt-3.5 flex items-start gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3.5"
         >
-          <AlertTriangle className="mt-px h-4 w-4 flex-none text-(--el-danger-text)" aria-hidden />
+          <AlertTriangle
+            className="mt-px h-4 w-4 flex-none text-(--el-danger-on-surface)"
+            aria-hidden
+          />
           <span className="text-[12.5px] leading-relaxed text-(--el-text-secondary)">
             <span className="font-semibold text-(--el-text)">{t('changelogErrorTitle')}</span>{' '}
             {t('changelogErrorBody')}

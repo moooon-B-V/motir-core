@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  DANGER_TOKEN,
   FAINT_CLASS,
   MUTED_CLASS,
   SAFE_SURFACE_TOKENS,
@@ -13,6 +14,14 @@ import {
   scanSource,
   violations,
 } from './inkContrastScan';
+import { contrast, deltaE2000, flattenColorMix } from './colorMetrics';
+import { loadTokenLayer, resolveToken } from './paletteCascade';
+
+/** The ink every swept danger site was sent to — MOTIR-3663. */
+const DANGER_INK = '--el-danger-on-surface';
+
+/** The base palette, which ships no `[data-palette]` block of its own. */
+const BASE_PALETTE = 'motir';
 
 // MOTIR-2475 / MOTIR-2477 — the repo-wide INK-CONTRAST guard, pointed at the
 // tree by the two sweeps that made it passable: the faint arm below is
@@ -156,6 +165,13 @@ const TEXT_BY_FILE = new Map(SOURCES.map((file) => [file, readFileSync(join(REPO
  */
 const FAINT_CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes(FAINT_CLASS));
 const MUTED_CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes(MUTED_CLASS));
+/**
+ * The danger arm's pre-filter keys on the bare TOKEN, not on a class — the arm
+ * rules on an inline `style` and on a `cva` variants string as well as on a
+ * utility, and a class-shaped filter would drop both file sets before the
+ * parser ever saw them (MOTIR-3663).
+ */
+const DANGER_CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes(DANGER_TOKEN));
 
 describe('ink-contrast lint — the scanned set is the set that was searched', () => {
   // notes.html #195: a guard is only worth what its file set is. A `ls-files`
@@ -178,6 +194,7 @@ describe('ink-contrast lint — the scanned set is the set that was searched', (
   it.each([
     ['--el-text-faint', FAINT_CARRIERS],
     ['--el-text-muted', MUTED_CARRIERS],
+    ['--el-danger-text', DANGER_CARRIERS],
   ])('reads files that actually carry %s', (_ink, carriers) => {
     // The counterpart to the check above: a file set can be real and still be
     // the wrong one. If NOTHING in the scanned tree mentions the token, the
@@ -367,6 +384,172 @@ describe('ink-contrast lint — --el-text-muted carries no text over a TINTED su
         'four surfaces in both themes and so is right whichever surface the element lands on. ' +
         'Moving the element onto `--el-card` also fixes the pair, but it changes layout intent — ' +
         'reach for the ink first.',
+    ).toBe('');
+  });
+});
+
+describe('ink-contrast lint — --el-danger-text carries ink ONLY on a danger fill', () => {
+  // MOTIR-3663. The third arm, and the cheapest of the three to state: the
+  // other two ask "is this ink legal on THAT background", which needs a surface
+  // walk and a measured table. This one asks "is the fill this ink exists for
+  // actually under it", which is one lexical test, because no other background
+  // makes the pairing legal.
+  //
+  // MOTIR-1553 fixed exactly this defect at two row menus in June and wrote the
+  // rest of the sweep down in its own body as "worth auditing" — a deferral
+  // with no card behind it, which is the same as no deferral. Fourteen months
+  // and fourteen sites later, three of them `role="alert"`, this arm is what
+  // replaces the sentence. Note what the tree looked like in between: three
+  // OTHER sites carry comments correctly warning about this bug, so the
+  // knowledge was present, distributed, and load-bearing nowhere — which is the
+  // argument for a guard over a sweep, and the reason this arm exists at all
+  // rather than a second round of edits.
+  it('leaves no danger violation anywhere in the scanned tree', () => {
+    const offenders = DANGER_CARRIERS.flatMap((file) =>
+      violations(scanSource(file, TEXT_BY_FILE.get(file)!)),
+    ).filter((finding) => finding.ink === 'danger');
+
+    expect(
+      offenders.map(formatFinding).join('\n'),
+      '`--el-danger-text` is `--color-destructive-foreground` — the ink FOR a bright danger ' +
+        'fill, which every palette defines as whatever contrasts with that fill. On a page it ' +
+        'is 1.00:1 in the light theme of ALL TEN palettes and 1.00:1 in six of the ten dark ' +
+        'ones; in the other four it renders near-white, so the danger SIGNAL is lost rather ' +
+        'than the text. Give each of these `--el-danger-on-surface`, which is AA on every ' +
+        'surface in all 20 palette × theme combinations (the table below). Its ONE legal use ' +
+        'is `bg-(--el-danger) text-(--el-danger-text)` — the Button danger variant.',
+    ).toBe('');
+  });
+});
+
+describe('ink-contrast lint — --el-danger-on-surface is AA in all 20 palette × theme pairs', () => {
+  // MOTIR-3663. The replacement the arm above sends every site to, measured
+  // rather than asserted once — and measured HERE rather than in a comment,
+  // because the numbers depend on values ten palettes are free to change.
+  //
+  // ⚠️ The reason this is a computed table and not a spot check: the defect it
+  // replaces was invisible for fourteen months precisely because the DEFAULT
+  // palette is one of the four where the ink renders (near-white, wrong, but
+  // rendering). Checking the palette you happen to be looking at is what let
+  // that stand. So the assertion is total over `PALETTE_IDS` — a new palette is
+  // covered on the day it is added, not on the day somebody remembers to
+  // extend a list.
+  //
+  // The surfaces are every background a danger message actually lands on in
+  // this tree, which is wider than the grey arms' four: the swept sites sit on
+  // the page, on `--el-surface`, on `--el-surface-soft`, on `--el-tint-rose`
+  // (the billing cancelled banner, the DraftWithAi rose Card) and on
+  // `--el-danger-surface` (the WorkItemNode cross-blocked chip, whose label
+  // measured 1.14–1.29:1 for as long as it has existed). An ink that clears all
+  // six is right whichever surface the element lands on — the same property
+  // that makes `--el-text-secondary` the answer on the grey arms.
+  const AA = 4.5;
+  const SURFACES = [
+    '--el-page-bg',
+    '--el-card',
+    '--el-surface',
+    '--el-surface-soft',
+    '--el-muted',
+    '--el-tint-rose',
+    '--el-danger-surface',
+  ];
+  const { rules } = loadTokenLayer();
+  const resolve = (palette: string, theme: 'light' | 'dark', token: string) =>
+    flattenColorMix(resolveToken(rules, { palette, theme }, token).value);
+
+  /**
+   * The palettes, READ OUT OF `theme.css` rather than imported from
+   * `@/lib/theme/palettes`.
+   *
+   * ⚠️ Not a stylistic preference — a lane constraint. `lib/theme/palettes.ts`
+   * re-exports `@motir/design-system`, and the `structural-guards` CI job
+   * installs without building that package (`ci.yml` — `pnpm install` then
+   * `pnpm test:guards`, no `--filter @motir/design-system build`). Importing it
+   * here resolves locally, where a build has usually happened, and fails the
+   * lane on a clean runner with "Failed to resolve entry for package".
+   *
+   * Reading the stylesheet is also the more honest source for THIS assertion:
+   * the thing being measured is what `theme.css` declares, so the matrix and
+   * the values come from one file and cannot drift apart.
+   */
+  const PALETTES = [
+    BASE_PALETTE,
+    ...new Set(
+      [...loadTokenLayer().css.matchAll(/\[data-palette=['"]([a-z0-9-]+)['"]\]/g)].map(
+        (match) => match[1]!,
+      ),
+    ),
+  ].filter((palette, index, all) => all.indexOf(palette) === index);
+
+  const PAIRS = PALETTES.flatMap((palette) =>
+    (['light', 'dark'] as const).map((theme) => ({ palette, theme })),
+  );
+
+  it('measures the whole matrix it claims to (every palette, both themes)', () => {
+    // The counterpart to notes.html #195 again: a matrix that silently went
+    // empty — a regex that stopped matching, a palette list that shrank — would
+    // make every assertion below vacuously true. The floor is `>=`, never `===`:
+    // the point of deriving the list is that an eleventh palette is measured on
+    // the day it is added, and an equality here would make it a test to edit.
+    expect(PAIRS).toHaveLength(PALETTES.length * 2);
+    expect(PALETTES).toContain(BASE_PALETTE);
+    expect(PALETTES).toContain('spectrum'); // the palette the defect was reported on
+    expect(PALETTES.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('resolves to a real colour in every pair — never an unresolved var()', () => {
+    // A `color-mix` over two tokens is only as good as both tokens resolving.
+    // An unresolved one folds to an empty string, and `contrast()` would then
+    // throw rather than fail — a guard that throws measures nothing.
+    const broken = PAIRS.filter(
+      ({ palette, theme }) => !/^#[0-9a-f]{6}$/i.test(resolve(palette, theme, DANGER_INK)),
+    ).map(({ palette, theme }) => `${palette}/${theme} → "${resolve(palette, theme, DANGER_INK)}"`);
+    expect(broken.join(', ')).toBe('');
+  });
+
+  it('clears AA on every surface a danger message lands on, in all 20 pairs', () => {
+    const failures: string[] = [];
+    for (const { palette, theme } of PAIRS) {
+      const ink = resolve(palette, theme, DANGER_INK);
+      for (const surface of SURFACES) {
+        const ratio = contrast(ink, resolve(palette, theme, surface));
+        if (ratio < AA) {
+          failures.push(`${palette}/${theme}: ${ink} on ${surface} = ${ratio.toFixed(2)}`);
+        }
+      }
+    }
+    expect(
+      failures.join('\n'),
+      `\`${DANGER_INK}\` must clear ${AA}:1 on every surface in every palette and theme — that ` +
+        'is the whole reason it exists rather than `--el-danger`, which is 4.25 / 4.11 / 4.24:1 ' +
+        'on the DARK page in the base, cobalt and graphite palettes. If a palette moved its ' +
+        'danger hue or its page, re-measure the PAIR before changing either side; if the mix ' +
+        'ratio in `theme.css` needs to move, move it there — never darken a hue at a call site.',
+    ).toBe('');
+  });
+
+  it('stays distinguishable from the body ink — the danger SIGNAL, not just the text', () => {
+    // The half of this bug that is NOT a contrast failure, and the half the
+    // report actually described ("the error text is white"). In four dark
+    // palettes `--el-danger-text` cleared 18.59–19.44:1 against the page and
+    // was still the defect, because it was the same near-white as `--el-text`.
+    // A replacement that merely passed AA could reintroduce exactly that, so
+    // the arm asserts SEPARATION from the body ink as well as contrast with the
+    // page. 10:1 apart in CIEDE2000 is a comfortable floor; the measured range
+    // is 23.8–39.2.
+    const tooClose: string[] = [];
+    for (const { palette, theme } of PAIRS) {
+      const distance = deltaE2000(
+        resolve(palette, theme, DANGER_INK),
+        resolve(palette, theme, '--el-text'),
+      );
+      if (distance < 10) tooClose.push(`${palette}/${theme}: ΔE ${distance.toFixed(1)}`);
+    }
+    expect(
+      tooClose.join('\n'),
+      'These pairs paint danger text in something a reader cannot tell from ordinary body ink. ' +
+        'That is the half of MOTIR-3663 that is not a contrast failure — on four dark palettes ' +
+        'the old token cleared 18.59–19.44:1 against the page and was still the bug.',
     ).toBe('');
   });
 });

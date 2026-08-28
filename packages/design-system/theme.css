@@ -2440,8 +2440,32 @@
   --el-link-pressed: var(--color-link-pressed);
 
   /* ── Semantic status ───────────────────────────────────────────── */
+  /* THREE danger tokens, and the middle one is the trap (MOTIR-3663).
+     --el-danger is the FILL. --el-danger-text is the ink FOR that fill, so it
+     is legal ONLY on an element that also carries bg-(--el-danger) — the
+     Button danger variant, and nothing else. Painted on a page instead it is
+     1.00:1 in the light theme of ALL TEN palettes (the ink and the page are
+     the same white) and 1.00:1 in six of the ten dark ones; in the other four
+     it renders near-white, indistinguishable from --el-text, so the DANGER
+     SIGNAL is lost rather than the text. Both halves are the same defect, and
+     `tests/theme/inkContrastLint.test.ts`'s danger arm now holds the rule at
+     zero over the same four roots.
+     --el-danger-on-surface is the ink for danger text ON a page: the palette's
+     own danger hue pulled 30% toward that theme's body ink, which is the
+     smallest move that clears AA everywhere. Raw --el-danger does NOT — it is
+     4.25:1 (base), 4.11:1 (cobalt) and 4.24:1 (graphite) on the DARK page, and
+     under 4.5 on most tints in both themes.
+     DERIVED rather than listed, deliberately: both inputs are tokens, so it
+     re-skins with data-palette and a new palette is covered on the day it is
+     added instead of the day somebody remembers to extend a table. Measured
+     across all 20 palette x theme combinations against page/card, --el-surface,
+     --el-surface-soft, --el-muted, --el-tint-rose and --el-danger-surface, the
+     worst pair is 4.77:1 and it stays perceptually red (deltaE 6.8-14.6 from
+     the base hue, 23.8-39.2 from the body ink). The table is asserted, not
+     asserted-once: inkContrastLint recomputes it from this file. */
   --el-danger: var(--color-destructive);
   --el-danger-text: var(--color-destructive-foreground);
+  --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
   --el-success: var(--color-success);
   --el-warning: var(--color-warning);
   --el-info: var(--color-info);

@@ -219,7 +219,7 @@ export function ExpansionNudgeBanner() {
         </div>
       ) : phase === 'error' ? (
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-sm text-(--el-danger-text)">
+          <span className="text-sm text-(--el-danger-on-surface)">
             {t('nudge.error', { code: errorCode ?? '' })}
           </span>
           <button type="button" onClick={handleDismiss} className="text-sm text-(--el-link)">

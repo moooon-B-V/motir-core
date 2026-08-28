@@ -159,7 +159,7 @@
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-danger: var(--color-destructive);
-        --el-danger-text: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
@@ -1204,7 +1204,7 @@
         gap: 6px;
         margin-top: -2px;
         font-size: 12px;
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
       }
       .inline-err svg {
         width: 13px;
@@ -1393,7 +1393,7 @@
       .ldetail .errbox .ec {
         font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
         display: inline-block;
         margin-top: 7px;
         padding: 3px 7px;

@@ -44,7 +44,10 @@ export default async function FollowConfirmPage({
 
   return (
     <main className="mx-auto flex max-w-[34rem] flex-col items-center gap-3 px-6 py-20 text-center">
-      <span className={failed ? 'text-(--el-danger-text)' : 'text-(--el-success)'} aria-hidden>
+      <span
+        className={failed ? 'text-(--el-danger-on-surface)' : 'text-(--el-success)'}
+        aria-hidden
+      >
         {failed ? <AlertTriangle className="h-8 w-8" /> : <CheckCheck className="h-8 w-8" />}
       </span>
       <h1 className="font-serif text-[20px] font-bold text-(--el-text)">

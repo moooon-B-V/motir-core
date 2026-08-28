@@ -325,7 +325,7 @@ export function PublicFollowControl({
           )}
 
           {failed ? (
-            <p role="alert" className="px-3.5 pb-3.5 text-[12px] text-(--el-danger-text)">
+            <p role="alert" className="px-3.5 pb-3.5 text-[12px] text-(--el-danger-on-surface)">
               {t('followFailed')}
             </p>
           ) : null}
