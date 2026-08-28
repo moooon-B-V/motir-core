@@ -1,7 +1,9 @@
 import type { AccountDeletionRequest } from '@/generated/prisma/client';
+import { deleteAttachmentBlob } from '@/lib/blob/uploader';
 import { accountRepository } from '@/lib/repositories/accountRepository';
 import { accountDeletionRequestRepository } from '@/lib/repositories/accountDeletionRequestRepository';
 import { apiTokenRepository } from '@/lib/repositories/apiTokenRepository';
+import { dataExportRequestRepository } from '@/lib/repositories/dataExportRequestRepository';
 import { deviceCodeRepository } from '@/lib/repositories/deviceCodeRepository';
 import { emailChangeRequestRepository } from '@/lib/repositories/emailChangeRequestRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
@@ -31,7 +33,9 @@ import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 // **DELETED — what is theirs alone.** Every credential and every piece of
 // personal auth substrate (`account` · `session` · `passkey` · `two_factor` ·
 // `api_token` · `github_identity` · `device_code` · `email_change_request`),
-// their memberships, and every workspace they are the ONLY member of.
+// **every personal-data export they ever asked for** (`data_export_request`,
+// and the archive each one built), their memberships, and every workspace they
+// are the ONLY member of.
 //
 // ⚠️ The card names *"credentials, sessions, passkeys, two-factor enrolment,
 // API tokens"*. This reads **credentials** as the CLASS rather than the
@@ -40,6 +44,27 @@ import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 // pending email-change tokens. A live credential outlasting the account it
 // authenticates is a security defect, not a scope question — and none of the
 // three is reachable from any surface that would have surfaced the omission.
+//
+// ⚠️ AND THE EXPORT IS IN THE GROUP FOR A DIFFERENT REASON: IT IS THE ARCHIVE
+// (Bug MOTIR-3732). Everything else in the DELETED group is a fragment; the
+// export is the copy of EVERYTHING, built to contain it (DECISION 1: *"the
+// user's own account and profile, plus the workspaces they are a member of"*).
+// It reached this file late because it did not exist when the group was
+// written: MOTIR-3701 shipped the table AFTER MOTIR-3702's card was authored,
+// so the DELETED group named what it could see. The composition is what was
+// wrong — a reader who exported and then deleted kept a downloadable archive
+// for the archive's full `DATA_EXPORT_RETENTION_DAYS` after the erasure
+// reported `completed`. Neither the FK cascade nor the expiry sweep is a second
+// chance: the cascade is `ON DELETE CASCADE` on a `user` row this sweep
+// deliberately never deletes, and `listExpirable` selects `ready` rows past
+// their `expiresAt` — erasure is not one of its triggers.
+//
+// **The generalisable half, and the reason a reader is being told rather than
+// shown:** every NEW table keyed to `user_id` is a new obligation on this
+// group, and nothing in the schema enforces it — precisely because the
+// anonymise-in-place decision makes the cascades inert for this population. The
+// coverage is a decision somebody keeps making, not a property the database
+// maintains.
 //
 // **ANONYMISED — what is part of someone else's project.** Not a per-table
 // walk. Every surface renders a person through `user.name` / `user.email` /
@@ -93,6 +118,21 @@ export interface AccountErasureSweepSummary {
   failed: number;
   /** Sole-membership workspaces deleted across the whole tick. */
   workspacesDeleted: number;
+  /** `data_export_request` rows deleted across the whole tick (MOTIR-3732). */
+  exportsDeleted: number;
+  /**
+   * One entry per built archive whose BLOB delete failed, by EXPORT REQUEST id
+   * — never by pathname, which embeds the user id (see `failures` below for the
+   * same rule).
+   *
+   * ⚠️ NOTHING RETRIES THESE, which is why the list exists at all. The row is
+   * deleted inside the erasure transaction and the blob delete happens after it
+   * commits, so by the time one fails there is no row left for a later tick to
+   * re-derive it from — the resume arm correctly finds an empty set. This list
+   * is therefore the ONLY record that an object was stranded in the store, and
+   * a non-empty one is an operator action, not a statistic.
+   */
+  exportBlobFailures: Array<{ exportRequestId: string; error: string }>;
   /**
    * One entry per request that threw, by REQUEST id — never by user id or
    * address. A failure line on an operator dashboard is not a place to put the
@@ -105,8 +145,25 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** One built archive the erasure transaction removed the row for, and whose
+ *  blob the post-commit step therefore owes a delete. */
+interface ErasedExportBlob {
+  /** The `data_export_request` id — what a failure is reported by. */
+  requestId: string;
+  pathname: string;
+}
+
+/** What the erasure transaction hands back to the post-commit steps. */
+interface ErasureTxResult {
+  outcome: ErasureOutcome;
+  exportsDeleted: number;
+  /** Empty on `resumed` and `skipped` — see below. */
+  exportBlobs: ErasedExportBlob[];
+}
+
 /**
- * Erase ONE account: the locked transaction, then the workspaces.
+ * Erase ONE account: the locked transaction, then the archives, then the
+ * workspaces.
  *
  * ⚠️ THE LOCK IS WHAT MAKES A DAY-29 CANCEL STICK, AND ITS SPAN IS THE WHOLE
  * DESIGN. `cancelOpenRequest` (`accountDeletionService`) takes a `FOR UPDATE`
@@ -134,11 +191,24 @@ function errorText(err: unknown): string {
  * makes the workspace deletes refuse. So they are erasure's last act, after
  * the account is already credential-less and anonymised and can no longer use
  * them for anything.
+ *
+ * ⚠️ AND THE EXPORT ARCHIVES SIT OUTSIDE IT FOR THE SAME REASON AND RUN FIRST
+ * OF THE TWO (Bug MOTIR-3732). Deleting a blob is an external side effect with
+ * no rollback, so it may not happen where a later statement — or the day-29
+ * cancel winning under the lock — could still undo the row it belongs to. It
+ * runs BEFORE the workspace loop because that loop THROWS on failure, and by
+ * then the export rows are already gone: a throw ahead of the blob deletes
+ * would skip them permanently rather than deferring them to a later tick.
  */
 async function eraseOneAccount(
   request: AccountDeletionRequest,
   now: Date,
-): Promise<{ outcome: ErasureOutcome; workspacesDeleted: number }> {
+): Promise<{
+  outcome: ErasureOutcome;
+  workspacesDeleted: number;
+  exportsDeleted: number;
+  exportBlobFailures: Array<{ exportRequestId: string; error: string }>;
+}> {
   const userId = request.userId;
 
   // ── The impact read, OUTSIDE any transaction ──────────────────────────────
@@ -166,13 +236,20 @@ async function eraseOneAccount(
   // point of no return is behind it, and refusing there would strand the
   // leftover workspaces for ever.
   if (request.status === 'scheduled' && preview.blocked) {
-    return { outcome: 'blocked', workspacesDeleted: 0 };
+    return { outcome: 'blocked', workspacesDeleted: 0, exportsDeleted: 0, exportBlobFailures: [] };
   }
 
-  const outcome: ErasureOutcome =
+  const txResult: ErasureTxResult =
     request.status === 'completed'
-      ? 'resumed'
-      : await withUserContext(userId, async (tx): Promise<ErasureOutcome> => {
+      ? // ⚠️ THE RESUME ARM CARRIES NO EXPORTS, and that is the idempotence
+        // rather than an omission. The rows went with the erasure transaction
+        // that committed on the first pass, so a second pass over the same
+        // account re-derives an EMPTY set — exactly as it re-derives an empty
+        // sole-membership workspace set. Nothing is re-deleted and nothing
+        // raises. The cost of that shape is the stranded blob the summary's
+        // `exportBlobFailures` exists to name.
+        { outcome: 'resumed', exportsDeleted: 0, exportBlobs: [] }
+      : await withUserContext(userId, async (tx): Promise<ErasureTxResult> => {
           // ── LOCK, THEN RE-READ ────────────────────────────────────────────
           // The row was SELECTed in an earlier, already-committed transaction;
           // a cancel may have landed since. `findOpenByUserIdForUpdate` filters
@@ -180,7 +257,7 @@ async function eraseOneAccount(
           // open any more" — cancelled, or completed by a concurrent tick.
           // Nothing below runs in that case.
           const open = await accountDeletionRequestRepository.findOpenByUserIdForUpdate(userId, tx);
-          if (!open) return 'skipped';
+          if (!open) return { outcome: 'skipped', exportsDeleted: 0, exportBlobs: [] };
 
           // ── DELETED: credentials and personal auth substrate ──────────────
           await accountRepository.deleteAllForUser(userId, tx);
@@ -195,6 +272,24 @@ async function eraseOneAccount(
           await githubIdentityRepository.deleteByUserId(userId, tx);
           await deviceCodeRepository.deleteAllForUser(userId, tx);
           await emailChangeRequestRepository.deleteAllForUser(userId, tx);
+
+          // ── DELETED: every personal-data export (Bug MOTIR-3732) ──────────
+          // The ROW goes here, in the transaction, so it is gone the instant
+          // the erasure commits and no cancel-window state can leave it
+          // half-erased. Its BLOB cannot: deleting an object is an external
+          // side effect with no rollback, so it waits for the commit — the
+          // position `deleteWorkspace` takes below, for the same reason.
+          //
+          // Read the pathnames BEFORE the delete: `deleteMany` answers with a
+          // count, not with the rows, and after it there is nothing left to ask.
+          const exports = await dataExportRequestRepository.listByUserId(userId, tx);
+          // A `preparing` row has no blob yet and a `failed` / `expired` one no
+          // longer has one — but the ROW still goes, because it carries this
+          // person's `user_id` either way.
+          const exportBlobs: ErasedExportBlob[] = exports
+            .filter((row): row is { id: string; blobPathname: string } => row.blobPathname !== null)
+            .map((row) => ({ requestId: row.id, pathname: row.blobPathname }));
+          const exportsDeleted = await dataExportRequestRepository.deleteAllForUser(userId, tx);
 
           // ── ANONYMISED: the profile row every attribution reads through ───
           await userRepository.anonymise(
@@ -218,10 +313,39 @@ async function eraseOneAccount(
             { status: 'completed', completedAt: now },
             tx,
           );
-          return 'erased';
+          return { outcome: 'erased', exportsDeleted, exportBlobs };
         });
 
-  if (outcome === 'skipped') return { outcome, workspacesDeleted: 0 };
+  const { outcome, exportsDeleted, exportBlobs } = txResult;
+
+  if (outcome === 'skipped') {
+    return { outcome, workspacesDeleted: 0, exportsDeleted: 0, exportBlobFailures: [] };
+  }
+
+  // ── DELETED: the archives themselves — POST-COMMIT, AND FIRST ─────────────
+  // ⚠️ FIRST among the post-commit steps, deliberately. The workspace loop
+  // below THROWS on failure (that is what `findDueOrResumable`'s resume arm
+  // exists to finish), and a throw there would skip this step — permanently,
+  // because the rows it derives from are already gone. Ordering it ahead costs
+  // nothing: an archive is not a precondition for anything below it.
+  //
+  // ⚠️ AND BEST-EFFORT, because the account must still be erased. A blob store
+  // that is unreachable for thirty seconds must not un-erase somebody, and it
+  // must not leave a `data_export_request` row standing to claim the archive is
+  // still theirs to download — the row is already gone. What is owed is the
+  // RECORD, and it goes in the summary by export-request id.
+  const exportBlobFailures: Array<{ exportRequestId: string; error: string }> = [];
+  for (const blob of exportBlobs) {
+    try {
+      await deleteAttachmentBlob(blob.pathname);
+    } catch (err) {
+      exportBlobFailures.push({ exportRequestId: blob.requestId, error: errorText(err) });
+      console.error(
+        `[accountErasure] the archive for export request ${blob.requestId} could not be ` +
+          'deleted; its row is gone, so no later tick will retry it.',
+      );
+    }
+  }
 
   // ── DELETED: the workspaces that go with the account ──────────────────────
   // ⚠️ THROUGH `deleteWorkspace`, AND THAT IS A CONTRACT RATHER THAN A STYLE
@@ -258,7 +382,7 @@ async function eraseOneAccount(
     await organizationMembershipRepository.deleteAllByUser(userId, tx);
   });
 
-  return { outcome, workspacesDeleted };
+  return { outcome, workspacesDeleted, exportsDeleted, exportBlobFailures };
 }
 
 export const accountErasureSweepService = {
@@ -268,8 +392,10 @@ export const accountErasureSweepService = {
    * IDEMPOTENT AND RESUMABLE BY CONSTRUCTION, on both arms. A re-run re-derives
    * everything it acts on rather than replaying a plan: an erased account's
    * request no longer matches the `scheduled` arm, its `deleteMany`s match zero
-   * rows, and its sole-membership workspaces are gone from the impact read, so
-   * a second pass over the same row does nothing and raises nothing.
+   * rows, its sole-membership workspaces are gone from the impact read, and its
+   * export set is re-derived EMPTY because those rows went with the first
+   * commit — so a second pass over the same row does nothing and raises
+   * nothing.
    *
    * ⚠️ ONE USER'S FAILURE MUST NOT ABORT THE BATCH, and the reason is the shape
    * of the queue rather than politeness: the rows are ordered by deadline, so an
@@ -297,14 +423,19 @@ export const accountErasureSweepService = {
       blocked: 0,
       failed: 0,
       workspacesDeleted: 0,
+      exportsDeleted: 0,
+      exportBlobFailures: [],
       failures: [],
     };
 
     for (const request of due) {
       try {
-        const { outcome, workspacesDeleted } = await eraseOneAccount(request, now);
+        const { outcome, workspacesDeleted, exportsDeleted, exportBlobFailures } =
+          await eraseOneAccount(request, now);
         summary[outcome] += 1;
         summary.workspacesDeleted += workspacesDeleted;
+        summary.exportsDeleted += exportsDeleted;
+        summary.exportBlobFailures.push(...exportBlobFailures);
       } catch (err) {
         summary.failed += 1;
         summary.failures.push({ requestId: request.id, error: errorText(err) });
