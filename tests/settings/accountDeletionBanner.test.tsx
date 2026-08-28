@@ -258,6 +258,7 @@ describe('the pane renders ONE deletion card, never both', () => {
         passkeys: 0,
         twoFactorEnrolments: 0,
         apiTokens: 0,
+        dataExports: 0,
         soleMemberWorkspaces: [],
         projects: 0,
         workItems: 0,

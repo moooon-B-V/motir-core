@@ -157,6 +157,25 @@ export const dataExportRequestRepository = {
     });
   },
 
+  /**
+   * HOW MANY requests this user holds — the number the ERASURE PREVIEW's
+   * `deleted` group renders (Story 8.4 · Bug MOTIR-3747).
+   *
+   * ⚠️ THE SAME PREDICATE AS {@link deleteAllForUser}, DELIBERATELY, and that is
+   * the whole point of it being a sibling method rather than a filter a caller
+   * assembles. The confirmation ledger's promise is that its numbers are what
+   * the erasure actually reaches; a count narrowed to `ready` — the shape a
+   * reader borrows from {@link listExpirable} without thinking — would under-
+   * report by every `preparing`, `failed` and `expired` row the delete takes.
+   *
+   * A `count` rather than a reuse of {@link listByUserId}: the preview needs the
+   * number and nothing else, and the pathnames that read exists for are the
+   * blob delete's input, which a read-only preview has no use for.
+   */
+  async countByUserId(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.dataExportRequest.count({ where: { userId } });
+  },
+
   /** Record a build's outcome (ready + its blob, failed + its reason, expired).
    *  Write → `tx` required. Keyed by `id` — the caller has just locked it. */
   async update(

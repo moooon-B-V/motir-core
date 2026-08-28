@@ -72,6 +72,7 @@ const OBSERVED_MODELS = [
   'passkey',
   'twoFactor',
   'apiToken',
+  'dataExportRequest',
   'workspace',
   'workspaceMembership',
   'organization',
@@ -466,6 +467,40 @@ describe('previewAccountErasure — the three ledger groups', () => {
     expect(after.deleted.twoFactorEnrolments).toBe(1);
   });
 
+  // ── The personal-data export (Bug MOTIR-3747) ──────────────────────────────
+  // MOTIR-3732 made erasure delete every `data_export_request` and the archive
+  // each one built; the ledger never named it. These pin the number the ledger
+  // renders — the CONTRACT half. That it equals what the sweep actually deletes
+  // is asserted where both halves can be driven, in
+  // `tests/account-erasure-sweep.test.ts`.
+
+  it('counts EVERY export request the reader holds, whatever its status', async () => {
+    const user = await createTestUser();
+    const bystander = await createTestUser();
+
+    // A reader who has never asked for one loses none — and the ledger's row is
+    // hidden at zero, so this is the value that decides whether it renders.
+    expect((await accountErasureService.previewAccountErasure(user.id)).deleted.dataExports).toBe(
+      0,
+    );
+
+    // Every status, matching `deleteAllForUser`'s own predicate. A count
+    // narrowed to `ready` — the shape `listExpirable` invites — would tell a
+    // reader on a consent surface that two of these four survive the erasure.
+    for (const status of ['ready', 'preparing', 'failed', 'expired'] as const) {
+      await adminDb.dataExportRequest.create({ data: { userId: user.id, status } });
+    }
+    // Somebody else's archive is not this reader's loss.
+    await adminDb.dataExportRequest.create({ data: { userId: bystander.id, status: 'ready' } });
+
+    const preview = await accountErasureService.previewAccountErasure(user.id);
+
+    expect(preview.deleted.dataExports).toBe(4);
+    expect(
+      (await accountErasureService.previewAccountErasure(bystander.id)).deleted.dataExports,
+    ).toBe(1);
+  });
+
   it('states the KEPT exceptions without counting them from the database', async () => {
     const user = await createTestUser();
 
@@ -489,6 +524,7 @@ describe('previewAccountErasure — the three ledger groups', () => {
         passkeys: 0,
         twoFactorEnrolments: 0,
         apiTokens: 0,
+        dataExports: 0,
         soleMemberWorkspaces: [],
         projects: 0,
         workItems: 0,

@@ -2456,6 +2456,10 @@
               "name": "The work inside them",
               "desc": "{projects, plural, one {# project} other {# projects}}, with their attachments and history."
             },
+            "dataExports": {
+              "name": "Data exports you asked for",
+              "desc": "{count, plural, one {The request, and the archive it built} other {Every request, and the archive each one built}} — a copy of everything this account held. A file you have already downloaded is yours to keep."
+            },
             "comments": {
               "name": "Comments in projects other people share",
               "desc": "Your name comes off; the comment stays, because it is part of a conversation others took part in."

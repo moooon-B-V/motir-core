@@ -542,6 +542,7 @@ describe('the defensive arms — what is NOT translated, and what is', () => {
         passkeys: 0,
         twoFactorEnrolments: 0,
         apiTokens: 0,
+        dataExports: 0,
         soleMemberWorkspaces: [],
         projects: 0,
         workItems: 0,
