@@ -368,6 +368,128 @@ describe('idempotence and concurrency', () => {
   });
 });
 
+describe('reading the session back out of the boot memo', () => {
+  // ⚠️ EVERY ARM OF THIS READ IS A REFUSAL, and each has to answer null rather
+  // than hand the terminal transition a half-shaped object. The sweep is the one
+  // caller that reconstructs a session WITHOUT the handler having run, so a
+  // memo it cannot make sense of has no second source to fall back on.
+  const rowFor = (runId: string, kind: 'index' | 'ci-runner', subject: string) =>
+    ({ runId, kind, subject }) as never;
+
+  it('answers null for a SLEEP checkpoint — a sleep memo carries no result at all', async () => {
+    const run = await makeRun('failed');
+    await withSystemContext((tx) =>
+      jobStepRepository.create(
+        {
+          runId: run.id,
+          stepId: 'index-boot:p1',
+          kind: 'sleep',
+          sleepUntil: new Date(),
+          workspaceId: run.workspaceId,
+        },
+        tx,
+      ),
+    );
+    expect(await supervisionSweepService.readSession(rowFor(run.id, 'index', 'p1'))).toBeNull();
+  });
+
+  it('answers null for a TERMINAL boot — nothing was provisioned to tear down', async () => {
+    const run = await makeRun('failed');
+    await withSystemContext((tx) =>
+      jobStepRepository.create(
+        {
+          runId: run.id,
+          stepId: 'index-boot:p1',
+          kind: 'run',
+          result: { phase: 'terminal', outcome: { outcome: 'provision_failed', detail: 'x' } },
+          workspaceId: run.workspaceId,
+        },
+        tx,
+      ),
+    );
+    expect(await supervisionSweepService.readSession(rowFor(run.id, 'index', 'p1'))).toBeNull();
+  });
+
+  it('answers null when the memo is absent, and when its result is null', async () => {
+    const run = await makeRun('failed');
+    expect(await supervisionSweepService.readSession(rowFor(run.id, 'index', 'p1'))).toBeNull();
+    await withSystemContext((tx) =>
+      jobStepRepository.create(
+        { runId: run.id, stepId: 'boot-runner', kind: 'run', workspaceId: run.workspaceId },
+        tx,
+      ),
+    );
+    expect(
+      await supervisionSweepService.readSession(rowFor(run.id, 'ci-runner', 'i-1')),
+    ).toBeNull();
+  });
+
+  it('a run row that no longer exists is not live', async () => {
+    // The `!run` arm, reached by asking about a run id nothing owns — which is
+    // what a supervision row outliving its run would look like if the cascade
+    // were ever relaxed.
+    expect(
+      await supervisionSweepService.runIsStillLive(
+        { runId: 'run-that-never-was' } as never,
+        new Date(),
+      ),
+    ).toBe(false);
+  });
+
+  it('carries the OBSERVED start through to both terminal transitions', async () => {
+    // The other side of the `startedAt` branch: a container the provider DID
+    // report running before the chain stopped. The observation is the row's, so
+    // the settle carries it — and the CI arm re-derives `bootLatencyMs` from it
+    // and the memoized `queuedAt`, which is why neither is a column (§16.2).
+    const observed = new Date(Date.now() - 39 * 60_000);
+    const indexRun = await makeRun('failed');
+    await seedSupervision(indexRun, { kind: 'index', subject: 'proj-s', dueMinutesAgo: 40 });
+    const ciRun = await makeRun('failed');
+    await seedSupervision(ciRun, { kind: 'ci-runner', subject: 'intent-s', dueMinutesAgo: 40 });
+    for (const [run, subject] of [
+      [indexRun, 'proj-s'],
+      [ciRun, 'intent-s'],
+    ] as const) {
+      await withSystemContext((tx) =>
+        jobSupervisionRepository.advance(
+          run.id,
+          subject,
+          { startedAt: observed, consecutiveReadFailures: 0, nextPollAt: run.runAt },
+          tx,
+        ),
+      );
+    }
+    const terminals = stubTerminals();
+
+    expect((await supervisionSweepService.sweepAbandoned()).settled).toBe(2);
+    expect(terminals.index.mock.calls[0]![1]).toMatchObject({
+      startedAt: observed.toISOString(),
+    });
+    const runnerVerdict = terminals.runner.mock.calls[0]![1] as {
+      startedAt: string | null;
+      bootLatencyMs: number | null;
+    };
+    expect(runnerVerdict.startedAt).toBe(observed.toISOString());
+    // `startedAt − queuedAt`, and the fixture's session queued a minute before
+    // it booted, so the latency is positive and derived rather than stored.
+    expect(runnerVerdict.bootLatencyMs).toBeGreaterThan(0);
+  });
+
+  it('settles a CI supervision whose container was never OBSERVED to start', async () => {
+    // `startedAt` null is the branch where `bootLatencyMs` cannot be derived —
+    // the container was booted and the provider never reported it running.
+    const run = await makeRun('failed');
+    await seedSupervision(run, { kind: 'ci-runner', subject: 'intent-2', dueMinutesAgo: 40 });
+    const terminals = stubTerminals();
+
+    expect((await supervisionSweepService.sweepAbandoned()).settled).toBe(1);
+    expect(terminals.runner.mock.calls[0]![1]).toMatchObject({
+      startedAt: null,
+      bootLatencyMs: null,
+    });
+  });
+});
+
 describe('a quiet tick is free', () => {
   it('performs no orchestrator call at all when nothing is stalled', async () => {
     const terminals = stubTerminals();
