@@ -7,6 +7,8 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import type { GithubWebhookResult } from '@/lib/services/githubWebhookService';
+import type { ChangeRequestSyncResult } from '@/lib/services/changeRequestStatusSync';
 import { repoSetCompletionService } from '@/lib/services/repoSetCompletionService';
 import { resolveChangeRequestWorkItemSet } from '@/lib/services/changeRequestWorkItems';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
@@ -98,6 +100,17 @@ function prPayload(opts: {
 
 const pr = (payload: ReturnType<typeof prPayload>) =>
   githubWebhookService.handleEvent('pull_request', payload);
+
+/** Narrow the webhook's result union to the STATUS-SYNC member on its own `event`
+ *  discriminant, so a per-card field can be read without a cast. A result that is
+ *  not a `pull_request` one is a test failure with a legible message rather than a
+ *  compile-time widening. */
+function asSync(result: GithubWebhookResult): ChangeRequestSyncResult {
+  if (result.event !== 'pull_request') {
+    throw new Error(`expected a pull_request result, got "${result.event}"`);
+  }
+  return result;
+}
 
 const ci = (opts: { conclusion: string; headSha: string; prNumbers: number[] }) =>
   githubWebhookService.handleEvent('check_suite', {
@@ -211,12 +224,13 @@ describe('ONE pull request delivering N cards — the merge closes all N (MOTIR-
     );
 
     // A delivery deciding N cards SAYS N — reporting one of them is the defect.
-    expect(merged).toMatchObject({ outcome: 'delivery_applied' });
-    expect(merged.deliveredItems).toHaveLength(3);
-    expect(new Set(merged.deliveredItems?.map((d) => d.workItemId))).toEqual(
+    const synced = asSync(merged);
+    expect(synced).toMatchObject({ outcome: 'delivery_applied' });
+    expect(synced.deliveredItems).toHaveLength(3);
+    expect(new Set(synced.deliveredItems?.map((d) => d.workItemId))).toEqual(
       new Set(cards.map((c) => c.id)),
     );
-    for (const d of merged.deliveredItems ?? []) {
+    for (const d of synced.deliveredItems ?? []) {
       expect(d).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     }
     for (const card of cards) expect(await statusOf(card.id)).toBe('done');
