@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { fireEvent } from '@testing-library/dom';
@@ -8,6 +8,10 @@ import {
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import type { ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
+import {
+  DEPENDENCY_LEGEND_COLLAPSED_STORAGE_KEY,
+  resetDependencyLegendCollapsedForTests,
+} from '@/lib/hooks/useDependencyLegendCollapsed';
 
 afterEach(() => cleanup());
 
@@ -1400,5 +1404,108 @@ describe('ProjectRoadmapCanvas — arriveAtReadableScale is opt-in', () => {
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(one)} arriveAtReadableScale />);
     expect(await screen.findByText('a')).toBeTruthy();
     expect(screen.getByTestId('planning-canvas')).toBeTruthy();
+  });
+});
+
+// ── THE COLLAPSIBLE DEPENDENCIES LEGEND (MOTIR-3838) ────────────────────────
+describe('ProjectRoadmapCanvas — the Dependencies legend collapses', () => {
+  const withDeps: RoadmapLevel = {
+    nodes: [node('A', 'a'), node('B', 'b')],
+    deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
+  };
+  const flowOnly: RoadmapLevel = {
+    nodes: [node('A', 'a'), node('B', 'b')],
+    deps: [{ from: 'A', to: 'B', kind: 'flow' }],
+  };
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetDependencyLegendCollapsedForTests();
+  });
+
+  it('renders EXPANDED by default — the shipped state — with the three style rows', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    const legend = await screen.findByTestId('edge-legend');
+    expect(within(legend).getByText('blocks')).toBeTruthy();
+    expect(within(legend).getByText('pending')).toBeTruthy();
+    const toggle = screen.getByTestId('edge-legend-toggle');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Hide the dependency legend');
+    // `aria-controls` names a real element in the document.
+    expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeTruthy();
+  });
+
+  it('COLLAPSES to the heading alone — the control stays findable', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    const toggle = await screen.findByTestId('edge-legend-toggle');
+    fireEvent.click(toggle);
+
+    const legend = screen.getByTestId('edge-legend');
+    // The heading survives; a legend that vanished entirely could not be reopened.
+    expect(within(legend).getByText('Dependencies')).toBeTruthy();
+    // The rows are HIDDEN, not unmounted — the disclosure pattern, so
+    // `aria-controls` keeps naming a real element and `hidden` takes the rows out
+    // of the accessibility tree and out of the layout.
+    const rows = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(rows.hidden).toBe(true);
+    expect(rows.contains(within(legend).getByText('blocks'))).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Show the dependency legend');
+  });
+
+  it('PERSISTS the choice under the shipped `motir.*` key, and re-reads it on a fresh mount', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    fireEvent.click(await screen.findByTestId('edge-legend-toggle'));
+    expect(window.localStorage.getItem(DEPENDENCY_LEGEND_COLLAPSED_STORAGE_KEY)).toBe('true');
+
+    cleanup();
+    resetDependencyLegendCollapsedForTests();
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    const toggle2 = await screen.findByTestId('edge-legend-toggle');
+    expect(toggle2.getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById(toggle2.getAttribute('aria-controls')!)!.hidden).toBe(true);
+  });
+
+  it('renders EXPANDED and does not throw when localStorage is unavailable', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: private mode');
+    });
+    try {
+      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+      const toggle3 = await screen.findByTestId('edge-legend-toggle');
+      expect(toggle3.getAttribute('aria-expanded')).toBe('true');
+      expect(document.getElementById(toggle3.getAttribute('aria-controls')!)!.hidden).toBe(false);
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
+  it('still shows NO legend at all on a level whose edges are all `flow`', async () => {
+    // The onboarding station serpentine — drawn, but not dependencies.
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(flowOnly)} />);
+    await screen.findByText('a');
+    expect(screen.queryByTestId('edge-legend')).toBeNull();
+    expect(screen.queryByTestId('edge-legend-toggle')).toBeNull();
+  });
+
+  it('collapsing does NOT move the legend, the zoom cluster, Locate or Reset layout', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(withDeps)}
+        locatable
+        onResetPositions={() => {}}
+        onNodeMove={() => {}}
+      />,
+    );
+    const legend = await screen.findByTestId('edge-legend');
+    const before = legend.className;
+    const locateBefore = screen.getByTestId('locate-button').parentElement!.className;
+
+    fireEvent.click(screen.getByTestId('edge-legend-toggle'));
+
+    // The panel collapses IN PLACE — same slot, so it can never land on the
+    // engine's zoom cluster at `bottom-4 left-4`.
+    expect(screen.getByTestId('edge-legend').className).toBe(before);
+    expect(screen.getByTestId('locate-button').parentElement!.className).toBe(locateBefore);
   });
 });

@@ -5737,7 +5737,9 @@
         "blockedElsewhere": "blocked elsewhere",
         "blockedElsewhereMeaning": "the blocker sits elsewhere in the plan",
         "blockerNotInSprint": "blocker not in sprint",
-        "blockerNotInSprintMeaning": "not done & outside the sprint"
+        "blockerNotInSprintMeaning": "not done & outside the sprint",
+        "collapse": "Hide the dependency legend",
+        "expand": "Show the dependency legend"
       },
       "origin": {
         "planning": "Planning",

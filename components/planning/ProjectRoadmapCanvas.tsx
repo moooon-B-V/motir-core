@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Eye,
   LocateFixed,
   Maximize,
@@ -18,6 +20,7 @@ import {
   type CanvasNode,
 } from '@/components/planning/PlanningCanvas';
 import { Input } from '@/components/ui/Input';
+import { useDependencyLegendCollapsed } from '@/lib/hooks/useDependencyLegendCollapsed';
 import { Spinner } from '@/components/ui/Spinner';
 import { ARRIVAL_MIN_SCALE } from '@/lib/planning/canvasGeometry';
 import {
@@ -387,6 +390,14 @@ export function ProjectRoadmapCanvas({
   // OS chrome hides too; if it rejects (e.g. headless / no user-gesture trust) the
   // overlay still fills the viewport, so the feature degrades cleanly.
   const [expanded, setExpanded] = useState(false);
+  // The dependency-legend collapse (MOTIR-3838) — a per-VIEWER preference, shared
+  // by every canvas that draws the legend and persisted on the shell's own
+  // localStorage recipe. Not opt-in: the legend is this canvas's own chrome, and
+  // giving two consumers a legend you can dismiss and two you cannot is a
+  // distinction no reader could infer.
+  const [legendCollapsed, toggleLegendCollapsed] = useDependencyLegendCollapsed();
+  // A per-instance id, so `aria-controls` is unique when two canvases coexist.
+  const legendRowsId = `${useId().replace(/:/g, '')}-legend-rows`;
   const reqSeq = useRef(0);
   // AUTO-DESCEND suppression (MOTIR-1807; design `auto-drill.*` panel F). `navigate()`
   // and `goBack()` are the user EXPLICITLY asking to see a level — if auto-descend then
@@ -1228,49 +1239,81 @@ export function ProjectRoadmapCanvas({
       {deps.some((d) => d.kind !== 'flow') && (
         <div
           data-testid="edge-legend"
+          data-collapsed={legendCollapsed || undefined}
           className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
         >
-          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
-            {t('legend.heading')}
-          </span>
-          {(
-            [
-              ['committed', t('legend.blocks'), t('legend.blocksMeaning')],
-              ['pending', t('legend.pending'), t('legend.pendingMeaning')],
-              ['warning', resolvedWarningLegend.label, resolvedWarningLegend.meaning],
-            ] as const
-          ).map(([kind, label, meaning]) => (
-            <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
-              <svg viewBox="0 0 40 12" className="h-3 w-10 shrink-0" aria-hidden="true">
-                <path
-                  d="M2 6H31"
-                  fill="none"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeDasharray={kind === 'pending' ? '2 5' : undefined}
-                  className={
-                    kind === 'warning'
-                      ? 'stroke-(--el-warning)'
-                      : kind === 'pending'
-                        ? 'stroke-(--el-canvas-edge-pending)'
-                        : 'stroke-(--el-canvas-edge-committed)'
-                  }
-                />
-                <path
-                  d="M30 2 36 6 30 10z"
-                  className={
-                    kind === 'warning'
-                      ? 'fill-(--el-warning)'
-                      : kind === 'pending'
-                        ? 'fill-(--el-canvas-edge-pending)'
-                        : 'fill-(--el-canvas-edge-committed)'
-                  }
-                />
-              </svg>
-              {label}
-              <span className="text-(--el-text-secondary)">· {meaning}</span>
+          {/* COLLAPSE (MOTIR-3838). The chevron rides the panel's OWN heading row
+              rather than being a bare pill beside it: the heading is the one thing
+              that must survive the collapse — a legend that vanishes entirely
+              cannot be brought back — so the control belongs next to it. The panel
+              collapses IN PLACE: the slot is unchanged, so the control does not
+              move under the reader's cursor and can never land on the engine's
+              zoom cluster at `bottom-4 left-4`. */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
+              {t('legend.heading')}
             </span>
-          ))}
+            <button
+              type="button"
+              data-testid="edge-legend-toggle"
+              onClick={toggleLegendCollapsed}
+              aria-expanded={!legendCollapsed}
+              aria-controls={legendRowsId}
+              aria-label={t(legendCollapsed ? 'legend.expand' : 'legend.collapse')}
+              title={t(legendCollapsed ? 'legend.expand' : 'legend.collapse')}
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {legendCollapsed ? (
+                <ChevronUp className="size-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="size-3.5" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+          <div
+            id={legendRowsId}
+            hidden={legendCollapsed}
+            className={legendCollapsed ? undefined : 'flex flex-col gap-1.5'}
+          >
+            {(
+              [
+                ['committed', t('legend.blocks'), t('legend.blocksMeaning')],
+                ['pending', t('legend.pending'), t('legend.pendingMeaning')],
+                ['warning', resolvedWarningLegend.label, resolvedWarningLegend.meaning],
+              ] as const
+            ).map(([kind, label, meaning]) => (
+              <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
+                <svg viewBox="0 0 40 12" className="h-3 w-10 shrink-0" aria-hidden="true">
+                  <path
+                    d="M2 6H31"
+                    fill="none"
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                    strokeDasharray={kind === 'pending' ? '2 5' : undefined}
+                    className={
+                      kind === 'warning'
+                        ? 'stroke-(--el-warning)'
+                        : kind === 'pending'
+                          ? 'stroke-(--el-canvas-edge-pending)'
+                          : 'stroke-(--el-canvas-edge-committed)'
+                    }
+                  />
+                  <path
+                    d="M30 2 36 6 30 10z"
+                    className={
+                      kind === 'warning'
+                        ? 'fill-(--el-warning)'
+                        : kind === 'pending'
+                          ? 'fill-(--el-canvas-edge-pending)'
+                          : 'fill-(--el-canvas-edge-committed)'
+                    }
+                  />
+                </svg>
+                {label}
+                <span className="text-(--el-text-secondary)">· {meaning}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
