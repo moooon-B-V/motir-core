@@ -98,11 +98,36 @@ So the brand does not belong in it.
 - **`nextjs-prisma-vercel-starter`, the scaffold agent, and every scaffolded product** depend on
   `@motir/design-system` and **never** on `@motir/brand`. That is the entire point of the split,
   and it is enforceable by a one-line check on the starter's manifest.
-- **`@motir/design-system` is an ordinary `dependencies` entry of `@motir/brand`**, on a caret
-  range — not a peer, not a co-versioned lockstep. The token contract (`--el-*` names, the
-  `data-*` attribute set) is already declared the semver surface by
-  `design-system-package.md` §3, so a caret range is exactly the right instrument and token skew
-  is a normal breaking-change conversation rather than a novel hazard.
+- **`@motir/design-system` is a REQUIRED PEER of `@motir/brand`**, on a caret range — not a
+  co-versioned lockstep. The token contract (`--el-*` names, the `data-*` attribute set) is
+  already declared the semver surface by `design-system-package.md` §3, so a caret range is
+  exactly the right instrument and token skew is a normal breaking-change conversation rather
+  than a novel hazard.
+
+  > **⚠️ AMENDED AT IMPLEMENTATION (MOTIR-1456, 2026-08-27) — this said `dependencies`, following
+  > `@atlaskit/logo`, and it was wrong for THIS repository for two reasons found while building
+  > it.** The card's first acceptance criterion requires the ADR to be amended rather than
+  > silently diverged from, so the reasoning is here rather than in a commit message.
+  >
+  > **1. The release lane would publish a broken manifest.** In a pnpm workspace the local link is
+  > written `"workspace:^"`, and it is `pnpm publish` that rewrites that to a real range at pack
+  > time. `release-design-system.yml` — which `release-brand.yml` copies — publishes with
+  > **`npm publish`** (`pnpm --filter … exec npm publish`), and npm does **not** rewrite the
+  > `workspace:` protocol. The published `package.json` would carry a literal `workspace:^` that
+  > no consumer can install. Writing a plain `"^0.1.0"` instead avoids that and buys a worse
+  > problem: pnpm 10+ defaults `link-workspace-packages` to false, so local development would
+  > resolve the last _published_ design system out of the registry and shadow the workspace copy.
+  > A peer range is subject to neither, because it is never installed and never rewritten.
+  >
+  > **2. A peer is what the coupling actually is.** The dependency is a CSS custom-property
+  > contract, not a module import — nothing in this package `import`s the design system. What a
+  > consumer must have is exactly ONE copy of the token layer: the one its own `globals.css`
+  > imports. A `dependencies` entry permits a second nested copy at a different version, which
+  > would be inert for CSS and actively misleading to read.
+  >
+  > **The precedent is unaffected on the point it was cited for** — Atlassian ships the marks as
+  > a SEPARATE package, which is the decision. How that package spells its version constraint is
+  > a property of its own toolchain, and ours publishes with a different tool.
 
 **This is the shape the mirror product's own vendor ships.** Atlassian publishes
 **`@atlaskit/logo`** — its own product marks — as a **separate package** from
@@ -133,9 +158,18 @@ reference product uses, and its dependency shape answers the coupling question d
   `components/onboarding/DiscoveryChatRail.tsx`, `components/planning/PlanChangeRail.tsx`,
   `components/planning/PlanWithAIFab.tsx` — do not change. This is the pattern MOTIR-1527 used
   and proved.
-- **Import ORDER matters in `globals.css`**, and it is the one thing a mechanical move can get
-  wrong: `@motir/design-system/theme.css` must be imported **before** `@motir/brand/brand.css`,
-  because the brand rules read tokens the theme defines.
+- **Both stylesheets are `@import`s at the TOP of the consumer's `globals.css`**, in that order.
+  **⚠️ CORRECTED AT IMPLEMENTATION (MOTIR-1456):** this bullet said the order was load-bearing
+  _"because the brand rules read tokens the theme defines"_, and that reason is wrong — CSS custom
+  properties resolve at computed-value time, so `var(--el-text)` resolves against `:root` whichever
+  sheet was parsed first. Keeping brand after theme remains the right convention because it matches
+  the dependency direction, but it is not a correctness requirement. **What IS structural is that
+  an `@import` must precede other rules**, so moving the block out of the app tail relocates the
+  seven `.brand-*` selectors from the end of the compiled sheet to the middle. That relocation was
+  measured rather than assumed: the compiled rule set is identical (1837 rules, same
+  selector/declaration pairs on both sides), and of the 89 rules that now follow the block, none
+  mentions `brand` and none can match a lockup element by tag — so no equal-specificity rule wins
+  where it previously lost.
 - **The release lane is a copy of `.github/workflows/release-design-system.yml`**, whose own
   header documents the extension (change `PACKAGE` / `PKG_DIR`, the `on.push.tags` prefix, and
   the tag-strip prefix): tag `brand-v<x.y.z>`, OIDC Trusted Publishing, no `NPM_TOKEN`. One

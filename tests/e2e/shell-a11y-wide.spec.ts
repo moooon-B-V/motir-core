@@ -58,7 +58,8 @@
 //     is muted-or-fainter ink on a non-white surface: the MOTIR-2477 class,
 //     surviving on routes its sweep never reached. Two of them were invisible
 //     to the MOTIR-2459 AST guard by construction — `.brand-pre` declares its
-//     colour in `globals.css` rather than a JSX class literal, and
+//     colour in a stylesheet (`@motir/brand`'s `brand.css` since MOTIR-1456,
+//     `globals.css` before it) rather than a JSX class literal, and
 //     `--el-text-eyebrow` is a distinct token NAME mapped to muted's Tier-0
 //     base. A guard that reads class literals cannot see either, which is
 //     precisely why a rendered sweep is the second mechanism and not a
