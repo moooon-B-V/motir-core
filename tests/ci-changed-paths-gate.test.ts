@@ -89,9 +89,47 @@ function patternsSetting(flag: string): string[] {
 
 /** Does any `case` pattern match this path? (`*` is the only glob in use.) */
 const covers = (patterns: string[], path: string): boolean =>
-  patterns.some((p) => new RegExp(`^${p.split('*').map(escapeRe).join('.*')}$`).test(path));
+  patterns.some((p) => matches(p, path));
+
+/** One `case` pattern against one path. In `case`, `*` spans `/` too. */
+const matches = (pattern: string, path: string): boolean =>
+  new RegExp(`^${pattern.split('*').map(escapeRe).join('.*')}$`).test(path);
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The `app` classifier's arms IN ORDER.
+ *
+ * ⚠️ `patternsSetting` above cannot answer anything about `app`, and the reason
+ * is the defect MOTIR-3806 fixed. `case` is FIRST-MATCH-WINS, so an arm's
+ * POSITION decides the answer — and `app`'s last arm is the catch-all `*)`,
+ * which covers every path there is. "Is there a pattern covering X" is therefore
+ * `true` for every X, including the ones the job deliberately excludes. A
+ * membership test would have passed just as happily before the fix as after it.
+ * So this models the shell instead: arms in source order, each with whether it
+ * sets `app`.
+ */
+const appArms: { patterns: string[]; setsApp: boolean }[] = (() => {
+  const blocks = [...changesCode.matchAll(/case "\$f" in\n([\s\S]*?)\n\s*esac/g)].map((m) => m[1]!);
+  const block = blocks.find((b) => /\bapp=true\b/.test(b)) ?? '';
+  return block.split('\n').flatMap((line) => {
+    const arm = /^\s*([^\s].*?)\)\s*(.*?)\s*;;\s*$/.exec(line);
+    if (!arm) return [];
+    return [
+      {
+        patterns: arm[1]!
+          .split('|')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        setsApp: /\bapp=true\b/.test(arm[2]!),
+      },
+    ];
+  });
+})();
+
+/** What the job decides for one path — first matching arm wins, as `case` does. */
+const classifiesAsApp = (path: string): boolean =>
+  appArms.find((arm) => arm.patterns.some((p) => matches(p, path)))?.setsApp ?? false;
 
 describe('the changed-paths gate (MOTIR-3148)', () => {
   it('finds the job it is meant to guard', () => {
@@ -154,6 +192,61 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         .slice(1)
         .join('\n');
       expect(runBodies).not.toMatch(/\$\{\{/);
+    });
+  });
+
+  describe('legal CONTENT counts as app code (MOTIR-3806)', () => {
+    it('finds the classifier arms it models', () => {
+      // Without this the whole block below passes vacuously: an unmatched
+      // regex yields no arms, and `classifiesAsApp` then answers `false` for
+      // every path — including the ones asserted `false` here.
+      expect(appArms.length).toBeGreaterThan(1);
+      expect(appArms.some((arm) => arm.setsApp)).toBe(true);
+      expect(appArms.some((arm) => !arm.setsApp)).toBe(true);
+    });
+
+    it('runs the app lanes for a content/legal/*.md-only change', () => {
+      // The defect. `content/legal/*.md` is not documentation — it is data the
+      // app parses and renders (`lib/legal/documents.ts`), and its front-matter
+      // `version` drives the re-consent gate. The blanket `*.md` exclusion
+      // swallowed it, so PR #2427 — the first-ever revision of a published
+      // legal document — skipped the entire Vitest lane, including the seven
+      // `tests/legal/` suites that exist to guard exactly that file class.
+      for (const path of ['content/legal/privacy.md', 'content/legal/terms.md']) {
+        expect(classifiesAsApp(path), path).toBe(true);
+      }
+    });
+
+    it('places the content arm BEFORE the `*.md` exclusion — the order IS the fix', () => {
+      // `content/legal/privacy.md` matches BOTH arms, so the answer is decided
+      // entirely by which one the shell reaches first. Move the content arm
+      // below the exclusion and the assertion above goes red; this one says why
+      // in one line, at the place a reader tidying the `case` would land.
+      const contentArm = appArms.findIndex((arm) => arm.patterns.includes('content/*'));
+      const excludeArm = appArms.findIndex((arm) => arm.patterns.includes('*.md'));
+      expect(contentArm, 'a content/* arm exists').toBeGreaterThanOrEqual(0);
+      expect(excludeArm, 'the *.md exclusion still exists').toBeGreaterThanOrEqual(0);
+      expect(contentArm).toBeLessThan(excludeArm);
+    });
+
+    it('still skips the app lanes for genuine documentation', () => {
+      // The saving, and the direction this fix must not cost. If these flip,
+      // `content/*` was written too wide and every docs-only PR is back on the
+      // full matrix.
+      for (const path of [
+        'docs/decisions/x.md',
+        'README.md',
+        'design/auth/design-notes.md',
+        'scripts/plan-seed/x.ts',
+      ]) {
+        expect(classifiesAsApp(path), path).toBe(false);
+      }
+    });
+
+    it('still counts an unanticipated path as code — the fail-open direction', () => {
+      for (const path of ['app/page.tsx', 'lib/legal/documents.ts', 'content/anything-else.json']) {
+        expect(classifiesAsApp(path), path).toBe(true);
+      }
     });
   });
 
