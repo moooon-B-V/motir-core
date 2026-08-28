@@ -11,6 +11,10 @@ import {
 import { followDigestEmail, type FollowDigestEmailProps } from '@/lib/emailTemplates/followDigest';
 import { emailChangeEmail, type EmailChangeEmailProps } from '@/lib/emailTemplates/emailChange';
 import {
+  dataExportReadyEmail,
+  type DataExportReadyEmailProps,
+} from '@/lib/emailTemplates/dataExportReady';
+import {
   workspaceInviteEmail,
   type WorkspaceInviteEmailProps,
 } from '@/lib/emailTemplates/workspaceInvite';
@@ -61,6 +65,7 @@ import { twoFactorOtpEmail, type TwoFactorOtpEmailProps } from '@/lib/emailTempl
 export type TransactionalEmail =
   | { to: string; template: 'password-reset'; data: PasswordResetEmailProps }
   | { to: string; template: 'email-change'; data: EmailChangeEmailProps }
+  | { to: string; template: 'data-export-ready'; data: DataExportReadyEmailProps }
   | { to: string; template: 'workspace-invite'; data: WorkspaceInviteEmailProps }
   | { to: string; template: 'mention-notification'; data: MentionNotificationEmailProps }
   | {
@@ -156,6 +161,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return followDigestEmail(message.data);
     case 'email-change':
       return emailChangeEmail(message.data);
+    case 'data-export-ready':
+      return dataExportReadyEmail(message.data);
     case 'workspace-invite':
       return workspaceInviteEmail(message.data);
     case 'mention-notification':
