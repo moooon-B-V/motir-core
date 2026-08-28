@@ -7,7 +7,7 @@
 //
 // Drives the REAL stack (Next + Postgres) end to end. The fixture seeds three
 // plans through the shipped services (plans-review-seed.ts): a STALE `planned`
-// plan (parent_removed + siblings_added), a clean `planned` plan, and an
+// plan (parent_removed), a clean `planned` plan, and an
 // already-`approved` plan. Waits on AUTHORITATIVE signals — the rendered rows
 // and the persisted approve/decline POST 200 — never fixed sleeps (the E2E
 // discipline in motir-core/CLAUDE.md; notes.html #37).
@@ -65,6 +65,13 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // The stale `planned` plan's row shows its status + the "N may be out of date"
   // indicator; the approved plan's row shows its Approved status.
+  //
+  // ⚠️ TWO, and each for a reason the proposal ITSELF named (MOTIR-3777): one
+  // add's declared blocker was archived, another's parent was. The third add —
+  // beside the first under the SAME parent, which gained an unrelated child after
+  // `plannedAt` — is NOT counted, and used to be. The count on this row is
+  // `staleCountFor`'s, a SECOND reader of the same verdict as the rail's summary
+  // below, so it is asserted in both places.
   const staleRow = page.locator(`a[href="/plans/${seed.stalePlan.id}"]`);
   await expect(staleRow).toContainText('Planned');
   await expect(staleRow).toContainText('2 may be out of date');
@@ -105,13 +112,25 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByTestId('plan-item-node').first()).toBeVisible();
   await expect(page.getByTestId('stale-badge').first()).toBeVisible();
 
-  // Per-item staleness summary: both drifted items, each with its reason.
+  // Per-item staleness summary: both drifted items, each with its own reason —
+  // and each reason is about something that proposal NAMED.
   const staleSummary = page.getByTestId('stale-summary');
   await expect(staleSummary).toContainText('2 items may be out of date');
-  await expect(staleSummary).toContainText(seed.staleProposalSiblings);
-  await expect(staleSummary).toContainText('New sibling items since planned');
+  await expect(staleSummary).toContainText(seed.staleProposalBlockerGone);
+  await expect(staleSummary).toContainText('A blocker was removed');
   await expect(staleSummary).toContainText(seed.staleProposalOrphan);
   await expect(staleSummary).toContainText('Parent removed since planned');
+
+  // ⚠️ MOTIR-3777, guarded on ABSENCE (CLAUDE.md § E2E), and the two assertions
+  // sit one canvas level apart from a BADGED proposal under the SAME parent —
+  // which is what makes this a guard rather than a coincidence. That parent
+  // gained an unrelated child after `plannedAt`, the exact mutation that used to
+  // raise "New sibling items since planned" on every add hanging there. The
+  // edge-less third proposal declared nothing, so nothing about it drifted; its
+  // neighbour is stale for a blocker it did declare. Before the fix BOTH were
+  // flagged, and the badged one carried this reason as well as its real one.
+  await expect(staleSummary).not.toContainText(seed.cleanProposalUnderBusyParent);
+  await expect(staleSummary).not.toContainText('New sibling items since planned');
 
   // ── 3. Approve → the stale-warning confirm → approve anyway ───────────────
   await page.getByRole('button', { name: /Approve.*to your backlog/ }).click();
@@ -148,7 +167,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // work item was given — which is what proves the node landed ON the committed
   // card rather than beside it as a second, keyless ghost.
   const materialized = await adminDb.workItem.findFirstOrThrow({
-    where: { projectId: seed.projectId, title: seed.staleProposalSiblings },
+    where: { projectId: seed.projectId, title: seed.cleanProposalUnderBusyParent },
   });
   const acceptedCard = page
     .getByTestId('plan-item-node')
@@ -158,9 +177,11 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // Guarded on ABSENCE (CLAUDE.md § E2E): a DECIDED plan can never be decided
   // again, so every staleness warning on it is advice about a choice nobody can
-  // make — and the two this plan carried were caused BY the approval, since the
-  // cards it created under one parent counted as unexplained new siblings against
-  // each other. Both surfaces must be quiet.
+  // make. Both surfaces must be quiet. (The warnings such a plan used to carry
+  // were caused BY the approval, since the cards it created under one parent
+  // counted as unexplained new siblings against each other — MOTIR-3777 retired
+  // that rule, and MOTIR-3165's status guard, asserted here, is what still holds
+  // the line for every reason that remains.)
   await expect(page.getByTestId('stale-summary')).toHaveCount(0);
   await expect(page.getByTestId('stale-badge')).toHaveCount(0);
 
@@ -168,7 +189,9 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // (under the still-living parent) appears in the ready set.
   await page.goto('/ready');
   await expect(
-    page.getByRole('list', { name: 'Ready work items' }).getByText(seed.staleProposalSiblings),
+    page
+      .getByRole('list', { name: 'Ready work items' })
+      .getByText(seed.cleanProposalUnderBusyParent),
   ).toBeVisible();
 
   // ── 4. Decline branch on the clean plan ───────────────────────────────────

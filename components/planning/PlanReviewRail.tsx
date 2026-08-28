@@ -50,8 +50,6 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
   switch (r.code) {
     case 'parent_removed':
       return t('staleParentRemoved');
-    case 'siblings_added':
-      return t('staleSiblingsAdded');
     case 'blocker_removed':
       return t('staleBlockerRemoved');
     case 'base_revision_drift':

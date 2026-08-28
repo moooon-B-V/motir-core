@@ -963,34 +963,6 @@ export const workItemRepository = {
   },
 
   /**
-   * Live (non-archived) children of MANY parents created strictly after a
-   * cutoff, in ONE query — the batched read behind plan-staleness `siblings_added`
-   * (7.21.3 / MOTIR-1340): a proposed `add` is stale when its parent gained a
-   * child AFTER the plan's `plannedAt` that the proposal has no dependency
-   * relation with. Mirrors {@link findChildren}'s `triagedAt: null` read-exclusion
-   * invariant. Workspace-scoped (finding-#26). Read-only path → `db` singleton;
-   * empty parent set short-circuits to `[]`.
-   */
-  async findChildrenCreatedAfter(
-    parentIds: string[],
-    workspaceId: string,
-    after: Date,
-    tx?: Prisma.TransactionClient,
-  ): Promise<WorkItem[]> {
-    if (parentIds.length === 0) return [];
-    const client = tx ?? db;
-    return client.workItem.findMany({
-      where: {
-        parentId: { in: parentIds },
-        workspaceId,
-        archivedAt: null,
-        triagedAt: null,
-        createdAt: { gt: after },
-      },
-    });
-  },
-
-  /**
    * Minimal STUBS for the roadmap's off-level blockers (Subtask 7.20.2 /
    * MOTIR-1331) — an `is_blocked_by` blocker that lives on ANOTHER level has no
    * node on screen, so the canvas anchors a red edge to a chip that NAMES it: its
