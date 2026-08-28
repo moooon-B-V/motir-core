@@ -3,7 +3,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -14,6 +13,7 @@ import type { SprintValidityDto } from '@/lib/dto/sprints';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // `validate_sprint` (Subtask 7.8.15) over real Postgres — the read that reports
 // whether a sprint is FINISHABLE (the productized re-validate-the-active-sprint
@@ -28,7 +28,7 @@ import { truncateAuthTables } from '../helpers/db';
 beforeEach(async () => {
   await truncateAuthTables();
   // Keep hermetic: startSprint fires best-effort post-commit job events.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] as string[] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

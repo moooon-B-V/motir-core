@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { commentsService, COMMENT_PAGE_SIZE } from '@/lib/services/commentsService';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { commentMentionRepository } from '@/lib/repositories/commentMentionRepository';
@@ -24,6 +23,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { captureEventPayloads } from '../helpers/jobs';
 
 // Service-layer tests for commentsService (Story 5.1 · Subtask 5.1.2). Real
 // Postgres, no DB mocks (CLAUDE.md); the one external seam stubbed is the
@@ -46,16 +46,7 @@ afterAll(async () => {
 
 /** Capture every `work-item/comment.created` publish (and block the network). */
 function captureCommentEvents(): WorkItemCommentCreatedData[] {
-  const events: WorkItemCommentCreatedData[] = [];
-  vi.spyOn(inngest, 'send').mockImplementation((async (payload: unknown) => {
-    const list = Array.isArray(payload) ? payload : [payload];
-    for (const entry of list) {
-      const evt = entry as { name?: string; data?: WorkItemCommentCreatedData };
-      if (evt?.name === 'work-item/comment.created' && evt.data) events.push(evt.data);
-    }
-    return { ids: [] as string[] };
-  }) as typeof inngest.send);
-  return events;
+  return captureEventPayloads<WorkItemCommentCreatedData>('work-item/comment.created').events;
 }
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;

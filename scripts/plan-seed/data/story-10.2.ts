@@ -233,7 +233,7 @@ export const story_10_2: SeedStory = {
         'multi-panel rule, mistake #31):\n\n' +
         '- **Panel 1 — the health board overview (populated, all-green).** A ' +
         'grid of compact health `Card`s — one per source (Vercel deploys, ' +
-        'Vercel functions, Inngest jobs, 9.0 gateway, DB) — each showing a ' +
+        'Vercel functions, background jobs, 9.0 gateway, DB) — each showing a ' +
         'status dot (healthy / degraded / critical via `--el-success` / ' +
         '`--el-warning` / `--el-danger` tints), the headline signal (e.g. ' +
         '“last deploy READY”, “0.3% fn error”, “12 failed runs / 1h”), and a ' +
@@ -346,7 +346,7 @@ export const story_10_2: SeedStory = {
         'whether Drains (function-log streaming, Pro/Enterprise) are in scope ' +
         'or deferred (default: deferred — the query API’s rollups suffice for ' +
         'a health badge).\n' +
-        '   - **Inngest jobs** — Function Status (runs by succeeded / failed ' +
+        '   - **background jobs** — Function Status (runs by succeeded / failed ' +
         '/ cancelled), top Failed Functions + frequency, Total-runs ' +
         'throughput, backlog (waiting runs), retries (default 4 attempts; ' +
         'exhausted → Failed) via the REST API ' +
@@ -570,7 +570,7 @@ export const story_10_2: SeedStory = {
         'NOTE the benign recursion: the read of Inngest’s health is scheduled ' +
         'ON Inngest — acceptable because the read is independent of pipeline ' +
         'throughput (and if Inngest is fully down, the snapshot simply staleness-' +
-        'flags, which is itself the “Inngest unreachable” signal).\n' +
+        'flags, which is itself the “the queue unreachable” signal).\n' +
         '- **Gated** through the 10.1.3 surface.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `inngestClient` reads run status / function-run lists READ-only ' +

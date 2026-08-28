@@ -14,15 +14,31 @@ import { defineJob } from '../defineJob';
 // spent, and declaring `transient` would say something untrue about how this
 // job fails. If a transient class is ever worth retrying, the change is to
 // re-throw it from the service — not to widen a policy here.
+//
+// ⚠️ IT DECLARED `concurrency: { limit: 1, key: 'event.data.userId' }` AND THAT
+// OPTION NO LONGER EXISTS (MOTIR-3418, which retired the substrate that
+// implemented it). The intent it recorded was "one build per user at a time —
+// an archive is a whole-account read, so two of them for one person running at
+// once is the one shape worth serialising."
+//
+// **The serialisation it wanted is still there, and it was always the stronger
+// half.** `dataExportService.requestDataExport` takes
+// `findLatestByUserIdForUpdate` and returns the EXISTING request without
+// emitting when one is already `preparing` — so at most one build event per user
+// is ever in flight, enforced by a row lock rather than by a scheduler's
+// admission. The option was belt to that braces.
+//
+// **What is genuinely lost is the belt, and it is filed rather than papered
+// over: MOTIR-3731.** The Postgres engine has no per-job concurrency at all — it
+// claims `CLAIM_BATCH` due runs per tick with `FOR UPDATE SKIP LOCKED` and reads
+// no per-job limit — so a `concurrency` on a definition would have been an
+// accepted-and-ignored field, which is worse than an absent one. Do not
+// re-declare it here; if a second, weaker guard is wanted, it is an engine
+// feature against `job_queue`'s claim predicate.
 export const dataExportBuild = defineJob(
   {
     id: 'account/data-export.requested',
     retryPolicy: 'none',
-    // One build per user at a time. The service's `FOR UPDATE` check already
-    // refuses a second REQUEST while one is preparing; this is the other side
-    // of it — an archive is a whole-account read, so two of them for one person
-    // running at once is the one shape worth serialising.
-    concurrency: { limit: 1, key: 'event.data.userId' },
   },
   async (ctx, services) => {
     const { userId, requestId } = ctx.event.data as { userId: string; requestId: string };

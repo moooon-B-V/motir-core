@@ -6,7 +6,7 @@ import {
   migrateOnboardingSweep,
   MIGRATE_ONBOARDING_SWEEP_CRON,
 } from '@/lib/jobs/definitions/migrateOnboardingSweep';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -71,7 +71,7 @@ async function seedSucceededIndexJob(workspaceId: string, repoRef: string) {
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
       eventId: `evt-${randomToken()}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       status: 'succeeded',
       finishedAt: new Date(),
@@ -156,7 +156,7 @@ describe('the index sweep leaves everything else alone', () => {
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: 'evt-running',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'running',
       },
@@ -330,15 +330,12 @@ describe('the sweep lane is mounted', () => {
     // reconciliation to it: the tick no longer only repairs the `index` step, and
     // a lane whose ledger id names one of its two jobs misleads whoever reads the
     // ledger to find out which one ran.
-    const config = (migrateOnboardingSweep as unknown as { opts: Record<string, unknown> })
-      .opts as {
-      id: string;
-      retries?: number;
-      triggers?: Array<{ cron?: string }>;
-    };
-    expect(config.id).toBe('system.migrate-onboarding-sweep');
-    expect(config.retries).toBe(4);
-    expect(config.triggers?.[0]?.cron).toBe(MIGRATE_ONBOARDING_SWEEP_CRON);
+    expect(migrateOnboardingSweep.id).toBe('system.migrate-onboarding-sweep');
+    // `idempotent` = 5 TOTAL attempts, which is what the engine's
+    // `job_queue.max_attempts` stores (it used to be read as the vendor's
+    // `retries: 4`, i.e. the ADDITIONAL ones).
+    expect(migrateOnboardingSweep.maxAttempts).toBe(5);
+    expect(migrateOnboardingSweep.cron).toBe(MIGRATE_ONBOARDING_SWEEP_CRON);
 
     // Registered on the schedule table, so the MOTIR-1970 schedule-health check
     // can see it go quiet, AND mounted on the serve route's list — a lane the
@@ -347,6 +344,6 @@ describe('the sweep lane is mounted', () => {
       functionId: 'system.migrate-onboarding-sweep',
       cron: MIGRATE_ONBOARDING_SWEEP_CRON,
     });
-    expect(jobFunctions).toContain(migrateOnboardingSweep);
+    expect(jobDefinitions).toContain(migrateOnboardingSweep);
   });
 });

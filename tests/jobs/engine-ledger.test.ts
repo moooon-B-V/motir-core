@@ -9,7 +9,6 @@ import { replayDLQ } from '@/lib/jobs/dlq';
 import { JobWorker } from '@/lib/jobs/engine/worker';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { JobStepYield } from '@/lib/jobs/engine/step';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
@@ -22,19 +21,15 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // the assertions are about ROWS — what an operator's dashboard reads — rather
 // than about the engine's internals.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -272,7 +267,6 @@ describe('terminal failure — the ledger row AND the dead-letter row', () => {
 describe('DLQ replay — the operator dashboard, unchanged', () => {
   it('a replay of a MIGRATED job enqueues a fresh run on the ENGINE', async () => {
     const { jobId, workspaceId } = await seedJob(() => ({ ok: true }));
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     const dlqRow = await adminDb.jobRunDlq.create({
       data: {
@@ -315,7 +309,6 @@ describe('DLQ replay — the operator dashboard, unchanged', () => {
       ran += 1;
       return { replayed: true };
     });
-    process.env[JOB_ENGINE_JOBS_ENV] = jobId;
 
     const dlqRow = await adminDb.jobRunDlq.create({
       data: {
@@ -349,9 +342,18 @@ describe('DLQ replay — the operator dashboard, unchanged', () => {
     expect(ledger[0]?.output).toEqual({ replayed: true });
   });
 
-  it('a job that has NOT moved still replays through Inngest — no queue row appears', async () => {
-    const { jobId, workspaceId } = await seedJob(() => ({ ok: true }));
-    delete process.env[JOB_ENGINE_JOBS_ENV];
+  it('replays a job the engine has never seen, rather than refusing it', async () => {
+    // ⚠️ THIS ASSERTED THE OTHER DIRECTION OF THE CUTOVER SWITCH (MOTIR-3418
+    // removed it): an UNMOVED job's replay had to keep using the old transport and
+    // write no queue row. There is no other lane to keep using, so the case that
+    // survives is the one the switch's absence exposes — a DLQ row for a job whose
+    // definition module this process has not evaluated.
+    //
+    // It must still replay: `replayDLQ` falls back to the default attempt budget
+    // rather than refusing, because an operator replaying a dead run should not
+    // have to care which modules a given process happened to import.
+    const jobId = `engine-ledger-unknown-${Date.now()}`;
+    const { workspaceId } = await seedJob(() => ({ ok: true }));
 
     const dlqRow = await adminDb.jobRunDlq.create({
       data: {
@@ -363,13 +365,17 @@ describe('DLQ replay — the operator dashboard, unchanged', () => {
         attempts: 3,
       },
     });
-    await adminDb.jobQueueRun.deleteMany({ where: { jobId } });
 
     const dto = await withSystemContext((tx) => replayDLQ(dlqRow.id, tx));
 
-    // The other direction of the switch, on the replay path: an unmoved job's
-    // replay must not quietly start using the new engine.
-    expect(await adminDb.jobQueueRun.count({ where: { jobId } })).toBe(0);
+    const queued = await adminDb.jobQueueRun.findMany({ where: { jobId } });
+    expect(queued).toHaveLength(1);
+    // `transient`'s 3 — what `defineJob` would have resolved for a job declaring
+    // nothing — rather than a refusal or a zero.
+    expect(queued[0]!.maxAttempts).toBe(3);
+    // And no key, because the template lives on a definition this process has not
+    // evaluated. Deduping on a synthesised placeholder would be far worse.
+    expect(queued[0]!.idempotencyKey).toBeNull();
     expect(dto.replayedAt).not.toBeNull();
   });
 });

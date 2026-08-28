@@ -34,9 +34,10 @@
  *   pnpm db:backfill:code-graph-index                        # enqueue for every affected tenant
  *   pnpm db:backfill:code-graph-index --workspace=<id>       # scope to one workspace
  *
- * It runs against the LIVE tenant and needs the Inngest event key of the
- * environment whose app should run the jobs (`INNGEST_EVENT_KEY` — the same
- * variable the deployed app sends with). Do the dry run first.
+ * It runs against the LIVE tenant and enqueues onto the job engine's own tables,
+ * so it needs the DATABASE of the environment whose worker should run the jobs —
+ * and nothing else. (Before MOTIR-3418 it also needed a vendor event key, because
+ * an enqueue was an HTTP send to a third party.) Do the dry run first.
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads

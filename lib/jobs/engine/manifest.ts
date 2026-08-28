@@ -12,7 +12,7 @@ import type { DebounceOption } from './debounce';
 // that single omission is the whole point.
 //
 // The emit path never runs a job; it only decides who would. `dispatchEventToEngine`
-// reads `sub.id` and `sub.maxAttempts`; `hasInngestSubscribers` reads `id` and
+// reads `sub.id` and `sub.maxAttempts`; the retired `hasInngestSubscribers` read `id` and
 // `trigger`. Not one emit-path caller touches `handler`, and `handler` is the one
 // field that drags the service graph in behind it. So this is not a new
 // abstraction — it is the split the existing call sites already implied.

@@ -17,23 +17,8 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
-  # protobufjs ships a postinstall that compiles native protobuf descriptors,
-  # used only by Inngest's gRPC `connect` transport. We serve over HTTP (the
-  # app/api/inngest serve route) and never use connect, so the build is
-  # unneeded — set false to silence pnpm 11's ERR_PNPM_IGNORED_BUILDS gate
-  # deterministically (PRODECT_FINDINGS #30, sharp edge #3).
-  protobufjs: false
   sharp: true
   unrs-resolver: true
-  # inngest-cli's postinstall downloads the Inngest dev-server Go binary. The
-  # E2E suite spawns it as its second webServer (the executor that runs the
-  # email.send job), so the binary MUST be present after `pnpm install` — set
-  # true. This replaces the old `npx --yes inngest-cli@<v>` approach (which
-  # re-resolved @latest every run, couldn't be cached, and cold-downloaded the
-  # 95MB binary INSIDE Playwright's 120s webServer window → the documented
-  # timeout flake). As a pinned devDependency the binary is fetched once at
-  # install time (outside any timeout) and cached via the pnpm store.
-  inngest-cli: true
   # @sentry/cli's postinstall is a FALLBACK DOWNLOADER, and in this tree it is a
   # verified no-op — so `false` silences pnpm's ERR_PNPM_IGNORED_BUILDS gate
   # without withholding anything (MOTIR-1162). It arrives as a dependency of
@@ -54,3 +39,4 @@ allowBuilds:
   # `tests/monitoring/sentry-wiring.test.ts` resolves the binary the way the
   # upload path does and asserts it exists on disk.
   '@sentry/cli': false
+  inngest-cli: set this to true or false

@@ -11,9 +11,9 @@ import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepos
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { inngest } from '@/lib/jobs/client';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 import { linkPr } from '../helpers/prLink';
 
 // ⚠️ MOTIR-3674 — every test below that means *this pull request delivers this
@@ -837,7 +837,7 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: `evt-${repoRef}`,
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'succeeded',
         output: { indexed: true, repoRef, projectsIndexed: 1 },
@@ -855,7 +855,7 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
       { id: 111, name: 'keep' },
       { id: 222, name: 'fresh' },
     ]);
-    const sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const sendSpy = spyOnJobDispatch();
 
     await githubInstallationService.persistInstallation({
       workspaceId,
@@ -884,9 +884,9 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
     });
     expect(res).toMatchObject({ event: 'installation_repositories', outcome: 'synced' });
 
-    return sendSpy.mock.calls
-      .filter(([e]) => (e as { name?: string }).name === 'system.code-graph-index')
-      .map(([e]) => (e as { data: Record<string, unknown> }).data);
+    return dispatchedEvents(sendSpy)
+      .filter((e) => e.name === 'system.code-graph-index')
+      .map((e) => e.data as Record<string, unknown>);
   }
 
   it('enqueues one code-graph-index job per UN-INDEXED repo and skips the already-indexed', async () => {
@@ -951,16 +951,14 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
 
   /** A fresh, history-clean spy on the enqueue transport. */
   function spySend() {
-    const spy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const spy = spyOnJobDispatch();
     spy.mockClear();
     return spy;
   }
 
   /** The spy's calls that enqueued the REFRESH event. */
   function refreshCalls(sendSpy: { mock: { calls: unknown[][] } }) {
-    return sendSpy.mock.calls.filter(
-      (call) => (call[0] as { name?: string }).name === 'system.code-graph-refresh',
-    );
+    return dispatchedEvents(sendSpy).filter((e) => e.name === 'system.code-graph-refresh');
   }
 
   it('a default-branch push enqueues the incremental refresh job (async, not inline)', async () => {
@@ -972,7 +970,7 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
 
     const calls = refreshCalls(sendSpy);
     expect(calls).toHaveLength(1);
-    expect((calls[0]![0] as { data: Record<string, unknown> }).data).toEqual({
+    expect(calls[0]!.data).toEqual({
       installationId: INSTALLATION_ID,
       workspaceId: workspace.id,
       repoOwner: 'moooon',
@@ -1027,7 +1025,7 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
 
   it('an enqueue transport failure never fails the ack (best-effort, fast 2xx)', async () => {
     await makeScenario('push-enqueue-down@example.com');
-    vi.spyOn(inngest, 'send').mockRejectedValue(new Error('queue down'));
+    spyOnJobDispatch().mockRejectedValue(new Error('queue down'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await githubWebhookService.handleEvent('push', pushPayload());

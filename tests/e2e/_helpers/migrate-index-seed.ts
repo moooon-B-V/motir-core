@@ -108,7 +108,7 @@ function ledgerRow(workspaceId: string, status: 'running' | 'succeeded' | 'faile
     functionId: 'system.code-graph-index',
     eventName: 'system.code-graph-index',
     eventId: `e2e-index-${ledgerSeq}`,
-    lane: 'inngest' as const,
+    lane: 'engine' as const,
     attempt: 0,
     status,
   };

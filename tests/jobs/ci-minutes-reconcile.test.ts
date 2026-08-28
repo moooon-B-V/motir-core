@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@/generated/prisma/client';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -8,7 +8,7 @@ import {
   ciMinutesReconcile,
   CI_MINUTES_RECONCILE_CRON,
 } from '@/lib/jobs/definitions/ciMinutesReconcile';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconciliationService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -16,7 +16,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // system.ci-minutes-reconcile (Story MOTIR-1775 · MOTIR-1896) — the monthly
 // audit of the meter against GitHub's own billing report
 // (`docs/decisions/ci-minutes-allowance.md` §5.8), driven IN-PROCESS via
-// @inngest/test against a REAL Postgres. The GitHub billing endpoint is the one
+// the in-process JobTestEngine against a REAL Postgres. The GitHub billing endpoint is the one
 // stubbed external (global `fetch`).
 
 const MOTIR_ORG = 'motir-projects';
@@ -86,7 +86,7 @@ function stubBillingReport(items: unknown[]): void {
 
 describe('system.ci-minutes-reconcile', () => {
   it('is registered on the cron the serve route mounts', () => {
-    expect(jobFunctions).toContain(ciMinutesReconcile);
+    expect(jobDefinitions).toContain(ciMinutesReconcile);
     // The 3rd, not the 1st: GitHub's usage report is not complete the instant a
     // month ends, so reconciling immediately would report lag as drift.
     expect(CI_MINUTES_RECONCILE_CRON).toBe('30 5 3 * *');
@@ -102,7 +102,7 @@ describe('system.ci-minutes-reconcile', () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
     vi.stubEnv('GITHUB_BILLING_TOKEN', undefined);
 
-    const { result } = await new InngestTestEngine({ function: ciMinutesReconcile }).execute();
+    const { result } = await new JobTestEngine({ function: ciMinutesReconcile }).execute();
 
     expect(result).toMatchObject({
       github: { outcome: 'skipped', reason: 'no_billing_credential' },
@@ -142,7 +142,7 @@ describe('system.ci-minutes-reconcile', () => {
       },
     ]);
 
-    const { result } = await new InngestTestEngine({ function: ciMinutesReconcile }).execute();
+    const { result } = await new JobTestEngine({ function: ciMinutesReconcile }).execute();
 
     expect(result).toMatchObject({
       github: { outcome: 'reconciled', org: MOTIR_ORG, year: 2026, month: 7 },
@@ -178,7 +178,7 @@ describe('system.ci-minutes-reconcile', () => {
     ]);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const { result } = await new InngestTestEngine({ function: ciMinutesReconcile }).execute();
+    const { result } = await new JobTestEngine({ function: ciMinutesReconcile }).execute();
 
     const reconciled = (
       result as {

@@ -20,7 +20,7 @@ import type { CiRunnerBootData } from '@/lib/jobs/types';
 // below:
 //
 //   * the SWEEP sends inside a `step.run` under the `idempotent` retry policy —
-//     a transport failure there should propagate, because Inngest retrying the
+//     a transport failure there should propagate, because the engine retrying the
 //     step is a free, correct fix;
 //   * the WEBHOOK has no retry that could help. GitHub retries a 500 delivery,
 //     and a redelivery cannot re-send an event that failed to send; it would

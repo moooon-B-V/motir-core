@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { Prisma } from '@/generated/prisma/client';
 
 import { db } from '@/lib/db';
@@ -16,7 +16,7 @@ import {
   leaseExpiryFrom,
 } from '@/lib/planChange/targetLock';
 import { planTargetLockSweep } from '@/lib/jobs/definitions/planTargetLockSweep';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -583,18 +583,18 @@ describe('recovery — the crashed planner', () => {
   });
 
   it('runs as the scheduled job, end to end', async () => {
-    // `jobFunctions` is what `app/api/inngest/route.ts` serves — a sweep absent
+    // `jobDefinitions` is what `app/api/inngest/route.ts` serves — a sweep absent
     // from it never runs, and the whole recovery story is that cron line. Driving
     // the real function in-process proves the wiring too: the registry entry, the
     // services bag, and the handler's own step.
-    expect(jobFunctions).toContain(planTargetLockSweep);
+    expect(jobDefinitions).toContain(planTargetLockSweep);
 
     const epic = await makeItem('epic', 'Billing');
     const session = await makeSession('A', [epic.identifier]);
     await planTargetLockService.acquireForScope(session.id, [epic.identifier], ctxFor(fx));
     await ageLease(epic.id, 1_000);
 
-    const engine = new InngestTestEngine({ function: planTargetLockSweep });
+    const engine = new JobTestEngine({ function: planTargetLockSweep });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({ released: 1 });

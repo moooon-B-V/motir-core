@@ -1,7 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
 import { projectRepoTakeoverService } from '@/lib/services/projectRepoTakeoverService';
@@ -24,6 +23,7 @@ import {
   createActionsVariableFake,
   type ActionsVariableFake,
 } from '../helpers/actionsVariableFake';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // The PER-PROJECT RUNNER GROUP over real Postgres (Story MOTIR-1916 · MOTIR-1972
 // · `docs/decisions/ci-runner-fleet.md` §7.3).
@@ -186,7 +186,7 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   _setReadinessPollForTests({ attempts: 2, delayMs: 0 });
   installGitHub();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

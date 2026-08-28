@@ -1,11 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobServices } from '@/lib/jobs/services';
 import { RETRY_POLICIES } from '@/lib/jobs/retries';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
@@ -73,56 +72,42 @@ function stubBothDirections() {
 
 describe('status-derivation/transitioned — the wiring (MOTIR-1621)', () => {
   it('is REGISTERED — an unserved consumer fires silently never', () => {
-    expect(jobFunctions).toContain(statusDerivationOnTransitioned);
+    expect(jobDefinitions).toContain(statusDerivationOnTransitioned);
   });
 
   it('triggers on work-item/transitioned, under an id distinct from the event name', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        {
-          id: 'status-derivation/transitioned',
-          trigger: 'work-item/transitioned',
-          retryPolicy: 'idempotent',
-        },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as
-        | { id?: string; triggers?: Array<{ event?: string }> }
-        | undefined;
-      expect(config?.triggers).toEqual([{ event: 'work-item/transitioned' }]);
-      // Distinct from the event name is what lets several consumers of the SAME
-      // event coexist (the watcher, the bell fan-in, the automation engine, and
-      // this one).
-      expect(config?.id).toBe('status-derivation/transitioned');
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      {
+        id: 'status-derivation/transitioned',
+        trigger: 'work-item/transitioned',
+        retryPolicy: 'idempotent',
+      },
+      () => undefined,
+    );
+    expect(def.trigger).toBe('work-item/transitioned');
+    // Distinct from the event name is what lets several consumers of the SAME
+    // event coexist (the watcher, the bell fan-in, the automation engine, and
+    // this one).
+    expect(def.id).toBe('status-derivation/transitioned');
   });
 
   it('does not collide with the OTHER consumers of the same event', () => {
-    const ids = jobFunctions.map((f) => (f as { id: () => string }).id());
+    const ids = jobDefinitions.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('takes the IDEMPOTENT retry budget — safe only because both services converge', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        {
-          id: 'status-derivation/transitioned',
-          trigger: 'work-item/transitioned',
-          retryPolicy: 'idempotent',
-        },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as { retries?: number } | undefined;
-      // Inngest's `retries` counts RE-tries, so the policy's attempts become
-      // attempts-1.
-      expect(config?.retries).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      {
+        id: 'status-derivation/transitioned',
+        trigger: 'work-item/transitioned',
+        retryPolicy: 'idempotent',
+      },
+      () => undefined,
+    );
+    // Inngest's `retries` counts RE-tries, so the policy's attempts become
+    // attempts-1.
+    expect(def.maxAttempts - 1).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);
   });
 
   it('reaches both services through the INJECTED bag — the same singletons', () => {
@@ -135,7 +120,7 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
   it('dispatches BOTH directions from one event, with the item id AND its workspace', async () => {
     const { rollUp, cascade } = stubBothDirections();
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: statusDerivationOnTransitioned,
       events: [EVENT],
     });
@@ -192,7 +177,7 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
       return { outcome: 'not_done' };
     });
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: statusDerivationOnTransitioned,
       events: [EVENT],
     });
@@ -226,7 +211,7 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
       itemId: 'wi-1',
     });
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: statusDerivationOnTransitioned,
       events: [EVENT],
     });
@@ -244,7 +229,7 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     // `recordStart` skips a run whose tenant does not exist.
     const fx = await makeWorkItemFixture();
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: statusDerivationOnTransitioned,
       events: [{ ...EVENT, data: { ...EVENT.data, workspaceId: fx.workspaceId } }],
     });
@@ -270,41 +255,27 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
 
 describe('the child-set consumers — the wiring (MOTIR-2892)', () => {
   it('both are REGISTERED', () => {
-    expect(jobFunctions).toContain(statusDerivationOnCreated);
-    expect(jobFunctions).toContain(statusDerivationOnChildSetChanged);
+    expect(jobDefinitions).toContain(statusDerivationOnCreated);
+    expect(jobDefinitions).toContain(statusDerivationOnChildSetChanged);
   });
 
   it('each triggers on its own event, under an id distinct from the other consumers', () => {
-    const byId = new Map(
-      jobFunctions.map((f) => [
-        (f as { id: () => string }).id(),
-        (f as { opts?: { triggers?: Array<{ event?: string }> } }).opts,
-      ]),
-    );
-    // `id()` prefixes the app id, so match on the suffix the definition declares.
-    const find = (suffix: string) => [...byId.entries()].find(([id]) => id.endsWith(suffix))?.[1];
+    const byId = new Map(jobDefinitions.map((d) => [d.id, d]));
 
-    expect(find('status-derivation/created')?.triggers).toEqual([{ event: 'work-item/created' }]);
-    expect(find('status-derivation/child-set-changed')?.triggers).toEqual([
-      { event: 'work-item/child-set.changed' },
-    ]);
+    expect(byId.get('status-derivation/created')?.trigger).toBe('work-item/created');
+    expect(byId.get('status-derivation/child-set-changed')?.trigger).toBe(
+      'work-item/child-set.changed',
+    );
     // `work-item/created` already has two consumers (the automation engine and
     // the outward bug telemetry); this is the additional-consumer form.
-    const createdConsumers = jobFunctions.filter((f) =>
-      ((f as { opts?: { triggers?: Array<{ event?: string }> } }).opts?.triggers ?? []).some(
-        (t) => t.event === 'work-item/created',
-      ),
-    );
+    const createdConsumers = jobDefinitions.filter((d) => d.trigger === 'work-item/created');
     expect(createdConsumers.length).toBeGreaterThanOrEqual(3);
   });
 
   // ── The silent-edit consumer (Bug MOTIR-2902) ────────────────────────────
   it('status-derivation/requested is REGISTERED and triggers on the derivation-only event', () => {
-    expect(jobFunctions).toContain(statusDerivationOnRequested);
-    const opts = (
-      statusDerivationOnRequested as { opts?: { triggers?: Array<{ event?: string }> } }
-    ).opts;
-    expect(opts?.triggers).toEqual([{ event: 'work-item/derivation.requested' }]);
+    expect(jobDefinitions).toContain(statusDerivationOnRequested);
+    expect(statusDerivationOnRequested.trigger).toBe('work-item/derivation.requested');
   });
 
   it('is the ONLY consumer of that event — which is what keeps the import storm-free', () => {
@@ -313,11 +284,7 @@ describe('the child-set consumers — the wiring (MOTIR-2892)', () => {
     // trigger derivation WITHOUT reopening that. The moment a second consumer
     // subscribes — a watcher, the bell fan-in, the automation engine — that
     // property is gone and the import is storming again, silently.
-    const consumers = jobFunctions.filter((f) =>
-      ((f as { opts?: { triggers?: Array<{ event?: string }> } }).opts?.triggers ?? []).some(
-        (t) => t.event === 'work-item/derivation.requested',
-      ),
-    );
+    const consumers = jobDefinitions.filter((d) => d.trigger === 'work-item/derivation.requested');
     expect(consumers).toEqual([statusDerivationOnRequested]);
   });
 });
@@ -326,7 +293,7 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
   it('created: recomputes the created item’s PARENT, and runs no cascade', async () => {
     const { rollUp, cascade } = stubBothDirections();
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: statusDerivationOnCreated,
       events: [
         {
@@ -364,7 +331,7 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
       .spyOn(childStatusCascadeService, 'cascadeToChildren')
       .mockResolvedValue({ outcome: 'not_done' });
 
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: statusDerivationOnChildSetChanged,
       events: [
         {

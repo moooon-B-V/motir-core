@@ -7,7 +7,6 @@ import {
   JobScheduler,
   MAX_CATCH_UP_FIRES,
 } from '@/lib/jobs/engine/scheduler';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { engineJob, type EngineJobDefinition } from '@/lib/jobs/engine/registry';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -30,22 +29,13 @@ import '@/lib/jobs/registry';
 //      return value. `event_name` in particular has three consumers and the
 //      return value would agree with the code whatever it wrote.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
-
-function routeToEngine(...jobIds: string[]): void {
-  process.env[JOB_ENGINE_JOBS_ENV] = jobIds.join(',');
-}
-
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -63,7 +53,7 @@ const SIX_HOURS_LATER = new Date(Date.UTC(2026, 7, 25, 9, 30, 0));
 /**
  * A scheduler over a FIXTURE definition set, so a case can pin a cadence and a
  * disposition without depending on which real job happens to declare them. The
- * ids are real ones, because `routedToEngine` and the ledger both key on the id.
+ * ids are real ones, because the registry and the ledger both key on the id.
  */
 function schedulerOver(defs: EngineJobDefinition[], now: Date): JobScheduler {
   const s = new JobScheduler({ scheduledJobs: () => defs, now: () => now, logger: silent });
@@ -117,7 +107,6 @@ describe('the start-up guard — an empty registry REFUSES rather than schedules
 
   it('a tick before start() is a no-op rather than a throw', async () => {
     const scheduler = new JobScheduler({ scheduledJobs: () => [def()], logger: silent });
-    routeToEngine('system.attachment-gc');
     const outcome = await scheduler.tick();
     expect(outcome.enqueued).toEqual([]);
     expect(await queuedFor('system.attachment-gc')).toEqual([]);
@@ -134,7 +123,6 @@ describe('the start-up guard — an empty registry REFUSES rather than schedules
 
 describe('one tick, one routed job', () => {
   it('enqueues exactly one row carrying the whole scheduler contract', async () => {
-    routeToEngine('system.attachment-gc');
     const scheduler = schedulerOver([def()], GC_FIRE);
 
     const outcome = await scheduler.tick();
@@ -160,29 +148,15 @@ describe('one tick, one routed job', () => {
     expect(row.state).toBe('pending');
   });
 
-  it('enqueues NOTHING for a job that is not routed — the switch defaults to Inngest', async () => {
-    // No `routeToEngine` call at all. The scheduler must respect the switch
-    // exactly as `dispatchEventToEngine` does, or the cutover stops being a
-    // cutover and becomes a double-run.
-    const scheduler = schedulerOver([def()], GC_FIRE);
-    const outcome = await scheduler.tick();
-    expect(outcome.enqueued).toEqual([]);
-    expect(await queuedFor('system.attachment-gc')).toEqual([]);
-  });
-
-  it('routes PER JOB — a routed job is scheduled while its unrouted sibling is not', async () => {
-    routeToEngine('system.attachment-gc');
-    const scheduler = schedulerOver(
-      [def(), def({ id: 'system.rate-limit-sweep', cron: '10 4 * * *', catchUp: 'latest' })],
-      new Date(Date.UTC(2026, 7, 25, 5, 0, 0)),
-    );
-    await scheduler.tick();
-    expect(await queuedFor('system.attachment-gc')).toHaveLength(1);
-    expect(await queuedFor('system.rate-limit-sweep')).toEqual([]);
-  });
+  // ⚠️ TWO TESTS STOOD HERE AND THEIR SUBJECT IS GONE (MOTIR-3418). One asserted
+  // that the scheduler enqueued NOTHING for a job absent from
+  // `MOTIR_POSTGRES_JOB_IDS` — it had to respect the switch exactly as
+  // `dispatchEventToEngine` did, or the cutover became a double-run — and the
+  // other that the switch was PER JOB, scheduling one cron while leaving its
+  // sibling alone. There is no second scheduler for a cron job to also fire on,
+  // so a registered cron is scheduled, full stop.
 
   it('TICKING TWICE for the same fire produces ONE row, and says already-queued', async () => {
-    routeToEngine('system.attachment-gc');
     const scheduler = schedulerOver([def()], GC_FIRE);
 
     const first = await scheduler.tick();
@@ -202,7 +176,6 @@ describe('one tick, one routed job', () => {
     // worker machines are, and a SERIAL pair of ticks cannot see the defect —
     // the second simply finds the first's row. Both ticks are in flight at once
     // against a warm pool.
-    routeToEngine('system.attachment-gc');
     const a = schedulerOver([def()], GC_FIRE);
     const b = schedulerOver([def()], GC_FIRE);
 
@@ -216,7 +189,6 @@ describe('one tick, one routed job', () => {
   });
 
   it('one job failing does not stop its siblings', async () => {
-    routeToEngine('system.attachment-gc', 'system.rate-limit-sweep');
     // A cron the evaluator refuses: the fan-out property the dispatcher already
     // has — one consumer's bad day must not silently drop thirteen sweeps.
     const scheduler = schedulerOver(
@@ -232,7 +204,6 @@ describe('one tick, one routed job', () => {
 
 describe('the fire time comes from the CLOCK, never from the last tick', () => {
   it('a tick that arrives SIX HOURS LATE still enqueues the fire it owed, at its own instant', async () => {
-    routeToEngine('system.attachment-gc');
     // The worker was down across 03:30 and came back at 09:30. The row must carry
     // 03:30 — not 09:30, and not "one interval after the previous tick", which is
     // what a self-re-arming timer would produce and what would shift every
@@ -245,7 +216,6 @@ describe('the fire time comes from the CLOCK, never from the last tick', () => {
   });
 
   it('a per-minute job crossing a fire boundary enqueues the NEW instant, not a shifted one', async () => {
-    routeToEngine('system.ci-runner-reap');
     const minutely = def({
       id: 'system.ci-runner-reap',
       cron: '* * * * *',
@@ -291,7 +261,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
   }
 
   it('`latest` enqueues ONLY the most recent missed fire, whatever the gap', async () => {
-    routeToEngine('system.ci-runner-reap');
     await seedWatermark('system.ci-runner-reap', T0);
 
     await schedulerOver(
@@ -308,7 +277,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
   });
 
   it('`all` enqueues EVERY missed fire, oldest first', async () => {
-    routeToEngine('system.ci-runner-reap');
     await seedWatermark('system.ci-runner-reap', T0);
 
     const outcome = await schedulerOver(
@@ -331,7 +299,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
   });
 
   it('`all` with NO prior row enqueues ONE fire — there is no history to replay', async () => {
-    routeToEngine('system.ci-runner-reap');
     // Without this, a first deploy would replay the evaluator's entire 400-day
     // horizon. A watermark that does not exist is not a watermark of zero.
     await schedulerOver(
@@ -344,7 +311,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
   });
 
   it('`all` CAPS a very long outage and SAYS SO — never a silent truncation', async () => {
-    routeToEngine('system.ci-runner-reap');
     // A watermark far enough back that the cap binds: MAX_CATCH_UP_FIRES + 10
     // minutes of missed per-minute fires.
     const long = new Date(T5.getTime() - (MAX_CATCH_UP_FIRES + 10) * 60_000);
@@ -362,7 +328,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
   });
 
   it('`skip` enqueues NOTHING for a fire from before the scheduler started', async () => {
-    routeToEngine('system.ci-runner-provision-sweep');
     // Started at 12:05:30 — thirty seconds AFTER the 12:05 fire, which is exactly
     // the shape "the worker was down across it" takes. The disposition's whole
     // question is "was anyone watching when that fire passed?", and this scheduler
@@ -379,7 +344,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
     // ⚠️ THE CONTROL, and it is what makes the empty result above mean anything:
     // the SAME job, the SAME clock, differing only in the declared disposition.
     // Without it, a fixture that simply never enqueues would pass.
-    routeToEngine('system.ci-runner-provision-sweep', 'system.ci-runner-reap');
     await schedulerOver(
       [def({ id: 'system.ci-runner-reap', cron: MINUTELY, catchUp: 'latest' })],
       startedAt,
@@ -390,7 +354,6 @@ describe('each declared catch-up disposition is HONOURED', () => {
   });
 
   it('`skip` DOES enqueue a fire that happens while the scheduler is watching', async () => {
-    routeToEngine('system.ci-runner-provision-sweep');
     // Started at 12:00:10, so the 12:01 fire happened on its watch.
     let clock = new Date(Date.UTC(2026, 7, 25, 12, 0, 10));
     const scheduler = new JobScheduler({
@@ -419,7 +382,6 @@ describe('the real fourteen, as shipped', () => {
     // Everything above uses a fixture definition so a cadence can be pinned. This
     // is the case that proves the wiring against the SHIPPED definition — its
     // cron, its disposition and its attempt budget, none of them restated here.
-    routeToEngine('system.attachment-gc');
     const real = engineJob('system.attachment-gc');
     expect(real?.cron).toBeTruthy();
 
@@ -432,8 +394,14 @@ describe('the real fourteen, as shipped', () => {
     expect(rows[0]?.maxAttempts).toBe(real?.maxAttempts);
     expect(rows[0]?.eventName).toBe('scheduled.system.attachment-gc');
 
-    // And nothing else was scheduled: only the routed id may be.
+    // ⚠️ AND THE SIBLINGS ARE SCHEDULED TOO, WHICH THIS LINE USED TO DENY. It read
+    // "nothing else was scheduled: only the routed id may be" — true while the
+    // cutover switch narrowed the scheduled set to the routed ids, and false with
+    // one lane, where every registered cron whose fire is due is enqueued. What is
+    // still worth asserting is that a scheduled row is a SCHEDULED row: each one
+    // carries a `scheduled_for`, which is what makes the tick idempotent.
     const all = await adminDb.jobQueueRun.findMany({ where: { scheduledFor: { not: null } } });
-    expect(all.map((r) => r.jobId)).toEqual(['system.attachment-gc']);
+    expect(all.map((r) => r.jobId)).toContain('system.attachment-gc');
+    expect(all.every((r) => r.scheduledFor !== null)).toBe(true);
   });
 });

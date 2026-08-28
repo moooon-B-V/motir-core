@@ -1,8 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Prisma } from '@/generated/prisma/client';
+import type { JobQueueRun, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { JOB_RUN_REAP_CRON } from '@/lib/jobs/definitions/jobRunReap';
+import { recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { engineJob } from '@/lib/jobs/engine/registry';
 import { jobServices } from '@/lib/jobs/services';
 import {
@@ -31,20 +32,44 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // Three groups below, in the order the criteria ask for them: the correlation
 // itself, the lane, and the reap that closes what no completion write will reach.
 
+/** An in-memory `step` for driving a handler directly — no memo table, no yield. */
 const silentStep = { run: async (_id: string, fn: () => unknown) => fn() };
 
-/** Invoke the `onFailure` Inngest wired onto a `defineJob` function, as Inngest would. */
-function invokeOnFailure(
-  fn: unknown,
-  args: { event: { id?: string; name?: string; data?: unknown }; runId: string; error: Error },
-): Promise<unknown> {
-  const onFailure = (fn as { opts: { onFailure: (a: unknown) => Promise<unknown> } }).opts
-    .onFailure;
-  return onFailure({
-    event: { data: { run_id: args.runId, event: args.event } },
-    error: args.error,
-    step: silentStep,
-  });
+/**
+ * Drive the engine's terminal-failure hook against a synthesized queue row.
+ *
+ * ⚠️ THIS USED TO INVOKE THE VENDOR'S `onFailure` OFF `fn.opts` (MOTIR-3418).
+ * That hook was a SEPARATE invocation, handed the ORIGINAL event nested under
+ * `event.data.event` — and the whole of MOTIR-3683 lived in the fact that it
+ * derived the correlation key from that nested copy while the run handler derived
+ * it from the real event, so on a cron they disagreed.
+ *
+ * The engine has one derivation, `ledgerIdentity`, computed from the `job_queue`
+ * row and called by BOTH paths — which is exactly what makes the class of defect
+ * these tests were written for structurally impossible here. So the tests keep
+ * their inputs and change what they drive: a row whose `eventId` is `''` or null
+ * must still produce an attributable failure row, correlated to the `running` row
+ * the same value produced.
+ */
+function terminalFailure(args: {
+  jobId: string;
+  eventId: string | null;
+  eventName: string;
+  runId: string;
+  error: Error;
+}): Promise<void> {
+  return recordEngineTerminalFailure(
+    {
+      id: args.runId,
+      jobId: args.jobId,
+      eventId: args.eventId,
+      eventName: args.eventName,
+      workspaceId: null,
+      attempts: 1,
+    } as unknown as JobQueueRun,
+    args.error,
+    {},
+  );
 }
 
 let seq = 0;
@@ -74,7 +99,7 @@ describe('a CRON run that fails writes ONE row, not two', () => {
     // payload's copy of that event carries `id: ''`.
     const jobId = nextId();
     const runId = '01M0YMRDM06V506AKWKBSC5D0Q';
-    const fn = defineJob(
+    defineJob(
       { id: jobId as never, cron: '0 9 * * *', catchUp: 'skip', retryPolicy: 'none' },
       () => {
         throw new Error('the check exploded');
@@ -87,14 +112,16 @@ describe('a CRON run that fails writes ONE row, not two', () => {
       functionId: jobId,
       eventName: `scheduled.${jobId}`,
       eventId: runId,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
     });
 
-    await invokeOnFailure(fn, {
-      // ⚠️ `id: ''` IS THE BUG, reproduced verbatim. Before the fix this made the
-      // correlation look up `''`, find nothing, and insert a second row.
-      event: { id: '', name: `scheduled.${jobId}`, data: {} },
+    await terminalFailure({
+      // ⚠️ `eventId: ''` IS THE BUG, reproduced verbatim. Before the `||` fix this
+      // made the correlation look up `''`, find nothing, and insert a second row.
+      jobId,
+      eventId: '',
+      eventName: `scheduled.${jobId}`,
       runId,
       error: new Error('the check exploded'),
     });
@@ -111,7 +138,7 @@ describe('a CRON run that fails writes ONE row, not two', () => {
     // blanket switch to the run id: for an event-triggered job `original.id` IS
     // populated, and the event id is the more useful thing to record.
     const jobId = nextId();
-    const fn = defineJob({ id: jobId as never, retryPolicy: 'none' }, () => {
+    defineJob({ id: jobId as never, retryPolicy: 'none' }, () => {
       throw new Error('boom');
     });
 
@@ -120,12 +147,14 @@ describe('a CRON run that fails writes ONE row, not two', () => {
       functionId: jobId,
       eventName: jobId,
       eventId: 'evt-real-id',
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
     });
 
-    await invokeOnFailure(fn, {
-      event: { id: 'evt-real-id', name: jobId, data: {} },
+    await terminalFailure({
+      jobId,
+      eventId: 'evt-real-id',
+      eventName: jobId,
       runId: 'run-should-not-be-used',
       error: new Error('boom'),
     });
@@ -142,12 +171,14 @@ describe('a CRON run that fails writes ONE row, not two', () => {
     // it, so it correlates a failure to an arbitrary sibling — or, as happened,
     // to nothing at all.
     const jobId = nextId();
-    const fn = defineJob({ id: jobId as never, retryPolicy: 'none' }, () => {
+    defineJob({ id: jobId as never, retryPolicy: 'none' }, () => {
       throw new Error('boom');
     });
 
-    await invokeOnFailure(fn, {
-      event: { id: '', name: jobId, data: {} },
+    await terminalFailure({
+      jobId,
+      eventId: '',
+      eventName: jobId,
       runId: 'run-fallback-1',
       error: new Error('boom'),
     });
@@ -191,7 +222,7 @@ describe('every ledger row names the engine that ran it', () => {
     const dto = await jobRunsService.recordTerminalFailure({
       functionId: jobId,
       eventId: 'orphan-key',
-      lane: 'inngest',
+      lane: 'engine',
       eventName: jobId,
       workspaceId: null,
       failure: { message: 'nothing to correlate to' },
@@ -199,7 +230,7 @@ describe('every ledger row names the engine that ran it', () => {
       attempts: 1,
     });
 
-    expect(dto!.lane).toBe('inngest');
+    expect(dto!.lane).toBe('engine');
   });
 });
 
@@ -218,7 +249,7 @@ describe('the abandoned-run reap', () => {
         functionId: jobId,
         eventName: `scheduled.${jobId}`,
         eventId: opts.eventId,
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'running',
         startedAt: opts.startedAt,
@@ -320,7 +351,7 @@ describe('the abandoned-run reap', () => {
     await jobRunsService.recordTerminalFailure({
       functionId: jobId,
       eventId: 'late-failure-1',
-      lane: 'inngest',
+      lane: 'engine',
       eventName: `scheduled.${jobId}`,
       workspaceId: null,
       failure: { message: 'it did fail, and here is why' },
@@ -339,7 +370,7 @@ describe('the abandoned-run reap', () => {
 // 4 · THE REAP IS ACTUALLY SCHEDULED.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('the reap job is registered on both lanes', () => {
+describe('the reap job is registered and scheduled', () => {
   it('is in the ENGINE registry under the cron this module exports', () => {
     // ⚠️ AN UNREGISTERED CRON FIRES SILENTLY NEVER — no error, no ledger row,
     // nothing. A reaper that never runs is worse than none, because the ledger
@@ -362,8 +393,8 @@ describe('the reap job is registered on both lanes', () => {
 
   it('its handler calls the sweep and returns what the sweep counted', async () => {
     // Driven through the ENGINE registry's own `handler` — the raw function, which
-    // is what the Postgres worker actually invokes. Reaching into the built Inngest
-    // object instead would re-enter the whole ledger wrapper and test that, not this.
+    // is what the worker actually invokes. Driving it through the ledger instead
+    // would re-enter the whole bookkeeping path and test that, not this.
     const spy = vi
       .spyOn(jobServices.jobRuns, 'reapAbandoned')
       .mockResolvedValue({ scanned: 3, abandoned: 2, stillLive: 1 });

@@ -16,10 +16,18 @@ import { join } from 'node:path';
 //      `always()`, so a red suite means nothing ships (ADR §6 / Q5).
 //   2. Only the default branch deploys. A `push:`-triggered workflow that also
 //      runs on pull requests would otherwise ship from any branch.
-//   3. The Inngest sync is a STEP of the deploy and FAILS the job. It used to
-//      ride `deployment_status` — an event Vercel raises and Fly does not — so
-//      leaving that trigger would have stopped the sync silently, reproducing
-//      the fault MOTIR-1970 fixed (five production jobs dead for a month).
+//   3. ⚠️ POINT 3 WAS THE FUNCTION-REGISTRATION SYNC, AND IT IS GONE
+//      (MOTIR-3418). It read: "The Inngest sync is a STEP of the deploy and FAILS
+//      the job. It used to ride `deployment_status` — an event Vercel raises and
+//      Fly does not — so leaving that trigger would have stopped the sync
+//      silently, reproducing the fault MOTIR-1970 fixed (five production jobs dead
+//      for a month)." The vendor held its own registry of this app's functions and
+//      it went stale invisibly; the deploy PUT the serve route and failed red if
+//      the PUT did not. There is no second registry now — the worker reads
+//      `lib/jobs/registry.ts` out of the image it is running — so a job is
+//      registered by being deployed and cannot be registered any other way. The
+//      step, the manual workflow and the composite action are all deleted, and the
+//      `describe` that asserted all three went with them.
 //   4. Verification reads its OBSERVATION from the PLATFORM. A config file is a
 //      claim about the deployment, not a reading of it — MOTIR-2102 verbatim.
 //      ⚠️ NARROWED by MOTIR-3570: `fly.toml` now supplies the EXPECTATION, which
@@ -36,10 +44,6 @@ import { join } from 'node:path';
 //      see that; this one reads the header.
 
 const CI_PATH = join(process.cwd(), '.github/workflows/ci.yml');
-const SYNC_WORKFLOW_PATH = join(process.cwd(), '.github/workflows/inngest-sync.yml');
-const SYNC_ACTION_PATH = join(process.cwd(), '.github/actions/inngest-sync/action.yml');
-const SYNC_ACTION_REF = 'uses: ./.github/actions/inngest-sync';
-
 const DEPLOY_JOB = 'deploy';
 /** The pool guard the deploy step invokes (MOTIR-3570). */
 const POOL_GUARD = 'scripts/assert-machine-pool.mjs';
@@ -51,8 +55,6 @@ const ci = readFileSync(CI_PATH, 'utf8');
 const poolGuard = [POOL_GUARD, 'scripts/machinePool.mjs']
   .map((rel) => readFileSync(join(process.cwd(), rel), 'utf8'))
   .join('\n');
-const syncWorkflow = readFileSync(SYNC_WORKFLOW_PATH, 'utf8');
-const syncAction = readFileSync(SYNC_ACTION_PATH, 'utf8');
 
 /**
  * Split a workflow's `jobs:` mapping into { jobId → body }. Job ids sit at
@@ -165,54 +167,17 @@ describe('the Fly deploy runs after the existing gates (MOTIR-2390)', () => {
   });
 });
 
-describe('the Inngest sync moved into the deploy (MOTIR-2390 / MOTIR-1970)', () => {
-  it('runs as a step of the deploy job', () => {
-    expect(deployCode).toContain(SYNC_ACTION_REF);
-    expect(existsSync(SYNC_ACTION_PATH)).toBe(true);
-  });
-
-  it('runs AFTER the release, never before it', () => {
-    // Registering a function list the release has not shipped yet tells the
-    // cloud about the wrong app.
-    const releaseAt = deployCode.indexOf('flyctl deploy');
-    const syncAt = deployCode.indexOf(SYNC_ACTION_REF);
-    expect(releaseAt).toBeGreaterThan(-1);
-    expect(syncAt).toBeGreaterThan(releaseAt);
-  });
-
-  it('registers the custom domain, not a per-deployment hostname', () => {
-    // Deployment URLs are what the Vercel integration probed, and what
-    // Deployment Protection answered with a login redirect. Inngest invokes the
-    // functions at the public domain, so that is the only URL worth registering.
-    expect(deployCode).toMatch(/serve-url:.*app\.motir\.co\/api\/inngest/);
-  });
-
-  it('FAILS the job when the sync does not succeed', () => {
-    // Its entire history is of a failure that produced no signal at all. A red
-    // check is the signal.
-    expect(syncAction).toContain('"$code" = "200"');
-    expect(syncAction).toMatch(/::error::.*Inngest registration failed/);
-    expect(syncAction).toMatch(/exit 1\s*$/m);
-  });
-
-  it('is one definition with two entry points', () => {
-    // The deploy step and the manual workflow both call the composite action,
-    // so the retry loop and the 200 assertion cannot drift between two copies.
-    expect(codeOf(syncWorkflow)).toContain(SYNC_ACTION_REF);
-    expect(syncAction).toMatch(/using:\s*composite/);
-    // A composite `run:` without `shell:` is a load-time error for every caller.
-    const steps = syncAction.split(/^\s{4}- /m).slice(1);
-    expect(steps.length).toBeGreaterThan(0);
-    for (const step of steps) {
-      if (/(^|\n)\s*run:/.test(step)) expect(step).toMatch(/shell:\s*bash/);
-    }
-  });
-
-  it('no longer triggers on Vercel’s deployment_status event', () => {
-    // Fly raises no such event. Leaving the trigger would have stopped the sync
-    // silently — the exact fault MOTIR-1970 fixed.
-    expect(codeOf(syncWorkflow)).not.toContain('deployment_status');
-    expect(codeOf(syncWorkflow)).toMatch(/^\s*workflow_dispatch:\s*$/m);
+describe('nothing registers functions with a third party any more (MOTIR-3418)', () => {
+  it('the deploy job has no registration step, and the workflow/action are gone', () => {
+    // The inverse of the `describe` that stood here, and the only shape this
+    // property has left. It asserted five things about the sync — that it ran as a
+    // step, AFTER the release, against the custom domain rather than a
+    // per-deployment hostname, that a non-200 failed the job, and that the step and
+    // the manual workflow shared one composite definition. Every one of them names a
+    // control plane that no longer exists.
+    expect(deployCode).not.toContain('inngest');
+    expect(existsSync(join(process.cwd(), '.github/actions/inngest-sync/action.yml'))).toBe(false);
+    expect(existsSync(join(process.cwd(), '.github/workflows/inngest-sync.yml'))).toBe(false);
   });
 });
 

@@ -1,11 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobServices } from '@/lib/jobs/services';
 import { RETRY_POLICIES } from '@/lib/jobs/retries';
 import { ABANDONED_PLAN_SWEEP_CRON } from '@/lib/jobs/definitions/abandonedPlanSweep';
@@ -50,28 +49,20 @@ afterAll(async () => {
 
 describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', () => {
   it('is REGISTERED in the job registry — an unserved cron function fires silently never', () => {
-    expect(jobFunctions).toContain(autoPlanCadenceTick);
+    expect(jobDefinitions).toContain(autoPlanCadenceTick);
   });
 
   it('wires the cron expression into the Inngest function config — hourly at :20', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        {
-          id: 'system.auto-plan-cadence-tick',
-          cron: AUTO_PLAN_CADENCE_TICK_CRON,
-          catchUp: 'latest',
-          retryPolicy: 'idempotent',
-        },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as
-        | { triggers?: Array<{ cron?: string }>; retries?: number }
-        | undefined;
-      expect(config?.triggers).toEqual([{ cron: '30 * * * *' }]);
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      {
+        id: 'system.auto-plan-cadence-tick',
+        cron: AUTO_PLAN_CADENCE_TICK_CRON,
+        catchUp: 'latest',
+        retryPolicy: 'idempotent',
+      },
+      () => undefined,
+    );
+    expect(def.cron).toBe('30 * * * *');
   });
 
   it('is scheduled ON the cluster, and AFTER the abandoned-plan sweep', () => {
@@ -93,25 +84,19 @@ describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', ()
   });
 
   it('takes the IDEMPOTENT retry budget — safe only because the sweep re-derives every gate', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        {
-          id: 'system.auto-plan-cadence-tick',
-          cron: AUTO_PLAN_CADENCE_TICK_CRON,
-          catchUp: 'latest',
-          retryPolicy: 'idempotent',
-        },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as { retries?: number } | undefined;
-      // Inngest's `retries` counts RE-tries, so the policy's 5 ATTEMPTS become
-      // 4 retries after the initial one — the longer budget it grants a sweep
-      // that is safe to repeat. (A raw `5` here would quietly buy a 6th attempt.)
-      expect(config?.retries).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      {
+        id: 'system.auto-plan-cadence-tick',
+        cron: AUTO_PLAN_CADENCE_TICK_CRON,
+        catchUp: 'latest',
+        retryPolicy: 'idempotent',
+      },
+      () => undefined,
+    );
+    // Inngest's `retries` counts RE-tries, so the policy's 5 ATTEMPTS become
+    // 4 retries after the initial one — the longer budget it grants a sweep
+    // that is safe to repeat. (A raw `5` here would quietly buy a 6th attempt.)
+    expect(def.maxAttempts - 1).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);
   });
 });
 
@@ -124,7 +109,7 @@ describe('system.auto-plan-cadence-tick — the handler DELEGATES (MOTIR-920)', 
         summary as Awaited<ReturnType<typeof autoPlanCadenceService.runCadenceSweep>>,
       );
 
-    const engine = new InngestTestEngine({ function: autoPlanCadenceTick });
+    const engine = new JobTestEngine({ function: autoPlanCadenceTick });
     const { result } = await engine.execute();
 
     // ONE call — a tick sweeps once, it does not re-enter per project.
@@ -151,7 +136,7 @@ describe('system.auto-plan-cadence-tick — the handler DELEGATES (MOTIR-920)', 
       outcomes: [],
     } as Awaited<ReturnType<typeof autoPlanCadenceService.runCadenceSweep>>);
 
-    const engine = new InngestTestEngine({ function: autoPlanCadenceTick });
+    const engine = new JobTestEngine({ function: autoPlanCadenceTick });
     await engine.execute();
 
     const runs = await adminDb.jobRun.findMany();
@@ -173,7 +158,7 @@ describe('system.auto-plan-cadence-tick — the handler DELEGATES (MOTIR-920)', 
     // `withSystemContext`. With no opted-in project it sweeps nothing, which is
     // exactly the assertion — the wiring reaches live Postgres and returns a
     // well-formed summary rather than throwing.
-    const engine = new InngestTestEngine({ function: autoPlanCadenceTick });
+    const engine = new JobTestEngine({ function: autoPlanCadenceTick });
     const { result } = await engine.execute();
 
     expect(result).toEqual({ scanned: 0, fired: 0, skipped: 0, failed: 0, outcomes: [] });

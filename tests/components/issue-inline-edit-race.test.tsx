@@ -62,13 +62,13 @@ vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) 
 
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 beforeAll(() => {
   // Radix needs a few browser APIs happy-dom lacks (same shims as the sibling
@@ -95,7 +95,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the REAL workItemsService.updateStatus this
   // suite drives now emits `work-item/transitioned` post-commit (Subtask
   // 5.4.5), and the test env has no Inngest key.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

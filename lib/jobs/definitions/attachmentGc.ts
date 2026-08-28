@@ -19,7 +19,7 @@ import { defineJob } from '../defineJob';
 //
 // `retryPolicy: 'idempotent'`: the sweep converges on re-run by construction
 // (deleted rows stop matching `listOrphans`; the blob delete is idempotent on
-// already-gone URLs), so a transient DB/Blob blip is worth Inngest's full
+// already-gone URLs), so a transient DB/Blob blip is worth the policy's full
 // 5-attempt budget — unlike the health check's point-in-time 'none'.
 //
 // KNOWN LIMITATION: blobs with NO attachment row at all (e.g. a

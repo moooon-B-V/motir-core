@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 
 // The plan-tree embedding JOB, driven end-to-end from the SHIPPED pipeline event
 // (Story MOTIR-2694 · Subtask MOTIR-2696, `docs/decisions/plan-tree-embeddings.md`
@@ -70,7 +70,7 @@ describe('workItemEmbeddingRequested', () => {
     );
     const data = requestedSince(from);
 
-    const { result } = await new InngestTestEngine({
+    const { result } = await new JobTestEngine({
       function: workItemEmbeddingRequested,
       events: [{ name: 'work-item/embedding.requested', data }],
     }).execute();
@@ -92,7 +92,7 @@ describe('workItemEmbeddingRequested', () => {
     );
     const data = requestedSince(from);
     const run = () =>
-      new InngestTestEngine({
+      new JobTestEngine({
         function: workItemEmbeddingRequested,
         events: [{ name: 'work-item/embedding.requested', data }],
       }).execute();
@@ -116,7 +116,7 @@ describe('workItemEmbeddingRequested', () => {
     const data = requestedSince(from);
     vi.mocked(embedTexts).mockRejectedValue(new MotirAiUnavailableError('gateway down'));
 
-    const { error } = await new InngestTestEngine({
+    const { error } = await new JobTestEngine({
       function: workItemEmbeddingRequested,
       events: [{ name: 'work-item/embedding.requested', data }],
     }).execute();

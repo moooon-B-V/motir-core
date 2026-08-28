@@ -19,11 +19,12 @@ import type { CodeGraphIndexData } from '../types';
 //
 // SYSTEM-scoped (`system.*`): the work spans an installation's workspace + its
 // projects, resolved under `withSystemContext` inside the service — like every
-// `system.*` job, it is enqueued via `inngest.send` directly (NOT `sendEvent`).
+// `system.*` job, it is enqueued via `sendSystemEvent` (NOT `sendEvent`, whose
+// workspace-scoping invariant a system payload cannot satisfy).
 //
 // `retryPolicy: 'idempotent'`: re-indexing the same repo is convergent by
 // construction (a re-dispatched container rebuilds the same graph and overwrites
-// the same commit-derived key), so a transient blip is worth Inngest's full
+// the same commit-derived key), so a transient blip is worth the policy's full
 // 5-attempt budget — and because every phase now sits inside a memoized step, a
 // retry RESUMES at the project that failed instead of re-booting the containers
 // that already succeeded. All the work is delegated to services (the 4-layer

@@ -1,11 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { planDriftOnTransitioned } from '@/lib/jobs/definitions/planDrift';
 import { planDriftService } from '@/lib/services/planDriftService';
 import { adminDb } from '../helpers/adminDb';
@@ -55,41 +54,33 @@ function stubBothDirections() {
 
 describe('plan-drift/transitioned — the wiring', () => {
   it('is REGISTERED — an unserved consumer fires silently never', () => {
-    expect(jobFunctions).toContain(planDriftOnTransitioned);
+    expect(jobDefinitions).toContain(planDriftOnTransitioned);
   });
 
   it('does not collide with the OTHER consumers of the same event', () => {
     // The derivation, watcher, bell fan-in and automation consumers all ride
     // `work-item/transitioned`; distinct ids are what let them coexist rather
     // than one replacing another.
-    const ids = jobFunctions.map((f) => (f as { id: () => string }).id());
+    const ids = jobDefinitions.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('triggers on work-item/transitioned under its own id, with the idempotent budget', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        {
-          id: 'plan-drift/transitioned',
-          trigger: 'work-item/transitioned',
-          retryPolicy: 'idempotent',
-        },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as
-        | { id?: string; triggers?: Array<{ event?: string }>; retries?: number }
-        | undefined;
-      expect(config?.triggers).toEqual([{ event: 'work-item/transitioned' }]);
-      expect(config?.id).toBe('plan-drift/transitioned');
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      {
+        id: 'plan-drift/transitioned',
+        trigger: 'work-item/transitioned',
+        retryPolicy: 'idempotent',
+      },
+      () => undefined,
+    );
+    expect(def.trigger).toBe('work-item/transitioned');
+    expect(def.id).toBe('plan-drift/transitioned');
   });
 
   it('dispatches BOTH directions from one event, threading the workspace and the TRANSITION', async () => {
     const { mark, restore } = stubBothDirections();
-    const engine = new InngestTestEngine({ function: planDriftOnTransitioned, events: [EVENT] });
+    const engine = new JobTestEngine({ function: planDriftOnTransitioned, events: [EVENT] });
     await engine.execute();
 
     // ⚠️ THE FROM/TO ARE THE LOAD-BEARING ARGUMENTS. Entry into a terminal

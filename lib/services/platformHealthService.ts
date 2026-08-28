@@ -205,13 +205,13 @@ async function scheduleSignalFrom(
   report: Promise<Awaited<ReturnType<typeof jobScheduleHealthService.check>> | null>,
 ): Promise<PlatformSignalDTO> {
   const resolved = await report;
-  if (!resolved) return unreachable('schedules', 'probeFailed', INNGEST_FUNCTIONS_URL);
+  if (!resolved) return unreachable('schedules', 'probeFailed', null);
 
   return {
     id: 'schedules',
     state: resolved.overdue.length > 0 ? 'degraded' : 'healthy',
     values: { overdue: resolved.overdue.length, total: resolved.entries.length },
-    linkOut: INNGEST_FUNCTIONS_URL,
+    linkOut: null,
   };
 }
 
@@ -220,13 +220,13 @@ async function failedJobsSignal(now: Date): Promise<PlatformSignalDTO> {
   const count = await probe(() =>
     withSystemContext((tx) => jobRunDlqRepository.countActiveSince(since, tx)),
   );
-  if (count === null) return unreachable('failedJobs', 'probeFailed', INNGEST_RUNS_URL);
+  if (count === null) return unreachable('failedJobs', 'probeFailed', null);
 
   return {
     id: 'failedJobs',
     state: count > 0 ? 'degraded' : 'healthy',
     values: { count },
-    linkOut: INNGEST_RUNS_URL,
+    linkOut: null,
   };
 }
 
@@ -270,14 +270,14 @@ async function lastHealthCheckSignal(now: Date): Promise<PlatformSignalDTO> {
       jobRunRepository.findLatestByEventName(DAILY_HEALTH_CHECK_EVENT_NAME, tx),
     ),
   }));
-  if (read === null) return unreachable('lastHealthCheck', 'probeFailed', INNGEST_RUNS_URL);
-  if (read.run === null) return unreachable('lastHealthCheck', 'never', INNGEST_RUNS_URL);
+  if (read === null) return unreachable('lastHealthCheck', 'probeFailed', null);
+  if (read.run === null) return unreachable('lastHealthCheck', 'never', null);
 
   return {
     id: 'lastHealthCheck',
     state: read.run.status === 'succeeded' ? 'healthy' : 'degraded',
     values: { ranAt: read.run.startedAt.toISOString(), status: read.run.status },
-    linkOut: INNGEST_RUNS_URL,
+    linkOut: null,
   };
 }
 
@@ -316,18 +316,27 @@ function neonConsoleUrl(): string | null {
 }
 
 /**
- * The two Inngest link-outs, and the one deliberate inaccuracy in the design's
- * own copy, kept because it is the design's:
+ * ⚠️ THE JOB SIGNALS HAVE NO LINK-OUT, AND THAT IS THE CORRECTION MOTIR-3418
+ * MAKES RATHER THAN AN OMISSION.
+ *
+ * They used to point at a vendor dashboard —
+ * `app.inngest.com/env/production/{functions,runs}` — carrying the design's own
+ * deliberate inaccuracy, kept because it was the design's:
  *
  * > "Failed after their retries. Inngest has no literal DLQ — this is the
  * > failed-set, and replay happens there."
  *
- * `job_run_dlq` is Motir's own table, and a job routed to the Postgres engine
- * never reaches Inngest at all. The link is still the right destination for the
- * jobs that DO run there, and the per-run detail an operator actually wants is
- * one workspace deep in `/settings/workspace/jobs` — a per-WORKSPACE surface
- * this console must not fork (the asset says so, and so does the card).
+ * That was already half wrong when it was written (`job_run_dlq` is Motir's own
+ * table, and a job on the Postgres engine never reached the vendor at all), and
+ * it is wholly wrong now: the account is being closed, so the link would take an
+ * operator mid-incident to a page with nothing on it — or to a login for a
+ * product this company no longer uses.
+ *
+ * ⚠️ AND THE REPLACEMENT IS NOT A DIFFERENT URL. The per-run detail an operator
+ * actually wants is one workspace deep in `/settings/workspace/jobs`, and that is
+ * a per-WORKSPACE surface this console must not fork — the asset says so and so
+ * does the card. A link-out this console cannot honestly construct is `null`,
+ * which the DTO already models (`hostingSignal` returns one on a deployment that
+ * is not managed) and which the card renders as text without an affordance.
  */
-const INNGEST_FUNCTIONS_URL = 'https://app.inngest.com/env/production/functions';
-const INNGEST_RUNS_URL = 'https://app.inngest.com/env/production/runs';
 const SENTRY_ISSUES_URL = 'https://sentry.io/issues/';

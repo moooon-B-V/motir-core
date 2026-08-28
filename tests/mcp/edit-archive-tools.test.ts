@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
@@ -12,6 +11,7 @@ import { runArchiveWorkItem, runUnarchiveWorkItem } from '@/lib/mcp/tools/archiv
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // MCP edit + soft-remove tools (Subtask 7.8.14) over real Postgres.
 // `update_work_item` / `archive_work_item` / `unarchive_work_item` — thin
@@ -24,7 +24,7 @@ import { truncateAuthTables } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] as string[] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

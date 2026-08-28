@@ -70,10 +70,10 @@ import type { CodeGraphRefreshData } from '../types';
 // `repoName` optional on `CodeGraphRefreshData` would silently coalesce unrelated
 // repos. `tests/jobs/debounce-burst.test.ts` pins that.
 //
-// SYSTEM-scoped (enqueued via `inngest.send`, not `sendEvent`) and
+// SYSTEM-scoped (enqueued via `sendSystemEvent`, not `sendEvent`) and
 // `retryPolicy: 'idempotent'` for the reason the index job carries it: a
 // re-dispatched container rebuilds the same graph over the same commit-derived
-// key, so a transient blip is worth Inngest's full 5-attempt budget — and every
+// key, so a transient blip is worth the `idempotent` policy's full 5-attempt budget — and every
 // phase sits inside a memoized step, so a retry RESUMES at the project that
 // failed instead of re-booting the containers that already succeeded.
 //

@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto, WorkItemKindDto } from '@/lib/dto/workItems';
@@ -11,6 +10,7 @@ import { runMoveToParent } from '@/lib/mcp/tools/moveToParent';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // MCP re-parent tool (bug MOTIR-1017) over real Postgres. `move_to_parent` is a
 // thin adapter over `workItemsService.moveWorkItem` — the SAME re-parent path
@@ -24,7 +24,7 @@ import { truncateAuthTables } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] as string[] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

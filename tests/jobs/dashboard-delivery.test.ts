@@ -35,7 +35,7 @@ async function seedRun(opts: {
       functionId: opts.functionId ?? 'email.send',
       eventName: opts.functionId ?? 'email.send',
       eventId: `evt-${randomToken()}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       status: opts.status ?? 'succeeded',
       idempotencyKey:

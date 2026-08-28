@@ -15,8 +15,8 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Delete-with-reassign (Story 2.3 · Subtask 2.3.1), real Postgres. Deleting an
 // in-use CUSTOM status migrates every referencing work item (incl. archived) to
@@ -28,7 +28,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
 });
 

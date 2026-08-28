@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { sendSystemEvent } from '@/lib/jobs/sendEvent';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
 // The REAL registry, for its side effect — every definition module evaluated, so
 // `engineSubscribers('system.billing-seat-sync')` resolves the real job.
 //
@@ -15,25 +16,44 @@ import { sendSystemEvent } from '@/lib/jobs/sendEvent';
 // make the registry complete the cheapest way.
 import '@/lib/jobs/registry';
 
-// `system.billing-seat-sync` is the ONE of the four converted `system.*` events
-// this story is entitled to move (MOTIR-3456's scope boundary): the other three
-// are the container supervisors, which MOTIR-3417 owns. Making a switch
-// reachable is not throwing it — so this proves the switch WORKS for it, while
-// `MOTIR_POSTGRES_JOB_IDS` ships untouched.
+// ⚠️ THIS FILE ASKED WHETHER A SWITCH REACHED A SYSTEM EVENT (MOTIR-3418 removed
+// the switch). `system.billing-seat-sync` was the ONE of the four converted
+// `system.*` events MOTIR-3456 was entitled to move — the other three being the
+// container supervisors MOTIR-3417 owned — so it asserted three things: the id in
+// the routing set enqueued, the id absent enqueued NOTHING, and the three
+// supervisors stayed unrouted "even so".
+//
+// Two of those three named a lane a job could stay on. What survives is the half
+// that was never about the migration and is the reason MOTIR-3456 exists at all:
+// **an emitter that goes through `sendSystemEvent` reaches the queue, and one
+// that bypasses it does not.** Four `system.*` emitters used to bypass it.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
 const SEAT_SYNC = 'system.billing-seat-sync';
+
+let seq = 0;
+/** A REAL workspace — `job_event.workspace_id` carries an FK, so a synthetic id
+ *  is refused at the insert and the emit is swallowed by the best-effort arm. */
+async function makeWorkspace(): Promise<string> {
+  seq += 1;
+  const user = await usersService.createUser({
+    email: `sys-routing-${seq}@example.com`,
+    password: 'hunter2hunter2',
+    name: `Sys Routing ${seq}`,
+  });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: `Sys Routing WS ${seq}`,
+    ownerUserId: user.id,
+  });
+  return workspace.id;
+}
 
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -41,10 +61,8 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('the cutover switch now reaches a system event', () => {
-  it('ENQUEUES a job_queue row when the seat-sync id is in the routing set', async () => {
-    process.env[JOB_ENGINE_JOBS_ENV] = SEAT_SYNC;
-
+describe('the system-event door reaches the queue', () => {
+  it('ENQUEUES a job_queue row for the seat-sync event', async () => {
     await sendSystemEvent(SEAT_SYNC, { organizationId: 'org_routing_1' });
 
     const rows = await adminDb.jobQueueRun.findMany({ where: { jobId: SEAT_SYNC } });
@@ -58,25 +76,16 @@ describe('the cutover switch now reaches a system event', () => {
     expect(events).toHaveLength(1);
   });
 
-  it('ENQUEUES NOTHING when the id is absent — the default is still Inngest', async () => {
-    delete process.env[JOB_ENGINE_JOBS_ENV];
-
-    await sendSystemEvent(SEAT_SYNC, { organizationId: 'org_routing_2' });
-
-    expect(await adminDb.jobQueueRun.findMany({ where: { jobId: SEAT_SYNC } })).toHaveLength(0);
-    // Not even a job_event row: writing one anyway would fill the table with
-    // events nothing will ever consume, for the whole migration.
-    expect(await adminDb.jobEvent.findMany({ where: { name: SEAT_SYNC } })).toHaveLength(0);
-  });
-
-  it('leaves the three SUPERVISOR events unrouted even so — MOTIR-3417 moves those', async () => {
-    // Reachable is not moved. The seam this card ships makes all four
-    // switchable; only one of them is this story's to switch.
-    process.env[JOB_ENGINE_JOBS_ENV] = SEAT_SYNC;
-
+  it('ENQUEUES the supervisor events through the same door', async () => {
+    // ⚠️ INVERTED FROM WHAT IT ASSERTED (MOTIR-3418). This used to be "leaves the
+    // three SUPERVISOR events unrouted even so", because reachable was not moved:
+    // MOTIR-3456 made all four switchable and only one of them was that story's
+    // to switch. All four moved (MOTIR-3489), and there is nowhere left to be
+    // unrouted to — so the assertion is that the door carries them, which is the
+    // property MOTIR-3456 actually shipped.
     await sendSystemEvent('system.code-graph-index', {
       installationId: 'inst_1',
-      workspaceId: 'ws_unrouted',
+      workspaceId: await makeWorkspace(),
       repoOwner: 'moooon-B-V',
       repoName: 'motir-core',
       defaultBranch: 'main',
@@ -84,6 +93,6 @@ describe('the cutover switch now reaches a system event', () => {
 
     expect(
       await adminDb.jobQueueRun.findMany({ where: { jobId: 'system.code-graph-index' } }),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 });

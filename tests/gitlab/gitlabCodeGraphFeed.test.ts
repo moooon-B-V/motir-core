@@ -8,10 +8,10 @@ import { gitlabWebhookService } from '@/lib/services/gitlabWebhookService';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { encryptToken } from '@/lib/gitlab/tokenCrypto';
-import { inngest } from '@/lib/jobs/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 
 // Story 7.23 · MOTIR-1476 — the GitLab code-graph FEED, against a real Postgres
 // (the motir-core convention). Two triggers, both driving the SAME
@@ -50,14 +50,14 @@ afterAll(async () => {
 
 /** A fresh, history-clean spy on the enqueue transport (`inngest.send`). */
 function spySend() {
-  const spy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  const spy = spyOnJobDispatch();
   spy.mockClear();
   return spy;
 }
 
 /** The spy's calls that enqueued `name`. */
 function callsFor(sendSpy: { mock: { calls: unknown[][] } }, name: string) {
-  return sendSpy.mock.calls.filter((call) => (call[0] as { name?: string }).name === name);
+  return dispatchedEvents(sendSpy).filter((e) => e.name === name);
 }
 
 /** Seed a workspace + a GitLab connection with a still-valid token (so the token
@@ -128,7 +128,7 @@ describe('gitlabWebhookService — push → code-graph refresh enqueue (MOTIR-14
 
     const calls = callsFor(sendSpy, 'system.code-graph-refresh');
     expect(calls).toHaveLength(1);
-    expect((calls[0]![0] as { data: Record<string, unknown> }).data).toEqual({
+    expect(calls[0]!.data).toEqual({
       installationId: `gitlab-ws-${workspace.id}`,
       workspaceId: workspace.id,
       repoOwner: 'octocat',
@@ -175,7 +175,7 @@ describe('gitlabWebhookService — push → code-graph refresh enqueue (MOTIR-14
 
   it('an enqueue transport failure never fails the ack (best-effort, fast 2xx)', async () => {
     await makeScenario('gl-push-enqueue-down@example.com', { withRepo: true });
-    vi.spyOn(inngest, 'send').mockRejectedValue(new Error('queue down'));
+    spyOnJobDispatch().mockRejectedValue(new Error('queue down'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await gitlabWebhookService.handleEvent('Push Hook', pushPayload());
@@ -219,7 +219,7 @@ describe('gitlabConnectionService — connect → full code-graph index (MOTIR-1
     // …and exactly one full-index job is enqueued for it, with the connection's id.
     const calls = callsFor(sendSpy, 'system.code-graph-index');
     expect(calls).toHaveLength(1);
-    expect((calls[0]![0] as { data: Record<string, unknown> }).data).toEqual({
+    expect(calls[0]!.data).toEqual({
       installationId: `gitlab-ws-${workspace.id}`,
       workspaceId: workspace.id,
       repoOwner: 'octocat',

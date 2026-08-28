@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { inngest } from '@/lib/jobs/client';
 import { enqueueCodeGraphIndex, enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import type { NormalizedRepo } from '@/lib/git/types';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 
 // Story 7.10 · MOTIR-896 — the FEED-DISPATCH branches of the code-graph index
 // enqueue (lib/github/indexEnqueue.ts) no per-subtask test reaches. The
@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('enqueueCodeGraphIndex — best-effort (MOTIR-896)', () => {
   it('swallows + logs a transport failure — the caller NEVER sees the queue blip', async () => {
-    const send = vi.spyOn(inngest, 'send').mockRejectedValue(new Error('queue down'));
+    const send = spyOnJobDispatch().mockRejectedValue(new Error('queue down'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
@@ -43,7 +43,7 @@ describe('enqueueCodeGraphIndex — best-effort (MOTIR-896)', () => {
   });
 
   it('sends the job event with the exact payload', async () => {
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
 
     await enqueueCodeGraphIndex({
       installationId: 'inst-1',
@@ -53,22 +53,23 @@ describe('enqueueCodeGraphIndex — best-effort (MOTIR-896)', () => {
       defaultBranch: 'main',
     });
 
-    expect(send).toHaveBeenCalledWith({
-      name: 'system.code-graph-index',
-      data: {
+    expect(send).toHaveBeenCalledWith(
+      'system.code-graph-index',
+      {
         installationId: 'inst-1',
         workspaceId: 'ws-1',
         repoOwner: 'moooon',
         repoName: 'acme',
         defaultBranch: 'main',
       },
-    });
+      { idempotencyKey: null },
+    );
   });
 });
 
 describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · MOTIR-1961)', () => {
   it('a reconcile whose repos are ALL indexed enqueues NOTHING', async () => {
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
 
     await enqueueReposMissingFirstIndex({
       installationId: 'inst-1',
@@ -81,7 +82,7 @@ describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · M
   });
 
   it('enqueues exactly the repos with NO code graph, skipping the already-indexed', async () => {
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
 
     await enqueueReposMissingFirstIndex({
       installationId: 'inst-1',
@@ -90,9 +91,7 @@ describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · M
       indexedRepoRefs: ['moooon/ai'],
     });
 
-    const names = send.mock.calls.map(
-      (c) => (c[0] as { data: { repoName: string } }).data.repoName,
-    );
+    const names = dispatchedEvents(send).map((e) => (e.data as { repoName: string }).repoName);
     expect(names).toEqual(['core', 'meta']);
   });
 
@@ -100,7 +99,7 @@ describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · M
     // The state the old novelty gate could not escape — every repo row already
     // exists (nothing is "newly added"), and not one has a graph. Under the old
     // `existingRepoIds` gate this enqueued zero jobs, forever.
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
 
     await enqueueReposMissingFirstIndex({
       installationId: 'inst-1',
@@ -109,15 +108,13 @@ describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · M
       indexedRepoRefs: [],
     });
 
-    const names = send.mock.calls.map(
-      (c) => (c[0] as { data: { repoName: string } }).data.repoName,
-    );
+    const names = dispatchedEvents(send).map((e) => (e.data as { repoName: string }).repoName);
     expect(names).toEqual(['core', 'ai', 'meta']);
   });
 
   it('matches the indexed set on owner/name, not on name alone', async () => {
     // Two owners can select repos of the same name; only the exact ref counts.
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
 
     await enqueueReposMissingFirstIndex({
       installationId: 'inst-1',
@@ -127,12 +124,11 @@ describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · M
     });
 
     expect(send).toHaveBeenCalledOnce();
-    expect((send.mock.calls[0]![0] as { data: { repoName: string } }).data.repoName).toBe('core');
+    expect((dispatchedEvents(send)[0]!.data as { repoName: string }).repoName).toBe('core');
   });
 
   it('one repo’s enqueue failure never blocks the others (best-effort PER repo)', async () => {
-    const send = vi
-      .spyOn(inngest, 'send')
+    const send = spyOnJobDispatch()
       .mockRejectedValueOnce(new Error('first blip'))
       .mockResolvedValue({ ids: [] } as never);
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -2,26 +2,24 @@ import type { FullConfig } from '@playwright/test';
 import { assertHarnessReady } from './_helpers/readiness';
 import { ensureAppRoleCanLogIn, isAppRoleE2E } from './_helpers/appRoleServer';
 import { jobWorkerEnabled, startJobWorker } from './_helpers/job-worker-process';
-import { clearJobRouting } from './_helpers/job-routing';
 
 /**
  * Playwright globalSetup (MOTIR-1565) — the E2E harness readiness gate.
  *
- * Playwright starts the two webServers (`pnpm dev` + `inngest-cli dev`) and
- * waits for each `webServer.url` to respond BEFORE this runs (the webServer
- * plugin's setup is ordered ahead of globalSetup in the runner's task list).
- * But that built-in check treats any status < 404 as "ready", so a redirecting
- * root URL is "up" the instant the socket binds — while `/sign-up` still 404s
- * and the inngest dev server's `PUT /api/inngest` sync 404-cascades. The suite
- * then ran against a half-started server and the entire shell-flows suite red
- * at once (MOTIR-1565: PR #1517, bulk-4 — 8 red specs from one bad shard start,
- * not a product regression).
+ * Playwright starts the webServer (`next build && next start`) and waits for its
+ * `webServer.url` to respond BEFORE this runs (the webServer plugin's setup is
+ * ordered ahead of globalSetup in the runner's task list). But that built-in
+ * check treats any status < 404 as "ready", so a redirecting root URL is "up"
+ * the instant the socket binds — while `/sign-up` still 404s. The suite then ran
+ * against a half-started server and the entire shell-flows suite red at once
+ * (MOTIR-1565: PR #1517, bulk-4 — 8 red specs from one bad shard start, not a
+ * product regression).
  *
- * This gate closes that window: it polls the authoritative app auth route, the
- * app's inngest serve route, and the inngest dev server's sync, with bounded
- * retry/backoff, before the first spec. On a genuine startup failure it THROWS
- * here — so the shard fails its own global-setup step with one clear error
- * instead of reddening the whole suite as if the PR under test had regressed.
+ * This gate closes that window: it polls the authoritative app auth route, with
+ * bounded retry/backoff, before the first spec. On a genuine startup failure it
+ * THROWS here — so the shard fails its own global-setup step with one clear
+ * error instead of reddening the whole suite as if the PR under test had
+ * regressed.
  *
  * Tunable via `E2E_READINESS_ATTEMPTS` (total probe attempts per check) for a
  * CI runner that needs a longer cold-start budget.
@@ -47,18 +45,12 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     config.projects[0]?.use?.baseURL ??
     process.env['E2E_BASE_URL'] ??
     `http://localhost:${process.env['PORT'] ?? '3000'}`;
-  // playwright.config.ts sets process.env.INNGEST_BASE_URL at module scope
-  // (before globalSetup runs); fall back to deriving it the same way it does.
-  const inngestBaseUrl =
-    process.env['INNGEST_BASE_URL'] ?? `http://localhost:${process.env['INNGEST_PORT'] ?? '8288'}`;
-
   const attemptsEnv = Number(process.env['E2E_READINESS_ATTEMPTS'] ?? '');
   const attempts = Number.isFinite(attemptsEnv) && attemptsEnv > 0 ? attemptsEnv : undefined;
 
-  console.warn(`[e2e-readiness] gating harness startup — app=${baseUrl} inngest=${inngestBaseUrl}`);
+  console.warn(`[e2e-readiness] gating harness startup — app=${baseUrl}`);
   await assertHarnessReady({
     baseUrl,
-    inngestBaseUrl,
     poll: attempts ? { attempts } : {},
   });
   console.warn('[e2e-readiness] harness fully ready — starting specs.');
@@ -70,12 +62,11 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   // is a claim loop, not a server. After the readiness gate, so it connects to a
   // database the app has already proven reachable.
   //
-  // Routing is cleared FIRST: a previous run that crashed mid-spec can leave the
-  // override file on disk, which would silently route a job onto the new engine
-  // for every spec in this run — including `jobs-flow.spec.ts`, whose whole
-  // subject is that `email.send` still runs on Inngest.
+  // ⚠️ IT IS THE LANE'S ONLY EXECUTOR NOW (MOTIR-3418). It used to run beside the
+  // vendor dev server, which was the `webServer` entry that actually delivered
+  // `email.send`; without this the outbox never fills and every `waitForEmail`
+  // hangs.
   if (jobWorkerEnabled()) {
-    await clearJobRouting();
     console.warn('[e2e-job-worker] starting the Postgres job engine worker…');
     await startJobWorker();
     console.warn('[e2e-job-worker] worker ready.');
