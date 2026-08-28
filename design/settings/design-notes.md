@@ -1903,9 +1903,31 @@ follows from a source rather than from taste.
 
 ### Deleted — what is yours alone
 
-Your profile, credentials, passkeys, two-factor enrolment and API tokens; and
-**every workspace where you are the only member**, with the projects and work
-items inside them.
+Your profile, credentials, passkeys, two-factor enrolment and API tokens; **every
+workspace where you are the only member**, with the projects and work items
+inside them; and **every personal-data export you asked for, with the archive
+each one built**.
+
+**Why the archive is a member, and why the enumeration had to be reopened to say
+so (MOTIR-3732 → MOTIR-3747 → MOTIR-3754).** This group's membership is not a
+list somebody wrote down — like the other two, it follows from a SOURCE, and its
+source is _what the erasure sweep actually deletes_. **That source widened after
+this asset was authored**: MOTIR-3732 made erasure remove every export request
+and the file it built, and MOTIR-3747 added the row to the shipped ledger. An
+enumeration that follows from a source is only correct while the source holds
+still, so **widening what erasure REACHES is also a change to what the design of
+record DRAWS** — and this group is the one place a reader is told what deletion
+means.
+
+The archive is also the member that can least afford to be missing. It is the one
+artefact that is a complete copy of everything the account held, and DECISION 2
+deliberately routes the reader PAST the export on the way to this dialog — so a
+ledger that names credentials and workspaces and stays silent about it omits the
+largest thing it is about to destroy. The row is **hidden at zero**, the same rule
+the workspace rows follow (the ledger states what deletion reaches, and a reader
+who never asked for an archive loses none), and its copy names the **archive**
+rather than promising a download exists: a `preparing` / `failed` / `expired`
+request carries no file.
 
 **Why whole workspaces go with the account, and why that is a CHOICE rather than
 a block.** `removeMemberInTx` throws `LastMemberError` when the membership count
@@ -2049,7 +2071,8 @@ named.
   here.**
 - **The impact COUNTS are a backend read, and they are the second capability this
   surface needs.** The ledger renders _"2 workspaces · 12 projects · 1,483 work
-  items · 214 comments · 96 work items"_, and a destructive flow always has two
+  items · 3 data exports · 214 comments · 96 work items"_, and a destructive flow
+  always has two
   distinct backend capabilities — the **preview/impact read** and the
   **do-the-action write**. MOTIR-1136 owns both; the numbers are not decoration
   and the preview is not free.
@@ -2123,10 +2146,10 @@ is the 58 rem peek surface, which is not a confirmation dialog.
 `Modal.Footer` · `Input` / `FormField` (label + helper) · `Pill`
 (mint / sky / peach / rose) · the callout (info / warn / danger) · `SidebarNav` +
 `SidebarSection` rows · the `.srow` settings-row grammar from the shipped Language
-and Profile panes. Icons are lucide, and the seven this pane adds
+and Profile panes. Icons are lucide, and the nine this pane adds
 (`database` · `users` · `message-square` · `receipt` · `square-kanban` ·
-`building-2` · `hourglass` · `user-x`) are emitted from `lucide-react`'s own
-`__iconNode` rather than drawn by hand.
+`building-2` · `hourglass` · `user-x` · `file-archive`) are emitted from
+`lucide-react`'s own `__iconNode` rather than drawn by hand.
 
 ## i18n
 
@@ -2164,7 +2187,7 @@ does not survive the commit, and a design asset naming a file that does not exis
 sends the next reader looking for nothing.
 
 The token block, the dark block and the 29 shared icon defs are **extracted from
-`two-factor.mock.html`**, never retyped; the eight added icons are generated from
+`two-factor.mock.html`**, never retyped; the nine added icons are generated from
 `lucide-react`'s `__iconNode`:
 
 ```py
