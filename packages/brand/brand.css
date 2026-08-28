@@ -1,0 +1,86 @@
+/*
+ * @motir/brand — the brand lockup's presentation (MOTIR-1150, moved here by
+ * MOTIR-1456 · ADR docs/decisions/brand-asset-distribution.md).
+ *
+ * Every colour below is a Tier-3 `--el-*` token and the wordmark's face is
+ * `--font-sans-source`; all five are DEFINED by
+ * `@motir/design-system/theme.css`, which is why this package declares that one
+ * a required peer. A consumer that imports this file without it gets the
+ * fallbacks alone.
+ *
+ * ⚠️ BUT THE IMPORT *ORDER* IS NOT WHAT MAKES THAT WORK, and it is worth saying
+ * so because the opposite is the intuitive guess. Custom properties resolve at
+ * computed-value time, not at parse time, so `var(--el-text)` here resolves
+ * against `:root` whether the definition was parsed before or after. What IS
+ * load-bearing is that both are `@import`s at the TOP of the consumer's
+ * stylesheet, because CSS requires `@import` to precede other rules — which is
+ * why moving this block out of an app's tail relocates it in the compiled
+ * output. Keeping this file after `theme.css` is the right convention (it
+ * matches the dependency direction) and is not a correctness requirement today:
+ * nothing in either sheet collides with these selectors at equal specificity.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   The brand lockup — the wave band + wordmark (MOTIR-1150)
+   ═══════════════════════════════════════════════════════════════════════
+   Copied from the design asset's own CSS (`design/brand/design-notes.md` §3 ·
+   `design/brand/brand-mark.mock.html` `.brand-lockup`), so the shipped lockup
+   and the approved artwork cannot drift. Consumed by `components/brand/
+   BrandMark.tsx`; every dimension derives from the `--brand-size` a surface
+   sets, and every colour routes through a Tier-3 --el-* token, so the mark
+   follows the theme and a data-palette swap for free (§4).
+
+   ⚠️ THE TYPE PIN. `.brand-word` names `--font-sans-source` — the raw FACE
+   variable — and never `--font-sans`, the ROLE token that the `motir-mono`,
+   `grotesk` and `mono-technical` [data-type] blocks each re-point. The mark is
+   brand; the type axis is chrome; wiring them to the same variable makes the
+   brand re-letter itself when a user picks a type pairing in Appearance (§3,
+   finding #1). */
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--brand-size, 32px) * 0.33);
+  color: var(--el-accent-on-surface);
+  text-decoration: none;
+}
+.brand-glyph {
+  /* Not --el-accent: the two are identical in light and diverge in dark, where
+     --el-accent is the darker FILL built to carry white ink and loses 0.8 of a
+     contrast point as a glyph (§4). */
+  color: var(--el-accent-on-surface);
+  flex: none;
+}
+.brand-word {
+  font-family:
+    var(--font-sans-source, Inter),
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: calc(var(--brand-size, 32px) * 0.72);
+  line-height: 1;
+  color: var(--el-text);
+}
+.brand-stacked {
+  flex-direction: column;
+  gap: calc(var(--brand-size, 32px) * 0.22);
+}
+.brand-inv .brand-glyph,
+.brand-inv .brand-word {
+  color: var(--el-accent-text);
+}
+.brand-quiet .brand-word {
+  color: var(--el-text-secondary);
+  font-weight: 600;
+}
+/* The lockup's prefix ("on Motir") is READ, so it is text WCAG measures — not a
+   decorative glyph. It was `--el-text-faint` (2.61:1 on white), which the ink
+   guard could not see because the colour is declared HERE, in CSS, and the
+   scanner reads JSX class literals. The widened /p/[identifier] sweep measured
+   it (MOTIR-2482). */
+.brand-pre {
+  font-size: calc(var(--brand-size, 32px) * 0.62);
+  color: var(--el-text-secondary);
+  margin-right: calc(var(--brand-size, 32px) * -0.1);
+}
