@@ -1,0 +1,24 @@
+NOTICE — trademarks
+===================
+
+The source code in this package is licensed under GPL-3.0-only. See the
+LICENSE at the root of the repository this package is published from.
+
+THE COPYRIGHT LICENCE CONVEYS NO TRADEMARK RIGHTS.
+
+"Motir" and the Motir wave-band mark — the glyph expressed by `WAVE_BAND_PATH`
+in this package, the wordmark rendered by `BrandMark`, and the lockups they
+compose — are trademarks of moooon B.V. GPL-3.0 grants rights over the code
+that draws them; it grants no permission to use the marks to identify your own
+product, service or organisation, and §7(e) of that licence expressly
+contemplates this reservation. All rights in the marks are reserved.
+
+This package exists so that Motir's own properties can share one source of the
+mark. It is deliberately NOT part of `@motir/design-system`, which is the
+neutral design kit that scaffolded and third-party products install: the design
+system is meant to be built with, and this package is not.
+
+If you are building a product with Motir's design system, install
+`@motir/design-system` and use your own brand assets. If you need to refer to
+Motir — in documentation, an integration listing, or a comparison — ordinary
+nominative use needs no permission from us.

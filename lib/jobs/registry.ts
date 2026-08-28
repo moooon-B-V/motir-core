@@ -47,6 +47,8 @@ import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 import { planTargetLockSweep } from './definitions/planTargetLockSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { jobRunReap } from './definitions/jobRunReap';
+import { dataExportBuild } from './definitions/dataExportBuild';
+import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
@@ -95,5 +97,7 @@ export const jobFunctions = [
   planTargetLockSweep,
   abandonedPlanSweep,
   jobRunReap,
+  dataExportBuild,
+  dataExportExpirySweep,
   accountErasureSweep,
 ];

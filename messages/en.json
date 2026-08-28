@@ -724,6 +724,15 @@
       "fallback": "Or copy this link into your browser:",
       "expires": "This link expires in 1 hour. If you didn't request this, you can ignore this email and your address stays unchanged."
     },
+    "dataExportReady": {
+      "subject": "Your Motir data export is ready",
+      "preview": "Your Motir data export is ready to download",
+      "greeting": "Hi {name},",
+      "lede": "The copy of your Motir data is ready. Open Data & privacy in your account settings to download it.",
+      "open": "Open Data & privacy",
+      "freshLink": "For your security, the file is not attached and there is no download link in this email. Each Download makes a fresh, private link that expires after five minutes.",
+      "retention": "We keep the file for {days} days, then delete it. After that, you can ask for a new export at any time."
+    },
     "mentionNotification": {
       "subject": "{author} mentioned you on {identifier}: {title}",
       "preview": "{author} mentioned you on {identifier}",

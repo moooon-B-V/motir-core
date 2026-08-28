@@ -399,6 +399,25 @@ export interface CiRunnerBootData {
  * job consuming it is 5.1.6; publishing to an event no function subscribes to
  * is a no-op on Inngest's side.)
  */
+/**
+ * The `account/data-export.requested` event payload (Story 8.4 · MOTIR-3701) —
+ * emitted AFTER `requestDataExport`'s transaction commits, so the build job can
+ * never read a row a rollback removed.
+ *
+ * `workspaceId` is `string | null` and always `null` in practice: a personal-data
+ * export is IDENTITY-scoped and spans every workspace the person belongs to, so
+ * it has no single owning tenant. This is the `email.send` carve-out, for the
+ * same reason a password reset has one — and `null` is the value the job_run
+ * row stores, never a `"system"` sentinel (the workspace_id FK would reject it).
+ */
+export interface DataExportRequestedData {
+  workspaceId: string | null;
+  /** Whose data is being exported. Also the job's concurrency key. */
+  userId: string;
+  /** The `data_export_request` row this build records its outcome on. */
+  requestId: string;
+}
+
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'system.attachment-gc': SystemScheduledData;
@@ -439,6 +458,10 @@ export interface JobEventDataMap {
    *  project's auto-plan cadence for good. Cross-tenant by design. */
   'system.abandoned-plan-sweep': SystemScheduledData;
   'system.job-run-reap': SystemScheduledData;
+  /** The personal-data export retention sweep (Story 8.4 · MOTIR-3701) —
+   *  deletes each archive's blob once its seven-day window has run out and
+   *  moves the row to `expired`. Cross-tenant by design. */
+  'system.data-export-expiry-sweep': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;
@@ -449,6 +472,7 @@ export interface JobEventDataMap {
   'system.code-graph-refresh': CodeGraphRefreshData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'public-follow/digest': PublicFollowDigestData;
+  'account/data-export.requested': DataExportRequestedData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;

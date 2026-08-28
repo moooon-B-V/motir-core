@@ -255,3 +255,65 @@ export class AccountDeletionAlreadyCompletedError extends Error {
     this.name = 'AccountDeletionAlreadyCompletedError';
   }
 }
+
+// ── Personal-data-export DELIVERY errors (Story 8.4 · Subtask MOTIR-3703) ──
+// The READ half of `Data › Data & privacy`. Design of record:
+// `design/settings/design-notes.md` → `Data & privacy` → DECISION 2 (the file
+// is handed over in the pane; the email only says it is ready).
+//
+// ⚠️ THREE REFUSALS, THREE TYPES, AND THE SPLIT IS THE POINT. This route hands
+// a private archive of one person's entire account to whoever calls it, so
+// "you may not have this" and "this is not ready yet" and "this is gone" are
+// three different sentences the pane has to render — and collapsing them would
+// either leak the existence of somebody else's export or tell a reader whose
+// window has closed to keep waiting.
+
+/**
+ * The export request does not resolve for the caller: no such row, or a row
+ * belonging to SOMEBODY ELSE.
+ *
+ * ⚠️ ONE TYPE FOR BOTH, deliberately — finding #44's rule, and it matters more
+ * here than anywhere else in the product: a distinguishable "exists but
+ * forbidden" would turn the download route into an oracle that confirms whether
+ * a given id is somebody's personal-data archive.
+ */
+export class DataExportNotFoundError extends Error {
+  readonly code = 'DATA_EXPORT_NOT_FOUND' as const;
+  constructor(id: string) {
+    super(`No data export found for "${id}".`);
+    this.name = 'DataExportNotFoundError';
+  }
+}
+
+/**
+ * The caller's own export exists but is not `ready` — still `preparing`, or
+ * `failed`. Carries the status because the pane renders a different thing for
+ * each (a progress note versus DECISION 2's `privacy@motir.co` route), and the
+ * pane should not have to make a second call to find out which.
+ */
+export class DataExportNotReadyError extends Error {
+  readonly code = 'DATA_EXPORT_NOT_READY' as const;
+  constructor(readonly status: string) {
+    super(`This data export is not ready to download (it is ${status}).`);
+    this.name = 'DataExportNotReadyError';
+  }
+}
+
+/**
+ * The retention window has run out. Raised for a row the sweep has already
+ * marked `expired` AND for one still reading `ready` whose `expiresAt` has
+ * passed — the sweep runs on a schedule, so there is always a window in which
+ * the row is stale and the promise is not.
+ *
+ * ⚠️ NOT folded into {@link DataExportNotReadyError}: *"come back in a moment"*
+ * and *"the file has been deleted, ask for a new one"* are opposite
+ * instructions, and the seven-day promise is only honest if the surface says
+ * plainly when it has elapsed.
+ */
+export class DataExportExpiredError extends Error {
+  readonly code = 'DATA_EXPORT_EXPIRED' as const;
+  constructor() {
+    super('This data export has expired. Request a new one to download your data.');
+    this.name = 'DataExportExpiredError';
+  }
+}

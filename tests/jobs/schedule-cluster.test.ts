@@ -132,13 +132,20 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     //
     // ⚠️ THE COUNT MOVES AS JOBS ARRIVE; THE SHAPE IS WHAT §21 PINS. Bumping this
     // number is the expected maintenance for a new `system.*` cron — what must
-    // NOT move is everything below it. 16 since `system.job-run-reap`
-    // (MOTIR-3683), whose first draft picked `10 4 * * *` and was stopped by the
-    // minute assertion above, exactly as §21 predicts a fifteenth job would be.
-    // 17 since `system.account-erasure-sweep` (MOTIR-3702), which took `0 3 * * *`
-    // — an hour of its own at the FRONT of the nightly cascade, on a minute the
-    // set already wakes on, so the four assertions below are untouched.
-    expect(jobSchedules().length).toBe(17);
+    // NOT move is everything below it. 18 since
+    // `system.account-erasure-sweep` (MOTIR-3702), which took `0 3 * * *` — an
+    // hour of its own at the FRONT of the nightly cascade, on a minute the set
+    // already wakes on. It was 17 since `system.data-export-expiry-sweep`
+    // (MOTIR-3701), at `30 5 * * *`, also already-clustered and also costing no
+    // new wake; and 16 since `system.job-run-reap` (MOTIR-3683), whose first
+    // draft picked `10 4 * * *` and was stopped by the minute assertion above,
+    // exactly as §21 predicts a fifteenth job would be.
+    //
+    // ⚠️ 3701 and 3702 were in flight together and each bumped 16 → 17, so the
+    // MERGE of the two resolved cleanly to a number that was wrong for both.
+    // The count is derivable — `grep -c '^    cron:' lib/jobs/definitions/*.ts`
+    // — so derive it rather than adding one to whatever the branch said.
+    expect(jobSchedules().length).toBe(18);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);
