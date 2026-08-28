@@ -5,9 +5,10 @@
 // source of the three groups, and each group's membership follows from a SOURCE
 // rather than from taste:
 //
-//   deleted    — what is the reader's ALONE: their identity rows, and every
-//                workspace where they are the only member (with the projects and
-//                work items inside).
+//   deleted    — what is the reader's ALONE: their identity rows, every personal-
+//                data export they asked for (Bug MOTIR-3747), and every workspace
+//                where they are the only member (with the projects and work items
+//                inside).
 //   anonymised — what is part of someone ELSE'S project: comments they wrote and
 //                work items they reported or were assigned in a SHARED
 //                workspace. The name comes off; the row stays.
@@ -56,6 +57,29 @@ export interface ErasureDeletedGroupDTO {
   /** `1` when the reader holds a two-factor enrolment row, else `0`. */
   twoFactorEnrolments: number;
   apiTokens: number;
+  /**
+   * Every personal-data export the reader has asked for, whatever its status —
+   * and, for the ones that built, the ARCHIVE each holds (Bug MOTIR-3747).
+   *
+   * ⚠️ IT IS A MEMBER OF THIS GROUP BECAUSE THE ERASURE DELETES IT. MOTIR-3732
+   * widened the sweep to take every `data_export_request` and its blob, and the
+   * ledger is the surface that tells a reader what deletion means: the design's
+   * rule is that *each group's membership follows from a SOURCE rather than
+   * from taste*, so a widening of what erasure DELETES is a widening of this
+   * contract. Held as a FIELD rather than a sentence in the copy precisely so
+   * the obligation is compile-time visible the next time the sweep grows.
+   *
+   * The archive is also the one member of this group that is a complete COPY of
+   * everything the account held, and the same pane routes the reader past the
+   * export on the way to the delete button — so a confirmation that omits it
+   * leaves them guessing whether the copy they were just offered survives.
+   *
+   * Counted over EVERY status: a `preparing` / `failed` / `expired` row carries
+   * no downloadable file, but it still names this person and the erasure still
+   * takes it, so the copy describes what is deleted rather than promising a
+   * download exists.
+   */
+  dataExports: number;
   /** Every workspace where the reader is the ONLY member, by name. */
   soleMemberWorkspaces: ErasureWorkspaceDTO[];
   /** Projects inside those workspaces. */

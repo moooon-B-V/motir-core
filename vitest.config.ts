@@ -249,10 +249,10 @@ export default defineConfig({
         // the reason the substrate is: an account deletion is the most
         // destructive thing a reader can ask for, and the two arms a regression
         // would silently take out — the `P2002` translation and the best-effort
-        // catch around the sign-in cancel — are exactly the ones no happy-path
-        // test exercises.
+        // catch around the post-commit sign-out — are exactly the ones no
+        // happy-path test exercises. (`lib/auth/accountDeletionCancellation.ts`
+        // stood beside it until MOTIR-3742 removed the sign-in cancel.)
         'lib/services/accountDeletionService.ts',
-        'lib/auth/accountDeletionCancellation.ts',
         // Story 8.4 · Subtask MOTIR-3702 — the ERASURE SWEEP that acts on those
         // rows: the vocabulary, the service that performs the three DECISION 3
         // groups, and the cron definition that runs it. All three MEASURED at
@@ -1818,12 +1818,6 @@ export default defineConfig({
         // Story 8.4 · Subtask MOTIR-3700 — both measured at 100 on every axis
         // (see the `include` block's note). 90 is the standard floor.
         'lib/services/accountDeletionService.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 90,
-          statements: 90,
-        },
-        'lib/auth/accountDeletionCancellation.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

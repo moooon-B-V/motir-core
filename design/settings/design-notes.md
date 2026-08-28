@@ -1903,9 +1903,31 @@ follows from a source rather than from taste.
 
 ### Deleted — what is yours alone
 
-Your profile, credentials, passkeys, two-factor enrolment and API tokens; and
-**every workspace where you are the only member**, with the projects and work
-items inside them.
+Your profile, credentials, passkeys, two-factor enrolment and API tokens; **every
+workspace where you are the only member**, with the projects and work items
+inside them; and **every personal-data export you asked for, with the archive
+each one built**.
+
+**Why the archive is a member, and why the enumeration had to be reopened to say
+so (MOTIR-3732 → MOTIR-3747 → MOTIR-3754).** This group's membership is not a
+list somebody wrote down — like the other two, it follows from a SOURCE, and its
+source is _what the erasure sweep actually deletes_. **That source widened after
+this asset was authored**: MOTIR-3732 made erasure remove every export request
+and the file it built, and MOTIR-3747 added the row to the shipped ledger. An
+enumeration that follows from a source is only correct while the source holds
+still, so **widening what erasure REACHES is also a change to what the design of
+record DRAWS** — and this group is the one place a reader is told what deletion
+means.
+
+The archive is also the member that can least afford to be missing. It is the one
+artefact that is a complete copy of everything the account held, and DECISION 2
+deliberately routes the reader PAST the export on the way to this dialog — so a
+ledger that names credentials and workspaces and stays silent about it omits the
+largest thing it is about to destroy. The row is **hidden at zero**, the same rule
+the workspace rows follow (the ledger states what deletion reaches, and a reader
+who never asked for an archive loses none), and its copy names the **archive**
+rather than promising a download exists: a `preparing` / `failed` / `expired`
+request carries no file.
 
 **Why whole workspaces go with the account, and why that is a CHOICE rather than
 a block.** `removeMemberInTx` throws `LastMemberError` when the membership count
@@ -1954,9 +1976,25 @@ would have been the more dangerous choice.
 
 ## DECISION 4 — a 30-day grace period, because here the window is REACHABLE
 
-**Deletion schedules; it does not fire.** The account closes immediately — the
-reader is signed out and the account stops being usable by anyone else — and the
-erasure runs 30 days later. Signing in before then cancels it.
+**Deletion schedules; it does not fire.** Confirming signs every device out — so
+the account is closed as far as any open session is concerned — and the erasure
+runs 30 days later. **Signing back in during those 30 days does NOT cancel it:
+the reader lands on the app-wide banner and cancels from there, or from this
+pane.** Both doors are one press, with no second confirmation.
+
+~~Signing in before then cancels it.~~ **AMENDED 2026-08-28 (MOTIR-3742), struck
+on the record rather than deleted, because it was built from and cited by five
+files across the auth seam, the service, the banner and this asset.** That
+auto-cancel shipped (MOTIR-3700, on
+`session.create.after`) and it contradicted the day-nine paragraph below, which
+is this decision's own argument for the banner: scheduling revokes every
+session, so the reader's next act is a sign-in — and an auto-cancel there took
+the deletion back **before any page rendered**, leaving both drawn doors
+reachable only when that cancel had thrown. It also revoked, silently, the
+deletion of anyone who signed in once to collect the export MOTIR-3703 delivers
+through an authenticated download. The hook is removed;
+`docs/decisions/account-deletion-cancel-path.md` carries the decision, the
+rejected alternative, and what the placement argument is replaced by.
 
 **The product already holds the doctrine that decides this.**
 `docs/decisions/code-graph-index-fleet.md` §14.3 gives a workspace hard-delete
@@ -1964,9 +2002,10 @@ erasure runs 30 days later. Signing in before then cancels it.
 grace period."_ A workspace delete cascades away every surface a user could undo
 into, so a window there would only extend retention.
 
-**An account deletion is the mirror case: signing in IS a surface to undo into.**
-The reader's own credentials are the undo affordance, and they survive until the
-erasure runs. So the same doctrine that refuses a window there requires one here —
+**An account deletion is the mirror case: the reader can get BACK to a surface to
+undo into.** Their own credentials survive until the erasure runs, so signing in
+is the way back to the window — it is not itself the undo. So the same doctrine
+that refuses a window there requires one here —
 and the number is not invented: `content/legal/privacy.md` §6 already promises
 _"we erase or anonymise within 30 days"_, and
 `CODE_GRAPH_RETENTION_WINDOW_DAYS = 30` is the constant the product already
@@ -1980,7 +2019,18 @@ therefore draws **two** doors: this pane, and an **app-wide banner on every page
 carrying the date and a `Cancel deletion` action. A reader who changes their mind
 on day nine will not think to navigate to Settings › Data & privacy to do it, and
 a window they cannot find is the same as no window — which is the §14.3 test,
-applied to its own mirror case.
+applied to its own mirror case. **These two are the ONLY doors, and that is what
+the amendment above buys**: the banner is mounted once in the authed layout, so
+it is on every page the reader lands on whichever way they signed in, and panel 5
+draws the state the product is actually in for all 30 days rather than one it
+reached by erroring.
+
+**What a reader sees, in order.** Confirm → signed out, on `/sign-in` → sign back
+in whenever they like → every page carries the banner with the date and
+`Cancel deletion` → they press it, or day 30 arrives and the erasure runs. The
+account is **scheduled**, not suspended: until the erasure they sign in, their
+workspaces are open, and their team sees no difference, which is what panel 5's
+own copy says.
 
 ## DECISION 5 — the BLOCKED case is the ORGANIZATION, and it is drawn at rest
 
@@ -2021,7 +2071,8 @@ named.
   here.**
 - **The impact COUNTS are a backend read, and they are the second capability this
   surface needs.** The ledger renders _"2 workspaces · 12 projects · 1,483 work
-  items · 214 comments · 96 work items"_, and a destructive flow always has two
+  items · 3 data exports · 214 comments · 96 work items"_, and a destructive flow
+  always has two
   distinct backend capabilities — the **preview/impact read** and the
   **do-the-action write**. MOTIR-1136 owns both; the numbers are not decoration
   and the preview is not free.
@@ -2095,10 +2146,10 @@ is the 58 rem peek surface, which is not a confirmation dialog.
 `Modal.Footer` · `Input` / `FormField` (label + helper) · `Pill`
 (mint / sky / peach / rose) · the callout (info / warn / danger) · `SidebarNav` +
 `SidebarSection` rows · the `.srow` settings-row grammar from the shipped Language
-and Profile panes. Icons are lucide, and the seven this pane adds
+and Profile panes. Icons are lucide, and the nine this pane adds
 (`database` · `users` · `message-square` · `receipt` · `square-kanban` ·
-`building-2` · `hourglass` · `user-x`) are emitted from `lucide-react`'s own
-`__iconNode` rather than drawn by hand.
+`building-2` · `hourglass` · `user-x` · `file-archive`) are emitted from
+`lucide-react`'s own `__iconNode` rather than drawn by hand.
 
 ## i18n
 
@@ -2136,7 +2187,7 @@ does not survive the commit, and a design asset naming a file that does not exis
 sends the next reader looking for nothing.
 
 The token block, the dark block and the 29 shared icon defs are **extracted from
-`two-factor.mock.html`**, never retyped; the eight added icons are generated from
+`two-factor.mock.html`**, never retyped; the nine added icons are generated from
 `lucide-react`'s `__iconNode`:
 
 ```py

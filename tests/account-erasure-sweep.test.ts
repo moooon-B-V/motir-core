@@ -12,6 +12,7 @@ import {
 import { accountDeletionRequestRepository } from '@/lib/repositories/accountDeletionRequestRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { accountDeletionService } from '@/lib/services/accountDeletionService';
+import { accountErasureService } from '@/lib/services/accountErasureService';
 import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 import { commentsService } from '@/lib/services/commentsService';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -402,6 +403,35 @@ describe('DELETED — what is theirs alone', () => {
     // Nobody else's export is touched — this is erasure, not a table sweep.
     expect(await adminDb.dataExportRequest.count({ where: { userId: bystander.id } })).toBe(1);
     expect(blob.store.has(theirs.blobPathname!)).toBe(true);
+  });
+
+  it('tells the LEDGER the same number it deletes — the preview’s count equals `exportsDeleted` (Bug MOTIR-3747)', async () => {
+    // The confirmation ledger's whole claim is that its numbers are what erasure
+    // reaches. The two halves are computed by different code — a `count` in the
+    // preview, a `deleteMany`'s row count in the sweep — over predicates that
+    // could drift apart without either one going red on its own, which is
+    // exactly how the ledger came to be silent about exports in the first place.
+    // So the assertion is the EQUALITY, driven end to end, rather than two
+    // literals agreeing by coincidence.
+    const user = await createTestUser();
+    const bystander = await createTestUser();
+    await giveExport(user.id, 'ready', { withBlob: true });
+    await giveExport(user.id, 'preparing');
+    await giveExport(user.id, 'expired');
+    // Not due, so nothing of theirs is deleted — which keeps the batch's
+    // `exportsDeleted` a number about THIS account.
+    await giveExport(bystander.id, 'ready', { withBlob: true });
+    await scheduleDue(user.id);
+
+    // Read the ledger exactly where a reader meets it: BEFORE confirming.
+    const preview = await accountErasureService.previewAccountErasure(user.id);
+    expect(preview.deleted.dataExports).toBe(3);
+
+    const summary = await accountErasureSweepService.sweep();
+
+    expect(summary.exportsDeleted).toBe(preview.deleted.dataExports);
+    expect(await adminDb.dataExportRequest.count({ where: { userId: user.id } })).toBe(0);
+    expect(await adminDb.dataExportRequest.count({ where: { userId: bystander.id } })).toBe(1);
   });
 
   it('deletes the ARCHIVE only after the erasure transaction has committed', async () => {

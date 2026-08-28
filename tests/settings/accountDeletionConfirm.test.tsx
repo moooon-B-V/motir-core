@@ -54,6 +54,7 @@ function preview(): AccountErasurePreviewDTO {
       passkeys: 2,
       twoFactorEnrolments: 1,
       apiTokens: 3,
+      dataExports: 2,
       soleMemberWorkspaces: [
         { id: 'ws_1', name: 'Personal' },
         { id: 'ws_2', name: 'moooon labs' },
@@ -133,6 +134,36 @@ describe('the ledger — three groups, each with the reason it belongs there', (
     // states these as exceptions, so the ledger names them.
     expect(panel.textContent).toContain('Invoices and tax records');
     expect(panel.textContent).toContain('Backups, until they rotate');
+  });
+
+  // ── The personal-data export (Bug MOTIR-3747) ──────────────────────────────
+  // MOTIR-3732 widened erasure to delete every export request and the archive
+  // each one built; this ledger — the only place a reader is ever told what
+  // deletion means — did not have a field to render it, let alone a row. BOTH
+  // states are asserted, because the row is hidden at zero and a renderer that
+  // is right in one state and wrong in the other is the ordinary way this goes.
+
+  it('names the ARCHIVE in the DELETED group, with the count the preview measured', () => {
+    const panel = (renderModal(), dialog());
+    expect(panel.textContent).toContain('Data exports you asked for');
+    // The copy is about the ARCHIVE — the thing the reader recognises — not the
+    // `data_export_request` row, which means nothing to them.
+    expect(panel.textContent).toContain('a copy of everything this account held');
+    // And it does not promise a download exists: a `preparing` / `failed` /
+    // `expired` request is counted here and carries no file.
+    expect(panel.textContent).not.toMatch(/Download (it|them|your)/);
+
+    // In the DELETED group, not merely somewhere in the dialog — the group is a
+    // verdict, and a row in the wrong one says the opposite of what it means.
+    const deleted = within(panel).getByRole('heading', { name: /Deleted/ }).parentElement!;
+    expect(deleted.textContent).toContain('Data exports you asked for');
+  });
+
+  it('HIDES the export row when the reader has never asked for one', () => {
+    const panel = (renderModal({ deleted: { ...preview().deleted, dataExports: 0 } }), dialog());
+    expect(panel.textContent).not.toContain('Data exports you asked for');
+    // The rest of the group is untouched — hiding one row is not emptying it.
+    expect(panel.textContent).toContain('Your profile and how you sign in');
   });
 
   it('omits the workspace rows entirely when the reader is nobody’s only member', () => {

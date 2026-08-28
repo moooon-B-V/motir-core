@@ -2456,6 +2456,10 @@
               "name": "其中的全部工作内容",
               "desc": "{projects, plural, other {#个项目}}，连同附件与历史记录。"
             },
+            "dataExports": {
+              "name": "你申请过的数据导出",
+              "desc": "{count, plural, other {每一次申请，以及随之生成的归档文件}}——其中是这个账号全部数据的副本。已经下载到本地的文件不受影响。"
+            },
             "comments": {
               "name": "你在他人共享项目中发表的评论",
               "desc": "你的名字会被移除，评论本身会保留——它是他人也参与其中的对话的一部分。"
@@ -5775,6 +5779,11 @@
       "error": "连接 GitHub 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitHub。",
       "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库。",
+      "repos_updated": "仓库访问权限已更新。Motir会读取你在GitHub上选择的仓库，无需再做任何操作。",
+      "install_unbound": "已在GitHub上安装Motir GitHub App，但安装并非从此工作区发起，因此尚未与它关联。请从这里重新发起安装以完成关联。",
+      "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
+      "install_forbidden": "你不是发起此次安装的工作区的成员，因此未连接任何内容。",
+      "install_provider_error": "Motir无法连接GitHub以完成App的关联，请重试。",
       "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。"
     },
     "connect": {

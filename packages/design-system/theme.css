@@ -2416,7 +2416,12 @@
   /* --el-accent is the FILL behind --el-accent-text (white): filled buttons,
      badges, toggles. --el-accent-on-surface is the accent used AS text/icon on
      a page surface. They diverge in dark theme (fill darkens for white-text AA;
-     text stays brand-bright for AA on the near-black canvas) — MOTIR-757. */
+     text stays brand-bright for AA on the near-black canvas) — MOTIR-757.
+     ⚠️ --el-accent-on-surface is OVERRIDDEN in the [data-theme='dark'] block
+     further down: brand-bright-on-the-canvas is not the same claim as AA on the
+     tinted surfaces that sit above it, and the ink was 4.24-4.41:1 on all three
+     for as long as the dark theme has shipped (MOTIR-3745). The light
+     declaration below is unchanged and is what the Tier-0-alias guards read. */
   --el-accent: var(--color-primary-fill);
   --el-accent-text: var(--color-primary-foreground);
   --el-accent-on-surface: var(--color-primary);
@@ -2885,6 +2890,53 @@
    one-shade-darker. */
 [data-theme='dark'] {
   --el-sidebar-item-bg-hover: #222222;
+  /* THE DARK ACCENT INK (MOTIR-3745). Light keeps the plain
+     var(--color-primary) alias declared in the Tier-3 block above, byte for
+     byte — this is a DARK-ONLY lift, and deliberately so: the light accent
+     already clears AA on every surface (6.29:1 on --el-surface-soft in the
+     base palette), so there is nothing there to buy and a re-tint would cost
+     the brand hue for no contrast.
+
+     What it fixes: the dark --color-primary was chosen for AA on the near-black
+     CANVAS (#0f0f0f, 4.67:1 — see the Tier-1 comment at --color-primary, and
+     MOTIR-757) and was never measured against anything else. Every tinted
+     surface in dark sits ABOVE the canvas, so the ink arrives there with less
+     contrast, not more: 4.24:1 on --el-surface / --el-muted (#1a1a1a) and
+     4.41:1 on --el-surface-soft (#161616), across all sixteen --el-* aliases of
+     those three fills. 13.5px semibold is not WCAG large text, so 1.4.3 asks
+     4.5:1 and ExploreTopBar's current-page nav item missed it by 0.09 on
+     /explore and /docs — both public, both reachable signed out.
+
+     Why the mix and not a hex: DERIVED from two tokens, exactly like
+     --el-danger-on-surface above, so it re-skins with data-palette and an
+     eleventh palette is covered the day it lands rather than the day somebody
+     remembers a table.
+
+     Why 82%: it is sized against a WIDER set than the guard measures. On the
+     surface vocabulary the accent arm asserts (the page white and the three
+     greys, every alias) the worst dark pair at 82% is 5.53:1. The binding
+     constraint is --el-tint-lavender — the accent family's own tint, which the
+     arm does not measure but which the tree paints accent text on in ten files:
+     84% is the largest primary share that clears it (4.57:1) and 82% is one
+     2% step further, for headroom (4.68:1). MOTIR-3774 carries the LIGHT half
+     of that pair, which no dark override can reach. Pulling further still would
+     eventually cost the accent its signal rather than buy contrast, so the
+     distance from --el-text is asserted too (22.6-54.5 deltaE, floor 10).
+
+     Why HERE and not on the Tier-3 alias: --el-accent-on-surface's light
+     declaration is a load-bearing Tier-0 ALIAS. tests/theme/
+     iconTextSurfaceTokens + interactionAgileTokens pin --el-icon-active and
+     --el-tabnav-active as zero-change aliases OF it, and brand-tile-contrast
+     resolves it to a --color-* by name. A dark-only override leaves all three
+     reading the base declaration they were written about, and leaves
+     --color-primary's eleven other Tier-3 consumers (plus --focus-ring-color)
+     where they are — including --el-vote-active-bg, which is a FILL and would
+     have LOST contrast against its white ink. Move the ink, not the fill
+     (MOTIR-3664).
+
+     The table is asserted, not asserted-once: inkContrastLint's accent arm
+     recomputes it from this file over every palette x theme. */
+  --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
   /* The modal scrim deepens in dark (MOTIR-1275 · 1266.4): on a near-black
      canvas a 40% scrim barely separates the dialog, so dark uses ~65% — the
      other concrete-hex --el-* alongside the sidebar hover. Light value (40%,

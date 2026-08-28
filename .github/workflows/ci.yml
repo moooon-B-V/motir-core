@@ -63,6 +63,42 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# ── Job time ceilings (MOTIR-3569) ─────────────────────────────────────────────
+#
+# EVERY job below that declares `runs-on` also declares `timeout-minutes`.
+# GitHub's default is 360 minutes, and a job with no bound produces no VERDICT:
+# a running job's logs cannot be downloaded (`BlobNotFound`), so the only
+# readable signal is a step poll that says `in_progress` — which is exactly what
+# a hang says too. On run 32959226187, `Vitest (2/3)` took 47.5 minutes against
+# its siblings' 20 and 22 and PASSED; for 45 of those minutes the honest answer
+# to "when will we know?" was "in up to six hours". MOTIR-2970 paid that budget
+# three times in one afternoon when `playwright install-deps` wedged on an apt
+# mirror, and fixed it at the one call site — the job-level gap it stood on was
+# left open for the next hang anywhere else.
+#
+# ⚠️ A CEILING IS NOT A PERFORMANCE TARGET. It bounds a hang; it must never cut
+# off a slow-but-healthy run. So each number below is derived from the job's
+# OBSERVED duration with generous headroom, stated per job as
+# `observed → ceiling (multiple)`, and every ceiling clears the worst run we
+# have on record. Durations were measured across the four most recent green
+# `ci.yml` runs (33167406878, 33164914867 and their two predecessors) plus the
+# 47.5-minute outlier above; re-measure with
+# `gh api repos/moooon-B-V/motir-core/actions/runs/<id>/jobs` before tightening
+# one. If a job hits its ceiling, the question to ask is whether the work grew
+# or the runner wedged — that is the whole point of having a number.
+#
+# ⚠️ Jobs of a few minutes get a 10-minute FLOOR rather than a tight multiple.
+# At that scale a proportional bound buys nothing (six hours → ten minutes is
+# already the entire saving) and a cold cache or a slow network turns it into a
+# false red — which is a worse trade than a rare ten-minute stall.
+#
+# `sandbox` and `runner-image` carry none, and cannot: they call a reusable
+# workflow, and GitHub does not accept `timeout-minutes` on a `uses:` job. Their
+# ceilings belong in `sandbox-images.yml` / `runner-image.yml` — see MOTIR-3768.
+#
+# `tests/ci-job-timeouts.test.ts` asserts the invariant by re-deriving the job
+# list from this file, so a job added later without a ceiling fails the suite
+# rather than inheriting six hours in silence.
 jobs:
   # ── What the diff can actually reach (MOTIR-3148) ───────────────────────────
   #
@@ -88,6 +124,9 @@ jobs:
   changes:
     name: What changed
     runs-on: ubuntu-latest
+    # Observed 0.4–2.4 min → 10 (~4x). Ten is the floor every short job
+    # gets; see the ceilings block above.
+    timeout-minutes: 10
     # Reads the diff, writes two booleans. Nothing else.
     permissions:
       contents: read
@@ -174,6 +213,9 @@ jobs:
   lint:
     name: Lint + Prettier
     runs-on: ubuntu-latest
+    # Observed 2.9–4.3 min → 15 (~3.5x). Prettier over the whole tree is the
+    # variable half, so this one is sized on a multiple rather than the floor.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -219,6 +261,8 @@ jobs:
   structural-guards:
     name: Structural guards
     runs-on: ubuntu-latest
+    # Observed 1.4–2.0 min → 10 (~5x, the short-job floor).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -241,6 +285,8 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
+    # Observed 2.0–2.6 min → 10 (~4x, the short-job floor).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -272,6 +318,8 @@ jobs:
   design-system:
     name: Design-system package
     runs-on: ubuntu-latest
+    # Observed 1.1–1.3 min → 10 (~8x, the short-job floor).
+    timeout-minutes: 10
     # The @motir/design-system package ships its own vitest suite (registries,
     # apply API, render, and the RSC-safe-barrel guard) that the root Vitest lane
     # does NOT run — its `include` globs only `tests/**`. Run it here so the
@@ -304,6 +352,8 @@ jobs:
   cli:
     name: CLI package
     runs-on: ubuntu-latest
+    # Observed 1.3–1.6 min → 10 (~6x, the short-job floor).
+    timeout-minutes: 10
     # Same gap as the design-system job above: `@motir/cli`'s own vitest suite
     # (config stores, link resolution, dispatch, the client core, the agent
     # profile table, and the 7.9.7a sandbox-image invariants) lives at
@@ -365,6 +415,8 @@ jobs:
   design-guards:
     name: Design asset guards
     runs-on: ubuntu-latest
+    # Observed 1.1–1.4 min → 10 (~7x, the short-job floor).
+    timeout-minutes: 10
     permissions:
       contents: read
       # The design-result publish authenticates KEYLESSLY off this job's GitHub
@@ -457,6 +509,10 @@ jobs:
   build:
     name: Next.js build
     runs-on: ubuntu-latest
+    # Observed 3.6–4.5 min → 15 (~3.3x). `next build` grows with the app and
+    # is the one short job whose normal duration has moved, so it gets a
+    # multiple rather than the floor.
+    timeout-minutes: 15
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
@@ -570,6 +626,16 @@ jobs:
     # job below to avoid cross-shard merge complexity.
     name: Vitest (${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
+    # Observed 20.1–24.9 min across three shards and four green runs → 75
+    # (~3x the slowest ordinary shard). ⚠️ THE MULTIPLE IS NOT THE BINDING
+    # CONSTRAINT HERE — the outlier is. `Vitest (2/3)` ran 47.5 minutes on run
+    # 32959226187 and PASSED, with every CPU-bound phase the same or faster
+    # than the 19-minute run before it and the entire delta inside test
+    # execution: an environment effect, never root-caused, and explicitly not
+    # this job's to fix. 75 clears that run by 1.6x, so it would still have
+    # passed. 45 — the number `e2e` uses — would have FAILED it, which is the
+    # reason this ceiling is not simply copied from the lane next door.
+    timeout-minutes: 75
     needs: changes
     # Skip the integration suite when the diff touches only documentation,
     # design assets or plan-seed data — none of them reach app code, services
@@ -662,6 +728,9 @@ jobs:
   coverage:
     name: Vitest coverage
     runs-on: ubuntu-latest
+    # Observed 1.1–1.3 min → 10 (~8x, the short-job floor). It only merges the
+    # shards' reports; the measuring is done by `test`.
+    timeout-minutes: 10
     if: ${{ needs.changes.outputs.app == 'true' }}
     needs: [test, changes]
     env:
@@ -972,6 +1041,9 @@ jobs:
   e2e-at-scale:
     name: Playwright E2E at-scale (${{ matrix.id }})
     runs-on: ubuntu-latest
+    # Observed 5.2–9.9 min across the four at-scale legs → 45 (~4.5x), the same
+    # number `e2e` carries and for the same reason: these legs share that job's
+    # setup, so they share its wedge.
     timeout-minutes: 45
     permissions:
       contents: read
@@ -1453,6 +1525,10 @@ jobs:
         deploy,
       ]
     runs-on: ubuntu-latest
+    # Observed <0.1 min → 10 (the short-job floor). It reads the `needs`
+    # context and exits. The clock starts when the job STARTS, so waiting for
+    # fifteen other jobs costs it nothing.
+    timeout-minutes: 10
     # Reads nothing, writes nothing — it only inspects the `needs` context.
     permissions: {}
     steps:

@@ -27,7 +27,8 @@ import { warmPool } from './helpers/warmPool';
 // The sibling suite `account-erasure-preview.test.ts` covers the READ half; this
 // is the WRITE. Design of record: `design/settings/design-notes.md` →
 // `Data & privacy` → DECISION 4 (deletion SCHEDULES, it does not fire; the
-// window is 30 days; signing in cancels it) and DECISION 5 (the block is the
+// window is 30 days; signing back in does NOT cancel it — the reader lands on
+// the app-wide banner and cancels there) and DECISION 5 (the block is the
 // ORGANIZATION).
 //
 // Five things this suite pins, and three of them are properties of HOW rather
@@ -39,8 +40,10 @@ import { warmPool } from './helpers/warmPool';
 //      second request, a cancel with nothing open, a cancel after the erasure;
 //   3. the RACE: two simultaneous schedules leave ONE row and the loser is told
 //      so in the domain's own words, not in Prisma's;
-//   4. the SEAM: signing in cancels, asserted through `auth.api.signInEmail`
-//      rather than by calling the service — the placement is the property;
+//   4. the SEAM: signing in leaves an open request STANDING, asserted through
+//      `auth.api.signInEmail` rather than by reading the service — the absence
+//      of a per-path behaviour is the property, and it has to be measured on
+//      the paths (MOTIR-3742; it asserted the opposite until then);
 //   5. the SHAPE: the sign-out is a post-commit side effect, so it is NOT in the
 //      transaction that decides the deletion, and its failure does not undo one.
 
@@ -542,6 +545,7 @@ describe('the defensive arms — what is NOT translated, and what is', () => {
         passkeys: 0,
         twoFactorEnrolments: 0,
         apiTokens: 0,
+        dataExports: 0,
         soleMemberWorkspaces: [],
         projects: 0,
         workItems: 0,
@@ -565,22 +569,51 @@ describe('the defensive arms — what is NOT translated, and what is', () => {
   });
 });
 
-describe('signing in cancels it — the seam, not the service', () => {
-  it('cancels an open request on a successful sign-in, through the session path', async () => {
+describe('signing in leaves it STANDING — the seam, not the service', () => {
+  // ⚠️ AMENDED, NOT REPLACED (MOTIR-3742). Until this card these four tests
+  // asserted the OPPOSITE — that a successful sign-in cancelled an open
+  // request, through `cancelDeletionOnSignIn` on `session.create.after`
+  // (MOTIR-3700). They were correct about the behaviour that shipped and the
+  // behaviour was wrong: composed with the sign-out `scheduleAccountDeletion`
+  // performs, the cancel fired before any page rendered, so the two cancel
+  // doors the design DRAWS (MOTIR-3704) were reachable only when the cancel
+  // itself had thrown — and anyone signing in once to collect the export
+  // MOTIR-3703 delivers lost their deletion silently. The hook is removed;
+  // `docs/decisions/account-deletion-cancel-path.md` is the record. Each test
+  // below keeps its original subject and inverts its expectation, so the
+  // reversal is legible here rather than being a hole in the file's history.
+
+  it('leaves an open request `scheduled` across a successful sign-in, through the session path', async () => {
     const user = await createTestUser();
     await accountDeletionService.scheduleAccountDeletion(user.id);
     expect(at(await requestsOf(user.id)).status).toBe('scheduled');
 
-    // ⚠️ THROUGH `auth.api.signInEmail`, NOT through the service. The card asks
-    // for this end-to-end because the risk is the PLACEMENT: a cancel that
-    // works when called directly proves nothing about whether signing in
-    // reaches it.
+    // ⚠️ THROUGH `auth.api.signInEmail`, NOT through the service — for the same
+    // reason the original did it this way, now pointed the other way: what is
+    // under test is that NO sign-in path takes the deletion back, and a service
+    // that is never called proves nothing about the paths that could call it.
     await auth.api.signInEmail({ body: { email: user.email, password: TEST_PASSWORD } });
 
     const rows = await requestsOf(user.id);
     expect(rows).toHaveLength(1);
-    expect(at(rows).status).toBe('cancelled');
-    expect(at(rows).cancelledAt).not.toBeNull();
+    expect(at(rows).status).toBe('scheduled');
+    expect(at(rows).cancelledAt).toBeNull();
+  });
+
+  it('and the reader is signed in while it stands — the state the banner renders', async () => {
+    // The composition this card was filed about. Scheduling revokes every
+    // session, so the reader's next act is a sign-in; what they must arrive at
+    // is a LIVE session holding an OPEN request, which is exactly what
+    // `AccountDeletionBanner`'s `findOpenDeletion` reads on every authed
+    // request. Before MOTIR-3742 this state existed only after a thrown cancel.
+    const user = await createTestUser();
+    await accountDeletionService.scheduleAccountDeletion(user.id);
+    expect(await sessionRepository.countByUserId(user.id)).toBe(0);
+
+    await auth.api.signInEmail({ body: { email: user.email, password: TEST_PASSWORD } });
+
+    expect(await sessionRepository.countByUserId(user.id)).toBeGreaterThan(0);
+    expect(await accountDeletionService.findOpenDeletion(user.id)).not.toBeNull();
   });
 
   it('leaves an ordinary sign-in alone — nothing scheduled, nothing written', async () => {
@@ -591,7 +624,7 @@ describe('signing in cancels it — the seam, not the service', () => {
     expect(await requestsOf(user.id)).toHaveLength(0);
   });
 
-  it('does not resurrect a `completed` erasure, and does not fail the sign-in over it', async () => {
+  it('does not disturb a `completed` erasure either, and does not fail the sign-in over it', async () => {
     const user = await createTestUser();
     await accountDeletionService.scheduleAccountDeletion(user.id);
     const row = at(await requestsOf(user.id));
@@ -607,38 +640,34 @@ describe('signing in cancels it — the seam, not the service', () => {
     expect(at(await requestsOf(user.id)).status).toBe('completed');
   });
 
-  it('⚠️ does not fail the sign-in when the cancel itself throws', async () => {
-    // Better-Auth runs `create.after` once the session is durable, so a throw
-    // here cannot un-create it — it would only 500 a person who is, at that
-    // moment, trying to rescue their account. The failure degrades to one extra
-    // screen: they are signed in, the request is still `scheduled`, and
-    // MOTIR-3704's app-wide banner offers `Cancel deletion` on every page.
-    const user = await createTestUser();
-    await accountDeletionService.scheduleAccountDeletion(user.id);
-    const spy = vi
-      .spyOn(accountDeletionService, 'cancelAccountDeletionIfScheduled')
-      .mockRejectedValue(new Error('deletion store unreachable'));
-    try {
-      await expect(
-        auth.api.signInEmail({ body: { email: user.email, password: TEST_PASSWORD } }),
-      ).resolves.toBeDefined();
-
-      expect(at(await requestsOf(user.id)).status).toBe('scheduled');
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it('hangs off `session.create.after` — the ONE seam every sign-in path ends at', () => {
-    // A structural assertion, for the reason `accountSuspension.test.ts` gives
-    // for its twin: every alternative placement BEHAVES correctly for the path
-    // it covers. A cancel moved onto `signInEmail` passes every behavioural
-    // test above and leaves a deletion standing for somebody who came back
-    // through Google or through `motir login` — and they would then be erased
-    // on day 30 having signed in and seen the product working.
+  it('⚠️ hangs NOTHING off `session.create.after` — the structural half, inverted', () => {
+    // The original asserted the PLACEMENT, for the reason `accountSuspension`'s
+    // twin gives: every alternative placement behaves correctly for the path it
+    // covers, so behaviour cannot pin it. The inverse needs the same
+    // instrument. A cancel re-added to `signInEmail`, to the Google callback or
+    // to the device grant would pass every behavioural test above — each drives
+    // ONE path — and would silently restore the defect on the others.
     const source = readFileSync('lib/auth/index.ts', 'utf8');
-    expect(source).toMatch(/session:\s*\{\s*create:\s*\{[\s\S]*?after:/);
-    expect(source).toContain('cancelDeletionOnSignIn(session.userId)');
+
+    // No cancel is CALLED from the auth wiring at all — asserted on the call
+    // form, so the prose above the hook may name what was removed.
+    expect(source).not.toMatch(/cancelDeletionOnSignIn\s*\(/);
+    expect(source).not.toMatch(/cancelAccountDeletion\w*\s*\(/);
+    expect(source).not.toContain("from '@/lib/auth/accountDeletionCancellation'");
+
+    // …and `session.create` carries no `after` arm for one to be re-added to.
+    // Sliced rather than regexed across the whole file: `user.create.after`
+    // exists two blocks down and legitimately stays.
+    const sessionHooks = source.slice(
+      source.indexOf('    session: {'),
+      source.indexOf('    user: {'),
+    );
+    expect(sessionHooks).toContain('create: {');
+    expect(sessionHooks).not.toMatch(/^\s*after:/m);
+
+    // `session.create.before` still carries the SUSPENSION guard, which is a
+    // different thing and stays: a scheduled deletion is not a suspension.
+    expect(sessionHooks).toContain('assertAccountNotSuspended(session.userId)');
   });
 });
 
