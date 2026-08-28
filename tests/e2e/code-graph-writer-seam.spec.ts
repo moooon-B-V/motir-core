@@ -23,8 +23,7 @@
 // that fails loudly if anything ever tries to fetch the archive in-process.
 
 import { expect, test } from '@playwright/test';
-import { resetDatabase, adminDb } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
 import { postSignedWebhook } from './_helpers/github-seed';
 import {
@@ -44,10 +43,7 @@ test.describe.configure({ timeout: 180_000 });
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
-  await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
-  );
+  await truncateJobTables();
   await adminDb.fleetInFlightSlot.deleteMany({});
 });
 

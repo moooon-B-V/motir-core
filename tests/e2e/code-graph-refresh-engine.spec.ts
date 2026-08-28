@@ -30,8 +30,7 @@
 // anything fetches bytes in-process. No new webServer entry and no new service.
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { resetDatabase, adminDb } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
 import { postSignedWebhook } from './_helpers/github-seed';
 import { killJobWorker, startJobWorker } from './_helpers/job-worker-process';
@@ -62,10 +61,7 @@ test.describe.configure({ timeout: 240_000, mode: 'serial' });
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
-  await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
-  );
+  await truncateJobTables();
   await adminDb.fleetInFlightSlot.deleteMany({});
 });
 

@@ -41,8 +41,7 @@
 // RATCHETS singleton statements under `tests/e2e/**` and that ratchet only falls.
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, adminDb } from './_helpers/db-reset';
-import { truncateJobRuns } from '@/tests/helpers/db';
+import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
 import { waitForEmail, emailsTo } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
 import { signIn } from './_helpers/shell-session';
@@ -69,10 +68,7 @@ interface Tenant {
 
 test.beforeEach(async () => {
   await resetDatabase();
-  await truncateJobRuns();
-  await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
-  );
+  await truncateJobTables();
   await clearEmailFault();
   // The fast lane PLUS `email.send`, because the watcher notification's
   // deliverable is an email and the chain has to be on one lane end to end.
