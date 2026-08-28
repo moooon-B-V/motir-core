@@ -225,35 +225,89 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
-  // ── MOTIR-3059: the design step that closes the loop ──────────────────────
+  // ── MOTIR-3059, REWRITTEN BY MOTIR-3783: the design step that closes the loop
   //
-  // The gap this pins is specific: the design result is published by CI, from a
-  // step that SHARES a job with the design-asset guards and runs after them — so
-  // a guard failure skips it silently. The run sees a green pull request and the
-  // card stays empty, which has happened (MOTIR-2413, filed as MOTIR-2981). That
-  // fix was a change to the human runbook; the agent reads THIS file.
-  describe('WHAT_TO_DO.design tells the agent to confirm the publish', () => {
+  // MOTIR-3059 pinned a CONFIRMATION: the result was published by CI from a step
+  // sharing a job with the design-asset guards, so a guard failure skipped it
+  // silently and the agent's job was to notice (MOTIR-2413 / MOTIR-2981).
+  //
+  // ⚠️ THAT WHOLE FRAME IS GONE. MOTIR-3780 moved the publish from a CI script to
+  // the `publish_design_result` tool, because a script has to BE PRESENT in the
+  // repository the design lands in and that was true of exactly one of the four.
+  // So the agent no longer confirms somebody else's publish — it MAKES the
+  // publish, and the step is written in `linkingStep`'s register: a named tool
+  // with named arguments, no conditional, no route names, no job log.
+  //
+  // The failure MODE the old step existed for is unchanged and is why the
+  // absence assertions below matter: a design card whose result never arrives
+  // still looks exactly like one that succeeded.
+  describe('WHAT_TO_DO.design tells the agent to PUBLISH the result', () => {
     const designPrompt = (): string =>
       assembleDispatchPrompt(source({ type: 'design', executor: 'coding_agent' })).prompt;
 
-    it('names the CHECK before the action — not "publish it", but "confirm it arrived"', () => {
+    it('names the TOOL and its arguments — the register `linkingStep` set', () => {
       const prompt = designPrompt();
-      expect(prompt).toContain('CONFIRM the design result reached the work item');
-      // The log line is what makes the check performable rather than vague.
-      expect(prompt).toContain('Published N design artifact(s)');
-      // …and WHY it can be absent, so the agent knows this is a real case and
-      // not a formality.
-      expect(prompt).toContain('SKIPPED when the guards fail');
+      expect(prompt).toContain('publish_design_result');
+      // Named arguments, not a description of a payload: this is the exact
+      // asymmetry MOTIR-3783 was filed about. The old step named three HTTP
+      // routes in prose and supplied no base URL, no credential and no request
+      // shape, so its "publish it yourself" fallback was uncallable.
+      for (const arg of ['mock', 'image', 'note_file', 'noteMd']) {
+        expect(prompt, `the design step omits the \`${arg}\` argument`).toContain(arg);
+      }
     });
 
-    it('names the SHIPPED publisher, never the general attach tool', () => {
+    it('the publish is the STEP, not a fallback behind a conditional', () => {
       const prompt = designPrompt();
-      expect(prompt).toContain('design-evidence');
-      // ⚠️ The general door would put the .png in the ATTACHMENTS panel while CI
-      // puts it in the Design result panel — one artifact, two surfaces. The
-      // which-door rule is docs/decisions/attachment-api-door.md §3, and this is
-      // where an agent would otherwise pick the wrong one.
-      expect(prompt).not.toContain('attach_file');
+      expect(prompt).toContain('PUBLISH the design result');
+      // The old wording made the agent's own publish an exception reached by
+      // failing to find a log — which, in a repository with no lane, was the
+      // only path, arrived at by looking for something that was never coming.
+      expect(prompt).not.toContain('If it is not there');
+      expect(prompt).not.toContain('CONFIRM the design result reached the work item');
+    });
+
+    it('⚠️ ABSENCE: no retired CI string can creep back in a later edit', () => {
+      // A guard on absence, not only on presence (MOTIR-3783 AC 5). Every string
+      // here names a mechanism that will not exist once the retirement story
+      // lands, and each would send an agent to look for something that is gone.
+      const prompt = designPrompt();
+      for (const retired of [
+        'design-asset guards',
+        'Published N design artifact(s)',
+        'SKIPPED when the guards fail',
+        'upload-token',
+        'design-evidence',
+        'job log',
+      ]) {
+        expect(prompt, `the design step still names the retired \`${retired}\``).not.toContain(
+          retired,
+        );
+      }
+    });
+
+    it('still never routes a design asset through the general attach door', () => {
+      // ⚠️ Unchanged in force, and now with a second reason. The general door
+      // would put the .png in the ATTACHMENTS panel while this publishes to the
+      // Design result panel — one artifact, two surfaces
+      // (docs/decisions/attachment-api-door.md §3) — and `attach_file` refuses
+      // `text/html` outright, so the mock could not travel that way at all.
+      expect(designPrompt()).not.toContain('attach_file');
+    });
+
+    it('says WHICH note sections to send, and why not the whole file', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('SECTIONS');
+      expect(prompt).toContain('never the whole note');
+    });
+
+    it('keeps the silent-failure warning, RETARGETED at the un-made call', () => {
+      // The most valuable sentence the old step carried, and the one most likely
+      // to be swept out as CI-era residue: the risk did not disappear with CI,
+      // it MOVED. An agent that simply forgets produces the identical symptom.
+      const prompt = designPrompt();
+      expect(prompt).toContain('looks exactly like one that succeeded');
+      expect(prompt).toContain('card empty');
     });
 
     it('keeps the repository the source of truth', () => {
@@ -269,7 +323,7 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       const prompt = designPrompt();
       expect(prompt).toContain('Stop at the asset. A design is reviewed before anything is built');
       expect(prompt.indexOf('Stop at the asset')).toBeLessThan(
-        prompt.indexOf('CONFIRM the design result'),
+        prompt.indexOf('PUBLISH the design result'),
       );
     });
 
@@ -280,7 +334,7 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
         const { prompt } = assembleDispatchPrompt(
           source({ type: 'design', executor: 'coding_agent', sessionBranch }),
         );
-        expect(prompt).toContain('CONFIRM the design result reached the work item');
+        expect(prompt).toContain('PUBLISH the design result');
       }
     });
 
@@ -290,7 +344,7 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       for (const type of Object.keys(MARKERS) as WorkItemTypeDto[]) {
         if (type === 'design') continue;
         const { prompt } = assembleDispatchPrompt(source({ type, executor: 'coding_agent' }));
-        expect(prompt).not.toContain('CONFIRM the design result');
+        expect(prompt).not.toContain('PUBLISH the design result');
       }
     });
   });
