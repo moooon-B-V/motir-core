@@ -53,7 +53,7 @@ const SIX_HOURS_LATER = new Date(Date.UTC(2026, 7, 25, 9, 30, 0));
 /**
  * A scheduler over a FIXTURE definition set, so a case can pin a cadence and a
  * disposition without depending on which real job happens to declare them. The
- * ids are real ones, because `routedToEngine` and the ledger both key on the id.
+ * ids are real ones, because the registry and the ledger both key on the id.
  */
 function schedulerOver(defs: EngineJobDefinition[], now: Date): JobScheduler {
   const s = new JobScheduler({ scheduledJobs: () => defs, now: () => now, logger: silent });

@@ -47,6 +47,8 @@ import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 import { planTargetLockSweep } from './definitions/planTargetLockSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { jobRunReap } from './definitions/jobRunReap';
+import { dataExportBuild } from './definitions/dataExportBuild';
+import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -108,4 +110,6 @@ export const jobDefinitions = [
   planTargetLockSweep,
   abandonedPlanSweep,
   jobRunReap,
+  dataExportBuild,
+  dataExportExpirySweep,
 ];
