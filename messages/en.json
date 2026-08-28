@@ -2363,7 +2363,7 @@
           "what": {
             "profile": {
               "name": "Your profile and account",
-              "desc": "Name, email, avatar, language and appearance preferences, sign-in methods, the sessions and API tokens you hold (their names and scopes — never their secrets).",
+              "desc": "Name, email, avatar, language and appearance preferences, sign-in methods, the sessions and tokens you hold (their names and scopes — never their secrets).",
               "value": "JSON"
             },
             "workspaces": {
