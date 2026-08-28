@@ -36,6 +36,21 @@ import { SHORTCUTS } from '@/lib/shortcuts';
  * </AppLayout>
  */
 export interface AppLayoutProps {
+  /**
+   * An app-wide notice pinned ABOVE the top bar, on every signed-in route.
+   *
+   * A slot rather than a fixed overlay, so the bar participates in the shell's
+   * flex column: the root is `h-dvh overflow-hidden`, so anything rendered as a
+   * SIBLING of this frame would push it past the viewport, and anything
+   * `fixed` would sit on top of the nav rather than above it. Given a node, the
+   * two rows below simply become three.
+   *
+   * Its first consumer is the account-deletion banner (MOTIR-3704), which
+   * design DECISION 4 requires on every page — *"a grace period is only
+   * reachable if the reader can find it"*. Data-agnostic like every other slot:
+   * this component knows nothing about what a banner says or when there is one.
+   */
+  banner?: ReactNode;
   /** Full-width top bar (workspace switcher, search, theme, avatar, hamburger). */
   topNav: ReactNode;
   /** The persistent rail, shown `≥md`. Typically a `<Sidebar />`. */
@@ -44,7 +59,7 @@ export interface AppLayoutProps {
   className?: string;
 }
 
-export function AppLayout({ topNav, sidebar, children, className }: AppLayoutProps) {
+export function AppLayout({ banner, topNav, sidebar, children, className }: AppLayoutProps) {
   const [collapsed, , toggleCollapsed] = useSidebarCollapsed();
 
   // ⌘\ (Mac) / Ctrl+\ — toggle the rail from anywhere in the shell. Combo comes
@@ -88,6 +103,11 @@ export function AppLayout({ topNav, sidebar, children, className }: AppLayoutPro
       >
         Skip to content
       </a>
+
+      {/* `shrink-0` for the same reason the nav has it: the frame is a fixed-
+          height flex column, so a banner that could shrink would be squeezed
+          out by a tall page instead of holding its row. */}
+      {banner ? <div className="shrink-0">{banner}</div> : null}
 
       <div className="shrink-0">{topNav}</div>
 

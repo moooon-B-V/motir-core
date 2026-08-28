@@ -36,6 +36,7 @@ import { ThemeToggle } from './_components/ThemeToggle';
 import { BuildInPublicButton } from './_components/build-in-public/BuildInPublicButton';
 import { BuildingInPublicHeaderLink } from './_components/build-in-public/BuildingInPublicHeaderLink';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+import { AccountDeletionBanner } from './_components/AccountDeletionBanner';
 import {
   isWorkspaceTierRevealed,
   scopeWorkspacesToActiveOrg,
@@ -333,6 +334,17 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 activeProjectId={activeProject?.id ?? null}
               >
                 <AppLayout
+                  /* THE APP-WIDE DELETION BANNER (MOTIR-3704) — design
+                     DECISION 4's second cancel door, mounted ONCE here rather
+                     than per page, because *"a grace period is only reachable
+                     if the reader can find it"* and a reader who changes their
+                     mind on day nine opens the app, not Settings › Data &
+                     privacy. It renders `null` for the overwhelming majority of
+                     requests (no open deletion request), and it is a SERVER
+                     component so that a cancel from EITHER door clears it on a
+                     `router.refresh()` — see its own file for why an island
+                     seeded at mount could not do that. */
+                  banner={<AccountDeletionBanner userId={session.user.id} />}
                   topNav={
                     <TopNav
                       activeOrg={activeOrg}

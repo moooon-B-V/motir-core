@@ -44,9 +44,21 @@ export interface DataExportCardProps {
   request: DataExportRequestDTO | null;
   /** Where the "it's ready" notification goes — the reader's own address. */
   email: string;
+  /**
+   * Replaces the idle head's standing pitch (MOTIR-3704, panel 5). The ONE
+   * caller is the scheduled state, where the pitch is no longer the honest
+   * line: with an erasure dated, the reason to export is that after that date
+   * there is nothing left to. Only the IDLE copy moves — every request state
+   * still reports what that row is doing.
+   */
+  idleSubtitle?: string;
 }
 
-export function DataExportCard({ request: initialRequest, email }: DataExportCardProps) {
+export function DataExportCard({
+  request: initialRequest,
+  email,
+  idleSubtitle,
+}: DataExportCardProps) {
   const t = useTranslations('settings.account.data.export');
   const locale = useLocale() as Locale;
   const { toast } = useToast();
@@ -88,7 +100,7 @@ export function DataExportCard({ request: initialRequest, email }: DataExportCar
           <div className="min-w-0">
             <h3 className="font-sans text-base font-semibold text-(--el-text)">{t('title')}</h3>
             <p className="mt-0.5 max-w-[54ch] font-sans text-sm text-(--el-text-muted)">
-              {headline(t, request, locale)}
+              {headline(t, request, locale, idleSubtitle)}
             </p>
           </div>
           {request === null ? null : <StatusPill status={request.status} t={t} />}
@@ -114,8 +126,13 @@ export function DataExportCard({ request: initialRequest, email }: DataExportCar
 type T = ReturnType<typeof useTranslations<'settings.account.data.export'>>;
 
 /** The head's subtitle — the standing pitch when idle, the state's line otherwise. */
-function headline(t: T, request: DataExportRequestDTO | null, locale: Locale): string {
-  if (request === null) return t('subtitle');
+function headline(
+  t: T,
+  request: DataExportRequestDTO | null,
+  locale: Locale,
+  idleSubtitle?: string,
+): string {
+  if (request === null) return idleSubtitle ?? t('subtitle');
   switch (request.status) {
     case 'preparing':
       return t('preparing.headline', { requested: formatDateTime(request.requestedAt, locale) });

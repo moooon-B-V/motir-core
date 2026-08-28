@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Building2, TriangleAlert, Trash2 } from 'lucide-react';
+import { Building2, TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button, buttonVariants } from '@/components/ui/Button';
+import { buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
-import type { ErasureBlockingOrganizationDTO } from '@/lib/dto/accountErasure';
+import type { AccountErasurePreviewDTO } from '@/lib/dto/accountErasure';
 import { ACCOUNT_ERASURE_WINDOW_DAYS } from '@/lib/users/dataSubjectRequests';
 import { SettingsCallout } from './SettingsCallout';
+import { DeleteAccountTrigger } from './DeleteAccountTrigger';
 
 // The "Delete your account" card on the Account › Data & privacy pane (Story 8.4
 // · Subtask MOTIR-1136), built to `design/settings/account-data.mock.html`
@@ -24,24 +25,38 @@ import { SettingsCallout } from './SettingsCallout';
 // A SERVER COMPONENT: everything it draws is a function of that preview, and it
 // holds no state of its own.
 //
-// ⚠️ WHAT IT DOES NOT OWN — THE CONFIRMATION. The unblocked control opens the
-// deleted / anonymised / kept ledger, and that modal (with the scheduled state
-// and the app-wide cancel banner) is MOTIR-3704's surface, which this card
-// blocks. So the control here is DRAWN and NOT WIRED, deliberately: the ledger
-// is what makes an irreversible write safe to reach, and giving the write a door
-// before the confirmation that gates it exists would be exactly backwards.
+// ⚠️ THE CONFIRMATION IS NOW WIRED (MOTIR-3704). This card shipped with the
+// control DRAWN AND NOT WIRED, deliberately — *"the ledger is what makes an
+// irreversible write safe to reach, and giving the write a door before the
+// confirmation that gates it exists would be exactly backwards."* The ledger
+// has landed, so the control opens it: `DeleteAccountTrigger` is the one small
+// client island (the dialog's open state), and everything this card draws
+// remains a pure function of the preview.
+//
+// It still owns NO write. The schedule call is the modal's, through
+// `_account-deletion-actions.ts`, and the SCHEDULED state is a different card
+// entirely (`AccountDeletionScheduledCard`) — the pane renders one or the
+// other, never this one with a deletion already pending.
 
 export interface DeleteAccountCardProps {
   /**
-   * `true` exactly when the reader is the last owner of an organization other
-   * people belong to — MOTIR-3699's `previewAccountErasure().blocked`.
+   * MOTIR-3699's impact preview, whole. Its `blocked` / `blockingOrganization`
+   * decide what this card draws at rest; the three groups are what the
+   * confirmation ledger renders once the reader opens it.
    */
-  blocked: boolean;
-  /** The organization doing the blocking, when one is. */
-  blockingOrganization: ErasureBlockingOrganizationDTO | null;
+  preview: AccountErasurePreviewDTO;
+  /** The reader's own address — the ledger's subject and its type-to-confirm. */
+  email: string;
+  /** Server-computed `erasureDueAt(now)`; see the modal's clock note. */
+  projectedErasureDueAt: string;
 }
 
-export async function DeleteAccountCard({ blocked, blockingOrganization }: DeleteAccountCardProps) {
+export async function DeleteAccountCard({
+  preview,
+  email,
+  projectedErasureDueAt,
+}: DeleteAccountCardProps) {
+  const { blocked, blockingOrganization } = preview;
   const t = await getTranslations('settings.account.data.delete');
 
   // `blocked` and the organization row are the same fact read twice, so trust
@@ -124,14 +139,13 @@ export async function DeleteAccountCard({ blocked, blockingOrganization }: Delet
               {block === null ? t('rowDesc') : t('blocked.disabledReason')}
             </div>
           </div>
-          <Button
-            variant="danger"
-            size="sm"
+          <DeleteAccountTrigger
+            label={t('cta')}
             disabled={block !== null}
-            leftIcon={<Trash2 className="h-4 w-4" />}
-          >
-            {t('cta')}
-          </Button>
+            preview={preview}
+            email={email}
+            projectedErasureDueAt={projectedErasureDueAt}
+          />
         </div>
       </div>
     </Card>
