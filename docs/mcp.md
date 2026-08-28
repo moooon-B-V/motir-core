@@ -1188,6 +1188,17 @@ MOTIR-3659 shipped the delivery-set gate but deliberately left the readers on
 the column, so that the question had one source while both were written. See
 ADR `docs/decisions/work-item-delivery-links.md` Q2.)
 
+> **⚠️ AMENDED 2026-08-28 (MOTIR-3735) — ONE scalar is dropped, not two.**
+> `github_pull_request.work_item_id` is the one that goes; its readers and its
+> drop are scoped by `docs/decisions/delivery-reader-migration.md` (MOTIR-3721 was
+> re-scoped to EXPAND-1 and drops nothing itself). **`work_item.session_branch`
+> is KEPT** — it answers a readiness question in the window BEFORE a pull request
+> exists, where a delivery row cannot exist at all
+> (`work_item_delivery.github_pull_request_id` is NOT NULL), so the readers that
+> decide whether a session run can proceed cannot move onto the table. See
+> `docs/decisions/session-branch-lineage.md`. `mark_integrated` keeps its
+> `sessionBranch` argument.
+
 ⚠️ **A pull request nobody links carries a FAILING CHECK.** Since MOTIR-3674 the
 title and the branch link nothing, so the absence of a link is the whole failure
 mode — and it is a quiet one: a card whose pull request merged and which nobody

@@ -7,8 +7,12 @@
 > that both scalars are dropped by a follow-up card. This file settles the four
 > questions that follow-up (MOTIR-3721) cannot answer for itself, and names the
 > BUILD SHAPE it is re-scoped to. It decides nothing about
-> `work_item.session_branch` — MOTIR-3734 is the mirror of this file for that
-> column, and MOTIR-3735 the build.
+> `work_item.session_branch` — [`session-branch-lineage.md`](./session-branch-lineage.md)
+> (MOTIR-3734) is the mirror of this file for that column, and MOTIR-3735 the
+> build. **⚠️ That mirror came back the other way (2026-08-28): the column is
+> KEPT, so the _"both scalars are dropped"_ clause above holds for
+> `github_pull_request.work_item_id` — this file's column — and for that one
+> only.**
 
 > **On the file name.** `docs/decisions/` is slug-named, not numbered. This slug
 > was checked free against `origin/main` and against every remote branch
