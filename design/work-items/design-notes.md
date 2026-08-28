@@ -26,6 +26,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **The DELIVERY SET on the detail page**           | **`delivery-set.mock.html`** + `delivery-set.png`                           | The pull requests that DELIVER a card, many-to-many (MOTIR-3655). EXTENDS `repository-set.mock.html` and re-decides nothing it settled: the rail's glyph gains a truer PREDICATE (delivered = every delivery in that repository landed, not any linked pull request), and the caption's SUBJECT becomes whatever is outstanding — a repository, an open pull request, or one merged onto a base that is not its trunk. FOUR panels: the one-repository/two-pull-request card today's vocabulary reads as DELIVERED while the gate holds it · both merged · merged but not onto trunk · one delivery, unchanged. The ONE new element is a `Not on trunk` pill. Story MOTIR-3655 · MOTIR-3691 (design). Gates MOTIR-3660. See below.                                                                                                                                                                                                                                                                        |
 | **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                   |
 | **The item page at ARRIVAL / STREAMING**          | **`detail-arrival.mock.html`** + `detail-arrival.png`                       | What the page shows between the URL and the item: the page's OWN pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card) — mounted as an in-page `<Suspense>` AFTER the gate, never as a `loading.tsx` (MOTIR-3492) — and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design), amended by MOTIR-3492. Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                              |
+| **The TO-DO LIST on a work item**                 | **`todo-list.mock.html`** + `todo-list.png`                                 | The ordered STEPS of a card's own work — one operation per row, ticked off, each carrying its own executor and, where the operation is a command, the command with a copy button. `design/work-items/` had NO checklist surface at all, so this is the NONE-exists case. COMPOSES `ContentSectionCard`'s header grammar over the shipped `Checkbox` / `Button` / `Tooltip`; nothing is redrawn and no colour or radius is invented. SIXTEEN panels: placement (MEASURED at 1280×900) · the row in its three faces (plain · command · agent) · empty · partly done · all done · read-only · adding · editing · dragging · delete confirm · at scale · the long command at 1280 AND at 390 · light + dark. Settles which of the two shipped copy grammars this surface takes (the button's own state, NOT a toast) and writes the overflow containment rule down in prose so the code card inherits it. Story MOTIR-3808 · MOTIR-3812 (design). Gates MOTIR-3815. See below.                                |
 
 ---
 
@@ -5384,3 +5385,183 @@ successful edit.
 
 **A route boundary is PROHIBITED here, not declined** — this route calls `notFound()`
 (`motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_).
+
+---
+
+## The to-do list on a work item (Story MOTIR-3808 · MOTIR-3812)
+
+`design/work-items/` had **no** checklist surface and this file's table had no
+checklist row — verified at `origin/main` with
+`git grep -ril -E 'to-?do list|checklist' -- design/**`, which returns ten files
+and none of them under `design/work-items/`. So this is the NONE-exists case:
+the code siblings (MOTIR-3815 · MOTIR-3816 · MOTIR-3817) are `blocked_by` this
+design, and `todo-list.mock.html` (built from the live `--el-*` tokens + the
+shipped primitives) is the asset they build to.
+
+The behaviour this asset draws is not invented here either: the decision record
+`docs/decisions/work-item-todo-list.md` (MOTIR-3811) is the workflow spec, and
+every §-reference below points into it.
+
+### Placement — MEASURED, not asserted
+
+A **left-column section card** (`Card` + `ContentSectionCard` header grammar),
+placed **after Explanation and before Relationships**, and arriving **with the
+FIRST CONTENT** rather than in the late `<Suspense>` stack.
+
+Measured at **1280×900** (panel 0). The viewport gives 900px of height; the app
+shell's header takes 56px and the page's own eyebrow + title block takes 132px,
+so **712px of the left column is above the fold**. Description (≈180px) and
+Explanation (≈210px) consume 390px of that, leaving **322px** — the section's
+header plus five rows at 44px. Below Relationships the section starts at ≈760px
+and is below the fold at every laptop height this folder has measured.
+
+Two consequences, and the second is why the tier matters as much as the order:
+
+- On a card whose work IS the list, the list is what the reader came for; a
+  region that is the point of the page does not go under the fold.
+- In the late stack it would also be the **last** region to arrive, so the most
+  actionable region of the page would be the slowest. `detail-arrival.mock.html`
+  now carries the To-do list in its three-tier table, at **with the FIRST
+  CONTENT** — the read is one small ordered query on the same card and joins the
+  page's existing parallel read group.
+
+### Anatomy
+
+- **Header** — `ContentSectionCard` title `To-do list` + muted gloss
+  `— the steps of this work`, with **`N of M done`** in mono at the header's far
+  end. The count renders even at `0 of 0`, so the number does not appear from
+  nowhere when a first step is added.
+- **Row** — a three-track grid (`auto 1fr auto`): the checkbox, the body, the
+  row actions. The body track carries `min-w-0`, which is load-bearing (see
+  _Overflow_ below).
+  - the **checkbox** is the shipped `Checkbox` box — 16px, `--radius-control`,
+    `--el-accent` fill with `--el-accent-text` ink when on;
+  - the **text** is `13.5px`, `--el-text`, and it is **plain text, never
+    Markdown** (§1) — rendered as a text node, not through `MarkdownView`;
+  - the **executor mark** is a small pill: `You` (a `user` glyph, `--el-border`,
+    `--el-text-secondary`) or `Agent` (a `bot` glyph on `--el-tint-lavender`
+    with `--el-text-strong`);
+  - the **row actions** — reorder handle, edit, delete — are icon `Button`s in
+    the third track, revealed on row hover and **always present for a keyboard
+    user**.
+- **Command row** — under the text, a `--font-mono` 12px value in its own
+  bordered box on `--el-code-bg`, with the copy `Button` beside it.
+- **Add row** — a `plus` glyph + `Add a step…`, under a hairline, at the end of
+  the list. It is the composer; there is no modal.
+
+### The row's three faces (panels 1–3)
+
+| face        | tell                              | notes                                                                                                                                                   |
+| ----------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **plain**   | checkbox · text · executor mark   | the common row                                                                                                                                          |
+| **command** | plus the mono value + copy button | `commandText` is non-null (§5) — the row is copyable because the FIELD is set, never because the text looks command-shaped                              |
+| **agent**   | the `Agent` mark                  | `executor: coding_agent`. It **authorizes nothing and disables nothing** (§2): the checkbox is live, because a person may have done the step themselves |
+
+**An agent row shows no run control at all** while nothing can run one — not a
+disabled button, which reads as a malfunction, and not a "coming soon", which is
+a promise the product cannot keep. Panel 3 marks where MOTIR-3809 will place one
+(the row-actions track, left of Edit) with a dashed annotation that is **part of
+the board and not of the product**.
+
+### The copy grammar — the BUTTON'S OWN STATE, not a toast
+
+Both are shipped and **exactly one belongs here**: `CodeBlock` confirms in the
+button (`Copy` → `Copied`, cleared after 2s), and `CopyCommandAction` confirms
+with a toast. This surface takes **the button's own state**. The reader is
+looking at the control they just clicked — a toast would announce a success
+already visible — and a list where several rows are copied in sequence would
+stack toasts for a confirmation the row already gives. `CopyCommandAction`'s
+toast is right where it ships, on the Ready LIST, because there the row scrolls
+under the cursor and the eye is elsewhere.
+
+**The two must not both appear.** A row that flashes a button state AND raises a
+toast reads as two events for one click.
+
+### Every state (panels 4–12)
+
+| state              | what it draws                                                                                                                                                                                                                                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **empty**          | `No steps yet.` + `Break this card's work into steps you can tick off, one operation each.` + a primary `Add the first step`. The header still reads `0 of 0 done`                                                                                                                                                    |
+| **partly done**    | a done row is **struck and moved to `--el-text-secondary`, and it stays where it is** — reordering completed rows to the bottom would destroy the sequence, which is the one thing this list is for. Under it, `Done by <name> · <date>` — the record a tick leaves, since a tick writes no history entry (§4)        |
+| **all done**       | the header's `3 of 3 done` and one quiet line, `Every step is done.` **No banner and no control offering to close the card** — §3 refuses any status change, and a tinted "Done" banner would read as exactly the status claim this surface may not make                                                              |
+| **read-only**      | an actor without `work_item:edit` keeps the rows, the marks and the count, and loses every control: no add row, no handle, no edit, no delete. The checkbox is **genuinely inert** — `role="checkbox"` + `aria-disabled="true"`, announced and not actionable — rather than a live control that silently does nothing |
+| **adding**         | the composer is the last row, not a modal. Enter commits and keeps focus in the field for the next step; Escape abandons. The command and the executor are set from the row afterwards, so the common case (a plain step) stays the fastest                                                                           |
+| **editing**        | the row becomes its own editor — text input, command input, executor as a two-value control, `Cancel` / `Save`. The patch is SPARSE: clearing the command field sets it to `null` and the row stops being copyable; leaving it alone leaves it alone                                                                  |
+| **dragging**       | the row lifts as a dashed ghost; a 2px `--el-accent` rule marks the drop slot. One row is written                                                                                                                                                                                                                     |
+| **delete confirm** | an inline swap on the row (`Cancel` / a danger `Delete`), not a `Modal` — one step is cheap to lose and cheap to retype, and the modal primitive is reserved for the irreversible                                                                                                                                     |
+| **at scale**       | twenty rows. The section **grows**; it does not cap and it does not scroll                                                                                                                                                                                                                                            |
+
+**On "at scale", the decision and its reason.** No `+N more`, no inner scroll.
+The list is bounded in the other direction by the granularity bar — a card
+needing forty steps is a card that should have been two cards, and the place to
+say so is the plan, not a control that hides the work. The **header's count** is
+what makes a long list legible without scrolling it. This is the one region on
+the page where an inner scroll would be actively wrong: the reader is working
+_through_ the list, and a scroll container inside a scrolling page is where a
+step gets missed.
+
+### Overflow — the containment rule, stated so the code card inherits it
+
+A command is routinely wider than the column. Panels 13 and 14 draw the same row
+at **1280** and at **390**. The rule, in three parts, all three load-bearing:
+
+1. **The mono value is its own `overflow-x-auto` container** — and a `<pre>`,
+   not a `<code>`, because `white-space: pre` only helps if the markup preserves
+   the line (a formatter will reflow the contents of an inline element). This is
+   also what the shipped `CodeBlock` renders (`ScrollableRegion as="pre"`).
+2. **The row's body cell carries `min-w-0`.** Without it a grid/flex child's
+   minimum size is its CONTENT, so the ROW widens and the **page** scrolls
+   sideways instead of the command.
+3. **The copy button carries `shrink-0`.** A `Button` in a flex row defeats
+   `min-w-0` on its own account unless it is explicitly told not to shrink.
+
+The box is `tabindex="0"`: a box that scrolls its own content is a box a
+keyboard user must be able to focus, or the content past its right edge is
+mouse-only.
+
+**This section SPECIFIES the rule; it does not implement it.** Applying it to
+the React surface, and asserting that the page does not scroll sideways, are
+MOTIR-3815's criteria.
+
+### Semantics — a LIST of rows, and deliberately not a listbox
+
+The section is a `<ul>` of `<li>` rows. **It is not a listbox and a row is not
+an `option`**: a row carries a checkbox, a copy button, a drag handle and two
+more buttons, and an `option` may not contain interactive descendants — drawing
+it that way produces a surface a screen reader can announce and cannot operate.
+
+| element                   | role / element                                             | accessible name                                           |
+| ------------------------- | ---------------------------------------------------------- | --------------------------------------------------------- |
+| the section               | `ContentSectionCard` → `<section>` with the `<h2>` title   | `To-do list`                                              |
+| the list                  | `<ul>`                                                     | — (the heading names it)                                  |
+| a row                     | `<li>`                                                     | —                                                         |
+| the tick                  | the shipped `Checkbox` (`role="checkbox"`, `aria-checked`) | the step's own text                                       |
+| the copy button           | `<button>`                                                 | **`Copy command`** — the glyph carries no name of its own |
+| the reorder handle        | `<button>`, **not** a `div` with a drag listener           | `Reorder step`                                            |
+| the edit / delete buttons | `<button>`                                                 | `Edit step` / `Delete step`                               |
+| the progress              | text in the header                                         | read as `N of M done`                                     |
+
+- **The drag handle has a keyboard equivalent, and it is the reason the handle is
+  a button**: Space picks the row up, ↑/↓ move it one slot with the new position
+  announced through a live region, Space drops it, Escape restores it. A
+  drag-only reorder would make the one editable thing on this surface
+  mouse-only.
+- **After a delete, focus moves to the NEXT row's checkbox** — or to the
+  add-step field when the deleted row was the last one. It never falls to the
+  document body, which is how a keyboard user loses their place in a list.
+- An **inert** checkbox (read-only actor) keeps `role="checkbox"` and
+  `aria-checked` and adds `aria-disabled="true"`, so the state is still
+  announced.
+
+### Out of scope
+
+- **The hosted-run control for an agent step** — MOTIR-3809 (Epic 9). This asset
+  draws where it goes and does not draw it.
+- **Any status change when the last box is ticked** — refused outright by
+  `docs/decisions/work-item-todo-list.md` §3, on the two-status-authorities
+  reason. Panel 6 is what all-done looks like when it changes nothing.
+- **Teaching the PLANNER to author to-do lists** — MOTIR-3810. A person writes
+  them in this UI.
+- **Any surface other than the item page** (the board, the ready list, the API).
+  No card in MOTIR-3808 ships one and this asset takes no position on a later
+  one.
