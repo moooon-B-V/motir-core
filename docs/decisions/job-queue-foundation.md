@@ -939,8 +939,126 @@ rather than inherited:**
   `INDEX_FLEET_TIME_BUDGETS`, `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is unchanged by
   this rule; it moves where durability lives, not how long anything waits.
 
+## §14 — The engine does NOT enforce per-job concurrency, and the type is what says so (MOTIR-3731)
+
+[MOTIR-3418] removed `defineJob`'s `concurrency` option rather than porting it, on the evidence
+that no job declared one. That evidence was a **count of a population that was still moving**:
+[MOTIR-3701] landed `account/data-export.requested` carrying
+`concurrency: { limit: 1, key: 'event.data.userId' }` between the measurement and the merge, so
+for the window in between the substrate accepted a field the engine had never read. The option is
+gone now; the QUESTION it left is what this section answers, because otherwise the next job to
+want one finds a deletion and no reasoning.
+
+**The question: should `job_queue` grow a per-job, event-keyed concurrency limit enforced at CLAIM
+time — at most N runs of job X in flight per key?**
+
+### §14.1 — The decision: NO — and it is a decision about WHERE a limit lives, not about whether serialisation is wanted
+
+**The queue is the wrong place to express "one at a time per key", and the engine will not grow an
+option for it.** Serialisation is a legitimate and recurring requirement, and §14.3 is a table of
+the four places this repository already expresses it. What is refused is the specific mechanism —
+an admission decision taken inside the claim.
+
+**The refusal is carried by the TYPE, not by this paragraph.** `DefineJobOptions` declares no such
+member, and `tests/jobs/defineJob-options-are-read.test.ts` asserts that **every option the type
+declares is read by something** — by `defineJob`'s own body, or by a module it hands the whole
+options object to. So the failure mode this section is named after cannot come back as a
+forwarded-and-ignored field. That guard is deliberately about the PROPERTY (an accepted option
+nobody reads) rather than about the word `concurrency`: a ban on the word would pass while the
+next such option shipped under a different name.
+
+### §14.2 — Why not, in the order the reasons actually weigh
+
+**1. The one place this org has shipped this mechanism, it wedged.** `motir-ai`'s planning queue
+does exactly what is proposed here: `claimNextQueued` skips any job whose `concurrencyKey` has a
+`running` row, with `concurrencyKeyFor` deriving `session:<aiProjectId>:<scopeKey>`. The
+consequence is recorded in `docs/decisions/application-hosting.md` Amendment 7 (_"The remedy,
+decided"_): **one abandoned `running` row wedges every future job of that planning session,
+permanently** — no poll interval reaches it, because the predicate excludes it at every tick for
+ever. That is not an argument that the shape is unimplementable; it is the measured cost of the
+liveness obligation it creates. `job_queue` would discharge that obligation better than `motir-ai`
+does — `reclaimExpiredLeases` bounds an abandoned claim to `LEASE_MS` rather than to for ever — but
+**the obligation is the feature**, and it is new surface area on the one path the engine cannot
+afford to be subtly wrong on.
+
+**2. The claim is the engine's hottest statement, and its shape is asserted rather than assumed.**
+`jobQueueRepository.claimDueRuns` is one `UPDATE … FROM (SELECT … ORDER BY run_at FOR UPDATE SKIP
+LOCKED LIMIT n)`, and `tests/jobs/engine-schema.test.ts` pins its plan to
+`job_queue_state_run_at_idx` with **no `Sort`** — an assertion, not a comment. A keyed limit is a
+correlated anti-join against the running set, evaluated per candidate row inside the lock, and
+that is precisely the predicate that takes the ordering off the index. The `ORDER BY run_at` is
+not a nicety: it is what makes the queue fair.
+
+**3. Head-of-line blocking is the semantics, not a detail.** A blocked keyed row is by
+construction the OLDEST due row, so it is the first thing the `LIMIT` reaches. Skip it and the
+batch silently shrinks — one hot key starves a batch shared by every other job; apply the `LIMIT`
+after the filter and the claim scans an unbounded prefix of the queue under a row lock. Both are
+defensible, they behave completely differently under load, and **there is no consumer to calibrate
+the choice against.** Picking one on taste is how a fairness property ends up decided by whoever
+happened to write the query.
+
+**4. The demand does not exist — and this time the count is taken on a ref.**
+`git grep -nE '^\s*concurrency\s*:' origin/main -- lib/jobs` returns **nothing**: no definition
+declares one. Every occurrence of the word under `lib/jobs/definitions/` is prose, in four files,
+three of which (`codeGraphIndex.ts`, `codeGraphRefresh.ts`, `dataExportBuild.ts`) exist to explain
+why that job deliberately has none. **Unlike the measurement [MOTIR-3418] relied on, nothing here
+rests on that staying true**: the guard in §14.1 fires on the DECLARATION, whenever it arrives.
+
+**5. What bounds concurrent work is now ours, which removes the pressure the option existed under.**
+`docs/decisions/job-lane-occupancy.md` §3 measured a vendor-account ceiling of **five concurrent
+steps, partitioned by nothing** and shared by every function — the arithmetic in which a single
+status change occupied four of five slots. Under `job_queue` the ceiling is the `worker` process
+group's machine count times `CLAIM_BATCH`, both of which this repository sets. **A per-job limit is
+a way to protect a pool you cannot resize; that is not the pool we have.**
+
+### §14.3 — What a job should reach for instead
+
+Ordered by strength, which is close to the opposite of the order they come to mind in.
+
+| want                                             | reach for                                                                                                                       | why it is stronger than a claim-time limit                                                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **one unit of work per subject at a time**       | a **request-time row lock** on the row the work is about — `SELECT … FOR UPDATE`, and do not emit when one is already in flight | it holds under a worker restart, a reclaimed lease and an event replay, none of which a scheduler's admission decision survives. `dataExportService.requestDataExport` is the shipped example        |
+| **at most one QUEUED run per key**               | `defineJob`'s **`idempotency`** template, enforced by the `(job_id, idempotency_key)` partial unique index at ENQUEUE           | a uniqueness constraint rather than a read-derived write, so it cannot race with itself and it has no liveness obligation at all                                                                     |
+| **one run per burst, carrying the latest event** | `defineJob`'s **`debounce`** (`key` + `period` + `timeout`)                                                                     | coalesces at enqueue, and its cap is measured from FIRST arrival, so a steady stream cannot defer it for ever (§9)                                                                                   |
+| **N concurrent units of a NON-queue resource**   | an **admission cap in the job's own domain** — `lib/ciFleet/limits.ts` is the shipped one                                       | what is being rationed is containers, money or a provider's rate limit, none of which the queue can see. `docs/decisions/code-graph-index-fleet.md` §7 decides exactly this, for exactly this reason |
+
+**The row lock and the queue are not two ways of doing one thing.** A claim-time limit answers
+_"how many of these may RUN at once"_; a row lock answers _"may this work be REQUESTED at all"_ —
+and where both are available, only the second survives a restart. The export job wanted the first
+as belt to the second's braces, and losing the belt cost it nothing.
+
+### §14.4 — The trigger to revise
+
+This decision is about a demand that does not exist yet, so it names the evidence that would
+overturn it rather than waiting to be re-argued from scratch. **Both, together:**
+
+- **a job whose serialisation cannot be expressed at request time** — because the subject is not a
+  row there is anything to lock (a whole-workspace reindex, an external tenant), AND
+- **a measured cost from running two of them concurrently.** Not a tidiness argument, and not the
+  belt-and-braces case: a second, weaker guard beside a row lock is what this section declines.
+
+With both in hand, the open design question is the one §14.2.3 refuses to answer on taste —
+whether a blocked key shrinks the batch or extends the scan — now decidable against that job's
+numbers, and owing the liveness argument §14.2.1 makes unavoidable. The parts exist:
+`concurrency_key` would be a column beside `debounce_key`, populated at dispatch from an event
+expression by the machinery `lib/jobs/engine/eventExpression.ts` already runs for `debounce.key`.
+**What is missing is not the plumbing; it is the fairness decision and a consumer to make it for.**
+
+### §14.5 — What §14 does not settle
+
+- **`motir-ai`'s own queue.** §14.2.1 reads it as EVIDENCE, not as a thing to change. Different
+  service, different table, different resource — whether its wedge is fixed, and how, is
+  Amendment 7's business and not this record's.
+- **Whether `CLAIM_BATCH` or the worker machine count is right.** Those are the real concurrency
+  controls now (§14.2.5); neither is examined here.
+- **The two jobs that deliberately carry no limit.** `codeGraphIndex.ts` and `codeGraphRefresh.ts`
+  each record their own reason at length. This section is why the OPTION is absent, not why those
+  two do not want one.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
+[MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
 [MOTIR-3485]: https://app.motir.co/items/MOTIR-3485
+[MOTIR-3701]: https://app.motir.co/items/MOTIR-3701
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss
