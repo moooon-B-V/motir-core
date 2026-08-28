@@ -65,6 +65,7 @@ import {
   PlanItemUnknownTargetRepoError,
   PlanNotEditableError,
   PlanProposalReferencedError,
+  PlanProposalRepoPinMovedError,
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
@@ -703,6 +704,82 @@ async function resolveProposedTargetRepos(
   return resolved;
 }
 
+/**
+ * The `targetRepo` spelling each proposal AUTHORS, keyed by proposal id — the
+ * PURE half of {@link resolveProposedTargetRepos}, which is what makes the
+ * in-transaction re-check affordable (MOTIR-3604).
+ *
+ * A proposal carrying NO pin is ABSENT from the map rather than present as
+ * `null`: the two mean different things on a `modify` (leave the column alone vs
+ * clear it), and collapsing them here would make an approve refuse a `modify`
+ * whose patch never mentioned the repo at all.
+ */
+function collectAuthoredTargetRepos(items: PlanItem[]): Map<string, string | null> {
+  const authored = new Map<string, string | null>();
+  for (const item of items) {
+    const value = authoredTargetRepo(item);
+    if (value !== undefined) authored.set(item.id, value);
+  }
+  return authored;
+}
+
+/** Compare two authored spellings the way the resolvers match them, so trailing
+ *  whitespace and casing are not read as a move. `undefined` (no pin at all)
+ *  stays distinct from `null` (an explicit unpin). */
+function sameAuthoredPin(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  if (a === null || b === null) return a === b;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * REFUSE the approve when a pin the transaction is about to materialize is not
+ * the pin the pre-transaction snapshot resolved (MOTIR-3604, AMENDMENT 9 D4).
+ *
+ * ⚠️ CALLED INSIDE THE TRANSACTION, on the FRESH proposal set, under the plan
+ * lock — the same placement and the same reason as {@link assertNoRevisionInFlight}
+ * directly above it. Read before the lock this would be a TOCTOU check; read
+ * under it, it is the property that makes the pre-transaction resolution safe.
+ *
+ * PURE, and that is the point: it compares two maps over rows both callers have
+ * already read. The resolution itself cannot move inside the transaction — the
+ * domain read opens its own workspace context — so the check has to be one that
+ * needs no read, and a comparison of AUTHORED spellings is exactly that.
+ *
+ * It walks the FRESH set, not the snapshot: a proposal WITHDRAWN in the window is
+ * not materialized and is not a hazard, while one whose pin arrived, moved or was
+ * cleared in the window is. A spelling change that names the same repository by
+ * another of its accepted forms (`owner/name` for the bare name) refuses too —
+ * deciding those two are the same needs the domain read this check may not make,
+ * and a refusal costs a retry where a guess costs a wrong pin.
+ */
+function assertRepoPinsUnmoved(
+  snapshot: ReadonlyMap<string, string | null>,
+  fresh: PlanItem[],
+): void {
+  for (const item of fresh) {
+    const before = snapshot.has(item.id) ? snapshot.get(item.id) : undefined;
+    const after = authoredTargetRepo(item);
+    if (sameAuthoredPin(before, after)) continue;
+    const label = proposalLabel({
+      op: item.op,
+      workItemId: item.workItemId,
+      title: ((item.proposedFields ?? null) as PlanItemProposedFields | null)?.title,
+    });
+    const printed = (v: string | null | undefined) =>
+      v === undefined ? 'no pin' : v === null ? 'explicitly unpinned' : `\`${v}\``;
+    throw new PlanProposalRepoPinMovedError(
+      item.id,
+      label,
+      before,
+      after,
+      `Proposal ${label} changed its repository pin while this plan was being approved: ` +
+        `${printed(before)} when the approve read it, ${printed(after)} now. Nothing was ` +
+        `materialized — re-read the plan and approve it again to apply the current pin.`,
+    );
+  }
+}
+
 // ── The proposed REPO ROLE — the PORTABLE pin (MOTIR-1912) ────────────────────
 //
 // The pin above names a REPOSITORY; this one names a ROLE of the project's set,
@@ -881,8 +958,9 @@ function resolveProposedRepoRoles(items: PlanItem[]): ProjectRepoRoleDto[] {
  * under this same transaction — this function does not re-check the grammar or
  * done-work immutability, it applies an already-confirmed proposal set. The repo
  * pins in `repoPins` are likewise ALREADY resolved + validated
- * (`resolveProposedTargetRepos`, outside this transaction) — this function only
- * writes them.
+ * (`resolveProposedTargetRepos`, outside this transaction) AND re-checked against
+ * the fresh rows under the lock (`assertRepoPinsUnmoved`, MOTIR-3604) — this
+ * function only writes them.
  *
  * RETURNS the ids of the work items it created or modified — the MATERIALIZE
  * trigger of the plan-tree embedding write path (Story MOTIR-2694 · MOTIR-2696,
@@ -2926,27 +3004,42 @@ export const plansService = {
       // obeys) — and because an unknown repo should be rejected while the tree is
       // still byte-identical.
       //
-      // Resolved from THIS pre-transaction snapshot, which is authoritative for
-      // pins: on a `planned` plan the proposal set is frozen. `addProposals` /
-      // `deepenProposal` require `generating`, `updateProposal`'s editable set
-      // (`mergeProposedFields`) does not include `targetRepo`, `declinePlan` moves
-      // the plan to `declined` (which the in-transaction status re-read below
-      // rejects), and the lifecycle has no path back to `generating`. So no pin the
-      // transaction materializes can differ from one resolved here.
+      // ⚠️ RESOLVED FROM A SNAPSHOT, AND THE TRANSACTION RE-CHECKS IT
+      // (MOTIR-3604, AMENDMENT 9 D4). This map is read outside the transaction and
+      // written inside it, so what makes it safe is a PROPERTY rather than a
+      // promise: `assertRepoPinsUnmoved` compares, under the plan lock, the pins
+      // the FRESH proposal set authors against the ones resolved here, and refuses
+      // the approve when they disagree.
       //
-      // ⚠️ THAT SECOND CLAUSE IS LOAD-BEARING — do not widen `mergeProposedFields`
-      // to carry `targetRepo` without revisiting this snapshot. The deepen turn's
-      // widening (AMENDMENT 4 D3a, MOTIR-3089) was `executor` alone, and one of the
-      // reasons the repo pin was left out is right here: a pin editable on a
-      // `planned` plan would make this pre-transaction resolution non-authoritative.
+      // It states a property because the alternative decays silently. This comment
+      // used to enumerate the doors that could not move a `planned` plan's pins —
+      // correctly, on the day it was written — and warned about the one widening
+      // its author expected (`mergeProposedFields`). AMENDMENT 8's correction door
+      // (`plansService.correctProposal`, MOTIR-3533) arrived through
+      // `CorrectProposalInput` instead, eight days later, and walked straight past
+      // an enumeration that still read exactly as true as it had before. A list of
+      // the ways something cannot happen goes stale with no signal that it has;
+      // a re-check does not.
       const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
+      const snapshotPins = collectAuthoredTargetRepos(preItems);
 
       // The proposed repo ROLES (MOTIR-1912) — validated against the vocabulary and
-      // collected from the SAME pre-transaction snapshot, and for the same two
-      // reasons: an unknown role is rejected while the tree is still byte-identical,
-      // and a `planned` plan's proposal set is frozen, so what is read here is what
-      // the transaction materializes. Pure — unlike the name pin, this needs no
-      // domain read, because a role's domain is a closed enum.
+      // collected from the SAME pre-transaction snapshot, so an unknown role is
+      // rejected while the tree is still byte-identical. Pure — unlike the name
+      // pin, this needs no domain read, because a role's domain is a closed enum.
+      //
+      // ⚠️ IT DOES *NOT* REST ON THE FROZEN-SET CLAIM THE PIN'S COMMENT ABOVE JUST
+      // LOST (MOTIR-3604). A role needs no in-transaction re-check for a stronger
+      // reason: nothing STALE is written from this pass. `materialize` and
+      // `applyModify` both read `targetRepoRole` off the FRESH row and resolve it
+      // there (`proposalRepoRef`), so a role corrected inside approve's window is
+      // HONOURED, not dropped — asserted in `approvePlanTargetRepo.test.ts`. And
+      // the vocabulary assertion here has no reachable window either, because
+      // every door a role can arrive or move through asserts it at its OWN
+      // boundary: `validateProposal` at the append, `correctProposal` on a
+      // `modify`'s patch, and `CorrectProposalInput` carries no `targetRepoRole`
+      // for an `add` at all. What remains is defence in depth, which is what it
+      // was always for.
       //
       // The list is ALSO §0.1.1's derivation signal, handed to `proposeRepositorySet`
       // after the commit below.
@@ -3028,6 +3121,10 @@ export const plansService = {
               plan.projectId,
               tx,
             );
+            // …AND THE PINS THE SNAPSHOT RESOLVED ARE STILL THE PINS THESE ROWS
+            // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
+            // under the lock, before a single row is materialized.
+            assertRepoPinsUnmoved(snapshotPins, proposals);
             const touchedWorkItemIds = await materialize(
               proposals,
               fresh,
