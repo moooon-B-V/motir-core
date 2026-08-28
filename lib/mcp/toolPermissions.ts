@@ -184,6 +184,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // dispatched agent can actually call it (MOTIR-3058; MOTIR-3051 is the
   // counter-example this deliberately avoids).
   attach_file: 'work_item:edit',
+  // `publish_design_result` (MOTIR-3782) — the SAME key, and the comment above
+  // is the reason it needed no argument of its own: the design-publish route has
+  // asserted `work_item:edit` since MOTIR-2667, and `CLI_TOKEN_GRANT` has
+  // carried it the whole time. Moving the publish from CI to the agent
+  // therefore adds no credential and no trust; it only stops requiring a script
+  // to be present in the repository. `CLI_TOKEN_GRANT` is NOT widened here.
+  publish_design_result: 'work_item:edit',
   // `link_pull_request` (Story MOTIR-3525 · MOTIR-3526) — declaring which work
   // item a pull request delivers is EDITING that work item, so it takes the same
   // key the picker's own write path sits behind, and the SERVICE asserts it too

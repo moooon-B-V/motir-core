@@ -18,23 +18,25 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 
 ## Asset set (the files)
 
-| File                                      | What it is                                                                                                                                    |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design-notes.md`                         | this spec (primitives, copy, token roles, per-behaviour provenance)                                                                           |
-| `roadmap.mock.html`                       | the canvas source of truth — a multi-panel mock built from the real tokens                                                                    |
-| `roadmap.png`                             | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
-| `edges.mock.html`                         | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                                                |
-| `edges.png`                               | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
-| `grid-init.mock.html`                     | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                                                |
-| `grid-init.png`                           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
-| `detail-surfaces.mock.html`               | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries                                 |
-| `detail-surfaces.png`                     | the detail-surfaces export (same render settings)                                                                                             |
-| `auto-drill.mock.html`                    | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases                                         |
-| `auto-drill.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
-| `planning-origin-drill.mock.html`         | the **planning card DRILLS into the pre-plan stations** (MOTIR-2204): the phase card, the drilled station level, and the card's honest states |
-| `planning-origin-drill.png` / `.dark.png` | its full-page exports (light + dark — the station tiles' tier tints are checked in both)                                                      |
-| `root-non-epic-rows.mock.html`            | the ROOT level's **non-epic rows** (MOTIR-3493): the grouped node, the level it drills into, and a level cap that is visible                  |
-| `root-non-epic-rows.png`                  | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
+| File                                      | What it is                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design-notes.md`                         | this spec (primitives, copy, token roles, per-behaviour provenance)                                                                                     |
+| `roadmap.mock.html`                       | the canvas source of truth — a multi-panel mock built from the real tokens                                                                              |
+| `roadmap.png`                             | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
+| `edges.mock.html`                         | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                                                          |
+| `edges.png`                               | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
+| `grid-init.mock.html`                     | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                                                          |
+| `grid-init.png`                           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
+| `detail-surfaces.mock.html`               | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries                                           |
+| `detail-surfaces.png`                     | the detail-surfaces export (same render settings)                                                                                                       |
+| `auto-drill.mock.html`                    | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases                                                   |
+| `auto-drill.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
+| `planning-origin-drill.mock.html`         | the **planning card DRILLS into the pre-plan stations** (MOTIR-2204): the phase card, the drilled station level, and the card's honest states           |
+| `planning-origin-drill.png` / `.dark.png` | its full-page exports (light + dark — the station tiles' tier tints are checked in both)                                                                |
+| `root-non-epic-rows.mock.html`            | the ROOT level's **non-epic rows** (MOTIR-3493): the grouped node, the level it drills into, and a level cap that is visible                            |
+| `root-non-epic-rows.png`                  | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
+| `roadmap-arrival.mock.html`               | the **roadmap you come back to** (MOTIR-3834): the level-addressable URL, the full-fold frame, the collapsible Dependencies panel, and the ARRIVAL view |
+| `roadmap-arrival.png`                     | its full-page export (`scripts/render-design-mock.mjs`, light, `deviceScaleFactor 2`, 1200px)                                                           |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -1552,3 +1554,297 @@ while a level is in flight; this asset adds nothing to it and the code card must
 
 **A route boundary is declined, and here it is a preference rather than a prohibition** —
 `/roadmap` does not call `notFound()`. Rule 5 applies: one mechanism, not two.
+
+---
+
+## ⭐ The roadmap you come back to (MOTIR-3834 / Story MOTIR-3833 — `roadmap-arrival.mock.html`)
+
+`roadmap-arrival.mock.html` specifies FOUR refinements to the shipped `/roadmap` surface as ONE
+surface, because they all move the same chrome: the **level-addressable URL**, the **full-fold canvas
+frame**, the **collapsible Dependencies panel**, and the **ARRIVAL VIEW** a level is first drawn at.
+Like the scope toggle (MOTIR-1380) and the refresh control (MOTIR-1540), its mandate is to **COMPOSE
+the shipped header + canvas, not redraw them**: `ProjectRoadmapCanvas` (MOTIR-1194) over the
+`PlanningCanvas` engine (MOTIR-1236) is reused unchanged, its look is owned by
+`design/roadmap/roadmap.mock.html`, and its edge vocabulary by `design/roadmap/edges.mock.html`.
+
+**Every canvas, node card, legend and page header in the asset is the app's own rendered markup**,
+dumped from the real components and laid out by the shipped `deterministicLayout` — not a redraw
+(the design-against-shipped-reality gate). **Every number below is measured in Chromium**, and the
+harness that produced them is reproduced inline at the end of this section.
+
+### Composed components + their contracts (notes #95)
+
+| Composed thing         | Source                                                                             | Contract this design honours                                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the canvas + its nodes | `ProjectRoadmapCanvas` / `WorkItemNode` (MOTIR-1194)                               | reused UNCHANGED. Every new prop is opt-in and defaults to today's behaviour — the component has four other consumers                                                            |
+| the arrival geometry   | `fitView` / `centerOn` (`lib/planning/canvasGeometry.ts`)                          | the arrival composes the two functions already there; no third transform, and `MIN_SCALE = 0.3` is untouched                                                                     |
+| the focal ladder       | the LOCATE control's own priority (`ProjectRoadmapCanvas.tsx`, `locateActionable`) | `here` → first `ready` → the level's first node. The canvas gains no second notion of "the node that matters"                                                                    |
+| the edge legend        | the legend overlay (MOTIR-1331), heading `roadmap.canvas.legend.heading`           | reused; the collapse adds a chevron to its existing heading row and changes nothing else                                                                                         |
+| the page header        | `components/planning/RoadmapView.tsx`                                              | reused unchanged. The full-fold change is to the CANVAS BOX's `calc()` and its bottom margin — the header is not re-laid-out                                                     |
+| the shell's band       | `--shell-bottom-clearance` (MOTIR-2763, `app/(authed)/layout.tsx`)                 | the canvas SPENDS the band, and the bottom-RIGHT overlay is lifted by the same custom property — never by a copied `96px`, so a workspace without the orb gets its `1.5rem` back |
+| the client preference  | `lib/hooks/useAttachmentsView.ts`                                                  | the collapse state uses that exact pattern — `useSyncExternalStore` + a module-cached snapshot + a `motir.*` key, whose server snapshot is today's behaviour                     |
+| the access path        | the **Roadmap** primary left-nav entry (MOTIR-1011)                                | unchanged. No new route, no new nav affordance; the one new door is the collapse control, whose entrance is the panel itself                                                     |
+
+### The six panels (`roadmap-arrival.mock.html`)
+
+| Panel | What it draws                                                                                                                                     | Composes, does not redesign                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **0** | the ACCESS PATH — the shipped rail with **Roadmap** `aria-current="page"`, and the one new affordance at real size in both states                 | `app/(authed)/_components/SidebarNav.tsx` + `components/ui/Sidebar.tsx`'s item |
+| **1** | the FULL-FOLD frame at 1440×900 with the vertical budget annotated, the orb and its 76 px reach drawn in, and a 1:1 today-vs-proposed bottom band | `components/planning/RoadmapView.tsx` + `app/(authed)/layout.tsx`              |
+| **2** | the ARRIVAL VIEW — the measured legibility table, then the root level today vs. at the floor, and a small level that is unchanged                 | `ProjectRoadmapCanvas` + `lib/planning/canvasGeometry.ts`                      |
+| **3** | the Dependencies panel COLLAPSED and EXPANDED, at real size, in place, in both the project-scope and sprint-scope variants                        | the shipped legend overlay (MOTIR-1331 / MOTIR-1379)                           |
+| **4** | the URL states — three address bars and the behaviour spec (no new pixels)                                                                        | the `?scope=` precedent, `roadmap-refresh.mock.html` panel 4                   |
+| **5** | what does NOT change                                                                                                                              | —                                                                              |
+
+### 1. The full-fold frame — the vertical budget, MEASURED
+
+The chrome above the canvas box is **160 px = 10rem**: the top nav `h-14` (56) + the shell's `pt-6`
+(24) + the page header (56 — the `font-serif text-2xl` `h1` at 32, `gap-1` 4, the `text-sm` subtitle 20) + the stack's `gap-6` (24). The shipped box subtracts **11.5rem**, which is **24 px more than the
+chrome actually costs**, and then subtracts `--shell-bottom-clearance` a SECOND time — the shell has
+already spent that band as `pb-(--shell-bottom-clearance)`.
+
+| viewport (window) | usable | canvas today | dead band below  | canvas proposed | dead band | gain     |
+| ----------------- | ------ | ------------ | ---------------- | --------------- | --------- | -------- |
+| 1366×768          | 648    | 1062×448     | 40 **+ scrolls** | 1062×488        | 0         | **+40**  |
+| 1440×900          | 780    | 1136×500     | 120              | 1136×620        | 0         | **+120** |
+| 1512×982          | 862    | 1208×582     | 120              | 1208×702        | 0         | **+120** |
+| 1920×1080         | 960    | 1616×680     | 120              | 1616×800        | 0         | **+120** |
+
+"usable" is the window height minus ~120 px of browser chrome. **At 1366×768 the shipped
+`min-h-[28rem]` floor exceeds the computed height, so `/roadmap` SCROLLS today** — on the one
+signed-in surface whose shell is `h-dvh overflow-hidden` — **and the Reset-layout button already
+overlaps the Plan-with-AI orb by 19 px there.**
+
+**THE SPEC — the canvas TAKES the band:**
+
+```css
+height: calc(100dvh - 10rem);
+margin-bottom: calc(-1 * var(--shell-bottom-clearance));
+```
+
+`min-h-[28rem]` stays; at 1366×768 the computed height becomes 488, so the floor no longer binds.
+
+**Only the bottom-RIGHT overlay moves.** The orb is `fixed right-5 bottom-5`, 56 px square — a 76 px
+reach from both edges — so it can only meet an overlay anchored bottom-right. Measured positions,
+all four viewports:
+
+| overlay            | shipped anchor                     | with the canvas at the fold                                  | orb clearance |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------ | ------------- |
+| zoom cluster       | `bottom-4 left-4` (PlanningCanvas) | unchanged                                                    | n/a (left)    |
+| LOCATE             | `bottom-4 left-[8.25rem]`          | unchanged                                                    | n/a (left)    |
+| Dependencies panel | `bottom-[4.25rem] left-3`          | unchanged, collapsed or not                                  | n/a (left)    |
+| **Reset layout**   | `right-3 bottom-4`                 | `bottom: calc(1rem + var(--shell-bottom-clearance, 1.5rem))` | **37 px**     |
+
+Expressed in the shell's own custom property, never a copied `96px`: a workspace with AI planning
+unconfigured sets it to `1.5rem` and the control comes back down.
+
+### 2. The ARRIVAL VIEW — the legibility FLOOR is **0.80**, and it is derived
+
+`PlanningCanvas` remounts per drill level (`key={`level:${focusId}`}`) and `fitView`s the WHOLE level
+once. On the project root — eighteen epics, a **1000×1324** world box under the shipped 3-column
+`deterministicLayout` at `NODE_W`×`NODE_H` = 280×124 — that is a correct fit and an unreadable one.
+
+The real `WorkItemNode` rendered in Chromium at `deviceScaleFactor: 1` and read. Type sizes are the
+card's own multiplied by the scale: identifier `font-mono text-xs` (12), title `text-sm` (14), status
+chip `text-[11px]`.
+
+| scale    | card px | identifier | title    | status chip | read at 1×                                             |
+| -------- | ------- | ---------- | -------- | ----------- | ------------------------------------------------------ |
+| 1        | 280×124 | 12         | 14       | 11          | legible — the authored size                            |
+| 0.90     | 252×112 | 10.8       | 12.6     | 9.9         | legible                                                |
+| 0.85     | 238×105 | 10.2       | 11.9     | 9.35        | legible                                                |
+| **0.80** | 224×99  | **9.6**    | **11.2** | **8.8**     | **THE FLOOR** — all three still resolve                |
+| 0.75     | 210×93  | 9          | 10.5     | 8.25        | marginal — the title reads, the chip is at the limit   |
+| 0.70     | 196×87  | 8.4        | 9.8      | 7.7         | the identifier blurs                                   |
+| 0.65     | 182×81  | 7.8        | 9.1      | 7.15        | the identifier is illegible                            |
+| 0.60     | 168×74  | 7.2        | 8.4      | 6.6         | the title starts to smear                              |
+| 0.55     | 154×68  | 6.6        | 7.7      | 6.05        | nothing but the fill reads                             |
+| 0.50     | 140×62  | 6          | 7        | 5.5         | nothing but the fill reads                             |
+| 0.45     | 126×56  | 5.4        | 6.3      | 4.95        | nothing but the fill reads                             |
+| 0.40     | 112×50  | 4.8        | 5.6      | 4.4         | today's arrival on a wide display                      |
+| 0.35     | 98×43   | 4.2        | 4.9      | 3.85        | colour blocks only                                     |
+| 0.30     | 84×37   | 3.6        | 4.2      | 3.3         | `MIN_SCALE` — today's arrival at 1366×768 and 1440×900 |
+
+**The floor is 0.80 because it is DERIVED, not chosen.** The card's smallest authored type size is
+the 11 px status chip, so the rule is: **the TITLE never renders smaller than the smallest type the
+card itself authors.** 14 × s ≥ 11 ⟹ s ≥ 0.786, rounded up to a clean **0.80**. The code card takes
+this number; it does not re-derive it.
+
+What the root level actually arrives at, per viewport (`fitView(bounds, canvasBox)` on the measured
+box):
+
+| viewport  | root arrival today  | root arrival at the full fold | the floor | a 5-node level |
+| --------- | ------------------- | ----------------------------- | --------- | -------------- |
+| 1366×768  | 0.300 **(clamped)** | 0.300 **(clamped)**           | 0.80      | 0.966          |
+| 1440×900  | 0.305               | 0.396                         | 0.80      | 1.040          |
+| 1512×982  | 0.367               | 0.458                         | 0.80      | 1.112          |
+| 1920×1080 | 0.441               | 0.532                         | 0.80      | 1.520          |
+
+**THE RULE, in one sentence a code card can implement with no second decision:** _fit the level when
+`fitView`'s scale is at or above 0.80; otherwise arrive at 0.80, centred on the level's focal card._
+
+Three clauses it needs, and the second is the one that stops the result looking wrong:
+
+- **The focal ladder is the shipped LOCATE ladder** — `here` → the first `ready` node → the level's
+  first node in layout order.
+- **Centring is PER AXIS.** On an axis where the level FITS at the floor, centre the level's BOUNDS;
+  on an axis where it does not, centre the focal CARD. The root level is 800 px wide at 0.80 in a
+  1136 px box, so it is centred horizontally and only the vertical follows the frontier — centring
+  the card on both axes parks a first-column card in the middle and leaves a third of the canvas
+  empty.
+- **It is an ARRIVAL, not a floor on zoom.** `MIN_SCALE = 0.3` is untouched; a reader who wants the
+  whole eighteen-epic level still zooms out to it.
+
+The "you are here" ring is the card's own — the accent border + map-pin pill `WorkItemNode` already
+draws for `here`. Nothing new is painted to make the centring read as deliberate.
+
+### 3. The Dependencies panel COLLAPSES, in place
+
+Measured: the shipped legend is **385×100 px** (**385×104** once the chevron joins its heading row)
+and sits over the bottom-left of the graph for ever, having taught its three arrow styles once.
+Collapsed it is **141×38 px** — **86.6%** of the overlay area handed back to the canvas.
+
+- **It collapses IN PLACE.** The slot (`bottom-[4.25rem] left-3`) is unchanged, so the control does
+  not move under the reader's cursor and the panel can never collide with the zoom cluster at
+  `bottom-4 left-4`. Only the three rows above it go.
+- **The affordance is a chevron ON the panel's own heading row**, not a bare pill: the heading is the
+  one thing that must survive collapse (a legend with no heading is unfindable), so the control
+  belongs beside it. `ChevronDown` expanded, `ChevronUp` collapsed — the direction the panel moves.
+- **Copy + catalogue keys.** Accessible name `Hide the dependency legend` when expanded and
+  `Show the dependency legend` when collapsed, under **`roadmap.canvas.legend.collapse`** and
+  **`roadmap.canvas.legend.expand`**. Both land in `messages/en.json` AND `messages/zh.json` in the
+  same pull request (the i18n en↔zh parity gate). The heading keeps its existing
+  `roadmap.canvas.legend.heading` key. **Adding those keys and rendering the control is NOT this
+  card's** — it is the collapsible-legend card's.
+- **A11y.** A real `<button>` carrying `aria-expanded`, controlling the legend rows via
+  `aria-controls`; the caption is text, not a second button; the chevron is `aria-hidden`; the focus
+  ring is the shared `--focus-ring-color`.
+- **Tokens, all reused from the panel it lives on:** surface `--el-surface`, edge `--el-border`,
+  radius `--radius-card`, elevation `--shadow-card`, the 10.5 px tracked uppercase caption in
+  `--el-text-secondary`; the toggle is `--radius-control`, 20×20, glyph `--el-text-secondary`. No
+  second overlay language is invented.
+- **Persistence is the SHIPPED client-preference pattern** — `lib/hooks/useAttachmentsView.ts`'s
+  `useSyncExternalStore` + module-cached snapshot + a `motir.*` key. Key
+  **`motir.roadmap.legend.collapsed`**, server snapshot **expanded** (today's behaviour), so SSR
+  paints the stable default and the stored choice applies right after hydration with no
+  `setState`-in-an-effect. No server-side per-user view preference.
+- The sprint-scope variant (MOTIR-1379) collapses identically — its warning row is a
+  `warningLegend` override, not a second panel.
+
+### 4. The URL states — SEMANTICS and the two fallbacks
+
+| URL                                     | the level in view                                                                                               |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `/roadmap`                              | the project ROOT. Canonical — the param is omitted, as `?scope=` omits `project`                                |
+| `/roadmap?item=MOTIR-1234`              | the level whose members are **MOTIR-1234's CHILDREN** — you land _inside_ it, which is where a drill leaves you |
+| `/roadmap?scope=sprint&item=MOTIR-1234` | composes with the shipped scope param (MOTIR-1541); two independent view-state params on one route              |
+
+- **Both fallbacks are SILENT, and land at the root.** An `item` that does not resolve, or that the
+  viewer cannot browse, falls back to the root level — the same silent catch `/planning` already uses
+  for its `?item=` anchor (`app/(planning)/planning/page.tsx`). So does an `item` outside the
+  active-sprint slice when `scope=sprint`. No error state and no toast: a stale link is not a
+  failure, it is a level that no longer exists.
+- **An `item` with NO CHILDREN opens its PARENT's level, with that node SELECTED.** A drill can never
+  write one — the canvas only drills a `drillable` node — but a hand-edited link can, and "the level
+  whose children are none" is an empty canvas that reads as a failed load. A parentless childless
+  item falls back to the root. The selection is the canvas's shipped `selectedId`, not a new
+  highlight.
+- **The trail is SEEDED, not guessed.** The server resolves the anchor's ancestor chain with
+  `workItemsService.getWorkItemWithAncestors` and hands it to the canvas's shipped `initialTrail`
+  prop (MOTIR-2070), so the breadcrumb reads identically to a hand-drilled one.
+
+### The INTERACTION spec (three of the four refinements are BEHAVIOUR)
+
+A static arrangement under-specifies this surface, so the behaviour is stated here and the cards that
+OWN each behaviour are cited rather than invented — this design READS their descriptions
+(`relates_to`), it does not define them.
+
+| the reader does…       | the level          | the URL                                                 | scale + pan        | owned by                                         |
+| ---------------------- | ------------------ | ------------------------------------------------------- | ------------------ | ------------------------------------------------ |
+| drills a node          | its children       | **pushed** `?item=<KEY>`                                | a new ARRIVAL (§2) | the canvas seam + the level-addressable-URL card |
+| clicks **Back**        | the parent level   | **pushed** (the parent, or bare `/roadmap` at the root) | a new ARRIVAL      | the same two                                     |
+| clicks a crumb         | that crumb's level | **pushed**                                              | a new ARRIVAL      | the same two                                     |
+| presses browser Back   | the previous level | the URL is the source of truth                          | a new ARRIVAL      | the level-addressable-URL card                   |
+| reloads / opens a link | the `?item=` level | unchanged                                               | a new ARRIVAL      | the level-addressable-URL card                   |
+| collapses the legend   | unchanged          | unchanged                                               | unchanged          | the collapsible-legend card                      |
+
+- **The write is a PUSH, not a replace**, and it is SHALLOW (`lib/navigation/shallowUrl.ts`). Back
+  must return to the previous level — MOTIR-1549 exists because the scope toggle once used a replace
+  and Back stopped restoring it — and the level is already in the browser, so the server has nothing
+  to re-answer.
+- **Scale and pan on a URL restore are the ARRIVAL, not a saved viewport.** Nothing persists a pan.
+- **Only the collapse persists** (`motir.roadmap.legend.collapsed`), per §3.
+
+### Token / a11y discipline (same rules as the canvas)
+
+- **Colour** via `--el-*` only. The board's own annotation ink is `--el-text-secondary` (6.18–6.80:1
+  on every surface it lands on); measurement rules and the `?item=` fragment are
+  `--el-accent-on-surface`; the dead-band call-out is an `--el-tint-peach` fill with
+  `--el-text-strong`. The orb is drawn as its FOOTPRINT — an `--el-accent` disc with
+  `--el-accent-text` — because this asset is about clearance, not about the orb's material, which
+  `design/ai-chat/design-notes.md` owns. No invented hue anywhere; the only raw values are the
+  non-semantic frame outlines.
+- **Shape** via element-semantic tokens: overlays and canvases `--radius-card`, the Reset button
+  `--radius-btn` with `--spacing-btn-x/y`, the rail rows `--radius-control` at `--height-control`,
+  chips `--radius-badge`, address bars `--radius-input` with `--spacing-input-x/y`. No raw
+  `rounded-*` / `p-*` / `h-*`.
+- **A11y** — the collapse toggle is a real `<button>` with an `aria-label`, `aria-expanded` and
+  `aria-controls`; every decorative glyph is `aria-hidden`; the "you are here" node keeps its shipped
+  `aria-current="step"`; no nested interactive elements. The frames use `outline`, not `border`, so a
+  drawn viewport measures the width it claims.
+
+### How the asset was produced (reproduced here rather than cited — the harness is deleted)
+
+The mock is the app's own markup. It was produced by a throwaway Vitest dump under a config with no
+`globalSetup` (so the root config's per-worker Postgres provisioning never runs), then composed and
+measured in Chromium:
+
+```ts
+// a throwaway Vitest spec under the component-test tree, deleted before the commit
+// @vitest-environment happy-dom
+const level = buildWorkItemLevel({ items: rows, edges, offLevelBlockers: [] }, { markActive: true });
+const pos = deterministicLayout(level.nodes.map((n) => n.id), level.deps);
+// one entry per node: { id, x, y, html: renderToStaticMarkup(intl(n.content)) }
+render(intl(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)}
+  searchable fullScreenable locatable onResetPositions={() => {}} onNodeMove={() => {}} />));
+await waitFor(() => screen.getByTestId('edge-legend'));
+writeFileSync('canvas-chrome.html', document.querySelector('[data-testid="roadmap-canvas"]').outerHTML);
+render(intl(<RoadmapView projectKey="MOTIR" projectName="Motir" hasActiveSprint … />));
+writeFileSync('page-shell.html', document.body.innerHTML); // the real page header
+```
+
+```js
+// the stylesheet inlined in the mock IS Tailwind's real output for this document
+// @import 'tailwindcss' source(none); @source './roadmap-arrival.mock.html';
+// @import '@motir/design-system/theme.css'; @import '@motir/brand/brand.css';
+postcss([tailwindcssPostcss()]).process(input, { from: inputPath });
+```
+
+Measurement: Chromium at `deviceScaleFactor: 1` for the legibility read (a 2× export flatters small
+type), at the four viewports above for the fold, reading `getBoundingClientRect()` and
+`getComputedStyle().fontSize` on the real elements. The PNG is re-exported with the shipped
+`node scripts/render-design-mock.mjs design/roadmap/roadmap-arrival.mock.html --width 1200`, **after**
+`prettier --write` on the mock.
+
+### ⚠️ Planning flags — surfaced by this pass, owned by no card in MOTIR-3833
+
+1. **The 3-column layout wastes the canvas's WIDTH, and that is what forces the arrival scale down.**
+   `deterministicLayout` is fixed at `COLS = 3`, so an 18-node level is a 1000×1324 world box —
+   taller than wide — inside a canvas that is 1136×620 and wider than tall. `fitView` is therefore
+   bound by HEIGHT at every viewport measured, and today's arrival leaves 30–50% of the horizontal
+   room empty. A column count that responded to the viewport would raise the fit scale before any of
+   this story's changes did. Outside MOTIR-3833's scope boundary as written; a follow-up, not a
+   silent widening of the arrival card.
+2. **`min-h-[28rem]` still makes `/roadmap` scroll on a short window.** The full-fold card removes the
+   symptom at 1366×768 (the computed height becomes 488, so the floor stops binding), but the floor
+   itself is untouched, so a shorter window still scrolls the one signed-in surface the shell
+   promises never scrolls. Whether a canvas should carry a minimum height at all is a decision
+   nobody has made.
+3. **The Reset-layout / orb overlap is a SHIPPED defect, not one this story introduces** — measured
+   at 1366×768 today, the button overlaps the orb by 19 px, because the `min-h` floor already pushes
+   the canvas past the band the shell reserved. The full-fold card's lift fixes it as a side effect;
+   recorded here so it is not re-discovered as a regression of this story.
+4. **Nothing persists a canvas PAN or ZOOM, and this asset deliberately does not add it.** §4 settles
+   that a URL restore is an ARRIVAL — the level is addressable, the viewport is not. A per-level
+   saved viewport would be its own story with its own storage decision, never a clause in the arrival
+   rule.

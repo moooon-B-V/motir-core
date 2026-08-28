@@ -2588,7 +2588,7 @@ export const workItemsService = {
         executor: row.executor,
         planningSource: row.planningSource,
         implementationSource: row.implementationSource,
-        hasLinkedPr: row.githubPullRequests.length > 0,
+        hasLinkedPr: row.deliveries.length > 0,
         sessionBranch: row.sessionBranch,
       };
       if (candidate.createdAt.getTime() <= seedBurstEnd.getTime())
@@ -4801,13 +4801,14 @@ export const workItemsService = {
    * two fields that say whether its merge reached the trunk.
    *
    * ── This is NOT `listLinkedPullRequests` under a new name ─────────────────
-   * That method reads `github_pull_request.work_item_id`, the SCALAR link, and so
-   * answers a question with a structural ceiling of one card per pull request: a
-   * `motir auto` pull request delivering twelve cards can be the link target of at
-   * most one of them, and appears on no other card's surface. This reads
-   * `work_item_delivery`, which is many-to-many in both directions. While the
-   * EXPAND step runs, both are written and both are correct; when the scalar is
-   * dropped, this is the survivor.
+   * That method answered the same question off `github_pull_request.work_item_id`,
+   * the SCALAR link, and so carried a structural ceiling of one card per pull
+   * request: a `motir auto` pull request delivering twelve cards could be the link
+   * target of at most one of them, and appeared on no other card's surface. Both
+   * read `work_item_delivery` now (MOTIR-3756 moved the Development surface;
+   * MOTIR-3757 dropped the column), so the two differ in their PROJECTION — that
+   * one is display-ready for a rail, this one carries the completion facts a gate
+   * decides on — rather than in what they can express.
    *
    * ⚠️ Empty is the ORDINARY answer. Nearly every card in the tree has no delivery
    * row, and every consumer — the gate, the rail, the CLI's watch loop — must read

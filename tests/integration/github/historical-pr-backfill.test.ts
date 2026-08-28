@@ -145,7 +145,6 @@ const CONTENT_COLUMNS = {
   merged: true,
   headRef: true,
   title: true,
-  workItemId: true,
   linkedManually: true,
 } as const;
 
@@ -156,12 +155,55 @@ function readRow(repoId: string, number: number) {
   });
 }
 
+/** A merged mirror row that already DELIVERS a card — the state the sweep must not
+ *  disturb. The link is a `work_item_delivery` row since MOTIR-3757 dropped
+ *  `github_pull_request.work_item_id`; `linkedManually` says only HOW it was made,
+ *  and both values of it are exercised above. */
+async function deliveredRow(
+  fx: WorkItemFixture,
+  repoId: string,
+  number: number,
+  headRef: string,
+  workItemId: string,
+  linkedManually: boolean,
+) {
+  const row = await adminDb.githubPullRequest.create({
+    data: {
+      provider: 'github',
+      repoId,
+      number,
+      state: 'closed',
+      merged: true,
+      headRef,
+      linkedManually,
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: { workspaceId: fx.workspaceId, workItemId, githubPullRequestId: row.id, repoId },
+  });
+  return row;
+}
+
+/** The cards a mirrored pull request delivers, by its `(repo, number)` identity. */
+async function deliveredIds(repoId: string, number: number): Promise<string[]> {
+  const pr = await adminDb.githubPullRequest.findUniqueOrThrow({
+    where: { repoId_number: { repoId, number } },
+    select: { id: true },
+  });
+  const rows = await adminDb.workItemDelivery.findMany({
+    where: { githubPullRequestId: pr.id },
+    orderBy: { createdAt: 'asc' },
+    select: { workItemId: true },
+  });
+  return rows.map((r) => r.workItemId);
+}
+
 const DRY = { dryRun: true };
 const APPLY = { dryRun: false };
 
 describe('historicalPullRequestBackfillService — mirroring merged history', () => {
-  it('attributes NOTHING — a branch key and a title key both mirror with a null link (MOTIR-3674)', async () => {
-    const { fx, repoId } = await makeConnectedRepo();
+  it('attributes NOTHING — a branch key and a title key both mirror unlinked (MOTIR-3674)', async () => {
+    const { fx } = await makeConnectedRepo();
     const byBranch = await createTestWorkItem(fx, { kind: 'task', title: 'Branch-named' });
     const byTitle = await createTestWorkItem(fx, { kind: 'task', title: 'Title-named' });
 
@@ -183,9 +225,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     // All three mirrored, all three unlinked. The rows are the workspace's pull
     // request HISTORY — a fact worth keeping — and the explicit-link picker
     // (MOTIR-1596) is what attaches one to a card, by a human's act.
-    expect((await readRow(repoId, 1)).workItemId).toBeNull();
-    expect((await readRow(repoId, 2)).workItemId).toBeNull();
-    expect((await readRow(repoId, 3)).workItemId).toBeNull();
+    expect(await adminDb.workItemDelivery.count()).toBe(0);
   });
 
   it('never mirrors a closed-UNMERGED PR — hasLinkedPr does not read the merged column', async () => {
@@ -232,7 +272,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     expect(repo.written).toBe(1);
     expect(repo.unattributed).toBe(1);
     expect(await adminDb.githubPullRequest.count()).toBe(1);
-    expect((await readRow(repoId, 101)).workItemId).toBeNull();
+    expect(await deliveredIds(repoId, 101)).toEqual([]);
   });
 
   it('a DRY RUN decides and reports but writes nothing', async () => {
@@ -274,55 +314,36 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     const { fx, repoId } = await makeConnectedRepo();
     const branchItem = await createTestWorkItem(fx, { kind: 'task', title: 'Named by branch' });
     const manualItem = await createTestWorkItem(fx, { kind: 'task', title: 'Linked by hand' });
-    await adminDb.githubPullRequest.create({
-      data: {
-        provider: 'github',
-        repoId,
-        number: 7,
-        state: 'closed',
-        merged: true,
-        headRef: `subtask/${branchItem.identifier}`,
-        workItemId: manualItem.id,
-        linkedManually: true,
-      },
-    });
+    await deliveredRow(fx, repoId, 7, `subtask/${branchItem.identifier}`, manualItem.id, true);
 
     serveListing([ghPull(7, { headRef: `subtask/${branchItem.identifier}` })]);
     const report = await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
 
     expect(report.repos[0]!.skippedLinked).toBe(1);
     expect(report.repos[0]!.written).toBe(0);
-    expect((await readRow(repoId, 7)).workItemId).toBe(manualItem.id);
+    expect(await deliveredIds(repoId, 7)).toEqual([manualItem.id]);
   });
 
   it('preserves a link the RETIRED PARSE wrote — `linked_manually: false` is still a link', async () => {
     // The production population this protects: 1026 rows the parse linked, all
     // carrying `linked_manually: false`. Gating the skip on that flag would have
-    // the sweep overwrite every one of them with a null link.
+    // the sweep overwrite every one of them — and since MOTIR-3757 what it would
+    // overwrite is the FLAG, because the link itself is a delivery row this sweep
+    // never touches. The guard's condition moved to the delivery set with it.
     const { fx, repoId } = await makeConnectedRepo();
     const parseLinked = await createTestWorkItem(fx, {
       kind: 'task',
       title: 'Linked by the parse',
     });
-    await adminDb.githubPullRequest.create({
-      data: {
-        provider: 'github',
-        repoId,
-        number: 8,
-        state: 'closed',
-        merged: true,
-        headRef: `subtask/${parseLinked.identifier}`,
-        workItemId: parseLinked.id,
-        linkedManually: false,
-      },
-    });
+    await deliveredRow(fx, repoId, 8, `subtask/${parseLinked.identifier}`, parseLinked.id, false);
 
     serveListing([ghPull(8, { headRef: `subtask/${parseLinked.identifier}` })]);
     const report = await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
 
     expect(report.repos[0]!.skippedLinked).toBe(1);
     expect(report.repos[0]!.written).toBe(0);
-    expect((await readRow(repoId, 8)).workItemId).toBe(parseLinked.id);
+    expect(await deliveredIds(repoId, 8)).toEqual([parseLinked.id]);
+    expect((await readRow(repoId, 8)).linkedManually).toBe(false);
   });
 
   it('scopes to one workspace / one repo, and reports a skipped non-GitHub connection', async () => {
@@ -374,10 +395,10 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
       workspaceId: keep.workspaceId,
     });
     expect(scoped.repos.map((r) => r.repoRef)).toEqual(['moooon-B-V/motir-core']);
-    // The row is written for the in-scope repository and for that one only. Its
-    // link is null since MOTIR-3674 — this case is about SCOPE, and the sweep no
-    // longer attributes anything (see the first case in this file).
-    expect((await readRow(repoId, 8)).workItemId).toBeNull();
+    // The row is written for the in-scope repository and for that one only. It
+    // delivers nothing since MOTIR-3674 — this case is about SCOPE, and the sweep
+    // no longer attributes anything (see the first case in this file).
+    expect(await deliveredIds(repoId, 8)).toEqual([]);
 
     const byRepo = await historicalPullRequestBackfillService.backfillMergedPullRequests({
       ...DRY,
@@ -453,9 +474,9 @@ describe('a backfilled row is INDISTINGUISHABLE from a live-ingested one', () =>
     );
     expect(live.event).toBe('pull_request');
     const liveRow = await readRow(repoId, 100);
-    // NULL since MOTIR-3674 — the live path does not infer a link either, which
+    // EMPTY since MOTIR-3674 — the live path does not infer a link either, which
     // is what makes the two paths identical rather than merely similar.
-    expect(liveRow.workItemId).toBeNull();
+    expect(await deliveredIds(repoId, 100)).toEqual([]);
 
     // (2) Now run the sweep over a listing carrying that SAME PR plus an
     //     otherwise-identical sibling #101 the webhook never saw.
@@ -479,12 +500,13 @@ describe('composed with the provenance backfill', () => {
   // cost of retiring the parse rather than a test detail.
   //
   // `classifyImplementationSource` stamps `byok` on `row.hasLinkedPr`, and
-  // `hasLinkedPr` is `githubPullRequests.length > 0` — the relation on
-  // `github_pull_request.work_item_id`. The historical sweep used to SET that
-  // column from the head ref, which is how MOTIR-1965 recovered provenance for
-  // ~1100 items whose pull requests predated the App installation. With the
-  // attribution pass gone, a mirrored row carries no link, so it is not evidence
-  // for any card and the classifier keeps abstaining.
+  // `hasLinkedPr` is `deliveries.length > 0` (MOTIR-3757; it read the singular FK
+  // relation until that column was dropped, with the same answer for every row).
+  // The historical sweep used to WRITE that link from the head ref, which is how
+  // MOTIR-1965 recovered provenance for ~1100 items whose pull requests predated
+  // the App installation. With the attribution pass gone, a mirrored row carries
+  // no delivery, so it is not evidence for any card and the classifier keeps
+  // abstaining.
   //
   // That is the correct reading of the data Motir actually has: an inferred link
   // producing a provenance STAMP is a guess wearing a fact's clothes. It is also

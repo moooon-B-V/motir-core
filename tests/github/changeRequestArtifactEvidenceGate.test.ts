@@ -10,7 +10,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { assessArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { linkPrByIdentifier } from '../helpers/prLink';
+import { deliveredItemIds, linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-3364 — A REFUSED CLOSE-OUT IS A HOLD, NOT A CRASH.
 //
@@ -190,8 +190,9 @@ describe('the artifact-evidence hold — a merge that cannot complete a `deploy`
 
     // The pull-request row still records the truth about the merge itself — the
     // hold changes what the CARD says, never what the change request did.
-    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7001 } });
-    expect(prRow).toMatchObject({ state: 'closed', merged: true, workItemId: s.item.id });
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7001 } });
+    expect(prRow).toMatchObject({ state: 'closed', merged: true });
+    expect(await deliveredItemIds(prRow.id)).toEqual([s.item.id]);
   });
 
   it('says WHY on the card — the pull request, the forms accepted, and the escape hatch', async () => {

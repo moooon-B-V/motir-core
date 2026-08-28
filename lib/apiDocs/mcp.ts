@@ -393,15 +393,24 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '138c5dd702b3',
   },
+  publish_design_result: {
+    summary:
+      'Put the design RESULT on a design work item — the note sections you changed, the mock and the .png export, in one call. It is the deliverable a reviewer opens, and nothing else publishes it.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '8742db646e68',
+  },
   link_pull_request: {
     summary:
-      'Declare which work item a pull request belongs to — call it right after opening one. It ' +
-      'writes both the singular link a card carries, which MOVES, and a delivery row, which ADDS — ' +
-      'and works before any webhook delivery has arrived.',
+      'Declare which work item a pull request delivers — call it right after opening one, once ' +
+      'per work item it delivers. The association is a SET, so a second call ADDS rather than ' +
+      'moving, and it works before any webhook delivery has arrived.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     // Re-pinned for MOTIR-3721: the description said a pull request "cannot point at two"
     // work items, which the delivery table falsified when MOTIR-3658 shipped the dual write.
-    descriptionFingerprint: '50b2e82bc56d',
+    // Re-pinned again for MOTIR-3757, and the SUMMARY changed with it: the description said
+    // the link a work item carries is SINGULAR and MOVES, which stopped being true when the
+    // column it described was dropped.
+    descriptionFingerprint: '97a9ab212c18',
   },
   unlink_pull_request: {
     summary:

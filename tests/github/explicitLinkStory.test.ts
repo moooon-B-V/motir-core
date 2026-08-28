@@ -243,8 +243,7 @@ describe('a pull request belongs to a card only by an explicit link (MOTIR-3672)
     // The assertion that matters is on the CARD, not on a return value: the
     // defect was never visible in one.
     expect(await statusOf(mentioned.id)).toBe('in_progress');
-    const row = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 101 } });
-    expect(row.workItemId).toBeNull();
+    await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 101 } });
     expect(await adminDb.workItemDelivery.count()).toBe(0);
   });
 

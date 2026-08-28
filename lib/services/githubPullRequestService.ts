@@ -159,20 +159,22 @@ export const githubPullRequestService = {
       if (!pr || pr.repo.workspaceId !== ctx.workspaceId)
         throw new GithubPullRequestNotFoundError(pullRequestId);
 
-      const updated = await githubPullRequestRepository.setWorkItemLink(
-        pullRequestId,
-        currentItemId,
-        tx,
-      );
-      // The DELIVERY LINK, written beside the FK (Story MOTIR-3655 · MOTIR-3658,
-      // ADR `docs/decisions/work-item-delivery-links.md`). This is the EXPAND
-      // window: both are written, the table is what later readers move to, and
-      // the column is dropped by a follow-up once none of them reads it.
+      // The DECLARED-not-inferred stamp. It no longer records a link — the FK it
+      // qualified is gone (MOTIR-3757) — and it is written for its own sake, so
+      // that the surviving `linked_manually` column keeps meaning the same thing
+      // for a row written today as for one written before the drop. The re-read
+      // it returns is what the DTO is built from.
+      const updated = await githubPullRequestRepository.markLinkedManually(pullRequestId, tx);
+      // THE LINK (Story MOTIR-3655 · MOTIR-3658, ADR
+      // `docs/decisions/work-item-delivery-links.md`), and since MOTIR-3757 the
+      // ONLY one: a pull request's association with a work item is a row in this
+      // table and lives nowhere else.
       //
-      // ⚠️ The two disagree ON PURPOSE about a re-link, and the table is the one
-      // that is right. The FK is singular so a re-link MOVES it; the table ADDS,
-      // because one pull request delivering several cards is a real shape (a
-      // `motir auto` run is exactly it) that the column could never express.
+      // It is a SET, which is the shape the retired column could never express:
+      // a re-link ADDS rather than moving, because one pull request delivering
+      // several cards is a real thing (a `motir auto` run is exactly it). Taking
+      // an association back is `unlinkPullRequest`, not a side effect of linking
+      // somewhere else.
       await workItemDeliveryRepository.add(
         {
           workspaceId: ctx.workspaceId,
@@ -214,12 +216,13 @@ export const githubPullRequestService = {
    *
    * ── The division of authority ─────────────────────────────────────────────
    * The caller is authoritative about the LINK and about nothing else; the
-   * webhook is authoritative about STATE and about nothing else. `linkedManually`
-   * is the boundary between those two claims and already exists, which is what
-   * turns a race into a handshake: `syncChangeRequestStatus` short-circuits its
-   * branch/title parse on a `linkedManually` row, so every later delivery
-   * refreshes `state` / `merged` / `headRef` / `baseRef` / `title` and leaves
-   * `work_item_id` alone.
+   * webhook is authoritative about STATE and about nothing else. That used to
+   * need a boundary marker, because both wrote the same column: `linkedManually`
+   * made a declared link STICKY against the sync's branch/title parse. Neither
+   * side of that is left — the parse went with MOTIR-3674 and the column with
+   * MOTIR-3757 — so the two claims now live in two different tables and cannot
+   * collide. A delivery refreshes `state` / `merged` / `headRef` / `baseRef` /
+   * `title` on the mirror row and reaches no association at all.
    *
    * That is why the two arms below are asymmetric, and the asymmetry is the
    * whole behaviour rather than an optimisation:
@@ -239,9 +242,11 @@ export const githubPullRequestService = {
    * created. An unknown or cross-workspace repository and an unknown item both
    * raise their typed not-found, so neither leaks existence.
    *
-   * ⚠️ The FK is SINGULAR: a call naming a different work item MOVES the link
-   * rather than adding one. `movedFrom` carries the identifier it was taken
-   * from so a caller can say so rather than report an addition.
+   * ⚠️ THE ASSOCIATION IS A SET: a call naming a different work item ADDS a
+   * second delivery rather than moving the first, and there is no move to report
+   * (MOTIR-3757 — the scalar `movedFrom` described is gone with the column). A
+   * mistaken link is retracted by `unlinkPullRequest`, which is why that door
+   * exists.
    */
   async linkPullRequestByCoordinates(
     input: {
@@ -259,7 +264,7 @@ export const githubPullRequestService = {
       title: string | null;
     },
     ctx: ServiceContext,
-  ): Promise<{ link: LinkedPullRequestDto; created: boolean; movedFrom: string | null }> {
+  ): Promise<{ link: LinkedPullRequestDto; created: boolean }> {
     // The key this tool DECLARES, asserted where the write happens rather than
     // left to the MCP permission gate alone: the gate says what the TOKEN may
     // reach, this says what its owner may do to this project. Runs BEFORE the
@@ -315,7 +320,6 @@ export const githubPullRequestService = {
           headRef: input.headRef,
           baseRef: input.baseRef,
           title: input.title,
-          workItemId: input.workItemId,
           linkedManually: true,
         };
         try {
@@ -329,14 +333,13 @@ export const githubPullRequestService = {
         }
       }
 
-      const previousWorkItemId = existing?.workItemId ?? null;
-      // ONE write for both arms, and it is the narrow one: `setWorkItemLink`
-      // touches `work_item_id` + `linked_manually` and nothing else, so the
-      // already-ingested case cannot clobber a delivery's state fields.
-      const updated = await githubPullRequestRepository.setWorkItemLink(prId, input.workItemId, tx);
-      // The DELIVERY LINK — see the note on the sibling arm. `repo.id` rather
-      // than a re-read: this arm already resolved the repository row, and the
-      // gate compares each member's merge against THAT repository's own default
+      // ONE write for both arms, and it is the narrow one: `markLinkedManually`
+      // touches `linked_manually` and nothing else, so the already-ingested case
+      // cannot clobber a delivery's state fields.
+      const updated = await githubPullRequestRepository.markLinkedManually(prId, tx);
+      // THE LINK — see the note on the sibling arm. `repo.id` rather than a
+      // re-read: this arm already resolved the repository row, and the gate
+      // compares each member's merge against THAT repository's own default
       // branch, so the column is stored rather than joined for per member.
       await workItemDeliveryRepository.add(
         {
@@ -348,16 +351,9 @@ export const githubPullRequestService = {
         tx,
       );
 
-      let movedFrom: string | null = null;
-      if (previousWorkItemId && previousWorkItemId !== input.workItemId) {
-        const previous = await workItemRepository.findById(previousWorkItemId, tx);
-        movedFrom = previous?.identifier ?? null;
-      }
-
       return {
         link: toLinkedPullRequestDto(updated),
         created: existing === null,
-        movedFrom,
         prId,
       };
     }).then(async ({ prId, ...result }) => {
@@ -381,18 +377,17 @@ export const githubPullRequestService = {
    * MOTIR-3658).
    *
    * ── Why this has to exist now, when it never did before ───────────────────
-   * With the singular FK a correction was expressible as a MOVE: link the pull
-   * request to the right item and the wrong association vanished, because there
-   * was only ever one. `work_item_delivery` is a set, so a re-link ADDS and the
-   * mistaken row stays. Removal therefore stops being a side effect of the fix
-   * and has to be its own operation.
+   * While the association was one nullable column a correction was expressible as
+   * a MOVE: link the pull request to the right item and the wrong association
+   * vanished, because there was only ever one. `work_item_delivery` is a set, so
+   * a re-link ADDS and the mistaken row stays. Removal therefore stops being a
+   * side effect of the fix and has to be its own operation.
    *
    * ── What it does NOT touch ────────────────────────────────────────────────
-   * `github_pull_request.work_item_id` is left exactly as it is. That column is
-   * the legacy scalar this story is retiring, its readers have not moved yet, and
-   * clearing it here would take a delivery's status sync away from a card whose
-   * OTHER links are perfectly good. The link table is the thing being corrected;
-   * the column is dropped by the follow-up, not edited by this door.
+   * The pull-request MIRROR row. It holds no association to remove — the scalar
+   * that used to sit beside this table was dropped by MOTIR-3757 — so this door
+   * deletes one delivery row and leaves `github_pull_request` exactly as the
+   * webhook last wrote it, `linked_manually` included.
    *
    * Returns whether a row was actually removed, so a caller can say "nothing to
    * unlink" rather than reporting a success that did nothing.
@@ -446,9 +441,7 @@ export const githubPullRequestService = {
    * simply not linked (a retry, or a correction somebody else already made).
    *
    * ── What it does NOT touch ────────────────────────────────────────────────
-   * `github_pull_request.work_item_id`, for the reason the sibling arm states: the
-   * column is the legacy scalar, and clearing it here would take a delivery's
-   * status sync away from a card whose OTHER links are good.
+   * The pull-request mirror row, for the reason the sibling arm states.
    */
   async unlinkPullRequestByCoordinates(
     input: {

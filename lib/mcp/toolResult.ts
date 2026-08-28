@@ -81,6 +81,7 @@ import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
+import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import {
   GithubNotConnectedError,
   GithubPullRequestNotFoundError,
@@ -295,6 +296,19 @@ export function toToolError(err: unknown): CallToolResult {
   // exact moment an agent most needs to be told what to fix — the same failure
   // shape `docs/decisions/attachment-api-door.md` §1 rejects for gates.
   if (err instanceof AttachmentError) {
+    return toolError(err.code, err.message);
+  }
+  // The design-publish door's typed refusals (MOTIR-3782) — mapped on the
+  // ABSTRACT BASE for exactly the reason the arm above is, and the stakes are
+  // higher here because more of them are reachable in normal use. A container
+  // target (`DESIGN_EVIDENCE_NOT_A_LEAF`), a key that is not a child of the
+  // declared container (`…NOT_A_CHILD`), an empty asset list, a pathname outside
+  // the item's prefix, a blob that never landed and a supersede race all carry a
+  // code and a message an agent can act on in one hop. Left unmapped they would
+  // surface as an opaque internal error at the end of a design card — the
+  // moment the card's whole deliverable is at stake and the agent has the bytes
+  // in hand to retry.
+  if (err instanceof DesignEvidenceError) {
     return toolError(err.code, err.message);
   }
   // The organization's storage cap. Not an AttachmentError (it is a billing

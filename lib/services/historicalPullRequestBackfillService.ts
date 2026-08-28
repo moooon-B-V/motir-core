@@ -6,6 +6,7 @@ import {
 } from '@/lib/github/historicalPullRequests';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 
 // Historical pull-request MIRROR backfill (MOTIR-1965) — the service behind
@@ -31,8 +32,8 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 //      the head-ref / title parse, exported for this caller rather than
 //      re-implemented; that resolver is gone and neither path infers a link now.
 //   3. The write goes through `githubPullRequestRepository.upsert` — the same
-//      repository call, with the same column tuple, under the same row lock and
-//      the same manual-link stickiness the sync applies.
+//      repository call, with the same column tuple, under the same row lock the
+//      sync takes.
 // The integration suite asserts it by DIFFING the columns of a row this sweep
 // wrote against one the webhook wrote for the same PR, rather than by eye.
 //
@@ -44,20 +45,24 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 // the parse does not degrade the attribution, it REMOVES it. That is the whole
 // choice, and it is deliberate: the sweep keeps doing the part that is fact (the
 // pull request existed, on this repository, with this head ref, merged at this
-// time) and stops doing the part that is a guess. A row it writes carries
-// `work_item_id: null` and shows up on the ledger and the Development surface
-// attached to no card, until somebody links it.
+// time) and stops doing the part that is a guess. A row it writes carries NO
+// delivery and shows up on the ledger and the Development surface attached to no
+// card, until somebody links it.
 //
 // A row that ALREADY carries a link keeps it, untouched — the same grandfathering
 // the sync applies, for the same reason: a stored link is a link, and this card
 // retires the inference rather than the history it produced.
 //
-// WHAT IT DOES NOT DO. It writes no work-item provenance. `pnpm
-// db:backfill:provenance` is the (idempotent, null-guarded) second step, and it
-// needs no change: once these rows exist, `hasLinkedPr` is true and the existing
-// `byok` rule fires on its own. It also never transitions a status — the mirror
-// row is evidence, not an event, and replaying six weeks of merges through the
-// status sync would rewrite the history of every card it touched.
+// WHAT IT DOES NOT DO. It writes no work-item provenance, and — since MOTIR-3674
+// removed the attribution pass — it no longer feeds any either. `hasLinkedPr` is
+// the provenance classifier's evidence and it reads the DELIVERY set
+// (MOTIR-3757); a row this sweep writes carries none, so `pnpm
+// db:backfill:provenance` sees exactly what it saw before the sweep ran. That is
+// the honest reading of MOTIR-3674's choice rather than a regression: the sweep
+// mirrors pull requests, and only an explicit `link_pull_request` says which card
+// one delivers. It also never transitions a status — the mirror row is evidence,
+// not an event, and replaying six weeks of merges through the status sync would
+// rewrite the history of every card it touched.
 
 /** How the sweep is scoped. Both filters are optional; with neither, every
  *  GitHub-connected repo in the database is swept (the defect is cross-tenant —
@@ -124,7 +129,6 @@ interface TargetRow {
    *  would be indistinguishable from a pre-column row and read as UNKNOWN. */
   baseRef: string;
   title: string | null;
-  workItemId: string | null;
   linkedManually: boolean;
 }
 
@@ -278,14 +282,26 @@ async function applyOne(
   if (!dryRun) await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
   const existing = await githubPullRequestRepository.findByRepoAndNumber(repo.id, cr.number, tx);
 
-  // A STORED link is sticky, however it was made (MOTIR-3674's grandfathering —
-  // the condition is `workItemId`, not `linkedManually`, exactly as in the sync).
-  // The live sync never re-derives a link, so neither does this: a historical PR
-  // that already names a card keeps that card, and this sweep touches nothing
-  // else on the row.
-  if (existing?.workItemId != null) {
-    report.skippedLinked += 1;
-    return;
+  // A STORED link is sticky, however it was made (MOTIR-3674's grandfathering).
+  // The condition RE-POINTS with the storage (MOTIR-3757): it read
+  // `existing.workItemId != null` while the association was a column on this row,
+  // and that column is gone, so it asks the table the association moved to. The
+  // question is unchanged — *does this pull request already deliver a card?* —
+  // and so is the answer for every row, because the EXPAND migration
+  // (20260827094500) backfilled one delivery per non-null link and every writer
+  // since has written both.
+  //
+  // ⚠️ AND THE GUARD IS STILL LOAD-BEARING, for a DIFFERENT column than the one
+  // it was written for. The sweep can no longer clobber a link; what it CAN
+  // clobber is `linked_manually`, which `target` sets to `false` unconditionally.
+  // Delete the guard and every already-linked row this sweep re-reads loses its
+  // provenance stamp.
+  if (existing) {
+    const deliveries = await workItemDeliveryRepository.listByPullRequest(existing.id, tx);
+    if (deliveries.length > 0) {
+      report.skippedLinked += 1;
+      return;
+    }
   }
 
   // No attribution pass. Every row this sweep writes carries a null link.
@@ -304,9 +320,6 @@ async function applyOne(
     headRef: cr.headRef,
     baseRef: cr.baseRef,
     title: cr.title,
-    // Unattributed by construction: the early return above is the only path on
-    // which `existing` carries a link, and it does not reach here.
-    workItemId: null,
     linkedManually: false,
   };
 
@@ -331,20 +344,17 @@ async function applyOne(
  * with ONE stated exception below; nothing else is (`id`, `repoId` and the
  * timestamps are identity, not content).
  *
- * ⚠️ `work_item_id` IS NOT COMPARED, and its absence is a deletion rather than an
- * oversight (MOTIR-3756, ADR `docs/decisions/delivery-reader-migration.md` §0 row
- * S5). The comparison used to read `existing.workItemId === target.workItemId`,
- * and `applyOne`'s sticky-link early return is what makes that provably
- * `null === null`: a row carrying a link RETURNS before reaching here, and
- * `target.workItemId` is the literal `null` on the only path that does. So the
+ * ⚠️ NO LINK IS COMPARED, and its absence is a deletion rather than an oversight
+ * (MOTIR-3756, ADR `docs/decisions/delivery-reader-migration.md` §0 row S5). The
+ * comparison used to read `existing.workItemId === target.workItemId`, and
+ * `applyOne`'s sticky-link early return is what made that provably
+ * `null === null`: a row carrying a link RETURNS before reaching here. So the
  * clause could never distinguish two rows — it was a read of the column that
- * decided nothing, and the column's readers are what this card is retiring.
+ * decided nothing.
  *
- * What still owns the column here is the early return itself, which is a WRITE-path
- * guard rather than a reader of a set: the sweep must not overwrite a link, and
- * while `work_item_id` is written (W1/W2 are untouched by this card) a stored link
- * is the thing it must not touch. That guard retires with the column, in the
- * CONTRACT card.
+ * The column itself went with MOTIR-3757, and the early return OUTLIVES it: it is
+ * a WRITE-path guard rather than a reader of a set, and what it now protects is
+ * `linked_manually`, which this sweep writes `false` on every row it reaches.
  */
 function rowMatches(
   existing: {
