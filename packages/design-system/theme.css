@@ -2985,6 +2985,43 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   MOTION FLOOR — the reduced-motion guard the PACKAGE owns (MOTIR-3844)
+
+   Not an axis and not a tier: a floor every consumer of this stylesheet gets
+   whichever palette, style or type it applies. The style axis already gates
+   its OWN motion (the `aurora` canvas drift and the `3d-immersive` tilt /
+   menu unfold, all `prefers-reduced-motion`-gated in their Tier-2 blocks
+   above), because that motion is decorative and belongs to the style that
+   introduced it. `animate-spin` belongs to no style: `Spinner` paints it on
+   ordinary interactive surfaces, and `<Button loading>` substitutes a Spinner
+   for the left icon — so it renders under every axis combination, and nothing
+   guarded it. Tailwind v4 defines `--animate-spin: spin 1s linear infinite`
+   with no media query anywhere near it, and neither consumer's `globals.css`
+   carried an override.
+
+   STOP THE ROTATION, KEEP THE GLYPH. A spinner is not decoration a reader can
+   do without — it is the only signal that a control is working — so this sets
+   `animation` and nothing else: the ring keeps its size, its border and its
+   `role="status"`, and a reader who asked for less motion still sees that
+   something is in flight. (`motir-marketing`'s own `.motir-spin` reaches the
+   same shape by hand, and pairs it with a label change — with the animation
+   stilled, the word is the whole of the state. A consumer whose only motion
+   cue is the rotation should do the same.)
+
+   WHY IT WINS THE CASCADE. `.animate-spin` is emitted by Tailwind inside
+   `@layer utilities`; this rule is UNLAYERED, and an unlayered declaration
+   outranks a layered one whatever their specificity. That is the whole of the
+   mechanism — it does not depend on source order or on this file's position in
+   the `@import` list. Measured, not reasoned: tests/theme/reducedMotionSpinner
+   reads it back off the COMPILED stylesheet for both consumer shapes.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    AXIS 1 (COLOUR) — data-palette overrides (Subtask 7.3.48)
    Registry: lib/theme/palettes.ts. A named palette re-skins the app by
    OVERRIDING the Tier-3 --el-* layer above — and ONLY colour (--el-* /
