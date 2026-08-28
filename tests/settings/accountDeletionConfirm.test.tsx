@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import en from '@/messages/en.json';
+import zh from '@/messages/zh.json';
 import type { AccountErasurePreviewDTO } from '@/lib/dto/accountErasure';
 import { erasureDueAt } from '@/lib/users/dataSubjectRequests';
 
@@ -84,6 +85,19 @@ function renderModal(overrides: Partial<AccountErasurePreviewDTO> = {}) {
 /** The rendered dialog panel — Radix portals it, so reach for it by role. */
 function dialog(): HTMLElement {
   return screen.getByRole('alertdialog');
+}
+
+/**
+ * The schedule callout's paragraph — the last thing a reader reads before typing
+ * their own address. Reached through the sentence that opens it rather than a
+ * test id, because the sentence is the deliverable and a hook around it would
+ * survive the copy being wrong.
+ */
+function scheduleCallout(): HTMLElement {
+  const opener = within(dialog()).getByText('Nothing is erased today.');
+  const paragraph = opener.closest('p');
+  if (!paragraph) throw new Error('the schedule callout is no longer a <p>');
+  return paragraph;
 }
 
 beforeEach(() => {
@@ -322,5 +336,56 @@ describe('⚠️ the window is INTERPOLATED — no component and no string retyp
     expect(en.settings.account.data.delete.grace.title).toContain('{date}');
     expect(en.settings.account.data.delete.grace.daysLeft).toContain('{days');
     expect(en.settings.account.data.delete.confirm.schedule).toContain('{date}');
+  });
+});
+
+describe('⚠️ the schedule callout does NOT promise that signing in cancels the erasure', () => {
+  // MOTIR-3772. MOTIR-3742 removed `cancelDeletionOnSignIn`, so taking a deletion
+  // back is now a deliberate press on one of the two drawn doors — the app-wide
+  // banner, or this pane (design DECISION 4, amended on the record). It swept the
+  // four carriers of the old claim that were SYMBOLS — the auth hook, the service,
+  // the banner component, the decision record — and could not reach the two that
+  // are PROSE: this string and the mock panel that draws it. Prose has no
+  // compiler, no import graph and no failing test when the thing it describes
+  // stops being true, which is exactly what this block is standing in for.
+  //
+  // ⚠️ THE GUARD IS SHAPED AROUND THE CLAIM, NOT AROUND ITS WORDS. The corrected
+  // copy contains both "signing back in" and "cancel", so any naive
+  // /sign.*cancel/ would flag the fix as the defect. This matches a sign-in named
+  // in the same SENTENCE as a cancellation with no negation between the two —
+  // i.e. the affirmative promise, and only that.
+  const AFFIRMS_SIGN_IN_CANCELS =
+    /sign(?:ing)?\s+(?:back\s+)?in\b(?:(?!\bnot\b|\bnever\b|n['\u2019]t\b)[^.])*\bcancel/i;
+
+  it('says signing back in does NOT cancel it, and names the two doors that do', () => {
+    renderModal();
+    const callout = scheduleCallout().textContent ?? '';
+
+    expect(callout).toMatch(/signing back in does not cancel/i);
+    // The two doors, both drawn in panel 5 and both one press: the app-wide
+    // banner the reader lands on, and this pane.
+    expect(callout).toMatch(/banner/i);
+    expect(callout).toMatch(/Data & privacy/i);
+
+    expect(callout).not.toMatch(AFFIRMS_SIGN_IN_CANCELS);
+  });
+
+  it('carries none of the retired sentence, verbatim', () => {
+    renderModal();
+    // Identity as well as shape, so a straight revert of the string is caught
+    // even if some future rewording slips past the regex above.
+    expect(scheduleCallout().textContent ?? '').not.toContain(
+      'Sign in before then and the deletion is cancelled',
+    );
+  });
+
+  it('holds for the zh twin, which carried the same claim in its own words', () => {
+    // The catalogue parity gate keeps the KEY in lockstep across locales;
+    // nothing keeps the CLAIM in lockstep, and `登录即可撤销注销` — "signing in
+    // is enough to take the deletion back" — is the carrier no English-reading
+    // review would catch.
+    const schedule = zh.settings.account.data.delete.confirm.schedule;
+    expect(schedule).not.toContain('登录即可撤销');
+    expect(schedule).toContain('不会撤销');
   });
 });
