@@ -2444,7 +2444,7 @@
             "keptWhy": "Required by law",
             "identity": {
               "name": "Your profile and how you sign in",
-              "desc": "Name, email, avatar, preferences, passkeys, two-factor, API tokens."
+              "desc": "Name, email, avatar, preferences, passkeys, two-factor, tokens."
             },
             "soleWorkspaces": {
               "name": "Workspaces where you are the only member",
