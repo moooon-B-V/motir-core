@@ -30,7 +30,8 @@ import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } fro
 //
 //   1. the SELECT — what is due, and the day-29 cancel that lands between the
 //      select and the write;
-//   2. DELETED — the credential and auth substrate, and the sole-membership
+//   2. DELETED — the credential and auth substrate, the personal-data EXPORTS
+//      and the archives they built (Bug MOTIR-3732), and the sole-membership
 //      workspaces, which must go through `workspacesService.deleteWorkspace` so
 //      the code-graph offboarding queue is fed;
 //   3. ANONYMISED — a third party's comments and backlog SURVIVE, counted
@@ -39,10 +40,49 @@ import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } fro
 //   5. the run's own properties — idempotence, batch isolation, and the
 //      side-effect-after-commit ordering.
 
+// ── the blob store, in memory ────────────────────────────────────────────────
+// `lib/blob/uploader` is the network seam (its own header says tests mock THIS
+// module so nothing hits S3), and the erasure reaches it to delete a built
+// export archive. The store is real enough to answer "is the object still
+// there?", which is what the MOTIR-3732 criteria are asserted with — the same
+// shape `tests/export/dataExportService.test.ts` uses one story over.
+//
+// `vi.hoisted` rather than a bare `const`: `vi.mock` is hoisted above this
+// file's static imports, so a factory closing over an ordinary top-level
+// binding would read it before it is initialised.
+const blob = vi.hoisted(() => ({
+  store: new Map<string, Buffer>(),
+  /** Set by a test to OBSERVE a delete, or to make one fail. */
+  onDelete: null as null | ((pathname: string) => void | Promise<void>),
+}));
+
+vi.mock('@/lib/blob/uploader', () => ({
+  deleteAttachmentBlob: async (pathname: string) => {
+    await blob.onDelete?.(pathname);
+    blob.store.delete(pathname);
+  },
+  putPrivateAttachment: vi.fn(async (pathname: string, body: Buffer) => {
+    blob.store.set(pathname, Buffer.from(body));
+    return { pathname };
+  }),
+  getPrivateBlobBytes: vi.fn(async (pathname: string) => blob.store.get(pathname) ?? null),
+  headPrivateBlob: vi.fn(async (pathname: string) => {
+    const hit = blob.store.get(pathname);
+    return hit ? { size: hit.byteLength, contentType: 'application/zip' } : null;
+  }),
+  putAttachment: vi.fn(),
+  putPublicAsset: vi.fn(),
+  deletePublicAsset: vi.fn(),
+  signedDownloadUrl: vi.fn(),
+  mintPrivateUploadToken: vi.fn(),
+}));
+
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
   await truncateCodeGraphOffboarding();
+  blob.store.clear();
+  blob.onDelete = null;
 });
 
 afterEach(async () => {
@@ -108,6 +148,36 @@ async function scheduleDue(userId: string, daysOverdue = 1): Promise<AccountDele
 /** The erased profile row, read through the owner client (RLS is not the subject here). */
 async function readUser(userId: string) {
   return adminDb.user.findUniqueOrThrow({ where: { id: userId } });
+}
+
+/**
+ * A `data_export_request` in the state a test needs — and, when it is one that
+ * BUILT something, the archive really in the store (Bug MOTIR-3732).
+ *
+ * Written directly rather than through `dataExportService.buildDataExport`: the
+ * subject here is what ERASURE does to a row in each state, and driving a real
+ * build would make a `preparing` or `expired` fixture the hard part of a test
+ * that is not about building.
+ */
+async function giveExport(
+  userId: string,
+  status: 'preparing' | 'ready' | 'failed' | 'expired',
+  options: { withBlob?: boolean } = {},
+) {
+  const row = await adminDb.dataExportRequest.create({ data: { userId, status } });
+  if (!options.withBlob) return row;
+  // The real shape (`dataExportService.archivePathname`) — which is also why a
+  // pathname must never reach a failure summary: it embeds the user id.
+  const pathname = `exports/${userId}/${row.id}/motir-export-2026-08-28.zip`;
+  blob.store.set(pathname, Buffer.from('PK the archive'));
+  return adminDb.dataExportRequest.update({
+    where: { id: row.id },
+    data: {
+      blobPathname: pathname,
+      builtAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * DAY_MS),
+    },
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,6 +362,102 @@ describe('DELETED — what is theirs alone', () => {
     expect(queued[0]!.dueAt.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
+  // ── The personal-data export (Bug MOTIR-3732) ──────────────────────────────
+  // The defect these four pin: a reader who exported and then deleted kept a
+  // downloadable archive of EVERYTHING the account held for the archive's full
+  // seven-day window, under a published promise (`content/legal/privacy.md` §6)
+  // that the data was gone. Neither of the two mechanisms that look like they
+  // would catch it does: the `ON DELETE CASCADE` hangs off a `user` row this
+  // sweep deliberately never deletes, and the expiry sweep selects `ready` rows
+  // past `expiresAt` — erasure is not one of its triggers.
+
+  it('deletes EVERY export request the account holds, whatever its status, and the archive each built', async () => {
+    const user = await createTestUser();
+    const bystander = await createTestUser();
+    const ready = await giveExport(user.id, 'ready', { withBlob: true });
+    await giveExport(user.id, 'preparing');
+    await giveExport(user.id, 'expired');
+    // A `failed` build's row still names this person — it goes with the rest.
+    await giveExport(user.id, 'failed');
+    const theirs = await giveExport(bystander.id, 'ready', { withBlob: true });
+    await scheduleDue(user.id);
+
+    // COUNTED before and after, per the criterion: a status check would pass
+    // just as happily against a table somebody had quietly emptied.
+    expect(await adminDb.dataExportRequest.count({ where: { userId: user.id } })).toBe(4);
+    expect(blob.store.has(ready.blobPathname!)).toBe(true);
+
+    const summary = await accountErasureSweepService.sweep();
+
+    // The DEFECT first, then the telemetry about it: this is the assertion that
+    // fails against the sweep as MOTIR-3702 shipped it (4 rows survive, and the
+    // archive with them), and a summary field missing from an older build must
+    // not be what a reader sees instead of it.
+    expect(await adminDb.dataExportRequest.count({ where: { userId: user.id } })).toBe(0);
+    // And the ARCHIVE, not only the row that pointed at it.
+    expect(blob.store.has(ready.blobPathname!)).toBe(false);
+    expect(summary).toMatchObject({ erased: 1, exportsDeleted: 4, failed: 0 });
+    expect(summary.exportBlobFailures).toEqual([]);
+
+    // Nobody else's export is touched — this is erasure, not a table sweep.
+    expect(await adminDb.dataExportRequest.count({ where: { userId: bystander.id } })).toBe(1);
+    expect(blob.store.has(theirs.blobPathname!)).toBe(true);
+  });
+
+  it('deletes the ARCHIVE only after the erasure transaction has committed', async () => {
+    // Same shape as the workspace-ordering test in section 5, and asserted the
+    // same way: read the request from an INDEPENDENT connection at the moment
+    // the blob delete is entered. Inside the transaction it would still read
+    // `scheduled`. Seeing `completed` is the ordering OBSERVED — which matters
+    // here because a blob delete is the one step in this sweep that no rollback
+    // could take back.
+    const user = await createTestUser();
+    await giveExport(user.id, 'ready', { withBlob: true });
+    const request = await scheduleDue(user.id);
+
+    let statusWhenBlobDeleteRan: string | null = null;
+    blob.onDelete = async () => {
+      const row = await adminDb.accountDeletionRequest.findUniqueOrThrow({
+        where: { id: request.id },
+      });
+      statusWhenBlobDeleteRan = row.status;
+    };
+
+    await accountErasureSweepService.sweep();
+
+    expect(statusWhenBlobDeleteRan).toBe('completed');
+  });
+
+  it('still erases the account when the archive delete FAILS, and names the export request in the summary', async () => {
+    // The blob store being unreachable for thirty seconds must not un-erase
+    // somebody, and must not leave a row behind claiming the archive is still
+    // theirs to download. What is owed is the RECORD — and nothing retries it,
+    // because the row it would be re-derived from is already gone.
+    const user = await createTestUser();
+    const stuck = await giveExport(user.id, 'ready', { withBlob: true });
+    const request = await scheduleDue(user.id);
+    blob.onDelete = () => {
+      throw new Error('blob store unreachable');
+    };
+
+    const summary = await accountErasureSweepService.sweep();
+
+    expect(summary).toMatchObject({ erased: 1, failed: 0, exportsDeleted: 1 });
+    expect(summary.exportBlobFailures).toEqual([
+      { exportRequestId: stuck.id, error: 'blob store unreachable' },
+    ]);
+    // The account IS erased, and the row does NOT survive the failed delete.
+    expect((await readUser(user.id)).name).toBe(ERASED_USER_NAME);
+    expect(await adminDb.dataExportRequest.count({ where: { userId: user.id } })).toBe(0);
+    const completed = await adminDb.accountDeletionRequest.findUniqueOrThrow({
+      where: { id: request.id },
+    });
+    expect(completed.status).toBe('completed');
+    // The failure line carries the export request id and NOT the pathname,
+    // which embeds the user id — the rule the `failures` array already keeps.
+    expect(JSON.stringify(summary.exportBlobFailures)).not.toContain(user.id);
+  });
+
   it('leaves a SHARED workspace standing and drops only the erased account’s membership', async () => {
     const owner = await createTestUser();
     const user = await createTestUser();
@@ -440,6 +606,33 @@ describe('the run', () => {
     expect(await readUser(user.id)).toEqual(afterFirst);
     expect(await adminDb.workspace.count({ where: { id: workspace.id } })).toBe(0);
     expect(await adminDb.codeGraphOffboarding.count()).toBe(1);
+  });
+
+  it('re-derives an EMPTY export set on the second pass, so nothing is deleted twice', async () => {
+    // The MOTIR-3732 half of the idempotence property above. The export rows go
+    // with the erasure TRANSACTION, so the resume arm — which does not open one
+    // — has nothing left to find. Asserted by the blob delete not being entered
+    // a second time, because a count of zero is also what a step that silently
+    // stopped running would report.
+    const user = await createTestUser();
+    await giveExport(user.id, 'ready', { withBlob: true });
+    await scheduleDue(user.id);
+
+    let deletes = 0;
+    blob.onDelete = () => {
+      deletes += 1;
+    };
+
+    const first = await accountErasureSweepService.sweep();
+    expect(first).toMatchObject({ erased: 1, exportsDeleted: 1, failed: 0 });
+    expect(deletes).toBe(1);
+
+    const second = await accountErasureSweepService.sweep();
+
+    expect(second).toMatchObject({ scanned: 1, resumed: 1, exportsDeleted: 0, failed: 0 });
+    expect(second.exportBlobFailures).toEqual([]);
+    expect(deletes).toBe(1);
+    expect(blob.store.size).toBe(0);
   });
 
   it('RESUMES a completed request whose workspace delete never ran', async () => {

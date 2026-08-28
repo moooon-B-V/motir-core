@@ -132,6 +132,31 @@ export const dataExportRequestRepository = {
     });
   },
 
+  /**
+   * EVERY request this user holds, with the blob each one names — the read the
+   * ERASURE takes immediately before it deletes them (Story 8.4 · MOTIR-3732).
+   *
+   * ⚠️ EVERY STATUS, and that is the whole difference from {@link listExpirable}
+   * one method up. That one is narrowed to `ready` because only a `ready` row
+   * has a retention window that can close; reusing it here would leave a
+   * `preparing`, `failed` or `expired` row — each still carrying this person's
+   * `user_id` and, for the first two, possibly a blob — standing after an
+   * erasure that reported `completed`.
+   *
+   * A `deleteMany` returns a count and not the rows, so the pathnames have to
+   * be read before the delete; they are the post-commit blob delete's input.
+   */
+  async listByUserId(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<DataExportRequest, 'id' | 'blobPathname'>>> {
+    return tx.dataExportRequest.findMany({
+      where: { userId },
+      select: { id: true, blobPathname: true },
+      orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /** Record a build's outcome (ready + its blob, failed + its reason, expired).
    *  Write → `tx` required. Keyed by `id` — the caller has just locked it. */
   async update(
@@ -140,5 +165,21 @@ export const dataExportRequestRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DataExportRequest> {
     return tx.dataExportRequest.update({ where: { id }, data });
+  },
+
+  /**
+   * Delete every request this user holds — the erasure's DELETE group
+   * (Story 8.4 · MOTIR-3732). Returns the row count, which is what the sweep's
+   * summary reports and what its test asserts before and after.
+   *
+   * The table's `user_id` FK is `ON DELETE CASCADE`, so this would be automatic
+   * if the erasure deleted the `user` row. It does not — it anonymises the row
+   * in place, because four NOT NULL `Restrict` foreign keys make a delete
+   * impossible (`lib/users/accountErasure.ts`) — so the cascade never fires and
+   * this method is what makes the promise true.
+   */
+  async deleteAllForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.dataExportRequest.deleteMany({ where: { userId } });
+    return count;
   },
 };
