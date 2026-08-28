@@ -300,6 +300,9 @@ jobs:
   membership:
     name: Does the lane hold a spec?
     runs-on: ubuntu-latest
+    # Observed 0.3–0.6 min → 10 (~17x, the short-job floor). It only reads
+    # the changed-file list and decides whether the lane holds a spec.
+    timeout-minutes: 10
     outputs:
       run: ${{ steps.gate.outputs.run }}
       count: ${{ steps.gate.outputs.count }}
@@ -381,6 +384,10 @@ jobs:
   build:
     name: Next.js build (acceptance)
     runs-on: ubuntu-latest
+    # Observed 4.1–4.6 min → 15 (~3.3x). `next build` grows with the app, so
+    # this gets a multiple rather than the floor — the same reading `ci.yml`'s
+    # own `build` job took, arrived at from THIS lane's runs.
+    timeout-minutes: 15
     needs: membership
     # ⚠️ THE GATE LIVES HERE, ON `build`, AND NOT ON `acceptance` — deliberately.
     # `acceptance` already `needs: build`, so a skipped build skips the shards
@@ -449,6 +456,12 @@ jobs:
   acceptance:
     name: Playwright E2E (acceptance-video) ${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
     runs-on: ubuntu-latest
+    # Observed 4.9–11.3 min per shard across four runs → 40 (~3.5x on the
+    # worst). ⚠️ DERIVED FROM THIS LANE, NOT COPIED FROM `e2e`. The acceptance
+    # specs are an order of magnitude heavier than ordinary E2E per test, so
+    # the number next door is not evidence about this one either way; run
+    # 33217054605 is the slowest on record (11.30 min, shard 3/4).
+    timeout-minutes: 40
     # BOTH edges, and each is load-bearing (MOTIR-2908):
     #   · `build` publishes the `.next/` artifact every leg downloads, and it is
     #     where the MOTIR-2760 gate lives — a skipped build skips the fan-out.

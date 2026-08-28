@@ -71,6 +71,8 @@ jobs:
   release:
     name: Publish @motir/cli
     runs-on: ubuntu-latest
+    # Observed 1.2–1.4 min across four runs → 10 (~7x, the short-job floor).
+    timeout-minutes: 10
     env:
       PACKAGE: '@motir/cli'
       PKG_DIR: packages/cli

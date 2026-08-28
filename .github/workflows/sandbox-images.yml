@@ -49,6 +49,10 @@ jobs:
   sandbox-smoke:
     name: Sandbox smoke (loop + failure + confinement)
     runs-on: ubuntu-latest
+    # Observed 2.8–8.3 min across 14 runs of BOTH callers → 25 (~3x on the
+    # worst, 8.32 min on release-sandbox run 30966874373). The publish path is
+    # the slow one; `ci.yml` runs this same job at 2.8–4.6.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
       # Register the arm64 emulator BEFORE the builder that will use it (the
@@ -135,6 +139,9 @@ jobs:
   sandbox-profiles-matrix:
     name: Sandbox profile matrix (setup)
     runs-on: ubuntu-latest
+    # Observed 0.2–0.4 min across 14 runs → 10 (~29x, the short-job floor).
+    # It emits the profile matrix and nothing else.
+    timeout-minutes: 10
     outputs:
       profiles: ${{ steps.read.outputs.profiles }}
     steps:
@@ -152,6 +159,18 @@ jobs:
     name: Sandbox profile ${{ matrix.profile.id }} (tier ${{ matrix.profile.tier }})
     needs: sandbox-profiles-matrix
     runs-on: ubuntu-latest
+    # Observed 2.6–16.7 min across 112 legs (eight profiles × 14 runs of both
+    # callers) → 50 (~3x on the worst, `aider` (tier 2) at 16.68 min on ci.yml
+    # run 33214411817, which SUCCEEDED). Sized on the slowest LEG, not the
+    # median: the matrix shares one ceiling, so a number that fits `kimi` at
+    # 2.6 would cut off a healthy `aider` at 16.7.
+    #
+    # ⚠️ MOTIR-3768's own card cited `0.1–5.8 min` for these legs, from ci.yml
+    # run 33167406878 — where `sandbox` was SKIPPED by its path filter and the
+    # figure measures nothing. A ~3x ceiling on 5.8 is 18, and 18 would have
+    # failed the 16.68-minute green run above. Re-measure from runs where the
+    # job actually ran; a skipped job reports a duration of zero, not an absence.
+    timeout-minutes: 50
     # Tier 2 is ALLOW-FAIL, not absent. Those installers pull from vendor
     # endpoints Motir does not control, so a network flake there must not put a
     # red X on an unrelated pull request — but the build still runs and is still
@@ -257,6 +276,9 @@ jobs:
     if: ${{ inputs.publish }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]
     runs-on: ubuntu-latest
+    # Observed 1.1–1.8 min across five runs → 10 (~6x, the short-job floor).
+    # `if: inputs.publish`, so it only ever runs on the release path.
+    timeout-minutes: 10
     steps:
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -325,6 +347,9 @@ jobs:
     if: ${{ inputs.publish }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
     runs-on: ubuntu-latest
+    # Observed 0.5–0.6 min across three runs → 10 (~17x, the short-job floor).
+    # `if: inputs.publish`, so it only ever runs on the release path.
+    timeout-minutes: 10
     # `contents: read` and nothing else. A called workflow can only ever REDUCE
     # what its caller granted, so this is spelled as a subset of
     # `release-sandbox.yml`'s `contents: read` + `packages: write` — asking for a
@@ -387,6 +412,9 @@ jobs:
     if: ${{ inputs.publish }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
     runs-on: ubuntu-latest
+    # Observed 0.5 min on run 31529928332 → 10 (~22x, the short-job floor).
+    # One run on record: this job is newer than the others (MOTIR-2612).
+    timeout-minutes: 10
     # `contents: read` and nothing else — it needs the checkout for the guide
     # source it derives the expectation from, and no registry scope whatsoever.
     permissions:

@@ -53,6 +53,13 @@ jobs:
   staleness:
     name: Is the published image still what main says it is?
     runs-on: ubuntu-latest
+    # NO HEALTHY run on record — every scheduled run back to 2026-08-23 FAILS,
+    # in about 0.5 min, on the staleness assertion itself. That verdict is
+    # true and is tracked as MOTIR-3850; it is not an infrastructure fault and
+    # not this ceiling's business. The job's mechanical cost is a checkout
+    # plus one dependency-free node script either way → 10, the short-job
+    # floor, taken as a STATED FLOOR rather than a measurement.
+    timeout-minutes: 10
     steps:
       # ⚠️ fetch-depth: 0 is load-bearing TWICE over. The default shallow
       # checkout fetches no tags, so there is nothing to compare against, and it

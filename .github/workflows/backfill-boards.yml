@@ -30,6 +30,11 @@ jobs:
   backfill:
     name: Backfill default boards onto board-less projects
     runs-on: ubuntu-latest
+    # Observed 0.5 min on run 27072801368 → 10 (~20x, the short-job floor).
+    # Only one run on record — it is `workflow_dispatch`-only — and the work
+    # scales with the number of board-less projects, so the floor is doing the
+    # bounding here rather than the multiple.
+    timeout-minutes: 10
     env:
       # The production (unpooled) Neon connection string — the SAME secret the
       # reseed workflow uses. Empty when unset; the guard step skips then.
