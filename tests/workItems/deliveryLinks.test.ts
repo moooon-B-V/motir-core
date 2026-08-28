@@ -27,12 +27,17 @@ import { randomToken } from '../helpers/random';
 //      `link_pull_request` must be a no-op rather than an error or a second row.
 //   3. RLS. The row's OWN `workspace_id` is the gate; a bound read from workspace A
 //      sees nothing of workspace B.
-//   4. THE MIGRATION'S BACKFILL, both passes, executed as the SHIPPED SQL rather
-//      than a copy of it — the file is read and its INSERT statements are run. A
-//      backfill asserted by reading the SQL is not asserted.
-//   5. The two SCALARS still work. This story's migration is the EXPAND step and
-//      drops nothing; a reader that regressed here would be invisible until a
-//      later card moved it.
+//   4. THE MIGRATION'S BACKFILL, executed as the SHIPPED SQL rather than a copy of
+//      it — the file is read and its INSERT statements are run. A backfill
+//      asserted by reading the SQL is not asserted. ⚠️ Only PASS 2 is replayable
+//      now: pass 1 selects `github_pull_request.work_item_id`, which MOTIR-3757
+//      dropped, so on any current database that statement raises. Pass 1 is a
+//      historical one-shot over a column that no longer exists and cannot be
+//      re-asserted; the file is still read, and this suite still checks that it
+//      ships exactly two INSERTs, so a change to it is not silent.
+//   5. `work_item.sessionBranch` still works. MOTIR-3734 decided that column is
+//      the integration LINEAGE and STAYS — it is not the sibling scalar's twin —
+//      so a reader that regressed here would still be invisible.
 
 afterAll(async () => {
   await db.$disconnect();
@@ -73,11 +78,12 @@ async function addRepo(fx: WorkItemFixture, name: string): Promise<{ id: string 
 
 let nextPrNumber = 1;
 
-/** A pull request on a repository. `workItemId` is the LEGACY scalar — left null
- *  except where a test is exercising backfill pass 1, which reads exactly it. */
+/** A pull request on a repository. It carries NO association with a work item —
+ *  `github_pull_request.work_item_id` was dropped by MOTIR-3757, and a delivery
+ *  row is the only thing that links one. */
 async function addPr(
   repoId: string,
-  opts: { headRef?: string; workItemId?: string | null; merged?: boolean } = {},
+  opts: { headRef?: string; merged?: boolean } = {},
 ): Promise<{ id: string }> {
   return adminDb.githubPullRequest.create({
     data: {
@@ -87,7 +93,6 @@ async function addPr(
       merged: opts.merged ?? false,
       headRef: opts.headRef ?? `subtask/PROD-1-${randomToken(4)}`,
       baseRef: 'main',
-      workItemId: opts.workItemId ?? null,
       provider: 'github',
     },
     select: { id: true },
@@ -281,8 +286,10 @@ describe("the migration's BACKFILL, run as the shipped SQL", () => {
     'prisma/migrations/20260827094500_work_item_delivery/migration.sql',
   );
 
-  /** The two INSERT statements the migration ships, extracted from the file itself
-   *  so this asserts the SHIPPED SQL and cannot drift from a copy of it. */
+  /** The INSERT statements the migration ships, extracted from the file itself so
+   *  this asserts the SHIPPED SQL and cannot drift from a copy of it. Both are
+   *  returned — the count is part of what is asserted — but only the REPLAYABLE
+   *  one is run; see `replayable`. */
   function backfillStatements(): string[] {
     const sql = readFileSync(MIGRATION, 'utf8');
     const statements = sql
@@ -293,31 +300,37 @@ describe("the migration's BACKFILL, run as the shipped SQL", () => {
     return statements;
   }
 
+  /** ⚠️ PASS 1 IS NOT REPLAYABLE and its exclusion is a fact about the schema, not
+   *  a narrowing of this suite. It reads `pr."work_item_id"`, which MOTIR-3757
+   *  dropped, so running it against a current database raises
+   *  `column pr.work_item_id does not exist`. It was a one-shot over a column that
+   *  is gone; pass 2 keys on `head_ref` and still runs. Selecting by the JOIN it
+   *  performs rather than by position, so a re-ordering of the file cannot silently
+   *  swap which statement this executes. */
+  function replayable(): string[] {
+    const chosen = backfillStatements().filter((s) => s.includes('w."sessionBranch"'));
+    expect(chosen).toHaveLength(1);
+    return chosen;
+  }
+
   async function replayBackfill(): Promise<void> {
     await adminDb.$executeRawUnsafe('DELETE FROM "work_item_delivery"');
-    for (const statement of backfillStatements()) {
+    for (const statement of replayable()) {
       await adminDb.$executeRawUnsafe(statement);
     }
   }
 
-  it('pass 1 writes exactly one row per non-null work_item_id, with the repo from the PR row', async () => {
-    const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'explicitly linked' });
-    const repo = await addRepo(fx, 'motir-core');
-    const linked = await addPr(repo.id, { workItemId: card.id });
-    // An UNLINKED pull request in the same repository — pass 1 must not invent a row.
-    await addPr(repo.id, { workItemId: null });
-
-    await replayBackfill();
-
-    const rows = await adminDb.workItemDelivery.findMany();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      workItemId: card.id,
-      githubPullRequestId: linked.id,
-      repoId: repo.id,
-      workspaceId: fx.workspaceId,
-    });
+  // ⚠️ THE PASS-1 BEHAVIOUR TEST IS RETIRED (MOTIR-3757), and this is what is left
+  // of it. It seeded a pull request carrying `work_item_id` and asserted the
+  // migration wrote one delivery for it; the column is dropped, so the fixture it
+  // needed cannot be built and the statement it exercised cannot run. What CAN
+  // still be asserted is that the shipped file has not been edited out from under
+  // this suite — two INSERTs, and the one keyed on the link column is still the
+  // first of them.
+  it('the shipped migration still carries BOTH passes, pass 1 first', () => {
+    const [first, second] = backfillStatements();
+    expect(first).toContain('pr."work_item_id"');
+    expect(second).toContain('w."sessionBranch"');
   });
 
   it('pass 2 writes TWO rows when one session branch matches pull requests in two repositories', async () => {
@@ -359,14 +372,16 @@ describe("the migration's BACKFILL, run as the shipped SQL", () => {
   it('is IDEMPOTENT — a second application inserts nothing further', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'applied twice' });
+    const branch = 'motir/auto-idempotent';
+    await adminDb.workItem.update({ where: { id: card.id }, data: { sessionBranch: branch } });
     const repo = await addRepo(fx, 'motir-core');
-    await addPr(repo.id, { workItemId: card.id });
+    await addPr(repo.id, { headRef: branch });
 
     await replayBackfill();
     const afterFirst = await adminDb.workItemDelivery.count();
     // The operator paths that repair a bad deploy can re-run a migration; a backfill
     // that doubles its rows turns a recovery into a second incident.
-    for (const statement of backfillStatements()) {
+    for (const statement of replayable()) {
       await adminDb.$executeRawUnsafe(statement);
     }
     const afterSecond = await adminDb.workItemDelivery.count();
@@ -385,22 +400,33 @@ describe("the migration's BACKFILL, run as the shipped SQL", () => {
   });
 });
 
-describe('the EXPAND step drops nothing', () => {
-  it('both legacy scalars are still present and still readable', async () => {
+describe('what the CONTRACT step left standing', () => {
+  // The predecessor of this test asserted that the EXPAND step dropped NEITHER
+  // scalar. MOTIR-3757 dropped one of them and MOTIR-3734 decided the other stays,
+  // so the pair came apart — and the surviving half is worth pinning precisely
+  // because the two were written down together and read as one thing.
+  it('`work_item.sessionBranch` is still written and still read', async () => {
     const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'legacy readers' });
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'lineage reader' });
     const repo = await addRepo(fx, 'motir-core');
     const branch = 'subtask/PROD-3-legacy';
     await adminDb.workItem.update({ where: { id: card.id }, data: { sessionBranch: branch } });
-    const pr = await addPr(repo.id, { headRef: branch, workItemId: card.id });
+    await addPr(repo.id, { headRef: branch });
 
-    // `work_item.sessionBranch` — still written, still read.
     const reread = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(reread.sessionBranch).toBe(branch);
+  });
 
-    // `github_pull_request.work_item_id` — still the FK the Development surface and
-    // `countOtherOpenByWorkItem` read today.
-    const prRow = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: pr.id } });
-    expect(prRow.workItemId).toBe(card.id);
+  it('a pull-request row carries NO work-item column at all', async () => {
+    const columns = await adminDb.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'github_pull_request'`;
+    const names = columns.map((c) => c.column_name);
+    // The drop, asserted where it happened rather than inferred from a green
+    // suite — and its sibling asserted at the same moment, because "dropped
+    // `work_item_id`" and "dropped the link columns" are different claims and
+    // MOTIR-3757 made only the first.
+    expect(names).not.toContain('work_item_id');
+    expect(names).toContain('linked_manually');
   });
 });

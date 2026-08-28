@@ -1384,9 +1384,22 @@ async function materialize(
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
 
   // modify + remove against existing targets (locked + re-read inside the tx).
+  //
+  // ⚠️ `autoRelateWorkItemMentions` does NOT run over a modified body, and that is
+  // a DECISION rather than an omission (MOTIR-3804 AC 5). The `add` path runs it
+  // because a card created here has no edge set yet, so wiring `relates_to` from
+  // its own mentions strictly adds information. A `modify` targets a card that
+  // ALREADY has one — curated by earlier passes and by people — and an amendment
+  // saying "this part moved to the card over there" is not a claim that the two
+  // are related in the tracker's sense. The plan grammar also gives `modify` an
+  // EXPLICIT edge channel (`blockedByAdd` / `blockedByRemove`), so edges on a
+  // modify are expressible and are expressed deliberately; deriving more of them
+  // from prose would let an amendment rewire a card the plan only meant to amend.
+  // The body's tokens still CHIP — that is what the rewrite above and
+  // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      await applyModify(item, ctx, resolveRef, tx, repoPins, repoRefs);
+      await applyModify(item, ctx, resolveRef, tx, repoPins, repoRefs, planItemToWorkItem, plan.id);
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -1471,6 +1484,28 @@ async function recomputeContainersForTouched(
 }
 
 /** A single `modify` materialize: patch the target (same id), one revision. */
+// Resolve a `modify` patch body's intra-plan temp-refs, preserving the PRESENCE
+// shape the sparse patch depends on: `undefined` means "the patch did not carry
+// this key" and must stay `undefined`; an explicit `null` clears the field and has
+// no tokens to rewrite. An unresolvable ref is left inert and reported through the
+// SAME `console.warn` path an `add`'s dangling ref uses, so the two ops fail
+// identically (MOTIR-3804).
+function rewritePatchBody(
+  value: string | null | undefined,
+  planItemToWorkItem: ReadonlyMap<string, string>,
+  planId: string,
+  identifier: string,
+): string | null | undefined {
+  if (value == null) return value;
+  const { body, unresolved } = rewriteIntraPlanRefs(value, planItemToWorkItem);
+  for (const ref of unresolved) {
+    console.warn(
+      `[plansService.materialize] plan ${planId}: intra-plan ref planItem:${ref} in ${identifier} resolved to no item — left inert`,
+    );
+  }
+  return body;
+}
+
 async function applyModify(
   item: PlanItem,
   ctx: ServiceContext,
@@ -1478,6 +1513,11 @@ async function applyModify(
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
   repoRefs: ProposalRepoRefs,
+  // The SAME temp-ref → work-item map Pass 3 rewrites the `add` bodies with
+  // (MOTIR-3804). The modify loop runs AFTER Pass 3, so every `add` on this plan
+  // already has its row and the map is complete by the time we are called.
+  planItemToWorkItem: ReadonlyMap<string, string>,
+  planId: string,
 ): Promise<void> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
@@ -1510,11 +1550,35 @@ async function applyModify(
     0,
     current.identifier.length - String(current.key).length - 1,
   );
+  // FIRST resolve the intra-plan temp-refs (MOTIR-3804), because a `modify` body
+  // may name a card THIS SAME PLAN proposes — which is what a re-plan writes every
+  // time it amends the survivor to point at the card that took over part of its
+  // scope. Pass 3 does this for the `add`s and iterated `createdAdds` only, so a
+  // `[label](motir-ref:planItem:<id>)` token in a patch used to materialize
+  // VERBATIM: a literal href pointing at nothing, with not even the dangling-ref
+  // warning an `add` gets, because the rewrite never ran on it.
+  //
+  // Order matters and is the cheap way round: this turns temp-refs into canonical
+  // `motir:<id>` tokens, and `normalizeBodyRefs` below then normalizes any BARE
+  // real key in the same body. Neither touches the other's output — a rewritten
+  // token is already canonical, and a bare key carries no `motir-ref:` prefix.
+  const patchedDescriptionMd = rewritePatchBody(
+    patch.descriptionMd,
+    planItemToWorkItem,
+    planId,
+    current.identifier,
+  );
+  const patchedExplanationMd = rewritePatchBody(
+    patch.explanationMd,
+    planItemToWorkItem,
+    planId,
+    current.identifier,
+  );
   const [normalizedDescriptionMd, normalizedExplanationMd] = await normalizeBodyRefs(
     {
       projectId: current.projectId,
       projectIdentifier: prefix,
-      fields: [patch.descriptionMd, patch.explanationMd],
+      fields: [patchedDescriptionMd, patchedExplanationMd],
     },
     tx,
   );

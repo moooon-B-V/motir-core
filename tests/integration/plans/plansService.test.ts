@@ -2138,3 +2138,168 @@ describe('plansService.addProposals — one proposal per existing target (MOTIR-
     ).rejects.toBeInstanceOf(PlanNotGeneratingError);
   });
 });
+
+// MOTIR-3804 — a `modify` proposal's body could not carry an intra-plan CHIP.
+// Pass 3 rewrote `motir-ref:planItem:<id>` over `createdAdds` only, so a token in a
+// `modify`'s patch materialized VERBATIM: a dead href on a real work item, with not
+// even the dangling-ref warning an `add` gets, because the rewrite never ran on it.
+// That is the shape a RE-PLAN takes by default — `add` the new card, `remove` the
+// superseded one, `modify` the survivor to name the card that took over its scope.
+//
+// Asserted END TO END through `approvePlan`, never on the helper: the defect was
+// that a correct helper was not CALLED on this path, so a helper-level test would
+// have passed throughout.
+describe('plansService.approvePlan — a MODIFY body carries an intra-plan chip (MOTIR-3804)', () => {
+  it('rewrites a `motir-ref:planItem:` token in a modify patch DESCRIPTION to the created card', async () => {
+    const fx = await makeWorkItemFixture();
+    const survivorId = await seedItem(fx, 'Survivor');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-plan' }, fx.ctx);
+    const afterAdd = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Took over the scope', kind: 'task' } }],
+      fx.ctx,
+    );
+    const newPlanItemId = afterAdd.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: survivorId,
+          patch: {
+            descriptionMd: `Half of this moved to [the new card](motir-ref:planItem:${newPlanItemId}).`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Took over the scope' },
+    });
+    const survivor = await adminDb.workItem.findUniqueOrThrow({ where: { id: survivorId } });
+    expect(survivor.descriptionMd).toBe(
+      `Half of this moved to [the new card](motir:${created.id}).`,
+    );
+  });
+
+  it('rewrites the same token in a modify patch EXPLANATION', async () => {
+    const fx = await makeWorkItemFixture();
+    const survivorId = await seedItem(fx, 'Survivor with a why');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-plan' }, fx.ctx);
+    const afterAdd = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'The successor', kind: 'task' } }],
+      fx.ctx,
+    );
+    const newPlanItemId = afterAdd.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: survivorId,
+          patch: {
+            explanationMd: `It matters less now that [the successor](motir-ref:planItem:${newPlanItemId}) exists.`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'The successor' } });
+    const survivor = await adminDb.workItem.findUniqueOrThrow({ where: { id: survivorId } });
+    expect(survivor.explanationMd).toBe(
+      `It matters less now that [the successor](motir:${created.id}) exists.`,
+    );
+  });
+
+  it('leaves an UNRESOLVABLE ref in a modify body inert — the same way an add fails', async () => {
+    const fx = await makeWorkItemFixture();
+    const survivorId = await seedItem(fx, 'Survivor with a dangling ref');
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'modify',
+        workItemId: survivorId,
+        patch: { descriptionMd: 'See [gone](motir-ref:planItem:pi_does_not_exist).' },
+      },
+    ]);
+    // Must NOT throw — a dangling temp-ref is body text on either op.
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const survivor = await adminDb.workItem.findUniqueOrThrow({ where: { id: survivorId } });
+    expect(survivor.descriptionMd).toBe('See [gone](motir-ref:planItem:pi_does_not_exist).');
+  });
+
+  it('leaves a modify body with NO such token byte-identical (no incidental rewriting)', async () => {
+    const fx = await makeWorkItemFixture();
+    const survivorId = await seedItem(fx, 'Untouched prose');
+    const body = 'Plain prose with a bare `motir-ref:` word and a [link](https://example.com).';
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: survivorId, patch: { descriptionMd: body } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const survivor = await adminDb.workItem.findUniqueOrThrow({ where: { id: survivorId } });
+    expect(survivor.descriptionMd).toBe(body);
+  });
+
+  it('does NOT auto-relate from a rewritten MODIFY body — the decision, asserted', async () => {
+    // AC 5 of MOTIR-3804 asks for this to be DECIDED rather than left to inference.
+    // The `add` path auto-relates because a card born here has no edge set to
+    // disturb; a `modify` targets a card that already has one, and the plan grammar
+    // gives it an explicit `blockedByAdd` / `blockedByRemove` channel. So the body
+    // CHIPS and no edge is written. If that is ever reversed, this test is the
+    // sentence to change.
+    const fx = await makeWorkItemFixture();
+    const survivorId = await seedItem(fx, 'Survivor that must not be rewired');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-plan' }, fx.ctx);
+    const afterAdd = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Mentioned but not related', kind: 'task' } }],
+      fx.ctx,
+    );
+    const newPlanItemId = afterAdd.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: survivorId,
+          patch: { descriptionMd: `See [it](motir-ref:planItem:${newPlanItemId}).` },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Mentioned but not related' },
+    });
+    const survivor = await adminDb.workItem.findUniqueOrThrow({ where: { id: survivorId } });
+    // The chip landed …
+    expect(survivor.descriptionMd).toBe(`See [it](motir:${created.id}).`);
+    // … and no `relates_to` edge was derived from it, in either direction.
+    expect(
+      await adminDb.workItemLink.count({
+        where: {
+          kind: 'relates_to',
+          OR: [
+            { fromId: survivorId, toId: created.id },
+            { fromId: created.id, toId: survivorId },
+          ],
+        },
+      }),
+    ).toBe(0);
+  });
+});

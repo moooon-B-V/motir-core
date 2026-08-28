@@ -34,12 +34,14 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 // (`docs/decisions/unlinked-pull-request-check.md`).
 //
 // ── The model was already right; only the door was missing ────────────────
-// `github_pull_request.work_item_id` is the link, `linked_manually` records HOW
+// A stored link was already the link and `linked_manually` already recorded HOW
 // it was made, and `syncChangeRequestStatus` already PREFERRED a sticky link
 // over the parse (`lib/services/changeRequestStatusSync.ts`). Since MOTIR-3674
 // there is nothing to prefer it over: the sync reads the stored link and stops,
 // and `linked_manually` is no longer part of that condition — a row the parse
-// linked historically is honoured exactly as an explicit one is. Motir
+// linked historically is honoured exactly as an explicit one is. (Where that link
+// is STORED has since moved: `work_item_delivery` is the whole of it, and
+// MOTIR-3757 dropped the `github_pull_request` column that used to hold it.) Motir
 // simply never gave the one actor who knows the answer a way to write it down: a
 // human can, from the detail page's "+ Link pull request" picker; the agent that
 // just ran `gh pr create` could not.
@@ -238,18 +240,14 @@ export async function runLinkPullRequest(
     );
 
     const where = `${result.link.repo}#${result.link.number}`;
-    const note = result.movedFrom
-      ? ` (MOVED from ${result.movedFrom} — that is the SINGULAR link, the one the completion` +
-        ` gate reads; ${result.movedFrom} KEEPS its delivery row, which only the item page removes)`
-      : result.created
-        ? ' (no delivery had arrived yet — the row was created by this call)'
-        : '';
+    const note = result.created
+      ? ' (no delivery had arrived yet — the row was created by this call)'
+      : '';
     return toolOk(
       `Linked ${where} to ${item.identifier}${note}.`,
       exempt(LINK_PULL_REQUEST_TOOL_NAME, {
         key: item.identifier,
         created: result.created,
-        movedFrom: result.movedFrom,
         pullRequest: { ...result.link },
       }),
     );
@@ -267,24 +265,23 @@ export function registerLinkPullRequest(
     {
       title: 'Link pull request',
       description:
-        'Declare which work item a pull request belongs to — call it IMMEDIATELY after opening ' +
-        'the pull request, once per pull request. You know the answer with certainty at that ' +
-        'moment; nothing else does. The link is what the completion gate and the status sync ' +
-        'read, so a merge moves the card whether or not any title ever named it. ' +
-        '⚠️ IT WRITES TWO LINKS AND THEY BEHAVE DIFFERENTLY. The link a work item CARRIES is ' +
-        'SINGULAR, so calling this again naming a DIFFERENT work item MOVES it off the first one ' +
-        '— the result says which item it was moved from. The call ALSO records the (work item, ' +
-        'pull request) pair in a delivery table, and THAT one pull request may fill for several ' +
-        'work items; it is what the item page’s Development panel lists. ' +
-        '⚠️ The completion gate and the status sync still read the SINGULAR link, so ONE pull ' +
-        'request delivering a parent and its children is linked to the PARENT, once — link the ' +
-        'children instead and every call walks the link off the last, the merge closes only ' +
-        'whichever card it happened to end on, and the siblings are stranded. The merge cascades ' +
-        'DOWN from the parent on its own. ' +
+        'Declare which work item a pull request delivers — call it IMMEDIATELY after opening ' +
+        'the pull request, once per work item it delivers. You know the answer with certainty ' +
+        'at that moment; nothing else does. The link is what the completion gate and the status ' +
+        'sync read, so a merge moves the card whether or not any title ever named it. ' +
+        '⚠️ IT IS A SET, NOT A SLOT. Calling this again naming a DIFFERENT work item ADDS a ' +
+        'second link; it does not move the first, and nothing is silently unlinked. One pull ' +
+        'request may deliver several work items and one work item may be delivered by several ' +
+        'pull requests — the item page’s Development panel lists them. A link made by mistake ' +
+        'is retracted with `unlink_pull_request`, which is the only thing that removes one. ' +
+        'So ONE pull request delivering a parent and its children can be declared either way: ' +
+        'link the PARENT once and the merge cascades DOWN to its children on its own, or link ' +
+        'each card the pull request actually delivers and the merge closes all of them. Linking ' +
+        'the parent is the shorter of the two and stays correct as children are added. ' +
         'Address the pull request as `repository` ("owner/name") + `number`, or as the `url` ' +
         '`gh pr create` printed. It works BEFORE GitHub’s webhook has delivered anything — ' +
         'that is the case it exists for — writing the row from the `headRef` / `baseRef` / ' +
-        '`title` you supply; a later delivery refreshes those and leaves the link alone. ' +
+        '`title` you supply; a later delivery refreshes those and leaves the links alone. ' +
         'Putting the key in the branch is still worth doing for a human reading a branch list, ' +
         'but it is a label now, not the mechanism. Honors the same access checks as the UI: an ' +
         'unknown or cross-workspace repository, and an unknown item key, are both refused.',

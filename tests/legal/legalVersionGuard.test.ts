@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { listLegalDocuments } from '@/lib/legal/documents';
 import {
   RECONSENT_DOCUMENT_SLUGS,
+  type ReconsentSlug,
   isMaterialChange,
   parseSemanticVersion,
 } from '@/lib/legal/consent';
@@ -45,6 +46,52 @@ import {
 //
 // The asymmetry is the thing to remember when in doubt: **over-asking costs a
 // screen, under-asking costs a promise.** Round up.
+//
+// ── ⚠️ THE TRIPWIRE WAS DEAD FOR ITS WHOLE LIFE (MOTIR-3806) ────────────────
+// The case that carried flag 1's actual ask used to read
+// `expect(isMaterialChange(document?.version, document?.version)).toBe(false)` —
+// a version compared with ITSELF. `isMaterialChange` returns `false` whenever
+// major and minor are equal, which they always are when a value is compared with
+// itself, so the expectation could not fail for any version, on any revision,
+// ever. It was described in this file as *"a statement of the CURRENT state"*;
+// it was a statement of nothing. MOTIR-3705 shipped the first real revision of a
+// published document (`privacy.md` 1.0.0 → 1.1.0, PR #2427) — the exact event the
+// case existed to catch — and it stayed green.
+//
+// The repair is the PINNED BASELINE below. Both arguments are now independent
+// values: a constant a human maintains, and the version parsed out of the file.
+// That comparison genuinely fails on the next material bump, which is the point —
+// the failure IS the prompt to read the diff and confirm the component.
+//
+// ── THE PINNED BASELINE ─────────────────────────────────────────────────────
+/**
+ * The version of each re-consent document that a person has last read a diff for
+ * and confirmed the semver component of.
+ *
+ * ⚠️ It is a COPY of `content/legal/`, taken deliberately — never derived from
+ * it. The two diverging is the whole signal; a baseline read out of the same
+ * front matter it is checked against would be the tautology again in a new shape.
+ *
+ * **WHEN IT IS UPDATED:** only in the pull request that ships a revision, and
+ * only after somebody has read that diff and decided whether what moved was
+ * material (MAJOR / MINOR) or not (PATCH). Editing this map IS that decision
+ * being recorded. Bumping it to clear a red test without making that read puts
+ * the tripwire back exactly where MOTIR-3806 found it.
+ *
+ *   * **`terms` · `acceptable-use` at `1.0.0`** — the launch set as approved
+ *     (`content(legal): approve the launch document set`, PR #2336). Neither has
+ *     been revised since.
+ *   * **`privacy` at `1.1.0`** — MOTIR-3705 widened §6 to cover work-item
+ *     attribution anonymisation, and recorded the component on the record:
+ *     *"version 1.0.0 -> 1.1.0 — MINOR, i.e. MATERIAL, so re-consent prompts."*
+ *     (PR #2427). That is the read this baseline is the receipt for.
+ */
+const REVIEWED_BASELINE: Record<ReconsentSlug, string> = {
+  terms: '1.0.0',
+  privacy: '1.1.0',
+  'acceptable-use': '1.0.0',
+};
+
 describe('the published legal set supports the materiality convention', () => {
   const documents = listLegalDocuments();
 
@@ -87,16 +134,51 @@ describe('the published legal set supports the materiality convention', () => {
     }
   });
 
-  it('holds nobody today — the published set is all at its initial version', () => {
-    // A statement of the CURRENT state rather than an invariant: nothing has
-    // been revised since publication, so a person who accepted at sign-up is
-    // current on all three. When the first real revision ships, this expectation
-    // is the one that fails, and the failure is the prompt to check that the
-    // component chosen matches what actually moved — which is the closest a test
-    // can honestly get to flag 1's real ask.
+  it('has published no material revision the baseline has not been read against', () => {
+    // THE TRIPWIRE. The published version is compared against the PINNED
+    // baseline above — two independent values, which is the whole difference
+    // from the assertion this replaced. It goes red the moment a MAJOR or MINOR
+    // bump lands without `REVIEWED_BASELINE` moving with it, and the failure is
+    // the prompt to check that the component chosen matches what actually moved.
+    //
+    // A PATCH bump passes, deliberately: `terms.md` §14 says a patch takes
+    // effect when published, so a patch is not something a person has to be
+    // stopped for. The residual risk stated above — a MATERIAL change shipped AS
+    // a patch — is not reachable from here and stays accepted, for the reason
+    // written there: only a human reading the diff can tell.
     for (const slug of RECONSENT_DOCUMENT_SLUGS) {
       const document = documents.find((candidate) => candidate.slug === slug);
-      expect(isMaterialChange(document?.version, document?.version)).toBe(false);
+      expect(document, `${slug} is published`).toBeDefined();
+      expect(
+        isMaterialChange(REVIEWED_BASELINE[slug], document?.version),
+        `${slug}: published ${document?.version} is a material move past the reviewed ` +
+          `baseline ${REVIEWED_BASELINE[slug]}. Read the diff, decide whether the component ` +
+          `matches what moved, then record that read by updating REVIEWED_BASELINE.`,
+      ).toBe(false);
+    }
+  });
+
+  it('CAN fail — a version above each baseline is reported material', () => {
+    // THE MUTATION CHECK, and it is the half MOTIR-3806 was missing rather than
+    // an extra. The assertion above only ever exercises the PASSING direction,
+    // and a guard exercised in one direction is indistinguishable from a guard
+    // that cannot fail — which is precisely how a tautology sat here being
+    // counted as coverage. So the same call, on the same baselines, must come
+    // back `true` for a minor bump and `false` for a patch: proving it fires,
+    // and proving it still discriminates rather than having become "always ask".
+    for (const slug of RECONSENT_DOCUMENT_SLUGS) {
+      const baseline = REVIEWED_BASELINE[slug];
+      const parsed = parseSemanticVersion(baseline);
+      if (!parsed) throw new Error(`${slug} baseline ${baseline} is not a semantic version`);
+
+      const materialBump = `${parsed.major}.${parsed.minor + 1}.0`;
+      const patchBump = `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`;
+
+      const material = isMaterialChange(baseline, materialBump);
+      expect(material, `${slug}: ${baseline} → ${materialBump} must prompt`).toBe(true);
+
+      const patch = isMaterialChange(baseline, patchBump);
+      expect(patch, `${slug}: ${baseline} → ${patchBump} must stay silent`).toBe(false);
     }
   });
 });

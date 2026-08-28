@@ -84,7 +84,10 @@ async function seedRow(
 
 let prNumber = 0;
 
-/** Attach a linked PR to an item — the 7.10.3 `GithubPullRequest` mirror the rules read. */
+/** Attach a DELIVERED pull request to an item — the evidence `hasLinkedPr` reads.
+ *  It reached the pull-request mirror through `github_pull_request.work_item_id`
+ *  until MOTIR-3757 dropped that column; the delivery row is the association now,
+ *  and the classifier's answer is unchanged. */
 async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise<void> {
   const installationId = `inst-${fx.workspaceId}`;
   const inst = await adminDb.githubInstallation.upsert({
@@ -113,7 +116,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
     update: {},
   });
   prNumber += 1;
-  await adminDb.githubPullRequest.create({
+  const pr = await adminDb.githubPullRequest.create({
     data: {
       provider: 'github',
       repoId: repo.id,
@@ -121,7 +124,14 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
       state: 'closed',
       merged: true,
       headRef: `subtask/MOTIR-${prNumber}`,
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: fx.workspaceId,
       workItemId,
+      githubPullRequestId: pr.id,
+      repoId: repo.id,
     },
   });
 }

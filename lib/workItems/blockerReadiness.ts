@@ -13,6 +13,22 @@
 //
 // PURE — no I/O, no Prisma, no context. The callers do the reads and hand the
 // rows in.
+//
+// WHY `work_item.session_branch` IS KEPT (docs/decisions/session-branch-lineage.md,
+// MOTIR-3734). `work-item-delivery-links.md` Q2 listed that column among "the two
+// scalars" a follow-up card drops once `work_item_delivery` is armed. It is NOT
+// dropped, and this module is the reason: a delivery row cannot exist before a
+// pull request does (`work_item_delivery.github_pull_request_id` is NOT NULL),
+// and `isOpenBlocker` runs in exactly that window — `mark_integrated` records the
+// branch on agent success, which on the scoped-run lane is the whole run before
+// any pull request is opened. Answer job 1 from a delivery join and every card
+// after the first in a session run reads `ready: false`, with the failure
+// presenting as a silently empty ready set rather than an error. The column is
+// therefore the PRE-pull-request fact and the delivery table the POST-
+// pull-request one; they are disjoint in time by construction, which is why one
+// is not a replacement for the other. Same reason a card's own feature branch is
+// not a substitute: this column is NULL for exactly those cards, and that
+// null-ness is the discriminator.
 
 /** A blocker row as the readiness classifier needs it — its status + project
  *  (for the per-project terminal check) and its integration `sessionBranch`. */

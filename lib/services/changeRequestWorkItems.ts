@@ -5,9 +5,10 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 // WHICH WORK ITEMS DOES THIS CHANGE REQUEST DELIVER? (MOTIR-3007 · MOTIR-3721)
 //
 // ── Why this is a module and not two lines inside the sync ──────────────────
-// `github_pull_request.work_item_id` is a single nullable column, so the schema
-// could only ever answer "which ONE item is this change request linked to". That
-// was true enough while every pull request carried one card. `motir auto` broke
+// The association used to be `github_pull_request.work_item_id`, a single nullable
+// column (dropped by MOTIR-3757), so the schema could only ever answer "which ONE
+// item is this change request linked to". That was true enough while every pull
+// request carried one card. `motir auto` broke
 // the assumption: it integrates a whole run onto ONE session branch and opens ONE
 // pull request for it, and `sessionBranchName` (`packages/cli/src/git.ts`)
 // deliberately keeps `MOTIR-<n>` OUT of that branch precisely so the 1:1
@@ -40,7 +41,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 // the 1:1 resolve the caller had already performed off the scalar column — and
 // its non-session arm returned `args.linked ? [args.linked] : []`. The RETURN
 // TYPE was already set-shaped, so the cap was invisible in it: it lived in a
-// `| null` in a parameter, which is why `git grep work_item_id` could not find
+// `| null` in a parameter, which is why a grep for the column name could not find
 // it (`docs/decisions/delivery-reader-migration.md` §2). An explicitly-linked
 // pull request was therefore capped at ONE work item by this function's own
 // signature, whatever the delivery table held — and the measured cost was four

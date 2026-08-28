@@ -165,20 +165,28 @@ describe('block 6 — the tool is REGISTERED on the shipped server', () => {
     expect(required).not.toContain('repository');
 
     // The description is the only briefing an agent gets, and the cardinality is
-    // the half it must not misread. It has BOTH halves to state since MOTIR-3658
-    // made the call dual-write, and pinning only the first is what let the text
-    // go stale: for a day it said one pull request "cannot point at two" work
-    // items, an agent delivering a parent and its children by one pull request
-    // read that as "link the children", and each call walked the singular link
-    // off the last (MOTIR-3722, motir-core#2353). So all three are pinned.
-    expect(tool!.description, 'the FK half — a re-link MOVES').toMatch(/MOVES/);
-    expect(tool!.description, 'the delivery half — it also ADDS').toMatch(/delivery table|ADDS/);
+    // the half it must not misread. Pinning only part of it is what let the text
+    // go stale twice: for a day it said one pull request "cannot point at two"
+    // work items, an agent delivering a parent and its children by one pull
+    // request read that as "link the children", and each call walked the singular
+    // link off the last (MOTIR-3722, motir-core#2353).
+    //
+    // ⚠️ THE PINS ARE INVERTED BY MOTIR-3757, and that is this card's deliverable
+    // rather than a fixture repair. The `MOVES` pin was correct while
+    // `github_pull_request.work_item_id` existed; with that column dropped a
+    // second link ADDS, so the text must say so and must NOT say the old thing.
+    expect(tool!.description, 'the cardinality — a re-link ADDS').toMatch(/ADDS/);
+    expect(tool!.description, 'the correction door — only unlink removes a link').toMatch(
+      /unlink_pull_request/,
+    );
     expect(
       tool!.description,
-      'the operative instruction — one pull request for a parent and its children links the PARENT',
+      'the parent/children case is still ANSWERED, whichever way it is declared',
     ).toMatch(/PARENT/);
-    // ⚠️ And the claim the dual write falsified must not come back.
+    // ⚠️ And neither retired claim may come back: the dual write falsified the
+    // first, and the column drop the second.
     expect(tool!.description).not.toMatch(/cannot point at two/);
+    expect(tool!.description).not.toMatch(/MOVES/);
     await client.close();
   });
 });
@@ -195,14 +203,18 @@ describe('block 6 — GRANTED: the sandboxed-run grant CAN call it', () => {
     const result = await callLink(client, key);
 
     expect(result.isError, 'CLI_TOKEN_GRANT cannot call link_pull_request').toBeFalsy();
-    expect(result.structuredContent).toMatchObject({ key, created: true, movedFrom: null });
+    expect(result.structuredContent).toMatchObject({ key, created: true });
+    // `movedFrom` retired with the column it reported on (MOTIR-3757).
+    expect(result.structuredContent).not.toHaveProperty('movedFrom');
 
     // Reached the database, not merely the registry.
     const row = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: repoRowId, number: 2291 },
     });
     expect(row.linkedManually).toBe(true);
-    expect(row.workItemId).not.toBeNull();
+    expect(await adminDb.workItemDelivery.count({ where: { githubPullRequestId: row.id } })).toBe(
+      1,
+    );
     await client.close();
   });
 

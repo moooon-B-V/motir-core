@@ -12,7 +12,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { linkPrByIdentifier } from '../helpers/prLink';
+import { deliveredItemIds, linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · MOTIR-1596 — the EXPLICIT item→PR link (the manual override of
 // the MOTIR-892 auto-resolver). Covers the service branches (happy link, takeover
@@ -141,18 +141,24 @@ describe('githubPullRequestService.linkPullRequest — the explicit override (MO
       headBranch: 'feature/unrelated-branch',
       title: 'Add per-route throttling',
     });
-    const before = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
-    expect(before?.workItemId).toBeNull();
+    expect(await deliveredItemIds(prId)).toEqual([]);
 
     const dto = await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
     expect(dto).toMatchObject({ number: 12, repo: 'moooon/acme', linkedManually: true });
 
-    const after = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
-    expect(after?.workItemId).toBe(item.id);
-    expect(after?.linkedManually).toBe(true);
+    expect(await deliveredItemIds(prId)).toEqual([item.id]);
+    const after = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
+    expect(after.linkedManually).toBe(true);
   });
 
-  it('a takeover MOVES the link to the picking item (single FK, no confirm)', async () => {
+  // ⚠️ THE ASSERTION IS INVERTED FROM WHAT THIS TEST USED TO PIN, and the
+  // inversion is the deliverable rather than a fixture repair. It read *a takeover
+  // MOVES the link to the picking item (single FK, no confirm)* — true while the
+  // association was `github_pull_request.work_item_id`, and the reason the corpus
+  // told a parent run to link the PARENT once. MOTIR-3757 dropped that column, so
+  // a second link ADDS a delivery and the first one stands; `unlink_pull_request`
+  // is the only thing that takes one away.
+  it('a second link ADDS a delivery — the first item keeps its own (no confirm)', async () => {
     const s = await makeScenario({
       email: 'link-takeover@example.com',
       installationId: INST_A,
@@ -176,9 +182,9 @@ describe('githubPullRequestService.linkPullRequest — the explicit override (MO
     await githubPullRequestService.linkPullRequest(itemA.id, prId, s.ctx);
     await githubPullRequestService.linkPullRequest(itemB.id, prId, s.ctx);
 
-    const row = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
-    expect(row?.workItemId).toBe(itemB.id);
-    expect(row?.linkedManually).toBe(true);
+    expect(await deliveredItemIds(prId)).toEqual([itemA.id, itemB.id]);
+    const row = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
+    expect(row.linkedManually).toBe(true);
   });
 
   it('a cross-workspace PR is rejected (no existence leak)', async () => {
@@ -447,9 +453,9 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
         action: 'reopened',
       }),
     );
-    const row = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
-    expect(row?.workItemId).toBe(item.id);
-    expect(row?.linkedManually).toBe(true);
+    expect(await deliveredItemIds(prId)).toEqual([item.id]);
+    const row = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
+    expect(row.linkedManually).toBe(true);
   });
 
   it('drives the status sync on merge (merged → Done via the manual link)', async () => {
@@ -490,8 +496,8 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
     const moved = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(moved?.status).toBe('done');
     // The link stays manual after the merge delivery.
-    const row = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
-    expect(row?.linkedManually).toBe(true);
-    expect(row?.workItemId).toBe(item.id);
+    const row = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
+    expect(row.linkedManually).toBe(true);
+    expect(await deliveredItemIds(prId)).toEqual([item.id]);
   });
 });

@@ -97,19 +97,15 @@ async function payload(caller: V1ProjectCaller, key: string): Promise<V1Dispatch
 /** A MERGED pull request onto that repository's own default branch — the one
  *  thing that makes a repository `delivered` (`lib/workItems/repoDelivery.ts`).
  *
- *  ⚠️ IT WRITES BOTH HALVES OF THE LINK (MOTIR-3721), because the database does.
- *  The completion FACTS the classifier reads now come from `work_item_delivery`,
- *  and every row that carries a `github_pull_request.work_item_id` carries a
- *  delivery row too: the delivery table's migration backfilled all of them, and
- *  both live writers (`link_pull_request`, `mark_integrated`) write the pair. A
- *  fixture writing only the column would be describing a state that exists on no
- *  migrated database, and would assert the absence of a link rather than the
- *  classifier. */
+ *  ⚠️ THE LINK IS THE DELIVERY ROW, and since MOTIR-3757 there is no second half
+ *  to write: `github_pull_request.work_item_id` is dropped, so a fixture that means
+ *  *this pull request delivers this card* says it in `work_item_delivery` or does
+ *  not say it at all. The completion FACTS the classifier reads come from that
+ *  table. */
 async function mergedPr(repoId: string, workItemId: string, baseRef: string, number: number) {
   const row = await adminDb.githubPullRequest.create({
     data: {
       repoId,
-      workItemId,
       number,
       state: 'closed',
       merged: true,
