@@ -9,6 +9,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { LINK_CHECK_NAME, NO_WORK_ITEM_LABEL } from '@/lib/services/pullRequestLinkCheckService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { readPullRequestHeadSha, writeCheckRun } from '@/lib/github/checkRuns';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -430,5 +431,66 @@ describe('the exemptions — each stated as a rule, each with its own case', () 
     );
 
     expect(writes()).toHaveLength(0);
+  });
+});
+
+// ⚠️ THE URL GUARD, asserted at the leaf rather than through a delivery. Every
+// path segment this module interpolates is whitelisted before a URL exists
+// (`lib/github/checkRuns.ts`), and the contract is not "the request fails" — it
+// is that NO REQUEST IS MADE. A best-effort writer that must never throw is
+// exactly the place a malformed segment would otherwise go out silently, so the
+// observable is the fetch count, and each case is one segment kind.
+describe('a segment that is not a thing GitHub could have named makes no request', () => {
+  function fetchCalls(): number {
+    return (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
+  }
+
+  const spec = {
+    installationId: INSTALLATION_ID,
+    owner: 'acme',
+    name: 'web',
+    headSha: HEAD_SHA,
+    conclusion: 'failure' as const,
+    title: 't',
+    summary: 's',
+  };
+
+  it.each([
+    ['an owner that walks the API path', { owner: '..' }],
+    ['a NAME that walks it — the other half of the same grammar', { name: '..' }],
+    ['an owner carrying a dot, which no GitHub login has', { owner: 'ac.me' }],
+    ['a name that truncates the URL with a query', { name: 'web?x=1' }],
+    ['a name that truncates it with a fragment', { name: 'web#x' }],
+    ['a name carrying its own path separator', { name: 'web/extra' }],
+    ['an empty owner', { owner: '' }],
+    ['a head sha that is not a hex commit', { headSha: 'HEAD' }],
+  ])('%s is refused before the write — %o', async (_label, patch) => {
+    const outcome = await writeCheckRun({ ...spec, ...patch });
+
+    expect(outcome).toBe('unavailable');
+    expect(fetchCalls()).toBe(0);
+  });
+
+  // The number reads as immune because it is arithmetic — but it arrives as JSON,
+  // where it is a number only by convention, and `Number.isInteger` admits two
+  // values that are integers and still not path segments.
+  it.each([
+    ['zero', 0],
+    ['a negative, which walks a `-` into the path', -5],
+    ['a fraction', 1.5],
+    ['NaN', Number.NaN],
+    ['an integer so large it stringifies to `1e+21`', 1e21],
+  ])('a pull request number that is %s is refused before the read', async (_label, number) => {
+    const sha = await readPullRequestHeadSha(INSTALLATION_ID, 'acme', 'web', number);
+
+    expect(sha).toBeNull();
+    expect(fetchCalls()).toBe(0);
+  });
+
+  it('and a well-formed one still reads the head sha, so the guard is not a wall', async () => {
+    const sha = await readPullRequestHeadSha(INSTALLATION_ID, 'acme', 'web', 42);
+
+    expect(sha).toBe(HEAD_SHA);
+    expect(fetchCalls()).toBe(1);
   });
 });

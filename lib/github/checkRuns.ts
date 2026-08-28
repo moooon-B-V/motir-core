@@ -28,9 +28,11 @@ import { mintInstallationToken } from './appAuth';
 
 const GITHUB_API = 'https://api.github.com';
 
-// ⚠️ EVERY PATH SEGMENT THAT REACHES A URL IS VALIDATED FIRST, and the reason is
-// not the scanner that found it (`js/request-forgery`, twice, on the two reads
-// below). The values ARRIVE from a webhook payload — GitHub's, signature-checked,
+// ⚠️ EVERY PATH SEGMENT THAT REACHES A URL IS VALIDATED FIRST — all FOUR kinds:
+// the repository's owner, its name, the commit SHA, and the pull request NUMBER.
+// The reason is not the scanner that found them (`js/request-forgery`, on two
+// reads and then, once those were guarded, on the number the third one
+// interpolates). The values ARRIVE from a webhook payload — GitHub's, signature-checked,
 // and mirrored into `github_repo` before this file sees them — so the realistic
 // exploit is thin. What is NOT thin is the failure mode: a repository row whose
 // `owner` or `name` was written wrong, by any path, turns every call in this file
@@ -41,14 +43,42 @@ const GITHUB_API = 'https://api.github.com';
 // So the guard is a WHITELIST of the grammar GitHub itself accepts, applied at
 // the one place a URL is built, and a value outside it produces no request at
 // all — which each caller already has an arm for.
-const REPO_SEGMENT = /^[A-Za-z0-9._-]{1,100}$/;
+//
+// ⚠️ AND A NUMERIC SEGMENT IS GUARDED THE SAME WAY, not with `Number.isInteger`.
+// A pull request number is arithmetic, so it reads as immune — but it arrives as
+// JSON from a webhook body or an MCP argument, and what a sender writes there is
+// only a number by convention. `Number.isInteger` also admits values that are
+// integers and still not path segments: `1e21` stringifies to `1e+21`, and a
+// negative walks a `-` into the path. Constraining what the segment SAYS is the
+// same question at all three sites, so it gets the same instrument.
+//
+// ⚠️ AND THE OWNER AND THE NAME ARE NOT THE SAME GRAMMAR, which is the mistake
+// this pair was written with and a test caught: one whitelist of
+// `[A-Za-z0-9._-]` for both ADMITS `..`, so the segment the note above names as
+// the thing it stops walked straight through it. A GitHub LOGIN is alphanumeric
+// and hyphens only, at most 39 characters and never leading with a hyphen — it
+// has no `.` to walk with. A repository NAME does take `.` (`.github` is one),
+// so there the dot-segments are excluded by name.
+const OWNER_SEGMENT = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const NAME_SEGMENT = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,100}$/;
 const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+const PULL_NUMBER = /^[1-9][0-9]{0,8}$/;
 
 /** `https://api.github.com/repos/<owner>/<name>`, or null when either segment is
  *  not a thing GitHub could have named. */
 function repoUrl(owner: string, name: string): string | null {
-  if (!REPO_SEGMENT.test(owner) || !REPO_SEGMENT.test(name)) return null;
+  if (!OWNER_SEGMENT.test(owner) || !NAME_SEGMENT.test(name)) return null;
   return `${GITHUB_API}/repos/${owner}/${name}`;
+}
+
+/** `<repoUrl>/pulls/<number>`, or null when the number is not one GitHub could
+ *  have issued. Separate from `repoUrl` because only one caller addresses a
+ *  pull request, and folding it in would put an unused segment in the other
+ *  two. */
+function pullUrl(base: string, number: number): string | null {
+  const segment = String(number);
+  if (!PULL_NUMBER.test(segment)) return null;
+  return `${base}/pulls/${segment}`;
 }
 
 /** The check run's name, as a person reads it in the GitHub UI. Stable: it is
@@ -212,10 +242,11 @@ export async function readPullRequestHeadSha(
     return null;
   }
   const base = repoUrl(owner, name);
-  if (base === null || !Number.isInteger(number) || number <= 0) return null;
+  const url = base === null ? null : pullUrl(base, number);
+  if (url === null) return null;
   let res: Response;
   try {
-    res = await fetch(`${base}/pulls/${number}`, {
+    res = await fetch(url, {
       headers: headers(token),
     });
   } catch {
