@@ -186,6 +186,55 @@ export interface ProjectRoadmapCanvasProps {
    */
   initialTrail?: readonly CanvasCrumb[];
   /**
+   * REPORT the level (MOTIR-3835) — the other half of `initialTrail`.
+   *
+   * Fired whenever the canvas's OWN level moves, with the full trail root-first
+   * (`[]` at the root level). There are exactly three movers and they funnel
+   * through two functions: `applyDrill` — shared by the explicit "Open"
+   * affordance AND the auto-descend, deliberately kept single — and `navigate`,
+   * shared by a crumb click and `goBack`. So an AUTO-DESCENDED arrival
+   * (MOTIR-1807) reports exactly like a hand-drilled one, which is the shipped
+   * design position that an arrival must be indistinguishable from a drill.
+   *
+   * ⚠️ NOT fired for the mount-time `initialTrail` seed, and not fired when a
+   * level LOAD resolves. The consumer supplied that trail; telling it what it
+   * just said is a write loop waiting to happen.
+   *
+   * Absent by default — the four other consumers are untouched.
+   */
+  onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
+  /**
+   * A CONTROLLED level (MOTIR-3835) — the consumer moving the canvas IN PLACE.
+   *
+   * `initialTrail` above is a SEED, read once, and it is right about that: where
+   * the canvas SITS is the user's. This prop is the opposite contract, and a
+   * consumer opts into exactly one of them: while it is supplied, the level is
+   * the CONSUMER's, and the canvas adopts any value that differs from where it
+   * currently is. `undefined` (the default) leaves the canvas uncontrolled;
+   * `[]` names the root level.
+   *
+   * Adoption happens DURING RENDER — React's adjust-state-when-an-input-changes
+   * pattern, the same one `remappedFocus` and `prevTargetSig` use — never a
+   * `useEffect` + `setState`, which the CI lint rule
+   * (`react-hooks/set-state-in-effect`) forbids and which would render one frame
+   * of the old level first. It clears exactly what a drill clears
+   * (`localPositions` / `selectedId` / `highlightId` / `showChanges`) and lets
+   * the existing load effect read the new level: **no remount**, so the
+   * consumer's level cache, the canvas chrome and the breadcrumb machinery all
+   * survive, which is the whole reason this is not a `key`.
+   *
+   * An adopted level SUPPRESSES auto-descend for that level, exactly as
+   * `navigate` does: a consumer asking for a level is asking to SEE it, not to
+   * be carried past it. Suppression is per ADOPTION, not per controlled-ness —
+   * a controlled canvas arriving at a root it was not moved to still
+   * auto-descends normally.
+   *
+   * ⚠️ Not combinable with `resolveHeldNode`: that follows an id the canvas
+   * HOLDS, and this replaces it, so a consumer using both would have the two
+   * fight over `focusId`. No shipped consumer passes both.
+   */
+  controlledTrail?: readonly CanvasCrumb[];
+  /**
    * FOLLOW a node the consumer RE-KEYS under a mounted canvas (bug MOTIR-3439).
    *
    * The canvas HOLDS two things by node id — its drilled `focusId` and every
@@ -235,6 +284,9 @@ const levelKey = (id: string | null) => id ?? ROOT_LEVEL_KEY;
 interface Crumb {
   id: string;
   label: string;
+  /** The work item's `<PREFIX>-<n>` key, when the node carried one (MOTIR-3835).
+   *  Keeps this local shape assignable to the model's `CanvasCrumb`. */
+  crumbKey?: string;
 }
 
 // The readable default zoom the LOCATE control snaps to (MOTIR-1421) — 1× shows a
@@ -261,6 +313,8 @@ export function ProjectRoadmapCanvas({
   loadingFallback,
   emptyRoot,
   initialTrail,
+  onLevelChange,
+  controlledTrail,
   resolveHeldNode,
   levelCaption,
 }: ProjectRoadmapCanvasProps) {
@@ -332,6 +386,9 @@ export function ProjectRoadmapCanvas({
   // our own descent path would otherwise descend forever, hanging the canvas rather
   // than failing visibly. Never descend into an ancestor; render the level instead.
   const crumbIdsRef = useRef<Set<string>>(new Set());
+  // The crumbs themselves, for the level REPORTERS (MOTIR-3835) — see the sync
+  // effect below for why a ref rather than a dependency.
+  const crumbsRef = useRef<Crumb[]>(crumbs);
 
   // ── FOLLOW a RE-KEYED node (bug MOTIR-3439) ─────────────────────────────────
   //
@@ -354,6 +411,40 @@ export function ProjectRoadmapCanvas({
       })
     : crumbs;
   if (remappedCrumbs.some((crumb, i) => crumb !== crumbs[i])) setCrumbs(remappedCrumbs);
+
+  // ── ADOPT a CONTROLLED level (MOTIR-3835) ───────────────────────────────────
+  //
+  // The mirror of `remappedFocus` directly above, and the same mechanism: an
+  // adjust-state-during-render, never a `useEffect` + `setState`. The difference is
+  // what each one is FOR — the remap changes a level's ADDRESS, this MOVES the
+  // canvas — and this one is idempotent by construction: once the state settles,
+  // `controlledFocusId === focusId` and the branch stops firing, so a re-render with
+  // an unchanged value is a true no-op and cannot loop.
+  const controlledFocusId =
+    controlledTrail === undefined
+      ? undefined
+      : (controlledTrail[controlledTrail.length - 1]?.id ?? null);
+  // The adoption EVENT, as state rather than a ref, because a ref may not be written
+  // during render. Its object identity is what re-arms the suppression effect below,
+  // so adopting the same level twice (drilled away, then restored) suppresses twice.
+  const [adoption, setAdoption] = useState<{ level: string | null } | null>(null);
+  if (controlledFocusId !== undefined && controlledFocusId !== focusId) {
+    setFocusId(controlledFocusId);
+    setCrumbs([...(controlledTrail ?? [])]);
+    // Exactly what a drill / a `navigate` clears — an adopted level is a level
+    // change, so nothing per-level may survive it.
+    setLocalPositions({});
+    setSelectedId(null);
+    setHighlightId(null);
+    setShowChanges(false);
+    setAdoption({ level: controlledFocusId });
+  }
+  // Record the suppression OUTSIDE render. Auto-descend must not carry the reader
+  // out of a level the consumer explicitly asked for — the same rule `navigate`
+  // applies for a crumb click, and the same `suppressedLevelRef` it writes.
+  useEffect(() => {
+    if (adoption !== null) suppressedLevelRef.current = levelKey(adoption.level);
+  }, [adoption]);
 
   // The opt-in flag, held in a ref so the load effect stays keyed strictly on level
   // identity (`focusId` / `reloadKey`) — toggling the prop must not refetch a level.
@@ -411,10 +502,22 @@ export function ProjectRoadmapCanvas({
   useEffect(() => {
     resolveHeldNodeRef.current = resolveHeldNode;
   }, [resolveHeldNode]);
+  // Same reason, for `onLevelChange` (MOTIR-3835): the reporters are `useCallback`s
+  // with empty deps, and a consumer's handler is commonly recreated every render.
+  const onLevelChangeRef = useRef(onLevelChange);
+  useEffect(() => {
+    onLevelChangeRef.current = onLevelChange;
+  }, [onLevelChange]);
   // Mirror the crumb ids for the auto-descend's cycle guard (a ref, so the load
   // effect can read the current path without re-running on every crumb change).
+  // `crumbsRef` mirrors the crumbs THEMSELVES for the same reason (MOTIR-3835):
+  // `applyDrill` and `navigate` must report the trail they are producing, and they
+  // hold no `crumbs` dependency by design — the functional `setCrumbs` updater is
+  // what keeps them stable, and calling a consumer's callback from inside an updater
+  // would fire it twice under StrictMode.
   useEffect(() => {
     crumbIdsRef.current = new Set(crumbs.map((c) => c.id));
+    crumbsRef.current = crumbs;
   }, [crumbs]);
 
   // `/` focuses the search field (unless already typing into one).
@@ -440,12 +543,24 @@ export function ProjectRoadmapCanvas({
   // the breadcrumb, search, locate, zoom and full-screen all keep working with no
   // special case.
   const applyDrill = useCallback((node: ProjectCanvasNode) => {
-    setCrumbs((c) => [...c, { id: node.id, label: node.crumbLabel ?? node.searchText }]);
+    const crumb: Crumb = {
+      id: node.id,
+      label: node.crumbLabel ?? node.searchText,
+      ...(node.crumbKey === undefined ? {} : { crumbKey: node.crumbKey }),
+    };
+    setCrumbs((c) => [...c, crumb]);
     setLocalPositions({});
     setSelectedId(null);
     setFocusId(node.id);
     setHighlightId(null);
     setShowChanges(false);
+    // REPORT the new level (MOTIR-3835). Computed from the crumbs ref rather than
+    // inside the updater above: an updater may run twice (StrictMode), and a
+    // consumer's callback is not something to fire twice. Because this is the ONE
+    // drill transition, an auto-descended arrival reports identically to a
+    // hand-drilled one — including each hop of a chained descent, which is what
+    // makes the final report name the level actually landed on.
+    onLevelChangeRef.current?.([...crumbsRef.current, crumb]);
   }, []);
 
   // Fetch the current level. The PRIOR level stays visible during a refetch (no
@@ -659,13 +774,15 @@ export function ProjectRoadmapCanvas({
     if (crumbId === null) {
       setCrumbs([]);
       setFocusId(null);
+      onLevelChangeRef.current?.([]);
       return;
     }
-    setCrumbs((c) => {
-      const i = c.findIndex((x) => x.id === crumbId);
-      return i >= 0 ? c.slice(0, i + 1) : c;
-    });
+    const cur = crumbsRef.current;
+    const i = cur.findIndex((x) => x.id === crumbId);
+    const next = i >= 0 ? cur.slice(0, i + 1) : cur;
+    setCrumbs(next);
     setFocusId(crumbId);
+    onLevelChangeRef.current?.(next);
   }, []);
 
   const goBack = useCallback(() => {

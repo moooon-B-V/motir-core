@@ -30,6 +30,10 @@ export interface ProjectCanvasNode {
   /** Shown as this node's breadcrumb crumb when it is the drill focus (defaults to
    *  `searchText`). */
   crumbLabel?: string;
+  /** The work item's `<PREFIX>-<n>` KEY, carried onto the crumb a drill pushes
+   *  (MOTIR-3835). See {@link CanvasCrumb.crumbKey} for why the label cannot stand
+   *  in for it. Optional: a node without it produces a crumb without it. */
+  crumbKey?: string;
   /** Has children → activating it DRILLS into the next level (the canvas fetches
    *  it). A non-drillable node is a leaf → `onSelect`. */
   drillable?: boolean;
@@ -104,6 +108,13 @@ export interface CanvasLevel {
 export interface CanvasCrumb {
   id: string;
   label: string;
+  /** The work item's `<PREFIX>-<n>` KEY (MOTIR-3835), when the producer knows it.
+   *  `label` is a DISPLAY string (`identifier · title`), so a consumer that wants to
+   *  write a human-readable, shareable address cannot recover the identifier from it
+   *  without splitting on a separator the label is free to change. Optional, so the
+   *  consumers that do not set it are untouched and the field is simply absent on
+   *  their crumbs. */
+  crumbKey?: string;
 }
 
 /**
@@ -173,7 +184,15 @@ export function breadcrumb(nodes: ProjectCanvasNode[], focusId: string | null): 
   const seen = new Set<string>();
   while (cur && !seen.has(cur.id)) {
     seen.add(cur.id);
-    path.unshift({ id: cur.id, label: cur.crumbLabel ?? cur.searchText });
+    // The KEY rides along when the node carries one (MOTIR-3835), for the same
+    // reason `crumbLabel` is produced by a shared helper: this function and
+    // `applyDrill` are two producers of the same crumb, and a trail seeded here
+    // has to be interchangeable with one a hand-drill pushed.
+    path.unshift({
+      id: cur.id,
+      label: cur.crumbLabel ?? cur.searchText,
+      ...(cur.crumbKey === undefined ? {} : { crumbKey: cur.crumbKey }),
+    });
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
   return path;
