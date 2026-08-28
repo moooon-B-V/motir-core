@@ -365,7 +365,19 @@ export function ProjectRoadmapCanvas({
     () => initialTrail?.[initialTrail.length - 1]?.id ?? null,
   );
   const [crumbs, setCrumbs] = useState<Crumb[]>(() => [...(initialTrail ?? [])]);
-  const [level, setLevel] = useState<RoadmapLevel | null>(null);
+  // The level, TOGETHER WITH the focus it was loaded for (MOTIR-3837).
+  //
+  // ⚠️ THE TWO CANNOT BE SEPARATE, and separating them is a real bug rather than
+  // untidiness. `focusId` moves the INSTANT a drill happens, while the level's
+  // data arrives one round trip later — deliberately, so the prior level stays
+  // visible instead of flashing. The engine below is remounted per level, and it
+  // FITS ONCE on mount: keyed on `focusId`, the new instance mounts during that
+  // window, sees the PREVIOUS level's nodes, fits THOSE, and marks itself
+  // fitted — so the level the reader actually lands on is drawn at the scale of
+  // the one they left. Keying on the focus the LEVEL belongs to closes the
+  // window: the engine remounts exactly when the data it will fit has arrived,
+  // and the prior level stays on screen until then, unchanged.
+  const [level, setLevel] = useState<{ focusId: string | null; data: RoadmapLevel } | null>(null);
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -646,9 +658,9 @@ export function ProjectRoadmapCanvas({
           applyDrill(only);
           return;
         }
-        setLevel(lvl);
+        setLevel({ focusId, data: lvl });
       } catch {
-        if (alive && seq === reqSeq.current) setLevel({ nodes: [], deps: [] });
+        if (alive && seq === reqSeq.current) setLevel({ focusId, data: { nodes: [], deps: [] } });
       }
     })();
     return () => {
@@ -656,8 +668,8 @@ export function ProjectRoadmapCanvas({
     };
   }, [focusId, reloadKey, applyDrill]);
 
-  const nodes = useMemo(() => level?.nodes ?? [], [level]);
-  const deps = useMemo(() => level?.deps ?? [], [level]);
+  const nodes = useMemo(() => level?.data.nodes ?? [], [level]);
+  const deps = useMemo(() => level?.data.deps ?? [], [level]);
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const matchIds = useMemo(() => new Set(searchMatches(nodes, query)), [nodes, query]);
 
@@ -1355,7 +1367,10 @@ export function ProjectRoadmapCanvas({
       ) : (
         <PlanningCanvas
           // Remount per drill level so the new level auto-fits to its own overview.
-          key={`level:${focusId ?? 'root'}`}
+          // Keyed on the focus the LEVEL belongs to, NOT on `focusId` — see the
+          // note on the `level` state above. The two differ for exactly one round
+          // trip, and that window is where the arrival scale was being lost.
+          key={`level:${level.focusId ?? 'root'}`}
           nodes={canvasNodes}
           edges={canvasEdges}
           renderNode={renderNode}
