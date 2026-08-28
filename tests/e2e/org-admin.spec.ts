@@ -16,6 +16,17 @@
 //     workspace under the org (administers a member living in a workspace the
 //     owner isn't in), and the multi-org switcher re-scopes the active org.
 //
+// ── LOCATOR DISCIPLINE (MOTIR-3737) ─────────────────────────────────────────
+// Every locator this file takes AFTER a navigation is role-based, scoped to the
+// live subtree (`#main`), or an absence check. React keeps the outgoing subtree
+// mounted while the incoming one streams, and Playwright resolves locators
+// BEFORE filtering on visibility, so an unscoped `getByText`/`getByLabel`/
+// `getByTestId` matches both copies and strict mode fails on a correct page
+// (`CLAUDE.md` § *a boundary makes every unscoped locator a race*). `getByRole`
+// is immune: the accessibility tree excludes the hidden copy. The one exception
+// is the sign-up password field — `input[type="password"]` has no ARIA role —
+// and it is annotated where it stands.
+//
 // Mirrors workspace-flows.spec.ts: the file-outbox email capture (1.1.6) for
 // the workspace-invite accept, the db-reset helper (1.1.7), and the
 // always-present org control's "New workspace" create path (6.10.5). The
@@ -46,8 +57,14 @@ test.afterAll(async () => {
 async function signUp(page: Page, email: string): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-up');
-  await page.getByPlaceholder('Email address').fill(email);
+  await page.getByRole('textbox', { name: 'Email address' }).fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  // ⚠️ The ONE locator in this file that cannot be role-based (MOTIR-3737's
+  // audit): `input[type="password"]` has no implicit ARIA role, so
+  // `getByRole('textbox')` never matches it and the placeholder is the only
+  // stable handle (the exception the file header names). Harmless here — the
+  // class needs two copies of a subtree in ONE document, and this is the first
+  // paint of a fresh one.
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
   await page.waitForURL('**/home', { timeout: 30_000 });
@@ -135,7 +152,26 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
     page.getByRole('link', { name: /upgrade|checkout|pay|subscribe|manage plan|add card/i }),
   ).toHaveCount(0);
 
-  const nameInput = page.getByLabel('Organization name');
+  // ⚠️ `getByRole`, NOT `getByLabel` (MOTIR-3737) — the SECOND site of the class
+  // MOTIR-3725 fixed in `cloud-org-settings-truth.spec.ts`. React keeps the
+  // OUTGOING subtree mounted while the incoming one streams, so both copies of
+  // this input sit in the DOM at once; Playwright resolves locators BEFORE
+  // filtering on visibility, so an unscoped `getByLabel` matches BOTH and strict
+  // mode fails on a page that is perfectly correct. `CLAUDE.md`'s
+  // loading-boundary rule states the remedy outright: *"`getByRole` is immune —
+  // the accessibility tree excludes the hidden copy"* (of the 30 assertions that
+  // class once broke, exactly zero used it).
+  //
+  // It is a LOCATOR-KIND bug, not a race, and the evidence is thirteen lines
+  // up: the `getByRole` heading assertion above passed on the same page, on the
+  // same navigation, in the same run that this line failed. A settle here would
+  // have gone green for the wrong reason and left every other unscoped locator
+  // on the page exposed.
+  //
+  // The failure named its own fix: Playwright reported the live element as
+  // `aka getByRole('textbox', { name: 'Organization name' })` and the stale twin
+  // by raw id alone.
+  const nameInput = page.getByRole('textbox', { name: 'Organization name' });
   await nameInput.fill('Acme Org');
   const renameResponse = page.waitForResponse(
     (r) => /\/api\/organizations\/[^/]+$/.test(r.url()) && r.request().method() === 'PATCH',
@@ -150,7 +186,9 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   await gotoAuthed(page, '/settings/organization/members');
   await expect(page.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
   // Single member → the first-run empty state, not a one-row roster.
-  await expect(page.getByText('It’s just you so far')).toBeVisible();
+  // Role, not text: `EmptyState` renders its title as an <h2>, so this reads the
+  // live subtree by construction (MOTIR-3737's audit).
+  await expect(page.getByRole('heading', { name: 'It’s just you so far' })).toBeVisible();
 
   // Invite the existing teammate to the org (default role: Member). At a single
   // member the roster shows the first-run empty state, whose CTA ("Invite
@@ -250,9 +288,16 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
 
   await gotoAuthed(page, '/settings/organization/members');
   // Total is 12 (owner + 11), but only a single page is rendered — NOT all rows.
-  await expect(page.getByText('12 people')).toBeVisible();
-  await expect(page.getByText('Page 1 of 2')).toBeVisible();
-  const memberRows = page.locator('li').filter({ hasText: '@example.com' });
+  // ⚠️ Scoped to `#main` (MOTIR-3737's audit). A count and a pager label carry no
+  // role, so the remedy `CLAUDE.md` names beside `getByRole` is the one that
+  // applies: scope to the live subtree. The outgoing tree is DETACHED from
+  // `#main` while the incoming one renders, so the scope is what makes these
+  // three unambiguous — including `memberRows`, whose whole point is that the
+  // count is 10 and not 20.
+  const main = page.locator('#main');
+  await expect(main.getByText('12 people')).toBeVisible();
+  await expect(main.getByText('Page 1 of 2')).toBeVisible();
+  const memberRows = main.locator('li').filter({ hasText: '@example.com' });
   await expect(memberRows).toHaveCount(10);
   const prev = page.getByRole('button', { name: 'Prev' });
   const next = page.getByRole('button', { name: 'Next' });
@@ -267,8 +312,8 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   );
   await next.click();
   expect((await pageTwoResponse).status()).toBe(200);
-  await expect(page.getByText('Page 2 of 2')).toBeVisible();
-  await expect(page.getByText('Pager Member 10', { exact: true })).toBeVisible();
+  await expect(main.getByText('Page 2 of 2')).toBeVisible();
+  await expect(main.getByText('Pager Member 10', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Prev' })).toBeEnabled();
 });
@@ -344,7 +389,8 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // auto-join gave them `member`), so this also exercises §6d's per-section
   // gate: the org-scoped cards are refused and C's workspace sections render.
   await gotoAuthed(pageC, '/settings/organization');
-  await expect(pageC.getByLabel('Workspace name')).toHaveValue(wa.name);
+  // Role, not label — same class as the org-name field above (MOTIR-3737).
+  await expect(pageC.getByRole('textbox', { name: 'Workspace name' })).toHaveValue(wa.name);
 
   // ── Org admin SPANS all workspaces. Build a SECOND workspace WB under org A
   // that C belongs to but the OWNER does NOT (org A's existing workspace is
@@ -365,8 +411,9 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // The owner's cross-workspace roster shows C across BOTH WA and WB — including
   // WB, a workspace the owner isn't a member of (org admin spans all workspaces).
   await gotoAuthed(page, '/settings/organization/members');
-  await expect(page.getByText('2 people')).toBeVisible();
-  const cRow = page.locator('li').filter({ hasText: T2_C });
+  const ownerMain = page.locator('#main');
+  await expect(ownerMain.getByText('2 people')).toBeVisible();
+  const cRow = ownerMain.locator('li').filter({ hasText: T2_C });
   await expect(cRow).toBeVisible();
   await expect(cRow.getByText('Side WS A')).toBeVisible();
 
@@ -420,8 +467,10 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // Re-pointed (§6d). C has fallen back to their OWN org, where they own one
   // workspace — still the collapsed state, so the name is read off the fold-in.
   await gotoAuthed(pageC, '/settings/organization');
-  await expect(pageC.getByLabel('Workspace name')).toHaveValue(cOwnWorkspace.name);
-  await expect(pageC.getByLabel('Workspace name')).not.toHaveValue(wa.name);
+  await expect(pageC.getByRole('textbox', { name: 'Workspace name' })).toHaveValue(
+    cOwnWorkspace.name,
+  );
+  await expect(pageC.getByRole('textbox', { name: 'Workspace name' })).not.toHaveValue(wa.name);
 
   // And C, no longer an org member, sees org A as NOT-FOUND (404), never
   // forbidden (403) — the cross-tenant no-leak posture (404-not-403).
