@@ -149,9 +149,14 @@ async function card(
 }
 
 /** A MERGED pull request onto that repository's own default branch — what makes
- *  a repository read `delivered` on the next dispatch. */
+ *  a repository read `delivered` on the next dispatch.
+ *
+ *  ⚠️ BOTH HALVES OF THE LINK (MOTIR-3721): the completion facts behind
+ *  `delivered` come from `work_item_delivery`, and every row carrying the legacy
+ *  column carries a delivery row too — the migration backfilled all of them and
+ *  both live writers write the pair. */
 async function recordMerge(repoId: string, workItemId: string, number: number) {
-  await adminDb.githubPullRequest.create({
+  const row = await adminDb.githubPullRequest.create({
     data: {
       repoId,
       workItemId,
@@ -161,6 +166,15 @@ async function recordMerge(repoId: string, workItemId: string, number: number) {
       headRef: `subtask/pr-${number}`,
       baseRef: 'main',
       mergedAt: new Date('2026-08-19T09:00:00.000Z'),
+    },
+  });
+  const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoId } });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: repo.workspaceId,
+      workItemId,
+      githubPullRequestId: row.id,
+      repoId,
     },
   });
 }
