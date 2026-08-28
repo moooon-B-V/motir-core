@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -78,7 +78,7 @@ async function seedTenant(ownerEmail: string): Promise<Tenant> {
     name: 'Cascade Load Project',
     identifier: PROJECT_KEY,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
@@ -166,17 +166,21 @@ test.describe('a status cascade under a long-running job', () => {
     await page.getByRole('combobox', { name: 'Status' }).click();
     await page.getByRole('option', { name: 'Done' }).click();
     await expect
-      .poll(async () => (await db.workItem.findUniqueOrThrow({ where: { id: story.id } })).status, {
-        timeout: 30_000,
-        message: 'awaiting the parent to commit as done',
-      })
+      .poll(
+        async () => (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status,
+        {
+          timeout: 30_000,
+          message: 'awaiting the parent to commit as done',
+        },
+      )
       .toBe('done');
 
     // ── 3 · THE ASSERTION — the children complete, and the probe is STILL running
     for (const child of [childA, childB]) {
       await expect
         .poll(
-          async () => (await db.workItem.findUniqueOrThrow({ where: { id: child.id } })).status,
+          async () =>
+            (await adminDb.workItem.findUniqueOrThrow({ where: { id: child.id } })).status,
           {
             timeout: 30_000,
             message: `awaiting the cascade to complete ${child.identifier}`,
