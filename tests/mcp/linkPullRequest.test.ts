@@ -13,6 +13,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { adminDb } from '../helpers/adminDb';
+import { deliveredItemIds } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story MOTIR-3525 · Subtask MOTIR-3528 — the suite for `link_pull_request`.
@@ -218,12 +219,16 @@ describe('block 1 — the PRE-DELIVERY link: the row can be created by the call 
     });
 
     expect(res.isError).toBeFalsy();
-    expect(structured(res)).toMatchObject({ key: item.identifier, created: true, movedFrom: null });
+    expect(structured(res)).toMatchObject({ key: item.identifier, created: true });
+    // `movedFrom` retired with the scalar it reported on (MOTIR-3757) — asserted
+    // as ABSENT rather than as null, because a caller that still reads it would
+    // otherwise see a value that can never be anything else.
+    expect(structured(res)).not.toHaveProperty('movedFrom');
 
     const row = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 42 },
     });
-    expect(row.workItemId).toBe(item.id);
+    expect(await deliveredItemIds(row.id)).toEqual([item.id]);
     expect(row.linkedManually).toBe(true);
     expect(row.state).toBe('open');
     expect(row.merged).toBe(false);
@@ -365,7 +370,7 @@ describe('block 2 — the webhook CONVERGES on the declared link rather than fig
     expect(row.state).toBe('open');
     expect(row.merged).toBe(false);
     // …and the LINK did not.
-    expect(row.workItemId).toBe(item.id);
+    expect(await deliveredItemIds(row.id)).toEqual([item.id]);
     expect(row.linkedManually).toBe(true);
   });
 
@@ -412,7 +417,7 @@ describe('block 2 — the webhook CONVERGES on the declared link rather than fig
       where: { repoId: s.repoRowId, number: 99 },
     });
     expect(row.merged).toBe(true);
-    expect(row.workItemId).toBe(item.id);
+    expect(await deliveredItemIds(row.id)).toEqual([item.id]);
     expect(row.linkedManually).toBe(true);
   });
 });
@@ -452,8 +457,8 @@ describe('block 3 — there is NO branch/title parse; an unlinked pull request l
       where: { repoId: s.repoRowId, number: 5 },
     });
     // The row is mirrored — the pull request is a fact about the repository — and
-    // it names no card. The key in the branch and the title is a LABEL.
-    expect(row.workItemId).toBeNull();
+    // it delivers no card. The key in the branch and the title is a LABEL.
+    expect(await deliveredItemIds(row.id)).toEqual([]);
     expect(row.linkedManually).toBe(false);
     // And the card is untouched: a pull request that merely MENTIONS a key is
     // exactly the case the retirement is about.
@@ -480,14 +485,19 @@ describe('block 4 — idempotency, the move, and the (repo_id, number) race', ()
     expect(first.isError).toBeFalsy();
     expect(second.isError).toBeFalsy();
     // The SECOND call found a row, so it created nothing — and said so.
-    expect(structured(first)).toMatchObject({ created: true, movedFrom: null });
-    expect(structured(second)).toMatchObject({ created: false, movedFrom: null });
+    expect(structured(first)).toMatchObject({ created: true });
+    expect(structured(second)).toMatchObject({ created: false });
     // Asserted by COUNT as well as by value: a duplicate would still leave a
     // correct-looking link on one of the two rows.
     expect(await adminDb.githubPullRequest.count({ where: { repoId: s.repoRowId } })).toBe(1);
   });
 
-  it('a second call naming a DIFFERENT item MOVES the link, and the result says so', async () => {
+  // ⚠️ INVERTED BY MOTIR-3757, and the inversion is this card's deliverable. It
+  // read *a second call naming a DIFFERENT item MOVES the link, and the result
+  // says so* — true while `github_pull_request.work_item_id` was the association.
+  // With that column dropped a second call ADDS, both cards keep their delivery,
+  // and there is no `movedFrom` to report.
+  it('a second call naming a DIFFERENT item ADDS — the first item keeps its delivery', async () => {
     const s = await makeScenario({
       email: 'moves@example.com',
       identifier: 'MOV',
@@ -501,18 +511,15 @@ describe('block 4 — idempotency, the move, and the (repo_id, number) race', ()
     await link(s, { key: a.identifier, repository: s.repo, number: 4 });
     const moved = await link(s, { key: b.identifier, repository: s.repo, number: 4 });
 
-    expect(structured(moved)).toMatchObject({
-      key: b.identifier,
-      created: false,
-      movedFrom: a.identifier,
-    });
-    // The human-readable half says MOVED too — an agent reading the text block
-    // must not read a move as an addition either.
-    expect(text(moved)).toContain('MOVED');
+    expect(structured(moved)).toMatchObject({ key: b.identifier, created: false });
+    expect(structured(moved)).not.toHaveProperty('movedFrom');
+    // And the human-readable half must not say MOVED either: an agent reading the
+    // text block is the reader MOTIR-3722 filed the bug about.
+    expect(text(moved)).not.toContain('MOVED');
     const row = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 4 },
     });
-    expect(row.workItemId).toBe(b.id);
+    expect(await deliveredItemIds(row.id)).toEqual([a.id, b.id]);
     expect(row.linkedManually).toBe(true);
   });
 
@@ -537,7 +544,7 @@ describe('block 4 — idempotency, the move, and the (repo_id, number) race', ()
     const row = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 6 },
     });
-    expect(row.workItemId).toBe(item.id);
+    expect(await deliveredItemIds(row.id)).toEqual([item.id]);
     expect(row.linkedManually).toBe(true);
   });
 });
@@ -742,7 +749,7 @@ describe('block 7 — the DELIVERY LINK, written beside the FK', () => {
     expect(new Set(set.map((d) => d.pullRequest.number))).toEqual(new Set([21, 22]));
   });
 
-  it('ONE pull request linked to a second card DELIVERS BOTH — where the table and the FK part company', async () => {
+  it('ONE pull request linked to a second card DELIVERS BOTH — the shape the retired scalar could not hold', async () => {
     const s = await makeScenario({
       email: 'delivery-both@example.com',
       identifier: 'DLB',
@@ -756,12 +763,9 @@ describe('block 7 — the DELIVERY LINK, written beside the FK', () => {
     await link(s, { key: a.identifier, repository: s.repo, number: 31 });
     const moved = await link(s, { key: b.identifier, repository: s.repo, number: 31 });
 
-    // The FK MOVED, and the tool still says so — block 4's contract is untouched.
-    expect(structured(moved)).toMatchObject({ movedFrom: a.identifier });
-    const row = await adminDb.githubPullRequest.findFirstOrThrow({
-      where: { repoId: s.repoRowId, number: 31 },
-    });
-    expect(row.workItemId).toBe(b.id);
+    // Nothing MOVED and the tool reports no move — block 4's contract, seen from
+    // the other side.
+    expect(structured(moved)).not.toHaveProperty('movedFrom');
 
     // The TABLE kept both, which is the answer the column could not give: this
     // pull request delivers two cards, exactly as a `motir auto` one does.
@@ -819,12 +823,12 @@ describe('block 7 — the DELIVERY LINK, written beside the FK', () => {
     expect(set).toHaveLength(1);
     expect(set[0]?.pullRequest.number).toBe(52);
 
-    // The legacy column is DELIBERATELY untouched: its readers have not moved
-    // yet, and clearing it would take a delivery's status sync away from a card
-    // whose other links are perfectly good.
-    const stillLinked = await adminDb.githubPullRequest.findFirstOrThrow({
+    // The pull request Motir was told about first is still mirrored — unlinking
+    // one delivery corrects an association, it does not retract a pull request.
+    // (This used to add that the legacy column was left standing; MOTIR-3757
+    // dropped it, so the row is all there is to leave alone.)
+    await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 51 },
     });
-    expect(stillLinked.workItemId).toBe(item.id);
   });
 });

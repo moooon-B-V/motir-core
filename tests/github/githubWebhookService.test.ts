@@ -14,7 +14,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
-import { linkPr } from '../helpers/prLink';
+import { deliveredItemIds, linkPr } from '../helpers/prLink';
 
 // ⚠️ MOTIR-3674 — every test below that means *this pull request delivers this
 // card* now LINKS it (`linkFor`, the `link_pull_request` service the agent calls)
@@ -183,9 +183,11 @@ describe('githubWebhookService — pull_request → status sync', () => {
     });
     expect(await statusOf(s.item.id)).toBe('implemented');
 
-    // The PR row is upserted and linked to the resolved work item.
-    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
-    expect(prRow).toMatchObject({ state: 'open', merged: false, workItemId: s.item.id });
+    // The PR row is upserted, and the DELIVERY says which card it carries — the
+    // row itself holds no association since MOTIR-3757.
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    expect(prRow).toMatchObject({ state: 'open', merged: false });
+    expect(await deliveredItemIds(prRow.id)).toEqual([s.item.id]);
 
     const merged = await githubWebhookService.handleEvent(
       'pull_request',
@@ -272,8 +274,9 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(await statusOf(s.item.id)).toBe('todo');
     // The pull-request row is still mirrored and linked — the status is what did
     // not move, not the delivery.
-    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
-    expect(prRow).toMatchObject({ state: 'open', workItemId: s.item.id });
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    expect(prRow).toMatchObject({ state: 'open' });
+    expect(await deliveredItemIds(prRow.id)).toEqual([s.item.id]);
   });
 
   it('records the transition in the activity log as the BOUND author when the PR author is a member', async () => {
@@ -386,9 +389,10 @@ describe('githubWebhookService — pull_request → status sync', () => {
     });
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
     expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
-    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 9 } });
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 9 } });
     // Title is captured on upsert (MOTIR-1579 — the Development surface renders it).
-    expect(prRow).toMatchObject({ workItemId: null, title: 'no key here' });
+    expect(prRow).toMatchObject({ title: 'no key here' });
+    expect(await deliveredItemIds(prRow.id)).toEqual([]);
   });
 
   it('an illegal transition logs a no-op instead of crashing (item unchanged)', async () => {
@@ -466,12 +470,12 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
     // The row is still mirrored — the pull request is a fact about the repository
     // whatever it delivers. Only the LINK is absent.
-    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
+    const prRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
     expect(prRow).toMatchObject({
-      workItemId: null,
       headRef: `feat/${s.item.identifier}-a-change`,
       title: `Some change (${s.item.identifier})`,
     });
+    expect(await deliveredItemIds(prRow.id)).toEqual([]);
 
     // And it stays absent on the merge, which is the consequence that matters:
     // a card is not closed by a pull request that merely MENTIONS it.
@@ -492,8 +496,9 @@ describe('githubWebhookService — pull_request → status sync', () => {
     // ⚠️ THE STORED LINK IS THE DELIVERY ROW NOW (MOTIR-3721), and the
     // grandfathering is unchanged BECAUSE of that: `work_item_delivery`'s
     // migration carried all 1096 stored links into the table, parse-written rows
-    // included, for exactly this reason. The fixture writes both halves because
-    // every migrated database has both.
+    // included, for exactly this reason — which is why MOTIR-3757 could drop the
+    // column without orphaning one of them. The fixture writes the delivery row
+    // and `linked_manually: false`, which is exactly the state such a row has.
     const s = await makeScenario('grandfathered@example.com');
     const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: REPO_PROVIDER_ID } });
     const row = await adminDb.githubPullRequest.create({
@@ -506,7 +511,6 @@ describe('githubWebhookService — pull_request → status sync', () => {
         headRef: `feat/${s.item.identifier}-a-change`,
         baseRef: 'main',
         title: `Some change (${s.item.identifier})`,
-        workItemId: s.item.id,
         linkedManually: false,
       },
     });
@@ -527,7 +531,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(merged).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     expect(await statusOf(s.item.id)).toBe('done');
     const after = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
-    expect(after.workItemId).toBe(s.item.id);
+    expect(await deliveredItemIds(after.id)).toEqual([s.item.id]);
     expect(after.linkedManually).toBe(false);
   });
 

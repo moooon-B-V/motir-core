@@ -13,6 +13,12 @@ githubPullRequestId, repoId, workspaceId)`, many-to-many, retiring BOTH
 > its **Superseding MOTIR-3527** section argues the reversal against this file
 > point by point.
 >
+> ⚠️ **AND Q1's decision below — _"KEEP THE SINGULAR FK. No join table."_ — now
+> names a column that DOES NOT EXIST.** `github_pull_request.work_item_id` was
+> dropped by MOTIR-3757 on 2026-08-28. The sentence stays verbatim because this
+> file is the record of a decision that was made, not a description of the
+> schema; nothing below it describes anything live.
+>
 > **Two premises below are false**, and neither is considered here:
 >
 > 1. _"Many cards, one pull request is already expressible"_ via `session_branch`

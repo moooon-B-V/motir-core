@@ -629,10 +629,13 @@ export const workItemRepository = {
    * the read half of the MOTIR-1758 backfill, projected to exactly the evidence
    * `lib/workItems/provenanceBackfill.ts` classifies on.
    *
-   * `hasLinkedPr` is derived from the 7.10.3 `GithubPullRequest` mirror by
-   * taking at most ONE linked row per item (`take: 1`) rather than counting
-   * them: the classifier only asks whether any PR exists, and a bounded take
-   * keeps the projection flat regardless of how many PRs an item accumulated.
+   * `hasLinkedPr` is derived from the item's DELIVERY set by taking at most ONE
+   * row (`take: 1`) rather than counting them: the classifier only asks whether
+   * any pull request delivers this card, and a bounded take keeps the projection
+   * flat regardless of how many it accumulated. It read the 7.10.3
+   * `GithubPullRequest` mirror through the singular FK until MOTIR-3757 dropped
+   * that column; the value is unchanged for every row, because the EXPAND
+   * migration backfilled one delivery per stored link.
    *
    * ARCHIVED rows are deliberately INCLUDED. Archive is a reversible
    * soft-remove — the item still exists, is still readable on the archived
@@ -658,7 +661,7 @@ export const workItemRepository = {
       implementationSource: WorkItemImplementationSource | null;
       sessionBranch: string | null;
       archivedAt: Date | null;
-      githubPullRequests: Array<{ id: string }>;
+      deliveries: Array<{ id: string }>;
     }>
   > {
     return (tx ?? db).workItem.findMany({
@@ -678,7 +681,7 @@ export const workItemRepository = {
         implementationSource: true,
         sessionBranch: true,
         archivedAt: true,
-        githubPullRequests: { select: { id: true }, take: 1 },
+        deliveries: { select: { id: true }, take: 1 },
       },
       orderBy: { key: 'asc' },
     });

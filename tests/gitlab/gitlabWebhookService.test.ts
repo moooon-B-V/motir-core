@@ -10,7 +10,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { linkPrByIdentifier } from '../helpers/prLink';
+import { deliveredItemIds, linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.23 · MOTIR-1475 — the GitLab inbound webhook MR → work-item status sync,
 // against a real Postgres (the motir-core convention). Proves GitLab MR hooks drive
@@ -203,14 +203,11 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     });
     expect(await statusOf(s.item.id)).toBe('implemented');
 
-    // The MR row is upserted, stamped provider='gitlab', linked to the work item.
-    const mrRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
-    expect(mrRow).toMatchObject({
-      provider: 'gitlab',
-      state: 'open',
-      merged: false,
-      workItemId: s.item.id,
-    });
+    // The MR row is upserted and stamped provider='gitlab'; the DELIVERY says
+    // which card it carries (the row itself holds no association — MOTIR-3757).
+    const mrRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    expect(mrRow).toMatchObject({ provider: 'gitlab', state: 'open', merged: false });
+    expect(await deliveredItemIds(mrRow.id)).toEqual([s.item.id]);
     // Attribution: GitLab has no bound identity, so the owner authored the move.
     expect((await latestRevision(s.item.id)).changedById).toBe(s.user.id);
 
@@ -272,8 +269,9 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     );
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
     // The MR row is still recorded (unlinked) so a later manual link / rename works.
-    const mrRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
-    expect(mrRow).toMatchObject({ provider: 'gitlab', workItemId: null });
+    const mrRow = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    expect(mrRow).toMatchObject({ provider: 'gitlab' });
+    expect(await deliveredItemIds(mrRow.id)).toEqual([]);
   });
 
   it('an MR for an UNCONNECTED project is unknown_repo (no crash, no write)', async () => {

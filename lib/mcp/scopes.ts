@@ -257,6 +257,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   reinforce_lesson: 'work_items:write',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',
+  publish_design_result: 'work_items:write',
   // `link_pull_request` (MOTIR-3526). A WRITE — it sets the change-request row's
   // `work_item_id`, and may create the row itself. This legacy table has no
   // integration-link axis finer than `integration`, which is the MERGE report's
