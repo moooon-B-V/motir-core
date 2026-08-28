@@ -957,6 +957,35 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
   },
 
+  // ── FORWARD-LOOKING: the decision record lands from the PARENT branch ──────
+  // Story MOTIR-3808 is run as a PARENT: its children land as commits on
+  // `parent/MOTIR-3808-work-item-todo-list`, and the `design` child is lifted
+  // out onto its own branch so Yue can approve the asset BEFORE the code
+  // siblings build to it. So the ADR (MOTIR-3811) and the asset that cites it
+  // reach `main` through two different pull requests, and for the length of the
+  // design PR the citation names a file this branch does not carry.
+  //
+  // The citation is CORRECT and is the whole point of the asset: every `§`
+  // reference in the notes resolves into that record, and stripping the path to
+  // get a green would send the next reader looking for the spec by prose.
+  //
+  // ⚠️ BOTH ROWS DELETE THEMSELVES. The moment the parent pull request merges,
+  // `docs/decisions/work-item-todo-list.md` exists, these exemptions stop
+  // applying, and the `carries no KNOWN_PATHS entry that has stopped applying`
+  // test below goes RED — which is what turns "that branch landed" into a
+  // failing test rather than a stale exemption. Delete both rows then; the
+  // citations are guarded like any other from that commit on.
+  {
+    file: 'design/work-items/todo-list.mock.html',
+    path: 'docs/decisions/work-item-todo-list.md',
+    why: "MOTIR-3812 — the asset's header names the decision record it is built to. That record is MOTIR-3811, a sibling child of the same story, and it lands on `main` with the PARENT pull request rather than with this design PR. Delete this row when that merges.",
+  },
+  {
+    file: 'design/work-items/design-notes.md',
+    path: 'docs/decisions/work-item-todo-list.md',
+    why: 'MOTIR-3812 — the same citation in the notes beside that mock: the section opens by naming the decision record as its workflow spec, and every `§` reference points into it. Same parent branch, same reason it resolves the moment that pull request merges. Delete this row then.',
+  },
+
   // (Three rows sat here and all three deleted themselves with this branch,
   //  exactly as their own `why` instructed:
   //    * `components/ui/Checkbox.tsx`  — created by MOTIR-2465;

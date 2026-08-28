@@ -1,0 +1,3899 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The TO-DO LIST on a work item (MOTIR-3808 · MOTIR-3812)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE TO-DO LIST ON A WORK ITEM.
+      Story MOTIR-3808, subtask MOTIR-3812 (design). Gates MOTIR-3815 (the
+      section), and through it MOTIR-3816 / MOTIR-3817 (the two test gates).
+
+      WHY IT EXISTS. `design/work-items/` has NO checklist asset and its
+      `design-notes.md` surface table has no checklist row — this is the
+      NONE-exists case, and the code siblings are `blocked_by` this card.
+
+      COMPOSES, DOES NOT REDRAW. The section is the shipped `ContentSectionCard`
+      header grammar over the shipped `Checkbox` / `Button` / `Pill` / `Tooltip`
+      primitives, on the left column of `app/(authed)/items/[key]/page.tsx`.
+      Every token below is copied 1:1 from the newest shipped asset in this
+      folder (`delivery-set.mock.html`, itself extracted from
+      `packages/design-system/theme.css` by script), so this file cannot drift
+      from the shipped layer. Nothing invents a colour or a radius.
+
+      WHAT IT SETTLES. Placement (measured at 1280×900) · the row in its three
+      faces (plain · command · agent) · every state the card enumerates (empty,
+      partly done, all done, read-only, adding, editing, dragging, delete
+      confirm, at scale) · the two overflow hazards at 1280 AND 390 · and the
+      semantics, which are a LIST of rows and deliberately not a listbox.
+
+      WHAT IT DOES NOT DRAW. The hosted-run control (MOTIR-3809) and any status
+      change on the card (refused by the ADR §3). See the notes' Out of scope.
+
+      The decision record this builds to is
+      `docs/decisions/work-item-todo-list.md` (MOTIR-3811) — it lands in the
+      same story, on the parent branch, so it is not on `main` at the moment
+      this asset's own pull request is open.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .dsPillDanger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
+         its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
+         surface is a left-column section card and has no rail, so a single
+         child would otherwise land in the 18rem track and render at a width the
+         product never uses. */
+      .panelBody {
+        display: block;
+      }
+      /* The left column's real width: the item page is a `1fr 18rem` grid with a
+         24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
+         section card below is drawn at that width, which is what makes the
+         overflow panels (13–14) measurements rather than illustrations. */
+      .secCard,
+      .panelBody > .grid {
+        max-width: 800px;
+      }
+      .twoUp {
+        max-width: 100%;
+      }
+
+      /* ── Extra utility shims this asset needs, same tokens ─────────────── */
+      .w-full {
+        width: 100%;
+      }
+      .gap-3 {
+        gap: 12px;
+      }
+      .gap-0\.5 {
+        gap: 2px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .ml-auto {
+        margin-left: auto;
+      }
+      .line-through {
+        text-decoration: line-through;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .cursor-grab {
+        cursor: grab;
+      }
+      .select-none {
+        user-select: none;
+      }
+      .whitespace-pre {
+        white-space: pre;
+      }
+      .opacity-60 {
+        opacity: 0.6;
+      }
+      .h-5 {
+        height: 20px;
+      }
+      .w-5 {
+        width: 20px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .py-2 {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .px-2 {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .pl-7 {
+        padding-left: 28px;
+      }
+      .text-\[12px\] {
+        font-size: 12px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+
+      /* ── The asset's OWN elements ─────────────────────────────────────── */
+      /* A section card, `ContentSectionCard` markup-for-markup. */
+      .secCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .secBody {
+        padding: 8px var(--spacing-card-padding) 16px;
+      }
+      /* ONE to-do row. A grid so the checkbox, the body and the row actions
+         each get their own track — and so the body track can be `min-w-0`,
+         which is what lets a long command scroll inside itself instead of
+         widening the row. */
+      .todoRow {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 9px 4px;
+        border-radius: var(--radius-control, 8px);
+      }
+      .todoRow + .todoRow {
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .todoRow.isHover {
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      /* The shipped `Checkbox` primitive's box. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border: 1px solid var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 6px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-card, var(--color-background));
+        color: transparent;
+        flex: none;
+      }
+      .cbox.isOn {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.isInert {
+        border-color: var(--el-border);
+        background: var(--el-muted, var(--color-muted));
+      }
+      /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .cmdBox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .cmdVal {
+        /* A `<pre>`, not a `<code>`: `white-space: pre` is only honoured if the
+           markup preserves the line, and a formatter will reflow the contents of
+           an inline element. This is also what the shipped `CodeBlock` renders
+           (`ScrollableRegion as="pre"`). */
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: pre;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 6px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn, 8px);
+        background: var(--el-card, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 5px 10px;
+        line-height: 1.2;
+      }
+      .btnIcon {
+        padding: 5px;
+      }
+      .btnPrimary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btnDanger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .rowActions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .execMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .execMark.isAgent {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .addRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 4px 2px;
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .inputBox {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+      }
+      .inputBox.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .dropGap {
+        height: 2px;
+        margin: 2px 4px;
+        border-radius: 2px;
+        background: var(--el-accent);
+      }
+      .ghostRow {
+        opacity: 0.5;
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 8px);
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg, var(--color-background));
+      }
+      .colLabel {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .twoUp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .foldRule {
+        position: relative;
+        border-top: 2px dashed var(--el-accent);
+        margin: 4px 0;
+      }
+      .foldRule span {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--el-page-bg, var(--color-background));
+        padding: 0 6px;
+        color: var(--el-accent-on-surface, var(--el-text-secondary));
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 8px);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .regionBox.isThis {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .narrow {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-card, var(--color-background));
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-copy"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </symbol>
+      <symbol id="i-grip" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+        <circle cx="9" cy="5" r="1" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="9" cy="19" r="1" />
+        <circle cx="15" cy="5" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="15" cy="19" r="1" />
+      </symbol>
+      <symbol
+        id="i-trash"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </symbol>
+      <symbol
+        id="i-pencil"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+        />
+        <path d="m15 5 4 4" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-bot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </symbol>
+      <symbol
+        id="i-chevron"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-bold"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+      </symbol>
+      <symbol
+        id="i-italic"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="19" x2="10" y1="4" y2="4" />
+        <line x1="14" x2="5" y1="20" y2="20" />
+        <line x1="15" x2="9" y1="4" y2="20" />
+      </symbol>
+      <symbol
+        id="i-strike"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+        <path d="M14 12a4 4 0 0 1 0 8H6" />
+        <line x1="4" x2="20" y1="12" y2="12" />
+      </symbol>
+      <symbol
+        id="i-code"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m16 18 6-6-6-6" />
+        <path d="m8 6-6 6 6 6" />
+      </symbol>
+      <symbol
+        id="i-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </symbol>
+      <symbol
+        id="i-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 5h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 19h.01" />
+        <path d="M8 5h13" />
+        <path d="M8 12h13" />
+        <path d="M8 19h13" />
+      </symbol>
+      <symbol
+        id="i-list-ol"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M11 5h10" />
+        <path d="M11 12h10" />
+        <path d="M11 19h10" />
+        <path d="M4 4h1v5" />
+        <path d="M4 9h2" />
+        <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" />
+      </symbol>
+      <symbol
+        id="i-user"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </symbol>
+    </svg>
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>The TO-DO LIST on a work item</h1>
+        <p>
+          MOTIR-3808 · MOTIR-3812. A work item carries the ORDERED STEPS of its own work, each one
+          operation, ticked off, carrying its own executor and — where the operation is a command —
+          the command itself with a button that copies it. This asset is the NONE-exists case:
+          <span class="font-mono">design/work-items/</span> has no checklist surface at all, so the
+          code siblings are <span class="font-mono">blocked_by</span> this card.
+        </p>
+        <p>
+          <strong>It COMPOSES the shipped page.</strong> The section is
+          <span class="font-mono">ContentSectionCard</span>'s header grammar over the shipped
+          <span class="font-mono">Checkbox</span>, <span class="font-mono">Button</span> and
+          <span class="font-mono">Tooltip</span>, in the left column of
+          <span class="font-mono">app/(authed)/items/[key]/page.tsx</span>. Nothing here is a new
+          primitive, a new colour or a new radius.
+        </p>
+        <p>
+          <strong
+            >Three things it settles that the code card would otherwise have to invent.</strong
+          >
+          Where the section sits, measured at 1280×900 rather than asserted (panel 0). Which of the
+          two shipped copy grammars this surface takes — the button's own state, not a toast — and
+          why (panel 2). And the containment rule for a command wider than the column, written down
+          in prose so the section inherits it rather than re-deriving it (panels 13–14).
+        </p>
+        <p>
+          <strong>Two things it deliberately does not draw.</strong> The hosted-run control for an
+          agent step, which is MOTIR-3809's; and any status change when the last box is ticked,
+          which <span class="font-mono">docs/decisions/work-item-todo-list.md</span> §3 refuses
+          outright. Panel 6 is what "all done" looks like when it changes nothing.
+        </p>
+      </div>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">0</span>PLACEMENT — after Explanation, before Relationships,
+          arriving WITH THE FIRST CONTENT.
+        </h2>
+        <p class="panelNote">
+          The left column's shipped order, with the To-do list inserted.
+          <strong>Measured, not asserted:</strong> at <span class="font-mono">1280×900</span> the
+          viewport gives 900px of height, of which the app shell's header takes 56px and the page's
+          own eyebrow + title block takes 132px — so 712px of column is above the fold. Description
+          (≈180px) and Explanation (≈210px) consume 390px of it, which leaves
+          <strong>322px</strong>: enough for this section's header plus five rows at 44px. On a card
+          whose work IS the list, that is what the reader came for. Below Relationships the section
+          starts at ≈760px and is below the fold at every measured laptop height; in the late stack
+          it would also be the last region to ARRIVE, which makes the page's most actionable region
+          the slowest.
+        </p>
+        <div class="panelBody">
+          <div class="grid gap-2" style="max-width: 640px">
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Description</span
+                ><span class="font-mono text-\[11px\]">with the FIRST CONTENT</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Explanation</span
+                ><span class="font-mono text-\[11px\]">with the FIRST CONTENT</span></span
+              >
+            </div>
+            <div class="regionBox isThis">
+              <span class="flex items-center justify-between gap-2"
+                ><span><strong>To-do list</strong></span
+                ><span class="font-mono text-\[11px\]">FIRST CONTENT — this asset</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Relationships</span
+                ><span class="font-mono text-\[11px\]">with the FIRST CONTENT</span></span
+              >
+            </div>
+            <div class="foldRule"><span>fold · 1280×900</span></div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Children</span
+                ><span class="font-mono text-\[11px\]">with the FIRST CONTENT</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Development · Acceptance · Design result</span
+                ><span class="font-mono text-\[11px\]">AFTER the page — late stack</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Attachments · Activity</span
+                ><span class="font-mono text-\[11px\]">AFTER the page — late stack</span></span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">1</span>The row, face one — a PLAIN step.</h2>
+        <p class="panelNote">
+          Checkbox · text · the executor mark · the row's own actions, revealed on hover and always
+          present for a keyboard user. The text is
+          <strong>plain text and never Markdown</strong> (ADR §1), so it is rendered as a text node
+          and not through <span class="font-mono">MarkdownView</span>.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Open the DNS panel for motir.co</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Add the TXT record from the Vercel domain page</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Wait for propagation, then re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">1b</span>The row, face one-and-a-half — a step carrying its
+          INSTRUCTIONS, collapsed and expanded.
+        </h2>
+        <p class="panelNote">
+          A to-do is one operation, and performing one operation still takes instructions —
+          <em>go to the dashboard, find the setting, create the token</em>. Those live in
+          <span class="font-mono">notesMd</span> (optional Markdown) beside the one-line
+          <span class="font-mono">text</span>, never as three more tickable rows:
+          <strong>navigation is not an operation</strong>, and nobody ticks
+          <em>&ldquo;found the setting&rdquo;</em>. The tickable unit is the one where
+          <em>done</em> is unambiguous.
+        </p>
+        <p class="panelNote">
+          <strong>Collapsed by default, and the chevron is the tell.</strong> It renders only on a
+          row that HAS notes, so a list of ten rows reads as ten lines and the reader expands the
+          one they are on — which is the whole answer to
+          <em>&ldquo;a body makes the list un-scannable&rdquo;</em>: it is a rendering question, not
+          a schema one. <strong>This is a FIELD, not a second work item</strong> — it has no status,
+          no assignee, no dependencies, no sprint and nothing that dispatches it (ADR §1,
+          <em>Instructions</em>).
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >1 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Create a restricted Stripe key</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <button type="button" class="notesToggle" aria-expanded="false">
+                      <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                      >Instructions
+                    </button>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Add the key to Fly secrets</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <button type="button" class="notesToggle isOpen" aria-expanded="true">
+                      <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                      >Instructions
+                    </button>
+                    <div class="notesBody">
+                      <ol>
+                        <li>Open the <a href="#">Fly dashboard</a> for <code>motir-core</code>.</li>
+                        <li>Secrets &rarr; <strong>New secret</strong>.</li>
+                        <li>
+                          Name it <code>STRIPE_RESTRICTED_KEY</code> and paste the value from the
+                          step above.
+                        </li>
+                      </ol>
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">
+fly secrets set STRIPE_RESTRICTED_KEY=rk_live_… --app motir-core</pre
+                      >
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Confirm the deploy picked it up</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+          <p class="mt-3 text-\[12px\] text-\(--el-text-secondary\)">
+            Row one has notes and is collapsed — one line, with the chevron as the only tell. Row
+            two is the same row expanded, and shows that instructions and a copyable command are
+            INDEPENDENT: a step may have either, both, or neither. Row three has neither.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span>The row, face two — a COMMAND step, with the value beside a
+          copy button.
+        </h2>
+        <p class="panelNote">
+          The command is a <strong>first-class field</strong>, not a substring of the text (ADR §5):
+          the row is copyable because <span class="font-mono">commandText</span> is non-null, never
+          because the text looks command-shaped.
+          <strong>The confirmation is the BUTTON'S OWN STATE, not a toast</strong> — the reader is
+          looking at the control they just clicked, and a toast would announce a success already
+          visible. That is <span class="font-mono">CodeBlock</span>'s grammar;
+          <span class="font-mono">CopyCommandAction</span>'s toast is the right choice on the Ready
+          LIST, where the row scrolls under the cursor and the eye is elsewhere.
+          <strong>Exactly one of the two, and this surface takes the button.</strong>
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >1 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Apply the migration on staging</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">pnpm prisma migrate deploy</pre>
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Regenerate the client</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">pnpm prisma generate</pre>
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Confirm the new table is present</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">
+fly deploy --app motir-core --image registry.fly.io/motir-core@sha256:6f1c0a9e4d2b8f7a3c5e1d9b0a4f6c8e2d7b5a3f1e9c7d5b3a1f9e7c5d3b1a9f --strategy rolling --wait-timeout 600</pre
+                      >
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">3</span>The row, face three — an AGENT step, on a card whose own
+          executor is <span class="font-mono">human</span>.
+        </h2>
+        <p class="panelNote">
+          Per the ADR §2 the row's executor is
+          <strong>declarative: it authorizes nothing and disables nothing</strong>. A person may
+          tick an agent's step — they may simply have done it themselves — so the checkbox is live,
+          exactly as on every other row. With no hosted run available the row shows
+          <strong>no run control at all</strong>: not a disabled button, which reads as a
+          malfunction, and not a "coming soon", which is a promise the product cannot keep. The
+          dotted slot marks where MOTIR-3809 will put one;
+          <strong>it is an annotation on this board and is NOT drawn in the product.</strong>
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Open the Stripe dashboard</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Regenerate the typed client and commit it</span
+                      >
+                      <span class="execMark isAgent"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                        >Agent</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">pnpm gen:stripe</pre>
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Paste the restricted key into Fly secrets</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <p class="mt-3 text-\[12px\] text-\(--el-text-secondary\)">
+                <span
+                  style="
+                    display: inline-block;
+                    border: 1px dashed var(--el-accent);
+                    border-radius: 6px;
+                    padding: 1px 8px;
+                    margin-right: 6px;
+                  "
+                  >Run</span
+                >ANNOTATION, not product: where MOTIR-3809 places the dispatch control, in the
+                row-actions track, left of Edit. Nothing in this story renders it.
+              </p>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">4</span>EMPTY — no steps yet, which is every card in the tree
+          today.
+        </h2>
+        <p class="panelNote">
+          The empty state carries its own invitation rather than an apology, because on a
+          <span class="font-mono">manual</span> card this section is the first thing worth filling
+          in. The header still renders its count, at <span class="font-mono">0 of 0</span>, so the
+          number does not appear from nowhere the moment a first step is added.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 0 done</span
+              >
+            </div>
+            <div class="secBody">
+              <p class="mt-2 text-\[13.5px\] text-\(--el-text\)" style="margin-bottom: 4px">
+                No steps yet.
+              </p>
+              <p class="text-\[12.5px\] text-\(--el-text-secondary\)" style="margin: 0">
+                Break this card’s work into steps you can tick off, one operation each.
+              </p>
+              <div class="addRow">
+                <button type="button" class="btn btnPrimary">
+                  <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg>Add the first
+                  step
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span>PARTLY DONE — how a ticked row reads, and what the header
+          counts.
+        </h2>
+        <p class="panelNote">
+          A done row is
+          <strong>struck and moved to the secondary ink, and it stays where it is</strong>:
+          reordering completed steps to the bottom would destroy the sequence, which is the one
+          thing this list is for. The stamp under a ticked row is
+          <span class="font-mono">doneBy</span> + <span class="font-mono">doneAt</span> — the record
+          a tick leaves, since a tick deliberately writes no history entry (ADR §4).
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >2 of 5 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Open the DNS panel for motir.co</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Add the TXT record</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Wait for propagation</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">motir domain verify motir.co</pre>
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Flip the apex record</span>
+                      <span class="execMark isAgent"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                        >Agent</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">6</span>ALL DONE — a finished LIST, and deliberately not a finished
+          CARD.
+        </h2>
+        <p class="panelNote">
+          Per the ADR §3 the last tick moves nothing: the card's status is untouched, there is no
+          confirmation, and no control appears offering to close it. So the all-done state has to
+          look like <em>a list with nothing left in it</em> rather than like a card that has been
+          completed — a tinted banner saying <em>Done</em> would read as a status, which is exactly
+          the claim this surface may not make. A quiet line under the rows, and the header's own
+          <span class="font-mono">3 of 3</span>, are the whole treatment.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >3 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Open the DNS panel</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Add the TXT record</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Mira · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <p class="mt-3 text-\[12.5px\] text-\(--el-text-secondary\)" style="margin-bottom: 0">
+                Every step is done.
+              </p>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">7</span>READ-ONLY — an actor without
+          <span class="font-mono">work_item:edit</span>.
+        </h2>
+        <p class="panelNote">
+          They keep the <strong>information</strong> and lose the <strong>controls</strong>: the
+          rows, the marks and the count all render, and there is no add row, no drag handle, no
+          edit, no delete. The checkbox is <strong>genuinely inert, not disabled-looking</strong> —
+          it is rendered as a static <span class="font-mono">role="checkbox"</span> with
+          <span class="font-mono">aria-disabled</span>, so a screen reader announces the state and
+          offers no action, and there is no control to click that silently does nothing.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >1 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span
+                    class="cbox isOn isInert"
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-disabled="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Open the DNS panel</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                      Done by Yue · 12 Aug
+                    </p>
+                  </div>
+                  <span class="rowActions"></span>
+                </li>
+                <li class="todoRow">
+                  <span
+                    class="cbox isInert"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-disabled="true"
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Add the TXT record</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"></span>
+                </li>
+                <li class="todoRow">
+                  <span
+                    class="cbox isInert"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-disabled="true"
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">motir domain verify motir.co</pre>
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"></span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">8</span>ADDING — the composer is the last row, not a modal.
+        </h2>
+        <p class="panelNote">
+          A step is one line, so asking for a dialog to type one would cost more than the step. The
+          input appends at the END (the fractional index's
+          <span class="font-mono">keyForAppend</span>), Enter commits and keeps focus in the field
+          for the next step, Escape abandons. The command and the executor are set from the row's
+          own menu after it exists — a composer that asked for three fields up front would make the
+          common case (a plain step) the slowest one.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 2 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Open the DNS panel</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Add the TXT record</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span class="inputBox isFocused">Wait for propagation|</span
+                ><button type="button" class="btn btnPrimary shrink-0">Add</button>
+              </div>
+              <p class="mt-2 text-\[11px\] text-\(--el-text-secondary\)">
+                Enter adds and keeps the field focused · Escape cancels
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">9</span>EDITING a row in place — three kinds of text, three
+          different controls.
+        </h2>
+        <p class="panelNote">
+          <strong
+            >The row becomes its own editor, and it carries THREE controls because it holds three
+            different KINDS of text.</strong
+          >
+          <span class="font-mono">text</span> is plain and one line &rarr; an
+          <span class="font-mono">Input</span>. <span class="font-mono">notesMd</span> is
+          <strong>Markdown</strong> &rarr; the shipped
+          <span class="font-mono">MarkdownEditor</span> at
+          <span class="font-mono">size="compact"</span>, the same composer the comments section on
+          this page already renders, whose button set is bold &middot; italic &middot; strike
+          &middot; inline code &middot; link &middot; bulleted &middot; numbered (<span
+            class="font-mono"
+            >components/ui/MarkdownEditor.tsx</span
+          >). <span class="font-mono">commandText</span> is one line of mono &rarr; an
+          <span class="font-mono">Input</span> again, never a rich-text surface.
+          <strong
+            >A field the product STORES as Markdown and EDITS as plain text is a field whose
+            numbered list and link a user can only produce by typing the syntax blind</strong
+          >
+          — which is the mismatch this panel exists to close. The executor is a two-value control
+          beneath them. The patch is <strong>sparse</strong> — clearing the command field to empty
+          sets it to <span class="font-mono">null</span> and the row stops being copyable, while
+          leaving it alone leaves it alone (MOTIR-3814's action contract).
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Open the DNS panel</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <span class="fieldLabel" style="margin-top: 0">Step</span>
+                    <span class="inputBox isFocused" style="display: block"
+                      >Apply the migration on staging|</span
+                    >
+
+                    <span class="fieldLabel">Instructions</span>
+                    <div class="mdEditor">
+                      <div class="editorToolbar" role="toolbar" aria-label="Formatting">
+                        <button type="button" class="tbIcon" aria-label="Bold">
+                          <svg aria-hidden="true"><use href="#i-bold" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Italic">
+                          <svg aria-hidden="true"><use href="#i-italic" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Strikethrough">
+                          <svg aria-hidden="true"><use href="#i-strike" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Inline code">
+                          <svg aria-hidden="true"><use href="#i-code" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Link">
+                          <svg aria-hidden="true"><use href="#i-link" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Bulleted list">
+                          <svg aria-hidden="true"><use href="#i-list" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Numbered list">
+                          <svg aria-hidden="true"><use href="#i-list-ol" /></svg>
+                        </button>
+                      </div>
+                      <div class="editorArea">
+                        <ol>
+                          <li>Take the staging database out of the pool first.</li>
+                          <li>Run the command below and watch for <code>All migrations</code>.</li>
+                        </ol>
+                      </div>
+                    </div>
+
+                    <span class="fieldLabel">Command</span>
+                    <div class="cmdBox">
+                      <span class="inputBox font-mono text-\[12px\]"
+                        >pnpm prisma migrate deploy</span
+                      >
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                      <span class="execMark isAgent"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                        >Agent</span
+                      >
+                      <span class="ml-auto flex gap-2">
+                        <button type="button" class="btn">Cancel</button>
+                        <button type="button" class="btn btnPrimary">Save</button>
+                      </span>
+                    </div>
+                  </div>
+                  <span class="rowActions"></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">10</span>DRAGGING to reorder — and its keyboard equivalent.
+        </h2>
+        <p class="panelNote">
+          The dragged row lifts as a dashed ghost and a 2px accent rule marks the drop slot. The
+          write is <strong>one row</strong>: the fractional index mints a key between the two
+          neighbours at the destination, so nothing below the moved row is rewritten.
+          <strong>The handle is a real button</strong> — Space picks the row up, Arrow-Up/Down moves
+          it a slot at a time with the position announced, Space drops it, Escape restores it. A
+          drag-only reorder would make the one editable thing on this surface mouse-only.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 4 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Open the DNS panel</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <div class="dropGap" aria-hidden="true"></div>
+                <li class="todoRow ghostRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Add the TXT record</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Flip the apex record</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <p class="mt-3 text-\[11px\] text-\(--el-text-secondary\)">
+                Keyboard: Space picks up · ↑↓ moves one slot · Space drops · Escape restores
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">11</span>DELETE — an inline confirm on the row, and where focus
+          lands afterwards.
+        </h2>
+        <p class="panelNote">
+          One step is a cheap thing to lose and a cheap thing to retype, so the confirm is an inline
+          swap on the row rather than a modal — the <span class="font-mono">Modal</span> primitive
+          is reserved for the irreversible.
+          <strong>After the delete, focus moves to the NEXT row's checkbox</strong>, or to the
+          add-step field when the deleted row was the last one; it never falls to the document body,
+          which is how a keyboard user loses their place in a list.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 3 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)">Open the DNS panel</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0 flex items-center gap-3">
+                    <span class="text-\[13.5px\] text-\(--el-text\)"
+                      >Delete “Add the TXT record”?</span
+                    >
+                    <span class="ml-auto flex gap-2">
+                      <button type="button" class="btn">Cancel</button>
+                      <button type="button" class="btn btnDanger">Delete</button>
+                    </span>
+                  </div>
+                  <span class="rowActions"></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Re-run the verification</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">12</span>AT SCALE — twenty steps. The section GROWS; it does not
+          cap and it does not scroll.
+        </h2>
+        <p class="panelNote">
+          A to-do list is bounded by the granularity bar in the other direction: a card needing
+          forty steps is a card that should have been two cards, and the right place to say so is
+          the plan, not a <span class="font-mono">+14 more</span> control that hides the work. So
+          the section grows with its content, as Children and Relationships do, and the
+          <strong>header's count is what makes a long list legible without scrolling it</strong>.
+          This is the one region on the page where an inner scroll would be actively wrong: the
+          reader is working THROUGH the list, and a scroll container inside a scrolling page is
+          where a step gets missed.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >6 of 20 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Step 1 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Step 2 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Step 3 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Step 4 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Step 5 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox isOn" role="checkbox" aria-checked="true"
+                    ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                        >Step 6 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 7 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 8 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 9 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 10 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 11 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 12 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 13 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 14 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 15 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 16 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 17 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 18 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 19 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Step 20 — one operation, no longer than a line</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <div class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>Add a step…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">13</span>OVERFLOW at 1280 — the long command scrolls INSIDE ITS OWN
+          box.
+        </h2>
+        <p class="panelNote">
+          The containment rule, written down here so the section card inherits it rather than
+          re-deriving it:
+          <strong
+            >the mono value is its own <span class="font-mono">overflow-x-auto</span> container; the
+            row's body cell carries <span class="font-mono">min-w-0</span>; the copy button carries
+            <span class="font-mono">shrink-0</span>.</strong
+          >
+          All three are load-bearing. Without <span class="font-mono">min-w-0</span> a grid/flex
+          child's minimum size is its CONTENT, so the row widens and the PAGE scrolls sideways
+          instead of the command. And a <span class="font-mono">Button</span> in a flex row defeats
+          <span class="font-mono">min-w-0</span> on its own account unless it is explicitly told not
+          to shrink. The box is <span class="font-mono">tabindex="0"</span> so a keyboard user can
+          scroll it — a box that scrolls its own content is a box that must be focusable.
+        </p>
+        <div class="panelBody">
+          <div class="secCard">
+            <div class="secHead">
+              <h3
+                class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                >— the steps of this work</span
+              >
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 2 done</span
+              >
+            </div>
+            <div class="secBody">
+              <ul class="list-none">
+                <li class="todoRow isHover">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Deploy the pinned image to production</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">
+fly deploy --app motir-core --image registry.fly.io/motir-core@sha256:6f1c0a9e4d2b8f7a3c5e1d9b0a4f6c8e2d7b5a3f1e9c7d5b3a1f9e7c5d3b1a9f --strategy rolling --wait-timeout 600</pre
+                      >
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-\[13.5px\] text-\(--el-text\)"
+                        >Watch the health checks come back green</span
+                      >
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <div class="cmdBox">
+                      <pre class="cmdVal" tabindex="0">fly status --app motir-core --watch</pre>
+                      <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">14</span>The SAME row at 390 — a phone. Nothing reflows; the
+          command still scrolls inside itself.
+        </h2>
+        <p class="panelNote">
+          The 390px column is where the rule earns its keep: the command is four times the width of
+          the viewport, and the only thing that moves is the inside of the mono box. The copy button
+          keeps its full hit target because it does not shrink, and the row's text wraps normally
+          above it.
+        </p>
+        <div class="panelBody">
+          <div class="narrow">
+            <div class="secHead" style="padding: 10px 0; border: 0">
+              <h3
+                class="font-sans text-\[14px\] font-semibold text-\(--el-text\)"
+                style="margin: 0"
+              >
+                To-do list
+              </h3>
+              <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                >0 of 1</span
+              >
+            </div>
+            <ul class="list-none">
+              <li class="todoRow">
+                <span class="cbox" role="checkbox" aria-checked="false"></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-\[13.5px\] text-\(--el-text\)"
+                      >Deploy the pinned image to production</span
+                    >
+                    <span class="execMark"
+                      ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg>You</span
+                    >
+                  </div>
+                  <div class="cmdBox">
+                    <pre class="cmdVal" tabindex="0">
+fly deploy --app motir-core --image registry.fly.io/motir-core@sha256:6f1c0a9e4d2b8f7a3c5e1d9b0a4f6c8e2d7b5a3f1e9c7d5b3a1f9e7c5d3b1a9f --strategy rolling --wait-timeout 600</pre
+                    >
+                    <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <span class="rowActions"></span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">15</span>DARK — token parity, on the two panels that carry every
+          colour this asset uses.
+        </h2>
+        <p class="panelNote">
+          Nothing here is a second design: the same markup under
+          <span class="font-mono">data-theme="dark"</span>. It is drawn because a token that
+          resolves in one theme and not the other is invisible until somebody switches, and this
+          asset introduces one tinted element (the agent mark) and one filled one (the danger
+          confirm).
+        </p>
+        <div class="panelBody">
+          <div class="twoUp">
+            <div>
+              <span class="colLabel">Light</span>
+              <div class="stage">
+                <div class="secCard">
+                  <div class="secHead">
+                    <h3
+                      class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                      style="margin: 0"
+                    >
+                      To-do list
+                    </h3>
+                    <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                      >— the steps of this work</span
+                    >
+                    <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                      >1 of 3 done</span
+                    >
+                  </div>
+                  <div class="secBody">
+                    <ul class="list-none">
+                      <li class="todoRow">
+                        <span class="cbox isOn" role="checkbox" aria-checked="true"
+                          ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                        ></span>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                              >Apply the migration</span
+                            >
+                            <span class="execMark"
+                              ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                              >You</span
+                            >
+                          </div>
+                          <div class="cmdBox">
+                            <pre class="cmdVal" tabindex="0">pnpm prisma migrate deploy</pre>
+                            <button
+                              type="button"
+                              class="btn btnIcon shrink-0"
+                              aria-label="Copy command"
+                            >
+                              <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                            </button>
+                          </div>
+                          <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                            Done by Yue · 12 Aug
+                          </p>
+                        </div>
+                        <span class="rowActions"
+                          ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-grip" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-pencil" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg></button
+                        ></span>
+                      </li>
+                      <li class="todoRow">
+                        <span class="cbox" role="checkbox" aria-checked="false"></span>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-\[13.5px\] text-\(--el-text\)"
+                              >Regenerate the client</span
+                            >
+                            <span class="execMark isAgent"
+                              ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                              >Agent</span
+                            >
+                          </div>
+                        </div>
+                        <span class="rowActions"
+                          ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-grip" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-pencil" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg></button
+                        ></span>
+                      </li>
+                      <li class="todoRow">
+                        <span class="cbox" role="checkbox" aria-checked="false"></span>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-\[13.5px\] text-\(--el-text\)"
+                              >Confirm the table exists</span
+                            >
+                            <span class="execMark"
+                              ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                              >You</span
+                            >
+                          </div>
+                        </div>
+                        <span class="rowActions"
+                          ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-grip" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-pencil" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg></button
+                        ></span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">Dark</span>
+              <div class="stage" data-theme="dark" data-appearance-scope>
+                <div class="secCard">
+                  <div class="secHead">
+                    <h3
+                      class="font-sans text-\[15px\] font-semibold text-\(--el-text\)"
+                      style="margin: 0"
+                    >
+                      To-do list
+                    </h3>
+                    <span class="font-sans text-sm text-\(--el-text-secondary\)"
+                      >— the steps of this work</span
+                    >
+                    <span class="ml-auto font-mono text-\[11px\] text-\(--el-text-secondary\)"
+                      >1 of 3 done</span
+                    >
+                  </div>
+                  <div class="secBody">
+                    <ul class="list-none">
+                      <li class="todoRow">
+                        <span class="cbox isOn" role="checkbox" aria-checked="true"
+                          ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-check" /></svg
+                        ></span>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-\[13.5px\] line-through text-\(--el-text-secondary\)"
+                              >Apply the migration</span
+                            >
+                            <span class="execMark"
+                              ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                              >You</span
+                            >
+                          </div>
+                          <div class="cmdBox">
+                            <pre class="cmdVal" tabindex="0">pnpm prisma migrate deploy</pre>
+                            <button
+                              type="button"
+                              class="btn btnIcon shrink-0"
+                              aria-label="Copy command"
+                            >
+                              <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                            </button>
+                          </div>
+                          <p class="mt-1 text-\[11px\] text-\(--el-text-secondary\)">
+                            Done by Yue · 12 Aug
+                          </p>
+                        </div>
+                        <span class="rowActions"
+                          ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-grip" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-pencil" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg></button
+                        ></span>
+                      </li>
+                      <li class="todoRow">
+                        <span class="cbox" role="checkbox" aria-checked="false"></span>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-\[13.5px\] text-\(--el-text\)"
+                              >Regenerate the client</span
+                            >
+                            <span class="execMark isAgent"
+                              ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                              >Agent</span
+                            >
+                          </div>
+                        </div>
+                        <span class="rowActions"
+                          ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-grip" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-pencil" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg></button
+                        ></span>
+                      </li>
+                      <li class="todoRow">
+                        <span class="cbox" role="checkbox" aria-checked="false"></span>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="text-\[13.5px\] text-\(--el-text\)"
+                              >Confirm the table exists</span
+                            >
+                            <span class="execMark"
+                              ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                              >You</span
+                            >
+                          </div>
+                        </div>
+                        <span class="rowActions"
+                          ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-grip" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-pencil" />
+                            </svg></button
+                          ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                            <svg class="w-4 h-4" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg></button
+                        ></span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

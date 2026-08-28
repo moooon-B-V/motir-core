@@ -25,7 +25,13 @@ A light pink FILL **cannot carry white text at AA**. So the CTA is a light
 bubblegum pink (`Pink-6 #efbfdd`) with **dark berry-plum labels** (`Pink-12
 #651249`, ~7.6:1) — the same dark-on-light pattern Amber/Citrine use for gold.
 `--color-primary` (the pink used AS text/icon on a surface) is Radix's AA "text"
-step `Pink-11 #c2298a`, not an invented darkening.
+step `Pink-11` — deepened by MOTIR-3774 to `#b72682`, Pink-11 mixed 88% toward
+the Pink-12 berry ink already used as `--color-primary-foreground`, so it is
+still derived from the Radix steps rather than an invented darkening. Pink-11
+itself was 5.28:1 on the page and 4.29:1 on `--el-tint-lavender` (Violet-4),
+which is the pairing the saved-filter count badge and the active sidebar row
+use. Lifting the TINT to Violet-3 would have cleared AA and left the chip at
+1.10:1 against the page — a tint that has become the page.
 
 ## How it re-skins (token mapping)
 
@@ -40,7 +46,7 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 | Role group          | Candy (light → dark) — all Radix steps                                                                               |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Text scale          | Mauve ink `#211f26` + a Pink-12 berry emphasis `#651249` → Mauve-dark `#eeeef0` + Pink-dark-12 `#fdd1ea`             |
-| Accent (CTA)        | light-pink fill `Pink-6 #efbfdd` → `Pink-dk-11 #ff8dcc` with **dark berry labels**; pink `#c2298a` text              |
+| Accent (CTA)        | light-pink fill `Pink-6 #efbfdd` → `Pink-dk-11 #ff8dcc` with **dark berry labels**; pink `#b72682` text              |
 | Surfaces            | candy-paper pinks `Pink-1 #fffcfe` / `Pink-3 #fee9f5` → pink-tinted black `#191117` / `#37172f`                      |
 | Recessed canvas     | planning board — recessed below the page and `--el-surface` — `Pink-4 #fbdcef` → `#120c11`                           |
 | Borders             | soft candy-pink hairlines `Pink-5 #f6cee7` → `Pink-dk-6 #692955`                                                     |
@@ -60,7 +66,8 @@ margins:
 - Primary ink on canvas — **16.0:1** (light) / **16.0:1** (dark).
 - Secondary `--el-text-secondary` on surface — **5.1:1** / **7.6:1**.
 - Captions `--el-text-muted` on surface — **5.1:1** / **7.6:1**.
-- Pink `--el-accent-on-surface` (Pink-11) — **5.2:1** (light) / **8.8:1** (dark);
+- Pink `--el-accent-on-surface` (Pink-11 → Pink-12, 88%) — **5.7:1** (light) /
+  **9.7:1** (dark), and **4.7:1** / **7.0:1** on `--el-tint-lavender`;
   **dark berry ink** on the light-pink `--el-accent` fill — **7.6:1** / **8.5:1**
   (the light-pink trap).
 - Candy-blue (Sky) link on the soft surface — **5.0:1** / **9.6:1**.

@@ -3399,11 +3399,16 @@
    Concrete-hex --el-* tokens that do NOT resolve through --color-*
    (--el-sidebar-item-bg-hover) are re-skinned explicitly below. */
 [data-palette='evergreen'] {
-  /* Brand / primary — emerald CTA (white label text clears AA on the fill) */
-  --color-primary: #0c7a52;
+  /* Brand / primary — emerald CTA (white label text clears AA on the fill).
+     --color-primary is the emerald used AS text/icon; --color-primary-fill is
+     the CTA fill. They were the same hex until MOTIR-3774 deepened the INK by
+     1.5% lightness (same hue 158.2, same 82.1% saturation) so it clears AA on
+     the palette's own pastel tints; the FILL is untouched, which is what the
+     picker swatch and every white-on-emerald label read. */
+  --color-primary: #0b714c; /* deepened emerald as text/icon (6.03:1 on white) */
   --color-primary-foreground: #ffffff;
   --color-primary-pressed: #095f40;
-  --color-primary-fill: #0c7a52;
+  --color-primary-fill: #0c7a52; /* emerald CTA fill — the signature; white-on AA */
 
   /* Surfaces — lightly cooled (green-leaning) neutrals over a white canvas */
   --color-background: #ffffff;
@@ -3782,7 +3787,7 @@
 [data-palette='amber'] {
   /* brand & primary — Binance Gold. The FILL carries DARK ink labels (yellow
      trap); --color-primary is a darkened gold used AS text/icon on a surface. */
-  --color-primary: #8a6a00; /* darkened gold as text/icon (AA ~5:1 on white) */
+  --color-primary: #7d6000; /* darkened gold as text/icon (5.92:1 on white — MOTIR-3774) */
   --color-primary-foreground: #181a20; /* Binance near-black on the gold fill (AA ~9.6:1) */
   --color-primary-pressed: #d4a30a;
   --color-primary-fill: #f0b90b; /* Binance Gold — the signature; dark-on AA */
@@ -3928,7 +3933,7 @@
 [data-palette='sienna'] {
   /* brand & primary — Mistral's flame. The FILL is Mistral Orange #fa520f with
      DARK ink labels; --color-primary is a darkened flame used AS text/icon. */
-  --color-primary: #c4400a; /* darkened Mistral flame as text/icon (AA ~4.9:1 on the cream) */
+  --color-primary: #b53b09; /* darkened Mistral flame as text/icon (5.60:1 on the cream — MOTIR-3774) */
   --color-primary-foreground: #2a1205; /* DARK warm ink on the flame fill (AA ~5.3:1) */
   --color-primary-pressed: #cc3a05; /* Mistral primary-deep */
   --color-primary-fill: #fa520f; /* Mistral Orange — the signature flame; dark-on AA */
@@ -4415,7 +4420,7 @@
 [data-palette='candy'] {
   /* brand & primary — a LIGHT bubblegum pink (Radix Pink). FILL is a light pink
      with DARK berry labels; --color-primary is the Pink-11 text step. */
-  --color-primary: #c2298a; /* Radix Pink-11 — pink text/icon (AA ~5.2:1 on white) */
+  --color-primary: #b72682; /* Radix Pink-11 88% toward Pink-12 (5.81:1 on white — MOTIR-3774) */
   --color-primary-foreground: #651249; /* Radix Pink-12 berry ink on the light-pink fill (~7.6:1) */
   --color-primary-pressed: #e7acd0; /* Radix Pink-7 */
   --color-primary-fill: #efbfdd; /* Radix Pink-6 — the light bubblegum pink */

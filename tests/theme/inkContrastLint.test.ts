@@ -631,7 +631,17 @@ describe('ink-contrast lint — --el-accent-on-surface is AA in all 20 palette �
   // so an alias added tomorrow is measured the day it lands. That is the whole
   // MOTIR-3693 lesson applied one ink over: `--el-sidebar-bg` was unmeasured for
   // the life of the rail because a list of three names was written by hand.
-  const SURFACES = [...SAFE_SURFACE_TOKENS, ...TINTED_SURFACE_TOKENS];
+  //
+  // ── …PLUS the one pastel tint the tree pairs this ink with (MOTIR-3774) ─────
+  // The derivation above is the NEUTRAL vocabulary — the page white and the
+  // three greys. `--el-tint-lavender` is not in it, and when this arm shipped
+  // the pair was left OUT of the matrix and tracked in prose at the bottom of
+  // this file instead, because four palettes failed it in LIGHT and no dark-only
+  // override could reach them. That prose is now a measurement: the pair is a
+  // member of `SURFACES`, so every palette × theme is asserted on it by the same
+  // table as everything else, and the tint stops being the one surface this
+  // arm's green does not cover.
+  const SURFACES = [...SAFE_SURFACE_TOKENS, ...TINTED_SURFACE_TOKENS, ACCENT_TINT];
 
   it('measures the whole matrix it claims to (every palette, both themes)', () => {
     // Same floor, and the same reason, as the danger arm's: a matrix that
@@ -643,6 +653,7 @@ describe('ink-contrast lint — --el-accent-on-surface is AA in all 20 palette �
     expect(PALETTES.length).toBeGreaterThanOrEqual(10);
     expect(SURFACES.length).toBeGreaterThan(3);
     expect(SURFACES).toContain('--el-surface-soft'); // ExploreTopBar's own header
+    expect(SURFACES).toContain(ACCENT_TINT); // the accent family's own tint — MOTIR-3774
   });
 
   it('resolves to a real colour in every pair — never an unresolved var()', () => {
@@ -704,34 +715,87 @@ describe('ink-contrast lint — --el-accent-on-surface is AA in all 20 palette �
     ).toBe('');
   });
 
+  it('leaves --el-tint-lavender a TINT — never within ΔE 3 of its own page', () => {
+    // The other half of MOTIR-3774, and the reason the fix moved the INK rather
+    // than the tint. Clearing 4.5:1 on a pastel has exactly two levers: darken
+    // the ink, or lighten the tint until it is nearly the page. The second one
+    // passes the arm above while costing `--el-tint-lavender` the job it exists
+    // for — it is also `--el-vote-bg`, `--el-roadmap-planned` and a label tint,
+    // and a chip you cannot see is not a quieter chip.
+    //
+    // Measured before it was asserted: the tightest pair in the tree is
+    // sienna/light at ΔE 4.2, because its lavender is a warm cream on a warm
+    // ivory page (`#ece6d6` on `#fffaeb`) — which is precisely why sienna had no
+    // room to lighten and its ink had to move. Candy is the worked counter-
+    // example: lifting its Violet-4 lavender to Violet-3 would have cleared AA
+    // at 4.71 and landed the tint at ΔE 6.0 from the page with 1.10:1 of
+    // separation, against 1.28:1 for the base palette's. Legal, and washed out.
+    const tooPale: string[] = [];
+    for (const { palette, theme } of PAIRS) {
+      const distance = deltaE2000(
+        resolve(palette, theme, ACCENT_TINT),
+        resolve(palette, theme, '--el-page-bg'),
+      );
+      if (distance < 3) tooPale.push(`${palette}/${theme}: ΔE ${distance.toFixed(1)}`);
+    }
+    expect(
+      tooPale.join('\n'),
+      'These palettes have lightened the accent tint until it is the page. That is the ' +
+        'cheap way to pass the AA assertion above and it removes the tint instead of fixing ' +
+        'the ink — raise `--color-primary` contrast in the palette block instead.',
+    ).toBe('');
+  });
+
+  it('keeps the DARK half where MOTIR-3745 put it — the 82% mix, not the 84% one', () => {
+    // MOTIR-3774 changes LIGHT declarations only, so this is the assertion that
+    // says so rather than the pull request saying so. The arm above would still
+    // pass at 4.5, and 4.5 is not where the dark half was left: MOTIR-3745
+    // measured 84% as the largest primary share that clears this same pair
+    // (4.57:1) and chose 82% for headroom (4.68:1). A floor of 4.6 is exactly
+    // the difference between those two choices, so a later re-tune that walks
+    // the mix back toward the palette's raw primary fails HERE, with the number
+    // that was reasoned about, instead of passing an AA check by 0.07.
+    const regressed: string[] = [];
+    for (const palette of PALETTES) {
+      const ratio = contrast(
+        resolve(palette, 'dark', ACCENT_INK),
+        resolve(palette, 'dark', ACCENT_TINT),
+      );
+      if (ratio < 4.6) regressed.push(`${palette}/dark: ${ratio.toFixed(2)}`);
+    }
+    expect(
+      regressed.join('\n'),
+      'The dark accent-on-lavender pair has fallen below the headroom the 82% mix was ' +
+        'sized for (4.68:1 at its worst, on the base palette). Re-read the ' +
+        "`[data-theme='dark']` block's `Why 82%` note before moving it.",
+    ).toBe('');
+  });
+
   it('pairs the ink with exactly one --el-tint-*, and it is the accent family’s own', () => {
-    // ⚠️ THE ONE SURFACE THIS ARM'S GREEN DOES NOT COVER, said out loud rather
-    // than left to be inferred — the same discipline the muted arm's heading
-    // keeps ("no violation the scanner can resolve a surface for").
+    // ⚠️ THIS PAIRING IS NOW MEASURED, NOT TRACKED HERE. `ACCENT_TINT` is a
+    // member of `SURFACES` above, so `--el-tint-lavender` is asserted in all
+    // twenty palette × theme pairs by the same table as the page white and the
+    // three greys. What this assertion still buys is the OTHER half, which no
+    // table can supply: that the set of pastel tints the tree pairs this ink
+    // with is still exactly the one the table measures.
     //
-    // `SURFACES` above is the NEUTRAL vocabulary: the page white and the three
-    // greys. The tree also deliberately paints accent ink on ONE pastel tint —
-    // `--el-tint-lavender`, the accent family's own — in ten files, mostly as a
-    // rounded glyph tile (`ProjectsEmptyState`, `PasskeyManager`,
-    // `TwoFactorManager`) but also as real text (`IssueFilterBar`'s saved-filter
-    // count badge, `ProposalQuickView`'s badge, `Sidebar`'s active row).
+    // The tree paints accent ink on `--el-tint-lavender` — the accent family's
+    // own — in ten files, mostly as a rounded glyph tile (`ProjectsEmptyState`,
+    // `PasskeyManager`, `TwoFactorManager`) but also as real text
+    // (`IssueFilterBar`'s saved-filter count badge, `ProposalQuickView`'s badge,
+    // `Sidebar`'s active row). Pair it with a SECOND tint and this goes red,
+    // because that tint is a surface nobody has measured the ink on — add it to
+    // `SURFACES` and measure it, rather than assuming it behaves like this one.
     //
-    // That pairing is NOT in the matrix above, and the reason is a measurement
-    // rather than an oversight. On `origin/main` it failed in five of the twenty
-    // pairs: base/DARK at 3.59 — which the dark fix takes to 4.68 — and
-    // evergreen 4.19, amber 4.00, sienna 4.13, candy 4.29 in LIGHT. The four
-    // light ones cannot be fixed from this card: their accent inks are marginal
-    // against ANY light surface (amber's `#8a6a00` tops out at 5.07:1 on pure
-    // white), so clearing 4.5 on a tint needs either the LIGHT accent ink to
-    // move — which this card is explicitly told not to do — or those palettes'
-    // lavender lifted nearly to the page white, which costs the tint its job.
-    // It is a palette-level defect with its own life, so it is a card:
-    // MOTIR-3774.
-    //
-    // What this assertion buys in the meantime is that the exposure cannot GROW
-    // silently. It is exactly one tint today; pair the accent ink with a second
-    // one and this goes red, and whoever does it reads the paragraph above
-    // instead of rediscovering it.
+    // ── What it used to say, and why the change is the point ────────────────
+    // Until MOTIR-3774 this comment carried the MEASUREMENT itself — five failing
+    // pairs out of twenty, four of them in LIGHT (evergreen 4.19, amber 4.00,
+    // sienna 4.13, candy 4.29) — as prose, because the fix needed those four
+    // palettes' accent inks to move and MOTIR-3745 was explicitly told not to
+    // touch a light value. A number in a comment is not a guard: it cannot go
+    // red, and nothing re-derives it. The four inks moved in `theme.css` and the
+    // pair joined the table, so the paragraph that stood in for the assertion is
+    // gone rather than updated.
     const paired = new Set<string>();
     for (const file of ACCENT_CARRIERS) {
       for (const [, , blob] of TEXT_BY_FILE.get(file)!.matchAll(
@@ -750,9 +814,9 @@ describe('ink-contrast lint — --el-accent-on-surface is AA in all 20 palette �
     expect(
       [...paired].filter((token) => token !== ACCENT_TINT).join(', '),
       'The accent ink is painted on a pastel tint this arm does not measure. ' +
-        `Only ${ACCENT_TINT} is a known pairing (MOTIR-3774 tracks its four sub-AA light ` +
-        'palettes); a second one is a new surface nobody has measured the ink on. Measure the ' +
-        'pair across all 20 palette × theme combinations before shipping it.',
+        `Only ${ACCENT_TINT} is measured (it is in \`SURFACES\` above); a second one is a new ` +
+        'surface nobody has measured the ink on. Add it to `SURFACES` so the pair is asserted ' +
+        'across all 20 palette × theme combinations, and fix whatever that turns red.',
     ).toBe('');
   });
 });

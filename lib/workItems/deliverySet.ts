@@ -206,8 +206,15 @@ export function amendRepoDeliveryWithSet(
  *      withholds exactly as a red one does.
  *   2. **An EMPTY set is NOT green.** `[].every(...)` is vacuously true, and a
  *      card with no pull request at all would promote itself to In Review on no
- *      evidence whatever. Absence of CI is not a state (`derivePrCiState` returns
- *      null for it) and it is certainly not a pass.
+ *      evidence whatever. A card with no pull request has no evidence, and no
+ *      evidence is not a pass.
+ *
+ * ⚠️ A `null` MEMBER IS NOT ALWAYS "NOT PASSING" ANY MORE (MOTIR-3823). This
+ * function still reads exactly what it is handed — `passing` or nothing — but the
+ * PROMOTION now maps each member through `deliveryStateForPromotion` first, which
+ * turns the `null` of a repository that CANNOT report a check into `passing`. The
+ * empty-set rule above is untouched by that and is the one property this file
+ * must never lose: a card with no delivery at all still has nothing to map.
  *
  * A card with exactly ONE pull request gets the same answer it always did:
  * over a set of one, "every" and "some" agree. That is what makes this safe for
@@ -216,4 +223,107 @@ export function amendRepoDeliveryWithSet(
 export function deliverySetIsGreen(states: readonly (string | null)[]): boolean {
   if (states.length === 0) return false;
   return states.every((state) => state === 'passing');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A REPOSITORY THAT CANNOT REPORT A CHECK (MOTIR-3823)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `derivePrCiState` answers `null` for a pull request with no check rows, and it
+ * is right to: absence of CI is not a state, and the Development pill renders
+ * nothing for it. **But `deliverySetIsGreen` reads that `null` as "not passing",
+ * which is only correct for ONE of the two situations that produce it:**
+ *
+ *   1. the repository has **no CI at all** — nothing will ever report; and
+ *   2. **nothing has reported YET** — a pull request opened seconds ago, a
+ *      webhook still in flight, a run that has not started.
+ *
+ * Decided by Yue, 2026-08-28: **(1) counts as GREEN.** A repository is allowed
+ * to have no CI — `motir-meta` is this project's own instance and carries the
+ * planning corpus — and holding its cards at `implemented` for ever punishes it
+ * for a choice it was entitled to make. **(2) must keep withholding**, because
+ * it is the normal state of every pull request for the first seconds of its
+ * life, which is exactly when the arrival edge fires. Mapping `null` to
+ * `passing` outright would announce almost every card in the system reviewable
+ * the instant its pull request opened, whatever CI later said.
+ *
+ * ── THE DISCRIMINATOR ─────────────────────────────────────────────────────
+ * The two are indistinguishable AT THE PULL REQUEST, so the question is asked of
+ * the REPOSITORY, from what Motir has already recorded about it:
+ *
+ *   - **It has recorded a check run, ever** ⇒ it CAN report. Its silence on this
+ *     pull request means "not yet", and the card is held.
+ *   - **It has never recorded one, AND at least one of its pull requests reached
+ *     MERGE without ever recording one** ⇒ it CANNOT report. A merged pull
+ *     request had its entire lifetime to produce a check and produced none; that
+ *     is evidence, where "a pull request exists" is only a lack of it.
+ *   - **Neither** — a repository with no history at all ⇒ treated as ABLE to
+ *     report, which HOLDS the card. Absence of evidence resolves to the
+ *     conservative side, deliberately.
+ *
+ * Its cost: two indexed reads, and only for a delivery whose verdict came back
+ * `null` — so nearly every card pays nothing at all. No GitHub API call, no
+ * cached column, and nothing for a human to configure. It is self-correcting in
+ * both directions: the first check row a repository records answers it for ever,
+ * and so does the first merge without one.
+ *
+ * ── WHAT IT ANSWERS, AND WHAT IT DOES NOT ────────────────────────────────
+ * It answers *"can this REPOSITORY report a check?"* It does NOT answer *"will
+ * anything report for THIS pull request?"* — a repository whose workflows are
+ * paths-filtered can be perfectly able to report and stay silent on a docs-only
+ * pull request, and such a card is still held at `implemented`. That is the
+ * conservative direction and it is deliberate: the alternative reads a silence
+ * as a pass, which is the regression above.
+ *
+ * **The residual failure, stated so the next reader does not over-trust it:** a
+ * genuinely CI-less repository holds its cards until ONE of its pull requests has
+ * been WATCHED to merge. Bounded to the start of a repository's life, in the safe
+ * direction, and it clears itself. The mirror failure — a repository that HAS CI
+ * but has never run it promoting a card early — is what the watched-merge
+ * evidence buys out: a pull request Motir saw open and saw merge, with nothing
+ * reported in between, is a repository that did not run CI for it.
+ *
+ * `docs/decisions/ci-less-repository-is-green.md` is the record.
+ */
+export interface RepoCheckReportingFact {
+  repoId: string;
+  /** Has ANY pull request in this repository ever recorded a check run? */
+  hasEverReportedACheck: boolean;
+  /** Has at least one of its pull requests MERGED without recording one? */
+  hasMergedWithoutAnyCheck: boolean;
+}
+
+/**
+ * Is this repository unable to report a check — so a `null` verdict from it is
+ * "no CI" rather than "no verdict yet"?
+ *
+ * Pure, and deliberately NOT in the repository layer: which facts amount to
+ * evidence is a judgement, and a judgement belongs where it can be read and
+ * asserted without a database.
+ */
+export function repoCannotReportChecks(fact: RepoCheckReportingFact): boolean {
+  if (fact.hasEverReportedACheck) return false;
+  return fact.hasMergedWithoutAnyCheck;
+}
+
+/**
+ * One delivery's contribution to `deliverySetIsGreen`, with the second question
+ * asked (MOTIR-3823).
+ *
+ * ⚠️ IT AMENDS THE PROMOTION'S READING, NEVER `derivePrCiState`. The shared
+ * derivation keeps its meaning — `null` is still "absence of CI is not a state",
+ * and every surface reading it (the Development pill, the `deliveries` field) is
+ * untouched. Only the promotion asks the follow-up, because only the promotion
+ * has to turn an absence into a yes or a no.
+ *
+ * Every non-null state passes through unchanged, which is what keeps this
+ * invisible for the overwhelming majority of cards.
+ */
+export function deliveryStateForPromotion(
+  state: string | null,
+  cannotReportChecks: boolean,
+): string | null {
+  if (state !== null) return state;
+  return cannotReportChecks ? 'passing' : null;
 }
