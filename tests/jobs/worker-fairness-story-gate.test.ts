@@ -136,10 +136,30 @@ describe('§1 the seam — a slow run does not detain the runs claimed beside it
 
     // THE assertion, on `job_run` rows rather than on a spy: the fast run is
     // finished and the slow one is not, at the same instant.
+    //
+    // ⚠️ WAIT ON BOTH OF THE FAST RUN'S ROWS — MOTIR-3842. `settle()` writes them
+    // one `await` apart, in a fixed order: `execute()` runs `executeWithLedger`,
+    // whose last step takes the LEDGER row (`job_run`) terminal, and only THEN
+    // does `jobQueueRepository.markSucceeded` release the QUEUE row
+    // (`job_queue_run`), in a transaction of its own. So the ledger reaching
+    // `succeeded` is NOT evidence about the queue row: polling the first and
+    // asserting the second reads the window between the two commits, and that
+    // window is a whole round trip rather than a scheduling hiccup — which is why
+    // this failed on a QUIET box on the first attempt, not once in a hundred runs.
+    //
+    // Waiting for the LATER of the two costs the property nothing. The slow run is
+    // held open by `held.wait` until this test releases it, so "the slow one is
+    // still running" is true at whatever instant the snapshot is taken — the
+    // simultaneity this test is about is bounded by the gate, not by how quickly
+    // we read. What must NOT be done instead is to release the claim before the
+    // ledger records the outcome: that ordering is what makes a crash between the
+    // two writes recoverable rather than a lost run.
     await until(async () => {
-      const row = await adminDb.jobRun.findFirst({ where: { functionId: fast.jobId } });
-      return row?.status === 'succeeded';
-    }, "the fast run's ledger row to reach succeeded");
+      const ledger = await adminDb.jobRun.findFirst({ where: { functionId: fast.jobId } });
+      if (ledger?.status !== 'succeeded') return false;
+      const queued = await adminDb.jobQueueRun.findUnique({ where: { id: fast.runId } });
+      return queued?.state === 'succeeded';
+    }, "the fast run's ledger row AND its queue row to reach their terminal states");
 
     const slowLedger = await adminDb.jobRun.findFirstOrThrow({
       where: { functionId: slow.jobId },
@@ -151,6 +171,9 @@ describe('§1 the seam — a slow run does not detain the runs claimed beside it
     expect((await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: slow.runId } })).state).toBe(
       'running',
     );
+    // Restates what the wait above already established, and deliberately so: a
+    // timed-out `until` throws its own message, and this keeps the failure a
+    // reader meets a named state rather than a poll deadline.
     expect((await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: fast.runId } })).state).toBe(
       'succeeded',
     );
