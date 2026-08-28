@@ -776,6 +776,80 @@ row lands, a dying job and an in-flight one are indistinguishable on the
 dashboard — so when you are watching a long job, watch `job_run_dlq`, not
 `job_run.status`.
 
+## Deferring a run — `deferRun(at, reason)` (MOTIR-3825)
+
+**A third way a pass can end.** `deferRun(at, reason)`
+(`lib/jobs/engine/defer.ts`) throws `JobRunDefer`; the worker returns the
+`job_queue` row to `pending` at `at`, releases the claim, REFUNDS the attempt,
+and a worker claims it again later. Nothing is checkpointed, and the handler is
+re-invoked **from the top**.
+
+```ts
+import { deferRun } from '@/lib/jobs/engine/defer';
+
+// One unit of work, then hand the run back.
+const advanced = await supervisionRepository.advance(runId, key, observation, tx);
+if (!advanced.done) deferRun(new Date(Date.now() + waitMs), `poll ${advanced.pollNumber}`);
+```
+
+**⚠️ A DEFERRING HANDLER OWNS ITS OWN DURABLE STATE. This is the rule, not a
+suggestion.** A defer writes NOTHING to `job_step`, so the next pass remembers
+no loop counter, no cursor and no observation. Everything the handler needs
+between passes has to be in a row it wrote itself and reads back at the top —
+and it may not be a `step.run` memo instead, because a memo freezes its FIRST
+answer for the life of the run (§13.3(b), which rejected exactly that for an
+observed `startedAt`). `docs/decisions/job-queue-foundation.md` §16.2 is where
+the container supervisors' own row is decided.
+
+**When a job wants it.** When the work is a SEQUENCE OF SMALL STEPS SPREAD OVER
+TIME and the waiting is most of the elapsed time — a container supervision
+polling for half an hour, a chunked backfill, anything that would otherwise be
+an in-process `while` loop holding one of `POOL_SIZE` slots while it sleeps. The
+gain is exactly that slot: between passes the run occupies no worker capacity at
+all.
+
+**What it costs.** One claim round trip per pass, plus a replay of every memo
+the handler still reads before it advances. That is LINEAR in the pass count —
+which is the property to protect, and the one the alternative loses:
+
+| shape                                 | per-pass cost                                                                                     | over N passes                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| an in-process `while` + `await`       | nothing extra, but ONE worker slot held throughout                                                | 1 slot × the whole duration                              |
+| `step.sleep` between un-memoized work | a replay of every earlier step **plus a re-execution of every un-memoized call before the sleep** | **O(N²)** — measured at 4 sleeps → 10 polls (MOTIR-3763) |
+| `deferRun`                            | one claim, plus the memos the handler reads                                                       | O(N), and no slot held between passes                    |
+
+**⚠️ IT IS NOT `step.sleep`, and choosing wrong is silent.** Both release the
+claim and refund the attempt, so a row deferred and a row slept look identical.
+They differ in what the HANDLER may assume:
+
+|                             | `step.sleep`                               | `deferRun`                      |
+| --------------------------- | ------------------------------------------ | ------------------------------- |
+| writes to `job_step`        | a `sleep` checkpoint, keyed by the step id | nothing                         |
+| where the next pass resumes | back into the same place in the same loop  | at the top                      |
+| who remembers the state     | the step ledger                            | **the handler, in its own row** |
+| reported by `onOutcome` as  | `yielded`                                  | `deferred`                      |
+
+Reach for `step.sleep` when the wait sits inside a short, already-memoized
+sequence and the replay is cheap. Reach for `deferRun` when the loop is the
+work.
+
+**⚠️ A DEFER IS A SUSPENSION, NEVER A PATH OUT OF THE WORK.** It is a THROW, so
+it unwinds through every `try`/`finally` between the call and the worker — and
+§15.4 recorded what that costs a supervision that tears down in a `finally`:
+_"a yielding poll loop would have called `settleIndexContainer` on its first
+suspension and torn down the container it was watching."_ A handler that defers
+must not have teardown in a `finally` above the call. The supervision driver's
+answer is structural rather than a guard (§16.4): it has no `finally` at all,
+and teardown is reachable only from an explicit terminal transition.
+
+**The ledger needs nothing, and that is worth knowing rather than re-deriving.**
+`executeWithLedger` writes `job-run:start` inside a memoized step and
+`job-run:succeeded` only when the handler RETURNS. A deferred pass throws, so it
+writes no success row; the next pass replays the memoized start. A supervision
+that defers a hundred times and settles on the hundred-and-first therefore
+leaves ONE `job_run` row, `succeeded`, with the last pass's output, and nothing
+in the dead-letter queue. `tests/jobs/engine-defer.test.ts` asserts the counts.
+
 ## Dead-letter queue
 
 When a job exhausts its retry budget, `recordEngineTerminalFailure` writes a row
