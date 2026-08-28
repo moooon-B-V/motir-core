@@ -163,6 +163,7 @@ export async function startJobWorker(): Promise<void> {
       // because the worker starts ONCE in `globalSetup` — a per-spec opt-in
       // would mean restarting it, which is exactly the cost this avoids.
       E2E_TEST_SLOW_JOB: '1',
+      E2E_TEST_DEFERRING_JOB: '1',
       // The index-writer seam — see `indexWriterSeamEnv` for why it is here and
       // nowhere else.
       ...indexWriterSeamEnv(),

@@ -254,6 +254,24 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * under-estimating is the direction that unbalances the bin-packer, and a local
  * number runs at or below the CI cost.
  *
+ * ⚠️ `supervision-pool-under-load.spec.ts` (MOTIR-3832) carries the same
+ * provenance, and it is the guard's sixth catch — brand new, so with no entry
+ * here it would have been assigned to no leg and gone green by never executing.
+ *
+ * Measured on 2026-08-28 against a production build, on a private lane with its
+ * own port, its own database and its own job worker — FOUR consecutive green
+ * runs. Bodies: **4.6 s** and **5.8 s**; wall-clock over the file 21–29 s
+ * including `globalSetup`'s worker start. Recorded as **11.0** — the higher body
+ * plus the hooks the reporter attributes separately, rounded UP, for this file's
+ * standing reason.
+ *
+ * ⚠️ IT COSTS MORE THAN ITS SIBLING BECAUSE IT FILLS THE POOL. `cascade-under-load`
+ * needs ONE long run beside the fast lane; this one needs `POOL_SIZE` of them,
+ * because after MOTIR-3762 a single supervisor detains only its own slot and a
+ * one-probe spec would pass on the pre-change worker. Ten probes each cycling on
+ * a 250 ms defer is what makes the assertion discriminate, and it is where the
+ * extra seconds go.
+ *
  * ⚠️ AND THE NUMBER IS ONLY THIS SMALL BECAUSE THE LONG JOB ENDS ON A SIGNAL.
  * The spec needs a run that is still in flight when the cascade lands, and the
  * obvious shape — a job that sleeps for a fixed duration — would have to outlast
@@ -474,6 +492,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'sprint-lifecycle.spec.ts': 8.0,
   'sprint-rename.spec.ts': 6.3,
   'status-derivation.spec.ts': 15.5,
+  'supervision-pool-under-load.spec.ts': 11.0,
   'token-permissions.spec.ts': 2.2,
   'top-bar-budget.spec.ts': 6.8,
   'triage-flow.spec.ts': 11.6,
