@@ -27,7 +27,7 @@ Like Amber's gold, Mistral's bright flame FILL (`#fa520f` light / `#ff7a38` dark
 Mistral's own dark-on-orange treatment: `--color-primary-foreground` is a **dark
 warm ink** (`#2a1205`) in **both** themes — dark-on-flame clears AA at ~5.3:1
 (light) / ~6.8:1 (dark). `--color-primary` (the flame used AS text/icon) is a
-darkened flame (`#c4400a` / `#ff8a4c`). Per Mistral, **links are the brand
+darkened flame (`#b53b09` / `#ff8a4c`). Per Mistral, **links are the brand
 orange** too (a darkened flame, AA-safe), not a cool blue.
 
 ## How it re-skins (token mapping)
@@ -43,11 +43,11 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 | Role group          | Sienna / Mistral (light → dark)                                                                                                      |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Text scale          | Mistral warm-charcoal ink — `#1f1f1f` → `#f5efe2`; secondary `#4a4a4a` → `#b3a892`                                                   |
-| Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#c4400a` → `#ff8a4c` text               |
+| Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#b53b09` → `#ff8a4c` text               |
 | Surfaces            | Mediterranean Warm-Ivory `#fffaeb` over cream `#fbf1d3` → warm-black `#15120d` / `#1f1d17`                                           |
 | Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#f5e9cb` → `#100d08`                                                  |
 | Borders             | warm beige hairlines — `#ece0c4` → `#322c1d`                                                                                         |
-| Links               | the brand orange (darkened flame) — `#c4400a` → `#ff9a5c`                                                                            |
+| Links               | the brand orange (darkened flame) — `#b53b09` → `#ff9a5c`                                                                            |
 | Semantic            | added warm-consistent (Mistral ships none) — success/warning/danger/info, AA-safe in both themes                                     |
 | Status ramp         | `--el-status-blocked` set directly — the palette's amber accent `#b5660a` (light) / rides `--color-warning` (dark) — see below       |
 | Pastel tints        | Mistral's golden washes (`tint-yellow` = Block Gold `#ffe295`) + warm feature hues; `tint-sky` is the palette's own teal — see below |
@@ -57,7 +57,7 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 
 Mistral ships **no semantic colours**, so this palette's `--color-warning` was
 added warm-consistent (`#b45309`) — which lands it right next to the darkened
-Mistral flame `--color-primary` `#c4400a`: the `blocked` / `in_review` pair
+Mistral flame `--color-primary` `#b53b09`: the `blocked` / `in_review` pair
 measures **ΔE2000 7.1** in light, amber against flame (MOTIR-2075).
 
 Rather than move the brand flame, **`blocked` takes the palette's own amber
@@ -96,7 +96,10 @@ numerically and by the rendered specimen. Notable margins:
 - Primary ink on canvas — **15.8:1** (light) / **16.3:1** (dark).
 - Secondary `--el-text-secondary` on surface — **7.9:1** / **7.2:1**.
 - Captions `--el-text-muted` on surface — **5.7:1** / **6.3:1**.
-- Flame `--el-accent-on-surface` — **4.9:1** / **8.0:1**; **dark ink** on the
+- Flame `--el-accent-on-surface` — **5.6:1** / **9.0:1**, and **4.7:1** / **7.6:1**
+  on `--el-tint-lavender` (MOTIR-3774 deepened the ink from `#c4400a`, which was
+  4.13:1 there; sienna's lavender is a warm cream ΔE 4.2 from the ivory page, so
+  the tint had no room to move and the ink did); **dark ink** on the
   Mistral-flame fill — **5.3:1** (light) / **6.8:1** (dark) (the yellow-trap
   treatment, same as Amber).
 - Link (brand orange) on the soft surface — **4.8:1** / **8.5:1**.
