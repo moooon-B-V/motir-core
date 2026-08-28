@@ -19,6 +19,10 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { workItemRepository } = await import('@/lib/repositories/workItemRepository');
 const { organizationRepository } = await import('@/lib/repositories/organizationRepository');
+const { organizationMembershipRepository } =
+  await import('@/lib/repositories/organizationMembershipRepository');
+const { userRepository } = await import('@/lib/repositories/userRepository');
+const { ORGANIZATION_ROLE } = await import('@/lib/organizations/roles');
 const { makeWorkItemFixture, createTestUser, nextTestPosition } = await import('./fixtures');
 const { keyForAppend } = await import('@/lib/workItems/positioning');
 const { truncateAuthTables } = await import('./helpers/db');
@@ -672,6 +676,185 @@ describe('entitlementsService — upload caps (§4.3)', () => {
     // A 3 GB incoming file (over free, well under scaled's 100 GB) is allowed.
     await expect(
       entitlementsService.assertWithinStorageCap(orgId, 3 * GB),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('entitlementsService — the org-creation gate’s ACTOR-row lock (MOTIR-3717)', () => {
+  // §4.5 was the ONE cap in this file that took no row lock at all. Its
+  // `count → compare → create` read the ACTOR's owner/admin memberships, and on
+  // the very first create that set is EMPTY — so the symmetric repair MOTIR-3710
+  // applied to the three count caps does not transfer: you cannot lock a row that
+  // does not exist yet. Two concurrent first creates for one fresh user both read
+  // `orgs.length === 0`, both took the always-free early return, and the user
+  // ended with TWO free orgs having never owned a paid one — two full free-tier
+  // allowances for an account entitled to one.
+  //
+  // The anchor is the row the actor genuinely owns and that exists BEFORE the
+  // first org does: their own `user` row. `ensureDefaultWorkspace` has serialized
+  // its zero-membership check-then-create on exactly that row since Story 1.2.4;
+  // this gate is the sibling that never did.
+
+  it('LOCKS the actor’s user row in the gate’s own bootstrap context — the probe returns true', async () => {
+    const user = await createTestUser();
+
+    // The context the gate ACTUALLY runs in: both callers
+    // (`workspacesService.insertWorkspaceWithOwner`'s mint-own-org branch and
+    // `organizationsService.createOrganization`) bind `app.user_id` +
+    // `app.bootstrap_slug` on a bare transaction — a tenant-BOOTSTRAP context,
+    // not `withOrgContext`, because the org id does not exist until the INSERT
+    // runs. Probing anywhere else would prove nothing about the lock this gate
+    // takes.
+    const probe = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${user.id}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.bootstrap_slug', ${'probe-3717'}, true)`;
+      const [ctx] = await tx.$queryRaw<Array<{ uid: string | null; role: string }>>`
+        SELECT current_setting('app.user_id', true) AS uid, current_user::text AS role
+      `;
+      // WHY it is lockable, measured rather than asserted from the migrations:
+      // `user` has RLS DISABLED, so no UPDATE policy `USING` clause can filter
+      // the `FOR UPDATE` out. That is the exact mechanism that made
+      // `organization`'s lock inert under `withWorkspaceContext` (MOTIR-3710) —
+      // readable and not lockable — so the reading belongs beside the verdict.
+      const [rls] = await tx.$queryRaw<Array<{ enabled: boolean; forced: boolean }>>`
+        SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced
+        FROM pg_class WHERE relname = 'user' AND relnamespace = 'public'::regnamespace
+      `;
+      const locked = (await userRepository.lockById(user.id, tx)) !== null;
+      return { locked, userRlsEnabled: rls!.enabled, userGuc: ctx!.uid ?? null, role: ctx!.role };
+    });
+
+    const census = `probe: ${JSON.stringify(probe)}`;
+    expect(probe.locked, `${census} — false means the FOR UPDATE matched no row`).toBe(true);
+    expect(probe.userRlsEnabled, `${census} — RLS on "user" would filter the FOR UPDATE`).toBe(
+      false,
+    );
+    expect(probe.userGuc, census).toBe(user.id);
+    // The non-bypass runtime role is the only one that matters: an owner
+    // connection would lock regardless and prove nothing (MOTIR-2734 made
+    // `@/lib/db` `motir_app` unconditionally).
+    expect(probe.role, census).toBe('motir_app');
+  });
+
+  it('races two FIRST-org creates for one user and leaves exactly ONE organization', async () => {
+    // Production altitude: two `createWorkspace` calls with no `organizationId`,
+    // i.e. the mint-own-org branch every signup takes. No barrier is needed here
+    // and none is available — each call opens its OWN transaction and does async
+    // slug work before reaching the gate, so they interleave naturally. The
+    // deterministic-overlap version is the barrier test directly below; this one
+    // is the shape a double-submitted signup actually produces.
+    const user = await createTestUser();
+
+    const results = await Promise.allSettled([
+      workspacesService.createWorkspace({ name: 'First', ownerUserId: user.id }),
+      workspacesService.createWorkspace({ name: 'Also first', ownerUserId: user.id }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+
+    // MEASURED BEFORE any assertion can throw, so the number survives into every
+    // failure message (MOTIR-3707's census discipline): 1 = the lock held,
+    // 2 = the gate did not serialize and the user has two free-tier allowances.
+    const orgMembershipsForUser = await adminDb.organizationMembership.count({
+      where: { userId: user.id },
+    });
+    const distinctOrgs = await adminDb.organization.count();
+    const census =
+      `census: fulfilled=${fulfilled.length} rejected=${rejected.length} ` +
+      `orgMembershipsForUser=${orgMembershipsForUser} distinctOrgs=${distinctOrgs} ` +
+      `rejections=[${rejected.map((r) => reasonLabel((r as PromiseRejectedResult).reason)).join(' | ')}]`;
+
+    expect(
+      orgMembershipsForUser,
+      `${census} — 2 means §4.5 admitted a second free org to one account`,
+    ).toBe(1);
+    expect(distinctOrgs, census).toBe(1);
+    expect(fulfilled, census).toHaveLength(1);
+    expect(rejected, census).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason, census).toBeInstanceOf(
+      EntitlementExceededError,
+    );
+  });
+
+  it('serializes two gate calls that are PROVABLY overlapped by a barrier', async () => {
+    // ⚠️ THE BARRIER IS THE INSTRUMENT (MOTIR-3710). The test above races the real
+    // service and relies on its own async work to interleave; this one removes
+    // that reliance by replicating the mint-own-org branch inline
+    // (`insertWorkspaceWithOwner` lines 146-170: bind the bootstrap GUCs, assert
+    // §4.5, create the org, create the owner membership) with a rendezvous on the
+    // first line. Neither transaction can count, create or COMMIT until both are
+    // open and GUC-bound, so a green here cannot be a green on a guard that does
+    // nothing. Do NOT delete it to "simplify" — that is exactly how §4.1's race
+    // test passed for months on an inert lock.
+    const user = await createTestUser();
+    const arrive = rendezvous(2);
+
+    const attempt = (slug: string) =>
+      db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${user.id}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.bootstrap_slug', ${slug}, true)`;
+        await arrive();
+        await entitlementsService.assertCanCreateOrganization(user.id, tx);
+        const organization = await organizationRepository.create({ name: slug, slug }, tx);
+        await organizationMembershipRepository.create(
+          { organizationId: organization.id, userId: user.id, role: ORGANIZATION_ROLE.owner },
+          tx,
+        );
+      });
+
+    const results = await Promise.allSettled([attempt('race-a-3717'), attempt('race-b-3717')]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    const orgMembershipsForUser = await adminDb.organizationMembership.count({
+      where: { userId: user.id },
+    });
+    const census =
+      `census: fulfilled=${fulfilled.length} rejected=${rejected.length} ` +
+      `orgMembershipsForUser=${orgMembershipsForUser} ` +
+      `rejections=[${rejected.map((r) => reasonLabel((r as PromiseRejectedResult).reason)).join(' | ')}]`;
+
+    expect(
+      orgMembershipsForUser,
+      `${census} — 2 means the barrier-overlapped gate let both through`,
+    ).toBe(1);
+    expect(fulfilled, census).toHaveLength(1);
+    expect(rejected, census).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason, census).toBeInstanceOf(
+      EntitlementExceededError,
+    );
+  });
+
+  it('REFUSES when the actor-row lock matches no row', async () => {
+    // A user id that resolves to no row is the cheapest way to drive the lock to
+    // "matched nothing" without breaking RLS. The gate must REFUSE rather than
+    // fall through to an unserialized count → compare → create: a cap that
+    // cannot serialize is not a cap (MOTIR-3710's rule, applied to §4.5's
+    // different anchor).
+    await expect(
+      db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${'user_does_not_exist'}, true)`;
+        return entitlementsService.assertCanCreateOrganization('user_does_not_exist', tx);
+      }),
+    ).rejects.toBeInstanceOf(CapLockUnavailableError);
+  });
+
+  it('stays INERT off-cloud — a self-hosted build still creates a SECOND org', async () => {
+    // The refusal sits BEHIND the `isCloudBilling()` early return, so a
+    // self-hosted (GPL-3.0) build can neither be 500ed by a lock it does not
+    // need nor gated by a cap it does not have. Asserted end-to-end, on the real
+    // create path, because that is the claim: two workspaces, two orgs, no error.
+    delete process.env['MOTIR_CLOUD'];
+    const user = await createTestUser();
+    await workspacesService.createWorkspace({ name: 'First', ownerUserId: user.id });
+    await workspacesService.createWorkspace({ name: 'Second', ownerUserId: user.id });
+
+    expect(await adminDb.organizationMembership.count({ where: { userId: user.id } })).toBe(2);
+
+    // …and the lock refusal itself never fires off-cloud.
+    await expect(
+      db.$transaction((tx) =>
+        entitlementsService.assertCanCreateOrganization('user_does_not_exist', tx),
+      ),
     ).resolves.toBeUndefined();
   });
 });

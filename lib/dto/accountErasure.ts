@@ -104,3 +104,37 @@ export interface AccountErasurePreviewDTO {
   /** The stated exceptions, not counted from the database. */
   kept: AccountErasureKeptException[];
 }
+
+// ── The scheduled deletion itself (Story 8.4 · Subtask MOTIR-3700) ─────────
+// The WRITE half's return shape. The preview above says what a deletion WOULD
+// reach; this says that one has been asked for and when it falls due.
+
+/** The three states a request can be in — mirrors the `AccountDeletionStatus`
+ *  Postgres enum, restated here so a consumer of the DTO layer never has to
+ *  import a Prisma type to render a state. */
+export type AccountDeletionStatusDTO = 'scheduled' | 'cancelled' | 'completed';
+
+/**
+ * One account-deletion request, as the pane and the app-wide banner render it.
+ *
+ * ⚠️ `erasureDueAt` IS THE POINT OF THE SHAPE, not a timestamp that came along
+ * for the ride. DECISION 4 makes the window a published promise
+ * (`content/legal/privacy.md` §6), and the copy that states it interpolates
+ * THIS value rather than recomputing `now + 30 days` — a reader who scheduled
+ * on Monday and opens the banner on Thursday must be told Monday's deadline.
+ * Persisted at create for the same reason, so a later change to the constant
+ * cannot move a deadline somebody has already been shown.
+ *
+ * ISO strings rather than `Date`s, the dominant convention in `lib/dto/`: this
+ * shape crosses the API boundary to a route and to a client island unchanged.
+ */
+export interface AccountDeletionRequestDTO {
+  id: string;
+  status: AccountDeletionStatusDTO;
+  /** When the reader asked. The window is measured from here. */
+  requestedAt: string;
+  /** When the erasure falls due — `requestedAt + ACCOUNT_ERASURE_WINDOW_DAYS`. */
+  erasureDueAt: string;
+  /** When the reader cancelled, if they did. */
+  cancelledAt: string | null;
+}

@@ -67,8 +67,12 @@ describe('the declaration is readable from shipped code', () => {
     // The point of the move: a list a test file owned could never be compared
     // against the live secret, because no running process could read it.
     expect(MIGRATED_TO_ENGINE.length).toBeGreaterThan(30);
-    expect(DELIBERATELY_ON_INNGEST.length).toBeGreaterThan(0);
     expect(declaredEngineJobIds().size).toBe(MIGRATED_TO_ENGINE.length);
+    // ⚠️ NOT `toBeGreaterThan(0)`. MOTIR-3489 moved the last three entries —
+    // the container supervisors — onto the engine, so the exclusion list is
+    // EMPTY, and an assertion that it is populated would fail on the very
+    // condition MOTIR-3418 is waiting for. What still has to hold either way is
+    // that the accessor and the constant agree, so that is what is asserted.
     expect(declaredInngestJobIds().size).toBe(DELIBERATELY_ON_INNGEST.length);
   });
 
@@ -139,16 +143,25 @@ describe('reconcileLanes — the two-way difference', () => {
     expect(drift.routedNotDeclared).toEqual([PHANTOM_ID]);
   });
 
-  it('counts a DELIBERATELY-ON-INNGEST job that has been routed as routed-but-not-declared', () => {
-    // An operator routing a container supervisor before MOTIR-3489 ships is the
-    // interesting instance of this direction: the id is real, the job exists,
-    // and the repository says out loud that it should be on the other lane.
-    const excluded = DELIBERATELY_ON_INNGEST[0]!.id;
-    process.env[JOB_ENGINE_JOBS_ENV] = secretFor([...MIGRATED_TO_ENGINE, excluded]);
-
-    const drift = reconcileLanes() as LaneDrifted;
-
-    expect(drift.routedNotDeclared).toEqual([excluded]);
+  it('has NOTHING deliberately left on Inngest — the MOTIR-3418 premise, stated positively', () => {
+    // ⚠️ THIS REPLACES A TEST THAT SAMPLED `DELIBERATELY_ON_INNGEST[0]`. That
+    // test's scenario was "an operator routes a container supervisor BEFORE
+    // MOTIR-3489 ships", and MOTIR-3489 has now shipped: the list is empty, so
+    // there is no id to sample and — more to the point — no registered job that
+    // is routed-but-not-declared can be constructed from real ids at all,
+    // because every registered job is declared for the engine. That is the
+    // state, not a coverage gap, and the honest assertion is to say so.
+    //
+    // The routed-but-not-declared DIRECTION keeps its coverage from the two
+    // tests above, which drive it with `PHANTOM_ID`.
+    //
+    // ⚠️ GUARD ON THE ABSENCE, not on a sample. Were an entry re-added here
+    // without its id also leaving `MOTIR_POSTGRES_JOB_IDS`, this goes red and
+    // names it, which is exactly the moment MOTIR-3418's premise stops holding.
+    expect(
+      DELIBERATELY_ON_INNGEST.map((e) => e.id),
+      'a job is deliberately on Inngest again — MOTIR-3418 cannot delete the SDK while this is non-empty',
+    ).toEqual([]);
   });
 
   it('reports NOT CUT OVER — its own verdict, never `not_applicable`', () => {

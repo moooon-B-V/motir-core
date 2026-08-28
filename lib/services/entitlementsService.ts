@@ -5,6 +5,7 @@ import { entitlementsFor, pmTierForOrg, type PmTier } from '@/lib/billing/entitl
 import { CapLockUnavailableError, EntitlementExceededError } from '@/lib/billing/errors';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -27,6 +28,18 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // of an org's creates contend on — then counts under the lock. The second racer
 // blocks until the first commits, re-counts, and correctly sees the limit. The
 // caller MUST run the assert INSIDE the same transaction as the create it guards.
+//
+// ⚠️ AND §4.5 IS NOT A COUNT CAP — IT LOCKS THE ACTOR, NOT AN ORG (MOTIR-3717).
+// The paragraph above says "every count-cap locks the ORG ROW", and the
+// org-CREATION gate is the one member of this file that is not a count cap over
+// an org. It counts the ACTOR's owner/admin orgs, and the window it fails in is
+// the one where that set is EMPTY — the first org, which every account passes
+// through exactly once, on signup, at the moment a person is most likely to
+// double-submit. `SELECT … FOR UPDATE` over zero rows locks nothing, so the
+// symmetric repair does not transfer: §4.5 anchors on the actor's `user` row
+// instead (`lockActorRowOrRefuse`), which exists before their first org does.
+// Reading "every cap locks the org row" as covering §4.5 is how it went
+// unserialized past MOTIR-3710's sweep of its three siblings.
 //
 // ⚠️ AND THE LOCK'S RESULT IS READ — `lockOrgRowOrRefuse`, NOT a bare call
 // (MOTIR-3710). The paragraph above described a contract this file did not
@@ -66,7 +79,44 @@ async function lockOrgRowOrRefuse(
   tx: Prisma.TransactionClient,
 ): Promise<void> {
   if (!(await organizationRepository.lockByIdForUpdate(organizationId, tx))) {
-    throw new CapLockUnavailableError(organizationId);
+    throw new CapLockUnavailableError('organization', organizationId);
+  }
+}
+
+/**
+ * Take the ACTOR-row lock the §4.5 org-creation gate serializes on, and REFUSE
+ * if it matched nothing (MOTIR-3717).
+ *
+ * ⚠️ WHY A DIFFERENT ANCHOR, AND WHY `lockOrgRowOrRefuse` CANNOT BE REUSED. The
+ * three count caps above lock the `organization` row because that is the single
+ * shared row all of one org's creates contend on. §4.5 has no such row: it
+ * counts the ACTOR's owner/admin memberships, and the bypass window is exactly
+ * the one where that set is EMPTY (`orgs.length === 0`, the always-free first
+ * org). You cannot lock a set that has no rows — every racer falls through the
+ * predicate together — so the anchor has to be a row that EXISTS before the
+ * first organization does. The actor's own `user` row is that row, and it is
+ * already the row `workspacesService.ensureDefaultWorkspace` serializes its
+ * zero-membership check-then-create on (Story 1.2.4); this gate is the sibling
+ * that never did.
+ *
+ * ⚠️ AND THE CONTEXT ADMITS IT, MEASURED RATHER THAN ASSUMED. MOTIR-3710's
+ * finding is that Postgres applies the UPDATE policy's `USING` clause to a
+ * `SELECT … FOR UPDATE` and filters non-qualifying rows out SILENTLY, so a
+ * readable row can be unlockable. It does not bite here: `user` has RLS
+ * DISABLED (`relrowsecurity = false`), so no policy can filter this lock. That
+ * is a fact about the deployed schema, not about this code, which is why
+ * `tests/entitlementsService.test.ts` re-measures it on every run inside the
+ * gate's own bootstrap context rather than reading it off a migration.
+ *
+ * `null` means the user row is gone — the actor was deleted mid-transaction —
+ * and a gate that cannot serialize must refuse rather than admit.
+ */
+async function lockActorRowOrRefuse(
+  actorUserId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if ((await userRepository.lockById(actorUserId, tx)) === null) {
+    throw new CapLockUnavailableError('user', actorUserId);
   }
 }
 
@@ -152,12 +202,22 @@ export const entitlementsService = {
    * could spin up N free orgs to dodge the per-org caps. Called inside the create
    * tx (covers both `organizationsService.createOrganization` AND the
    * mint-own-org branch of `workspacesService.insertWorkspaceWithOwner`).
+   *
+   * MUST be called inside the create transaction: the ACTOR-row lock it takes
+   * first is what serializes two concurrent creates, and it only serializes them
+   * for as long as that transaction is open (MOTIR-3717).
    */
   async assertCanCreateOrganization(
     actorUserId: string,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     if (!isCloudBilling()) return;
+    // ⚠️ SERIALIZE FIRST — the count below is read-derived and the create it
+    // guards happens in this same transaction. Without the lock two concurrent
+    // FIRST creates both read `orgs.length === 0`, both take the always-free
+    // early return, and one account ends up holding two free-tier allowances
+    // (MOTIR-3717).
+    await lockActorRowOrRefuse(actorUserId, tx);
     const orgs = await organizationMembershipRepository.findOwnerAdminOrgsWithSubscription(
       actorUserId,
       tx,

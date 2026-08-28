@@ -1,0 +1,126 @@
+# Publishes `@motir/brand` to the public npm registry.
+#
+# Trigger: push a PACKAGE-SCOPED tag `brand-v<x.y.z>` (a monorepo must
+# scope its release tags per package — a bare `v*` would also fire for the app or
+# `@motir/cli`), or run manually via `workflow_dispatch` (with an optional dry run
+# that builds + packs but skips publish).
+#
+# Release procedure (see packages/brand/README.md → "Releasing"):
+#   1. bump packages/brand/package.json `version`
+#   2. open + merge the PR
+#   3. git tag brand-v<x.y.z> && git push origin brand-v<x.y.z>
+#   4. this workflow builds, guards the tag==version, and publishes.
+#
+# This file IS that extension, taken as `release-design-system.yml` documented it
+# (MOTIR-1456): the two `PACKAGE`/`PKG_DIR` env values, the `on.push.tags` prefix
+# and the tag-strip prefix in the guard step are the only things that differ.
+# Kept as one workflow per package (not a matrix) so each package's tag namespace
+# and release cadence stay independent — `@motir/brand` moves when the mark
+# changes, which is rarely and for reasons that have nothing to do with the
+# design system's token contract.
+#
+# ⚠️ THE FIRST PUBLISH (`0.1.0`) MUST BE CUT BY HAND. OIDC Trusted Publishing
+# cannot bootstrap a package that does not exist yet — the Trusted Publisher
+# config lives on the package's own settings page on npmjs.com, which there is
+# nothing to attach to until a first version is there. `@motir/design-system`
+# was bootstrapped the same way. Until that is done and the Trusted Publisher is
+# configured (org `moooon-B-V` / repo `motir-core` / this workflow's filename),
+# a tag push reaches the publish step and fails on auth.
+name: Release @motir/brand
+
+on:
+  push:
+    tags:
+      - 'brand-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build + pack only; skip the npm publish step'
+        type: boolean
+        default: false
+
+# Auth is OIDC "Trusted Publishing" — GitHub mints a short-lived id-token that npm
+# exchanges for a one-time publish credential, so there is NO long-lived NPM_TOKEN
+# secret to leak or rotate. Requires a Trusted Publisher configured on npmjs.com for
+# this package (org `moooon-B-V` / repo `motir-core` / this workflow filename). The
+# first `0.1.0` publish was done manually (OIDC can't bootstrap a package that does
+# not exist yet); every release from here flows through here token-free.
+#   - `id-token: write` lets the job request the OIDC token.
+#   - provenance (free supply-chain attestation) is auto-generated on a Trusted
+#     Publish and needs the `repository` field now present in package.json.
+permissions:
+  contents: read
+  id-token: write
+
+# Never let two releases of the same tag run concurrently; don't cancel an
+# in-flight publish (a half-cancelled publish is worse than a queued one).
+concurrency:
+  group: release-brand-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE: '@motir/brand'
+      PKG_DIR: packages/brand
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # OIDC Trusted Publishing needs npm >= 11.5.1; node 22 ships npm 10.x.
+      - name: Upgrade npm for OIDC Trusted Publishing
+        run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the package
+        run: pnpm --filter "$PACKAGE" build
+
+      - name: Resolve the package version
+        id: ver
+        run: |
+          PKG_VERSION="$(node -p "require('./${PKG_DIR}/package.json').version")"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Package version: $PKG_VERSION"
+
+      # Fail fast if the tag and the package.json version disagree — the tag is the
+      # human intent, the package.json is what actually publishes; a mismatch means
+      # someone forgot to bump (or retagged wrong). Only meaningful on a tag push.
+      - name: Guard — tag version must equal package version
+        if: github.event_name == 'push'
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#brand-v}"
+          echo "Tag version: $TAG_VERSION  ·  package.json version: ${{ steps.ver.outputs.pkg_version }}"
+          if [ "$TAG_VERSION" != "${{ steps.ver.outputs.pkg_version }}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version '$TAG_VERSION' but ${PKG_DIR}/package.json is '${{ steps.ver.outputs.pkg_version }}'. Bump the package version to match the tag, or retag."
+            exit 1
+          fi
+
+      # Prove the tarball ships what a consumer needs (dist/** + theme.css) before
+      # we publish anything.
+      - name: Verify tarball contents (npm pack --dry-run)
+        run: npm pack --dry-run
+        working-directory: ${{ env.PKG_DIR }}
+
+      # Idempotency: a re-run of an already-published version is a success, not a
+      # hard failure (npm itself would 403 on a duplicate publish).
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          if npm view "${PACKAGE}@${{ steps.ver.outputs.pkg_version }}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${PACKAGE}@${{ steps.ver.outputs.pkg_version }} is already published — skipping publish."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: >-
+          steps.published.outputs.already == 'false' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        run: pnpm --filter "$PACKAGE" exec npm publish --access public --provenance

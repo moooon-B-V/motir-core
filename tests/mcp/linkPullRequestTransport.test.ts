@@ -164,9 +164,21 @@ describe('block 6 — the tool is REGISTERED on the shipped server', () => {
     expect(required).not.toContain('url');
     expect(required).not.toContain('repository');
 
-    // The description is the only briefing an agent gets, and the move-not-add
-    // semantics are the half it must not misread.
-    expect(tool!.description).toMatch(/MOVES/);
+    // The description is the only briefing an agent gets, and the cardinality is
+    // the half it must not misread. It has BOTH halves to state since MOTIR-3658
+    // made the call dual-write, and pinning only the first is what let the text
+    // go stale: for a day it said one pull request "cannot point at two" work
+    // items, an agent delivering a parent and its children by one pull request
+    // read that as "link the children", and each call walked the singular link
+    // off the last (MOTIR-3722, motir-core#2353). So all three are pinned.
+    expect(tool!.description, 'the FK half — a re-link MOVES').toMatch(/MOVES/);
+    expect(tool!.description, 'the delivery half — it also ADDS').toMatch(/delivery table|ADDS/);
+    expect(
+      tool!.description,
+      'the operative instruction — one pull request for a parent and its children links the PARENT',
+    ).toMatch(/PARENT/);
+    // ⚠️ And the claim the dual write falsified must not come back.
+    expect(tool!.description).not.toMatch(/cannot point at two/);
     await client.close();
   });
 });

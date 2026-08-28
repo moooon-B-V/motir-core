@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest';
 // — and it CANNOT see this pair. That guard reads `className` strings out of
 // the AST and reasons about the ink/surface tokens it finds named together on
 // one element. Here the ink is not in a className: the glyph takes its colour
-// from `.brand-glyph` in `app/globals.css`, and only the FILL is a utility. So
+// from `.brand-glyph` in `@motir/brand`'s `brand.css`, and only the FILL is a
+// utility. So
 // the lint passes whatever the fill is, including one the mark disappears into.
 // A green guard is not evidence about this pair, which is exactly the shape of
 // defect that ships looking fine to whoever picked it on a good monitor.
@@ -30,7 +31,7 @@ import { describe, expect, it } from 'vitest';
 const ROOT = resolve(import.meta.dirname, '../..');
 const THEME = readFileSync(resolve(ROOT, 'packages/design-system/theme.css'), 'utf8');
 const TOP_NAV = readFileSync(resolve(ROOT, 'app/(authed)/_components/TopNav.tsx'), 'utf8');
-const GLOBALS = readFileSync(resolve(ROOT, 'app/globals.css'), 'utf8');
+const BRAND_CSS = readFileSync(resolve(ROOT, 'packages/brand/brand.css'), 'utf8');
 
 interface Rule {
   selector: string;
@@ -132,7 +133,12 @@ describe('the shell brand tile (MOTIR-2557)', () => {
     // PublicTopBar, the OG images and the specimen. The tile was chosen so this
     // rule would not have to move; asserting it is what stops a later "just
     // darken the glyph a bit" from repainting all of them.
-    expect(GLOBALS).toMatch(/\.brand-glyph\s*\{[^}]*color:\s*var\(--el-accent-on-surface\)/);
+    //
+    // The rule now lives in `packages/brand/brand.css` rather than
+    // `app/globals.css` (MOTIR-1456 shipped the brand chrome as `@motir/brand`).
+    // That is a change of ADDRESS, not of scope: the same one rule still paints
+    // all six surfaces, so what this test protects is unchanged.
+    expect(BRAND_CSS).toMatch(/\.brand-glyph\s*\{[^}]*color:\s*var\(--el-accent-on-surface\)/);
   });
 
   it('drops the divider the tile’s own edge replaced', () => {

@@ -26,7 +26,8 @@ const REPO = process.cwd();
 
 /**
  * Every TRACKED source file that can put a colour on screen — components, app
- * routes, the extracted design system, and `lib/` (where the colour LOGIC lives:
+ * routes, the extracted design system, the extracted BRAND package, and `lib/`
+ * (where the colour LOGIC lives:
  * `lib/workflows/statusColor.ts`, `lib/issues/priorityMeta.ts`, the email
  * templates). Scanning the whole surface rather than a slice is the point: the
  * contract is not "components are clean", it is "nothing paints past the layer".
@@ -45,6 +46,13 @@ function renderedSources(): string[] {
       'lib/**/*.ts',
       'packages/design-system/src/**/*.tsx',
       'packages/design-system/src/**/*.ts',
+      // Both forms, as `components/` above needs: a git pathspec `**` wants at
+      // least one directory between it and the file, and this package's sources
+      // sit directly in `src/` rather than in a subdirectory.
+      'packages/brand/src/*.tsx',
+      'packages/brand/src/*.ts',
+      'packages/brand/src/**/*.tsx',
+      'packages/brand/src/**/*.ts',
     ],
     { cwd: REPO, encoding: 'utf8' },
   )
@@ -65,6 +73,13 @@ describe('swap-layer lint — no component reaches past the --el-* layer', () =>
     expect(SOURCES.length).toBeGreaterThan(1000);
     expect(SOURCES).toContain('components/issues/StatusPicker.tsx');
     expect(SOURCES).toContain('packages/design-system/src/components/ui/Pill.tsx');
+    // MOTIR-1456 moved the brand chrome into its own package. The glob list
+    // above is hand-maintained, so an extracted package is invisible to this
+    // guard until someone adds it — and an allowlist entry pointing into an
+    // unscanned directory fails OPEN in the worst way: the file is exempted and
+    // never read. Naming a member of each scanned package here is what makes a
+    // future extraction fail loudly instead.
+    expect(SOURCES).toContain('packages/brand/src/waveBand.ts');
     expect(SOURCES).toContain('lib/workflows/statusColor.ts');
   });
 
@@ -105,8 +120,10 @@ describe('swap-layer lint — no component reaches past the --el-* layer', () =>
       // two colours, the OG cards, the email header) need the value baked. This
       // module is where the bake happens ONCE, with each literal naming the
       // token it came from, rather than the hex being retyped at four call
-      // sites. It renders nothing itself.
-      'components/brand/waveBand.ts',
+      // sites. It renders nothing itself. (Moved out of `components/brand/` by
+      // MOTIR-1456, which ships the brand chrome as `@motir/brand`; the shim
+      // left behind at the old path re-exports and carries no literal.)
+      'packages/brand/src/waveBand.ts',
       // The appearance PREVIEW swatches must show each palette's OWN literal
       // colours side by side, so they cannot resolve through the active one.
       'packages/design-system/src/components/theme/AppearancePickers.tsx',
