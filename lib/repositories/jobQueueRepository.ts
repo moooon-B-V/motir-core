@@ -155,6 +155,38 @@ export const jobQueueRepository = {
   },
 
   /**
+   * THE DUE BACKLOG — how many runs are claimable right now, and how long the
+   * oldest of them has been waiting (Subtask MOTIR-3764).
+   *
+   * ⚠️ THE POINT IS WHO CAN ASK. This is a direct read of `job_queue`, so it
+   * answers whether anything is CLAIMING even when nothing is: the check that
+   * would otherwise report a wedged worker is itself a job, and a job engine
+   * cannot be the thing that reports its own death. Nothing here enqueues, and
+   * nothing here depends on a run.
+   *
+   * `run_at <= now()` is what makes this a backlog rather than a schedule: a
+   * retry backed off for five minutes and a cron fire due tomorrow are both
+   * `pending` and neither is waiting on a worker. `AT TIME ZONE 'UTC'` on both
+   * sides, per this file's header — the database is the clock.
+   *
+   * An EMPTY queue answers `{ depth: 0, oldestRunAt: null }`, which is a
+   * measurement and not an absence: `min()` over no rows is `NULL`, and the
+   * caller must render that as "nothing waiting" rather than as an unread probe.
+   */
+  async readDueBacklog(
+    tx: Prisma.TransactionClient,
+  ): Promise<{ depth: number; oldestRunAt: Date | null }> {
+    const rows = await tx.$queryRaw<Array<{ depth: number; oldestRunAt: Date | null }>>`
+      SELECT count(*)::int      AS "depth",
+             min("run_at")      AS "oldestRunAt"
+        FROM "job_queue"
+       WHERE "state" = 'pending'
+         AND "run_at" <= (now() AT TIME ZONE 'UTC')
+    `;
+    return rows[0] ?? { depth: 0, oldestRunAt: null };
+  },
+
+  /**
    * RECLAIM abandoned runs: `running` rows whose lease has expired, back to
    * `pending` so a live worker can take them.
    *

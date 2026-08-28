@@ -86,3 +86,38 @@ export interface PlatformHealthDTO {
   /** How many schedules were checked — the foot's "{checked} schedules checked". */
   schedulesChecked: number;
 }
+
+/**
+ * THE QUEUE BACKLOG READING (Subtask MOTIR-3764) — a MACHINE surface, and
+ * deliberately not one of the six cards above.
+ *
+ * ⚠️ WHY IT IS ITS OWN SHAPE RATHER THAN A SEVENTH `PlatformSignalDTO`. The six
+ * are cards on a staff-gated page, and this reading exists precisely for the
+ * moment that page cannot be reached: on 2026-08-28 the queue stopped being
+ * claimed and the only thing that noticed was a person wondering why six work
+ * items had not moved. A signal that can only be read by signing in to the app
+ * re-creates the defect one layer up. So this crosses the boundary on its own,
+ * through an unauthenticated route an external monitor polls, carrying two
+ * numbers and no tenant data at all.
+ *
+ * (`design/platform-admin/design-notes.md` Panel 8 draws SIX signal cards and
+ * says "Six signals" in its own subtitle. Adding a seventh would be a design
+ * change, and it would be the weaker half of this card besides — so the board is
+ * untouched and the reading ships as a route.)
+ */
+export interface PlatformQueueHealthDTO {
+  /** `healthy` while the queue is moving; `stalled` once the oldest DUE run has waited past the threshold. */
+  state: 'healthy' | 'stalled';
+  /** How many runs are claimable right now. CONTEXT, never the verdict — a deep queue that is draining is healthy. */
+  depth: number;
+  /**
+   * How long the oldest claimable run has been waiting, in ms — THE verdict's
+   * input. `null` when nothing is due, which is a measured empty queue and not
+   * an unread probe.
+   */
+  oldestPendingAgeMs: number | null;
+  /** The threshold `state` was judged against, so a reader never has to guess what "stalled" meant. */
+  stallThresholdMs: number;
+  /** ISO-8601 — when this reading was taken. */
+  checkedAt: string;
+}
