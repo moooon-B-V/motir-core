@@ -401,6 +401,26 @@ describe('the exemptions — each stated as a rule, each with its own case', () 
     expect(writes()).toHaveLength(0);
   });
 
+  it('a delivery with NO installation id, and one with no pull request, write nothing', async () => {
+    // The two defensive arms. Neither can produce a check — there is nothing to
+    // address one to — and neither may throw: the delivery's load-bearing effect
+    // is the status sync, and a check that cannot be written must not make GitHub
+    // retry a delivery for ever.
+    await makeScenario('lc-malformed@example.com');
+
+    const noInstallation = { ...prPayload({ number: 77 }), installation: undefined };
+    await expect(
+      githubWebhookService.handleEvent('pull_request', noInstallation),
+    ).resolves.toBeDefined();
+
+    const noPullRequest = { ...prPayload({ number: 78 }), pull_request: undefined };
+    await expect(
+      githubWebhookService.handleEvent('pull_request', noPullRequest),
+    ).resolves.toBeDefined();
+
+    expect(writes()).toHaveLength(0);
+  });
+
   it('a CLOSED delivery writes nothing — a closed pull request cannot be linked forward', async () => {
     await makeScenario('lc-closed@example.com');
 
