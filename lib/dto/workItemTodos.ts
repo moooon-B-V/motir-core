@@ -27,6 +27,21 @@ export interface WorkItemTodoDto {
    * by inspecting `text` for something command-shaped (ADR §5). A row with no
    * command maps to `null`, never to `''`.
    */
+  /**
+   * The INSTRUCTIONS for this one operation — Markdown, or `null` when the step
+   * needs none. The *how*, where `text` is the *what*.
+   *
+   * Rendered **collapsed behind a disclosure**, so a list of ten rows reads as
+   * ten lines whether or not any of them carries notes. A row with notes shows
+   * a tell; the reader expands the one they are on.
+   *
+   * ⚠️ This is a FIELD, not a second work item: it has no status, no assignee,
+   * no dependencies, no sprint and nothing that dispatches it (ADR §1,
+   * *Instructions*). It is Markdown deliberately — a dashboard flow wants a
+   * numbered list and a link, and plain text would strip the part that makes
+   * *"go to the dashboard"* actionable.
+   */
+  notesMd: string | null;
   commandText: string | null;
   /**
    * Who this operation is FOR. **Declarative: it authorizes nothing** (ADR §2).

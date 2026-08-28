@@ -8,10 +8,15 @@ import { toWorkItemTodoDto, toWorkItemTodoListDto } from '@/lib/mappers/workItem
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
-import { TODO_COMMAND_MAX_LENGTH, TODO_TEXT_MAX_LENGTH } from '@/lib/workItemTodos/limits';
+import {
+  TODO_COMMAND_MAX_LENGTH,
+  TODO_NOTES_MAX_LENGTH,
+  TODO_TEXT_MAX_LENGTH,
+} from '@/lib/workItemTodos/limits';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
+  TodoNotesTooLongError,
   TodoReorderConflictError,
   TodoTextTooLongError,
   WorkItemTodoNotFoundError,
@@ -161,6 +166,27 @@ function requireText(raw: string): string {
 }
 
 /**
+ * Validate the optional INSTRUCTIONS and return them, or `null`.
+ *
+ * Markdown, unlike `text` — the how of a dashboard flow wants a numbered list
+ * and a link, and a plain-text field would strip exactly the part that makes
+ * *"go to the dashboard"* actionable. Whitespace-only normalises to `null` so a
+ * row cannot render an empty disclosure.
+ *
+ * ⚠️ THIS CAP IS NOT A GRANULARITY BAR. `text`'s 200 asks *"is this one
+ * operation?"*; this 2000 asks *"has the how become a document?"* — and the
+ * remedy for hitting it is a card, not a split, which is what its typed error
+ * says.
+ */
+function normalizeNotes(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const notes = raw.trim();
+  if (notes.length === 0) return null;
+  if (notes.length > TODO_NOTES_MAX_LENGTH) throw new TodoNotesTooLongError(notes.length);
+  return notes;
+}
+
+/**
  * Validate an optional command. An empty / whitespace-only string normalises to
  * `null` rather than to `''` — the DTO's contract is that `commandText === null`
  * is exactly "not a command row", and an empty string would make a row that
@@ -220,6 +246,8 @@ export interface TodoWriteResult {
 
 export interface AddTodoInput {
   text: string;
+  /** The INSTRUCTIONS — optional Markdown, the *how* of this one operation. */
+  notesMd?: string | null;
   commandText?: string | null;
   /**
    * Who this operation is for. Omitted ⇒ SEEDED from the parent card's own
@@ -233,6 +261,7 @@ export interface AddTodoInput {
 
 export interface UpdateTodoInput {
   text?: string;
+  notesMd?: string | null;
   commandText?: string | null;
   executor?: ExecutorDto | null;
 }
@@ -276,6 +305,7 @@ export const workItemTodosService = {
     ctx: ServiceContext,
   ): Promise<TodoWriteResult> {
     const text = requireText(input.text);
+    const notesMd = normalizeNotes(input.notesMd);
     const commandText = normalizeCommand(input.commandText);
 
     return withWorkspaceContext(ctx, async (tx) => {
@@ -294,6 +324,7 @@ export const workItemTodosService = {
           workspaceId: ctx.workspaceId,
           workItemId: item.id,
           text,
+          notesMd,
           commandText,
           executor,
           position: keyForAppend(last),
@@ -328,6 +359,7 @@ export const workItemTodosService = {
   ): Promise<TodoWriteResult> {
     const patch: Prisma.WorkItemTodoUncheckedUpdateInput = {};
     if (input.text !== undefined) patch.text = requireText(input.text);
+    if (input.notesMd !== undefined) patch.notesMd = normalizeNotes(input.notesMd);
     if (input.commandText !== undefined) patch.commandText = normalizeCommand(input.commandText);
     if (input.executor !== undefined) patch.executor = input.executor;
 
@@ -346,9 +378,15 @@ export const workItemTodosService = {
             edited: [
               {
                 id: todo.id,
-                from: { text: todo.text, commandText: todo.commandText, executor: todo.executor },
+                from: {
+                  text: todo.text,
+                  notesMd: todo.notesMd,
+                  commandText: todo.commandText,
+                  executor: todo.executor,
+                },
                 to: {
                   text: updated.text,
+                  notesMd: updated.notesMd,
                   commandText: updated.commandText,
                   executor: updated.executor,
                 },

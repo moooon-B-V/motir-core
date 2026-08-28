@@ -9,6 +9,7 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
+  TodoNotesTooLongError,
   TodoReorderConflictError,
   TodoTextTooLongError,
   WorkItemTodoNotFoundError,
@@ -73,6 +74,11 @@ async function todoErrorMessage(err: unknown): Promise<string | null> {
   if (err instanceof TodoCommandTooLongError) {
     return t('errors.commandTooLong', { limit: err.limit });
   }
+  // Deliberately NOT the split message: the notes are the how of ONE operation,
+  // so overrunning this bound means the step has grown into a work item.
+  if (err instanceof TodoNotesTooLongError) {
+    return t('errors.notesTooLong', { limit: err.limit });
+  }
   if (err instanceof TodoReorderConflictError) return t('errors.reorderConflict');
   return null;
 }
@@ -84,6 +90,7 @@ async function genericError(): Promise<string> {
 export async function addTodoAction(input: {
   workItemId: string;
   text: string;
+  notesMd?: string | null;
   commandText?: string | null;
   executor?: ExecutorDto | null;
 }): Promise<TodoActionResult> {
@@ -92,7 +99,12 @@ export async function addTodoAction(input: {
   try {
     const { todo, progress } = await workItemTodosService.addTodo(
       input.workItemId,
-      { text: input.text, commandText: input.commandText, executor: input.executor },
+      {
+        text: input.text,
+        notesMd: input.notesMd,
+        commandText: input.commandText,
+        executor: input.executor,
+      },
       ctx,
     );
     revalidatePath(ISSUES_PATH);
@@ -107,6 +119,7 @@ export async function addTodoAction(input: {
 export async function updateTodoAction(input: {
   todoId: string;
   text?: string;
+  notesMd?: string | null;
   commandText?: string | null;
   executor?: ExecutorDto | null;
 }): Promise<TodoActionResult> {
@@ -115,8 +128,14 @@ export async function updateTodoAction(input: {
   try {
     // The patch is SPARSE end to end: a key the caller omitted is omitted here
     // too, so editing the text cannot blank a command the user did not touch.
-    const patch: { text?: string; commandText?: string | null; executor?: ExecutorDto | null } = {};
+    const patch: {
+      text?: string;
+      notesMd?: string | null;
+      commandText?: string | null;
+      executor?: ExecutorDto | null;
+    } = {};
     if (input.text !== undefined) patch.text = input.text;
+    if (input.notesMd !== undefined) patch.notesMd = input.notesMd;
     if (input.commandText !== undefined) patch.commandText = input.commandText;
     if (input.executor !== undefined) patch.executor = input.executor;
 

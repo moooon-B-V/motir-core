@@ -117,10 +117,10 @@ one that PERFORMS one.**
 ### §1 — What ONE to-do IS: five fields, a done stamp, and a hard length cap
 
 A to-do is **one operation** — _change this one setting_, _run this one
-command_ — not a phase and not a sub-project. It is a **short plain-text line
-with state**, and deliberately not a Markdown document: a to-do with paragraphs,
-headings and its own acceptance criteria is a work item, and Motir already has
-one of those.
+command_ — not a phase and not a sub-project. Its **title is a short plain-text
+line with state**; the _how_ of performing it lives beside the title in an
+optional `notesMd`, and the two are different things (see _Instructions_,
+below).
 
 | Field                     | Type                          | Notes                                                                                       |
 | ------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
@@ -128,6 +128,7 @@ one of those.
 | `workspaceId`             | `String`                      | **on the row**, because RLS does not traverse foreign keys (`work_item_delivery` precedent) |
 | `workItemId`              | `String`                      | the card this list belongs to; `onDelete: Cascade`                                          |
 | `text`                    | `String @db.Text`             | **plain text, single line.** Not Markdown. Capped at 200 by the SERVICE — see below         |
+| `notesMd`                 | `String? @db.Text`            | **the INSTRUCTIONS** — optional Markdown, the _how_ of this one operation. Capped at 2000   |
 | `commandText`             | `String? @db.Text`            | nullable; present ⇒ this row is a command row (§5); capped at 500 by the service            |
 | `executor`                | `Executor`                    | `coding_agent` \| `human`; declarative (§2)                                                 |
 | `position`                | `String`                      | the shipped opaque fractional index (`lib/workItems/positioning.ts`)                        |
@@ -145,7 +146,12 @@ one of those.
 - **`commandText` ≤ 500 characters.** A real command with flags and a URL runs
   long; the cap exists to keep a shell script out of the field, not to keep a
   `curl` out.
-- **Both caps live in ONE exported constant pair** (`lib/workItemTodos/limits.ts`)
+- **`notesMd` ≤ 2000 characters.** Room for eight or ten numbered lines with
+  URLs — the shape of _"Dashboard → Developers → API keys, then Create
+  restricted key, scope it to `charges:write`"_. Above that it stops being the
+  how of one operation and starts being a document, which is the point at which
+  it genuinely wants a card.
+- **All three caps live in ONE exported constant set** (`lib/workItemTodos/limits.ts`)
   that the service validator, the DTO's documented contract, the error message a
   user reads and every test read, so the number has exactly one home.
 
@@ -176,9 +182,69 @@ the service rejects past, it is a bar the product holds. This is the same move
 `TYPEABLE_KINDS` makes for types: the rule is enforced where the write happens,
 not restated where the write is described.
 
-**Rejected: a Markdown `body_md`.** It re-creates the work item at one tier
-down, it makes the row un-scannable in a list, and it makes _"is this one
-operation?"_ unanswerable. If a step needs a body, it needs a card.
+#### Instructions — a to-do CARRIES them, in `notesMd`
+
+**⚠️ AMENDED 2026-08-28, on Yue's reading, before any of this shipped. The
+earlier revision of this section REJECTED a body outright**, in these words:
+
+> **Rejected: a Markdown `body_md`.** It re-creates the work item at one tier
+> down, it makes the row un-scannable in a list, and it makes _"is this one
+> operation?"_ unanswerable. If a step needs a body, it needs a card.
+
+**The load-bearing clause of that paragraph is false, and the rest of it is a
+rendering problem stated as a data one.**
+
+- **Prose is not what makes something a work item.** A work item has a
+  **status**, an **assignee**, **dependencies**, a **sprint**, an **estimate**
+  and a **pull request**, and it can be **dispatched**. A `Comment` has a
+  Markdown body and is not a work item; an `AcceptanceEvidence` has one and is
+  not either. Adding a note to a row re-creates none of that machinery, and the
+  list below says so field by field.
+- **"If a step needs a body, it needs a card" fails on the ordinary case.**
+  _Create a restricted Stripe key_ is ninety seconds of clicking. Promoting it
+  to a card to carry three sentences about where the button is buys it a status,
+  a sprint slot, an estimate and an executor — every one of them noise — in
+  exchange for somewhere to put the how.
+- **And it would have moved this story's own problem down one tier rather than
+  solving it.** MOTIR-3808 exists because _"provision the DNS records"_ is one
+  card and a dozen operations whose steps have nowhere to live but prose. If
+  each of those operations then needs its own card to hold ITS instructions, the
+  prose is still homeless, one level further down.
+
+**The granularity bar is not weakened by this — it is sharpened, because
+NAVIGATION IS NOT AN OPERATION.** Take the sequence that prompted the
+amendment:
+
+```
+1. go to the dashboard      ← navigation
+2. find the setting         ← navigation
+3. …                        ← navigation
+4. create a token           ← THE OPERATION
+5. add the token to …       ← THE OPERATION
+```
+
+Nobody ticks _"found the setting"_. Steps 1–3 are not steps; they are the _how_
+of step 4. So that sequence is **TWO to-dos, each carrying instructions** — not
+five to-dos, and not one large one. **The tickable unit is the one where "done"
+is unambiguous; getting there is instructions.** `text` therefore keeps its
+one-line 200-character bar and still answers _"is this one operation?"_, and
+`notesMd` answers a different question that the bar was never about.
+
+**What `notesMd` does NOT get**, which is the line that keeps it a field rather
+than a tier: no status, no assignee, no dependencies, no sprint, no estimate, no
+executor of its own, and nothing dispatches it. It is a column on a row.
+
+**The un-scannable-list objection is real and is answered by the RENDERING, not
+by the schema:** the notes are **collapsed by default** behind a disclosure, and
+a row carrying them shows a tell so the reader knows one exists without
+expanding it. MOTIR-3812 draws both states; a list of ten rows reads as ten
+lines whether or not any of them has instructions.
+
+**One consequence worth naming for MOTIR-1344.** _Help with a task_ is specified
+to rewrite this list mid-session, and **`notesMd` is the field it will most want
+to write** — an assistant helping somebody through a dashboard flow produces
+instructions, not more one-line titles. Deciding now that the field exists means
+that story extends a list rather than re-shaping one.
 
 **Rejected: a separate `isDone Boolean`.** Two columns encoding one fact drift —
 `doneAt` set with `isDone false` is representable and meaningless. `doneAt` is
@@ -366,7 +432,7 @@ surface; both already ship, and neither is invented here.
 
 Inherits, as a column definition it transcribes rather than decides:
 
-- **The nine fields of §1**, both text columns as `TEXT`, with the two caps
+- **The ten fields of §1**, all three text columns as `TEXT`, with the three caps
   enforced by the service out of the exported constant pair those numbers live
   in (`lib/workItemTodos/limits.ts`).
 - **`doneAt` as the state** — no `isDone` boolean.

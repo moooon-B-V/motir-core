@@ -3966,6 +3966,20 @@ model WorkItemTodo {
   /// `TODO_TEXT_MAX_LENGTH` — see the model note on why the number is a
   /// constraint and `lib/workItemTodos/limits.ts` for its single home.
   text        String    @db.Text
+  /// The INSTRUCTIONS for this one operation — optional Markdown, the *how*.
+  ///
+  /// ⚠️ THIS IS NOT A SECOND WORK ITEM, and the reason is what it does NOT
+  /// carry: no status, no assignee, no dependencies, no sprint, no estimate, no
+  /// executor of its own, and nothing dispatches it. Prose is not what makes
+  /// something a work item — `Comment` has a Markdown body and is not one
+  /// either. Capped by the service at `TODO_NOTES_MAX_LENGTH`; above that it
+  /// stops being the how of one operation and starts being a document, which is
+  /// the point at which it genuinely wants a card (ADR §1, *Instructions*).
+  ///
+  /// The row's `text` still answers *"is this one operation?"* on its own
+  /// one-line bar — NAVIGATION IS NOT AN OPERATION, so "go to the dashboard,
+  /// find the setting" belongs here and never as three tickable rows.
+  notesMd     String?   @map("notes_md") @db.Text
   /// The command this step runs, when it runs one — its OWN column, never
   /// parsed out of `text` (ADR §5). Non-null ⇔ the row is copyable; a parse
   /// would break on the first sentence containing a backtick, and silently.

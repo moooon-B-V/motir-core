@@ -33,6 +33,13 @@
 --     the read without a sort.
 --   * `(workspace_id)` — as every tenant table carries.
 --
+-- `notes_md` IS THE INSTRUCTIONS for the one operation `text` names, and it is a
+-- COLUMN rather than a second tier because prose is not what makes something a
+-- work item: this row still has no status, no assignee, no dependencies, no
+-- sprint, no estimate and nothing that dispatches it. `comment.body_md` is the
+-- precedent one table over. Capped by the SERVICE (`TODO_NOTES_MAX_LENGTH`), for
+-- the same reason the other two caps live there — see the note above.
+--
 -- NO UNIQUE INDEX ON `position`. Fractional keys are minted between neighbours
 -- and a concurrent insert at the same slot is serialized by the service's
 -- `FOR UPDATE` lock on those neighbours, not by a constraint: a unique index
@@ -45,6 +52,7 @@ CREATE TABLE "work_item_todo" (
     "workspace_id" TEXT NOT NULL,
     "work_item_id" TEXT NOT NULL,
     "text" TEXT NOT NULL,
+    "notes_md" TEXT,
     "command_text" TEXT,
     "executor" "executor",
     "position" TEXT NOT NULL,

@@ -13,11 +13,16 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
+  TodoNotesTooLongError,
   TodoReorderConflictError,
   TodoTextTooLongError,
   WorkItemTodoNotFoundError,
 } from '@/lib/workItemTodos/errors';
-import { TODO_COMMAND_MAX_LENGTH, TODO_TEXT_MAX_LENGTH } from '@/lib/workItemTodos/limits';
+import {
+  TODO_COMMAND_MAX_LENGTH,
+  TODO_NOTES_MAX_LENGTH,
+  TODO_TEXT_MAX_LENGTH,
+} from '@/lib/workItemTodos/limits';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 
@@ -160,6 +165,112 @@ describe('addTodo', () => {
       fx.ctx,
     );
     expect(todo.commandText).toBeNull();
+  });
+});
+
+describe('the INSTRUCTIONS (notesMd)', () => {
+  it('carries the HOW beside the one-line WHAT, as Markdown', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    const notes = [
+      '1. Dashboard → Developers → **API keys**',
+      '2. *Create restricted key*',
+      '3. Scope it to `charges:write` only',
+    ].join('\n');
+
+    const { todo } = await workItemTodosService.addTodo(
+      card,
+      { text: 'Create a restricted Stripe key', notesMd: notes },
+      fx.ctx,
+    );
+
+    // The tickable unit stays one line and one operation; the navigation that
+    // gets you there is instructions, not three more rows.
+    expect(todo.text).toBe('Create a restricted Stripe key');
+    expect(todo.notesMd).toContain('Developers → **API keys**');
+    expect(await positions(card, fx)).toEqual(['Create a restricted Stripe key']);
+  });
+
+  it('is NULL when the step needs none, and a blank string normalises to null', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    const plain = await workItemTodosService.addTodo(card, { text: 'Tick this' }, fx.ctx);
+    const blank = await workItemTodosService.addTodo(
+      card,
+      { text: 'And this', notesMd: '   \n  ' },
+      fx.ctx,
+    );
+    // `null` and `''` must not be two spellings of "no instructions" — the
+    // client tests this field to decide whether to draw the disclosure.
+    expect(plain.todo.notesMd).toBeNull();
+    expect(blank.todo.notesMd).toBeNull();
+  });
+
+  it('REJECTS notes past their own cap, and the message asks for a CARD rather than a split', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    await expect(
+      workItemTodosService.addTodo(
+        card,
+        { text: 'A step', notesMd: 'x'.repeat(TODO_NOTES_MAX_LENGTH + 1) },
+        fx.ctx,
+      ),
+    ).rejects.toThrow(TodoNotesTooLongError);
+
+    const err = new TodoNotesTooLongError(TODO_NOTES_MAX_LENGTH + 1);
+    expect(err.limit).toBe(TODO_NOTES_MAX_LENGTH);
+    // The remedy differs from the text cap's, and the copy has to say so.
+    expect(err.message).toContain('work item');
+    expect(err.message.toLowerCase()).not.toContain('split');
+  });
+
+  it('the notes cap does NOT loosen the one-operation bar on the text', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    // Long instructions are fine; a long TITLE is still two steps or a card.
+    await expect(
+      workItemTodosService.addTodo(
+        card,
+        { text: 'x'.repeat(TODO_TEXT_MAX_LENGTH + 1), notesMd: 'short' },
+        fx.ctx,
+      ),
+    ).rejects.toThrow(TodoTextTooLongError);
+  });
+
+  it('the patch is SPARSE over notes too: editing the text leaves them, an explicit null clears them', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    const { todo } = await workItemTodosService.addTodo(
+      card,
+      { text: 'Create the key', notesMd: 'Dashboard → Developers' },
+      fx.ctx,
+    );
+
+    const retitled = await workItemTodosService.updateTodo(
+      todo.id,
+      { text: 'Create the restricted key' },
+      fx.ctx,
+    );
+    expect(retitled.todo.notesMd).toBe('Dashboard → Developers');
+
+    const cleared = await workItemTodosService.updateTodo(todo.id, { notesMd: null }, fx.ctx);
+    expect(cleared.todo.notesMd).toBeNull();
+    expect(cleared.todo.text).toBe('Create the restricted key');
+  });
+
+  it('an edit to the notes records a revision naming both sides', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeCard(fx);
+    const { todo } = await workItemTodosService.addTodo(
+      card,
+      { text: 'A step', notesMd: 'first' },
+      fx.ctx,
+    );
+    await workItemTodosService.updateTodo(todo.id, { notesMd: 'second' }, fx.ctx);
+    const edited = (await todoRevisions(card, fx.workspaceId))[1]!;
+    expect(edited.diff).toMatchObject({
+      todos: { edited: [{ id: todo.id, from: { notesMd: 'first' }, to: { notesMd: 'second' } }] },
+    });
   });
 });
 

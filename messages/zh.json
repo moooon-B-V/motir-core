@@ -7136,12 +7136,17 @@
     "humanStep": "由你执行",
     "reorder": "调整步骤顺序",
     "delete": "删除步骤",
+    "notesLabel": "操作说明",
+    "notesShow": "展开说明",
+    "notesHide": "收起说明",
+    "notesPlaceholder": "这一步怎么做——可留空",
     "errors": {
       "notFound": "该步骤已不存在。",
       "forbidden": "你没有修改此工作项步骤的权限。",
       "empty": "步骤需要写明要做什么。",
       "textTooLong": "每个步骤只做一个操作，因此上限为 {limit} 个字符。请拆分为两个步骤。",
       "commandTooLong": "命令的上限为 {limit} 个字符。",
+      "notesTooLong": "操作说明的上限为 {limit} 个字符。需要更多说明的步骤应当是一个独立的工作项。",
       "reorderConflict": "移动该步骤时清单已发生变化。请刷新后重试。",
       "generic": "出现问题，请重试。"
     }

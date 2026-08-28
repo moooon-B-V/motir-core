@@ -7140,12 +7140,17 @@
     "humanStep": "Your step",
     "reorder": "Reorder step",
     "delete": "Delete step",
+    "notesLabel": "Instructions",
+    "notesShow": "Show instructions",
+    "notesHide": "Hide instructions",
+    "notesPlaceholder": "How to do this step — optional",
     "errors": {
       "notFound": "That step no longer exists.",
       "forbidden": "You do not have permission to change this item's steps.",
       "empty": "A step needs to say what to do.",
       "textTooLong": "A step is one operation, so it is capped at {limit} characters. Split it into two steps.",
       "commandTooLong": "A command is capped at {limit} characters.",
+      "notesTooLong": "Instructions are capped at {limit} characters. A step needing more than that is a work item.",
       "reorderConflict": "The list changed while you were moving that step. Reload and try again.",
       "generic": "Something went wrong. Please try again."
     }

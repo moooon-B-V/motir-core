@@ -11,6 +11,7 @@
 //   TodoTextTooLongError       → 422 (the granularity bar; the text is REJECTED,
 //                                     never silently truncated)
 //   TodoCommandTooLongError    → 422
+//   TodoNotesTooLongError      → 422 (the step has become a work item)
 //   EmptyTodoTextError         → 422
 //   TodoReorderConflictError   → 409 (a concurrent reorder moved or removed a
 //                                     neighbour out from under this one)
@@ -20,7 +21,7 @@
 // work item's own `ProjectAccessDeniedError('edit')` and adding a second name
 // for it would put two vocabularies on one permission.
 
-import { TODO_COMMAND_MAX_LENGTH, TODO_TEXT_MAX_LENGTH } from './limits';
+import { TODO_COMMAND_MAX_LENGTH, TODO_NOTES_MAX_LENGTH, TODO_TEXT_MAX_LENGTH } from './limits';
 
 export class WorkItemTodoNotFoundError extends Error {
   readonly code = 'WORK_ITEM_TODO_NOT_FOUND' as const;
@@ -62,6 +63,22 @@ export class TodoCommandTooLongError extends Error {
       `A to-do's command is capped at ${TODO_COMMAND_MAX_LENGTH} characters (this one is ${actual}).`,
     );
     this.name = 'TodoCommandTooLongError';
+    this.actual = actual;
+  }
+}
+
+export class TodoNotesTooLongError extends Error {
+  readonly code = 'TODO_NOTES_TOO_LONG' as const;
+  readonly limit = TODO_NOTES_MAX_LENGTH;
+  readonly actual: number;
+  constructor(actual: number) {
+    // Unlike the text cap, this message does NOT ask for a split: the notes are
+    // the how of ONE operation, so hitting this bound means the step has grown
+    // into something that wants a card, which is a different remedy.
+    super(
+      `A to-do's instructions are capped at ${TODO_NOTES_MAX_LENGTH} characters (these are ${actual}). A step needing more than that is a work item.`,
+    );
+    this.name = 'TodoNotesTooLongError';
     this.actual = actual;
   }
 }

@@ -30,6 +30,10 @@ export function toWorkItemTodoDto(row: WorkItemTodoRow): WorkItemTodoDto {
   return {
     id: row.id,
     text: row.text,
+    // Normalised the same way `commandText` is: `null` and `''` must not be two
+    // spellings of "no instructions", because the client tests this field to
+    // decide whether to draw the disclosure at all.
+    notesMd: row.notesMd === null || row.notesMd === '' ? null : row.notesMd,
     // Explicitly normalised: a row with no command is `null` on the wire, never
     // `''`, because `commandText === null` is the client's test for "is this a
     // command row?" and an empty string would answer it wrongly.

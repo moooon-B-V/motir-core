@@ -68,7 +68,7 @@ const { CUSTOM_ROLE_TIER } = await import('@/lib/permissions/builtinRoles');
 const { createTestUser, makeWorkItemFixture } = await import('./fixtures');
 const { addTodoAction, updateTodoAction, moveTodoAction, setTodoDoneAction, deleteTodoAction } =
   await import('@/app/(authed)/items/[key]/todoActions');
-const { TODO_COMMAND_MAX_LENGTH, TODO_TEXT_MAX_LENGTH } =
+const { TODO_COMMAND_MAX_LENGTH, TODO_NOTES_MAX_LENGTH, TODO_TEXT_MAX_LENGTH } =
   await import('@/lib/workItemTodos/limits');
 const { toWorkItemTodoDto } = await import('@/lib/mappers/workItemTodoMappers');
 
@@ -139,6 +139,7 @@ describe('the DTO on the wire', () => {
       workspaceId: 'w',
       workItemId: 'i',
       text: 'A step',
+      notesMd: null,
       commandText: '',
       executor: null,
       position: 'a0',
@@ -149,6 +150,37 @@ describe('the DTO on the wire', () => {
     });
     expect(dto.commandText).toBeNull();
     expect(dto.done).toBe(false);
+  });
+
+  it('carries the INSTRUCTIONS on the response body, and null when there are none', async () => {
+    const { cardId } = await scenario();
+    const withNotes = await addTodoAction({
+      workItemId: cardId,
+      text: 'Create a restricted Stripe key',
+      notesMd: '1. Dashboard → Developers → **API keys**\n2. Scope to `charges:write`',
+    });
+    const without = await addTodoAction({ workItemId: cardId, text: 'Tick this' });
+
+    expect(withNotes.ok && withNotes.todo.notesMd).toContain('**API keys**');
+    expect(without.ok && without.todo.notesMd).toBeNull();
+  });
+
+  it('the mapper normalises an empty-string notes to null — the client tests this to draw the disclosure', () => {
+    const dto = toWorkItemTodoDto({
+      id: 't2',
+      workspaceId: 'w',
+      workItemId: 'i',
+      text: 'A step',
+      notesMd: '',
+      commandText: null,
+      executor: null,
+      position: 'a0',
+      doneAt: null,
+      doneById: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(dto.notesMd).toBeNull();
   });
 
   it('resolves doneBy to the USER, so the section can render a name rather than an id', async () => {
@@ -225,6 +257,14 @@ describe('the five actions', () => {
     // patch exists to preserve.
     const cleared = await updateTodoAction({ todoId: added.todo.id, commandText: null });
     expect(cleared.ok && cleared.todo.commandText).toBeNull();
+
+    // …and the same over the instructions, which are the field a caller is most
+    // likely to send alone (MOTIR-1344's assistant writes exactly this one).
+    const noted = await updateTodoAction({ todoId: added.todo.id, notesMd: 'Dashboard → keys' });
+    expect(noted.ok && noted.todo).toMatchObject({
+      notesMd: 'Dashboard → keys',
+      text: 'Apply the migration',
+    });
   });
 
   it('refuses every action with the generic message when there is no workspace context', async () => {
@@ -280,6 +320,20 @@ describe('error translation', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain(String(TODO_COMMAND_MAX_LENGTH));
+  });
+
+  it('over-long INSTRUCTIONS return their own message, which asks for a card and not a split', async () => {
+    const { cardId } = await scenario();
+    const result = await addTodoAction({
+      workItemId: cardId,
+      text: 'A step',
+      notesMd: 'x'.repeat(TODO_NOTES_MAX_LENGTH + 1),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain(String(TODO_NOTES_MAX_LENGTH));
+    expect(result.error).toContain('work item');
+    expect(result.error.toLowerCase()).not.toContain('split');
   });
 
   it('an unknown to-do id returns the not-found message rather than leaking one', async () => {

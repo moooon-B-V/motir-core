@@ -26,6 +26,22 @@
 export const TODO_TEXT_MAX_LENGTH = 200;
 
 /**
+ * The longest a to-do's `notesMd` may be, in characters.
+ *
+ * 2000 is room for eight or ten numbered lines with URLs — the shape of
+ * *"Dashboard → Developers → API keys, then Create restricted key, scope it to
+ * `charges:write`"*. Above that it stops being the HOW of one operation and
+ * starts being a document, which is exactly the point at which it genuinely
+ * wants a card of its own.
+ *
+ * ⚠️ It does NOT loosen {@link TODO_TEXT_MAX_LENGTH}. The title still has to
+ * name one operation in a line; the notes say how to perform it. Navigation is
+ * not an operation, so *"go to the dashboard, find the setting"* belongs here
+ * and never as three tickable rows (ADR §1, *Instructions*).
+ */
+export const TODO_NOTES_MAX_LENGTH = 2000;
+
+/**
  * The longest a to-do's `commandText` may be, in characters.
  *
  * Deliberately far above {@link TODO_TEXT_MAX_LENGTH}: a real command with
