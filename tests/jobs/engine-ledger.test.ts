@@ -135,11 +135,16 @@ describe('the job_run ledger — parity with the Inngest wrapper', () => {
     });
 
     // Three attempts on the SAME queue row: fail, fail, succeed.
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762 — each settle is
+    // detached, so `settled()` is the authoritative "this attempt is over".
     await w.tick();
+    await w.settled();
     await adminDb.jobQueueRun.update({ where: { id: runId }, data: { runAt: new Date() } });
     await w.tick();
+    await w.settled();
     await adminDb.jobQueueRun.update({ where: { id: runId }, data: { runAt: new Date() } });
     await w.tick();
+    await w.settled();
 
     expect(attempts).toBe(3);
     const rows = await adminDb.jobRun.findMany({ where: { functionId: jobId } });
@@ -191,9 +196,11 @@ describe('terminal failure — the ledger row AND the dead-letter row', () => {
     // not by calling the hook directly — a hook that is never reached from the
     // real path is exactly the defect PRODECT_FINDINGS #39 records.
     await w.tick();
+    await w.settled();
     expect((await readRun(runId)).state).toBe('pending'); // retrying
     await adminDb.jobQueueRun.update({ where: { id: runId }, data: { runAt: new Date() } });
     await w.tick();
+    await w.settled();
 
     const queued = await readRun(runId);
     expect(queued.state).toBe('failed');
@@ -232,6 +239,7 @@ describe('terminal failure — the ledger row AND the dead-letter row', () => {
     });
 
     await w.tick();
+    await w.settled();
 
     // A `running` row with no live claimant is work nobody will ever pick up.
     // A missing dashboard entry is a worse-looking but strictly smaller problem.
@@ -333,6 +341,7 @@ describe('DLQ replay — the operator dashboard, unchanged', () => {
       },
     });
     expect(await w.tick()).toBe(1);
+    await w.settled();
 
     expect(ran).toBe(1);
     const replayed = await adminDb.jobQueueRun.findFirstOrThrow({ where: { jobId } });

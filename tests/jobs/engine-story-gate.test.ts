@@ -92,6 +92,9 @@ describe('§2 the seam — sendEvent → dispatcher → job_queue → worker →
       },
     });
     expect(await w.tick()).toBe(1);
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762; `settled()` is what
+    // says the handler has run.
+    await w.settled();
 
     // The payload survived every hop: sendEvent → job_event.data → the worker's
     // lookup → buildEngineContext → ctx.event.data. A key that drifted anywhere
@@ -137,6 +140,7 @@ describe('§2 the seam — sendEvent → dispatcher → job_queue → worker →
       },
     });
     await w.tick();
+    await w.settled();
 
     // The run does not quietly succeed: it fails, terminally, naming the id it
     // could not resolve.
@@ -184,6 +188,10 @@ describe('§3a two workers never execute one job_queue row', () => {
     const [a, b, c] = [mk('race-a'), mk('race-b'), mk('race-c')];
     for (let i = 0; i < 12; i++) {
       const claimed = await Promise.all([a.tick(), b.tick(), c.tick()]);
+      // The three ticks still race — that is the assertion. Draining each
+      // round's DETACHED settles is what keeps "nothing claimed" meaning the
+      // queue is empty rather than momentarily in flight (MOTIR-3762).
+      await Promise.all([a.settled(), b.settled(), c.settled()]);
       if (claimed.every((n) => n === 0)) break;
     }
 

@@ -213,6 +213,9 @@ describe('§2a debounce → worker: the claimed run carries the LAST event', () 
       },
     });
     expect(await worker.tick()).toBe(1);
+    // ⚠️ `tick()` returns at the CLAIM since MOTIR-3762; `settled()` is what
+    // says the handler and its ledger write are done.
+    await worker.settled();
 
     // ONE execution, carrying the THIRD push.
     expect(seen).toHaveLength(1);
@@ -272,7 +275,9 @@ describe('§2b collapse → ledger: the row a supervised run leaves behind', () 
     }));
     await enqueue(jobId, { workspaceId: null });
 
-    expect(await workerFor().tick()).toBe(1);
+    const succeedingWorker = workerFor();
+    expect(await succeedingWorker.tick()).toBe(1);
+    await succeedingWorker.settled();
 
     const ledger = await adminDb.jobRun.findMany({ where: { functionId: jobId } });
     expect(ledger).toHaveLength(1);
@@ -296,7 +301,9 @@ describe('§2b collapse → ledger: the row a supervised run leaves behind', () 
     });
     await enqueue(jobId, { workspaceId: null });
 
-    await workerFor().tick();
+    const failingWorker = workerFor();
+    await failingWorker.tick();
+    await failingWorker.settled();
 
     const ledger = await adminDb.jobRun.findMany({ where: { functionId: jobId } });
     expect(ledger).toHaveLength(1);

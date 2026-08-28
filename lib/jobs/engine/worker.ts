@@ -32,6 +32,34 @@ import { isJobStepYield } from './step';
 // transactions, so every service the handler calls would fail besides.
 //
 // ===========================================================================
+// What the claim RATE is governed by (MOTIR-3762)
+// ===========================================================================
+// FREE CAPACITY, and not by the slowest run in flight. `tick()` used to end
+// `await Promise.all(claimed.map((run) => this.settle(run)))`, so the loop could
+// not claim again until the LAST of its batch settled. On 2026-08-28 that held
+// four unrelated claims for thirty-five minutes behind one
+// `system.code-graph-refresh`, with 139 rows pending and nothing claiming them.
+// `docs/decisions/job-queue-foundation.md` §15.1 is that measurement and §15.3
+// is the decision. So:
+//
+//   * each claimed run SETTLES INDEPENDENTLY — `tick()` returns at the claim,
+//     not at the settle, and one long run cannot detain its batch-mates;
+//   * in-flight work is bounded by POOL_SIZE, a number this repository sets;
+//   * a tick claims AT MOST the free capacity — `claimDueRuns` takes the
+//     remaining slots, never a constant — so a full pool claims nothing rather
+//     than claiming into nothing;
+//   * a saturated loop waits for a SLOT (`waitForSlot`) instead of backing off
+//     against the queue, because "the pool is full" and "the queue is empty"
+//     are different facts and only one of them is fixed by waiting longer.
+//
+// ⚠️ THIS IS NOT A SCHEDULER, AND §14.1's REFUSAL IS UNTOUCHED. What is bounded
+// here is the WORKER's own in-flight set, after the claiming transaction has
+// committed. No per-job option is added, `DefineJobOptions` gains nothing, and
+// `claimDueRuns`'s statement — its predicate, its `ORDER BY run_at`, its plan —
+// is unchanged. §15.2 is the distinction, with the test that settles which side
+// a change is on.
+//
+// ===========================================================================
 // The lease, and the two ways a claim ends badly
 // ===========================================================================
 // A claim carries a LEASE: `lease_expires_at`, renewed by a heartbeat while the
@@ -101,8 +129,30 @@ export const IDLE_MIN_MS = 250;
 export const IDLE_MAX_MS = 5_000;
 /** How long a drain waits for in-flight runs before releasing them anyway. */
 export const DRAIN_TIMEOUT_MS = 20_000;
-/** How many runs one worker claims per tick. */
+/**
+ * How many runs one worker claims per tick — an AMORTISER for the claim
+ * round-trip, and (since MOTIR-3762) not a concurrency control.
+ *
+ * It used to be both, because the tick awaited its whole batch. It no longer
+ * does, so this bounds how much one `claimDueRuns` statement takes and nothing
+ * else; {@link POOL_SIZE} is what bounds concurrent work
+ * (`docs/decisions/job-queue-foundation.md` §15.6.3, which also records why
+ * neither raising nor lowering this is the instrument for a long run).
+ */
 export const CLAIM_BATCH = 5;
+/**
+ * How many claimed runs this worker EXECUTES at once — the worker's own
+ * in-flight pool, and the real concurrency control (§15.3).
+ *
+ * Not a database pool and not a per-job limit: it is a count of settles running
+ * concurrently in this process. Its FLOOR is the number of long-running
+ * supervisors that may legitimately be in flight at once — today
+ * `system.code-graph-index`, `system.code-graph-refresh` and
+ * `system.ci-runner-boot`, three — plus headroom for the fast lane, which is
+ * what 2026-08-28 had none of. Ten leaves seven slots for short work while all
+ * three supervisors watch containers.
+ */
+export const POOL_SIZE = 10;
 /** The channel the dispatcher NOTIFYs when it enqueues. */
 export const JOB_QUEUE_CHANNEL = 'motir_job_queue';
 
@@ -122,6 +172,7 @@ export interface JobWorkerOptions {
     idleMaxMs: number;
     drainTimeoutMs: number;
     claimBatch: number;
+    poolSize: number;
   }>;
   /** Called on every terminal outcome. */
   onOutcome?: (run: JobQueueRun, outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded') => void;
@@ -206,6 +257,7 @@ export class JobWorker {
   private readonly idleMaxMs: number;
   private readonly drainTimeoutMs: number;
   private readonly claimBatch: number;
+  private readonly poolSize: number;
 
   /** Set by `shutdown()`; the loop stops CLAIMING the moment it is true. */
   private draining = false;
@@ -214,6 +266,15 @@ export class JobWorker {
   private heartbeat: NodeJS.Timeout | undefined;
   /** Runs this worker has claimed and not yet settled. The drain waits on these. */
   private readonly inFlight = new Set<string>();
+  /**
+   * The DETACHED settle of each in-flight run, kept so {@link settled} can await
+   * them. `tick()` returns at the claim now, so a caller that wants "and then
+   * they all finished" has to be able to say so — which is the authoritative
+   * signal a test needs in place of the old awaited `Promise.all`.
+   */
+  private readonly settling = new Map<string, Promise<void>>();
+  /** Resolvers waiting for a slot to free. Woken by a settle, and by `shutdown()`. */
+  private readonly slotWaiters = new Set<() => void>();
   /** Resolves when the idle sleep should be cut short — the NOTIFY path. */
   private wake: (() => void) | undefined;
 
@@ -230,6 +291,7 @@ export class JobWorker {
     this.idleMaxMs = opts.timings?.idleMaxMs ?? IDLE_MAX_MS;
     this.drainTimeoutMs = opts.timings?.drainTimeoutMs ?? DRAIN_TIMEOUT_MS;
     this.claimBatch = opts.timings?.claimBatch ?? CLAIM_BATCH;
+    this.poolSize = Math.max(1, opts.timings?.poolSize ?? POOL_SIZE);
     this.idleDelay = this.idleMinMs;
   }
 
@@ -238,9 +300,21 @@ export class JobWorker {
     return this.inFlight.size;
   }
 
+  /** How many more runs this worker may take before its pool is full. */
+  get freeCapacity(): number {
+    return Math.max(0, this.poolSize - this.inFlight.size);
+  }
+
   /**
-   * Claim and execute one batch. Returns how many runs were claimed — 0 means
-   * the queue had nothing due, which is what drives the backoff.
+   * Claim one batch and START it. Returns how many runs were CLAIMED — 0 means
+   * either that the queue had nothing due or that the pool is full, which
+   * {@link freeCapacity} tells apart and {@link loop} acts on differently.
+   *
+   * ⚠️ IT RETURNS AT THE CLAIM, NOT AT THE SETTLE (MOTIR-3762). Each claimed run
+   * is settled on its own, detached, so a thirty-five-minute supervisor cannot
+   * detain the four runs claimed beside it — and so the loop can claim again the
+   * moment capacity frees rather than when the slowest member finishes. A caller
+   * that wants "and then they all finished" awaits {@link settled}.
    *
    * Public so a test can step the loop deterministically rather than sleeping
    * against a background timer, which is the same authoritative-signal
@@ -248,6 +322,13 @@ export class JobWorker {
    */
   async tick(): Promise<number> {
     if (this.draining) return 0;
+
+    // ⚠️ CAPACITY IS CHECKED FIRST, BEFORE THE SCHEDULER AND BEFORE THE RECLAIM.
+    // A tick that cannot claim should not spend two statements discovering it —
+    // and `claimDueRuns` must not be called with a non-positive limit, which is
+    // what "claiming into nothing" would mean.
+    const capacity = this.freeCapacity;
+    if (capacity <= 0) return 0;
 
     // The SCHEDULER, before anything else (MOTIR-3471): a cron fire it enqueues
     // is then claimed by the very same tick. Guarded because a scheduling failure
@@ -266,18 +347,80 @@ export class JobWorker {
     await withSystemContext((tx) => jobQueueRepository.reclaimExpiredLeases(tx));
 
     // The claim: one transaction, holding the lock and the state write and
-    // nothing else.
+    // nothing else. The LIMIT is the free capacity, never a constant — the batch
+    // size only bounds how much one statement takes.
+    const limit = Math.min(this.claimBatch, capacity);
     const claimed = await withSystemContext((tx) =>
-      jobQueueRepository.claimDueRuns(this.workerId, this.claimBatch, this.leaseMs, tx),
+      jobQueueRepository.claimDueRuns(this.workerId, limit, this.leaseMs, tx),
     );
     if (claimed.length === 0) return 0;
 
-    for (const run of claimed) this.inFlight.add(run.id);
-
-    // Executed OUTSIDE the claiming transaction — see the header. Settled
-    // independently, so one run's failure cannot abort its batch-mates.
-    await Promise.all(claimed.map((run) => this.settle(run)));
+    for (const run of claimed) {
+      this.inFlight.add(run.id);
+      // Executed OUTSIDE the claiming transaction — see the header. DETACHED, so
+      // one slow run does not hold the tick, and one run's failure cannot abort
+      // its batch-mates.
+      //
+      // The `catch` is not decoration: `settle()` swallows a HANDLER failure, but
+      // a throw from its own bookkeeping (the reschedule, the mark) would now be
+      // an unhandled rejection on a detached promise — which takes the process
+      // down, where before it merely failed the tick. `settle()`'s own `finally`
+      // has already released the in-flight slot by the time this runs.
+      const settling = this.settle(run)
+        .catch((err: unknown) => {
+          this.log.error(`[job-worker] settle threw for run ${run.id}`, err);
+        })
+        .finally(() => {
+          this.settling.delete(run.id);
+          this.releaseSlot();
+        });
+      this.settling.set(run.id, settling);
+    }
     return claimed.length;
+  }
+
+  /**
+   * Resolves when every run currently in flight has settled.
+   *
+   * The authoritative signal that replaces the awaited `Promise.all` `tick()`
+   * used to end with. It loops because a settle may finish while we are awaiting
+   * another, and a caller asking "is the worker quiet?" means all of them.
+   */
+  async settled(): Promise<void> {
+    while (this.settling.size > 0) {
+      await Promise.all([...this.settling.values()]);
+    }
+  }
+
+  /** Wake everything waiting for a slot. Called by a finished settle, and by the drain. */
+  private releaseSlot(): void {
+    if (this.slotWaiters.size === 0) return;
+    for (const waiter of [...this.slotWaiters]) waiter();
+  }
+
+  /**
+   * Wait until a slot frees, or until `timeoutMs` — whichever is first.
+   *
+   * The BACK-PRESSURE half of §15.3. A saturated worker must not back off
+   * against the QUEUE: the queue is not the thing that is full, and waiting
+   * longer does not empty the pool. The timeout is a floor rather than the
+   * mechanism, so a lost wake-up degrades latency instead of wedging the loop —
+   * the same ordering `notify()` has against the poll.
+   */
+  private waitForSlot(timeoutMs: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let done = false;
+      const finish = (): void => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        this.slotWaiters.delete(finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      timer.unref?.();
+      this.slotWaiters.add(finish);
+    });
   }
 
   /** Run one claimed row and record its terminal state. Never throws — a failure is an outcome, not an exception the loop should die on. */
@@ -353,6 +496,16 @@ export class JobWorker {
         this.idleDelay = this.idleMinMs; // work found — poll eagerly again
         continue;
       }
+      // ⚠️ SATURATED IS NOT IDLE (MOTIR-3762). A tick returns 0 for two reasons
+      // and they want opposite responses: an empty queue is waited out with the
+      // backoff, while a full pool is waited out on a SLOT. Backing off against
+      // the queue here would grow the delay while the only thing that can change
+      // is a settle finishing — and would then leave the freed slot idle for the
+      // remainder of the sleep.
+      if (this.freeCapacity === 0) {
+        await this.waitForSlot(this.idleMaxMs);
+        continue;
+      }
       await this.sleepInterruptibly(this.idleDelay);
       this.idleDelay = Math.min(this.idleDelay * 2, this.idleMaxMs);
     }
@@ -418,11 +571,18 @@ export class JobWorker {
   async shutdown(): Promise<void> {
     this.draining = true;
     this.wake?.(); // cut any idle sleep short so the loop exits promptly
+    this.releaseSlot(); // and any wait for capacity, which no settle may be about to end
     if (this.heartbeat) {
       clearInterval(this.heartbeat);
       this.heartbeat = undefined;
     }
 
+    // ⚠️ IT WAITS ON `inFlight`, WHICH IS STILL THE WHOLE SET (MOTIR-3762). The
+    // settles are detached now, so there is no `tick()` promise left to await —
+    // and that is exactly why the drain's condition was never the tick. Every
+    // detached settle removes its own id here in a `finally`, so a claim held by
+    // one is a claim this loop still sees, and the unconditional release below
+    // still reaches it.
     const deadline = Date.now() + this.drainTimeoutMs;
     while (this.inFlight.size > 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 50));
