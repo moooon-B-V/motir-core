@@ -1056,7 +1056,7 @@ expression by the machinery `lib/jobs/engine/eventExpression.ts` already runs fo
   each record their own reason at length. This section is why the OPTION is absent, not why those
   two do not want one.
 
-## §15 — What actually bounds concurrent supervision: the batch settles independently and the supervisor yields (MOTIR-3761)
+## §15 — What actually bounds concurrent supervision: the batch settles independently, and the POOL bounds the supervisor (MOTIR-3761, corrected by [MOTIR-3763])
 
 §14.5 named two things it did not examine — **`CLAIM_BATCH`** and **the worker machine count** — and
 said plainly that they are the real concurrency controls now. On **2026-08-28** a production stall
@@ -1064,7 +1064,7 @@ made the question concrete rather than theoretical, so this section examines bot
 measurement, and answers the three questions the incident actually raises:
 
 1. **Does a claimed batch have to settle together?** (§15.3 — no.)
-2. **May a container supervisor hold its claim while it waits?** (§15.4 — it may, and it should not.)
+2. **May a container supervisor hold its claim while it waits?** (§15.4 — it may, and **measured, it must**: the yield this section first recommended was falsified before it shipped.)
 3. **What bounds concurrent supervision afterwards?** (§15.5.)
 
 **It re-opens nothing in §14.** §15.2 is the distinction, stated first, because the incident looks
@@ -1195,90 +1195,149 @@ scoped to `claimed_by`), the SIGTERM drain that releases claims, and the attempt
 reclaim/drain. A drain that does not release a claim held by a detached settle would turn this
 change into the failure mode it exists to remove.
 
-### §15.4 — Question 2: may a supervisor hold its claim while it waits? IT MAY, AND IT SHOULD NOT
+### §15.4 — Question 2: may a supervisor hold its claim while it waits? IT MAY, AND — MEASURED — IT MUST
 
-`docs/decisions/job-lane-occupancy.md` §2's [MOTIR-3488] amendment prices this exactly, and it is
-right: _"The collapsed loop holds ONE claim for the container's whole life … **AND THAT IS A REAL
-COST, NOT AN ABSENCE OF ONE.** It is affordable because the pool is ours to size."_ **§15 does not
-dispute the price. It declines to pay it**, because the engine already offers the alternative and
-`worker.ts` already implements it:
+> **⚠️ THIS SECTION IS A CORRECTION ([MOTIR-3763]).** It first read _"IT MAY, AND IT SHOULD NOT"_ and
+> recommended that the supervision loops yield between polls with `ctx.step.sleep`. **That
+> recommendation was falsified by a probe before any of it shipped, and the falsification is kept here
+> rather than edited away**, because the reasoning that produced it is reachable again by anybody who
+> reads §13 and thinks the same true thought about a durable sleep.
 
-`settle()` catches `isJobStepYield(err)` and calls
-`jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx, { refundAttempt: true })` — so a
-`ctx.step.sleep` re-enqueues the run at the deadline, **refunds the attempt, and releases the
-claim**. `JobStepKind` carries a `sleep` member and `job_step.sleep_until` is the column it resumes
-from. Nothing needs building for this; it needs USING.
+`docs/decisions/job-lane-occupancy.md` §2's [MOTIR-3488] amendment prices the occupancy exactly, and
+it is right: _"The collapsed loop holds ONE claim for the container's whole life … **AND THAT IS A
+REAL COST, NOT AN ABSENCE OF ONE.** It is affordable because the pool is ours to size."_
 
-**DECIDED: the supervision loops yield between polls.** The wait becomes `ctx.step.sleep`; the poll,
-the classification, the counter and the loop stay ordinary control flow.
+**What this section originally proposed** was to stop paying it. `settle()` catches
+`isJobStepYield(err)` and calls `jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx,
+{ refundAttempt: true })`, so a `ctx.step.sleep` re-enqueues the run at the deadline, refunds the
+attempt and releases the claim. The argument was that `step.sleep` had done two jobs — survive
+Vercel's invocation ceiling, and release the slot — and that only the first was a platform artifact,
+so the YIELD could be restored without restoring the per-poll STEPPING that [MOTIR-3484] deleted.
 
-#### ⚠️ §15.4a — This AMENDS §13.1 limb 3, and says so rather than sitting beside it
+#### The measurement that killed it
 
-§13.1 limb 3 puts _"the interval between polls"_ in ordinary control flow, and §13.2 rejects
-"keeping everything durable" outright. **Both were decided on the DURABILITY axis — what a restart
-may be allowed to forget — and on that axis they are still exactly right.** A supervisor that
-forgets it was sleeping re-attaches to the same container out of the memoized boot; a supervisor
-that forgets it BOOTED provisions a second billed container. Nothing here moves that line.
+**On this engine a resume re-invokes the handler FROM THE TOP** — `lib/jobs/engine/runner.ts`'s
+`runQueuedJob` builds a fresh context and calls `def.handler`, which §13.2 already states in bold —
+and **only `step.run` results are memoized.** So every UN-memoized call before a yield re-executes
+on every later pass. In a supervision loop that call is the POLL, and a poll is a real round trip to
+the container orchestrator.
 
-**What §13 did not weigh is OCCUPANCY**, because at the time it was written the cost of an occupied
-claim had not been measured and the worker had been running for days rather than months. On this
-engine a wait is not merely a thing that may be forgotten — **it is a held claim**, and that is what
-makes the interval the one piece of ordinary control flow worth spending a step on.
+A probe driving exactly the proposed shape (`sleep, poll, sleep, poll, …` with the poll an ordinary
+call), through the real `createStepApi` against the real `job_step` table:
 
-**So limb 3 is amended to read: everything except the WAIT is ordinary control flow.** The wait is a
-`step.sleep`, and it is a step for a reason that is not durability at all.
+```
+4 sleeps  ->  PASSES=5  POLLS=10  STEPS=4
+```
 
-**And §13.2's cost objection is answered rather than waved past, because the arithmetic changed with
-the shape.** §13.2 rejected porting the stepped supervisor on the ground that a loop polling _N_
-times performs on the order of _N²_ memo lookups and _2N_ row writes — true of the shape it was
-describing, which memoized ~128 steps. **The yield-only shape memoizes THREE** (`index-admit`,
-`index-boot`, `index-settle`), so a replay re-reads three rows, not a growing prefix: a 30-minute
-index at the shipped cadence is ~122 yields ⇒ **~366 memo lookups and ~244 row writes, linear in
-_N_**, against ~8 000 lookups for the shape §13.2 refused. That is a different order of magnitude,
-and it is what makes the yield affordable where the stepping was not.
+**Ten, not four.** N(N+1)/2 — the polls are re-executed, and only the sleeps are saved. Applied to
+the shipped cadence (`indexPollWaitMs` is 3 s, 6 s, 12 s, then 15 s ⇒ ~122 polls per 30-minute
+index, `job-lane-occupancy.md` §2's arithmetic):
 
-#### ⚠️ §15.4b — What this does NOT revive, stated because the ceremony and the durability were one call
+| shape                                       | orchestrator reads per index |
+| ------------------------------------------- | ---------------------------- |
+| today — an in-process `await` between polls | **122**                      |
+| the yield, with the poll left un-memoized   | **7 503**                    |
 
-[MOTIR-3484] deleted ~128 memoized poll steps per index and [MOTIR-3485] did the same for the CI
-supervisor. **That was correct and stays correct.** Those steps existed because
-`app/api/inngest/route.ts` pinned `maxDuration = 300` on Vercel, and `Dockerfile` has ended
-`CMD ["node", "server.js"]` since [MOTIR-2384] — the ceiling binds nothing.
+At a pessimistic ~1.5 s per provider `describe` that is about three hours of provider calls inside a
+thirty-minute container. **It is not a cost to weigh; it does not fit.**
 
-**`step.sleep` did TWO jobs, and only one of them was a platform artifact:**
+#### And it would have destroyed the container on the first poll
 
-| what `step.sleep` bought                                        | did it depend on Vercel?                           | disposition                       |
-| --------------------------------------------------------------- | -------------------------------------------------- | --------------------------------- |
-| surviving `maxDuration = 300` — a run longer than an invocation | **YES**, entirely                                  | gone with the platform, correctly |
-| **releasing the slot while waiting**                            | **NO** — it is a property of a queue-backed engine | **restored here**                 |
+`runIndexContainer`'s teardown is a `finally`, and a `JobStepYield` is a THROW — so a yielding poll
+loop would have called `settleIndexContainer` on its first suspension and torn down the container it
+was watching. **A yield is a SUSPENSION, not a path out of the loop**, and §13.4's requirement that
+_"teardown is reached on every path out"_ does not cover it. Any future attempt at this shape owes a
+guard that distinguishes the two before it owes anything else.
 
-They were the same call, so collapsing one collapsed the other. `lib/jobs/indexFleetSteps.ts`'s
-[MOTIR-3484] block argues the loop is fine _because Vercel is gone_, which is TRUE and INCOMPLETE:
-it is the reason the STEPPING went, not the reason the loop is fine. That block is corrected by the
-card that restores the yield, rather than left describing a reason that no longer covers its own
-conclusion.
+#### The two shapes that DO release the slot, and why neither is a smaller version of this
 
-**The three memoized side-effect steps are untouched**, and the admission backoff stays inside ONE
-step as §13.3(c) requires. **`tests/jobs/supervisor-cutover-story-gate.test.ts` changes MEANING and
-must not be deleted**: it asserts a step count identical at two poll counts, which yielding
-falsifies by construction. The property that survives is the one that was always load-bearing —
-**the number of MEMOIZED SIDE-EFFECT steps is invariant in the poll count**; sleep steps are not,
-and never were meant to be.
+1. **Memoize every poll** — one `step.run` per poll, ~128 per index. That is precisely the shape
+   [MOTIR-3484] deleted and §13.2 rejected on its N² memo cost. Restoring it is a coherent option; it
+   is not this one, and this section does not recommend it.
+2. **Stop looping** — make a supervision a state machine over RUNS rather than a loop inside one, so
+   each run does exactly one poll and re-enqueues itself. The claim is then held for the duration of
+   one provider read. That is a redesign of where supervision state lives, and it is [MOTIR-3778].
+
+**DECIDED: the supervisor KEEPS its claim.** The occupancy stands as [MOTIR-3488] priced it, and
+§15.5 names what bounds it. What the 2026-08-28 outage actually needed is §15.3, which is shipped:
+the batch no longer settles together, so one long supervisor detains nothing but its own slot.
+
+#### ⚠️ §15.4a — the amendment to §13.1 limb 3 is WITHDRAWN, and §13.1 stands unchanged
+
+This section previously amended §13.1 limb 3 — _"everything except the WAIT is ordinary control
+flow"_ — on the ground that §13 had weighed DURABILITY and not OCCUPANCY. **That amendment is
+withdrawn. Limb 3 stands exactly as written: the interval between polls is ordinary control flow.**
+
+**Why the amendment was wrong, stated as the mechanism rather than as a verdict.** It treated the
+two axes as separable — as though a wait could be made durable for its occupancy benefit while
+everything around it stayed ordinary. **On a replaying engine they are not separable in that
+direction.** A yield is only affordable when everything before it is memoized, because the resume
+replays from the top; so buying the occupancy benefit requires paying the durability cost for the
+whole loop, which is the cost §13.2 measured and refused. The wait is the one construct where
+"durable" and "cheap" cannot both hold, and §13.1 limb 3 is the sentence that says so.
+
+**And §13.2's cost objection was not answered, it was answered over the wrong quantity.** This
+section computed _"three memo rows per replay, so ~366 lookups, linear in N"_ — a correct count of
+MEMO traffic, which is bounded by the number of checkpoints. The quantity that explodes is the
+ORDINARY calls between them, which appear in no step ledger and were not counted. §13.2's own
+sentence enumerates memo lookups, so applying its figure to memo lookups feels like applying it;
+that substitution is the whole of the mistake and it is why it survived being written into a
+decision record.
+
+#### ⚠️ §15.4b — `step.sleep`'s two jobs were ONE job, and the table that said otherwise was the error
+
+The corrected reading:
+
+| what `step.sleep` bought                                        | did it depend on the STEPPING?                                                                                          | disposition                       |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| surviving `maxDuration = 300` — a run longer than an invocation | **YES** — the checkpoints are what let a run resume at all                                                              | gone with the platform, correctly |
+| releasing the slot while waiting                                | **ALSO YES** — a released slot is only useful if the resume is cheap, and the resume is cheap only because of the memos | **stays gone, with it**           |
+
+The row that read _"releasing the slot … did NOT depend on Vercel … restored here"_ was false, and it
+was false in the most plausible possible way: the slot release genuinely does not depend on **Vercel**
+— it is a property of a queue-backed engine — and the sentence then slid from _not platform-specific_
+to _separable from the stepping_. Those are different claims and only the first is true.
+
+**[MOTIR-3484] and [MOTIR-3485] remain correct in full**, and `lib/jobs/indexFleetSteps.ts`'s
+[MOTIR-3484] block needs no correction after all: its argument that the loop is fine _because the
+platform ceiling is gone_ is true, and this section no longer claims it is incomplete. The three
+memoized side-effect steps, the admission backoff inside one step (§13.3(c)) and the in-process wait
+all stay exactly as they are.
+
+**`tests/jobs/supervisor-cutover-story-gate.test.ts` is UNCHANGED and needs no restatement.** It
+asserts that the step count is identical at two poll counts, and that property is still literally
+true of the shipped supervisors — it was only the yield that would have falsified it. A card that
+restated it would have been editing a correct test to match a change that is not happening.
 
 ### §15.5 — Question 3: what bounds concurrent supervision afterwards?
 
-**After §15.4, supervision stops being the thing that needs bounding at the queue at all**, because a
-yielding supervisor occupies no claim between polls. What remains is:
+**THE WORKER'S OWN POOL, and after §15.4 that is a complete answer rather than a residual one.** A
+supervision holds one slot of `POOL_SIZE` for its container's life; three long-running supervisors
+exist (`system.code-graph-index`, `system.code-graph-refresh`, `system.ci-runner-boot`); the pool is
+**10**. So the worst case is three slots occupied and seven left for the fast lane — which is why the
+2026-08-28 queue of 139 rows drains in seconds once §15.3 stops the batch coupling.
 
 | what is being rationed                    | the instrument                                                                                                     | why it is the right one                                                                             |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | **containers, and the money they cost**   | the admission cap in the job's own domain — `lib/ciFleet/limits.ts`, `docs/decisions/code-graph-index-fleet.md` §7 | it rations the actually scarce resource, which the queue cannot see (§14.3's fourth row, unchanged) |
-| **runs executing at once on ONE worker**  | the **pool size** §15.3 introduces                                                                                 | a number in this file, changeable without a deploy of anything else                                 |
+| **SUPERVISOR OCCUPANCY**                  | the **pool size** §15.3 introduces, minus the count of concurrent supervisions                                     | it is a number in this file, and the occupancy is bounded by construction rather than by a promise  |
+| **runs executing at once on ONE worker**  | the same **pool size**                                                                                             | changeable without a deploy of anything else                                                        |
 | **total in-flight work across the fleet** | pool size × **worker machine count**                                                                               | both ours to set; the second is `fly.toml` plus a release, read back from the platform (§15.1)      |
 
+**The residual cost, stated rather than left implicit:** N concurrent supervisions occupy N of
+`POOL_SIZE` slots for their containers' lives, and nothing reclaims those slots early. That is
+[MOTIR-3488]'s priced trade-off, unchanged and now bounded by a number this repository sets.
+
+**THE TRIGGER TO REVISE — and it is a measurement, not a feeling.** Schedule [MOTIR-3778] (the
+self-rescheduling supervision) when the pool is demonstrably contended by supervisions: a
+queue-depth or oldest-pending-age alert firing while the in-flight set is full of them, or a FOURTH
+long-running supervisor arriving. Tidiness is not the trigger, and neither is the fact that a held
+claim reads badly.
+
 **So §14.5's two controls are answered:** `CLAIM_BATCH` is no longer a concurrency control at all
-once §15.3 lands (§15.6.3), and the worker machine count remains the fleet-level instrument but
-stops being the answer to _"how do we survive a long supervisor"_ — which is what it was implicitly
-being asked to be, at a count of one.
+once §15.3 lands (§15.6.3), and the worker machine count remains the fleet-level instrument — but
+the answer to _"how do we survive a long supervisor"_ is the POOL, not the machine count, which is
+what it was implicitly being asked to be at a count of one.
 
 ### §15.6 — The alternatives, each with a verdict, so they are not re-proposed
 
@@ -1325,8 +1384,12 @@ supervisors that may legitimately be in flight at once plus headroom for the fas
 - **`motir-ai`'s own queue.** Unchanged from §14.5 — read as evidence in §14.2.1, not as a thing to
   change here.
 - **The poll CADENCE, the backoffs and the budgets.** Every value in `INDEX_FLEET_TIME_BUDGETS`,
-  `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is unchanged by this section, exactly as §13.5
-  says of §13: it moves where a wait is SPENT, not how long anything waits.
+  `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is unchanged by this section — and after
+  §15.4's correction, so is the wait itself. §15 changes what the CLAIM LOOP does; it changes
+  nothing about how a supervision waits.
+- **Whether supervision should stop being a loop at all.** [MOTIR-3778] carries the
+  self-rescheduling shape — one poll per run, the session in a durable row — with the measurement
+  that would schedule it. §15.5 names the trigger; this section does not decide it.
 
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
@@ -1339,5 +1402,7 @@ supervisors that may legitimately be in flight at once plus headroom for the fas
 [MOTIR-3759]: https://app.motir.co/items/MOTIR-3759
 [MOTIR-3760]: https://app.motir.co/items/MOTIR-3760
 [MOTIR-3769]: https://app.motir.co/items/MOTIR-3769
+[MOTIR-3763]: https://app.motir.co/items/MOTIR-3763
+[MOTIR-3778]: https://app.motir.co/items/MOTIR-3778
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss
