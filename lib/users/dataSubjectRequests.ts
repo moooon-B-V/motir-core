@@ -77,3 +77,18 @@ export function erasureDueAt(requestedAt: Date): Date {
 export function dataExportExpiresAt(builtAt: Date): Date {
   return new Date(builtAt.getTime() + DATA_EXPORT_RETENTION_DAYS * DAY_MS);
 }
+
+/**
+ * Where the reader comes back to, once the archive is built.
+ *
+ * The export-ready email carries a link to THIS PANE and never to the file —
+ * design DECISION 2, and the reason is measured rather than stylistic: a
+ * presigned URL lives 300 seconds, which is far too short to survive an inbox.
+ * So the notification is a nudge back to a surface that can authenticate the
+ * reader, and the download is minted on the click.
+ *
+ * It lives here, with the two windows, for the same reason they do: the pane
+ * (MOTIR-1136) and the email that points at it must not each carry their own
+ * copy of the path. One value, every reader.
+ */
+export const DATA_PRIVACY_PANE_PATH = '/settings/account/data';

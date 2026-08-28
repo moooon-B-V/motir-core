@@ -713,6 +713,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | Operation                                 | Verbs     | Gate today     | Permission | Decision    | Why |
 | ----------------------------------------- | --------- | -------------- | ---------- | ----------- | --- |
 | `/api/account/confirm-email-change`       | GET       | — none —       | —          | user-scoped | R31 |
+| `/api/account/data-export/[id]/download`  | GET       | session only   | —          | user-scoped | R31 |
 | `/api/account/two-factor/backup-codes`    | POST      | session only   | —          | user-scoped | R31 |
 | `/api/account/two-factor/status`          | GET       | session only   | —          | user-scoped | R31 |
 | `/api/account/two-factor/trusted-devices` | DELETE    | session only   | —          | user-scoped | R31 |

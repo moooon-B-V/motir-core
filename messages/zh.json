@@ -724,6 +724,15 @@
       "fallback": "或将此链接复制到浏览器中打开：",
       "expires": "此链接将在1小时后过期。如果这不是你本人的操作，可以忽略此邮件，你的邮箱地址将保持不变。"
     },
+    "dataExportReady": {
+      "subject": "你的Motir数据导出已就绪",
+      "preview": "你的Motir数据导出已可下载",
+      "greeting": "你好，{name}：",
+      "lede": "你的Motir数据副本已准备好。请在账号设置中打开“数据与隐私”下载。",
+      "open": "打开数据与隐私",
+      "freshLink": "出于安全考虑，此邮件不含附件，也不含下载链接。每次点击下载都会生成一个全新的私密链接，5分钟后失效。",
+      "retention": "该文件我们保留{days}天，之后会删除。此后你可以随时重新申请导出。"
+    },
     "mentionNotification": {
       "subject": "{author}在{identifier}中提到了你：{title}",
       "preview": "{author}在{identifier}中提到了你",

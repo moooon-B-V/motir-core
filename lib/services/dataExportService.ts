@@ -1,10 +1,21 @@
 import 'server-only';
 
 import { type DataExportRequest } from '@/generated/prisma/client';
-import { deleteAttachmentBlob, putPrivateAttachment } from '@/lib/blob/uploader';
+import { deleteAttachmentBlob, putPrivateAttachment, signedDownloadUrl } from '@/lib/blob/uploader';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { dataExportRequestRepository } from '@/lib/repositories/dataExportRequestRepository';
-import { dataExportExpiresAt } from '@/lib/users/dataSubjectRequests';
+import { userRepository } from '@/lib/repositories/userRepository';
+import {
+  DATA_EXPORT_RETENTION_DAYS,
+  DATA_PRIVACY_PANE_PATH,
+  dataExportExpiresAt,
+} from '@/lib/users/dataSubjectRequests';
+import {
+  DataExportExpiredError,
+  DataExportNotFoundError,
+  DataExportNotReadyError,
+} from '@/lib/users/errors';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { archiveFilename, buildPersonalDataArchive } from '@/lib/export/personalDataArchive';
 
@@ -122,6 +133,11 @@ export const dataExportService = {
         ),
       );
 
+      // AFTER the row is committed `ready`, and BEST-EFFORT (Subtask
+      // MOTIR-3703). See `notifyExportReady` for why it cannot be allowed to
+      // reach the catch below.
+      await this.notifyExportReady({ userId, requestId });
+
       return {
         requestId,
         status: 'ready' as const,
@@ -144,6 +160,108 @@ export const dataExportService = {
       // costing the reader a state they can act on.
       return { requestId, status: 'failed' as const, failureReason };
     }
+  },
+
+  /**
+   * Tell the reader their archive is ready — the notification half of DECISION
+   * 2 (Story 8.4 · Subtask MOTIR-3703).
+   *
+   * ⚠️ BEST-EFFORT, AND THAT IS THE WHOLE POINT OF THE SEPARATE `try`. This
+   * runs after the row is committed `ready`, so the archive EXISTS and the pane
+   * will show it whatever happens here. Letting a send failure fall through to
+   * `buildDataExport`'s catch would mark a perfectly good export `failed` and
+   * route the reader to `privacy@motir.co` because a mail provider hiccuped —
+   * turning a delivered right into a support ticket. The durable state is the
+   * source of truth; the notification is fire-and-forget.
+   *
+   * The event itself is enqueued rather than sent, so the provider call happens
+   * in the durable `email.send` job with its own retries. `idempotencyKey` is
+   * keyed on the REQUEST, so a re-run of the build for one request cannot mail
+   * the same person twice.
+   *
+   * ⚠️ NO LINK TO THE FILE — only to the pane. `signedDownloadUrl` mints a
+   * 300-second URL, which is expired before most people open their inbox
+   * (DECISION 2, and the template's own header).
+   */
+  async notifyExportReady(input: { userId: string; requestId: string }): Promise<void> {
+    try {
+      // `user` carries no RLS (see `withUserContext`'s note), and this read is
+      // not gating a write, so it needs no context of its own.
+      const user = await userRepository.findById(input.userId);
+      if (!user?.email) return;
+      await sendEvent('email.send', {
+        // Identity-scoped, like the request event above: an export spans every
+        // workspace the person belongs to, so it has no single workspace.
+        workspaceId: null,
+        idempotencyKey: `data-export-ready:${input.requestId}`,
+        to: user.email,
+        template: 'data-export-ready',
+        data: {
+          recipientName: user.name,
+          paneUrl: `${resolveBaseUrlTrimmed()}${DATA_PRIVACY_PANE_PATH}`,
+          // From the constant, never retyped — the promise the copy states and
+          // the window the sweep enforces are the same number.
+          retentionDays: DATA_EXPORT_RETENTION_DAYS,
+        },
+      });
+    } catch (err) {
+      console.error(
+        '[dataExportService] the export-ready notification could not be enqueued; ' +
+          'the archive is ready and the pane still offers Download',
+        { requestId: input.requestId, err },
+      );
+    }
+  },
+
+  /**
+   * Hand over one built archive: authorise the request row against the CALLING
+   * user, refuse anything not downloadable, and mint a FRESH presigned URL the
+   * route 302-redirects to (Story 8.4 · Subtask MOTIR-3703 · DECISION 2).
+   *
+   * ⚠️ THE MINTED URL IS NEVER PERSISTED AND NEVER REUSED. Each call presigns
+   * again, which is what the pane's copy promises — *"Each Download makes a
+   * fresh, private link that expires after five minutes"* — and what keeps a
+   * five-minute grant from being turned into a durable one by storing it.
+   *
+   * ⚠️ THE AUTHORIZATION IS THE RLS CONTEXT, not a filter written here. The
+   * read runs under `withUserContext(userId)`, and
+   * `data_export_request_owner_or_system` admits only rows whose `user_id`
+   * matches — so a request belonging to somebody else is NOT FOUND rather than
+   * forbidden (finding #44, and the reason it matters more here than anywhere:
+   * a distinguishable refusal would confirm that a given id is somebody's
+   * personal-data archive). The explicit ownership assertion below is the
+   * second lock, not the first: it holds even if a future caller opens this
+   * under a wider context.
+   *
+   * @throws DataExportNotFoundError   no such row, or not the caller's
+   * @throws DataExportExpiredError    the seven-day window has elapsed
+   * @throws DataExportNotReadyError   still preparing, or the build failed
+   */
+  async getDownloadUrl(input: { requestId: string; userId: string; now?: Date }): Promise<string> {
+    const { requestId, userId, now = new Date() } = input;
+
+    const row = await withUserContext(userId, (tx) =>
+      dataExportRequestRepository.findById(requestId, tx),
+    );
+    if (!row || row.userId !== userId) throw new DataExportNotFoundError(requestId);
+
+    // EXPIRY FIRST, and deliberately: the sweep runs on a schedule, so a row
+    // whose window has closed reads `ready` until it catches up. Asking "is it
+    // ready?" first would offer a Download for a file the seven-day promise
+    // says is gone — and once the sweep HAS run the row is `expired`, which is
+    // the same answer arriving through the status instead of the clock.
+    if (row.status === 'expired' || (row.expiresAt !== null && row.expiresAt <= now)) {
+      throw new DataExportExpiredError();
+    }
+    if (row.status !== 'ready') throw new DataExportNotReadyError(row.status);
+    // A `ready` row with no pathname is a state the build never writes; if one
+    // ever exists there is no object to hand over, and "not found" is the only
+    // honest answer.
+    if (!row.blobPathname) throw new DataExportNotFoundError(requestId);
+
+    // `download: true` binds the content-disposition INTO the signature, so the
+    // browser saves `motir-export-<date>.zip` instead of rendering it.
+    return signedDownloadUrl(row.blobPathname, { download: true });
   },
 
   /**
