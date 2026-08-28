@@ -2302,6 +2302,8 @@
       "dlqTableCaption": "死信队列",
       "replay": "重放",
       "replayTooltip": "只有工作区所有者才能重放任务",
+      "alreadyReplayedToastTitle": "已重放过",
+      "alreadyReplayedToastDesc": "该条目此前已重放，未新建任务。",
       "replayedToastTitle": "任务已重放",
       "replayedToastDesc": "原始事件已重新发出。",
       "replayErrorTitle": "无法重放",

@@ -4,7 +4,7 @@ import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { toJobRunDTO, toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
 import { emailDeliveryRepository } from '@/lib/repositories/emailDeliveryRepository';
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
-import { replayDLQ as replayDlqInTx } from '@/lib/jobs/dlq';
+import { replayDLQ as replayDlqInTx, type ReplayDLQResult } from '@/lib/jobs/dlq';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
 import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
@@ -150,12 +150,17 @@ export const jobsDashboardService = {
    * withWorkspaceContext transaction so (a) the membership read sees the RLS
    * GUCs, and (b) the DLQ read + the replayedAt stamp share a tenant-scoped tx.
    * Delegates the actual re-emit + stamp to lib/jobs/dlq.ts (1.6.4).
+   *
+   * ⚠️ RETURNS A DISCRIMINATED RESULT, and an ALREADY-REPLAYED row is a normal
+   * one (MOTIR-3730) — not an error, and not something the route may only learn
+   * from a log line. It used to be a raw `P2002` thrown straight through this
+   * method into the Server Action.
    */
   async replayDLQ(input: {
     dlqId: string;
     workspaceId: string;
     userId: string;
-  }): Promise<JobRunDlqDTO> {
+  }): Promise<ReplayDLQResult> {
     return withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
       async (tx) => {
@@ -190,6 +195,9 @@ export const jobsDashboardService = {
             actorUserId: input.userId,
             functionId: entry.functionId,
             eventName: entry.eventName,
+            // A second click enqueues nothing, and the audit line has to say so
+            // — otherwise two identical entries read as two re-runs.
+            outcome: result.outcome,
           }),
         );
 

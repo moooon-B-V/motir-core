@@ -2302,6 +2302,8 @@
       "dlqTableCaption": "Dead-letter queue",
       "replay": "Replay",
       "replayTooltip": "Only a workspace owner can replay jobs",
+      "alreadyReplayedToastTitle": "Already replayed",
+      "alreadyReplayedToastDesc": "This entry was replayed earlier — nothing new was queued.",
       "replayedToastTitle": "Job replayed",
       "replayedToastDesc": "The original event was re-emitted.",
       "replayErrorTitle": "Could not replay",

@@ -16,6 +16,13 @@ import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  /**
+   * Set by {@link replayDlqAction} when the entry had ALREADY been replayed and
+   * this call enqueued nothing (MOTIR-3730). A success, not a failure — the
+   * surface says so rather than showing the operator a constraint violation for
+   * a second click on a slow button.
+   */
+  alreadyReplayed?: boolean;
 }
 
 async function requireContext() {
@@ -30,14 +37,20 @@ async function requireContext() {
  * Replay a dead-lettered job. The service re-checks the owner gate server-side,
  * so a non-owner posting this directly still fails. On success the page is
  * revalidated so the DLQ row's "Replayed" stamp + badge count refresh.
+ *
+ * A row that was already replayed comes back `ok: true, alreadyReplayed: true`
+ * (MOTIR-3730) — the engine's dedup answering a double-click, which is neither
+ * a failure to translate here nor something to hide behind a second success
+ * toast that claims a re-run happened.
  */
 export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
   const t = await getErrorsTranslator();
   if (!dlqId) return { ok: false, error: t('actions.missingDlqId') };
 
+  let outcome: 'replayed' | 'already-replayed';
   try {
-    await jobsDashboardService.replayDLQ({ dlqId, workspaceId, userId });
+    ({ outcome } = await jobsDashboardService.replayDLQ({ dlqId, workspaceId, userId }));
   } catch (err) {
     if (err instanceof ReplayForbiddenError) {
       return { ok: false, error: t('actions.ownerOnlyReplay') };
@@ -49,5 +62,5 @@ export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
   }
 
   revalidatePath('/settings/workspace/jobs');
-  return { ok: true };
+  return { ok: true, alreadyReplayed: outcome === 'already-replayed' };
 }

@@ -36,6 +36,16 @@ import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 // new failure — a new dlq row — replays independently. A job with no idempotency
 // key is unaffected (it already replayed unconditionally).
 //
+// AND THE SECOND CLICK IS REPORTED, NOT RAISED (MOTIR-3730). That dedup is
+// enforced by a UNIQUE index, so from the moment the engine arm carried a routed
+// job (MOTIR-3463) the second replay of one row surfaced a raw `P2002` out of the
+// dashboard's Server Action — a constraint name shown to an operator who had done
+// nothing wrong; invisible until MOTIR-3418 only because the VENDOR arm swallowed
+// it in a dedup window and toasted success twice. The
+// enqueue therefore goes through `createIfAbsent`, and the outcome rides the
+// RETURN VALUE (`ReplayDLQResult`) so the surface can say "already replayed".
+// Nothing about the dedup itself changed; only what the caller is told.
+//
 // Why it enqueues directly and not through `sendEvent`: the stored `eventData` is
 // dynamic jsonb (it can be ANY job's payload, including system/cron jobs that
 // never go through `sendEvent`), so it bypasses `sendEvent`'s compile-time event
@@ -44,13 +54,32 @@ import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 // invariant.
 
 /**
+ * What one replay did — a DISCRIMINATED result rather than a bare DTO, for the
+ * reason `EnqueueScheduledResult` gives one tier down (MOTIR-3730): "this
+ * row was already replayed" is a normal outcome of a healthy system — an
+ * operator double-clicking a slow button — and a caller must be able to tell it
+ * from a replay it caused without inspecting a log line or a timestamp it did
+ * not write.
+ */
+export type ReplayDLQResult =
+  /** A fresh `job_event` + `job_queue` pair was written and the row stamped. */
+  | { outcome: 'replayed'; entry: JobRunDlqDTO }
+  /**
+   * The dedup index already held a run for this replay's key, so NOTHING was
+   * written — the entry comes back with the `replayedAt` the FIRST replay
+   * stamped, not a new one.
+   */
+  | { outcome: 'already-replayed'; entry: JobRunDlqDTO };
+
+/**
  * Replay a dead-lettered job by re-emitting its original event, then stamping
- * `replayedAt`. Returns the updated DLQ DTO. Throws if the id is unknown.
+ * `replayedAt`. Reports whether it enqueued anything (see
+ * {@link ReplayDLQResult}). Throws if the id is unknown.
  */
 export async function replayDLQ(
   dlqId: string,
   tx: Prisma.TransactionClient,
-): Promise<JobRunDlqDTO> {
+): Promise<ReplayDLQResult> {
   const row = await jobRunDlqRepository.findById(dlqId, tx);
   if (!row) {
     throw new Error(`job_run_dlq ${dlqId} not found`);
@@ -87,7 +116,15 @@ export async function replayDLQ(
     },
     tx,
   );
-  await jobQueueRepository.create(
+  // ⚠️ `createIfAbsent`, NOT `create` (MOTIR-3730). The key re-shaped above is
+  // deliberately DERIVED FROM THE DLQ ROW ID, so a second replay of the same row
+  // derives the SAME key and the partial unique on `(job_id, idempotency_key)`
+  // refuses it — which is the dedup working exactly as intended, and is NOT an
+  // error to hand back to whoever pressed the button. `dispatchEventToEngine`
+  // has read this violation as "already enqueued" since MOTIR-3423; this arm
+  // simply never applied it, because it was written for the case where the row
+  // had not already been replayed.
+  const enqueued = await jobQueueRepository.createIfAbsent(
     {
       jobId: row.functionId,
       eventId: event.id,
@@ -103,8 +140,23 @@ export async function replayDLQ(
     },
     tx,
   );
+
+  if (enqueued === null) {
+    // ⚠️ ROLL THE EVENT BACK BY HAND, because the transaction is the CALLER's
+    // and it is still healthy — that is the whole point of absorbing the
+    // conflict at the INSERT rather than catching a `P2002` (see
+    // `jobQueueRepository.createIfAbsent`). The event above was written before
+    // the queue row could be attempted at all, since the run carries the FK, so
+    // on this arm it references nothing and nothing will ever consume it.
+    await jobEventRepository.deleteById(event.id, tx);
+    // ⚠️ AND DO NOT RE-STAMP `replayedAt`. It records WHEN the replay that
+    // actually enqueued happened; moving it on a no-op would tell an operator
+    // their second click did something.
+    return { outcome: 'already-replayed', entry: toJobRunDlqDTO(row) };
+  }
+
   const replayed = await jobRunDlqRepository.update(dlqId, { replayedAt: new Date() }, tx);
-  return toJobRunDlqDTO(replayed);
+  return { outcome: 'replayed', entry: toJobRunDlqDTO(replayed) };
 }
 
 /**

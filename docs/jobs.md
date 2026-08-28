@@ -797,6 +797,10 @@ operator action; there is one surface now, and it is this one.
   calls `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`), which re-emits the original
   event — with a **re-shaped idempotency key** (see below) — and stamps
   `replayed_at` so the action is auditable.
+- **What a second click does** — nothing, and it says so. The row is already
+  replayed, its key is already taken, and the dashboard toasts _"Already
+  replayed"_ rather than an error; `replayed_at` keeps the time of the replay
+  that actually queued a run (MOTIR-3730).
 - **When NOT to replay** — if the failure was a bad payload or a since-removed
   code path, replaying just re-fails. Fix forward first; replay only transient
   infrastructure failures (provider outage, expired upstream token now renewed).
@@ -816,6 +820,22 @@ survived the migration.) The new key is derived from the
 re-run (no double-delivery), while a genuinely new failure replays
 independently. A job with **no** idempotency key was always replayed
 unconditionally and is unaffected. See `PRODECT_FINDINGS.md` #40.
+
+**And the second click is REPORTED, not raised (MOTIR-3730).** The dedup above is
+enforced by the `(job_id, idempotency_key)` partial unique index, so for as long
+as the engine has routed jobs the second replay of one row raised a `P2002` out of
+the dashboard's Server Action — a Prisma constraint name shown to an operator who
+had done nothing wrong. `replayDLQ` now enqueues through
+`jobQueueRepository.createIfAbsent` (Prisma's `INSERT … ON CONFLICT DO NOTHING`)
+and returns a discriminated `ReplayDLQResult`: `replayed`, or `already-replayed`
+with nothing written and `replayed_at` untouched. Nothing about the dedup itself
+changed. **The reason it is absorbed at the INSERT and not caught as a `P2002`:**
+`replayDLQ` runs inside the transaction the dashboard service opens and goes on
+using, and a raised unique violation aborts that whole transaction — every later
+statement answers `25P02 current transaction is aborted` and the `COMMIT` then
+rolls back while reporting success. `dispatchEventToEngine` and `enqueueScheduled`
+may catch their own violations only because each wraps its insert in a
+one-statement `withSystemContext` transaction of its own.
 
 ## Event-level idempotency on the Postgres engine (MOTIR-3459)
 
