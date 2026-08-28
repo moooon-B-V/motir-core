@@ -66,6 +66,8 @@ export function TodoListSection({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const genericError = t('errors.generic');
+
   const [adding, setAdding] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -75,21 +77,45 @@ export function TodoListSection({
   const [announcement, setAnnouncement] = useState('');
   const lastAction = useRef<(() => Promise<void>) | null>(null);
 
-  /** Run one action, holding its failure INSIDE the section (never blanking the page). */
-  const run = useCallback(async (fn: () => Promise<{ ok: boolean; error?: string }>) => {
-    setPending(true);
-    try {
-      const result = await fn();
-      if (!result.ok) {
-        setError(result.error ?? null);
+  /**
+   * Run one action, holding its failure INSIDE the section (never blanking the
+   * page).
+   *
+   * ⚠️ TWO FAILURE SHAPES, AND THE SECOND IS THE ONE THAT ACTUALLY HAPPENS. An
+   * action can REFUSE — returning `{ ok: false, error }` for a typed store
+   * error — or it can REJECT: the network drops, a deploy lands mid-flight, or
+   * the action rethrows an error it has no message for (which `todoActions`
+   * does deliberately, so a bug is reported rather than flattened into
+   * "something went wrong").
+   *
+   * An earlier revision handled only the refusal — `try` / `finally` with no
+   * `catch` — so a rejection escaped as an unhandled rejection and the section
+   * rendered NOTHING: no error, no retry, and a control that silently did not
+   * work. MOTIR-3817's error-state E2E is what caught it, by aborting the
+   * action's POST at the network boundary, which is exactly the shape a real
+   * user hits and the one no refusal path can produce.
+   */
+  const run = useCallback(
+    async (fn: () => Promise<{ ok: boolean; error?: string }>) => {
+      setPending(true);
+      try {
+        const result = await fn();
+        if (!result.ok) {
+          setError(result.error ?? genericError);
+          return false;
+        }
+        setError(null);
+        return true;
+      } catch {
+        // No typed message exists for this — the action never got to answer.
+        setError(genericError);
         return false;
+      } finally {
+        setPending(false);
       }
-      setError(null);
-      return true;
-    } finally {
-      setPending(false);
-    }
-  }, []);
+    },
+    [genericError],
+  );
 
   const retry = useCallback(async () => {
     const again = lastAction.current;

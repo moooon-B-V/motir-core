@@ -517,6 +517,33 @@ describe('a failed ADD', () => {
   });
 });
 
+describe('a REJECTED action (not merely a refused one)', () => {
+  it('shows the section’s generic error rather than escaping as an unhandled rejection', async () => {
+    // The shape a real user hits: the network drops, a deploy lands mid-flight,
+    // or the action rethrows an error it has no message for. An earlier
+    // revision handled only `{ ok: false }` and rendered NOTHING for this —
+    // caught by MOTIR-3817's error-state E2E, which aborts the POST.
+    const row = todo({ text: 'A step' });
+    setTodoDoneAction.mockRejectedValueOnce(new Error('network'));
+    mount([row]);
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByText('Something went wrong. Please try again.')).toBeTruthy();
+    // …and the list is still standing.
+    expect(screen.getByText('A step')).toBeTruthy();
+  });
+
+  it('a refusal with no message still shows something rather than an empty alert', async () => {
+    const row = todo({ text: 'A step' });
+    setTodoDoneAction.mockResolvedValueOnce({ ok: false });
+    mount([row]);
+    fireEvent.click(screen.getByRole('checkbox'));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByText('Something went wrong. Please try again.')).toBeTruthy();
+  });
+});
+
 // ── the overflow containment rule (criterion 8, structurally) ───────────────
 
 describe('the containment rule for a wide command', () => {
