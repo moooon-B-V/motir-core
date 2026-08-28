@@ -65,9 +65,16 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // The stale `planned` plan's row shows its status + the "N may be out of date"
   // indicator; the approved plan's row shows its Approved status.
+  //
+  // ⚠️ ONE, not two (MOTIR-3777). The fixture drifts the tree twice and only ONE
+  // of those drifts is a reason now: the archived parent. The other — an
+  // unrelated card landing under the OTHER proposal's still-living parent — used
+  // to raise `siblings_added` and raises nothing, which is the whole of the fix.
+  // The count on this row is `staleCountFor`'s, a SECOND reader of the same
+  // verdict as the rail's summary below, so it is asserted here as well.
   const staleRow = page.locator(`a[href="/plans/${seed.stalePlan.id}"]`);
   await expect(staleRow).toContainText('Planned');
-  await expect(staleRow).toContainText('2 may be out of date');
+  await expect(staleRow).toContainText('1 may be out of date');
 
   // ⚠️ THE APPROVED PLAN IS IN ITS OWN TAB (MOTIR-3241). `/plans` is no longer one
   // reverse-chronological stream of every plan: it is a tab per lifecycle state,
