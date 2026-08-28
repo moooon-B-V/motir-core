@@ -393,6 +393,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '138c5dd702b3',
   },
+  publish_design_result: {
+    summary:
+      'Put the design RESULT on a design work item — the note sections you changed, the mock and the .png export, in one call. It is the deliverable a reviewer opens, and nothing else publishes it.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '8742db646e68',
+  },
   link_pull_request: {
     summary:
       'Declare which work item a pull request belongs to — call it right after opening one. It ' +

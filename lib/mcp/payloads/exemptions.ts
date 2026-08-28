@@ -39,6 +39,16 @@ export const EXEMPT_TOOLS = {
     'Reports a project’s PLANNING PRECONDITIONS (established?, code connected + indexed?, ' +
     'repo set, onboarding run) — an agent-facing readiness report assembled for dispatch, ' +
     'with no REST client asking for it.',
+  publish_design_result:
+    'Returns the published RESULT\u2019s receipt \u2014 `{ id, workItemKey, assetCount, ' +
+    'noteTruncated, createdAt }`. `/api/v1` publishes no design-evidence component at all: the ' +
+    'design result is reached over the CI-authed `/api/work-items/[id]/design-evidence` route ' +
+    'and read by the panel server-side, neither of which is a v1 operation, so ' +
+    '`V1_RESOURCE_COMPONENTS` has nothing to derive from \u2014 by architecture rather than by ' +
+    'omission. \u26a0\ufe0f `noteTruncated` is load-bearing rather than decorative: it is how a ' +
+    'caller learns the inline note hit the 64 KiB cap and that the complete text lives in the ' +
+    '`note_file` asset, which is the difference between a rendering bound and data loss ' +
+    '(MOTIR-3782).',
   link_work_items:
     'Returns the created EDGE ROW (`WorkItemLinkDto` — `id`, `fromId`, `toId`, `kind`, ' +
     '`createdById`). v1 has a link-create endpoint, but its 201 body is an inline ' +

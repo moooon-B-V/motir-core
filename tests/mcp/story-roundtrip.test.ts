@@ -328,6 +328,22 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           contentType: 'text/markdown',
           contentBase64: 'eA==',
         },
+        // MOTIR-3782. Same shape and the same stake as `attach_file`, one
+        // artifact class over — and the leak this guards is worse, because a
+        // design result RENDERS: a publish that crossed a tenant boundary would
+        // put a stranger's screen on A's card under a real evidence id. The key
+        // must read as not-found before any byte is written.
+        publish_design_result: {
+          key: item1,
+          assets: [
+            {
+              kind: 'image',
+              sourcePath: 'design/rogue/rogue.png',
+              contentType: 'image/png',
+              contentBase64: 'eA==',
+            },
+          ],
+        },
         // MOTIR-3526. Aimed at tenant A's item like its neighbours: the ITEM key
         // must read as not-found BEFORE the repository is looked at, so a
         // non-member learns neither that the card exists nor which repositories
@@ -770,6 +786,19 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           filename: 'findings.md',
           contentType: 'text/markdown',
           contentBase64: 'eA==',
+        },
+        // MOTIR-3782 — the caller's OWN item. A write-scoped tool, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        publish_design_result: {
+          key: item1,
+          assets: [
+            {
+              kind: 'image',
+              sourcePath: 'design/scoped/scoped.png',
+              contentType: 'image/png',
+              contentBase64: 'eA==',
+            },
+          ],
         },
         // MOTIR-3526 — the caller's OWN item. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate; the

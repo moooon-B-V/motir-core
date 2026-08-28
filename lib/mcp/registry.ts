@@ -41,6 +41,10 @@ import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchL
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
 import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
 import { LINK_PULL_REQUEST_TOOL_NAME, registerLinkPullRequest } from './tools/linkPullRequest';
+import {
+  PUBLISH_DESIGN_RESULT_TOOL_NAME,
+  registerPublishDesignResult,
+} from './tools/publishDesignResult';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
@@ -118,6 +122,7 @@ export const MCP_TOOL_NAMES = [
   SEARCH_LESSONS_TOOL_NAME,
   REINFORCE_LESSON_TOOL_NAME,
   ATTACH_FILE_TOOL_NAME,
+  PUBLISH_DESIGN_RESULT_TOOL_NAME,
   LINK_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
@@ -247,6 +252,7 @@ export function registerMcpTools(
   // The general attachment door (MOTIR-3058) — the agent-facing half of
   // MOTIR-3057's `/api/v1` route, over the same service path.
   registerAttachFile(target, resolveContext);
+  registerPublishDesignResult(target, resolveContext);
   // The pull-request LINK door (Story MOTIR-3525 · MOTIR-3526) — an executing
   // agent declares which card its pull request delivers, at the one moment it
   // knows with certainty. The branch/title parse stays as the fallback for a

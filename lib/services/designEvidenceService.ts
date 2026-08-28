@@ -7,7 +7,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { randomUUID } from 'node:crypto';
-import { headPrivateBlob, mintPrivateUploadToken } from '@/lib/blob/uploader';
+import { headPrivateBlob, mintPrivateUploadToken, putPrivateAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedDesignAssetType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
@@ -72,6 +72,26 @@ export interface RecordDesignResultInput {
    * children, and is never persisted.
    */
   withinParentKey?: string | null;
+}
+
+/**
+ * One asset published with its BYTES IN HAND, for the caller that is already
+ * inside the server (MOTIR-3782). {@link DesignAssetInput} names a blob the
+ * CLIENT has already PUT; this names one nobody has uploaded yet.
+ */
+export interface DesignAssetBytesInput {
+  kind: DesignAssetKindDTO;
+  /** The repo path the file came from. */
+  sourcePath: string;
+  /** The media type the caller declares. Checked here, and again at register
+   *  against what the store actually holds. */
+  contentType: string;
+  /** The decoded file bytes. */
+  bytes: Buffer;
+}
+
+export interface RecordDesignResultFromBytesInput extends Omit<RecordDesignResultInput, 'assets'> {
+  assets: DesignAssetBytesInput[];
 }
 
 /** The private-store key prefix that scopes one item's design artifacts. */
@@ -543,6 +563,67 @@ export const designEvidenceService = {
     } catch (err) {
       throw translateSupersedeConflict(err, item.id);
     }
+  },
+
+  /**
+   * Publish a design result from BYTES THE CALLER ALREADY HOLDS (MOTIR-3782) —
+   * the door for an agent inside the server, where the mint-then-PUT dance has
+   * nothing to dance with.
+   *
+   * ⚠️ IT ADDS NO POLICY. Every decision stays where it already lived: the
+   * target resolution and its leaf / child refusals are {@link resolveTarget};
+   * the pathname is composed exactly as {@link createUploadTokens} composes it,
+   * under the same `design/<ws>/<itemId>/` prefix with the same nonce-and-index
+   * collision guard; and the whole register half — the prefix check, the
+   * authoritative `head`, the storage cap, `capNoteMd`, the `note_file`
+   * companion, supersede and idempotency — is {@link recordFromPathnames},
+   * called at the end rather than reimplemented. What this method owns is the
+   * upload, and nothing else.
+   *
+   * ⚠️ THE PER-FILE CAP IS CHECKED BEFORE THE WRITE, WHICH THE MINTED PATH
+   * CANNOT DO. A presigned PUT is enforced server-side AFTER the object lands
+   * (`mintPrivateUploadToken`'s own note), because the grant cannot bound what a
+   * client actually sends. Here the bytes are in hand, so an over-cap asset is
+   * refused having written nothing — a strictly better outcome reached only
+   * because the caller is on this side of the wire. `recordFromPathnames` still
+   * re-checks the STORED size, and that check remains the authoritative one.
+   *
+   * ⚠️ THE DECLARED TYPE IS CHECKED HERE AND THE STORED TYPE AT REGISTER, and
+   * both are deliberate. This one refuses a disallowed type before any object
+   * exists — the same thing the mint step does for the same reason. The register
+   * check reads what the store holds, which is what actually protects §5's
+   * one-entrance guarantee for `text/html`.
+   */
+  async recordFromBytes(
+    input: RecordDesignResultFromBytesInput,
+    ctx: ServiceContext,
+  ): Promise<DesignEvidenceDTO> {
+    const item = await resolveTarget(input.workItemId, ctx, input.withinParentKey);
+    if (!input.assets || input.assets.length === 0) throw new DesignEvidenceEmptyError();
+
+    const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
+    const prefix = designPrefix(ctx.workspaceId, item.id);
+    const nonce = randomUUID();
+
+    const uploaded: DesignAssetInput[] = [];
+    for (const [index, asset] of input.assets.entries()) {
+      if (!ASSET_KINDS.includes(asset.kind)) {
+        throw new UnsupportedFileTypeError(String(asset.kind));
+      }
+      if (!isAllowedDesignAssetType(asset.contentType)) {
+        throw new UnsupportedFileTypeError(asset.contentType);
+      }
+      if (asset.bytes.byteLength > perFileLimit) throw new FileTooLargeError(perFileLimit);
+
+      const pathname = `${prefix}${nonce}-${index}-${basenameOf(asset.sourcePath)}`;
+      await putPrivateAttachment(pathname, asset.bytes, asset.contentType);
+      uploaded.push({ kind: asset.kind, sourcePath: asset.sourcePath, pathname });
+    }
+
+    // Address the item by ID: it is already resolved, and re-resolving by the
+    // caller's original reference would re-run the child gate against a
+    // container this call has already cleared.
+    return this.recordFromPathnames({ ...input, workItemId: item.id, assets: uploaded }, ctx);
   },
 
   /**
