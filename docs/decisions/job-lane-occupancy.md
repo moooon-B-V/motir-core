@@ -153,6 +153,36 @@ The honest summary: §1, §2's arithmetic and §3 are all measurements of a reti
 history; §2's CONCLUSION — a supervisor is not what delays the fast lane — survives, re-grounded
 above on the engine.
 
+### ⚠️ RE-EXAMINED 2026-08-28 (MOTIR-3761): the price above is CORRECT, and it is no longer PAID — `docs/decisions/job-queue-foundation.md` §15
+
+**The amendment's pricing is where this record ends and it is not where the question ends.** _"The
+collapsed loop holds ONE claim for the container's whole life … AND THAT IS A REAL COST, NOT AN
+ABSENCE OF ONE. It is affordable because the pool is ours to size"_ is exactly right, and on
+2026-08-28 the pool turned out to be size **one** — read from the platform, not from `fly.toml` —
+and the affordability argument met the bill. A 35-minute `system.code-graph-refresh` held its claim
+and four unrelated claims beside it; 139 rows sat unclaimed, the oldest for 30 minutes; a status
+cascade arrived thirteen minutes late.
+
+**Where that was examined, and what it decided:** `job-queue-foundation.md` **§15**. In short —
+
+- **§15.3**: a claimed batch does NOT have to settle together. `tick()`'s `Promise.all` was a
+  consequence of writing _"run these"_, not a control anybody chose; claiming is governed by free
+  capacity instead.
+- **§15.4**: a supervisor need not hold its claim while it waits. `ctx.step.sleep` re-enqueues the
+  run, refunds the attempt and **releases the claim** — machinery `lib/jobs/engine/worker.ts`
+  already implements. §15.4b records which half of `step.sleep`'s value was a Vercel artifact
+  (surviving `maxDuration = 300`, gone with the platform) and which never was (releasing the slot,
+  restored).
+- **§15.5**: what bounds concurrent supervision afterwards is the job's own admission cap for
+  containers, and the worker's pool size × machine count for total in-flight work — not the queue.
+
+**So this amendment's CONCLUSION survives a second time and on a third footing.** A supervisor is
+still not what delays the fast lane — first because the slot was released between ~128 polls, then
+because there was no shared pool to occupy, and now because the claim is given back between polls by
+construction. **What does NOT survive is the sentence about the pool being ours to size being
+sufficient on its own:** it is true, and it is a reason the cost is affordable rather than a reason
+it is absent. §15 removes the cost instead of pricing it again.
+
 ---
 
 ## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps — HISTORICAL
