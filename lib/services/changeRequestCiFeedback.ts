@@ -5,11 +5,11 @@ import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { liveCheckRows } from '@/lib/github/checkSuites';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
 import { workItemsService } from './workItemsService';
 import { promoteDeliveredCardsOnGreen } from './ciPromotion';
+import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 
 // The provider-agnostic CI / pipeline → work-item feedback consumer (Story 7.10 ·
 // MOTIR-894, generalized for GitLab in Story 7.23 · MOTIR-1477). This is THE ONE
@@ -148,17 +148,28 @@ export async function applyCiStatusFeedback(
 
     // ⚠️ A CHANGE REQUEST WITH NO LINKED CARD IS NOT NECESSARILY A NO-OP
     // (MOTIR-3006). A session pull request carries N cards and its head ref
-    // deliberately names none of them, so the link column is null while the
-    // delivery is about real work. The rows must still be recorded and the
-    // promotion still evaluated; what a null link costs is the COMMENT and the
-    // `ciState` flip, both of which need one card to hang on and are unchanged.
-    const workItem = cr.workItemId ? await workItemRepository.findById(cr.workItemId, tx) : null;
-    const delivered = await workItemRepository.findBySessionBranch(
-      cr.headRef,
-      repo.workspaceId,
+    // deliberately names none of them, so it resolves through the SESSION arm
+    // while the delivery is about real work. The rows must still be recorded and
+    // the promotion still evaluated; what the session arm costs is the COMMENT
+    // and the `ciState` flip, both of which need cards of their own to hang on.
+    //
+    // ⚠️ ONE MEMBERSHIP RULE (MOTIR-3721). This used to ask two questions of two
+    // sources — the link column for "the" card, `findBySessionBranch` for the run
+    // — which is the same shape the shared resolver exists to prevent the two
+    // consumers of drifting apart on. It now asks the resolver, so the CI half
+    // and the merge half cannot disagree about what a pull request delivers.
+    const delivery = await resolveChangeRequestWorkItemSet({
+      workspaceId: repo.workspaceId,
+      headRef: cr.headRef,
+      githubPullRequestId: cr.id,
       tx,
-    );
-    if (!workItem && delivered.length === 0) return { kind: 'no_work_item' as const };
+    });
+    if (delivery.items.length === 0) return { kind: 'no_work_item' as const };
+    // The cards this verdict is ABOUT, per card. Empty on the session arm, whose
+    // cards are reached by the promotion below and by nothing else here — exactly
+    // as a null link column reached nothing before.
+    const deliveredWorkItemIds =
+      delivery.kind === 'linked' ? delivery.items.map((item) => item.id) : [];
 
     const existing = await githubCheckRunRepository.findByKey(
       cr.id,
@@ -175,8 +186,9 @@ export async function applyCiStatusFeedback(
       kind: 'resolved' as const,
       workspaceId: repo.workspaceId,
       provider: installation.provider as GitProviderId,
-      /** The LINKED card — null for a session pull request, which names none. */
-      workItemId: workItem?.id ?? null,
+      /** EVERY card the pull request's delivery links name (MOTIR-3721) — empty
+       *  for a session pull request, whose cards the promotion reaches instead. */
+      deliveredWorkItemIds,
       prId: cr.id,
       checksUrl: buildChecksUrl(cr.number),
       existing: existing
@@ -191,6 +203,22 @@ export async function applyCiStatusFeedback(
   if (resolved.kind === 'unknown_repo') return { event: 'ci', outcome: 'unknown_repo' };
   if (resolved.kind === 'no_pull_request') return { event: 'ci', outcome: 'no_pull_request' };
   if (resolved.kind === 'no_work_item') return { event: 'ci', outcome: 'no_work_item' };
+
+  // The cards this verdict reaches, and the ONE of them the feedback comment
+  // lands on.
+  //
+  // ⚠️ THE COMMENT IS STILL ONE CARD'S, AND THAT IS A KNOWN SHORTFALL RATHER
+  // THAN A CHOICE THIS FILE MAKES (MOTIR-3721). Its identity is stored in
+  // `github_check_run.feedback_comment_id` — a SCALAR with a real foreign key
+  // and `onDelete: SetNull`, which is what guarantees the id this path edits is
+  // live. N comments need N ids, and an array cannot carry that FK; deciding the
+  // replacement is a schema question the reader-migration ADR did not settle, and
+  // its failure is VISIBLE and LOCAL (a second card shows no CI comment), which
+  // is the ADR's own cut for the NEXT half rather than this one. Recorded on the
+  // card and filed as a bug rather than left as a sentence here. The `ciState`
+  // write below is per card, because it needs no such storage.
+  const [firstDelivered] = resolved.deliveredWorkItemIds;
+  const commentTarget = firstDelivered ?? null;
 
   // An in-flight check: RECORD the row (conclusion 'pending') so the per-change-request
   // "Checks running" state is derivable (MOTIR-1579), but with NONE of the terminal
@@ -215,7 +243,7 @@ export async function applyCiStatusFeedback(
     return {
       event: 'ci',
       outcome: 'pending_recorded',
-      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+      ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
     };
   }
 
@@ -224,7 +252,7 @@ export async function applyCiStatusFeedback(
     return {
       event: 'ci',
       outcome: 'no_work_item',
-      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+      ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
     };
 
   // Idempotent: a redelivery of the SAME conclusion we already recorded (and
@@ -238,7 +266,7 @@ export async function applyCiStatusFeedback(
     return {
       event: 'ci',
       outcome: 'noop',
-      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+      ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
       ciState: event.conclusion === 'success' ? 'passing' : 'failing',
     };
   }
@@ -301,8 +329,8 @@ export async function applyCiStatusFeedback(
     // no "Edited" tag, no event — so a delivery that moves nothing stays silent.)
     if (existingCommentId) {
       await commentsService.editComment(existingCommentId, { bodyMd }, actorCtx);
-    } else if (resolved.workItemId) {
-      const created = await commentsService.addComment(resolved.workItemId, { bodyMd }, actorCtx);
+    } else if (commentTarget) {
+      const created = await commentsService.addComment(commentTarget, { bodyMd }, actorCtx);
       await githubCheckRunRepository.upsert(
         {
           pullRequestId: resolved.prId,
@@ -321,12 +349,15 @@ export async function applyCiStatusFeedback(
     // recorded for the Development surface, never gate the verdict.)
   });
 
-  // Flip the verification signal through the service (no raw work_item write).
-  // Only a LINKED card has one to flip: a session pull request names none, and
-  // `ciState` is a per-card signal, so there is nothing to write there. The
-  // promotion below is what that delivery is actually for.
-  if (resolved.workItemId) {
-    await workItemsService.setCiState(resolved.workItemId, ciState, actorCtx);
+  // Flip the verification signal through the service (no raw work_item write) —
+  // ONCE PER DELIVERED CARD (MOTIR-3721). `ciState` is a per-card signal and this
+  // verdict is about all of them: a pull request delivering two cards leaves the
+  // second one's pill reading whatever the previous run left, which is a wrong
+  // answer rather than a missing one. Only the LINKED arm has cards to flip here:
+  // a session pull request's are reached by the promotion below, which is what
+  // that delivery is actually for.
+  for (const workItemId of resolved.deliveredWorkItemIds) {
+    await workItemsService.setCiState(workItemId, ciState, actorCtx);
   }
 
   // ── CI GREEN PROMOTES (MOTIR-3006) ──────────────────────────────────────
@@ -361,31 +392,38 @@ export async function applyCiStatusFeedback(
     // always did — what changed is that it now RECORDS its rows and evaluates the
     // promotion on the way there, which is the only thing a session pull request
     // could ever have wanted from this path.
-    outcome: resolved.workItemId
+    outcome: firstDelivered
       ? event.conclusion === 'success'
         ? 'verified'
         : 'failed'
       : 'no_work_item',
-    ...(resolved.workItemId ? { workItemId: resolved.workItemId, ciState } : {}),
+    ...(firstDelivered ? { workItemId: firstDelivered, ciState } : {}),
     ...(promoted.length > 0 ? { promoted } : {}),
   };
 }
 
 /** Resolve the stored change request (PR / MR) for a CI event — by the event's
  *  PR/MR-number list first (the strongest link), else the head branch (stable
- *  across a re-push). Null when neither resolves to a stored row. */
+ *  across a re-push). Null when neither resolves to a stored row.
+ *
+ *  ⚠️ NO `workItemId` IN THE PROJECTION (MOTIR-3721). It used to carry the link
+ *  column, and that scalar was consumed at EIGHT sites below — the feedback
+ *  comment and the `ciState` write among them — so an ordinary pull request's
+ *  CI verdict reached exactly ONE card whatever its delivery set held. WHICH
+ *  cards a change request delivers is `resolveChangeRequestWorkItemSet`'s one
+ *  question, asked by the caller; this function's job is to find the ROW. */
 async function resolveChangeRequest(
   repoId: string,
   event: NormalizedStatusEvent,
   tx: Prisma.TransactionClient,
-): Promise<{ id: string; number: number; workItemId: string | null; headRef: string } | null> {
+): Promise<{ id: string; number: number; headRef: string } | null> {
   for (const number of event.prNumbers) {
     const pr = await githubPullRequestRepository.findByRepoAndNumber(repoId, number, tx);
-    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId, headRef: pr.headRef };
+    if (pr) return { id: pr.id, number: pr.number, headRef: pr.headRef };
   }
   if (event.headBranch) {
     const pr = await githubPullRequestRepository.findByRepoAndHeadRef(repoId, event.headBranch, tx);
-    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId, headRef: pr.headRef };
+    if (pr) return { id: pr.id, number: pr.number, headRef: pr.headRef };
   }
   return null;
 }
@@ -455,4 +493,19 @@ export function feedbackCommentBody(
 
 function plural(n: number, word: string): string {
   return n === 1 ? word : `${word}s`;
+}
+
+/** The `workItemId` field a CI outcome reports — the FIRST delivered card, or
+ *  nothing at all when the change request delivers none through its links.
+ *
+ *  A spread rather than a value so an outcome with no card omits the key entirely,
+ *  which is the shape every one of these results has always had. A delivery
+ *  carrying SEVERAL cards reports the first here and the full set through
+ *  `promoted`; naming all of them in this field would change a scalar that
+ *  callers and tests read (MOTIR-3721). */
+function reportedWorkItemId(
+  deliveredWorkItemIds: readonly string[],
+): { workItemId: string } | null {
+  const [first] = deliveredWorkItemIds;
+  return first ? { workItemId: first } : null;
 }

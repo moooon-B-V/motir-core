@@ -3,6 +3,7 @@ import { getGitProvider } from '@/lib/git';
 import { readPullRequestBaseRef } from '@/lib/github/pullRequestBase';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   repoSetCompletionService,
@@ -144,18 +145,34 @@ export const pullRequestBaseRefBackfillService = {
     const repos = inScope.filter((r) => r.provider === 'github');
 
     const reports: PullRequestBaseRefRepoReport[] = [];
-    // A work item can carry rows in SEVERAL repositories, so the touched set is
-    // deduplicated across the whole sweep — re-evaluating one item twice would
-    // be harmless but would report two verdicts for one decision.
-    const touchedWorkItemIds = new Set<string>();
+    // The PULL REQUESTS this sweep actually filled, deduplicated across the whole
+    // run. The cards they deliver are resolved from them AFTERWARDS, in one read
+    // (MOTIR-3721): a pull request delivers a SET of cards, so the ids cannot be
+    // taken off the candidate row's own link column — that column names at most
+    // one of them, and a sweep that re-evaluated one card of three would report
+    // `filled: N` having repaired nothing (ADR §5).
+    const touchedPullRequestIds = new Set<string>();
 
     for (const repo of repos) {
-      reports.push(await sweepRepo(repo, opts.dryRun, touchedWorkItemIds));
+      reports.push(await sweepRepo(repo, opts.dryRun, touchedPullRequestIds));
     }
 
+    // A work item can be delivered by rows in SEVERAL repositories, so the id set
+    // is deduplicated by the read itself — re-evaluating one item twice would be
+    // harmless but would report two verdicts for one decision.
+    const touchedWorkItemIds =
+      touchedPullRequestIds.size > 0
+        ? await withSystemContext((tx) =>
+            workItemDeliveryRepository.listWorkItemIdsByPullRequests(
+              [...touchedPullRequestIds],
+              tx,
+            ),
+          )
+        : [];
+
     const reevaluated =
-      !opts.dryRun && opts.reevaluate !== false && touchedWorkItemIds.size > 0
-        ? await repoSetCompletionService.reevaluateItems([...touchedWorkItemIds], {
+      !opts.dryRun && opts.reevaluate !== false && touchedWorkItemIds.length > 0
+        ? await repoSetCompletionService.reevaluateItems(touchedWorkItemIds, {
             dryRun: false,
           })
         : [];
@@ -167,7 +184,7 @@ export const pullRequestBaseRefBackfillService = {
 async function sweepRepo(
   repo: GithubRepo & { installation: GithubInstallation },
   dryRun: boolean,
-  touchedWorkItemIds: Set<string>,
+  touchedPullRequestIds: Set<string>,
 ): Promise<PullRequestBaseRefRepoReport> {
   const report = emptyRepoReport(repo);
 
@@ -218,7 +235,10 @@ async function sweepRepo(
         continue;
       }
       report.filled += 1;
-      if (candidate.workItemId) touchedWorkItemIds.add(candidate.workItemId);
+      // The PULL REQUEST, not a card id read off it (MOTIR-3721). Which cards
+      // this merge could complete is a question for the delivery table, asked
+      // once for the whole sweep.
+      touchedPullRequestIds.add(candidate.id);
     }
   } catch (err) {
     // Every failure mode is recorded on the repo and the sweep moves on — the

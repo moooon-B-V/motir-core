@@ -29,7 +29,21 @@ export interface UpsertGithubPullRequestInput {
    *  only because rows written before it existed cannot know theirs. */
   baseRef: string;
   title: string | null;
-  workItemId: string | null;
+  /** The stored 1:1 link (W2, the webhook write). Still WRITTEN and still present
+   *  — MOTIR-3721 moves the column's READERS onto `work_item_delivery` and drops
+   *  nothing; the drop is its own later card, once nothing reads it.
+   *
+   *  ⚠️ OPTIONAL, and the third state is the point (MOTIR-3721). `null` CLEARS
+   *  the link; a string SETS it; **omitting it leaves the stored value exactly as
+   *  it is** (Prisma ignores an `undefined` field, so `update` does not touch the
+   *  column and `create` takes the column default). The status sync omits it: it
+   *  no longer resolves a card from this column, so it has no value to write back
+   *  — and reading the row's own value merely to hand it straight back would be a
+   *  read of the column wearing a write's clothes, which is the thing being
+   *  retired. The two callers that genuinely DECIDE a link
+   *  (`githubPullRequestService`, `historicalPullRequestBackfillService`) pass it
+   *  explicitly, as they always did. */
+  workItemId?: string | null;
   /** Whether this link is the manual override (MOTIR-1596). The webhook passes
    *  the row's PRESERVED value so an auto delivery never clears a manual link. */
   linkedManually: boolean;
@@ -145,91 +159,6 @@ export const githubPullRequestRepository = {
     });
   },
 
-  /** Count a work item's OTHER linked PRs (excluding `excludePrId`) that are
-   *  still OPEN (`state = 'open'`). The status sync uses this so a merge only
-   *  COMPLETES the item when it is the item's LAST open linked PR: a cross-repo
-   *  (two-PR) card must not flip Done while a sibling PR is still open
-   *  (MOTIR-1604). A read guarding the transition write → takes `tx`. */
-  async countOtherOpenByWorkItem(
-    workItemId: string,
-    excludePrId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    return tx.githubPullRequest.count({
-      where: { workItemId, state: 'open', id: { not: excludePrId } },
-    });
-  },
-
-  /**
-   * A work item's linked change requests, as the COMPLETION facts the
-   * repository-SET gate needs (Story MOTIR-2725 · MOTIR-2729): which repository
-   * each landed in, whether it merged, which branch it targeted, and that
-   * repository's own default branch.
-   *
-   * Takes a REQUIRED `tx` — unlike `listByWorkItemWithContext` beside it, which
-   * is a read-only render path. This one guards a status WRITE and must run
-   * inside the sync's resolve transaction, under the row lock already taken, so
-   * concurrent redeliveries serialize on it exactly as the two shipped gates do.
-   *
-   * Projected rather than `include: { repo: true }` so the gate cannot
-   * accidentally read a field it has no business in, and so the shape says what
-   * the decision is made of.
-   */
-  async listCompletionFactsByWorkItem(
-    workItemId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<LinkedChangeRequestCompletionFact[]> {
-    const rows = await tx.githubPullRequest.findMany({
-      where: { workItemId },
-      select: {
-        merged: true,
-        baseRef: true,
-        repo: { select: { name: true, defaultBranch: true } },
-      },
-    });
-    return rows.map((r) => ({
-      repoName: r.repo.name,
-      repoDefaultBranch: r.repo.defaultBranch,
-      merged: r.merged,
-      baseRef: r.baseRef,
-    }));
-  },
-
-  /** Count a work item's linked PRs that are still OPEN. The re-evaluation path
-   *  (MOTIR-3034) uses it where the sync uses `countOtherOpenByWorkItem`: there a
-   *  delivery is being decided and the DELIVERING row must be excluded from its
-   *  own gate, here there is no delivery at all, so every open sibling counts.
-   *  Deliberately a second method rather than `excludePrId: null` on the first —
-   *  the two callers are asking different questions and a nullable exclusion
-   *  would make which one is being asked a property of a call site's argument.
-   *  A read guarding the transition write → takes `tx`. */
-  async countOpenByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.githubPullRequest.count({ where: { workItemId, state: 'open' } });
-  },
-
-  /** The workspace that owns a work item's linked change requests, via the REPO
-   *  row (MOTIR-1931's tenancy rule), or null when the item has no linked change
-   *  request at all (MOTIR-3034).
-   *
-   *  This is the re-evaluation path's TRUSTED workspace resolution. It matters
-   *  that it reads the CONNECTION tier and nothing else: `github_pull_request` and
-   *  `github_repo` both carry a `system_admin` policy arm, so this read is
-   *  admitted inside `withSystemContext` — which is the only way a caller holding
-   *  just a work-item id can learn the tenant it must bind before touching
-   *  `work_item`, a table with no such arm (MOTIR-2880). Both tables the query
-   *  touches are armed; the join is part of the predicate. */
-  async findWorkspaceIdByWorkItem(
-    workItemId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<string | null> {
-    const row = await tx.githubPullRequest.findFirst({
-      where: { workItemId },
-      select: { repo: { select: { workspaceId: true } } },
-      orderBy: { createdAt: 'asc' },
-    });
-    return row?.repo.workspaceId ?? null;
-  },
-
   /** One repository's MERGED change requests whose `base_ref` is NULL — the rows
    *  the completion gate reads as UNKNOWN (MOTIR-3034). Exactly the population
    *  the base-ref backfill repairs, and the reason a second run of that backfill
@@ -242,15 +171,24 @@ export const githubPullRequestRepository = {
    *  today can be wrong tomorrow and the next delivery writes the right one
    *  anyway. Spending a rate-limited request on either buys nothing.
    *
+   *  ⚠️ NO `work_item_id` IN THE PROJECTION (MOTIR-3721), and its absence is the
+   *  point rather than a tidy-up. The card ids this sweep must re-evaluate come
+   *  from `workItemDeliveryRepository.listWorkItemIdsByPullRequests` over the rows
+   *  it actually filled — a SET per pull request, which a scalar column could not
+   *  express. The projection and its consumer are the two ends of ONE path (ADR
+   *  §5): read the ids off this row and a pull request delivering three cards
+   *  re-evaluates one of them, or none, and the sweep reports `filled: N` either
+   *  way, having repaired nothing and raised nothing.
+   *
    *  Read guarding a write → takes `tx`. Ordered so a long sweep's log is
    *  diffable and resumable by eye. */
   async listMergedMissingBaseRefByRepo(
     repoId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string; number: number; workItemId: string | null }>> {
+  ): Promise<Array<{ id: string; number: number }>> {
     return tx.githubPullRequest.findMany({
       where: { repoId, merged: true, baseRef: null },
-      select: { id: true, number: true, workItemId: true },
+      select: { id: true, number: true },
       orderBy: { number: 'asc' },
     });
   },
