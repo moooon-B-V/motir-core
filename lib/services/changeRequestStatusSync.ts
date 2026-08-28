@@ -24,9 +24,9 @@ import {
 } from '@/lib/workItems/repoDelivery';
 import {
   resolveChangeRequestWorkItemSet,
+  resolveDeliveredWorkItems,
   type ChangeRequestWorkItemSet,
 } from './changeRequestWorkItems';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
 import { workflowsService } from './workflowsService';
@@ -118,6 +118,7 @@ export type ChangeRequestSyncResult = {
   outcome:
     | 'transitioned'
     | 'session_closed' // a merged SESSION-branch delivery — every card on the branch closed (MOTIR-3007)
+    | 'delivery_applied' // ONE pull request delivered SEVERAL cards — read `deliveredItems` (MOTIR-3721)
     | 'noop'
     | 'deferred_incomplete_delivery_set' // a pull request DELIVERING this item has not landed — item stays In Review (MOTIR-3659)
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
@@ -142,7 +143,38 @@ export type ChangeRequestSyncResult = {
    *  that closes N cards has to SAY N — reporting one of them is what this
    *  outcome exists to stop. */
   sessionItems?: { completed: number; alreadyDone: number; failed: number };
+  /** Every card this delivery decided, with that card's OWN outcome (MOTIR-3721).
+   *
+   *  Present only when the pull request delivers MORE THAN ONE card — a delivery
+   *  that decides N cards has to SAY N, and reporting one of them is the defect
+   *  the delivery table exists to remove. Absent on the ordinary one-card
+   *  delivery, whose single outcome IS the result's own, so nothing that reads
+   *  `outcome` / `workItemId` changes shape for the case that is nearly all of
+   *  them. Same instrument as `sessionItems`, at the per-card grain the linked
+   *  arm needs. */
+  deliveredItems?: DeliveredItemResult[];
 };
+
+/** One delivered card's own verdict — its id, what happened to it, and the status
+ *  it moved to when it moved. */
+export interface DeliveredItemResult {
+  workItemId: string;
+  outcome: ChangeRequestSyncResult['outcome'];
+  toStatus?: string;
+}
+
+/** One delivered card carried from the resolve transaction to the tail: its
+ *  identity, its current status, and the three ITEM-SCOPED gate verdicts computed
+ *  under the row lock. Everything pull-request-scoped (the base ref, the actor,
+ *  whether the merge was already recorded) is shared and lives beside it. */
+interface ItemDecision {
+  workItemId: string;
+  projectId: string;
+  currentStatus: string;
+  deliveryShortfall: DeliverySetShortfall;
+  hasOtherOpenLinkedPr: boolean;
+  shortfall: RepoSetShortfall;
+}
 
 /** The connection + repo + resolved author a provider hands the shared sync, once
  *  it has resolved them from its own payload shape. The TENANT comes from
@@ -236,22 +268,13 @@ export async function syncChangeRequestStatus(
       cr.number,
       tx,
     );
-    let workItem: ResolvedChangeRequestWorkItem | null = null;
-    let linkedManually = false;
-    if (existingPr?.workItemId) {
-      const linked = await workItemRepository.findById(existingPr.workItemId, tx);
-      // A link whose target was hard-deleted falls back to unlinked.
-      workItem = linked
-        ? {
-            id: linked.id,
-            identifier: linked.identifier,
-            projectId: linked.projectId,
-            status: linked.status,
-            targetRepos: linked.targetRepos,
-          }
-        : null;
-      linkedManually = linked !== null && existingPr.linkedManually;
-    }
+    // The manual-override flag is PRESERVED as it stands (MOTIR-1596), so an auto
+    // delivery never clears a manual link. It used to be re-derived from a
+    // successful resolve of the existing row's link column — the read this card
+    // moves — and the derivation bought nothing: a hard-deleted target already
+    // nulls the column through the FK's `SetNull`, and this flag is the record of
+    // HOW a link was made, read by nothing in this file.
+    const linkedManually = existingPr?.linkedManually ?? false;
 
     // Upsert the change-request row — the change-request→work-item link entity.
     // Idempotent under concurrent redelivery: a lost unique-`(repo,number)` race
@@ -271,7 +294,11 @@ export async function syncChangeRequestStatus(
       // happened in other repositories, whose only record is this row.
       baseRef: cr.baseRef,
       title: cr.title,
-      workItemId: workItem?.id ?? null,
+      // ⚠️ `workItemId` IS OMITTED, not written as null (MOTIR-3721). Omitting it
+      // leaves the stored column EXACTLY as it is — the same preservation this
+      // path always performed, now expressed without reading the column to hand
+      // it back. W2 is untouched as a writer: the field is still on the input and
+      // the two callers that decide a link still pass it.
       linkedManually,
     };
     let prId: string;
@@ -284,120 +311,140 @@ export async function syncChangeRequestStatus(
       prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
     }
 
-    // MOTIR-3007 — WHICH ITEMS does this delivery carry? A `motir auto` run
-    // integrates every card onto ONE session branch and opens ONE pull request,
-    // whose branch deliberately carries no `MOTIR-<n>` (see
-    // `resolveChangeRequestWorkItemSet`) — so the 1:1 resolve above returns null
-    // and, before this, a merge closed nothing at all.
+    // MOTIR-3007 · MOTIR-3721 — WHICH ITEMS does this delivery carry? A `motir
+    // auto` run integrates every card onto ONE session branch and opens ONE pull
+    // request whose branch deliberately carries no `MOTIR-<n>`; and ANY pull
+    // request may deliver several cards, which the link column could not express
+    // at all. Both answers come from the one membership rule.
     //
-    // Resolved ONLY on a `done` delivery, deliberately: an `opened` /
-    // closed-unmerged delivery is byte-for-byte the path it always was, which is
-    // the AC "the single-card path is untouched" taken literally. The read is one
-    // indexed lookup inside the transaction already open, under the row lock taken
-    // above, so a concurrent redelivery serializes on it exactly as the gates do.
-    const delivery: ChangeRequestWorkItemSet | null =
+    // ⚠️ THE SESSION ARM IS CONSULTED ONLY ON A `done` DELIVERY, and that is a
+    // decision this card preserves rather than an accident of the old shape. Its
+    // only consumer is the session CLOSE-OUT below, which is guarded by
+    // `sessionBranch` and not by the lifecycle — so resolving the session arm on
+    // an `opened` delivery would close a whole run's cards the moment its pull
+    // request was created. The LINKED arm, by contrast, is consulted on EVERY
+    // lifecycle, exactly as the link column was: that is the reader being moved.
+    //
+    // One indexed lookup inside the transaction already open, under the row lock
+    // taken above, so a concurrent redelivery serializes on it as the gates do.
+    const delivery: ChangeRequestWorkItemSet =
       lifecycle === 'done'
         ? await resolveChangeRequestWorkItemSet({
             workspaceId: repo.workspaceId,
             headRef: cr.headRef,
-            linked: workItem,
+            githubPullRequestId: prId,
             tx,
           })
-        : null;
-    const sessionBranch = delivery?.kind === 'session_branch' ? delivery.sessionBranch : null;
+        : {
+            kind: 'linked',
+            sessionBranch: null,
+            items: await resolveDeliveredWorkItems(prId, tx),
+          };
+    const sessionBranch = delivery.kind === 'session_branch' ? delivery.sessionBranch : null;
+    // The per-card set. Empty on a session close-out: `completeSession` walks the
+    // branch itself, so the item-scoped gates below have nothing to decide there.
+    const delivered = delivery.kind === 'linked' ? delivery.items : [];
 
-    // A delivery that resolves NEITHER a linked item NOR a session branch is the
-    // unchanged no-op it always was.
-    if (!workItem && !sessionBranch) return { kind: 'no_work_item' as const };
+    // A delivery that resolves NEITHER a delivered item NOR a session branch is
+    // the unchanged no-op it always was.
+    if (delivered.length === 0 && !sessionBranch) return { kind: 'no_work_item' as const };
 
     // MOTIR-1873 — a merge only COMPLETES the item when it landed on the trunk.
     // Compare the change request's base against the MIRRORED default branch, never
     // a hard-coded `'main'`: a self-hoster's repo defaults to `master` / `trunk`
     // and must behave identically. Only a `done` delivery can complete, so this is
-    // meaningless for any other lifecycle.
+    // meaningless for any other lifecycle. PULL-REQUEST scoped — it is a fact
+    // about this merge, so it holds every card the merge delivers alike.
     const mergedIntoNonDefaultBase = lifecycle === 'done' && cr.baseRef !== repo.defaultBranch;
 
-    // MOTIR-1604 — a merge only COMPLETES the item when it is the item's LAST open
-    // linked change request. A cross-repo (two-PR) card has >1 linked PR/MR; the
-    // first merge must NOT flip Done while a sibling is still open. This row was
-    // just upserted (closed, on a merge), so we count the item's OTHER open linked
-    // change requests — non-zero means DEFER. Only a `done` delivery can complete,
-    // and a stranded merge is already held by the gate above, so skip the read for
-    // either.
+    // ── THE THREE ITEM-SCOPED GATES, now evaluated PER DELIVERED CARD ────────
     //
-    // ⚠️ BOTH ITEM-SCOPED GATES ARE SKIPPED ON A SESSION CLOSE-OUT, and that is a
-    // boundary rather than an omission (MOTIR-3007). They answer "is THIS item
-    // finished", and a session delivery closes N items whose repository sets and
-    // sibling change requests differ; `completeSession` walks the branch itself,
-    // so there is no per-item exclusion to hand it. Composing the two is the
-    // multi-repo axis MOTIR-2725 / MOTIR-2731 own, and this card's scope
-    // deliberately stops short of it. Nothing is weakened by the skip: before
-    // this card a session merge closed NOTHING, so the gates were never reached
-    // on this path at all. The branch-scoped gate above (a merge that never
-    // landed on the trunk) DOES still run, and holds the whole close-out.
-    // MOTIR-3659 — the item completes only when EVERY pull request DELIVERING it
-    // has merged onto its own repository's default branch. Read from the delivery
-    // link table, which is the one association the ADR settles on, inside THIS
-    // transaction and under the row lock taken above so concurrent redeliveries
-    // serialize on it exactly as the other gates do.
+    // ⚠️ ALL THREE ARE SKIPPED ON A SESSION CLOSE-OUT, and that is a boundary
+    // rather than an omission (MOTIR-3007): they answer "is THIS item finished",
+    // and a session delivery closes N items whose repository sets and sibling
+    // change requests differ; `completeSession` walks the branch itself, so there
+    // is no per-item exclusion to hand it. `delivered` is empty there, so the
+    // loop below simply does not run. The branch-scoped gate above DOES still
+    // run, and holds the whole close-out.
     //
-    // ⚠️ It ABSTAINS on an empty set, which is what keeps every card that predates
-    // this table byte-identical: no links, no shortfall, no hold. Almost every
-    // card in the tree is that case.
-    const deliveryShortfall =
-      lifecycle === 'done' && !mergedIntoNonDefaultBase && !sessionBranch && workItem !== null
-        ? deliverySetShortfall(
-            (await workItemDeliveryRepository.listByWorkItem(workItem.id, tx)).map((d) => ({
-              repoLabel: `${d.repo.owner}/${d.repo.name}`,
-              number: d.pullRequest.number,
-              merged: d.pullRequest.merged,
-              baseRef: d.pullRequest.baseRef,
-              defaultBranch: d.repo.defaultBranch,
-            })),
-          )
-        : EMPTY_DELIVERY_SHORTFALL;
+    // Evaluating them per card is what MOTIR-3721 changes. They were always
+    // per-card questions; there was only ever one card to ask them about, because
+    // the resolve above was capped at one. The answers genuinely differ between
+    // two cards on one pull request — different repository sets, different
+    // sibling pull requests — so each is decided on its own facts.
+    const decisions: ItemDecision[] = [];
+    for (const item of delivered) {
+      // MOTIR-3659 — the item completes only when EVERY pull request DELIVERING
+      // it has merged onto its own repository's default branch. Read from the
+      // delivery link table, the one association the ADR settles on, inside THIS
+      // transaction and under the row lock taken above.
+      //
+      // ⚠️ It ABSTAINS on an empty set, which is what keeps every card that
+      // predates this table byte-identical: no links, no shortfall, no hold.
+      const deliveryShortfall =
+        lifecycle === 'done' && !mergedIntoNonDefaultBase
+          ? deliverySetShortfall(
+              (await workItemDeliveryRepository.listByWorkItem(item.id, tx)).map((d) => ({
+                repoLabel: `${d.repo.owner}/${d.repo.name}`,
+                number: d.pullRequest.number,
+                merged: d.pullRequest.merged,
+                baseRef: d.pullRequest.baseRef,
+                defaultBranch: d.repo.defaultBranch,
+              })),
+            )
+          : EMPTY_DELIVERY_SHORTFALL;
 
-    const hasOtherOpenLinkedPr =
-      lifecycle === 'done' && !mergedIntoNonDefaultBase && !sessionBranch && workItem !== null
-        ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
-        : false;
+      // MOTIR-1604 — a merge only COMPLETES the item when it is the item's LAST
+      // open delivering change request. A cross-repo (two-PR) card has >1; the
+      // first merge must NOT flip Done while a sibling is still open. This row
+      // was just upserted (closed, on a merge), so we count the item's OTHER open
+      // DELIVERING change requests — non-zero means DEFER.
+      const hasOtherOpenLinkedPr =
+        lifecycle === 'done' && !mergedIntoNonDefaultBase
+          ? (await workItemDeliveryRepository.countOtherOpenByWorkItem(item.id, prId, tx)) > 0
+          : false;
 
-    // MOTIR-2729 — the item completes only when EVERY repository it CARRIES has a
-    // merged change request on that repository's own default branch. The two gates
-    // above reason about change requests that EXIST; a repository whose pull
-    // request was never opened writes no row, so neither can see it. The expected
-    // side is the item's own repository SET (MOTIR-2727).
-    //
-    // Read inside THIS transaction, after `bindWorkspaceContext` and under the row
-    // lock taken above, so concurrent redeliveries serialize on it exactly as the
-    // other two do. Skipped for any delivery the gates above already hold or that
-    // cannot complete at all — the read costs nothing to skip and the outcome
-    // would be discarded.
-    const shortfall =
-      lifecycle === 'done' &&
-      !mergedIntoNonDefaultBase &&
-      !hasOtherOpenLinkedPr &&
-      !sessionBranch &&
-      workItem !== null
-        ? repoSetShortfall(
-            classifyRepoDelivery(
-              // RESOLVED through the references, not the stored name projection
-              // (Story MOTIR-2732 · MOTIR-3043). The projection goes stale the
-              // moment a repository is renamed on the host, and a gate reading
-              // it compares a name no pull request will ever report again.
-              await resolveExpectedRepos(workItem.id, workItem.targetRepos, tx),
-              await githubPullRequestRepository.listCompletionFactsByWorkItem(workItem.id, tx),
-            ),
-          )
-        : EMPTY_SHORTFALL;
+      // MOTIR-2729 — the item completes only when EVERY repository it CARRIES has
+      // a merged change request on that repository's own default branch. The two
+      // gates above reason about change requests that EXIST; a repository whose
+      // pull request was never opened writes no row, so neither can see it. The
+      // expected side is the item's own repository SET (MOTIR-2727).
+      //
+      // Skipped for any delivery the gates above already hold or that cannot
+      // complete at all — the read costs nothing to skip and the outcome would be
+      // discarded.
+      const shortfall =
+        lifecycle === 'done' && !mergedIntoNonDefaultBase && !hasOtherOpenLinkedPr
+          ? repoSetShortfall(
+              classifyRepoDelivery(
+                // RESOLVED through the references, not the stored name projection
+                // (Story MOTIR-2732 · MOTIR-3043). The projection goes stale the
+                // moment a repository is renamed, and a gate reading it compares
+                // a name no pull request will ever report again.
+                await resolveExpectedRepos(item.id, item.targetRepos, tx),
+                await workItemDeliveryRepository.listCompletionFactsByWorkItem(item.id, tx),
+              ),
+            )
+          : EMPTY_SHORTFALL;
+
+      decisions.push({
+        workItemId: item.id,
+        projectId: item.projectId,
+        currentStatus: item.status,
+        deliveryShortfall,
+        hasOtherOpenLinkedPr,
+        shortfall,
+      });
+    }
 
     const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
     return {
       kind: 'resolved' as const,
       workspaceId: repo.workspaceId,
-      projectId: workItem?.projectId ?? null,
-      workItemId: workItem?.id ?? null,
-      currentStatus: workItem?.status ?? null,
+      // EVERY card this delivery carries, each with its own three gate verdicts
+      // (MOTIR-3721). Usually exactly one, which is why the tail below returns
+      // that one card's result unchanged.
+      decisions,
       // Non-null ⇒ this merge closes out a whole run's branch (MOTIR-3007).
       sessionBranch,
       provider: installation.provider as GitProviderId,
@@ -408,9 +455,6 @@ export async function syncChangeRequestStatus(
       // It is what keeps the stranded-merge note POSTED ONCE: the note describes a
       // merge event, and GitHub redelivers events freely.
       mergeAlreadyRecorded: existingPr?.state === 'closed' && existingPr.merged === true,
-      hasOtherOpenLinkedPr,
-      deliveryShortfall,
-      shortfall,
       actorUserId: authorBoundUserId ?? owner?.userId ?? null,
       ownerUserId: owner?.userId ?? null,
     };
@@ -427,148 +471,63 @@ export async function syncChangeRequestStatus(
   // the umbrella change request that eventually reaches the trunk fires its own
   // delivery and completes the item then.
   //
+  // PULL-REQUEST scoped, so it is decided ONCE and holds every card the merge
+  // delivers — and the note goes on EVERY one of them (MOTIR-3721): a card held
+  // with nothing on it to say why is precisely the invisibility MOTIR-1873 paid
+  // for, and it does not become acceptable for the second card of two.
+  //
   // Checked BEFORE the actor gate and BEFORE MOTIR-1604's, on purpose. Before the
   // actor gate because holding the item must not depend on there being someone to
   // author a note — the note is the diagnosis, the hold is the correctness. Before
   // 1604's because this is the stronger statement: a merge with no path to the
   // trunk is not partial completion, it is none.
   if (resolved.mergedIntoNonDefaultBase) {
-    // Never a silent no-op — invisibility is what made the incident expensive. Say
-    // WHICH base swallowed the merge, on the item itself, where the next person to
-    // read the card (or the next `motir run` that treats it as a prerequisite) will
-    // see it. Posted once per merge, and best-effort: a failed note must not turn a
-    // correct hold into a 500 the host retries forever.
-    if (resolved.actorUserId && resolved.workItemId && !resolved.mergeAlreadyRecorded) {
-      try {
-        await commentsService.addComment(
-          resolved.workItemId,
-          {
-            bodyMd: strandedMergeCommentBody({
-              noun: changeRequestNoun(resolved.provider),
-              number: cr.number,
-              baseRef: cr.baseRef,
-              defaultBranch: resolved.defaultBranch,
-            }),
-          },
-          { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
-        );
-      } catch (err) {
-        console.error('[changeRequestStatusSync] stranded-merge note failed; item still held', {
-          workItemId: resolved.workItemId,
-          number: cr.number,
-          baseRef: cr.baseRef,
-          error: err instanceof Error ? err.message : 'unknown',
-        });
+    // Never a silent no-op. Say WHICH base swallowed the merge, on the item
+    // itself, where the next person to read the card (or the next `motir run`
+    // that treats it as a prerequisite) will see it. Posted once per merge, and
+    // best-effort: a failed note must not turn a correct hold into a 500 the host
+    // retries forever.
+    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
+      for (const decision of resolved.decisions) {
+        try {
+          await commentsService.addComment(
+            decision.workItemId,
+            {
+              bodyMd: strandedMergeCommentBody({
+                noun: changeRequestNoun(resolved.provider),
+                number: cr.number,
+                baseRef: cr.baseRef,
+                defaultBranch: resolved.defaultBranch,
+              }),
+            },
+            { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+          );
+        } catch (err) {
+          console.error('[changeRequestStatusSync] stranded-merge note failed; item still held', {
+            workItemId: decision.workItemId,
+            number: cr.number,
+            baseRef: cr.baseRef,
+            error: err instanceof Error ? err.message : 'unknown',
+          });
+        }
       }
     }
-    return {
+    return withDeliveredItems(resolved.decisions, {
       event: 'pull_request',
       outcome: 'deferred_non_default_base',
-      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+      ...(resolved.decisions[0] ? { workItemId: resolved.decisions[0].workItemId } : {}),
       ...(resolved.sessionBranch ? { sessionBranch: resolved.sessionBranch } : {}),
-    };
+    });
   }
 
   if (!resolved.actorUserId)
     // No workspace owner and no bound author — nothing can author the move.
-    return {
+    return withDeliveredItems(resolved.decisions, {
       event: 'pull_request',
       outcome: 'access_denied',
-      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
-    };
-
-  // MOTIR-3659 — a merge that leaves any pull request DELIVERING this item
-  // unlanded holds the item In Review. THIRD, ahead of the two gates below, because
-  // it is the most specific answer available: a card that carries delivery links
-  // should be decided by its links rather than fall through to a proxy for them.
-  //
-  // It abstains on a card with no links, so the two gates below are still the only
-  // protection every card that predates this table has — which is nearly all of
-  // them — and neither is weakened.
-  if (
-    lifecycle === 'done' &&
-    resolved.workItemId &&
-    hasDeliverySetShortfall(resolved.deliveryShortfall)
-  ) {
-    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
-    // per merge (the same `mergeAlreadyRecorded` read taken under the row lock) and
-    // best-effort — a failed note must not turn a correct hold into a 500 the host
-    // redelivers forever.
-    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
-      try {
-        await commentsService.addComment(
-          resolved.workItemId,
-          {
-            bodyMd: incompleteDeliverySetCommentBody({
-              noun: changeRequestNoun(resolved.provider),
-              number: cr.number,
-              shortfall: resolved.deliveryShortfall,
-            }),
-          },
-          { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
-        );
-      } catch (err) {
-        console.error('[changeRequestStatusSync] delivery-set note failed; item still held', {
-          workItemId: resolved.workItemId,
-          number: cr.number,
-          outstanding: resolved.deliveryShortfall.outstanding,
-          error: err instanceof Error ? err.message : 'unknown',
-        });
-      }
-    }
-    return {
-      event: 'pull_request',
-      outcome: 'deferred_incomplete_delivery_set',
-      workItemId: resolved.workItemId,
-    };
-  }
-
-  // A merged change request that is NOT the item's last open linked one leaves the
-  // item In Review — a cross-repo (two-PR) card completes only when its LAST linked
-  // change request merges (MOTIR-1604).
-  if (lifecycle === 'done' && resolved.hasOtherOpenLinkedPr && resolved.workItemId) {
-    return { event: 'pull_request', outcome: 'deferred_open_pr', workItemId: resolved.workItemId };
-  }
-
-  // A merge that leaves any repository the item CARRIES without a merge of its own
-  // holds the item In Review (MOTIR-2729). THIRD, not a replacement for the gate
-  // above: that one works with no expected set at all and is therefore the only
-  // protection every unpinned card in the product has. Where both hold, the one
-  // above wins on purpose — "a sibling change request is still open" names an
-  // artifact the reader can go and look at.
-  if (lifecycle === 'done' && resolved.workItemId && hasRepoSetShortfall(resolved.shortfall)) {
-    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
-    // per merge (guarded by the same `mergeAlreadyRecorded` read taken under the
-    // row lock) and best-effort — a failed note must not turn a correct hold into
-    // a 500 the host retries forever.
-    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
-      try {
-        await commentsService.addComment(
-          resolved.workItemId,
-          {
-            bodyMd: incompleteRepoSetCommentBody({
-              noun: changeRequestNoun(resolved.provider),
-              number: cr.number,
-              shortfall: resolved.shortfall,
-            }),
-          },
-          { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
-        );
-      } catch (err) {
-        console.error('[changeRequestStatusSync] repo-set note failed; item still held', {
-          workItemId: resolved.workItemId,
-          number: cr.number,
-          outstanding: resolved.shortfall.outstanding,
-          error: err instanceof Error ? err.message : 'unknown',
-        });
-      }
-    }
-    return {
-      event: 'pull_request',
-      outcome: 'deferred_incomplete_repo_set',
-      workItemId: resolved.workItemId,
-    };
-  }
+      ...(resolved.decisions[0] ? { workItemId: resolved.decisions[0].workItemId } : {}),
+    });
+  const actorUserId = resolved.actorUserId;
 
   // ── The SESSION close-out (MOTIR-3007) ────────────────────────────────────
   // A merged delivery whose head ref is a session branch carrying work items
@@ -578,19 +537,23 @@ export async function syncChangeRequestStatus(
   // `motir done --session` calls — so every closure goes through
   // `applyStatusTransition` and records a revision, an item already `done` is an
   // idempotent no-op, and an item with no legal edge to `done` is REPORTED and
-  // skipped rather than failing the delivery. The card named in the pull request
-  // title is on the branch like every other, so it is closed exactly once, here;
-  // there is no separate pass for it.
+  // skipped rather than failing the delivery.
   //
   // IDEMPOTENT UNDER REDELIVERY by construction, with nothing added: the close-out
   // CLEARS `session_branch` as it goes, so a second delivery of the same merge
-  // resolves an empty branch, falls through to the single-item path, and finds
-  // either no work item at all or one already in `done`. The same is true of a
-  // merge that arrives after a human already ran `motir done --session`.
+  // resolves an empty branch, falls through to the delivered-cards path, and finds
+  // either no card at all or ones already in `done`. The same is true of a merge
+  // that arrives after a human already ran `motir done --session`.
+  //
+  // ⚠️ IT MOVED ABOVE THE ITEM-SCOPED GATES (MOTIR-3721) and nothing changed by
+  // it: `decisions` is EMPTY on a session resolution — the gates it used to sit
+  // below all abstained there and returned early only for a delivered card — so
+  // this branch was always the next thing a session delivery reached. Hoisting it
+  // is what lets the loop below be unconditional.
   if (resolved.sessionBranch) {
     const summary = await closeOutSession(resolved.sessionBranch, {
       workspaceId: resolved.workspaceId,
-      actorUserId: resolved.actorUserId,
+      actorUserId,
       ownerUserId: resolved.ownerUserId,
     });
     return {
@@ -598,91 +561,239 @@ export async function syncChangeRequestStatus(
       outcome: 'session_closed',
       sessionBranch: resolved.sessionBranch,
       sessionItems: summary,
-      // The linked item, when the pull request also named one — it is IN the set
-      // above, reported here only so a log line still points at a card.
-      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
     };
   }
 
-  // Past this point the delivery is the ordinary single-item one, which only
-  // exists when a work item resolved.
-  if (!resolved.workItemId || !resolved.projectId || resolved.currentStatus === null)
-    return { event: 'pull_request', outcome: 'no_work_item' };
+  // ── EVERY DELIVERED CARD, one at a time (MOTIR-3721) ──────────────────────
+  // Each card is decided on its OWN gate verdicts and moved through its OWN
+  // project's workflow, so one card's hold, refusal or missing status never
+  // decides another's. A pull request delivering one card — nearly every pull
+  // request — takes exactly the path it always did and returns exactly the result
+  // it always returned; the loop is what a second card costs.
+  const perItem: DeliveredItemResult[] = [];
+  for (const decision of resolved.decisions) {
+    perItem.push(
+      await applyToDeliveredItem(cr, lifecycle, decision, {
+        workspaceId: resolved.workspaceId,
+        provider: resolved.provider,
+        mergeAlreadyRecorded: resolved.mergeAlreadyRecorded,
+        actorUserId,
+        ownerUserId: resolved.ownerUserId,
+      }),
+    );
+  }
+
+  const [first, ...rest] = perItem;
+  if (!first) return { event: 'pull_request', outcome: 'no_work_item' };
+  if (rest.length === 0)
+    return {
+      event: 'pull_request',
+      outcome: first.outcome,
+      workItemId: first.workItemId,
+      ...(first.toStatus ? { toStatus: first.toStatus } : {}),
+    };
+
+  // MORE THAN ONE, so there is no single outcome to report and reporting one of
+  // them is the defect this card exists to remove. Same shape the session
+  // close-out has used since MOTIR-3007: a delivery that decides N cards SAYS N.
+  return {
+    event: 'pull_request',
+    outcome: 'delivery_applied',
+    deliveredItems: perItem,
+  };
+}
+
+/** Attach the per-card list to a shared, pull-request-scoped outcome — but only
+ *  when there is more than one card to attach, so a single-card delivery reports
+ *  exactly the shape it always did. */
+function withDeliveredItems(
+  decisions: readonly ItemDecision[],
+  result: ChangeRequestSyncResult,
+): ChangeRequestSyncResult {
+  if (decisions.length < 2) return result;
+  return {
+    ...result,
+    deliveredItems: decisions.map((d) => ({
+      workItemId: d.workItemId,
+      outcome: result.outcome,
+    })),
+  };
+}
+
+/**
+ * Decide and apply ONE delivered card: the three item-scoped holds, then the
+ * transition through the shipped authority.
+ *
+ * Extracted from the tail of `syncChangeRequestStatus` by MOTIR-3721 — every
+ * gate, every note and every outcome is the shipped path's, unchanged. What
+ * changed is that the caller can run it more than once, because a pull request
+ * can deliver more than one card.
+ */
+async function applyToDeliveredItem(
+  cr: NormalizedChangeRequest,
+  lifecycle: ChangeRequestLifecycle,
+  decision: ItemDecision,
+  shared: {
+    workspaceId: string;
+    provider: GitProviderId;
+    mergeAlreadyRecorded: boolean;
+    actorUserId: string;
+    ownerUserId: string | null;
+  },
+): Promise<DeliveredItemResult> {
+  const { workItemId } = decision;
+  const actorCtx = { userId: shared.actorUserId, workspaceId: shared.workspaceId };
+
+  // MOTIR-3659 — a merge that leaves any pull request DELIVERING this item
+  // unlanded holds the item In Review. FIRST of the three, because it is the most
+  // specific answer available: a card that carries delivery links should be
+  // decided by its links rather than fall through to a proxy for them.
+  //
+  // It abstains on a card with no links, so the two gates below are still the only
+  // protection every card that predates this table has — which is nearly all of
+  // them — and neither is weakened.
+  if (lifecycle === 'done' && hasDeliverySetShortfall(decision.deliveryShortfall)) {
+    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
+    // per merge (the same `mergeAlreadyRecorded` read taken under the row lock) and
+    // best-effort — a failed note must not turn a correct hold into a 500 the host
+    // redelivers forever.
+    if (!shared.mergeAlreadyRecorded) {
+      try {
+        await commentsService.addComment(
+          workItemId,
+          {
+            bodyMd: incompleteDeliverySetCommentBody({
+              noun: changeRequestNoun(shared.provider),
+              number: cr.number,
+              shortfall: decision.deliveryShortfall,
+            }),
+          },
+          actorCtx,
+        );
+      } catch (err) {
+        console.error('[changeRequestStatusSync] delivery-set note failed; item still held', {
+          workItemId,
+          number: cr.number,
+          outstanding: decision.deliveryShortfall.outstanding,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
+    return { workItemId, outcome: 'deferred_incomplete_delivery_set' };
+  }
+
+  // A merged change request that is NOT the item's last open delivering one leaves
+  // the item In Review — a cross-repo (two-PR) card completes only when its LAST
+  // delivering change request merges (MOTIR-1604).
+  if (lifecycle === 'done' && decision.hasOtherOpenLinkedPr) {
+    return { workItemId, outcome: 'deferred_open_pr' };
+  }
+
+  // A merge that leaves any repository the item CARRIES without a merge of its own
+  // holds the item In Review (MOTIR-2729). THIRD, not a replacement for the gate
+  // above: that one works with no expected set at all and is therefore the only
+  // protection every unpinned card in the product has. Where both hold, the one
+  // above wins on purpose — "a sibling change request is still open" names an
+  // artifact the reader can go and look at.
+  if (lifecycle === 'done' && hasRepoSetShortfall(decision.shortfall)) {
+    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
+    // per merge (guarded by the same `mergeAlreadyRecorded` read taken under the
+    // row lock) and best-effort — a failed note must not turn a correct hold into
+    // a 500 the host retries forever.
+    if (!shared.mergeAlreadyRecorded) {
+      try {
+        await commentsService.addComment(
+          workItemId,
+          {
+            bodyMd: incompleteRepoSetCommentBody({
+              noun: changeRequestNoun(shared.provider),
+              number: cr.number,
+              shortfall: decision.shortfall,
+            }),
+          },
+          actorCtx,
+        );
+      } catch (err) {
+        console.error('[changeRequestStatusSync] repo-set note failed; item still held', {
+          workItemId,
+          number: cr.number,
+          outstanding: decision.shortfall.outstanding,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
+    return { workItemId, outcome: 'deferred_incomplete_repo_set' };
+  }
 
   // Phase 2 — the status transition through the SHIPPED authority. Resolve the
   // concrete target status key by category against the project's live workflow.
   const targetKey = await workflowsService.resolveStatusKey(
-    resolved.projectId,
-    resolved.workspaceId,
+    decision.projectId,
+    shared.workspaceId,
     LIFECYCLE_TARGET[lifecycle],
   );
   if (!targetKey)
     // A custom workflow with no status in the target category — a logged no-op,
     // never a crash.
-    return {
-      event: 'pull_request',
-      outcome: 'no_matching_status',
-      workItemId: resolved.workItemId,
-    };
+    return { workItemId, outcome: 'no_matching_status' };
 
   // Idempotent: already in the target (a redelivery) — updateStatus no-ops, but
   // short-circuit so the outcome reads `noop` rather than `transitioned`.
-  if (resolved.currentStatus === targetKey)
-    return {
-      event: 'pull_request',
-      outcome: 'noop',
-      workItemId: resolved.workItemId,
-      toStatus: targetKey,
-    };
+  if (decision.currentStatus === targetKey)
+    return { workItemId, outcome: 'noop', toStatus: targetKey };
 
-  // The narrowed slice `reportTransitionRefusal` needs, hoisted once: the guards
-  // above proved `workItemId` and `actorUserId` non-null, and that narrowing is
-  // per-property — it does not survive passing `resolved` itself.
   const refusalContext = {
-    workItemId: resolved.workItemId,
-    workspaceId: resolved.workspaceId,
-    actorUserId: resolved.actorUserId,
-    provider: resolved.provider,
-    mergeAlreadyRecorded: resolved.mergeAlreadyRecorded,
+    workItemId,
+    workspaceId: shared.workspaceId,
+    actorUserId: shared.actorUserId,
+    provider: shared.provider,
+    mergeAlreadyRecorded: shared.mergeAlreadyRecorded,
   };
 
   try {
-    await applyTransition(resolved.workItemId, targetKey, {
-      userId: resolved.actorUserId,
-      workspaceId: resolved.workspaceId,
-    });
+    await applyTransition(workItemId, targetKey, actorCtx);
   } catch (err) {
     // The bound author lacked edit rights (e.g. a viewer) — retry once as the
     // owner (a manager, always edit-capable). This keeps the sync working while
     // still PREFERRING the author for the activity-log attribution.
     if (
       err instanceof ProjectAccessDeniedError &&
-      resolved.ownerUserId &&
-      resolved.ownerUserId !== resolved.actorUserId
+      shared.ownerUserId &&
+      shared.ownerUserId !== shared.actorUserId
     ) {
       try {
-        await applyTransition(resolved.workItemId, targetKey, {
-          userId: resolved.ownerUserId,
-          workspaceId: resolved.workspaceId,
+        await applyTransition(workItemId, targetKey, {
+          userId: shared.ownerUserId,
+          workspaceId: shared.workspaceId,
         });
       } catch (retryErr) {
-        return reportTransitionRefusal(retryErr, cr, refusalContext, targetKey);
+        return toDeliveredItemResult(
+          workItemId,
+          await reportTransitionRefusal(retryErr, cr, refusalContext, targetKey),
+        );
       }
-      return {
-        event: 'pull_request',
-        outcome: 'transitioned',
-        workItemId: resolved.workItemId,
-        toStatus: targetKey,
-      };
+      return { workItemId, outcome: 'transitioned', toStatus: targetKey };
     }
-    return reportTransitionRefusal(err, cr, refusalContext, targetKey);
+    return toDeliveredItemResult(
+      workItemId,
+      await reportTransitionRefusal(err, cr, refusalContext, targetKey),
+    );
   }
 
+  return { workItemId, outcome: 'transitioned', toStatus: targetKey };
+}
+
+/** Narrow a whole-delivery result back to the per-card slice — `reportTransitionRefusal`
+ *  answers in the sync's own result shape, and a per-card refusal is one member of
+ *  a delivery that may hold several. */
+function toDeliveredItemResult(
+  workItemId: string,
+  result: ChangeRequestSyncResult,
+): DeliveredItemResult {
   return {
-    event: 'pull_request',
-    outcome: 'transitioned',
-    workItemId: resolved.workItemId,
-    toStatus: targetKey,
+    workItemId,
+    outcome: result.outcome,
+    ...(result.toStatus ? { toStatus: result.toStatus } : {}),
   };
 }
 

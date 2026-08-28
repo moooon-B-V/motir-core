@@ -95,9 +95,18 @@ async function payload(caller: V1ProjectCaller, key: string): Promise<V1Dispatch
 }
 
 /** A MERGED pull request onto that repository's own default branch — the one
- *  thing that makes a repository `delivered` (`lib/workItems/repoDelivery.ts`). */
+ *  thing that makes a repository `delivered` (`lib/workItems/repoDelivery.ts`).
+ *
+ *  ⚠️ IT WRITES BOTH HALVES OF THE LINK (MOTIR-3721), because the database does.
+ *  The completion FACTS the classifier reads now come from `work_item_delivery`,
+ *  and every row that carries a `github_pull_request.work_item_id` carries a
+ *  delivery row too: the delivery table's migration backfilled all of them, and
+ *  both live writers (`link_pull_request`, `mark_integrated`) write the pair. A
+ *  fixture writing only the column would be describing a state that exists on no
+ *  migrated database, and would assert the absence of a link rather than the
+ *  classifier. */
 async function mergedPr(repoId: string, workItemId: string, baseRef: string, number: number) {
-  await adminDb.githubPullRequest.create({
+  const row = await adminDb.githubPullRequest.create({
     data: {
       repoId,
       workItemId,
@@ -107,6 +116,15 @@ async function mergedPr(repoId: string, workItemId: string, baseRef: string, num
       headRef: `subtask/pr-${number}`,
       baseRef,
       mergedAt: new Date('2026-08-19T09:00:00.000Z'),
+    },
+  });
+  const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoId } });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: repo.workspaceId,
+      workItemId,
+      githubPullRequestId: row.id,
+      repoId,
     },
   });
 }

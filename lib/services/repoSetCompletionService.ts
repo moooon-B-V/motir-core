@@ -1,5 +1,5 @@
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
-import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
@@ -99,19 +99,33 @@ export const repoSetCompletionService = {
    * `work_item` and `workspace_membership` carry no `system_admin` policy arm, so
    * a read of either inside a bare `withSystemContext` returns ZERO ROWS and
    * raises nothing — which would present here as "no such work item" for an item
-   * that plainly exists. The workspace is therefore resolved FIRST, off the
-   * connection tier (`github_pull_request` → `github_repo`, both armed), and
-   * `bindWorkspaceContext` is called before the first tenant-table statement.
+   * that plainly exists. The workspace is therefore resolved FIRST, from a
+   * DELIVERY row, and `bindWorkspaceContext` is called before the first
+   * tenant-table statement.
+   *
+   * ⚠️ AND THE RESOLUTION ITSELF DEPENDS ON AN ARM THIS CARD ADDED (MOTIR-3721).
+   * It used to read the connection tier (`github_pull_request` → `github_repo`,
+   * both armed). `work_item_delivery` shipped with a pure workspace policy, so
+   * repointing it here without the arm would have returned an EMPTY LIST and
+   * raised nothing — `no_linked_change_request` for every card in the product,
+   * MOTIR-3034's repair path dead in silence. Migration
+   * `20260828120000_work_item_delivery_system_arm` is what makes this read
+   * ADMITTED, and `docs/decisions/delivery-reader-migration.md` §1 demonstrates
+   * both halves on a live cluster as a non-superuser role. Bound reads and
+   * ADMITTED reads are different questions; this one needed both answered.
    */
   async reevaluateItem(
     workItemId: string,
     opts: RepoSetReevaluationOptions = { dryRun: false },
   ): Promise<RepoSetReevaluationResult> {
     const resolved = await withSystemContext(async (tx) => {
-      // CONNECTION TIER — armed for the system flag. This is also the only
+      // ARMED FOR THE SYSTEM FLAG (migration
+      // `20260828120000_work_item_delivery_system_arm`). This is also the only
       // trusted source of the tenant for a caller holding just an item id: the
-      // repo row carries the workspace (MOTIR-1931), never request input.
-      const workspaceId = await githubPullRequestRepository.findWorkspaceIdByWorkItem(
+      // delivery row carries the workspace on the ROW, never request input.
+      // Passing it in from the caller was considered and REJECTED — its failure
+      // mode is a cross-tenant read rather than an empty one (ADR §1, option c).
+      const workspaceId = await workItemDeliveryRepository.findWorkspaceIdByWorkItem(
         workItemId,
         tx,
       );
@@ -137,7 +151,7 @@ export const repoSetCompletionService = {
       // just closed. Nothing is closing here, so EVERY open linked change request
       // counts — which is the conservative reading, and the only one that cannot
       // complete a card whose sibling pull request is still in review.
-      const openChangeRequests = await githubPullRequestRepository.countOpenByWorkItem(
+      const openChangeRequests = await workItemDeliveryRepository.countOpenByWorkItem(
         workItemId,
         tx,
       );
@@ -151,7 +165,7 @@ export const repoSetCompletionService = {
                 // reason as the sync's own site: a renamed repository leaves the
                 // stored projection naming something that no longer exists.
                 await resolveExpectedRepos(workItemId, item.targetRepos, tx),
-                await githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+                await workItemDeliveryRepository.listCompletionFactsByWorkItem(workItemId, tx),
               ),
             );
 

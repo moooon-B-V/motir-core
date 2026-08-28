@@ -4928,7 +4928,7 @@ export const workItemsService = {
     // gate would be the same bug wearing this story's own clothes.
     const { expected, facts } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
       expected: await resolveExpectedRepos(workItemId, targetRepos, tx),
-      facts: await githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+      facts: await workItemDeliveryRepository.listCompletionFactsByWorkItem(workItemId, tx),
     }));
     return classifyRepoDelivery(expected, facts);
   },

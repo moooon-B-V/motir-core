@@ -100,9 +100,14 @@ async function payload(caller: V1ProjectCaller, key: string): Promise<V1Dispatch
   return (await res.json()) as V1DispatchPrompt;
 }
 
-/** A MERGED pull request onto that repository's own default branch. */
+/** A MERGED pull request onto that repository's own default branch.
+ *
+ *  ⚠️ BOTH HALVES OF THE LINK (MOTIR-3721): the completion facts the classifier
+ *  reads come from `work_item_delivery`, and every row carrying the legacy column
+ *  carries a delivery row too — the migration backfilled all of them and both live
+ *  writers write the pair. */
 async function mergedPr(repoId: string, workItemId: string, baseRef: string, number: number) {
-  await adminDb.githubPullRequest.create({
+  const row = await adminDb.githubPullRequest.create({
     data: {
       repoId,
       workItemId,
@@ -112,6 +117,15 @@ async function mergedPr(repoId: string, workItemId: string, baseRef: string, num
       headRef: `subtask/pr-${number}`,
       baseRef,
       mergedAt: new Date('2026-08-19T09:00:00.000Z'),
+    },
+  });
+  const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoId } });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: repo.workspaceId,
+      workItemId,
+      githubPullRequestId: row.id,
+      repoId,
     },
   });
 }
