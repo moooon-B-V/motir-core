@@ -386,11 +386,23 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
       const result = await replayDlqAction(id);
       setReplayingId(null);
       if (result.ok) {
-        toast({
-          variant: 'success',
-          title: t('jobs.replayedToastTitle'),
-          description: t('jobs.replayedToastDesc'),
-        });
+        // ⚠️ A SECOND CLICK IS NOT A SECOND RE-RUN (MOTIR-3730). The engine's
+        // dedup collapses a double-click of one row to a single run, and the
+        // action reports that; saying "Job replayed" again would tell the
+        // operator something happened that did not.
+        toast(
+          result.alreadyReplayed
+            ? {
+                variant: 'info',
+                title: t('jobs.alreadyReplayedToastTitle'),
+                description: t('jobs.alreadyReplayedToastDesc'),
+              }
+            : {
+                variant: 'success',
+                title: t('jobs.replayedToastTitle'),
+                description: t('jobs.replayedToastDesc'),
+              },
+        );
         router.refresh();
       } else {
         toast({ variant: 'error', title: t('jobs.replayErrorTitle'), description: result.error });

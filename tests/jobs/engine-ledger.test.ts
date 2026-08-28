@@ -280,7 +280,8 @@ describe('DLQ replay — the operator dashboard, unchanged', () => {
     });
 
     const before = await adminDb.jobQueueRun.count({ where: { jobId } });
-    const dto = await withSystemContext((tx) => replayDLQ(dlqRow.id, tx));
+    const { outcome, entry: dto } = await withSystemContext((tx) => replayDLQ(dlqRow.id, tx));
+    expect(outcome).toBe('replayed');
 
     // Re-emitting to Inngest for a job that has MOVED would land at a handler
     // that declines to execute — a success toast and a `replayedAt` stamp for a
@@ -366,7 +367,7 @@ describe('DLQ replay — the operator dashboard, unchanged', () => {
       },
     });
 
-    const dto = await withSystemContext((tx) => replayDLQ(dlqRow.id, tx));
+    const { entry: dto } = await withSystemContext((tx) => replayDLQ(dlqRow.id, tx));
 
     const queued = await adminDb.jobQueueRun.findMany({ where: { jobId } });
     expect(queued).toHaveLength(1);

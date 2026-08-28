@@ -200,7 +200,8 @@ describe('jobsDashboardService.replayDLQ', () => {
       idempotencyKey: `replay-key-xyz:replay:${dlqId}`,
     });
 
-    expect(result.replayedAt).not.toBeNull();
+    expect(result.outcome).toBe('replayed');
+    expect(result.entry.replayedAt).not.toBeNull();
     const reread = await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } });
     expect(reread!.replayedAt).not.toBeNull();
   });
