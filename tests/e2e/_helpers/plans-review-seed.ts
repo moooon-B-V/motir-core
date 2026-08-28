@@ -13,14 +13,20 @@
 //
 // Staleness is COMPUTED on read (never stored). To make a `planned` plan stale
 // deterministically we mutate the committed tree AFTER `markPlanned`:
-//   • parent_removed — archive the real parent a proposed `add` hangs under.
+//   • parent_removed  — archive the real parent a proposed `add` hangs under.
+//   • blocker_removed — archive a committed item a proposed `add` declares
+//     `blocked_by`. This one hangs under the LIVING parent, which is what puts a
+//     badge on the canvas level the spec inspects: the archived parent's level is
+//     not drawn, so a plan whose only stale proposal is the orphan renders no
+//     badge at all.
 //
 // ⚠️ AND ONE MUTATION THAT MUST *NOT* FLAG ANYTHING (MOTIR-3777): a new child
-// lands under the OTHER proposal's still-living parent, after `plannedAt`, that
-// the proposal declares no dependency on. That used to raise `siblings_added` —
-// a warning about somebody else's work, on the one surface whose whole purpose
-// is to be trustworthy about a decision. The rule is retired and the fixture
-// keeps the mutation, so the spec can assert the ABSENCE at the browser.
+// lands under that same still-living parent, after `plannedAt`, and a THIRD
+// proposal sits beside it there declaring no edges at all. That used to raise
+// `siblings_added` — a warning about somebody else's work, on the one surface
+// whose whole purpose is to be trustworthy about a decision. The rule is retired
+// and the fixture keeps the mutation, so one canvas level now carries both a
+// badged proposal and an unbadged one under the SAME busy parent.
 
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -43,13 +49,17 @@ export interface PlansReviewSeed {
   userId: string;
   workspaceId: string;
   projectId: string;
-  /** A `planned` plan made STALE (parent_removed) — the one the spec reviews +
-   *  approves-anyway. Its two proposed adds, by title: */
+  /** A `planned` plan made STALE (blocker_removed + parent_removed) — the one the
+   *  spec reviews + approves-anyway. Its three proposed adds, by title: */
   stalePlan: PlanRef;
-  /** Under a LIVE parent that GAINS an unrelated child after `plannedAt` — and
-   *  is therefore NOT stale (MOTIR-3777). The negative half of the fixture. */
-  cleanProposalUnderBusyParent: string;
+  /** Under the LIVE parent, declaring `blocked_by` a card archived after
+   *  `plannedAt` → `blocker_removed`. Renders BADGED on the canvas level. */
+  staleProposalBlockerGone: string;
   staleProposalOrphan: string; // proposed add under an archived parent → parent_removed
+  /** Beside it under that SAME live parent, declaring nothing — and therefore NOT
+   *  stale however many unrelated children land there (MOTIR-3777). The negative
+   *  half of the fixture, and the one the spec follows through to /ready. */
+  cleanProposalUnderBusyParent: string;
   /** A `planned`, NON-stale plan the spec declines. */
   declinePlan: PlanRef;
   declineProposal: string;
@@ -103,9 +113,16 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
     { projectId, kind: 'story', title: 'Settings epic' },
     ctx,
   );
+  // A committed card the first proposal declares a dependency on, archived below
+  // after `plannedAt` — the surviving reason that keeps a badge on the canvas.
+  const doomedBlocker = await workItemsService.createWorkItem(
+    { projectId, kind: 'task', title: 'Design spike' },
+    ctx,
+  );
 
-  const cleanProposalUnderBusyParent = 'Onboarding wizard';
+  const staleProposalBlockerGone = 'Onboarding wizard';
   const staleProposalOrphan = 'Settings revamp';
+  const cleanProposalUnderBusyParent = 'Onboarding copy pass';
   const stale = await plansService.createPlan(
     projectId,
     { title: 'Q3 onboarding & settings', summary: 'Wire up onboarding and refresh settings.' },
@@ -116,13 +133,20 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
     [
       {
         op: 'add',
-        proposedFields: { title: cleanProposalUnderBusyParent, kind: 'subtask' },
+        proposedFields: { title: staleProposalBlockerGone, kind: 'subtask' },
         parentRef: livingParent.id,
+        blockedByRefs: [doomedBlocker.id],
       },
       {
         op: 'add',
         proposedFields: { title: staleProposalOrphan, kind: 'subtask' },
         parentRef: doomedParent.id,
+      },
+      {
+        // ⚠️ NO `blockedByRefs`, and that is the point (MOTIR-3777).
+        op: 'add',
+        proposedFields: { title: cleanProposalUnderBusyParent, kind: 'subtask' },
+        parentRef: livingParent.id,
       },
     ],
     ctx,
@@ -130,14 +154,16 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
   await plansService.markPlanned(stale.id, ctx);
 
   // Drift the committed tree AFTER plannedAt:
-  //   • a new sibling under the living parent → NOTHING on the first add, which
-  //     declared no edge to it (MOTIR-3777);
-  //   • archive the doomed parent → `parent_removed` on the second add.
+  //   • a new sibling under the living parent → NOTHING on either add hanging
+  //     there, because neither declared an edge to it (MOTIR-3777);
+  //   • archive the doomed parent → `parent_removed` on the second add;
+  //   • archive the declared blocker → `blocker_removed` on the first add.
   await workItemsService.createWorkItem(
     { projectId, kind: 'subtask', title: 'Late onboarding addition', parentId: livingParent.id },
     ctx,
   );
   await workItemsService.archiveWorkItem(doomedParent.id, ctx);
+  await workItemsService.archiveWorkItem(doomedBlocker.id, ctx);
 
   // ── Clean planned plan (decline target) ───────────────────────────────────
   const declineProposal = 'Marketing microsite';
@@ -166,8 +192,9 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
     workspaceId: ctx.workspaceId,
     projectId,
     stalePlan: { id: stale.id },
-    cleanProposalUnderBusyParent,
+    staleProposalBlockerGone,
     staleProposalOrphan,
+    cleanProposalUnderBusyParent,
     declinePlan: { id: decline.id },
     declineProposal,
     approvedPlan: { id: approved.id },

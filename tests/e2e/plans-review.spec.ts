@@ -66,15 +66,15 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // The stale `planned` plan's row shows its status + the "N may be out of date"
   // indicator; the approved plan's row shows its Approved status.
   //
-  // ⚠️ ONE, not two (MOTIR-3777). The fixture drifts the tree twice and only ONE
-  // of those drifts is a reason now: the archived parent. The other — an
-  // unrelated card landing under the OTHER proposal's still-living parent — used
-  // to raise `siblings_added` and raises nothing, which is the whole of the fix.
-  // The count on this row is `staleCountFor`'s, a SECOND reader of the same
-  // verdict as the rail's summary below, so it is asserted here as well.
+  // ⚠️ TWO, and each for a reason the proposal ITSELF named (MOTIR-3777): one
+  // add's declared blocker was archived, another's parent was. The third add —
+  // beside the first under the SAME parent, which gained an unrelated child after
+  // `plannedAt` — is NOT counted, and used to be. The count on this row is
+  // `staleCountFor`'s, a SECOND reader of the same verdict as the rail's summary
+  // below, so it is asserted in both places.
   const staleRow = page.locator(`a[href="/plans/${seed.stalePlan.id}"]`);
   await expect(staleRow).toContainText('Planned');
-  await expect(staleRow).toContainText('1 may be out of date');
+  await expect(staleRow).toContainText('2 may be out of date');
 
   // ⚠️ THE APPROVED PLAN IS IN ITS OWN TAB (MOTIR-3241). `/plans` is no longer one
   // reverse-chronological stream of every plan: it is a tab per lifecycle state,
@@ -112,17 +112,23 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByTestId('plan-item-node').first()).toBeVisible();
   await expect(page.getByTestId('stale-badge').first()).toBeVisible();
 
-  // Per-item staleness summary: the drifted item, with its reason.
+  // Per-item staleness summary: both drifted items, each with its own reason —
+  // and each reason is about something that proposal NAMED.
   const staleSummary = page.getByTestId('stale-summary');
-  await expect(staleSummary).toContainText('1 item may be out of date');
+  await expect(staleSummary).toContainText('2 items may be out of date');
+  await expect(staleSummary).toContainText(seed.staleProposalBlockerGone);
+  await expect(staleSummary).toContainText('A blocker was removed');
   await expect(staleSummary).toContainText(seed.staleProposalOrphan);
   await expect(staleSummary).toContainText('Parent removed since planned');
 
-  // ⚠️ MOTIR-3777, guarded on ABSENCE (CLAUDE.md § E2E). The OTHER proposal's
-  // parent gained an unrelated child after `plannedAt` — the exact mutation that
-  // used to raise "New sibling items since planned" on it. It declared no edge to
-  // that child, so nothing about it drifted, and the reviewer is told nothing.
-  // The whole fixture is here and the summary names ONE item, not two.
+  // ⚠️ MOTIR-3777, guarded on ABSENCE (CLAUDE.md § E2E), and the two assertions
+  // sit one canvas level apart from a BADGED proposal under the SAME parent —
+  // which is what makes this a guard rather than a coincidence. That parent
+  // gained an unrelated child after `plannedAt`, the exact mutation that used to
+  // raise "New sibling items since planned" on every add hanging there. The
+  // edge-less third proposal declared nothing, so nothing about it drifted; its
+  // neighbour is stale for a blocker it did declare. Before the fix BOTH were
+  // flagged, and the badged one carried this reason as well as its real one.
   await expect(staleSummary).not.toContainText(seed.cleanProposalUnderBusyParent);
   await expect(staleSummary).not.toContainText('New sibling items since planned');
 
