@@ -89,6 +89,12 @@ function prPayload(opts: {
       number: opts.number ?? 1688,
       state: opts.state ?? 'open',
       merged: opts.merged ?? false,
+      // GitHub always carries `merged_at` on a merged pull request, and Motir
+      // stores it (`githubWebhookService`'s merge-instant read). Supplied here
+      // because a merged payload WITHOUT it is a shape GitHub never sends, and a
+      // consumer that reads it — MOTIR-3823's CI-less discriminator does — would
+      // otherwise be exercised against a row that cannot occur.
+      merged_at: opts.merged ? new Date().toISOString() : null,
       title: `Some change (${opts.identifier})`,
       head: { ref: `subtask/${opts.identifier}-a-change` },
       base: { ref: opts.baseRef },
@@ -229,7 +235,17 @@ describe('the trunk gate — a merge completes an item only on the default branc
     const s2 = await makeScenario('trunk-master2@example.com', 'master');
     const onMain = await openThenMergeInto(s2.item.identifier, 'main', 3002);
     expect(onMain).toMatchObject({ outcome: 'deferred_non_default_base' });
-    expect(await statusOf(s2.item.id)).toBe('implemented');
+    // ⚠️ NOT `implemented` any more, and the difference is not this gate's
+    // (MOTIR-3823). Both scenarios in this test share ONE mirrored repo row —
+    // `persistInstallation` upserts on the installation id — so by the time s2's
+    // card arrives at Implemented, #3001 has already been watched to merge in that
+    // repository without ever reporting a check. That is the CI-less signal, so
+    // the promotion latch legitimately moves the card to In Review: a human SHOULD
+    // look at a card whose merge went to the wrong base. What this test is about is
+    // that the merge did not COMPLETE it, which is asserted directly below and by
+    // the hop trail — the gate's own claim, unchanged.
+    expect(await statusOf(s2.item.id)).not.toBe('done');
+    expect(await statusHops(s2.item.id)).not.toContain('done');
     expect((await commentsOn(s2.item.id))[0]!.bodyMd).toContain('master');
   });
 
