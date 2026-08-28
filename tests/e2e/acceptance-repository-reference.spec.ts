@@ -379,21 +379,20 @@ test('a repository is a link you can follow, and a rename does not break the car
     // makes the second spec's `opened` delivery resolve to the first spec's
     // change request, so its card never reaches Implemented. Take a new block
     // rather than reusing one.
-    // Both pull requests are LINKED before either is delivered. Since MOTIR-3674
-    // the title naming `twoRepo.identifier` associates nothing, so the link is
-    // what makes the hold below a statement about the repository SET — this
-    // receipt's subject — rather than about the parse that used to find the card.
+    // ⚠️ EACH pull request is linked WHEN IT OPENS, not both up front. Since
+    // MOTIR-3674 the title naming `twoRepo.identifier` associates nothing, so a
+    // link is what makes the hold below a statement about the repository SET —
+    // this receipt's subject — at all.
+    //
+    // Linking both in advance gives the card two delivery links, and the
+    // DELIVERY-set gate (MOTIR-3659) then holds it first, answering a different
+    // question than this receipt asks. One link per pull request, as it opens,
+    // is both what a run does and what keeps the repo-set hold the assertion.
     const refHeadRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-reference`;
     await linkPr(page, {
       workItemId: twoRepo.id,
       repo: E2E_REPO,
       number: 8101,
-      headRef: refHeadRef,
-    });
-    await linkPr(page, {
-      workItemId: twoRepo.id,
-      repo: E2E_REPO_SECOND,
-      number: 8102,
       headRef: refHeadRef,
     });
 
@@ -422,6 +421,12 @@ test('a repository is a link you can follow, and a rename does not break the car
     await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
     await beat();
 
+    await linkPr(page, {
+      workItemId: twoRepo.id,
+      repo: E2E_REPO_SECOND,
+      number: 8102,
+      headRef: refHeadRef,
+    });
     await deliver(page, {
       action: 'opened',
       identifier: twoRepo.identifier,

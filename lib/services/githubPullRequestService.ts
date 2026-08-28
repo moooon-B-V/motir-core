@@ -5,6 +5,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
+import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { toLinkedPullRequestDto, toPullRequestLinkCandidateDto } from '@/lib/mappers/githubMappers';
 import {
@@ -135,6 +136,9 @@ export const githubPullRequestService = {
       // view of it, and a host that refuses the write must never turn a recorded
       // link into an error the caller sees.
       await refreshLinkCheckForPullRequest(pullRequestId);
+      // …and apply the sync the `opened` delivery could not, because at the
+      // moment it arrived this link did not exist. See `resyncLinkedPullRequest`.
+      await resyncLinkedPullRequest(pullRequestId);
       return dto;
     });
   },
@@ -306,6 +310,13 @@ export const githubPullRequestService = {
       // is the arm that matters most: it is the one a RUN calls, seconds after
       // `gh pr create`, often before any delivery has arrived at all.
       await refreshLinkCheckForPullRequest(prId);
+      // The arm a RUN calls, so the one where the delivery has almost always
+      // already been and gone — and `created` is exactly how this arm knows.
+      // A row this call CREATED means no delivery has arrived yet: there is
+      // nothing to catch up on, and the `opened` delivery still to come will
+      // transition the card itself. A row that already existed means a delivery
+      // came, found no link, and correctly moved nothing.
+      if (!result.created) await resyncLinkedPullRequest(prId);
       return result;
     });
   },

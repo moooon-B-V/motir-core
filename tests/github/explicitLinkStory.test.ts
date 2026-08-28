@@ -392,6 +392,59 @@ describe('a pull request belongs to a card only by an explicit link (MOTIR-3672)
     expect(await statusOf(item.id)).toBe('implemented');
   });
 
+  // ⚠️ THE ORDERING A RUN ACTUALLY PRODUCES, and the one the parse used to hide.
+  // `gh pr create` fires the `opened` delivery within a second; the agent's
+  // `link_pull_request` call lands several seconds later. So the delivery is
+  // ALWAYS the unlinked one, and before `resyncLinkedPullRequest` the card sat in
+  // In Progress until the merge closed it — silently skipping Implemented, the
+  // state MOTIR-2999 added to say the code is pushed and no build has spoken.
+  it('7 — OPENED first, LINKED second: the link applies the sync the delivery could not', async () => {
+    const s = await makeScenario('order@example.com');
+    const item = await card(s, 'Opened before it was linked');
+
+    // The delivery arrives with nothing to attribute to — correct, and the
+    // story's first acceptance criterion.
+    const opened = await githubWebhookService.handleEvent(
+      'pull_request',
+      delivery({ action: 'opened', number: 7301, title: `feat: ${item.identifier} the work` }),
+    );
+    expect(opened).toMatchObject({ outcome: 'no_work_item' });
+    expect(await statusOf(item.id)).toBe('in_progress');
+
+    // The link catches the card up — through the SHIPPED sync, so the status it
+    // lands at is the one the delivery would have produced, not a second
+    // status writer's opinion.
+    await link(s, item.id, 7301);
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  it('7b — a linked pull request that is already MERGED is not re-derived from the link', async () => {
+    const s = await makeScenario('merged-link@example.com');
+    const item = await card(s, 'Attached after the fact');
+
+    // A pull request that opened AND merged with no link — the historical shape.
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      delivery({ action: 'opened', number: 7302, title: 'feat: some other work' }),
+    );
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      delivery({
+        action: 'closed',
+        number: 7302,
+        title: 'feat: some other work',
+        state: 'closed',
+        merged: true,
+      }),
+    );
+
+    // Linking it records the association and NOTHING else: completing a card by
+    // attaching an old merged pull request is a different feature, and the
+    // completion gate reads merge facts a `closed` delivery carries.
+    await link(s, item.id, 7302);
+    expect(await statusOf(item.id)).toBe('in_progress');
+  });
+
   it('the check is named the way a person reads it in the GitHub UI', async () => {
     // Documented in `docs/mcp.md` by this exact string, and it is the name a
     // branch-protection rule would have to match.

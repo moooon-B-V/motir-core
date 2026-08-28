@@ -252,17 +252,22 @@ test('a card that ships in two repositories holds until BOTH have merged', async
     await beat();
   });
 
-  // Both pull requests are LINKED to the card before either is delivered.
-  // Since MOTIR-3674 the title naming `twoRepo.identifier` associates nothing —
-  // an unlinked delivery resolves `no_work_item` — so the link is what makes the
-  // repository-set hold below a statement about the SET rather than about the
-  // parse that used to find it.
+  // ⚠️ EACH pull request is linked WHEN IT OPENS, not both up front. Since
+  // MOTIR-3674 the title naming `twoRepo.identifier` associates nothing — an
+  // unlinked delivery resolves `no_work_item` — so a link is what makes the hold
+  // below a statement about the repository SET at all.
+  //
+  // The ordering is load-bearing and it is the product's, not the harness's.
+  // Linking BOTH before the first merge gives the card two delivery links, and
+  // the DELIVERY-set gate (MOTIR-3659) then holds it first —
+  // `deferred_incomplete_delivery_set`, a true answer to a different question
+  // than the one this receipt asks. Linking each as it opens is both what a run
+  // does and what keeps `deferred_incomplete_repo_set` the assertion.
   const headRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-set`;
-  await linkPr(page, { workItemId: twoRepo.id, repo: E2E_REPO, number: 5101, headRef });
-  await linkPr(page, { workItemId: twoRepo.id, repo: E2E_REPO_SECOND, number: 5102, headRef });
 
   // ── 4 — the first merge, and the HOLD. The product change. ────────────────
   await chapter('Merge the FIRST repository — the card holds', async () => {
+    await linkPr(page, { workItemId: twoRepo.id, repo: E2E_REPO, number: 5101, headRef });
     await deliver(page, {
       action: 'opened',
       identifier: twoRepo.identifier,
@@ -299,6 +304,12 @@ test('a card that ships in two repositories holds until BOTH have merged', async
 
   // ── 5 — the second merge completes it ─────────────────────────────────────
   await chapter('Merge the SECOND repository — the card completes', async () => {
+    await linkPr(page, {
+      workItemId: twoRepo.id,
+      repo: E2E_REPO_SECOND,
+      number: 5102,
+      headRef,
+    });
     await deliver(page, {
       action: 'opened',
       identifier: twoRepo.identifier,

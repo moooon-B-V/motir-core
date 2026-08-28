@@ -1053,3 +1053,89 @@ export function classifyTransitionError(
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
+
+/**
+ * Re-apply the sync for a pull request whose LINK has just arrived.
+ *
+ * ⚠️ WHY THIS EXISTS — the ordering the parse used to hide (Story MOTIR-3672).
+ * A delivery resolves its card from the STORED link, and the link is written by
+ * `link_pull_request` AFTER the pull request exists. In a real run those two
+ * happen in this order: the agent runs `gh pr create`, GitHub delivers `opened`
+ * within a second, and the agent's link call lands several seconds later. So the
+ * `opened` delivery correctly finds no card and moves nothing — and under the
+ * retired parse that never showed, because the title carried the key and the
+ * delivery attributed itself.
+ *
+ * Without this, the card would sit in In Progress until the MERGE closed it,
+ * silently skipping Implemented — the state MOTIR-2999 introduced to say "the
+ * code is pushed and no build has spoken for it". The story's own acceptance
+ * receipt asserts the card lands there from exactly this open-then-link
+ * sequence, which is what surfaced the gap.
+ *
+ * So linking runs the sync the delivery could not: same function, same gates,
+ * same outcomes. It is not a second status writer — every deferral, every repo-
+ * and delivery-set check and every refusal comment is the shipped path's.
+ *
+ * ⚠️ ONLY WHERE A DELIVERY HAS ALREADY BEEN. The caller passes a pull request
+ * whose row PRE-EXISTED the link; when the link is what created the row, no
+ * delivery has arrived yet, there is nothing to catch up on, and the `opened`
+ * delivery still to come does the transition itself. Resyncing there would move
+ * the card early and leave that delivery reporting `noop` — a true statement
+ * about a card that had already been moved by something other than the event
+ * the outcome names.
+ *
+ * ⚠️ OPEN AND UNMERGED ONLY, and that is a decision rather than an omission. A
+ * pull request that is already closed or merged reaches this through a `closed`
+ * delivery, which carries the merge facts the completion gate reads; re-deriving
+ * `done` from a link would let someone complete a card by attaching an old
+ * merged pull request to it, which is a different feature and needs its own
+ * argument. An open one asserts only what the link itself already says: this
+ * code is being written for this card.
+ *
+ * Best-effort at the call site, like the check refresh beside it: the link is the
+ * durable fact, this is a consequence of it, and a sync that cannot run must
+ * never turn a recorded link into an error the caller sees.
+ */
+export async function resyncLinkedPullRequest(
+  githubPullRequestId: string,
+): Promise<ChangeRequestSyncResult | null> {
+  const subject = await withSystemContext(async (tx: Prisma.TransactionClient) =>
+    githubPullRequestRepository.findByIdWithInstallation(githubPullRequestId, tx),
+  );
+  if (!subject || subject.state !== 'open' || subject.merged) return null;
+  // ⚠️ And a row with NO base ref does not resync. `baseRef` is nullable on the
+  // stored row (rows written before it was captured) and REQUIRED on the
+  // normalized shape, whose own contract is that a payload carrying no
+  // destination does not normalize rather than defaulting to a guess. The
+  // completion gate reads this field against the mirrored default branch, so a
+  // guess here is not a cosmetic default — it is the difference between "reached
+  // the trunk" and "merged onto a dead branch". `linkPullRequestByCoordinates`
+  // always writes one, so this skips only rows an older delivery created.
+  if (subject.baseRef === null) return null;
+
+  const cr: NormalizedChangeRequest = {
+    providerRepoId: subject.repo.repoId,
+    number: subject.number,
+    state: 'open',
+    merged: false,
+    headRef: subject.headRef,
+    baseRef: subject.baseRef,
+    title: subject.title,
+  };
+
+  return syncChangeRequestStatus(cr, 'implemented', async (tx) => {
+    // The same bind the providers' own resolvers do, for the same reason: the
+    // repo row is where the tenant is learned, and everything the sync reads
+    // below it lives in tables with no `system_admin` arm (MOTIR-2880).
+    await bindWorkspaceContext(tx, subject.repo.workspaceId);
+    return {
+      kind: 'resolved',
+      installation: subject.repo.installation,
+      repo: subject.repo,
+      // The LINKER is not the pull request's author, and this argument names the
+      // author. Passing null takes the documented owner-fallback attribution
+      // rather than crediting the wrong person for opening the branch.
+      authorBoundUserId: null,
+    };
+  });
+}
