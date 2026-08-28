@@ -28,6 +28,29 @@ import { mintInstallationToken } from './appAuth';
 
 const GITHUB_API = 'https://api.github.com';
 
+// ⚠️ EVERY PATH SEGMENT THAT REACHES A URL IS VALIDATED FIRST, and the reason is
+// not the scanner that found it (`js/request-forgery`, twice, on the two reads
+// below). The values ARRIVE from a webhook payload — GitHub's, signature-checked,
+// and mirrored into `github_repo` before this file sees them — so the realistic
+// exploit is thin. What is NOT thin is the failure mode: a repository row whose
+// `owner` or `name` was written wrong, by any path, turns every call in this file
+// into a request to a URL nobody wrote. `..` in a segment walks the API path;
+// a `?` or `#` truncates it. A best-effort writer that must never throw is
+// exactly the place that would do it silently.
+//
+// So the guard is a WHITELIST of the grammar GitHub itself accepts, applied at
+// the one place a URL is built, and a value outside it produces no request at
+// all — which each caller already has an arm for.
+const REPO_SEGMENT = /^[A-Za-z0-9._-]{1,100}$/;
+const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+
+/** `https://api.github.com/repos/<owner>/<name>`, or null when either segment is
+ *  not a thing GitHub could have named. */
+function repoUrl(owner: string, name: string): string | null {
+  if (!REPO_SEGMENT.test(owner) || !REPO_SEGMENT.test(name)) return null;
+  return `${GITHUB_API}/repos/${owner}/${name}`;
+}
+
 /** The check run's name, as a person reads it in the GitHub UI. Stable: it is
  *  the key this module re-writes in place, and what a branch-protection rule
  *  would name. `docs/mcp.md` documents it by this string. */
@@ -83,10 +106,12 @@ async function findExistingRun(
   name: string,
   headSha: string,
 ): Promise<number | null> {
+  const base = repoUrl(owner, name);
+  if (base === null || !COMMIT_SHA.test(headSha)) return null;
   let res: Response;
   try {
     res = await fetch(
-      `${GITHUB_API}/repos/${owner}/${name}/commits/${headSha}/check-runs` +
+      `${base}/commits/${headSha}/check-runs` +
         `?check_name=${encodeURIComponent(LINK_CHECK_NAME)}&per_page=1`,
       { headers: headers(token) },
     );
@@ -124,6 +149,11 @@ export async function writeCheckRun(spec: CheckRunSpec): Promise<CheckRunWriteOu
     return 'unavailable';
   }
 
+  const base = repoUrl(spec.owner, spec.name);
+  // Same guard as the reads, and applied even though the scanner did not flag this
+  // site: an inconsistent whitelist is the shape the note above describes.
+  if (base === null || !COMMIT_SHA.test(spec.headSha)) return 'unavailable';
+
   const existingId = await findExistingRun(token, spec.owner, spec.name, spec.headSha);
   const payload = {
     name: LINK_CHECK_NAME,
@@ -136,9 +166,7 @@ export async function writeCheckRun(spec: CheckRunSpec): Promise<CheckRunWriteOu
   let res: Response;
   try {
     res = await fetch(
-      existingId === null
-        ? `${GITHUB_API}/repos/${spec.owner}/${spec.name}/check-runs`
-        : `${GITHUB_API}/repos/${spec.owner}/${spec.name}/check-runs/${existingId}`,
+      existingId === null ? `${base}/check-runs` : `${base}/check-runs/${existingId}`,
       {
         method: existingId === null ? 'POST' : 'PATCH',
         headers: headers(token),
@@ -183,9 +211,11 @@ export async function readPullRequestHeadSha(
   } catch {
     return null;
   }
+  const base = repoUrl(owner, name);
+  if (base === null || !Number.isInteger(number) || number <= 0) return null;
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API}/repos/${owner}/${name}/pulls/${number}`, {
+    res = await fetch(`${base}/pulls/${number}`, {
       headers: headers(token),
     });
   } catch {
