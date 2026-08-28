@@ -9,6 +9,7 @@ import {
 import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
+import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 
 // Subtask 7.12.5 / MOTIR-911 — the confirmation gate's VERDICT, as pure logic
 // (no DB). The gate's job: an approved proposal set becomes rows ONLY after an
@@ -195,6 +196,72 @@ describe('validatePlanProposals — the kind-parent grammar', () => {
 
   it('does not gate a modify on the grammar — a patch cannot re-parent or re-kind', () => {
     expect(() => validate([modify('m1', { patch: { blockedByAdd: [] } })])).not.toThrow();
+  });
+});
+
+// MOTIR-3654 — the `type` arm, the twin of `unknown_kind` above.
+//
+// The defect: the plan door's `type` was a bare `z.string()` while `kind`,
+// `priority` and `executor` beside it were all `z.enum`, and this gate read only
+// `kind`. So `type: "migration"` was stored, `validate_plan` answered
+// `{ valid: true }`, and `prisma.workItem.create()` raised a
+// `PrismaClientValidationError` from inside the approve transaction.
+//
+// Written against the CONTRACT (an out-of-enum value is refused; a member is
+// not) rather than against the module's list, exactly as the kind-parent cases
+// above are — the one exception is the totality case, which asserts precisely
+// that the gate and the exported constant agree.
+describe('validatePlanProposals — the proposed `type` is a closed set (MOTIR-3654)', () => {
+  it('rejects an add proposing a type outside the enum, naming the proposal', () => {
+    try {
+      validate([add('p1', { proposedFields: { kind: 'task', type: 'migration' } })]);
+      expect.unreachable('an out-of-enum type must be rejected');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('unknown_type');
+      expect((err as PlanGrammarError).planItemId).toBe('p1');
+      // The message lists the legal members: the caller correcting this is
+      // usually an agent, which can act on a list and cannot act on a refusal.
+      expect((err as PlanGrammarError).message).toContain('migration');
+      expect((err as PlanGrammarError).message).toContain('code');
+    }
+  });
+
+  it('accepts every member of the shipped enum', () => {
+    for (const type of WORK_ITEM_TYPES) {
+      expect(() =>
+        validate([add(`p-${type}`, { proposedFields: { kind: 'task', type } })]),
+      ).not.toThrow();
+    }
+  });
+
+  it('accepts an add with no type at all, and one that clears it — untyped is legal', () => {
+    expect(() => validate([add('p1', { proposedFields: { kind: 'task' } })])).not.toThrow();
+    expect(() =>
+      validate([add('p2', { proposedFields: { kind: 'task', type: null } })]),
+    ).not.toThrow();
+  });
+
+  it('reports the TYPE before the parent grammar — the most specific reason wins', () => {
+    // Both are wrong on this proposal: `subtask` at the root is an illegal
+    // placement AND `migration` is not a work type. The type arm runs first
+    // because it is a property of the proposal alone and needs no graph.
+    try {
+      validate([add('p1', { proposedFields: { kind: 'subtask', type: 'migration' } })]);
+      expect.unreachable('must be rejected');
+    } catch (err) {
+      expect((err as PlanGrammarError).reason).toBe('unknown_type');
+    }
+  });
+
+  it('is TOTAL over the schema enum — no member the gate rejects, none it misses', () => {
+    // The pairing that makes this more than a restatement: the gate must accept
+    // every member AND reject a plausible non-member. `migration` is the value
+    // that actually reached `prisma.workItem.create()` in production, and it is
+    // exactly the shape the old `.describe()` string invited — a five-of-fourteen
+    // list ending in an ellipsis.
+    expect(WORK_ITEM_TYPES).toHaveLength(14);
+    expect((WORK_ITEM_TYPES as readonly string[]).includes('migration')).toBe(false);
   });
 });
 
