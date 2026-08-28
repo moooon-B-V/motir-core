@@ -3,6 +3,7 @@ import {
   assembleDispatchPrompt,
   branchSlug,
   FINDINGS_POLICY_TOKENS,
+  LINKING_RATIONALE,
   NO_INJECTIONS,
   parseFindingsPolicy,
   type DispatchPromptSource,
@@ -367,7 +368,9 @@ describe('assembleDispatchPrompt — the GIT WORKFLOW variants', () => {
     const step = prompt.split('\n').find((l) => l.includes('link_pull_request'));
     expect(step, 'the link step is missing from the per-item-PR grammar').toBeDefined();
     expect(step).toContain('PROD-7');
-    expect(prompt).toContain('pull-request URL the previous step printed');
+    // MOTIR-3678 — the step's wording is now the SHARED one, so this asserts the
+    // property the older text was standing in for: every argument is in hand.
+    expect(prompt).toContain('pull request (its URL, or repository + number), plus headRef');
     expect(prompt).toContain('headRef subtask/PROD-7-add-the-ready-set-filter-bar');
     expect(prompt).toContain('baseRef main');
     // And it is IMMEDIATELY after the pull request, not left to the end.
@@ -385,7 +388,10 @@ describe('assembleDispatchPrompt — the GIT WORKFLOW variants', () => {
     expect(prompt).toContain('inherits the session branch session/PROD-2-run');
     expect(prompt).toContain('origin/session/PROD-2-run');
     expect(prompt).toContain('mark_integrated');
-    expect(prompt).toContain('Do NOT open a pull request for this item.');
+    // MOTIR-3678 — the agent no longer opens one OF ITS OWN, and is told what to
+    // do about the one the run has usually already opened.
+    expect(prompt).toContain('Do NOT open a pull request of your own.');
+    expect(prompt).toContain('If it does not exist yet, you are the');
   });
 
   it('the branch PREFIX follows the diff content, not the card kind', () => {
@@ -507,6 +513,66 @@ describe('assembleDispatchPrompt — the prose-vs-graph advisory block (MOTIR-20
 // the user's own key: no wrapper, no policy layer, no second channel. The prompt
 // is the entire contract with the agent, so every assertion here is about text
 // that either reaches it or does not exist.
+// ── THE LINKING SENTENCE (Story MOTIR-3672 · MOTIR-3678) ─────────────────────
+//
+// One text, every grammar. The point of the card is that an agent never has to
+// work out which lane it is in before it can follow the instruction, and the
+// only way that stays true is a test that fails when the two drift.
+describe('assembleDispatchPrompt — the linking sentence is ONE text', () => {
+  const RATIONALE = LINKING_RATIONALE.join('\n');
+
+  it.each([
+    ['per_item_pr', null],
+    ['session_lineage', 'motir/auto-20260827-120000'],
+  ])('renders it BYTE-IDENTICALLY in the %s grammar', (mode, sessionBranch) => {
+    const { prompt, workflowMode } = assembleDispatchPrompt(source({ sessionBranch }));
+    expect(workflowMode).toBe(mode);
+    // Indentation is the only thing a grammar may vary, so the comparison is on
+    // the de-indented text — which is what makes this an assertion about the
+    // WORDS rather than about the list they sit in.
+    const flat = prompt
+      .split('\n')
+      .map((l) => l.trim())
+      .join('\n');
+    expect(flat).toContain(
+      RATIONALE.split('\n')
+        .map((l) => l.trim())
+        .join('\n'),
+    );
+  });
+
+  it.each([
+    ['per_item_pr', null],
+    ['session_lineage', 'motir/auto-20260827-120000'],
+  ])('tells the %s grammar to CALL link_pull_request with the card key', (mode, sessionBranch) => {
+    const { prompt } = assembleDispatchPrompt(source({ sessionBranch }));
+    expect(prompt).toContain('call the link_pull_request tool with key PROD-7');
+  });
+
+  it('says the title is a LABEL with no fallback, and NAMES the failing check', () => {
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt).toContain('There is no fallback');
+    expect(prompt).toContain('Motir / work item link');
+    expect(prompt).toContain('it goes green on the link itself');
+  });
+
+  // ⚠️ The contradiction this card was filed on: `outcomeProtocol` renders for
+  // BOTH grammars and used to say "open the pull request" to an agent whose git
+  // workflow said not to.
+  it('never tells a SESSION-LINEAGE agent to open a pull request of its own', () => {
+    const branch = 'motir/auto-20260827-120000';
+    const { prompt } = assembleDispatchPrompt(source({ sessionBranch: branch }));
+    expect(prompt).not.toContain('    3. open the pull request');
+    expect(prompt).toContain('find the session pull request for this repository');
+    expect(prompt).toContain(`gh pr list --head ${branch}`);
+  });
+
+  it('still tells a PER-ITEM agent to open one', () => {
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt).toContain('    3. open the pull request');
+  });
+});
+
 describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
   // ⚠️ BOTH VARIANTS, asserted separately. A section added to one branch of a
   // two-branch assembler is the classic half-shipped prompt change, and it would
@@ -933,7 +999,7 @@ describe('the MULTI-REPOSITORY session-lineage workflow', () => {
   });
 
   it('opens no pull request in any repository', () => {
-    expect(built().prompt).toContain('Do NOT open a pull request in any repository.');
+    expect(built().prompt).toContain('Do NOT open a pull request OF YOUR OWN in any repository.');
     expect(built().prompt).not.toContain('TITLE carries');
   });
 });

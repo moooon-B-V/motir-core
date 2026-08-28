@@ -749,6 +749,17 @@ function siblingDir(repo: string, index: number): string {
  * ⚠️ AND `resolveChangeRequestWorkItem` NO LONGER EXISTS (MOTIR-3674): the parse
  * is retired at both its call sites, so the title is not even a fallback now.
  * An unlinked pull request associates with nothing at all.
+ *
+ * ⚠️ EXTENDED, NOT REPLACED (MOTIR-3678), and the instruction above holds with
+ * MORE force than when it was written. The paragraph the older rule is quoted in
+ * exists so that a reader who meets `link_pull_request` and thinks *"surely the
+ * title still works as a backstop"* finds the answer here instead of re-deriving
+ * it. Retiring the parse makes that re-derivation newly tempting — a mechanism
+ * that is gone leaves no error message behind, so the only trace of it is this
+ * paragraph. **Do not restore the title rule, and do not delete the record of
+ * it.** What replaces the fallback is not silence but a RED CHECK: an unlinked
+ * pull request fails `Motir / work item link` (MOTIR-3675), which is where a
+ * person now learns what the title used to do for them.
  */
 function multiRepoPrBlocks(
   src: DispatchPromptSource,
@@ -773,12 +784,14 @@ function multiRepoPrBlocks(
       `  6. Push the branch and open a pull request against ${repo.defaultBranch ?? 'main'}.`,
       `     Put ${src.key} in the TITLE as well, as a label for a human reading a`,
       '     list — it is not what links the pull request.',
-      `  7. LINK it: call the link_pull_request tool with key ${src.key}, the`,
-      '     pull-request URL the previous step printed (or repository + number),',
-      `     headRef ${branch} and baseRef ${repo.defaultBranch ?? 'main'}.`,
-      '     ONCE PER REPOSITORY — each repository has its own pull request, so',
-      '     each needs its own call; the item completes only when they have all',
-      '     merged.',
+      ...linkingStep(src, branch, 7, {
+        indent: '  ',
+        baseRef: repo.defaultBranch ?? 'main',
+        trailer: [
+          'ONCE PER REPOSITORY — each repository has its own pull request, so each',
+          'needs its own call; the item completes only when they have all merged.',
+        ],
+      }),
     );
   });
   return lines;
@@ -857,10 +870,76 @@ function multiRepoSessionLineageWorkflow(
     `sessionBranch ${sessionBranch}. One call for the item, not one per repository —`,
     'the item records a single session branch, which is why the name is shared.',
     '',
-    'Do NOT open a pull request in any repository. The session branch has one review',
-    'surface per repository, and a human opens and merges them.',
+    'Do NOT open a pull request OF YOUR OWN in any repository. The session branch has',
+    'one review surface per repository, and the run opens it at the first item that',
+    'reaches Implemented there — so it usually already exists by the time you get',
+    `here (\`gh pr list --head ${sessionBranch}\`). If a repository you touched has`,
+    'none yet, you are the first: open it from that branch, targeting its default',
+    'branch.',
+    '',
+    'Then, in EACH repository whose session pull request you found or opened:',
+    ...linkingStep(src, sessionBranch, 1, {
+      trailer: [
+        'ONCE PER REPOSITORY, and once per item — several items link the same session',
+        'pull request, which is exactly what the delivery table records.',
+      ],
+    }),
   );
   return lines;
+}
+
+/**
+ * THE LINKING SENTENCE — one text, every grammar (Story MOTIR-3672 · MOTIR-3678).
+ *
+ * `docs/decisions/work-item-delivery-links.md` settled that `link_pull_request`
+ * stays SINGLE-KEY and is called ONCE PER ITERATION in every lane, and it wrote
+ * the agent instruction out in full precisely so there would be nothing to infer:
+ *
+ *   > **When your work is committed and the pull request exists, call
+ *   > `link_pull_request` with your card and that pull request.**
+ *
+ * ⚠️ NO GRAMMAR BRANCH, and that is the point rather than an economy. A per-lane
+ * variant asks the agent to work out which lane it is in before it can follow an
+ * instruction, and an agent that has to infer its lane infers other things too.
+ * `motir auto` opens its pull request at the first implemented card and reuses
+ * it, so there is no lane in which the association is deferred or guessed — which
+ * is what makes one sentence sufficient.
+ *
+ * {@link LINKING_RATIONALE} is the part that carries the MEANING and it is a
+ * constant with no interpolation, so it renders byte-identically wherever it
+ * appears; only the step number, the branch and the base ref differ. A test
+ * asserts every grammar contains it verbatim, so an edit to one cannot drift
+ * from the others (MOTIR-3678 AC 5).
+ */
+export const LINKING_RATIONALE = [
+  'The link is the ONLY thing that associates a pull request with a card.',
+  'There is no fallback: the key in the branch and in the title is a LABEL for a',
+  'human reading a list, and Motir does not parse it. An unlinked pull request',
+  'moves no card when it merges, AND fails a check named "Motir / work item link"',
+  'whose text repeats this call. If you see that check red, this step is what',
+  'clears it — it goes green on the link itself, so you do not need to push again.',
+];
+
+/** The linking STEP, in the shape the surrounding list needs: `indent` for the
+ *  per-repository blocks, which are nested one level. */
+export function linkingStep(
+  src: DispatchPromptSource,
+  branch: string,
+  stepNumber: number,
+  opts: { indent?: string; baseRef?: string; trailer?: string[] } = {},
+): string[] {
+  const pad = opts.indent ?? '';
+  const body = pad + '   ';
+  return [
+    `${pad}${stepNumber}. LINK it: call the link_pull_request tool with key ${src.key} and the`,
+    `${body}pull request (its URL, or repository + number), plus headRef ${branch}`,
+    `${body}and baseRef ${opts.baseRef ?? 'main'}. Do this in the SAME iteration that did`,
+    `${body}the work, while the pull request is in front of you — not at the end of`,
+    `${body}the run.`,
+    ...(opts.trailer ?? []).map((l) => `${body}${l}`),
+    '',
+    ...LINKING_RATIONALE.map((l) => `${body}${l}`),
+  ];
 }
 
 /** The per-item-PR GIT WORKFLOW: branch from `origin/main`, one PR, stop. */
@@ -879,12 +958,7 @@ function perItemPrWorkflow(src: DispatchPromptSource): string[] {
     `   ${src.key} in the TITLE as well — a human scanning a pull-request list`,
     '   reads it there — but the title is a LABEL, not what links the pull',
     '   request. Step 6 is what links it.',
-    `6. LINK it: call the link_pull_request tool with key ${src.key} and the`,
-    '   pull-request URL the previous step printed (or repository + number),',
-    `   plus headRef ${branch} and baseRef main. Do this IMMEDIATELY, while the`,
-    '   pull request is still in front of you: the stored link is what carries',
-    '   the merge back to this item, it works before any webhook delivery has',
-    '   arrived, and it holds even if the title never names the card.',
+    ...linkingStep(src, branch, 6),
     '7. STOP at the open pull request. Do not merge it and do not delete the branch.',
   ];
 }
@@ -906,8 +980,14 @@ function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string
     `5. Integrate the commit into ${sessionBranch} and push that branch.`,
     `6. Report it: call the mark_integrated tool with key ${src.key} and`,
     `   sessionBranch ${sessionBranch}.`,
-    '7. Do NOT open a pull request for this item. The session branch has one review',
-    '   surface, and a human opens and merges it.',
+    '7. Do NOT open a pull request of your own. The session branch has ONE review',
+    `   surface: a pull request from ${sessionBranch}, which the run opens at the`,
+    '   first item that reaches Implemented in this repository. So by the time you',
+    '   are reading this it USUALLY ALREADY EXISTS — find it with',
+    `   \`gh pr list --head ${sessionBranch}\`. If it does not exist yet, you are the`,
+    '   first: open it, from that branch, targeting main.',
+    ...linkingStep(src, sessionBranch, 8),
+    '9. STOP. Do not merge that pull request and do not delete the branch.',
   ];
 }
 
@@ -988,8 +1068,26 @@ function modelSelfReport(): string[] {
  * is not silence: the agent is told what to do INSTEAD, because an agent with a
  * finding and no instruction improvises.
  */
-function outcomeProtocol(src: DispatchPromptSource): string[] {
+function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null): string[] {
   const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
+  // ⚠️ THIS BLOCK USED TO CONTRADICT THE SESSION-LINEAGE GRAMMAR, IN ONE PROMPT
+  // (found while running MOTIR-3655, fixed here by MOTIR-3678). It renders for
+  // BOTH grammars and took only `src`, so it could not vary — and it said
+  // *"3. open the pull request"* to an agent whose git workflow three sections
+  // earlier said *"do NOT open a pull request for this item"*. An agent handed
+  // both has no coherent instruction, and what it does then is not predictable.
+  //
+  // The fix is the parameter, not a second protocol: the ORDER is the same in
+  // both lanes and the order is what this section is for. What differs is one
+  // line — whether the pull request is something you open or something the run
+  // has already opened — so that line varies and nothing else does.
+  const finished = sessionBranch
+    ? [
+        '    3. find the session pull request for this repository',
+        `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
+        '       you are the first item to reach this point in it',
+      ]
+    : ['    3. open the pull request'];
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -1002,11 +1100,14 @@ function outcomeProtocol(src: DispatchPromptSource): string[] {
     '  IN THIS ORDER, and the order is the point:',
     '',
     '    1. commit',
-    '    2. push the branch',
-    '    3. open the pull request',
-    `    4. link it with the link_pull_request tool (key ${src.key}, and the`,
-    '       pull request you just opened) — once per repository if this item',
-    '       ships in more than one',
+    sessionBranch
+      ? `    2. integrate into ${sessionBranch} and push that branch`
+      : '    2. push the branch',
+    ...finished,
+    `    4. link it with the link_pull_request tool (key ${src.key}, and that`,
+    '       pull request) — once per repository if this item ships in more than',
+    '       one. The link is the only association a pull request has; the key in',
+    '       the branch and the title is a label Motir does not parse.',
     `    5. move ${src.key} to Implemented with the transition_status tool`,
     `       (key ${src.key}, status implemented)`,
     '',
@@ -1274,7 +1375,10 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
       // it starts acting. Placing it earlier would leave the git workflow as the
       // final word, which is how "set the card to Implemented" becomes the step
       // that gets forgotten.
-      ...section('REPORTING THE OUTCOME — say which one happened', outcomeProtocol(src)),
+      ...section(
+        'REPORTING THE OUTCOME — say which one happened',
+        outcomeProtocol(src, sessionBranch),
+      ),
     ];
   }
 

@@ -284,9 +284,14 @@ const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
   claim_refused: 'claimed by somebody else, or no longer claimable',
 };
 
-/** The PR title for a session branch. Carries NO `MOTIR-<n>`: see
+/** The PR title for a session branch. Carries a `MOTIR-<n>` only in its
+ *  one-card arm, where the claim is true; see
  *  {@link import('./git.js').sessionBranchName} for why a session PR must not
- *  name one item. */
+ *  name one item otherwise.
+ *
+ *  ⚠️ Since MOTIR-3674 a key here is a LABEL a human reads and nothing more —
+ *  Motir does not parse a title, so this string cannot link, mis-link, or move
+ *  anything. It is still worth getting right for the reader. */
 export function sessionPrTitle(
   runId: string,
   carried: readonly Pick<DispatchRecord, 'key' | 'title' | 'parentKey'>[],
