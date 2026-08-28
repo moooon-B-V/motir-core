@@ -104,38 +104,44 @@ describe('addTodo', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
 
-    const first = await workItemTodosService.addTodo(
+    const { todo: first } = await workItemTodosService.addTodo(
       card,
       { text: '  Open the DNS panel  ' },
       fx.ctx,
     );
-    const second = await workItemTodosService.addTodo(card, { text: 'Add the TXT record' }, fx.ctx);
+    const { todo: second } = await workItemTodosService.addTodo(
+      card,
+      { text: 'Add the TXT record' },
+      fx.ctx,
+    );
 
     // Trimmed, not Markdown, not a command row, not done.
     expect(first).toMatchObject({
       text: 'Open the DNS panel',
       commandText: null,
       doneAt: null,
-      doneById: null,
+      doneBy: null,
+      done: false,
     });
     expect(first.position < second.position).toBe(true);
     expect(await positions(card, fx)).toEqual(['Open the DNS panel', 'Add the TXT record']);
 
     const list = await workItemTodosService.listTodos(card, fx.ctx);
-    expect(list).toMatchObject({ done: 0, total: 2 });
+    expect(list.progress).toEqual({ done: 0, total: 2 });
+    expect(list.items).toHaveLength(2);
   });
 
   it('carries a command as its OWN field — the row is copyable because the column is set, not because the text looks like a command', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
 
-    const withCommand = await workItemTodosService.addTodo(
+    const { todo: withCommand } = await workItemTodosService.addTodo(
       card,
       { text: 'Apply the migration', commandText: '  pnpm prisma migrate deploy  ' },
       fx.ctx,
     );
     // A step whose TEXT contains backticks is still not a command row.
-    const backticked = await workItemTodosService.addTodo(
+    const { todo: backticked } = await workItemTodosService.addTodo(
       card,
       { text: 'Run `pnpm build` if it fails' },
       fx.ctx,
@@ -148,7 +154,7 @@ describe('addTodo', () => {
   it('normalises a blank command to NULL, so no row renders a copy button for nothing', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(
+    const { todo } = await workItemTodosService.addTodo(
       card,
       { text: 'A step', commandText: '   ' },
       fx.ctx,
@@ -162,12 +168,12 @@ describe('addTodo — the executor', () => {
     const fx = await makeWorkItemFixture();
     const manualCard = await makeCard(fx, { type: 'manual' });
 
-    const seeded = await workItemTodosService.addTodo(
+    const { todo: seeded } = await workItemTodosService.addTodo(
       manualCard,
       { text: 'Open the console' },
       fx.ctx,
     );
-    const carved = await workItemTodosService.addTodo(
+    const { todo: carved } = await workItemTodosService.addTodo(
       manualCard,
       { text: 'Regenerate the client', executor: 'coding_agent' },
       fx.ctx,
@@ -182,14 +188,14 @@ describe('addTodo — the executor', () => {
   it('falls back to `human` when the card carries no executor of its own', async () => {
     const fx = await makeWorkItemFixture();
     const untyped = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(untyped, { text: 'Ask Yue' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(untyped, { text: 'Ask Yue' }, fx.ctx);
     expect(todo.executor).toBe('human');
   });
 
   it('an explicit NULL clears it rather than falling back to the card', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx, { type: 'code' });
-    const todo = await workItemTodosService.addTodo(
+    const { todo } = await workItemTodosService.addTodo(
       card,
       { text: 'Undecided', executor: null },
       fx.ctx,
@@ -218,7 +224,7 @@ describe('the granularity bar', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
     const atCap = 'x'.repeat(TODO_TEXT_MAX_LENGTH);
-    const todo = await workItemTodosService.addTodo(card, { text: atCap }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: atCap }, fx.ctx);
     expect(todo.text).toHaveLength(TODO_TEXT_MAX_LENGTH);
   });
 
@@ -264,14 +270,14 @@ describe('updateTodo', () => {
   it('is SPARSE: an omitted field is untouched, an explicit null CLEARS', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(
+    const { todo } = await workItemTodosService.addTodo(
       card,
       { text: 'Apply it', commandText: 'pnpm migrate', executor: 'coding_agent' },
       fx.ctx,
     );
 
     // Only the text: the command and the executor must survive.
-    const retitled = await workItemTodosService.updateTodo(
+    const { todo: retitled } = await workItemTodosService.updateTodo(
       todo.id,
       { text: 'Apply the migration' },
       fx.ctx,
@@ -282,7 +288,7 @@ describe('updateTodo', () => {
       executor: 'coding_agent',
     });
 
-    const cleared = await workItemTodosService.updateTodo(
+    const { todo: cleared } = await workItemTodosService.updateTodo(
       todo.id,
       { commandText: null, executor: null },
       fx.ctx,
@@ -297,10 +303,10 @@ describe('updateTodo', () => {
   it('an EMPTY patch is a no-op that writes no revision', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
     const before = (await todoRevisions(card, fx.workspaceId)).length;
 
-    const same = await workItemTodosService.updateTodo(todo.id, {}, fx.ctx);
+    const { todo: same } = await workItemTodosService.updateTodo(todo.id, {}, fx.ctx);
     expect(same.text).toBe('A step');
     expect((await todoRevisions(card, fx.workspaceId)).length).toBe(before);
   });
@@ -308,7 +314,7 @@ describe('updateTodo', () => {
   it('enforces the same bar on an EDIT as on a create', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
     await expect(
       workItemTodosService.updateTodo(
         todo.id,
@@ -388,34 +394,37 @@ describe('setTodoDone', () => {
   it('writes doneAt and doneById TOGETHER and clears them TOGETHER — no row can be half-ticked', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
 
     const ticked = await workItemTodosService.setTodoDone(todo.id, true, fx.ctx);
+    expect(ticked.todo.done).toBe(true);
     expect(ticked.todo.doneAt).not.toBeNull();
-    expect(ticked.todo.doneById).toBe(fx.ctx.userId);
+    // `doneBy` is the resolved USER, not a bare id — the section renders a name.
+    expect(ticked.todo.doneBy).toEqual({ id: fx.ctx.userId, name: fx.owner.name });
 
     const unticked = await workItemTodosService.setTodoDone(todo.id, false, fx.ctx);
+    expect(unticked.todo.done).toBe(false);
     expect(unticked.todo.doneAt).toBeNull();
-    expect(unticked.todo.doneById).toBeNull();
+    expect(unticked.todo.doneBy).toBeNull();
   });
 
   it('reports the progress counts from the SAME snapshot as the write', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const a = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
+    const { todo: a } = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
     await workItemTodosService.addTodo(card, { text: 'B' }, fx.ctx);
 
     const result = await workItemTodosService.setTodoDone(a.id, true, fx.ctx);
-    expect(result).toMatchObject({ done: 1, total: 2 });
+    expect(result.progress).toEqual({ done: 1, total: 2 });
 
     const list = await workItemTodosService.listTodos(card, fx.ctx);
-    expect(list).toMatchObject({ done: 1, total: 2 });
+    expect(list.progress).toEqual({ done: 1, total: 2 });
   });
 
   it("a PERSON may tick an AGENT's step — the executor authorizes nothing (ADR §2)", async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const agentStep = await workItemTodosService.addTodo(
+    const { todo: agentStep } = await workItemTodosService.addTodo(
       card,
       { text: 'Regenerate the client', executor: 'coding_agent' },
       fx.ctx,
@@ -428,7 +437,11 @@ describe('setTodoDone', () => {
   it('ticking the LAST to-do does NOT move the card (ADR §3 — no third status authority)', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const only = await workItemTodosService.addTodo(card, { text: 'The only step' }, fx.ctx);
+    const { todo: only } = await workItemTodosService.addTodo(
+      card,
+      { text: 'The only step' },
+      fx.ctx,
+    );
 
     // Read the STATUS COLUMN directly rather than through a detail DTO: the
     // claim is about what this write did to `work_item.status`, and a read that
@@ -440,7 +453,7 @@ describe('setTodoDone', () => {
     const result = await workItemTodosService.setTodoDone(only.id, true, fx.ctx);
     const after = await statusOf();
 
-    expect(result).toMatchObject({ done: 1, total: 1 });
+    expect(result.progress).toEqual({ done: 1, total: 1 });
     expect(after).toBe(before);
   });
 });
@@ -450,7 +463,7 @@ describe('the revision split (criterion 8, both directions)', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
 
-    const a = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
+    const { todo: a } = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
     expect(await todoRevisions(card, fx.workspaceId)).toHaveLength(1);
 
     await workItemTodosService.addTodo(card, { text: 'B' }, fx.ctx);
@@ -475,7 +488,7 @@ describe('the revision split (criterion 8, both directions)', () => {
   it('a TICK records NONE — asserted as the absence, which is the half that regresses silently', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
     const afterAdd = (await todoRevisions(card, fx.workspaceId)).length;
 
     await workItemTodosService.setTodoDone(todo.id, true, fx.ctx);
@@ -490,7 +503,7 @@ describe('the revision split (criterion 8, both directions)', () => {
   it('the add / edit / move / delete diffs name the row, so History can render what changed', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
     const [added] = await todoRevisions(card, fx.workspaceId);
     expect(added!.diff).toMatchObject({ todos: { added: [{ id: todo.id, text: 'A step' }] } });
 
@@ -506,7 +519,7 @@ describe('deleteTodo', () => {
   it('removes the row and leaves its siblings ordered', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const a = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
+    const { todo: a } = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
     await workItemTodosService.addTodo(card, { text: 'B' }, fx.ctx);
 
     await workItemTodosService.deleteTodo(a.id, fx.ctx);
@@ -523,7 +536,7 @@ describe('permissions', () => {
   it('every WRITE is `work_item:edit`: a project VIEWER is refused add, edit, move, tick and delete alike', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
 
     const viewer = await createTestUser({ email: 'viewer@ex.com', name: 'Viewer' });
     await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
@@ -557,7 +570,7 @@ describe('permissions', () => {
   it('a VIEWER can READ the list and its progress — they lose the controls, not the information', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const todo = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
+    const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
     await workItemTodosService.setTodoDone(todo.id, true, fx.ctx);
 
     const viewer = await createTestUser({ email: 'reader@ex.com', name: 'Reader' });
@@ -573,7 +586,7 @@ describe('permissions', () => {
       userId: viewer.id,
       workspaceId: fx.workspaceId,
     });
-    expect(list).toMatchObject({ done: 1, total: 1 });
+    expect(list.progress).toEqual({ done: 1, total: 1 });
   });
 
   it('a CROSS-WORKSPACE card is a 404, not a 403 — no existence leak', async () => {
@@ -655,7 +668,7 @@ describe('concurrency', () => {
       workItemTodosService.addTodo(card, { text: 'second' }, fx.ctx),
     ]);
 
-    expect(one.position).not.toBe(two.position);
+    expect(one!.todo.position).not.toBe(two!.todo.position);
     const order = await positions(card, fx);
     expect(order).toHaveLength(3);
     expect(order[0]).toBe('seed');
@@ -670,14 +683,14 @@ describe('concurrency', () => {
       ['a', 'b', 'c', 'd', 'e'].map((t) => workItemTodosService.addTodo(card, { text: t }, fx.ctx)),
     );
 
-    expect(new Set(created.map((t) => t.position)).size).toBe(5);
+    expect(new Set(created.map((r) => r.todo.position)).size).toBe(5);
     expect(await positions(card, fx)).toHaveLength(5);
   });
 
   it('a simultaneous MOVE and APPEND leave the list intact', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeCard(fx);
-    const a = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
+    const { todo: a } = await workItemTodosService.addTodo(card, { text: 'A' }, fx.ctx);
     await workItemTodosService.addTodo(card, { text: 'B' }, fx.ctx);
 
     await Promise.all([

@@ -7123,5 +7123,31 @@
       "declineFoot": "Would rather talk to a person about it? Write to <contact>legal@motir.co</contact> and we'll answer.",
       "back": "← Back"
     }
+  },
+  "workItemTodos": {
+    "sectionTitle": "To-do list",
+    "sectionSubtitle": "the steps of this work",
+    "progress": "{done} of {total} done",
+    "empty": "No steps yet.",
+    "emptyHint": "Break this card's work into steps you can tick off, one operation each.",
+    "allDone": "Every step is done.",
+    "addPlaceholder": "Add a step…",
+    "add": "Add step",
+    "commandLabel": "Command",
+    "copyCommand": "Copy command",
+    "commandCopied": "Command copied",
+    "agentStep": "The agent's step",
+    "humanStep": "Your step",
+    "reorder": "Reorder step",
+    "delete": "Delete step",
+    "errors": {
+      "notFound": "That step no longer exists.",
+      "forbidden": "You do not have permission to change this item's steps.",
+      "empty": "A step needs to say what to do.",
+      "textTooLong": "A step is one operation, so it is capped at {limit} characters. Split it into two steps.",
+      "commandTooLong": "A command is capped at {limit} characters.",
+      "reorderConflict": "The list changed while you were moving that step. Reload and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
   }
 }

@@ -1,4 +1,12 @@
 import { Prisma, type WorkItemTodo } from '@/generated/prisma/client';
+import type { WorkItemTodoRow } from '@/lib/mappers/workItemTodoMappers';
+
+/**
+ * The `doneBy` selection every read carries — the two fields the wire DTO
+ * needs and nothing else, so a to-do read can never become a door onto a user
+ * record.
+ */
+const DONE_BY_SELECT = { select: { id: true, name: true } } as const;
 
 // Work-item to-do repository — single Prisma operations on the
 // `work_item_todo` table (Story MOTIR-3808 · Subtask MOTIR-3813). The
@@ -38,9 +46,13 @@ export const workItemTodoRepository = {
    * whole-list read — a card with enough steps to need paging has a planning
    * problem, not a paging one.
    */
-  async listByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<WorkItemTodo[]> {
+  async listByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemTodoRow[]> {
     return tx.workItemTodo.findMany({
       where: { workItemId },
+      include: { doneBy: DONE_BY_SELECT },
       orderBy: [{ position: 'asc' }, { id: 'asc' }],
     });
   },
@@ -52,16 +64,20 @@ export const workItemTodoRepository = {
   async create(
     data: Prisma.WorkItemTodoUncheckedCreateInput,
     tx: Prisma.TransactionClient,
-  ): Promise<WorkItemTodo> {
-    return tx.workItemTodo.create({ data });
+  ): Promise<WorkItemTodoRow> {
+    return tx.workItemTodo.create({ data, include: { doneBy: DONE_BY_SELECT } });
   },
 
   async update(
     id: string,
     patch: Prisma.WorkItemTodoUncheckedUpdateInput,
     tx: Prisma.TransactionClient,
-  ): Promise<WorkItemTodo> {
-    return tx.workItemTodo.update({ where: { id }, data: patch });
+  ): Promise<WorkItemTodoRow> {
+    return tx.workItemTodo.update({
+      where: { id },
+      data: patch,
+      include: { doneBy: DONE_BY_SELECT },
+    });
   },
 
   /**
@@ -76,8 +92,12 @@ export const workItemTodoRepository = {
     id: string,
     position: string,
     tx: Prisma.TransactionClient,
-  ): Promise<WorkItemTodo> {
-    return tx.workItemTodo.update({ where: { id }, data: { position } });
+  ): Promise<WorkItemTodoRow> {
+    return tx.workItemTodo.update({
+      where: { id },
+      data: { position },
+      include: { doneBy: DONE_BY_SELECT },
+    });
   },
 
   async delete(id: string, tx: Prisma.TransactionClient): Promise<WorkItemTodo> {

@@ -17,7 +17,11 @@ import {
   WorkItemTodoNotFoundError,
 } from '@/lib/workItemTodos/errors';
 import type { ExecutorDto } from '@/lib/dto/workItems';
-import type { WorkItemTodoDto, WorkItemTodoListDto } from '@/lib/dto/workItemTodos';
+import type {
+  TodoProgressDto,
+  WorkItemTodoDto,
+  WorkItemTodoListDto,
+} from '@/lib/dto/workItemTodos';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Work-item to-do service (Story MOTIR-3808 · Subtask MOTIR-3813) — the
@@ -170,6 +174,22 @@ function normalizeCommand(raw: string | null | undefined): string | null {
   return command;
 }
 
+/**
+ * The card's progress, read INSIDE the caller's transaction.
+ *
+ * ⚠️ Never called after the transaction closes. The number returned to a caller
+ * is the number a header renders, so it must describe the list that write
+ * produced — a count taken afterwards describes a LATER snapshot, and the
+ * header would then be a true statement about a list nobody was shown.
+ */
+async function progressOf(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<TodoProgressDto> {
+  const { done, total } = await workItemTodoRepository.countByWorkItem(workItemId, tx);
+  return { done, total };
+}
+
 /** Record one structural revision on the parent card (never for a tick). */
 async function recordTodoRevision(
   workItemId: string,
@@ -181,6 +201,21 @@ async function recordTodoRevision(
     { workItemId, changedById: userId, changeKind: 'updated', diff },
     tx,
   );
+}
+
+/**
+ * What every WRITE returns: the row that was written, and the card's progress
+ * AS OF THAT WRITE.
+ *
+ * The progress rides on every write rather than only on the tick, because the
+ * header moves for four of the five: an add raises the total, a delete lowers
+ * it, and a tick moves the numerator. Returning it here is what lets the
+ * section update in place without a follow-up read that would describe a later
+ * snapshot.
+ */
+export interface TodoWriteResult {
+  todo: WorkItemTodoDto;
+  progress: TodoProgressDto;
 }
 
 export interface AddTodoInput {
@@ -239,7 +274,7 @@ export const workItemTodosService = {
     workItemId: string,
     input: AddTodoInput,
     ctx: ServiceContext,
-  ): Promise<WorkItemTodoDto> {
+  ): Promise<TodoWriteResult> {
     const text = requireText(input.text);
     const commandText = normalizeCommand(input.commandText);
 
@@ -273,7 +308,7 @@ export const workItemTodosService = {
         tx,
       );
 
-      return toWorkItemTodoDto(created);
+      return { todo: toWorkItemTodoDto(created), progress: await progressOf(item.id, tx) };
     });
   },
 
@@ -290,7 +325,7 @@ export const workItemTodosService = {
     todoId: string,
     input: UpdateTodoInput,
     ctx: ServiceContext,
-  ): Promise<WorkItemTodoDto> {
+  ): Promise<TodoWriteResult> {
     const patch: Prisma.WorkItemTodoUncheckedUpdateInput = {};
     if (input.text !== undefined) patch.text = requireText(input.text);
     if (input.commandText !== undefined) patch.commandText = normalizeCommand(input.commandText);
@@ -298,7 +333,9 @@ export const workItemTodosService = {
 
     return withWorkspaceContext(ctx, async (tx) => {
       const { todo, item } = await resolveEditableTodo(todoId, ctx, tx);
-      if (Object.keys(patch).length === 0) return toWorkItemTodoDto(todo);
+      if (Object.keys(patch).length === 0) {
+        return { todo: toWorkItemTodoDto(todo), progress: await progressOf(item.id, tx) };
+      }
 
       const updated = await workItemTodoRepository.update(todo.id, patch, tx);
       await recordTodoRevision(
@@ -321,7 +358,7 @@ export const workItemTodosService = {
         },
         tx,
       );
-      return toWorkItemTodoDto(updated);
+      return { todo: toWorkItemTodoDto(updated), progress: await progressOf(item.id, tx) };
     });
   },
 
@@ -340,7 +377,7 @@ export const workItemTodosService = {
    * fractional index rather than an integer rank: a move mints one key between
    * two neighbours instead of renumbering everything below it.
    */
-  async moveTodo(todoId: string, toIndex: number, ctx: ServiceContext): Promise<WorkItemTodoDto> {
+  async moveTodo(todoId: string, toIndex: number, ctx: ServiceContext): Promise<TodoWriteResult> {
     return withWorkspaceContext(ctx, async (tx) => {
       const { todo, item } = await resolveEditableTodo(todoId, ctx, tx);
       await lockTodoList(todo.workItemId, tx);
@@ -373,7 +410,7 @@ export const workItemTodosService = {
         { todos: { moved: [{ id: todo.id, text: todo.text, toIndex: index }] } },
         tx,
       );
-      return toWorkItemTodoDto(moved);
+      return { todo: toWorkItemTodoDto(moved), progress: await progressOf(item.id, tx) };
     });
   },
 
@@ -398,11 +435,7 @@ export const workItemTodosService = {
    * tick an agent's step, because they may simply have done it themselves
    * (ADR §2).
    */
-  async setTodoDone(
-    todoId: string,
-    done: boolean,
-    ctx: ServiceContext,
-  ): Promise<{ todo: WorkItemTodoDto; done: number; total: number }> {
+  async setTodoDone(todoId: string, done: boolean, ctx: ServiceContext): Promise<TodoWriteResult> {
     return withWorkspaceContext(ctx, async (tx) => {
       const { todo } = await resolveEditableTodo(todoId, ctx, tx);
       const updated = await workItemTodoRepository.update(
@@ -410,14 +443,19 @@ export const workItemTodosService = {
         done ? { doneAt: new Date(), doneById: ctx.userId } : { doneAt: null, doneById: null },
         tx,
       );
-      const counts = await workItemTodoRepository.countByWorkItem(todo.workItemId, tx);
-      return { todo: toWorkItemTodoDto(updated), done: counts.done, total: counts.total };
+      return {
+        todo: toWorkItemTodoDto(updated),
+        progress: await progressOf(todo.workItemId, tx),
+      };
     });
   },
 
-  /** Delete one to-do. Structural, so it records a revision. */
-  async deleteTodo(todoId: string, ctx: ServiceContext): Promise<void> {
-    await withWorkspaceContext(ctx, async (tx) => {
+  /**
+   * Delete one to-do. Structural, so it records a revision — and it returns the
+   * card's progress, because removing a row moves the header's denominator.
+   */
+  async deleteTodo(todoId: string, ctx: ServiceContext): Promise<TodoProgressDto> {
+    return withWorkspaceContext(ctx, async (tx) => {
       const { todo, item } = await resolveEditableTodo(todoId, ctx, tx);
       await workItemTodoRepository.delete(todo.id, tx);
       await recordTodoRevision(
@@ -426,6 +464,7 @@ export const workItemTodosService = {
         { todos: { removed: [{ id: todo.id, text: todo.text }] } },
         tx,
       );
+      return progressOf(item.id, tx);
     });
   },
 };

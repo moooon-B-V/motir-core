@@ -7119,5 +7119,31 @@
       "declineFoot": "更想和真人聊聊？写信到 <contact>legal@motir.co</contact>，我们会回复你。",
       "back": "← 返回"
     }
+  },
+  "workItemTodos": {
+    "sectionTitle": "待办清单",
+    "sectionSubtitle": "本项工作的步骤",
+    "progress": "已完成 {done}/{total}",
+    "empty": "尚无步骤。",
+    "emptyHint": "把这张卡片的工作拆成可以逐条勾选的步骤，每条一个操作。",
+    "allDone": "所有步骤均已完成。",
+    "addPlaceholder": "添加步骤…",
+    "add": "添加步骤",
+    "commandLabel": "命令",
+    "copyCommand": "复制命令",
+    "commandCopied": "已复制命令",
+    "agentStep": "由 Agent 执行",
+    "humanStep": "由你执行",
+    "reorder": "调整步骤顺序",
+    "delete": "删除步骤",
+    "errors": {
+      "notFound": "该步骤已不存在。",
+      "forbidden": "你没有修改此工作项步骤的权限。",
+      "empty": "步骤需要写明要做什么。",
+      "textTooLong": "每个步骤只做一个操作，因此上限为 {limit} 个字符。请拆分为两个步骤。",
+      "commandTooLong": "命令的上限为 {limit} 个字符。",
+      "reorderConflict": "移动该步骤时清单已发生变化。请刷新后重试。",
+      "generic": "出现问题，请重试。"
+    }
   }
 }
