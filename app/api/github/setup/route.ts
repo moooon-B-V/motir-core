@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { resolveTwoFactorHold } from '@/lib/auth/requireCompliantSession';
-import { decodeInstallState } from '@/lib/github/installState';
+import { decodeInstallStateResult } from '@/lib/github/installState';
+import type { GithubBannerStatus } from '@/lib/github/bannerStatus';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -19,7 +20,7 @@ import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
 const SETTINGS_PATH = '/settings/workspace/github';
 
-function settingsRedirect(status: string): NextResponse {
+function settingsRedirect(status: GithubBannerStatus): NextResponse {
   return NextResponse.redirect(`${resolveBaseUrlTrimmed()}${SETTINGS_PATH}?github=${status}`);
 }
 
@@ -53,27 +54,57 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (setupAction && setupAction !== 'install' && setupAction !== 'update') {
     return settingsRedirect('installed');
   }
-  if (!installationId || !state) return settingsRedirect('install_error');
 
-  const decoded = decodeInstallState(state);
-  // Reject a missing/tampered/expired state, or a state minted for a different
-  // user (the acting session must be the one who started the install).
-  if (!decoded || decoded.userId !== session.user.id) return settingsRedirect('install_error');
+  // NO STATE AT ALL — the round trip did not START in Motir, so there was never
+  // a state to lose and nothing has failed (MOTIR-3755). `encodeInstallState` is
+  // called in exactly one place, the settings page's install link, so a request
+  // arriving without one came from github.com.
+  //
+  // The overwhelmingly common case is editing the installation's REPOSITORY
+  // SELECTION from the App's own settings on GitHub: it redirects here with
+  // `setup_action=update` and no state, and the repository really is connected —
+  // the repository set is maintained by the `installation_repositories` webhook,
+  // not by this handler, and the installation → workspace binding this route
+  // exists to write ALREADY EXISTS. Reporting `install_error` there told the
+  // person the opposite of what happened and invited them to re-run an install
+  // that had already succeeded.
+  //
+  // A bare `install` with no state is a DIFFERENT outcome and keeps its own
+  // message: the App was installed from GitHub rather than from Motir, so no
+  // binding was written and there IS something left to do.
+  if (!state) {
+    return settingsRedirect(setupAction === 'update' ? 'repos_updated' : 'install_unbound');
+  }
+  if (!installationId) return settingsRedirect('install_error');
+
+  // The state is present, so it is verified exactly as before — this card
+  // changed what a MISSING state means, never what a present one is trusted for.
+  const decoded = decodeInstallStateResult(state);
+  if (!decoded.ok) {
+    // An EXPIRED state is not a failure either: the person started from Motir
+    // and spent longer than the 10-minute TTL on GitHub's repository picker. Its
+    // remedy (start again from Settings) is the opposite of the tampered case's,
+    // so the two must not share a banner.
+    return settingsRedirect(decoded.reason === 'expired' ? 'install_expired' : 'install_error');
+  }
+  // A state minted for a different user — the acting session must be the one
+  // that started the install.
+  if (decoded.state.userId !== session.user.id) return settingsRedirect('install_error');
 
   // Authorize: the acting user must be a member of the target workspace — no
   // cross-workspace binding even with a validly-signed state.
-  const role = await workspacesService.getMemberRole(session.user.id, decoded.workspaceId);
-  if (!role) return settingsRedirect('install_error');
+  const role = await workspacesService.getMemberRole(session.user.id, decoded.state.workspaceId);
+  if (!role) return settingsRedirect('install_forbidden');
 
   try {
     await githubInstallationService.bindInstallationForWorkspace({
-      workspaceId: decoded.workspaceId,
+      workspaceId: decoded.state.workspaceId,
       installationId,
     });
   } catch {
     // Provider/config failure (e.g. GITHUB_APP_ID/PRIVATE_KEY unset) — surface a
     // clean banner, never a 500.
-    return settingsRedirect('install_error');
+    return settingsRedirect('install_provider_error');
   }
 
   return settingsRedirect('installed');

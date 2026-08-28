@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   Clock,
   Database,
+  FileArchive,
   MessageSquare,
   Receipt,
   SquareKanban,
@@ -190,6 +191,27 @@ export function DeleteAccountConfirmModal({
                   count={preview.deleted.workItems}
                 />
               </>
+            ) : null}
+            {/* THE ARCHIVE, and it is the reason this row exists rather than a
+                sentence somewhere (Bug MOTIR-3747). MOTIR-3732 made erasure
+                delete every export request and the file each one built, and the
+                pane above deliberately routes the reader PAST the export on the
+                way to this dialog — so a ledger that names credentials and
+                workspaces and stays silent about the one artefact that is a
+                complete copy of everything they held is the omission this
+                surface cannot afford. HIDDEN at zero, the same rule the
+                workspace rows follow: the ledger states what deletion reaches,
+                and a reader who never asked for an archive loses none. The copy
+                names the ARCHIVE, not the request row — and it describes what
+                goes rather than promising a download exists, because a
+                `preparing` / `failed` / `expired` row carries no file. */}
+            {preview.deleted.dataExports > 0 ? (
+              <LedgerRow
+                icon={<FileArchive aria-hidden className="h-4 w-4" />}
+                name={t('ledger.dataExports.name')}
+                desc={t('ledger.dataExports.desc', { count: preview.deleted.dataExports })}
+                count={preview.deleted.dataExports}
+              />
             ) : null}
           </LedgerGroup>
 

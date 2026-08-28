@@ -126,6 +126,7 @@ function emptyPreview(): AccountErasurePreviewDTO {
       passkeys: 0,
       twoFactorEnrolments: 0,
       apiTokens: 0,
+      dataExports: 0,
       soleMemberWorkspaces: [],
       projects: 0,
       workItems: 0,

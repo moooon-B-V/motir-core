@@ -45,35 +45,61 @@ export function encodeInstallState(
   return `${b64}.${sign(b64)}`;
 }
 
-/** Verify + decode an install-state token, or `null` when it is malformed,
- *  tampered (bad signature), or expired. Constant-time signature compare. */
-export function decodeInstallState(
+/** Why a token did not decode. `expired` is separated from the rest because it
+ *  is the one rejection that is NOT a sign anything is wrong: the person took
+ *  longer than the TTL on GitHub's repository picker, and the remedy is to start
+ *  again from Settings rather than to conclude the install failed (MOTIR-3755).
+ *  Everything else — a truncated token, a bad signature, a payload of the wrong
+ *  shape — is indistinguishable from tampering and stays one reason. */
+export type InstallStateRejection = 'malformed' | 'expired';
+
+export type InstallStateResult =
+  | { ok: true; state: InstallState }
+  | { ok: false; reason: InstallStateRejection };
+
+/** Verify + decode an install-state token, reporting WHY it was rejected.
+ *  Constant-time signature compare. The checks are unchanged — this only names
+ *  the outcome the caller was previously handed as a bare `null`. */
+export function decodeInstallStateResult(
   token: string,
   nowSeconds: number = Math.floor(Date.now() / 1000),
-): InstallState | null {
+): InstallStateResult {
   const dot = token.lastIndexOf('.');
-  if (dot <= 0) return null;
+  if (dot <= 0) return { ok: false, reason: 'malformed' };
   const b64 = token.slice(0, dot);
   const providedSig = token.slice(dot + 1);
   const expectedSig = sign(b64);
 
   const a = Buffer.from(providedSig);
   const b = Buffer.from(expectedSig);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, reason: 'malformed' };
 
   let payload: { w?: unknown; u?: unknown; exp?: unknown };
   try {
     payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8')) as typeof payload;
   } catch {
-    return null;
+    return { ok: false, reason: 'malformed' };
   }
   if (
     typeof payload.w !== 'string' ||
     typeof payload.u !== 'string' ||
     typeof payload.exp !== 'number'
   ) {
-    return null;
+    return { ok: false, reason: 'malformed' };
   }
-  if (payload.exp < nowSeconds) return null;
-  return { workspaceId: payload.w, userId: payload.u };
+  // Only a token that VERIFIED can be called expired — an unsigned payload
+  // claiming a past `exp` must stay `malformed`, so the expiry banner (which
+  // says nothing is broken) is never reachable from an unauthenticated string.
+  if (payload.exp < nowSeconds) return { ok: false, reason: 'expired' };
+  return { ok: true, state: { workspaceId: payload.w, userId: payload.u } };
+}
+
+/** Verify + decode an install-state token, or `null` when it is malformed,
+ *  tampered (bad signature), or expired. */
+export function decodeInstallState(
+  token: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): InstallState | null {
+  const result = decodeInstallStateResult(token, nowSeconds);
+  return result.ok ? result.state : null;
 }
