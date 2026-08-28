@@ -1509,3 +1509,44 @@ describe('ProjectRoadmapCanvas — the Dependencies legend collapses', () => {
     expect(screen.getByTestId('locate-button').parentElement!.className).toBe(locateBefore);
   });
 });
+
+// ── THE BOTTOM-RIGHT CONTROL AND THE FOLD (MOTIR-3839) ──────────────────────
+describe('ProjectRoadmapCanvas — "Reset layout" respects the fold inset', () => {
+  const arranged: RoadmapLevel = { nodes: [node('A', 'a'), node('B', 'b')], deps: [] };
+
+  it('offsets from the bottom by `--canvas-fold-inset`, which DEFAULTS to 0 for every other mount', async () => {
+    // The floating Plan-with-AI orb is `fixed right-5 bottom-5` — a 76px reach from
+    // both edges — so only a bottom-RIGHT control can meet it. A consumer whose box
+    // SPENDS the shell's clearance band declares the inset; every other mount
+    // inherits nothing and the control stays exactly where it is today.
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(arranged)}
+        positions={{ A: { x: 500, y: 500 } }}
+        onResetPositions={() => {}}
+        onNodeMove={() => {}}
+      />,
+    );
+    await screen.findByText('a');
+    const reset = screen.getByRole('button', { name: 'Reset layout' });
+    expect(reset.className).toContain('bottom-[calc(1rem+var(--canvas-fold-inset,0px))]');
+    // Anchored right — the only side the orb can reach.
+    expect(reset.className).toContain('right-3');
+  });
+
+  it('leaves every LEFT-anchored overlay at its shipped offset', async () => {
+    const withDep: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b')],
+      deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDep)} locatable />);
+    // The legend and Locate are bottom-LEFT; the orb cannot reach them, so the fold
+    // must not move them.
+    const legend = await screen.findByTestId('edge-legend');
+    expect(legend.className).toContain('bottom-[4.25rem]');
+    expect(legend.className).toContain('left-3');
+    expect(screen.getByTestId('locate-button').parentElement!.className).toContain(
+      'bottom-4 left-[8.25rem]',
+    );
+  });
+});

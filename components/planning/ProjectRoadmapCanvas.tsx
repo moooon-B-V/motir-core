@@ -1168,7 +1168,15 @@ export function ProjectRoadmapCanvas({
         <button
           type="button"
           onClick={resetLayout}
-          className="absolute right-3 bottom-4 z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          // THE ONE control the fold can collide with (MOTIR-3839). Every other
+          // bottom-anchored overlay on this canvas is anchored LEFT; the floating
+          // Plan-with-AI orb is `fixed right-5 bottom-5`, 56px square — a 76px
+          // reach from both edges — so only a bottom-RIGHT control can meet it.
+          // `--canvas-fold-inset` is declared by a consumer whose box SPENDS the
+          // shell's clearance band (today: the roadmap page); it defaults to `0px`,
+          // so every other mount — the item page's Children panel, the two plan
+          // canvases — is exactly where it is now.
+          className="absolute right-3 bottom-[calc(1rem+var(--canvas-fold-inset,0px))] z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" />
           {t('resetLayout')}

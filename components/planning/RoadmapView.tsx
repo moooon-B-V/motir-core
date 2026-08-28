@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
@@ -260,10 +260,36 @@ export function RoadmapView({
         </div>
       </header>
 
-      {/* 11.5rem of chrome above, then the shell's own bottom reservation —
-          see the same split in BoardColumn / plans/[id] (MOTIR-2763). The flat
-          13rem this replaces encoded the shell's old 1.5rem bottom padding. */}
-      <div className="h-[calc(100dvh_-_11.5rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
+      {/* THE CANVAS FILLS THE FOLD (MOTIR-3839).
+          
+          The chrome above this box is 10rem, MEASURED rather than derived: the top
+          nav `h-14` (56) + the shell's `pt-6` (24) + this page's header (56 — the
+          `font-serif text-2xl` h1 at 32, `gap-1` 4, the `text-sm` subtitle 20) +
+          this stack's `gap-6` (24). The shipped value was `11.5rem`, 24px MORE
+          than the chrome actually costs, and it then subtracted
+          `--shell-bottom-clearance` a SECOND time — the shell has already spent
+          that band as `pb-(--shell-bottom-clearance)` (`app/(authed)/layout.tsx`).
+          Net dead band below the canvas at 1440x900: 120px, on the one surface
+          whose whole job is drawing a graph. At 1366x768 it was worse than dead:
+          `min-h-[28rem]` exceeded the computed height, so the page SCROLLED.
+
+          The negative bottom margin is how the canvas SPENDS the shell's band
+          without making `<main>` scroll — done locally here rather than by
+          touching the shell, so no other route's layout moves. `min-h-[28rem]`
+          stays and no longer binds (488px at 1366x768).
+
+          `--canvas-fold-inset` is the other half, and it is why this is safe: the
+          band exists because the floating Plan-with-AI orb reaches 76px up from
+          the window's bottom-right (MOTIR-2763). The canvas may have an orb over
+          blank board; its bottom-RIGHT chrome may not sit under it. Declaring the
+          inset HERE — on the box that takes the band — lets the canvas's own
+          bottom-right control lift by exactly that much, while every other mount
+          of the same canvas (the item page's Children panel, the two plan
+          canvases) inherits nothing and is untouched. */}
+      <div
+        style={{ '--canvas-fold-inset': 'var(--shell-bottom-clearance, 1.5rem)' } as CSSProperties}
+        className="mb-[calc(-1*var(--shell-bottom-clearance,1.5rem))] h-[calc(100dvh_-_10rem)] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)"
+      >
         {noActiveSprint ? (
           <div className="flex h-full items-center justify-center p-6">
             <EmptyState

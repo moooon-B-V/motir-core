@@ -462,3 +462,48 @@ describe('RoadmapView — the level is the URL (?item=)', () => {
     expect(fetchUrls.every((u) => !u.includes('ancestors'))).toBe(true);
   });
 });
+
+// ── THE CANVAS FILLS THE FOLD (MOTIR-3839) ──────────────────────────────────
+//
+// The BEHAVIOUR is geometry and is measured in a real Chromium (the table is in
+// the pull request; happy-dom does no layout, so a height cannot be asserted
+// here). What IS assertable — and what a later edit would silently break — is the
+// STRUCTURE the geometry rests on: the budget, the way the band is spent, and the
+// inset that keeps the canvas's bottom-right control off the floating orb.
+describe('RoadmapView — the canvas box’s vertical budget', () => {
+  function box(): HTMLElement {
+    // The canvas frame: the element that carries the fold height.
+    return document.querySelector('[style*="--canvas-fold-inset"]') as HTMLElement;
+  }
+
+  it('subtracts the MEASURED chrome (10rem) and no longer double-spends the shell’s band', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    const cls = box().className;
+    expect(cls).toContain('h-[calc(100dvh_-_10rem)]');
+    // The old value subtracted 11.5rem — 24px more than the chrome costs — AND
+    // `--shell-bottom-clearance`, which the shell has already spent as padding.
+    expect(cls).not.toContain('11.5rem');
+    expect(cls).not.toContain('h-[calc(100dvh_-_10rem_-_var(--shell-bottom-clearance');
+  });
+
+  it('SPENDS the shell’s clearance band with a negative bottom margin, not by changing the shell', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    expect(box().className).toContain('mb-[calc(-1*var(--shell-bottom-clearance,1.5rem))]');
+  });
+
+  it('keeps min-h-[28rem] — the floor that stops the frame collapsing on a short window', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    expect(box().className).toContain('min-h-[28rem]');
+  });
+
+  it('declares `--canvas-fold-inset` so the canvas’s bottom-RIGHT control clears the orb', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    // Declared on the box that TAKES the band — so every other mount of the same
+    // canvas inherits nothing and is untouched.
+    expect(box().getAttribute('style')).toContain('--shell-bottom-clearance');
+  });
+});
