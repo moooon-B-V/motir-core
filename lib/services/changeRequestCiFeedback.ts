@@ -4,6 +4,7 @@ import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
+import { githubCiFeedbackCommentRepository } from '@/lib/repositories/githubCiFeedbackCommentRepository';
 import { liveCheckRows } from '@/lib/github/checkSuites';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
@@ -25,12 +26,19 @@ import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 // `changeRequestStatusSync`).
 //
 // On a TERMINAL conclusion the consumer posts (or, on a later conclusion at the
-// same head commit, UPDATES in place) THE feedback comment and flips the item's
-// `ciState` verification signal — both through the shipped services
+// same head commit, UPDATES in place) THE feedback comment ON EVERY CARD THE
+// CHANGE REQUEST DELIVERS, and flips each of their `ciState` verification
+// signals — both per card since MOTIR-3770, both through the shipped services
 // (`commentsService`, `workItemsService.setCiState`), never a raw write, under
 // `withSystemContext` (a webhook has no active workspace).
 //
-// ⚠️ ONE COMMENT PER `(changeRequest, headSha)` — not per check (MOTIR-2946). The
+// ⚠️ ONE COMMENT PER `(changeRequest, headSha)` PER DELIVERED CARD — not per
+// check (MOTIR-2946), and not one for the whole delivery (MOTIR-3770). The
+// per-card coordinate is stored in `github_ci_feedback_comment`, one row per
+// `(pull request, head commit, work item)`; `github_check_run.feedback_comment_id`
+// is now a WRITTEN MIRROR of the first delivered card's id, kept while its readers
+// live (`docs/decisions/ci-feedback-comment-per-card.md`). The rest of this note
+// is about the `(changeRequest, headSha)` half, which is unchanged. The
 // INGESTION key is `(pr, headSha, checkName, checkSuiteId)`: one `githubCheckRun`
 // row per check PER RUN, which is what the Development surface derives "Checks
 // running" and the `ciState` pill from, and what makes a redelivery of an
@@ -178,6 +186,13 @@ export async function applyCiStatusFeedback(
       suiteId,
       tx,
     );
+    // WHICH delivered cards already carry this commit's feedback comment
+    // (MOTIR-3770) — read here because the idempotency guard below needs it, and
+    // that guard used to answer the question off the legacy scalar, which names
+    // ONE card however many the delivery reached.
+    const commentedWorkItemIds = (
+      await githubCiFeedbackCommentRepository.listByPrAndSha(cr.id, event.commitSha, tx)
+    ).map((row) => row.workItemId);
     // `repo.workspaceId`, never `installation.workspaceId` (MOTIR-1931) — the repo
     // row carries the tenancy; the installation only supplies the provider
     // discriminator that picks the right noun for the feedback comment.
@@ -189,6 +204,8 @@ export async function applyCiStatusFeedback(
       /** EVERY card the pull request's delivery links name (MOTIR-3721) — empty
        *  for a session pull request, whose cards the promotion reaches instead. */
       deliveredWorkItemIds,
+      /** The subset of them that already has a comment at this head commit. */
+      commentedWorkItemIds,
       prId: cr.id,
       checksUrl: buildChecksUrl(cr.number),
       existing: existing
@@ -204,21 +221,13 @@ export async function applyCiStatusFeedback(
   if (resolved.kind === 'no_pull_request') return { event: 'ci', outcome: 'no_pull_request' };
   if (resolved.kind === 'no_work_item') return { event: 'ci', outcome: 'no_work_item' };
 
-  // The cards this verdict reaches, and the ONE of them the feedback comment
-  // lands on.
-  //
-  // ⚠️ THE COMMENT IS STILL ONE CARD'S, AND THAT IS A KNOWN SHORTFALL RATHER
-  // THAN A CHOICE THIS FILE MAKES (MOTIR-3721). Its identity is stored in
-  // `github_check_run.feedback_comment_id` — a SCALAR with a real foreign key
-  // and `onDelete: SetNull`, which is what guarantees the id this path edits is
-  // live. N comments need N ids, and an array cannot carry that FK; deciding the
-  // replacement is a schema question the reader-migration ADR did not settle, and
-  // its failure is VISIBLE and LOCAL (a second card shows no CI comment), which
-  // is the ADR's own cut for the NEXT half rather than this one. Recorded on the
-  // card and filed as a bug rather than left as a sentence here. The `ciState`
-  // write below is per card, because it needs no such storage.
+  // The FIRST delivered card. It is no longer "the card the comment lands on" —
+  // the comment reaches EVERY delivered card since MOTIR-3770 — but it is still
+  // two things: the card this result REPORTS in its scalar `workItemId` field
+  // (which callers and tests read), and the one whose comment is mirrored into the
+  // legacy `github_check_run.feedback_comment_id` column while that column's
+  // readers still exist.
   const [firstDelivered] = resolved.deliveredWorkItemIds;
-  const commentTarget = firstDelivered ?? null;
 
   // An in-flight check: RECORD the row (conclusion 'pending') so the per-change-request
   // "Checks running" state is derivable (MOTIR-1579), but with NONE of the terminal
@@ -258,10 +267,18 @@ export async function applyCiStatusFeedback(
   // Idempotent: a redelivery of the SAME conclusion we already recorded (and
   // commented) is a no-op — never a duplicate comment. The check set at this sha
   // is unchanged by a redelivery, so the aggregate the comment carries is too.
+  //
+  // ⚠️ *COMMENTED* MEANS EVERY DELIVERED CARD (MOTIR-3770). The scalar arm alone
+  // answers "the FIRST card has a comment", which on a delivery of N cards is a
+  // different question — and it is the one that let a redelivery skip a card
+  // carrying no comment at all. The per-card set is what makes the guard say what
+  // it has always claimed to say; for a single-card delivery the two agree, which
+  // is why nothing about that case changes.
   if (
     resolved.existing &&
     resolved.existing.conclusion === event.conclusion &&
-    resolved.existing.feedbackCommentId
+    resolved.existing.feedbackCommentId &&
+    resolved.deliveredWorkItemIds.every((id) => resolved.commentedWorkItemIds.includes(id))
   ) {
     return {
       event: 'ci',
@@ -274,14 +291,15 @@ export async function applyCiStatusFeedback(
   const actorCtx = { userId: resolved.actorUserId, workspaceId: resolved.workspaceId };
   const noun = changeRequestNoun(resolved.provider);
 
-  // Record this check's row and write THE ONE feedback comment for
-  // `(changeRequest, headSha)` — under a row lock on the change request, because
-  // the comment body is DERIVED from every check row at this sha and the comment
-  // itself is the write. Without the lock, two of the N deliveries that land
-  // together both read "no comment yet" and both create one, which is the very
-  // duplication this card removes (the lock-before-read-derived-update rule).
-  // `commentsService` runs its own transaction on its own connection and touches
-  // neither `github_pull_request` nor `github_check_run`, so no cycle can form.
+  // Record this check's row and write THE feedback comment for
+  // `(changeRequest, headSha)` ON EVERY DELIVERED CARD — under a row lock on the
+  // change request, because the comment body is DERIVED from every check row at
+  // this sha and the comment itself is the write. Without the lock, two of the N
+  // deliveries that land together both read "no comment yet" and both create one,
+  // which is the very duplication MOTIR-2946 removed (the
+  // lock-before-read-derived-update rule). `commentsService` runs its own
+  // transaction on its own connection and touches neither `github_pull_request`
+  // nor `github_check_run`, so no cycle can form.
   const ciState = await withSystemContext(async (tx) => {
     // The tenant is known here (phase 1 resolved it), so bind it up front: the
     // lock below reads `github_pull_request` and the comment path reads tenant
@@ -290,18 +308,39 @@ export async function applyCiStatusFeedback(
     await githubPullRequestRepository.lockById(resolved.prId, tx);
 
     // Read the sha's rows UNDER THE LOCK — every sibling that landed while we
-    // waited is in here, and any one of them already carrying the link tells us
-    // THE comment for this head commit. Every row at the sha points at the same
-    // one, so a new check joins the existing comment instead of opening its own.
+    // waited is in here.
     const siblings = await githubCheckRunRepository.listByPrAndSha(
       resolved.prId,
       event.commitSha,
       tx,
     );
-    const existingCommentId =
+
+    // THE comments for this head commit, one per card that already has one
+    // (MOTIR-3770). This is the source of truth; a new check joins the comment its
+    // card already carries instead of opening a second one.
+    const recordedComments = await githubCiFeedbackCommentRepository.listByPrAndSha(
+      resolved.prId,
+      event.commitSha,
+      tx,
+    );
+    const commentByWorkItem = new Map(
+      recordedComments.map((row) => [row.workItemId, row.commentId] as const),
+    );
+
+    // The LEGACY scalar, read for exactly one case and no other: a
+    // `(change request, head commit)` whose first verdict was written by a build
+    // that had only the column — the rows this migration backfilled, and any
+    // written by an instance still running the previous build during a deploy
+    // window. It names the comment on the FIRST delivered card, which is the only
+    // card that build could reach, so it is a fallback for that card alone. The
+    // loop below ADOPTS whatever it finds into the per-card table, so the fallback
+    // fires at most once per commit.
+    const legacyCommentId =
       siblings.find((r) => r.feedbackCommentId)?.feedbackCommentId ??
       resolved.existing?.feedbackCommentId ??
       null;
+    const existingCommentId =
+      (firstDelivered ? commentByWorkItem.get(firstDelivered) : null) ?? legacyCommentId;
 
     const recorded = await githubCheckRunRepository.upsert(
       {
@@ -318,30 +357,63 @@ export async function applyCiStatusFeedback(
     // The authoritative check set at this head commit: the siblings plus this
     // delivery's own row, which the upsert either created or just refreshed —
     // MINUS every run a later run has replaced (MOTIR-3209). Filtering here
-    // rather than in the query is deliberate: `existingCommentId` above must see
+    // rather than in the query is deliberate: `legacyCommentId` above must see
     // the WHOLE set, because the comment belongs to the head commit and a
     // replacement run has to edit the one its predecessor opened.
     const rows = liveCheckRows([...siblings.filter((r) => r.id !== recorded.id), recorded]);
     const bodyMd = feedbackCommentBody(summarizeChecks(rows), resolved.checksUrl, noun);
 
-    // The first terminal conclusion CREATES the comment; every later one EDITS it
-    // in place. (An edit whose body is unchanged is a no-op in `commentsService` —
-    // no "Edited" tag, no event — so a delivery that moves nothing stays silent.)
-    if (existingCommentId) {
-      await commentsService.editComment(existingCommentId, { bodyMd }, actorCtx);
-    } else if (commentTarget) {
-      const created = await commentsService.addComment(commentTarget, { bodyMd }, actorCtx);
-      await githubCheckRunRepository.upsert(
-        {
-          pullRequestId: resolved.prId,
-          commitSha: event.commitSha,
-          checkName: event.context,
-          checkSuiteId: suiteId,
-          conclusion: event.conclusion,
-          feedbackCommentId: created.id,
-        },
+    // ONE COMMENT PER DELIVERED CARD (MOTIR-3770). The first terminal conclusion
+    // CREATES each card's comment; every later one at this commit EDITS every one
+    // of them in place. (An edit whose body is unchanged is a no-op in
+    // `commentsService` — no "Edited" tag, no event — so a delivery that moves
+    // nothing stays silent.)
+    //
+    // ⚠️ The set is `deliveredWorkItemIds`, which is EMPTY on the session arm — a
+    // session pull request's cards are reached by the promotion below and by
+    // nothing here, exactly as a null link column reached nothing before. So this
+    // loop runs zero times for one, and once for an ordinary single-card pull
+    // request, which is why that case is byte-identical to what it was.
+    for (const workItemId of resolved.deliveredWorkItemIds) {
+      // The legacy column only ever named the FIRST card's comment, so it is a
+      // fallback for that card and never for a sibling — reading it for a sibling
+      // would EDIT the first card's comment while claiming to write the second's.
+      const known =
+        commentByWorkItem.get(workItemId) ??
+        (workItemId === firstDelivered ? legacyCommentId : null);
+
+      let commentId = known;
+      if (commentId) {
+        await commentsService.editComment(commentId, { bodyMd }, actorCtx);
+      } else {
+        commentId = (await commentsService.addComment(workItemId, { bodyMd }, actorCtx)).id;
+      }
+
+      // Record it per card — an upsert, so a comment that only the legacy scalar
+      // named is ADOPTED here rather than left for the fallback to find again.
+      await githubCiFeedbackCommentRepository.upsert(
+        { pullRequestId: resolved.prId, commitSha: event.commitSha, workItemId, commentId },
         tx,
       );
+
+      // Keep the legacy column in step with the FIRST card's comment while its
+      // readers still exist (the EXPAND half). It is what an instance running the
+      // previous build reads during a deploy window, and leaving it null there is
+      // how that instance opens a SECOND comment on a card this one just
+      // commented on.
+      if (workItemId === firstDelivered && commentId !== legacyCommentId) {
+        await githubCheckRunRepository.upsert(
+          {
+            pullRequestId: resolved.prId,
+            commitSha: event.commitSha,
+            checkName: event.context,
+            checkSuiteId: suiteId,
+            conclusion: event.conclusion,
+            feedbackCommentId: commentId,
+          },
+          tx,
+        );
+      }
     }
 
     return deriveCiState(rows.map((r) => r.conclusion));

@@ -16,7 +16,10 @@
 
 /**
  * How long after an account-deletion request the erasure becomes due — the
- * grace period during which signing back in cancels it.
+ * grace period the reader can take the deletion back inside, from the app-wide
+ * banner or the Data & privacy pane. **Signing back in is the way to that
+ * window; it is not itself the cancel** (MOTIR-3742 removed the auto-cancel —
+ * `docs/decisions/account-deletion-cancel-path.md`).
  *
  * ⚠️ **THIS VALUE IS A PUBLISHED LEGAL PROMISE.**
  * `content/legal/privacy.md` **§6** ("How long we keep it") tells every user:

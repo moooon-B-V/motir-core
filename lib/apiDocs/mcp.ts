@@ -409,6 +409,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // work items, which the delivery table falsified when MOTIR-3658 shipped the dual write.
     descriptionFingerprint: '50b2e82bc56d',
   },
+  unlink_pull_request: {
+    summary:
+      'Undo ONE `link_pull_request` — remove the delivery recorded between a work item and a ' +
+      'pull request. A delivery is a row, so re-linking the right card ADDS rather than ' +
+      'corrects; this removes exactly the one pair you name and leaves every other delivery ' +
+      'alone.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '0dd646f57b25',
+  },
   get_work_item: {
     // Re-pinned for MOTIR-3096, summary UNCHANGED and deliberately so: the tool
     // gained an optional `planId` that answers the SAME question over the live

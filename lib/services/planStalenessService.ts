@@ -22,6 +22,12 @@ import type { PlanItemStalenessDto, PlanStalenessDto, StaleReason } from '@/lib/
 // `PlanItem` — WHY, so the user can SEE it and decide (approve anyway / decline
 // / regenerate).
 //
+// ⚠️ DRIFT IS MEASURED ON WHAT THE PROPOSAL NAMED (MOTIR-3777) — its parent, its
+// declared blockers, its modify/remove target — never on what happened NEARBY. A
+// warning on the one surface whose entire purpose is to be trustworthy about a
+// decision costs the reviewer's trust every time it fires, so a rule that cannot
+// tell a related change from an unrelated one does not belong here.
+//
 // Contracts (the card):
 //   - PURE READ. Staleness NEVER blocks approve; it WARNS. Writes nothing, opens
 //     no transaction (read-only paths use the `db` singleton via the repos).
@@ -46,16 +52,16 @@ function isRealRef(ref: string): boolean {
   return !ref.startsWith(TEMP_REF_PREFIX);
 }
 
-/** The batched tree snapshot every rule reads from — built once per plan. */
+/** The batched tree snapshot every rule reads from — built once per plan.
+ *
+ *  ⚠️ NOTHING HERE IS `plannedAt`-RELATIVE ANY MORE (MOTIR-3777). Every rule now
+ *  keys on something the PROPOSAL named — its parent, its declared blockers, its
+ *  modify/remove target — so the snapshot is a snapshot of those referents and
+ *  not of the tree's recent traffic. */
 interface StalenessContext {
-  /** When the plan finished generating; `null` while still `generating`
-   *  (siblings_added — the only `plannedAt`-relative rule — then no-ops). */
-  plannedAt: Date | null;
   /** A referenced work item is REMOVED when it is missing (hard-deleted /
    *  cross-tenant) OR archived. Archived counts as removed (the card). */
   isRemoved: (workItemId: string) => boolean;
-  /** Live children created after `plannedAt`, grouped by (real) parent id. */
-  newChildrenByParent: Map<string, WorkItem[]>;
   /** Each (modify/remove) target's CURRENT latest revision id, for the
    *  base-revision drift compare. Absent = the target has no revisions. */
   latestRevByTarget: Map<string, string | undefined>;
@@ -74,20 +80,6 @@ const parentRemovedRule: StalenessRule = (item, sctx) => {
   const ref = item.parentRef;
   if (!ref || !isRealRef(ref) || !sctx.isRemoved(ref)) return [];
   return [{ code: 'parent_removed', parentId: ref }];
-};
-
-/** `add`: the (real, still-live) parent gained children after `plannedAt` that
- *  the proposal declares no dependency relation with (not among its
- *  `blockedByRefs`) → its build-sequence context is outdated. */
-const siblingsAddedRule: StalenessRule = (item, sctx) => {
-  if (item.op !== 'add') return [];
-  const ref = item.parentRef;
-  if (!sctx.plannedAt || !ref || !isRealRef(ref) || sctx.isRemoved(ref)) return [];
-  const declaredBlockers = new Set(item.blockedByRefs.filter(isRealRef));
-  const siblingIds = (sctx.newChildrenByParent.get(ref) ?? [])
-    .filter((c) => !declaredBlockers.has(c.id))
-    .map((c) => c.id);
-  return siblingIds.length > 0 ? [{ code: 'siblings_added', siblingIds }] : [];
 };
 
 /** `add`: real `blocked_by` targets of the proposal that are now
@@ -117,13 +109,12 @@ const baseRevisionDriftRule: StalenessRule = (item, sctx) => {
 };
 
 /** The ordered rule set — extend by appending (the card's "swappable interface
- *  so the rule set can grow"). */
-const RULES: StalenessRule[] = [
-  parentRemovedRule,
-  siblingsAddedRule,
-  blockerRemovedRule,
-  baseRevisionDriftRule,
-];
+ *  so the rule set can grow").
+ *
+ *  ⚠️ A NEW RULE ANSWERS *DID SOMETHING THIS PROPOSAL NAMED MOVE?* (MOTIR-3777).
+ *  `siblingsAddedRule` sat second here and answered a different question — *is
+ *  this parent busy?* — which is why it is gone rather than tuned. */
+const RULES: StalenessRule[] = [parentRemovedRule, blockerRemovedRule, baseRevisionDriftRule];
 
 export interface PlanStalenessService {
   /**
@@ -155,11 +146,21 @@ export interface PlanStalenessService {
    * that one caller is the surface a person actually reads.
    *
    * On an approved plan the warning was not merely useless but CAUSED by the
-   * approval: `findChildrenCreatedAfter` has no exclusion for the items the plan
-   * itself materialized, and `isRealRef` drops every intra-plan `planItem:`
-   * edge, so N proposals under one committed parent each saw the other N−1 as
-   * unexplained new siblings. The more thoroughly a plan was approved, the more
-   * alarming its own record looked.
+   * approval: the retired `siblings_added` rule read the parent's post-`plannedAt`
+   * children with no exclusion for the items the plan itself materialized, and
+   * `isRealRef` drops every intra-plan `planItem:` edge, so N proposals under one
+   * committed parent each saw the other N−1 as unexplained new siblings. The more
+   * thoroughly a plan was approved, the more alarming its own record looked.
+   *
+   * ⚠️ THE STATUS GUARD IS NOT WHAT MOTIR-3777 CHANGED — read them as two layers.
+   * This guard decides WHICH PLANS can be stale (undecided ones) and is
+   * MOTIR-3165's, untouched. MOTIR-3777 changed WHAT MAKES A PROPOSAL STALE, one
+   * layer in: `siblings_added` fired on a still-`planned` plan for every unrelated
+   * card logged under its parent, because its predicate was the parent's child
+   * count and its one excuse — *unless the proposal declared an edge to that
+   * sibling* — was unreachable by construction (the sibling is younger than the
+   * proposal that would have to name it). Every surviving rule is keyed on
+   * something the proposal ITSELF named.
    */
   computePlanStaleness(planId: string, ctx: ServiceContext): Promise<PlanStalenessDto>;
 }
@@ -197,14 +198,12 @@ export const planStalenessService: PlanStalenessService = {
     // --- Collect the distinct work-item ids the rules will read (real refs
     //     only; intra-plan temp-refs resolve at materialize, never stale). ---
     const referencedIds = new Set<string>(); // parents + blockers + targets — for isRemoved
-    const realParentIds = new Set<string>(); // for the new-siblings read
     const targetIds = new Set<string>(); // modify/remove targets — for latest revision
 
     for (const item of items) {
       if (item.op === 'add') {
         if (item.parentRef && isRealRef(item.parentRef)) {
           referencedIds.add(item.parentRef);
-          realParentIds.add(item.parentRef);
         }
         for (const ref of item.blockedByRefs) {
           if (isRealRef(ref)) referencedIds.add(ref);
@@ -215,31 +214,17 @@ export const planStalenessService: PlanStalenessService = {
       }
     }
 
-    // --- Three batched reads (each one round-trip, regardless of plan size). ---
+    // --- Two batched reads (each one round-trip, regardless of plan size). The
+    //     third — the parent's children created after `plannedAt` — went with
+    //     `siblings_added` (MOTIR-3777), so a plan review no longer pays for a
+    //     scan of every busy parent's recent arrivals to answer a question about
+    //     the proposal. ---
     const presentById = new Map<string, WorkItem>();
     if (referencedIds.size > 0) {
       const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         workItemRepository.findByIdsInWorkspace([...referencedIds], ctx.workspaceId, tx),
       );
       for (const row of rows) presentById.set(row.id, row);
-    }
-
-    const newChildrenByParent = new Map<string, WorkItem[]>();
-    if (plan.plannedAt && realParentIds.size > 0) {
-      const children = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-        workItemRepository.findChildrenCreatedAfter(
-          [...realParentIds],
-          ctx.workspaceId,
-          plan.plannedAt as Date,
-          tx,
-        ),
-      );
-      for (const child of children) {
-        if (!child.parentId) continue;
-        const bucket = newChildrenByParent.get(child.parentId);
-        if (bucket) bucket.push(child);
-        else newChildrenByParent.set(child.parentId, [child]);
-      }
     }
 
     const latestRevByTarget = new Map<string, string | undefined>();
@@ -255,12 +240,10 @@ export const planStalenessService: PlanStalenessService = {
     }
 
     const sctx: StalenessContext = {
-      plannedAt: plan.plannedAt,
       isRemoved: (id) => {
         const wi = presentById.get(id);
         return !wi || wi.archivedAt != null;
       },
-      newChildrenByParent,
       latestRevByTarget,
     };
 

@@ -626,7 +626,7 @@ function isEmptyish(value: unknown): boolean {
   return false;
 }
 
-describe('workItemRepository — all 68 fallback arms have a caller', () => {
+describe('workItemRepository — all 67 fallback arms have a caller', () => {
   it('every `tx ?? db` read resolves unbound, and answers EMPTY under motir_app', async () => {
     const { fx, itemId } = await seedItem('FBW');
     const ws = fx.workspaceId;
@@ -648,7 +648,6 @@ describe('workItemRepository — all 68 fallback arms have a caller', () => {
       ['findByIdentifiers', r.findByIdentifiers(pid, ['FBW-1'])],
       ['findByIds', r.findByIds([itemId])],
       ['findByIdsInWorkspace', r.findByIdsInWorkspace([itemId], ws)],
-      ['findChildrenCreatedAfter', r.findChildrenCreatedAfter([itemId], ws, win.start)],
       ['findRoadmapBlockerStubs', r.findRoadmapBlockerStubs([itemId])],
       ['findBySessionBranch', r.findBySessionBranch('nope', ws)],
       ['findReadyLayer', r.findReadyLayer(pid, ws, null)],

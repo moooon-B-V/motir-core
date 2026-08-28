@@ -103,12 +103,21 @@ export function toWorkItemDeliveryDto(row: WorkItemDeliveryWithChecks): WorkItem
 /**
  * A candidate PR row → the explicit-link picker's display shape (Story 7.10 ·
  * MOTIR-1596, design/github Panel 5b). Same title fallback + merged collapse as
- * the linked-row DTO; `linkedTo` surfaces the takeover chip when the PR already
- * points at ANOTHER item (callers exclude PRs linked to the current item, so a
- * present `workItem` here is always a different item).
+ * the linked-row DTO.
+ *
+ * `linkedTo` arrives as a SEPARATE ARGUMENT rather than off the row (MOTIR-3756):
+ * the identifiers are the pull request's DELIVERY SET, which is a second table and
+ * a batched read the service owns, not an `include` this mapper can reach. Callers
+ * exclude candidates already delivering the current item, so no member is ever the
+ * item being edited.
+ *
+ * The argument is required rather than defaulted to `[]`, because the empty array
+ * is a real answer ("this pull request delivers nothing") and a caller that forgot
+ * to pass the set would render exactly that answer, silently.
  */
 export function toPullRequestLinkCandidateDto(
   row: GithubPullRequestCandidate,
+  linkedTo: readonly string[],
 ): PullRequestLinkCandidateDto {
   return {
     id: row.id,
@@ -116,6 +125,6 @@ export function toPullRequestLinkCandidateDto(
     repo: `${row.repo.owner}/${row.repo.name}`,
     number: row.number,
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
-    linkedTo: row.workItem?.identifier ?? null,
+    linkedTo: [...linkedTo],
   };
 }

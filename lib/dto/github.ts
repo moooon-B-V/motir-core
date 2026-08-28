@@ -81,10 +81,20 @@ export interface PullRequestLinkCandidateDto {
   number: number;
   /** Display state: `merged` wins over the raw open/closed pair. */
   state: 'open' | 'merged' | 'closed';
-  /** When the PR is already linked to ANOTHER item, that item's identifier
-   *  (`MOTIR-<n>`) — the neutral "Linked to {key}" takeover chip; picking it MOVES
-   *  the link. Null when the PR is unlinked. */
-  linkedTo: string | null;
+  /** The identifiers (`MOTIR-<n>`) of every work item this pull request already
+   *  DELIVERS, oldest link first — the neutral chip in the option's trailing slot
+   *  (MOTIR-3756, ADR `docs/decisions/delivery-reader-migration.md` §3).
+   *
+   *  A SET rather than the one item a singular FK named, because one pull request
+   *  delivering several cards is the ordinary shape of a `motir auto` run. The
+   *  renderer reads its LENGTH: empty → the PR-state pill; exactly one → the
+   *  unchanged "Linked to {key}" copy; two or more → "Delivers {count} work
+   *  items". Candidates already delivering the CURRENT item are dropped by the
+   *  service, so no member is ever the item being edited.
+   *
+   *  ⚠️ The chip is INFORMATION, not a takeover warning: picking a candidate ADDS
+   *  a delivery row (`work_item_delivery`), it does not move an existing one. */
+  linkedTo: string[];
 }
 
 /**

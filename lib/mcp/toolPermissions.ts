@@ -203,6 +203,12 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // against a workspace PAT, and refuses the sandboxed agent it was built for
   // (MOTIR-3058 and MOTIR-3051, twice on this same constant).
   link_pull_request: 'work_item:edit',
+  // `unlink_pull_request` (MOTIR-3756) — THE SAME KEY, deliberately. Undoing a
+  // link is editing the card the link was made against, exactly as making it was;
+  // and a correction door a token cannot reach while it CAN reach the door that
+  // creates the mistake is strictly worse than no door at all. `CLI_TOKEN_GRANT`
+  // already carries `work_item:edit`, so nothing is widened here either.
+  unlink_pull_request: 'work_item:edit',
 
   // ── sprint:manage — the sprint lifecycle + membership ────────────────────
   // `sprintsService.assertCanManageSprints` and `backlogService.assertCanGroom`

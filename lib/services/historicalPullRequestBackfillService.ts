@@ -327,8 +327,24 @@ async function applyOne(
  * harmless. A blind re-upsert would write the same values and still bump
  * `updated_at` on every row — which the Development surface orders by, and which
  * the board's Done-column age window reads — so re-running the sweep would churn
- * the mirror's ordering for no gain. Every column the upsert sets is compared;
- * nothing else is (`id`, `repoId` and the timestamps are identity, not content).
+ * the mirror's ordering for no gain. Every column the upsert sets is compared,
+ * with ONE stated exception below; nothing else is (`id`, `repoId` and the
+ * timestamps are identity, not content).
+ *
+ * ⚠️ `work_item_id` IS NOT COMPARED, and its absence is a deletion rather than an
+ * oversight (MOTIR-3756, ADR `docs/decisions/delivery-reader-migration.md` §0 row
+ * S5). The comparison used to read `existing.workItemId === target.workItemId`,
+ * and `applyOne`'s sticky-link early return is what makes that provably
+ * `null === null`: a row carrying a link RETURNS before reaching here, and
+ * `target.workItemId` is the literal `null` on the only path that does. So the
+ * clause could never distinguish two rows — it was a read of the column that
+ * decided nothing, and the column's readers are what this card is retiring.
+ *
+ * What still owns the column here is the early return itself, which is a WRITE-path
+ * guard rather than a reader of a set: the sweep must not overwrite a link, and
+ * while `work_item_id` is written (W1/W2 are untouched by this card) a stored link
+ * is the thing it must not touch. That guard retires with the column, in the
+ * CONTRACT card.
  */
 function rowMatches(
   existing: {
@@ -338,7 +354,6 @@ function rowMatches(
     headRef: string;
     baseRef: string | null;
     title: string | null;
-    workItemId: string | null;
     linkedManually: boolean;
   },
   target: TargetRow,
@@ -354,7 +369,6 @@ function rowMatches(
     // for a merge this sweep can prove landed on the trunk.
     existing.baseRef === target.baseRef &&
     existing.title === target.title &&
-    existing.workItemId === target.workItemId &&
     existing.linkedManually === target.linkedManually
   );
 }

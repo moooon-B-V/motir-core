@@ -245,6 +245,34 @@ export const workItemDeliveryRepository = {
   },
 
   /**
+   * Every card a BATCH of pull requests delivers, in (pull request, link age)
+   * order — {@link listByPullRequest} for a list, in one query (MOTIR-3756).
+   *
+   * The callers are the two readers that ask the question per CANDIDATE rather
+   * than per card: the explicit-link picker annotates each of its ten candidates
+   * with the cards it already delivers, and the subsumption index annotates every
+   * pull request touching a batch's paths with the cards it was opened by. Both
+   * hold a list of pull-request ids and would otherwise issue one read each.
+   *
+   * Returns the delivery ROWS rather than resolved work items: the two callers
+   * want different things from them (identifiers to render, ids to compare), and
+   * a link whose target the tenant context cannot see must not become a
+   * fabricated item — the caller resolves what it needs and stays tolerant of a
+   * short answer, exactly as `resolveDeliveredWorkItems` does.
+   */
+  async listByPullRequests(
+    githubPullRequestIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<WorkItemDelivery, 'githubPullRequestId' | 'workItemId'>[]> {
+    if (githubPullRequestIds.length === 0) return [];
+    return tx.workItemDelivery.findMany({
+      where: { githubPullRequestId: { in: [...githubPullRequestIds] } },
+      select: { githubPullRequestId: true, workItemId: true },
+      orderBy: [{ githubPullRequestId: 'asc' }, { createdAt: 'asc' }],
+    });
+  },
+
+  /**
    * Every card ONE pull request delivers — the direction the singular FK could not
    * express at all.
    *
