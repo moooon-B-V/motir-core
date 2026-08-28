@@ -1,8 +1,9 @@
 ---
 title: Privacy Policy
-version: 1.0.0
+version: 1.1.0
 effectiveDate: TBD
 status: approved
+changeSummary: §6 now covers the work items you reported or were assigned in a shared workspace, not only comments on a public project.
 ---
 
 # Privacy Policy
@@ -133,12 +134,28 @@ statement.
 | **Billing records**               | Kept as long as tax and accounting law requires, which in the Netherlands is generally **seven years**                            |
 | **Security and service logs**     | Short-lived — kept only as long as they are useful for operating and defending the service                                        |
 | **Backups**                       | Rotated on their own schedule and overwritten in the ordinary course. Data present only in a backup is not restored to active use |
-| **Public contributions**          | See below                                                                                                                         |
+| **Shared contributions**          | See below                                                                                                                         |
 
-**Public contributions are the case worth stating plainly.** If you posted a request or a
-comment on someone else's public project, deleting your account does not simply erase it,
-because it is part of a conversation others took part in. We **anonymise** your
-contributions — your name is removed — rather than deleting the thread around them.
+**Shared contributions are the case worth stating plainly.** Work you did inside a
+workspace or project that other people share — the **work items you reported or were
+assigned**, the **comments you wrote**, and the changes you made to them — is not simply
+erased when you delete your account, because it is part of a record other people took part
+in and still depend on. We **anonymise** it: your name, email address and picture are
+removed from the profile every one of those attributions is read through, so they show a
+former member instead of you, and the work itself stays where it is. **This applies whether
+the project is public or private to a team.**
+
+**What we do not do is delete other people's work in order to take your name off it.** A
+work item a team is depending on belongs to the project; the name on it belongs to you. So
+the name goes and the item stays. **Where you were the only member of a workspace, there is
+no one else's work to keep, and the workspace goes with your account.**
+
+**One case delays an erasure rather than limiting it.** If you are the last owner of an
+organization that other people are still members of, we cannot close your account without
+leaving that organization with nobody able to run it. You cannot start a deletion in that
+position, and if you end up in it during the thirty days, the erasure waits rather than
+proceeding — it completes as soon as somebody else takes the owner role. **Nothing is kept
+that would otherwise be erased.**
 
 ## 7. Your rights
 
