@@ -507,3 +507,37 @@ describe('RoadmapView — the canvas box’s vertical budget', () => {
     expect(box().getAttribute('style')).toContain('--shell-bottom-clearance');
   });
 });
+
+// ── The remaining branches of the header + the popstate fallback ────────────
+describe('RoadmapView — subtitle variants and the unknown-key fallback', () => {
+  it('shows the SPRINT NAME alone when the active sprint has no goal', async () => {
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps({ sprintGoal: null })} />);
+    expect(await screen.findByText('Sprint 32')).toBeTruthy();
+  });
+
+  it('falls back to the project subtitle when the sprint has neither name nor goal', async () => {
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps({ sprintName: null, sprintGoal: null })} />);
+    expect(await screen.findByText("Acme's roadmap")).toBeTruthy();
+  });
+
+  it('a popstate to a key the session cache does NOT know falls back to the root level', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByRole('navigation', { name: 'Breadcrumb' });
+
+    // Only reachable by hand-editing the address bar without a reload. The view
+    // does NOT fetch an ancestor chain for it — it opens the root.
+    const before = fetchUrls.length;
+    window.history.replaceState(null, '', '/roadmap?item=MOTIR-NEVER-SEEN');
+    fireEvent.popState(window);
+    await waitFor(() =>
+      expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull(),
+    );
+    expect(fetchUrls.length).toBe(before);
+    expect(fetchUrls.every((u) => !u.includes('ancestors'))).toBe(true);
+  });
+});

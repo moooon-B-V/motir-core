@@ -39,6 +39,12 @@ const listeners = new Set<() => void>();
 let collapsed: boolean | undefined;
 
 function readInitial(): boolean {
+  /* v8 ignore next -- UNREACHABLE by React's own contract: `readInitial` runs only
+     from `getSnapshot`, which React calls on the CLIENT; the server path goes to
+     `getServerSnapshot` below. The invariant is asserted by the
+     "renders EXPANDED under renderToString, without touching localStorage" test in
+     `tests/components/useDependencyLegendCollapsed.test.tsx`. The guard stays so the
+     module is importable in a non-DOM context. */
   if (typeof window === 'undefined') return false;
   try {
     return window.localStorage.getItem(DEPENDENCY_LEGEND_COLLAPSED_STORAGE_KEY) === 'true';
@@ -83,11 +89,21 @@ function subscribe(listener: () => void): () => void {
       emit();
     }
   };
+  /* v8 ignore start -- the `typeof window` arms are UNREACHABLE for the same reason
+     as the one in `readInitial`: `useSyncExternalStore` does not subscribe during a
+     server render, so `subscribe` only ever runs on the client. Asserted by the
+     "renders EXPANDED under renderToString, without touching localStorage" test in
+     `tests/components/useDependencyLegendCollapsed.test.tsx`, which renders this hook
+     off-DOM and observes no storage access at all. The guards are kept because this
+     is a verbatim copy of `useSidebarCollapsed`'s recipe and the three hooks must not
+     drift. */
   if (typeof window !== 'undefined') {
     window.addEventListener('storage', onStorage);
   }
+  /* v8 ignore stop */
   return () => {
     listeners.delete(listener);
+    /* v8 ignore next 3 -- same guard, same invariant, same test. */
     if (typeof window !== 'undefined') {
       window.removeEventListener('storage', onStorage);
     }

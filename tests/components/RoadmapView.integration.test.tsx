@@ -1,9 +1,23 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RoadmapView } from '@/components/planning/RoadmapView';
+import {
+  ARRIVAL_MIN_SCALE,
+  arrivalView,
+  fitView,
+  nodesBounds,
+} from '@/lib/planning/canvasGeometry';
+import {
+  NODE_H,
+  NODE_W,
+  deterministicLayout,
+  workItemCrumbLabel,
+} from '@/lib/planning/projectCanvasModel';
 
 // Story-level ASSEMBLED gate for MOTIR-1539 (roadmap usability): the TWO features
 // this story ships — URL-addressable scope (MOTIR-1541, now URL-driven end to end
@@ -308,5 +322,154 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     expect(screen.queryByText(/·/)).toBeNull();
     // The Sprint scope chip still renders alongside it.
     expect(screen.getByText('Sprint scope')).toBeTruthy();
+  });
+});
+
+// ── STORY MOTIR-3833's ASSEMBLED SEAMS (MOTIR-3840) ─────────────────────────
+//
+// Each feature card's units stub exactly the thing the next card builds: the URL
+// card's tests hand the canvas a trail, the canvas card's tests hand the consumer
+// a callback, the arrival card's tests hand the geometry a bounding box. Nobody in
+// that arrangement drives a real resolve through a real crumb into a real
+// breadcrumb, or a real laid-out level into a real arrival. These do.
+describe('MOTIR-3833 — the assembled roadmap seams', () => {
+  // What the SERVER produces for `?item=MOTIR-1`: `ancestors ++ [the item]`, each
+  // crumb labelled by the shipped `workItemCrumbLabel` — the same producer the
+  // canvas uses for a hand-drilled crumb, which is the drift this asserts against.
+  const serverTrail = [
+    {
+      id: 'E1',
+      crumbKey: 'MOTIR-1',
+      label: workItemCrumbLabel('MOTIR-1', 'Whole-project epic'),
+    },
+  ];
+
+  it('THE TRAIL SEAM — a server-resolved trail becomes the reader’s breadcrumb, letter for letter', async () => {
+    sp.current = 'item=MOTIR-1';
+    render(<RoadmapView {...baseProps({ initialTrail: serverTrail })} />);
+
+    const crumb = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    // The rendered crumb text, not the prop that was passed.
+    expect(within(crumb).getByText('MOTIR-1 · Whole-project epic')).toBeTruthy();
+    // And the canvas opened ON that level — it never read the project root first.
+    await waitFor(() => expect(fetchUrls.length).toBeGreaterThan(0));
+    expect(fetchUrls.every((u) => u.includes('parentId=E1'))).toBe(true);
+  });
+
+  it('THE TRAIL SEAM — a seeded crumb is byte-identical to a hand-DRILLED one', async () => {
+    // One producer (`workItemCrumbLabel`) or the two paths drift; a test that built
+    // the expected string by hand could not see it.
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    const crumb = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(crumb).getByText(serverTrail[0]!.label)).toBeTruthy();
+  });
+
+  it('THE LEVEL ROUND-TRIP — drill writes ?item=, popstate returns the canvas IN PLACE and costs no fetch', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    expect(String(pushState.mock.calls.at(-1)![2])).toBe('/roadmap?item=MOTIR-1');
+    await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    const afterDrill = fetchUrls.length;
+
+    window.history.replaceState(null, '', '/roadmap');
+    fireEvent.popState(window);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull(),
+    );
+    expect(await screen.findByText('Whole-project epic')).toBeTruthy();
+    // `loadLevel` is NOT re-called: the root is in the adapter's level cache and
+    // the trail is in this view's session cache.
+    expect(fetchUrls.length).toBe(afterDrill);
+  });
+
+  it('THE ARRIVAL SEAM — a real laid-out level that cannot fit arrives AT the floor, centred on `here`', () => {
+    // The product's own layout, not a hand-built box: eighteen cards through the
+    // shipped `deterministicLayout`, then the shipped bounds, then the arrival.
+    const ids = Array.from({ length: 18 }, (_, i) => `E${i + 1}`);
+    const pos = deterministicLayout(ids, []);
+    const rects = ids.map((id) => ({ x: pos[id]!.x, y: pos[id]!.y, w: NODE_W, h: NODE_H }));
+    const bounds = nodesBounds(rects);
+    const box = { w: 1136, h: 620 }; // the measured canvas box at 1440x900
+
+    expect(fitView(bounds, box).scale).toBeLessThan(ARRIVAL_MIN_SCALE);
+    const here = rects[6]!; // the in-progress frontier, third row
+    const v = arrivalView(bounds, box, ARRIVAL_MIN_SCALE, here);
+
+    expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
+    // The vertical is constrained, so the focal card is centred on it.
+    expect((here.y + here.h / 2) * v.scale + v.ty).toBeCloseTo(box.h / 2, 6);
+  });
+
+  it('THE ARRIVAL SEAM — a real SMALL level still arrives exactly as fitView frames it', () => {
+    const ids = ['S1', 'S2', 'S3', 'S4', 'S5'];
+    const pos = deterministicLayout(ids, []);
+    const bounds = nodesBounds(
+      ids.map((id) => ({ x: pos[id]!.x, y: pos[id]!.y, w: NODE_W, h: NODE_H })),
+    );
+    const box = { w: 1136, h: 620 };
+    expect(arrivalView(bounds, box, ARRIVAL_MIN_SCALE)).toEqual(fitView(bounds, box));
+  });
+});
+
+// ── THE OPT-IN DEFAULTS ARE THE CONTRACT (MOTIR-3840) ───────────────────────
+//
+// This story adds several props to a canvas FOUR surfaces mount, and the only
+// thing keeping the other three unchanged is that every new prop defaults to
+// today's behaviour. That is a promise held by care alone, which means a later
+// card can flip a default and quietly change onboarding and both plan canvases
+// with a green suite. Written down, it fails loudly instead.
+describe('MOTIR-3833 — the shared canvas’s opt-in defaults', () => {
+  const consumers = [
+    'components/onboarding/OnboardingCanvas.tsx',
+    'components/planning/PlanChangeCanvas.tsx',
+    'components/planning/PlanReviewCanvas.tsx',
+  ];
+  // Every prop THIS STORY added to the shared canvas. `initialTrail` is NOT one of
+  // them — it is MOTIR-2070's shipped arrival seed, and `PlanChangeCanvas` already
+  // forwards it, which is exactly why the list is the story's additions rather than
+  // "every prop with a trail in its name".
+  const optIns = ['onLevelChange', 'controlledTrail', 'arriveAtReadableScale'];
+
+  it('the three other consumers pass NONE of the level/arrival props', () => {
+    for (const file of consumers) {
+      const src = readFileSync(join(process.cwd(), file), 'utf8');
+      for (const prop of optIns) {
+        expect(src, `${file} must not pass ${prop}`).not.toContain(prop);
+      }
+    }
+  });
+
+  it('the LEGEND COLLAPSE is the one deliberate exception — it reaches EVERY consumer', () => {
+    // Not opt-in, and that asymmetry is a decision rather than a miss: the legend
+    // is the canvas's own chrome, and "I know what a dashed arrow means" is a fact
+    // about the reader, not about the route. Giving two canvases a legend you can
+    // dismiss and two you cannot is a distinction no reader could infer.
+    const canvas = readFileSync(
+      join(process.cwd(), 'components/planning/ProjectRoadmapCanvas.tsx'),
+      'utf8',
+    );
+    expect(canvas).toContain('useDependencyLegendCollapsed()');
+    // It is not gated on any prop.
+    expect(canvas).not.toMatch(/collapsibleLegend\s*[?:&]/);
+  });
+
+  it('a canvas rendered WITHOUT the opt-ins fits via fitView and fires no level callback', async () => {
+    const onLevelChange = vi.fn();
+    // `WorkItemRoadmap` is the ONLY adapter that opts in; rendered bare, the canvas
+    // reports nothing and takes the engine's plain fit.
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    expect(onLevelChange).not.toHaveBeenCalled();
+    // A level that FITS is framed identically whether or not a floor is supplied.
+    const bounds = { minX: 40, minY: 40, maxX: 1040, maxY: 360 };
+    const box = { w: 1136, h: 620 };
+    expect(arrivalView(bounds, box, ARRIVAL_MIN_SCALE)).toEqual(fitView(bounds, box));
   });
 });

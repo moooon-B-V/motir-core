@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Bounds } from '@/lib/planning/canvasGeometry';
+import type { Bounds, Rect } from '@/lib/planning/canvasGeometry';
 import {
   ARRIVAL_MIN_SCALE,
   MAX_SCALE,
@@ -285,5 +285,30 @@ describe('arrivalView', () => {
     // below the card's own smallest authored type (the 11px status chip).
     expect(ARRIVAL_MIN_SCALE).toBe(0.8);
     expect(14 * ARRIVAL_MIN_SCALE).toBeGreaterThanOrEqual(11);
+  });
+});
+
+// ── routeEdges: the BOTH-OVERLAP axis choice ────────────────────────────────
+describe('routeEdges — two boxes that overlap on BOTH axes', () => {
+  it('picks the axis by the larger centre-to-centre delta', () => {
+    const rects: Record<string, Rect> = {
+      // Overlapping rects: neither axis separates them, so the tie-break is
+      // distance — the arm the three separation cases above never reach.
+      A: { x: 0, y: 0, w: 280, h: 124 },
+      wide: { x: 200, y: 20, w: 280, h: 124 }, // |dx| 200 > |dy| 20 → horizontal
+      tall: { x: 20, y: 100, w: 280, h: 124 }, // |dy| 100 > |dx| 20 → vertical
+    };
+    const [h, v] = routeEdges(
+      [
+        { from: 'A', to: 'wide' },
+        { from: 'A', to: 'tall' },
+      ],
+      (id) => rects[id],
+    );
+    // Both route; what differs is which side they leave from, which the `d` string
+    // records as its first point.
+    expect(h).not.toBeNull();
+    expect(v).not.toBeNull();
+    expect(h!.d).not.toBe(v!.d);
   });
 });

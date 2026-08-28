@@ -898,6 +898,20 @@ export default defineConfig({
         // reach the browser with nothing else in the way, so an untested branch
         // is an unproven one. `tests/components/roadmapAutoDrillGate.test.tsx`
         // carries the top-up + the DTO→adapter→canvas seam.
+        // Story MOTIR-3833 · MOTIR-3840 — the roadmap-refinement surface, MEASURED
+        // before being gated (this list's own rule). `canvasGeometry` gained the
+        // arrival view, `RoadmapView` the URL↔level wiring and the fold budget, and
+        // the legend-collapse hook is new. Three files this story changed are
+        // deliberately NOT here, each with its number: `projectCanvasModel.ts`
+        // (L100 B83.33 F100 — the shortfall is twelve pre-existing `?? fallback`
+        // arms on maps seeded by construction, none of them this story's),
+        // `PlanningCanvas.tsx` (L75.16 B64.88 F75 — a pre-existing pan/zoom/drag
+        // component this story added one optional prop to), and
+        // `app/(authed)/roadmap/page.tsx` (an async Server Component; the rule at
+        // the top of this list is that a page joins only once somebody measures it).
+        'lib/planning/canvasGeometry.ts',
+        'components/planning/RoadmapView.tsx',
+        'lib/hooks/useDependencyLegendCollapsed.ts',
         'components/planning/ProjectRoadmapCanvas.tsx',
         'components/planning/WorkItemRoadmap.tsx',
         // Story MOTIR-1755 · Subtask MOTIR-2205 — the planning phase card's DOOR
@@ -2869,6 +2883,12 @@ export default defineConfig({
         'lib/projectAiSettings/plannerModels.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/autoPlanCadenceTick.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-1808 — the roadmap auto-drill surface at the same floor.
+        // Story MOTIR-3833 · MOTIR-3840. Measured on the story's branch:
+        // canvasGeometry L100 B92.42 F100 · RoadmapView L100 B97.29 F100 ·
+        // useDependencyLegendCollapsed 100/100/100.
+        'lib/planning/canvasGeometry.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/RoadmapView.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/hooks/useDependencyLegendCollapsed.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/ProjectRoadmapCanvas.tsx': {
           branches: 90,
           functions: 90,

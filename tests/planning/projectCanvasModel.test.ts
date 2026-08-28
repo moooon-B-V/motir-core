@@ -206,3 +206,61 @@ describe('focalNode', () => {
     expect(focalNode([n('__origin__', { decorative: true })])).toBeNull();
   });
 });
+
+// ── the pure layout/order fallbacks ─────────────────────────────────────────
+describe('topologicalOrder and deterministicLayout — the defensive arms', () => {
+  it('ignores an edge naming a node that is not in the set, and a self-edge', () => {
+    const ids = ['A', 'B'];
+    const order = topologicalOrder(ids, [
+      { from: 'A', to: 'B' },
+      { from: 'A', to: 'GHOST' }, // not a member
+      { from: 'B', to: 'B' }, // self
+    ]);
+    expect(order).toEqual(['A', 'B']);
+  });
+
+  it('still emits every node when the edges form a CYCLE (no member has in-degree 0)', () => {
+    // The queue starts empty, so the drain loop never runs and the tail pass is
+    // what produces the order — the arm a well-formed DAG never reaches.
+    const order = topologicalOrder(
+      ['A', 'B', 'C'],
+      [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'C' },
+        { from: 'C', to: 'A' },
+      ],
+    );
+    expect([...order].sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('lays out a CYCLE without hanging, and places every node exactly once', () => {
+    const pos = deterministicLayout(
+      ['A', 'B'],
+      [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'A' },
+      ],
+    );
+    expect(Object.keys(pos).sort()).toEqual(['A', 'B']);
+    expect(pos['A']).not.toEqual(pos['B']);
+  });
+
+  it('lays out a set with NO edges at all — every node is loose', () => {
+    const pos = deterministicLayout(['A', 'B', 'C', 'D'], []);
+    expect(Object.keys(pos)).toHaveLength(4);
+    // The loose band is a grid, so the first row shares a `y`.
+    expect(pos['A']!.y).toBe(pos['B']!.y);
+  });
+
+  it('lays out a chain DEEPER than one layer, stacking each node past its predecessor', () => {
+    const pos = deterministicLayout(
+      ['A', 'B', 'C'],
+      [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'C' },
+      ],
+    );
+    expect(pos['A']!.x).toBeLessThan(pos['B']!.x);
+    expect(pos['B']!.x).toBeLessThan(pos['C']!.x);
+  });
+});

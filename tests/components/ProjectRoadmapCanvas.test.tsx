@@ -1467,7 +1467,9 @@ describe('ProjectRoadmapCanvas — the Dependencies legend collapses', () => {
   });
 
   it('renders EXPANDED and does not throw when localStorage is unavailable', async () => {
-    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    // happy-dom's `localStorage` is a Proxy, so an instance spy must be restored
+    // explicitly (`restoreAllMocks` does not undo it) — see the `finally` below.
+    const getItem = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
       throw new Error('SecurityError: private mode');
     });
     try {
