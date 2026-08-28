@@ -20,6 +20,16 @@ import { loadTokenLayer, resolveToken } from './paletteCascade';
 /** The ink every swept danger site was sent to — MOTIR-3663. */
 const DANGER_INK = '--el-danger-on-surface';
 
+/** The accent used AS TEXT on a surface, rather than as a fill — MOTIR-3745. */
+const ACCENT_INK = '--el-accent-on-surface';
+const ACCENT_CLASS = `text-(${ACCENT_INK})`;
+
+/**
+ * The accent family's own tint — the ONE tinted surface the tree deliberately
+ * pairs the accent ink with. Named here because the pairing is guarded below.
+ */
+const ACCENT_TINT = '--el-tint-lavender';
+
 /** The base palette, which ships no `[data-palette]` block of its own. */
 const BASE_PALETTE = 'motir';
 
@@ -172,6 +182,14 @@ const MUTED_CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes
  * parser ever saw them (MOTIR-3663).
  */
 const DANGER_CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes(DANGER_TOKEN));
+/**
+ * The ACCENT arm's carriers. Keyed on the TEXT class rather than on the bare
+ * token: `--el-accent-on-surface` is also written as `border-(…)` and as a
+ * `ring-(…)`, and a border is a GRAPHIC — WCAG 1.4.11 asks 3:1 of it, not the
+ * 4.5:1 this arm measures. Keying on the token would put those sites inside a
+ * text assertion they were never subject to.
+ */
+const ACCENT_CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes(ACCENT_CLASS));
 
 describe('ink-contrast lint — the scanned set is the set that was searched', () => {
   // notes.html #195: a guard is only worth what its file set is. A `ls-files`
@@ -195,6 +213,7 @@ describe('ink-contrast lint — the scanned set is the set that was searched', (
     ['--el-text-faint', FAINT_CARRIERS],
     ['--el-text-muted', MUTED_CARRIERS],
     ['--el-danger-text', DANGER_CARRIERS],
+    ['--el-accent-on-surface', ACCENT_CARRIERS],
   ])('reads files that actually carry %s', (_ink, carriers) => {
     // The counterpart to the check above: a file set can be real and still be
     // the wrong one. If NOTHING in the scanned tree mentions the token, the
@@ -422,6 +441,46 @@ describe('ink-contrast lint — --el-danger-text carries ink ONLY on a danger fi
   });
 });
 
+/**
+ * The AA bar for normal-size text (WCAG 1.4.3). Shared by the two MEASURED
+ * arms below — danger and accent — which ask the same question of two inks.
+ */
+const AA = 4.5;
+
+const { rules: TOKEN_RULES } = loadTokenLayer();
+
+/** One `--el-*` token's concrete colour under one palette × theme. */
+const resolve = (palette: string, theme: 'light' | 'dark', token: string) =>
+  flattenColorMix(resolveToken(TOKEN_RULES, { palette, theme }, token).value);
+
+/**
+ * The palettes, READ OUT OF `theme.css` rather than imported from
+ * `@/lib/theme/palettes`.
+ *
+ * ⚠️ Not a stylistic preference — a lane constraint. `lib/theme/palettes.ts`
+ * re-exports `@motir/design-system`, and the `structural-guards` CI job
+ * installs without building that package (`ci.yml` — `pnpm install` then
+ * `pnpm test:guards`, no `--filter @motir/design-system build`). Importing it
+ * here resolves locally, where a build has usually happened, and fails the
+ * lane on a clean runner with "Failed to resolve entry for package".
+ *
+ * Reading the stylesheet is also the more honest source for THIS assertion:
+ * the thing being measured is what `theme.css` declares, so the matrix and
+ * the values come from one file and cannot drift apart.
+ */
+const PALETTES = [
+  BASE_PALETTE,
+  ...new Set(
+    [...loadTokenLayer().css.matchAll(/\[data-palette=['"]([a-z0-9-]+)['"]\]/g)].map(
+      (match) => match[1]!,
+    ),
+  ),
+].filter((palette, index, all) => all.indexOf(palette) === index);
+
+const PAIRS = PALETTES.flatMap((palette) =>
+  (['light', 'dark'] as const).map((theme) => ({ palette, theme })),
+);
+
 describe('ink-contrast lint — --el-danger-on-surface is AA in all 20 palette × theme pairs', () => {
   // MOTIR-3663. The replacement the arm above sends every site to, measured
   // rather than asserted once — and measured HERE rather than in a comment,
@@ -443,7 +502,6 @@ describe('ink-contrast lint — --el-danger-on-surface is AA in all 20 palette �
   // measured 1.14–1.29:1 for as long as it has existed). An ink that clears all
   // six is right whichever surface the element lands on — the same property
   // that makes `--el-text-secondary` the answer on the grey arms.
-  const AA = 4.5;
   const SURFACES = [
     '--el-page-bg',
     '--el-card',
@@ -453,37 +511,6 @@ describe('ink-contrast lint — --el-danger-on-surface is AA in all 20 palette �
     '--el-tint-rose',
     '--el-danger-surface',
   ];
-  const { rules } = loadTokenLayer();
-  const resolve = (palette: string, theme: 'light' | 'dark', token: string) =>
-    flattenColorMix(resolveToken(rules, { palette, theme }, token).value);
-
-  /**
-   * The palettes, READ OUT OF `theme.css` rather than imported from
-   * `@/lib/theme/palettes`.
-   *
-   * ⚠️ Not a stylistic preference — a lane constraint. `lib/theme/palettes.ts`
-   * re-exports `@motir/design-system`, and the `structural-guards` CI job
-   * installs without building that package (`ci.yml` — `pnpm install` then
-   * `pnpm test:guards`, no `--filter @motir/design-system build`). Importing it
-   * here resolves locally, where a build has usually happened, and fails the
-   * lane on a clean runner with "Failed to resolve entry for package".
-   *
-   * Reading the stylesheet is also the more honest source for THIS assertion:
-   * the thing being measured is what `theme.css` declares, so the matrix and
-   * the values come from one file and cannot drift apart.
-   */
-  const PALETTES = [
-    BASE_PALETTE,
-    ...new Set(
-      [...loadTokenLayer().css.matchAll(/\[data-palette=['"]([a-z0-9-]+)['"]\]/g)].map(
-        (match) => match[1]!,
-      ),
-    ),
-  ].filter((palette, index, all) => all.indexOf(palette) === index);
-
-  const PAIRS = PALETTES.flatMap((palette) =>
-    (['light', 'dark'] as const).map((theme) => ({ palette, theme })),
-  );
 
   it('measures the whole matrix it claims to (every palette, both themes)', () => {
     // The counterpart to notes.html #195 again: a matrix that silently went
@@ -550,6 +577,182 @@ describe('ink-contrast lint — --el-danger-on-surface is AA in all 20 palette �
       'These pairs paint danger text in something a reader cannot tell from ordinary body ink. ' +
         'That is the half of MOTIR-3663 that is not a contrast failure — on four dark palettes ' +
         'the old token cleared 18.59–19.44:1 against the page and was still the bug.',
+    ).toBe('');
+  });
+});
+
+describe('ink-contrast lint — --el-accent-on-surface is AA in all 20 palette × theme pairs', () => {
+  // MOTIR-3745. The FOURTH ink, and the first one added because of what the
+  // guard did NOT say rather than because of what it did.
+  //
+  // ── The hole ────────────────────────────────────────────────────────────────
+  // The three arms above were each written after a defect in THAT ink was found:
+  // faint (MOTIR-2455), muted (MOTIR-2455), danger-text (MOTIR-3663). Each time
+  // the lint went green afterwards, and a green lint reads as *the inks are
+  // measured*. It never was — it is *the three inks somebody has been bitten by
+  // are measured*. `--el-accent-on-surface` is how the product says **you are
+  // here** (an active nav item, a selected row, a count badge) and it had never
+  // been in any matrix, in any palette, in either theme.
+  //
+  // What was standing under that silence, on `origin/main`, base palette, DARK:
+  //
+  //   --el-accent-on-surface #7b6ce5 on --el-surface      #1a1a1a   4.24:1
+  //                                  on --el-surface-soft #161616   4.41:1
+  //                                  on --el-muted        #1a1a1a   4.24:1
+  //
+  // `app/(public)/explore/_components/ExploreTopBar.tsx` paints its header
+  // `bg-(--el-surface-soft)` and its current-page nav item
+  // `text-[13.5px] font-semibold text-(--el-accent-on-surface)`. 13.5px semibold
+  // is not WCAG large text (large is ≥24px, or ≥18.66px bold), so 1.4.3 asks
+  // 4.5:1 and it missed by 0.09 — on `/explore` and `/docs`, both public and
+  // both reachable signed out, for as long as either has shipped.
+  //
+  // ── Why this arm is a MATRIX and not an AST scan ────────────────────────────
+  // The three arms above scan CALL SITES because their inks are, by design, not
+  // AA everywhere: faint clears AA on nothing, muted only on the white page/card,
+  // and `--el-danger-text` only on the danger fill. Each site therefore has to be
+  // ruled on individually — is it a glyph, is it disabled, what is under it.
+  //
+  // `--el-accent-on-surface` is the opposite kind of token. Its whole job is to
+  // be the accent that is LEGIBLE as ink, on whatever surface it lands on — the
+  // Tier-3 comment says so, and it is why the token exists apart from
+  // `--el-accent` (the fill). So the honest question is not *which site is
+  // wrong*, it is *is the ink AA on every surface the app paints under it*, in
+  // every palette and both themes. That is a computed table, exactly like the
+  // `--el-danger-on-surface` one above, and for the same stated reason: the
+  // numbers depend on values ten palettes are free to change.
+  //
+  // ── The surface set is DERIVED, not remembered ──────────────────────────────
+  // The two describes near the top of this file already read the surface
+  // vocabulary back out of `theme.css` in both directions — `SAFE_SURFACE_TOKENS`
+  // (every `--el-*` that IS the page white) and `TINTED_SURFACE_TOKENS` (every
+  // `--el-*` that resolves to one of the three measured tints, total over the
+  // token table). This arm measures that union rather than a hand-written list,
+  // so an alias added tomorrow is measured the day it lands. That is the whole
+  // MOTIR-3693 lesson applied one ink over: `--el-sidebar-bg` was unmeasured for
+  // the life of the rail because a list of three names was written by hand.
+  const SURFACES = [...SAFE_SURFACE_TOKENS, ...TINTED_SURFACE_TOKENS];
+
+  it('measures the whole matrix it claims to (every palette, both themes)', () => {
+    // Same floor, and the same reason, as the danger arm's: a matrix that
+    // silently went empty would make every assertion below vacuously true, and
+    // `>=` rather than `===` is what makes an eleventh palette measured on the
+    // day it is added instead of a test to edit.
+    expect(PAIRS).toHaveLength(PALETTES.length * 2);
+    expect(PALETTES).toContain(BASE_PALETTE); // the palette the defect was reported on
+    expect(PALETTES.length).toBeGreaterThanOrEqual(10);
+    expect(SURFACES.length).toBeGreaterThan(3);
+    expect(SURFACES).toContain('--el-surface-soft'); // ExploreTopBar's own header
+  });
+
+  it('resolves to a real colour in every pair — never an unresolved var()', () => {
+    // As on the danger arm: an unresolved `var()` folds to an empty string and
+    // `contrast()` would then THROW rather than fail, and a guard that throws
+    // measures nothing. It matters more here than there, because the fix for
+    // this ink is a `color-mix` over two tokens in the dark block — if either
+    // input stopped resolving, the assertion below would stop being a test.
+    const broken = PAIRS.filter(
+      ({ palette, theme }) => !/^#[0-9a-f]{6}$/i.test(resolve(palette, theme, ACCENT_INK)),
+    ).map(({ palette, theme }) => `${palette}/${theme} → "${resolve(palette, theme, ACCENT_INK)}"`);
+    expect(broken.join(', ')).toBe('');
+  });
+
+  it('clears AA on every surface in the vocabulary, in all 20 pairs', () => {
+    const failures: string[] = [];
+    for (const { palette, theme } of PAIRS) {
+      const ink = resolve(palette, theme, ACCENT_INK);
+      for (const surface of SURFACES) {
+        const ratio = contrast(ink, resolve(palette, theme, surface));
+        if (ratio < AA) {
+          failures.push(`${palette}/${theme}: ${ink} on ${surface} = ${ratio.toFixed(2)}`);
+        }
+      }
+    }
+    expect(
+      failures.join('\n'),
+      `\`${ACCENT_INK}\` is the accent used AS TEXT, so it owes 4.5:1 on whatever surface the ` +
+        'element lands on — that is the property that separates it from `--el-accent`, the ' +
+        'FILL. In the DARK theme the base palette painted it at 4.24–4.41:1 on the three ' +
+        "tints, which is what `[data-theme='dark']` in `theme.css` now lifts by mixing the " +
+        "palette's own `--color-primary` toward that theme's body ink. If a palette moved its " +
+        'primary or its surfaces, re-measure the PAIR before changing either side; if the mix ' +
+        'ratio needs to move, move it in `theme.css` — never darken or lighten the accent at a ' +
+        'call site, which is what the token exists to make unnecessary.',
+    ).toBe('');
+  });
+
+  it('stays distinguishable from the body ink — the ACCENT signal, not just the text', () => {
+    // Borrowed wholesale from the danger arm, and for the same reason: the fix
+    // for a contrast failure is to pull the hue toward the body ink, and pulled
+    // far enough that stops being an accent at all. An accent nobody can tell
+    // from ordinary copy has lost the thing it was painted for, so the floor is
+    // asserted rather than left to whoever next tunes the mix. 10:1 in CIEDE2000
+    // is the same comfortable floor; the measured range here is 22.6–54.5.
+    const tooClose: string[] = [];
+    for (const { palette, theme } of PAIRS) {
+      const distance = deltaE2000(
+        resolve(palette, theme, ACCENT_INK),
+        resolve(palette, theme, '--el-text'),
+      );
+      if (distance < 10) tooClose.push(`${palette}/${theme}: ΔE ${distance.toFixed(1)}`);
+    }
+    expect(
+      tooClose.join('\n'),
+      'These pairs paint the you-are-here accent in something a reader cannot tell from ' +
+        'ordinary body ink. Raising contrast by mixing further toward `--el-text` eventually ' +
+        'does that, so this is the floor that stops the fix from eating the signal.',
+    ).toBe('');
+  });
+
+  it('pairs the ink with exactly one --el-tint-*, and it is the accent family’s own', () => {
+    // ⚠️ THE ONE SURFACE THIS ARM'S GREEN DOES NOT COVER, said out loud rather
+    // than left to be inferred — the same discipline the muted arm's heading
+    // keeps ("no violation the scanner can resolve a surface for").
+    //
+    // `SURFACES` above is the NEUTRAL vocabulary: the page white and the three
+    // greys. The tree also deliberately paints accent ink on ONE pastel tint —
+    // `--el-tint-lavender`, the accent family's own — in ten files, mostly as a
+    // rounded glyph tile (`ProjectsEmptyState`, `PasskeyManager`,
+    // `TwoFactorManager`) but also as real text (`IssueFilterBar`'s saved-filter
+    // count badge, `ProposalQuickView`'s badge, `Sidebar`'s active row).
+    //
+    // That pairing is NOT in the matrix above, and the reason is a measurement
+    // rather than an oversight. On `origin/main` it failed in five of the twenty
+    // pairs: base/DARK at 3.59 — which the dark fix takes to 4.68 — and
+    // evergreen 4.19, amber 4.00, sienna 4.13, candy 4.29 in LIGHT. The four
+    // light ones cannot be fixed from this card: their accent inks are marginal
+    // against ANY light surface (amber's `#8a6a00` tops out at 5.07:1 on pure
+    // white), so clearing 4.5 on a tint needs either the LIGHT accent ink to
+    // move — which this card is explicitly told not to do — or those palettes'
+    // lavender lifted nearly to the page white, which costs the tint its job.
+    // It is a palette-level defect with its own life, so it is a card:
+    // MOTIR-3774.
+    //
+    // What this assertion buys in the meantime is that the exposure cannot GROW
+    // silently. It is exactly one tint today; pair the accent ink with a second
+    // one and this goes red, and whoever does it reads the paragraph above
+    // instead of rediscovering it.
+    const paired = new Set<string>();
+    for (const file of ACCENT_CARRIERS) {
+      for (const [, , blob] of TEXT_BY_FILE.get(file)!.matchAll(
+        /(['"`])((?:[^\\]|\\[\s\S])*?)\1/g,
+      )) {
+        if (!blob!.includes(ACCENT_CLASS)) continue;
+        for (const [, token] of blob!.matchAll(/(?:^|\s|:)bg-\((--el-tint-[a-z0-9-]+)\)/g)) {
+          paired.add(token!);
+        }
+      }
+    }
+    // Non-empty first: a regex that stopped matching would make the equality
+    // below pass by measuring nothing, which is this file's standing failure
+    // mode (notes.html #195).
+    expect([...paired]).toContain(ACCENT_TINT);
+    expect(
+      [...paired].filter((token) => token !== ACCENT_TINT).join(', '),
+      'The accent ink is painted on a pastel tint this arm does not measure. ' +
+        `Only ${ACCENT_TINT} is a known pairing (MOTIR-3774 tracks its four sub-AA light ` +
+        'palettes); a second one is a new surface nobody has measured the ink on. Measure the ' +
+        'pair across all 20 palette × theme combinations before shipping it.',
     ).toBe('');
   });
 });
