@@ -294,6 +294,29 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * It is cheap for what it does because the ceremonies are virtual: a CDP
  * authenticator answers instantly, where the 2FA spec pays for six real sign-in
  * journeys.
+ *
+ * ⚠️ `data-subject-request-journey.spec.ts` (MOTIR-3706) carries the LOCAL
+ * provenance too, and the entry arrives WITH the spec rather than after a red
+ * CI run — which is what the guard above would otherwise have caught: a spec
+ * with no cost here is assigned to NO leg and never runs.
+ *
+ * Measured on 2026-08-28 against a production build, on its own port (3406) and
+ * its own scratch database, TWICE — three tests each, both `3 passed`. Only the
+ * SECOND run is a per-test reading (the first was taken with the `line`
+ * reporter, which prints the summary and nothing else), so what the first
+ * contributes is the pass and not a number. Said plainly rather than averaged
+ * in. The readings: **2.8 s + 0.9 s + 0.8 s = 4.5 s** of test bodies.
+ *
+ * Recorded as **6.0**, the measurement plus headroom, following
+ * `jobs-postgres-engine.spec.ts` above — under-estimating is the direction that
+ * unbalances a bin-packer, and the calibration note says a local reading runs at
+ * or below its CI cost.
+ *
+ * The deletion journey is the heavy one of the three and its cost is where you
+ * would expect: it pays for a sign-UP and then a sign-IN, because the flow it
+ * walks deliberately signs the reader out halfway through. The other two are a
+ * single navigation each. Re-measure from the first green CI run that includes
+ * it.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
@@ -338,6 +361,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'comments.spec.ts': 11.6,
   'custom-fields.spec.ts': 18.5,
   'custom-roles.spec.ts': 8.2,
+  'data-subject-request-journey.spec.ts': 6.0,
   'dashboards.spec.ts': 12.6,
   'design-result.spec.ts': 6.3,
   'docs-index.spec.ts': 1.7,
