@@ -282,9 +282,21 @@ describe('the cases that must be UNPERTURBED — nearly every card in the tree',
     expect(await commentCount(card.id)).toBe(0);
   });
 
-  it('a ZERO-delivery card closes on the merge that names it, with no delivery row involved', async () => {
-    // The gate ABSTAINS on an empty set. A card whose pull request was never
-    // linked through the new door still behaves as it does on `origin/main`.
+  it('a ZERO-delivery pull request moves NOTHING — the legacy column associates no card (MOTIR-3721)', async () => {
+    // ⚠️ THIS ASSERTION IS INVERTED FROM THE ONE IT REPLACES, deliberately and on
+    // the record. It used to read *"a ZERO-delivery card closes on the merge that
+    // names it, with no delivery row involved"* — true while the sync resolved its
+    // card from `github_pull_request.work_item_id`. MOTIR-3721 moves that reader
+    // onto `work_item_delivery`, so the column associates nothing and a pull
+    // request carrying only it resolves NO card at all.
+    //
+    // ⚠️ AND THE STATE IS UNREACHABLE ON A MIGRATED DATABASE, which is why the
+    // change is safe rather than a lost link: `work_item_delivery`'s migration
+    // carried EVERY non-null `work_item_id` into a delivery row (pass 1), and
+    // every live writer since (`link_pull_request`, `mark_integrated`) writes
+    // both halves. What is left is the corrupt pairing the backfill's own guard
+    // declined — a pull request whose repository belongs to a different workspace
+    // than the card it names — and failing CLOSED there is the correct direction.
     const s = await makeScenario('story-zero@example.com');
     const item = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'task', title: 'linked the old way' },
@@ -300,8 +312,7 @@ describe('the cases that must be UNPERTURBED — nearly every card in the tree',
         baseRef: 'main',
       }),
     );
-    // The LEGACY column alone — no delivery row, which is the shape
-    // `historicalPullRequestBackfillService` writes.
+    // The LEGACY column alone — no delivery row.
     await adminDb.githubPullRequest.updateMany({
       where: { number: 303 },
       data: { workItemId: item.id },
@@ -323,8 +334,12 @@ describe('the cases that must be UNPERTURBED — nearly every card in the tree',
       }),
     );
 
-    expect(merged).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
-    expect(await statusOf(item.id)).toBe('done');
+    expect(merged).toMatchObject({ outcome: 'no_work_item' });
+    expect(await statusOf(item.id)).toBe('implemented');
+    // And the column is left exactly as it stands: the sync stopped reading it,
+    // it did not start clearing it (AC 7 — nothing is dropped by this card).
+    const after = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 303 } });
+    expect(after.workItemId).toBe(item.id);
   });
 });
 
