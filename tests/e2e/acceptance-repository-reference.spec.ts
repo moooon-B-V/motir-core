@@ -388,10 +388,19 @@ test('a repository is a link you can follow, and a rename does not break the car
     // DELIVERY-set gate (MOTIR-3659) then holds it first, answering a different
     // question than this receipt asks. One link per pull request, as it opens,
     // is both what a run does and what keeps the repo-set hold the assertion.
+    //
+    // ⚠️ AND IT NAMES THE REPOSITORY BY ITS CURRENT NAME, which in THIS spec is
+    // the renamed one. The two doors do not resolve a repository the same way,
+    // and that asymmetry is this file's whole subject: a delivery arrives with a
+    // `providerRepoId` and is rename-proof, while `link_pull_request` takes
+    // coordinates a person can type and resolves by owner and name. So the
+    // deliveries below keep using `E2E_REPO` — its id is what they match on —
+    // and the link has to say `RENAMED` or the repository is not found (a 404
+    // from the link door, which is the shape this got wrong first time).
     const refHeadRef = `subtask/${twoRepo.identifier.toLowerCase()}-repository-reference`;
     await linkPr(page, {
       workItemId: twoRepo.id,
-      repo: E2E_REPO,
+      repo: { ...E2E_REPO, name: RENAMED },
       number: 8101,
       headRef: refHeadRef,
     });
