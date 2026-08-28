@@ -9,6 +9,37 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * The scrubbed columns {@link userRepository.anonymise} writes — every field on
+ * `user` that says something about a PERSON.
+ *
+ * Spelled out rather than a `Partial<User>` so the set is a reviewable list: a
+ * new personal column added to the model and forgotten here is the exact defect
+ * MOTIR-3702's explanation names (*"an erasure that quietly skips a table"*),
+ * and a named type is what makes the omission visible in a diff.
+ */
+export interface AnonymiseUserInput {
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  image: null;
+  /** The last-active pointer names a project inside somebody's workspace. */
+  lastActiveProjectId: null;
+  /** An erased account is not platform staff, whatever it was. */
+  platformRole: null;
+  suspendedAt: null;
+  /** Operator prose ABOUT the person — personal data like any other. */
+  suspendedReason: null;
+}
+
+// ⚠️ `twoFactorEnabled` is NOT in this set, and its absence is deliberate. The
+// column has exactly one write — {@link userRepository.setTwoFactorEnabled} —
+// and `tests/twoFactorPredicateOneImplementation.test.ts` asserts that no other
+// file in `lib/` so much as NAMES it. The erasure clears it by calling that
+// method beside its `twoFactorRepository.deleteByUserId`, which is the same
+// drop-the-enrolment-and-clear-the-flag-in-one-transaction pair that method was
+// written for.
+
 export const userRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<User | null> {
     const client = tx ?? db;
@@ -212,5 +243,29 @@ export const userRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<User> {
     return tx.user.update({ where: { id }, data: { twoFactorEnabled: enabled } });
+  },
+
+  /**
+   * Scrub the personal columns off a profile row — the ANONYMISE half of the
+   * erasure sweep (MOTIR-3702), and the one write that makes DECISION 3's
+   * *"the name is removed, the row stays"* true.
+   *
+   * The row is NOT deleted, and `lib/users/accountErasure.ts` carries the whole
+   * argument for why: four NOT NULL `onDelete: Restrict` foreign keys onto
+   * `user` (`work_item.reporter_id`, `comment.author_id`,
+   * `work_item_link.created_by_id`, `work_item_revision.changed_by_id`) make a
+   * delete impossible for exactly the population the anonymise group is about.
+   *
+   * The CALLER computes the scrubbed values (`erasedEmailFor`,
+   * `ERASED_USER_NAME`) — this is a single Prisma write with no policy in it,
+   * per CLAUDE.md's 4-layer rule. `tx` REQUIRED: it is a write, and it belongs
+   * to the erasure's single transaction.
+   */
+  async anonymise(
+    id: string,
+    data: AnonymiseUserInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<User> {
+    return tx.user.update({ where: { id }, data });
   },
 };

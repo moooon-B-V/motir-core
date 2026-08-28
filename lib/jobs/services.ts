@@ -33,6 +33,7 @@ import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { dataExportService } from '@/lib/services/dataExportService';
+import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -85,6 +86,8 @@ export const jobServices = {
   // The personal-data export (Story 8.4 · MOTIR-3701) — the build job and
   // the retention sweep are both its callers.
   dataExport: dataExportService,
+  // The nightly erasure of accounts whose grace period has run out (MOTIR-3702).
+  accountErasureSweep: accountErasureSweepService,
 };
 
 export type JobServices = typeof jobServices;

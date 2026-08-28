@@ -78,4 +78,17 @@ export const emailChangeRequestRepository = {
   async findByTokenUnsafe(token: string): Promise<EmailChangeRequest | null> {
     return db.emailChangeRequest.findUnique({ where: { token } });
   },
+
+  /**
+   * Drop every pending verified-email-change token this user holds — the
+   * erasure sweep's DELETE group (MOTIR-3702).
+   *
+   * It is not only tidiness: a pending request holds the address the person
+   * asked to move to, which is personal data the erasure is removing, and its
+   * token would otherwise still confirm a change onto an anonymised row.
+   */
+  async deleteAllForUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const { count } = await tx.emailChangeRequest.deleteMany({ where: { userId } });
+    return count;
+  },
 };
