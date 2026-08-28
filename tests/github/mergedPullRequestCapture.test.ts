@@ -15,6 +15,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-2922 — the merge CAPTURE: a merged pull request's changed paths and its
 // merge instant land on the `github_pull_request` row, and the accessor a
@@ -174,9 +175,22 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** MOTIR-3674 — the link that used to come from the head ref. */
+async function linkFor(identifier: string, number = 11) {
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon-B-V',
+    name: 'motir-core',
+    number,
+    headRef: `subtask/${identifier}-a-change`,
+    title: `Some change (${identifier})`,
+  });
+}
+
 describe('the merge capture writes the row (MOTIR-2922)', () => {
   it('a MERGED delivery stores the changed paths and the merge instant', async () => {
     const s = await makeScenario('merge-capture@example.com');
+    await linkFor(s.item.identifier);
     const { calls } = stubGithub({ files: ['lib/services/workflowsService.ts', 'prisma/x.sql'] });
 
     const result = await githubWebhookService.handleEvent(
@@ -396,6 +410,7 @@ describe('a failed capture leaves the status sync untouched (notes.html #39)', (
   it('the sync outcome and the transition are IDENTICAL to a run whose fetch succeeded', async () => {
     // Control: the fetch succeeds.
     const ok = await makeScenario('capture-control@example.com');
+    await linkFor(ok.item.identifier);
     stubGithub({ files: ['lib/db.ts'] });
     const okResult = await githubWebhookService.handleEvent(
       'pull_request',
@@ -415,6 +430,7 @@ describe('a failed capture leaves the status sync untouched (notes.html #39)', (
     await truncateAuthTables();
     _resetInstallationTokenCache();
     const bad = await makeScenario('capture-blip@example.com');
+    await linkFor(bad.item.identifier);
     stubGithub({ files: null });
     const badResult = await githubWebhookService.handleEvent(
       'pull_request',
@@ -448,6 +464,7 @@ describe('a failed capture leaves the status sync untouched (notes.html #39)', (
 
   it('an unreachable host is swallowed the same way a 4xx is', async () => {
     const s = await makeScenario('capture-unreachable@example.com');
+    await linkFor(s.item.identifier);
     const { privateKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,
       publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -512,6 +529,7 @@ describe('the cap is stored, and it SAYS it capped (MOTIR-2922)', () => {
 describe('no shipped consumer of GithubPullRequest changes shape', () => {
   it('the Development-surface DTO carries exactly its documented keys after a capture', async () => {
     const s = await makeScenario('dto-shape@example.com');
+    await linkFor(s.item.identifier);
     stubGithub({ files: ['lib/db.ts'] });
     await githubWebhookService.handleEvent(
       'pull_request',

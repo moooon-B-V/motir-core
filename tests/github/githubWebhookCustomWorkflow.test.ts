@@ -9,6 +9,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · MOTIR-896 — the CUSTOM-WORKFLOW no-match branch of the PR →
 // status sync (the one enumerated 7.7.4 case no per-subtask test covers): a
@@ -60,6 +61,17 @@ async function makeScenario(email: string) {
         archived: false,
       },
     ],
+  });
+  // MOTIR-3674 — the pull request every test here delivers is #7, and the link
+  // is now the only thing that associates it with `item`. Written here so each
+  // test reads exactly as it did when the branch name carried the association.
+  await linkPrByIdentifier({
+    identifier: item.identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number: 7,
+    headRef: `feat/${item.identifier}-a-change`,
+    title: `Some change (${item.identifier})`,
   });
   return { user, workspace, project, item, ctx };
 }

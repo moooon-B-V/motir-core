@@ -30,8 +30,9 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 //
 // ── The rule ────────────────────────────────────────────────────────────────
 // The head ref names a session branch that HAS work items ⇒ the delivery carries
-// every item recorded on that branch. Otherwise ⇒ the single linked item,
-// exactly as before (the head-ref/title resolve, or a sticky manual link).
+// every item recorded on that branch. Otherwise ⇒ the single linked item — the
+// STORED link on the pull-request row, which since MOTIR-3674 is the only kind
+// there is (the head-ref/title parse that used to feed this argument is gone).
 //
 // "HAS work items" is the whole test — there is no name pattern to match, and
 // deliberately so. `motir/auto-<runId>` is the CLI's current shape and nothing
@@ -64,9 +65,11 @@ export interface ChangeRequestWorkItemSet {
 /**
  * Resolve the work items one change request delivers.
  *
- * `linked` is the 1:1 resolve the caller already performed (head ref / title, or
- * a sticky manual link) — it is used ONLY when the head ref is not a session
- * branch, so a caller never has to decide which of the two answers to prefer.
+ * `linked` is the 1:1 resolve the caller already performed — the work item the
+ * pull-request row's stored link names (MOTIR-3674; there is no longer a
+ * head-ref / title parse behind it). It is used ONLY when the head ref is not a
+ * session branch, so a caller never has to decide which of the two answers to
+ * prefer.
  *
  * Reads inside the caller's transaction, so it sees the same snapshot (and the
  * same row locks) as the decision it feeds.

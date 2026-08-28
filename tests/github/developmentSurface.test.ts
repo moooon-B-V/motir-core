@@ -9,6 +9,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · MOTIR-1579 — the Development surface's READ PATH, as an
 // integration SEAM test: what the webhook ingestion WRITES (PR rows + title +
@@ -133,8 +134,17 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
       { projectId: s.project.id, kind: 'task', title: 'A tracked change' },
       s.ctx,
     );
-    // Ingest an OPEN PR whose branch names the item (the auto-resolver link),
-    // then a pending + a success check at the same head sha → 'running' wins.
+    // Link the pull request, then ingest it OPEN, then a pending + a success
+    // check at the same head sha → 'running' wins. (MOTIR-3674: the branch names
+    // the item as a label; the LINK is what puts it on this surface.)
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 41,
+      headRef: `feat/${item.identifier}-work`,
+      title: 'Throttle burst traffic',
+    });
     await githubWebhookService.handleEvent(
       'pull_request',
       prEvent({
@@ -173,7 +183,9 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'open',
         ci: 'running',
         url: 'https://github.com/moooon/acme/pull/41',
-        linkedManually: false,
+        // MOTIR-3674 — every link is explicit now, so this is what the surface
+        // shows for a linked pull request.
+        linkedManually: true,
       },
     ]);
 
@@ -189,6 +201,14 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
       { projectId: s.project.id, kind: 'task', title: 'A merged change' },
       s.ctx,
     );
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 7,
+      headRef: `feat/${item.identifier}-done`,
+      title: 'Ship it',
+    });
     await githubWebhookService.handleEvent(
       'pull_request',
       prEvent({
@@ -218,7 +238,9 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'merged',
         ci: null, // no check rows → no CI pill
         url: 'https://github.com/moooon/acme/pull/7',
-        linkedManually: false,
+        // MOTIR-3674 — every link is explicit now, so this is what the surface
+        // shows for a linked pull request.
+        linkedManually: true,
       },
     ]);
   });

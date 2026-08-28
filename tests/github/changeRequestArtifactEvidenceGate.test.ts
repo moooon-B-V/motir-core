@@ -10,6 +10,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { assessArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-3364 — A REFUSED CLOSE-OUT IS A HOLD, NOT A CRASH.
 //
@@ -109,6 +110,17 @@ function prPayload(opts: {
 /** Open the PR (parking the item at Implemented, as in reality) then merge it into
  *  the default branch. Returns the MERGE delivery's result. */
 async function openThenMerge(identifier: string, number: number) {
+  // MOTIR-3674 — the link is the only association a pull request has; the key in
+  // the branch is a label. A run writes it the moment `gh pr create` returns,
+  // which is before the `opened` delivery lands.
+  await linkPrByIdentifier({
+    identifier,
+    owner: 'moooon',
+    name: 'acme',
+    number,
+    headRef: `subtask/${identifier}-cut-the-release`,
+    title: `Cut the release (${identifier})`,
+  });
   const opened = await githubWebhookService.handleEvent(
     'pull_request',
     prPayload({ action: 'opened', identifier, number }),
@@ -215,6 +227,14 @@ describe('the artifact-evidence hold — a merge that cannot complete a `deploy`
 
   it('is idempotent under redelivery — the hold repeats, the note does not', async () => {
     const s = await makeScenario('ae-redeliver@example.com');
+    await linkPrByIdentifier({
+      identifier: s.item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 7003,
+      headRef: `subtask/${s.item.identifier}-cut-the-release`,
+      title: `Cut the release (${s.item.identifier})`,
+    });
     const mergePayload = prPayload({
       action: 'closed',
       identifier: s.item.identifier,
@@ -299,6 +319,14 @@ describe('the gate is not weakened — what still completes on merge', () => {
     // The gate is scoped to the merged→Done decision; the abandoned-work path
     // targets `in_progress`, which is not a done-category status.
     const s = await makeScenario('ae-unmerged@example.com');
+    await linkPrByIdentifier({
+      identifier: s.item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 7008,
+      headRef: `subtask/${s.item.identifier}-cut-the-release`,
+      title: `Cut the release (${s.item.identifier})`,
+    });
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: s.item.identifier, number: 7008 }),

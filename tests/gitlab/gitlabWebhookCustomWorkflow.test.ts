@@ -11,6 +11,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.23 · MOTIR-1479 — the CUSTOM-WORKFLOW no-match branch of the MR →
 // status sync (mirroring `tests/github/githubWebhookCustomWorkflow.test.ts` /
@@ -72,6 +73,16 @@ async function makeScenario(email: string) {
     );
   });
 
+  // MOTIR-3674 — the merge request every test here delivers is iid 7, and the
+  // link is now the only thing that associates it with `item`.
+  await linkPrByIdentifier({
+    identifier: item.identifier,
+    owner: 'octocat',
+    name: 'acme',
+    number: 7,
+    headRef: `subtask/${item.identifier}-a-change`,
+    title: `Some change (${item.identifier})`,
+  });
   return { user, workspace, project, item, ctx };
 }
 

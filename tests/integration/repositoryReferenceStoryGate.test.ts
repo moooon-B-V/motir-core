@@ -17,6 +17,7 @@ import { resolveItemDispatchPin } from '@/lib/workItems/dispatchRepo';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // STORY GATE for MOTIR-2732 — a card's repository is a THING, not a word
 // (Subtask MOTIR-3031). It runs over the story's ASSEMBLED state and measures
@@ -297,6 +298,18 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
         },
       });
     const deliver = async (repo: typeof CORE, number: number) => {
+      // LINKED first — since MOTIR-3674 the `Change (KEY)` title above names the
+      // story to a reader and to nothing else, so an unlinked delivery would
+      // resolve `no_work_item` and the repository-set gate below would never be
+      // reached. The link is setup; the gate assertions are unchanged.
+      await linkPrByIdentifier({
+        identifier: storyRow.identifier,
+        owner: 'moooon',
+        name: repo.name,
+        number,
+        headRef: `story/${storyRow.identifier}`,
+        baseRef: repo.defaultBranch,
+      });
       await event('opened', repo, number, false);
       return event('closed', repo, number, true);
     };

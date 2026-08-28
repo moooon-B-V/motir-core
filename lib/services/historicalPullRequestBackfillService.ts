@@ -7,7 +7,6 @@ import {
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
-import { resolveChangeRequestWorkItem } from './changeRequestStatusSync';
 
 // Historical pull-request MIRROR backfill (MOTIR-1965) — the service behind
 // `pnpm db:backfill:pull-requests`.
@@ -27,13 +26,31 @@ import { resolveChangeRequestWorkItem } from './changeRequestStatusSync';
 //   1. The listing normalizes GitHub's `pull_request` object into the SAME
 //      `NormalizedChangeRequest` the webhook parser produces — same fields, same
 //      endpoint object.
-//   2. The work-item link comes from `resolveChangeRequestWorkItem`, the sync's
-//      OWN resolver, exported for this caller rather than re-implemented.
+//   2. The work-item link is whatever the row ALREADY carries, which is what the
+//      sync does too (MOTIR-3674). Until then both called `resolveChangeRequestWorkItem`,
+//      the head-ref / title parse, exported for this caller rather than
+//      re-implemented; that resolver is gone and neither path infers a link now.
 //   3. The write goes through `githubPullRequestRepository.upsert` — the same
 //      repository call, with the same column tuple, under the same row lock and
 //      the same manual-link stickiness the sync applies.
 // The integration suite asserts it by DIFFING the columns of a row this sweep
 // wrote against one the webhook wrote for the same PR, rather than by eye.
+//
+// ⚠️ WHAT IT NO LONGER DOES — ATTRIBUTE (MOTIR-3674, option A of that card).
+// This sweep used to link each mirrored row to the work item whose key appeared
+// in the pull request's head ref or title. A historical pull request CANNOT have
+// had `link_pull_request` called on it — it was opened before Motir saw the
+// repository — so there is no explicit path to fall back to here, and retiring
+// the parse does not degrade the attribution, it REMOVES it. That is the whole
+// choice, and it is deliberate: the sweep keeps doing the part that is fact (the
+// pull request existed, on this repository, with this head ref, merged at this
+// time) and stops doing the part that is a guess. A row it writes carries
+// `work_item_id: null` and shows up on the ledger and the Development surface
+// attached to no card, until somebody links it.
+//
+// A row that ALREADY carries a link keeps it, untouched — the same grandfathering
+// the sync applies, for the same reason: a stored link is a link, and this card
+// retires the inference rather than the history it produced.
 //
 // WHAT IT DOES NOT DO. It writes no work-item provenance. `pnpm
 // db:backfill:provenance` is the (idempotent, null-guarded) second step, and it
@@ -61,19 +78,19 @@ export interface HistoricalPrRepoReport {
   workspaceId: string;
   /** Closed PRs read off the host (merged and abandoned alike). */
   scanned: number;
-  /** Merged PRs that resolved to a work item. */
-  resolved: number;
-  /** Merged PRs that resolved to NO work item — still mirrored, with a null
-   *  link, exactly as a live delivery does. */
-  unresolvable: number;
+  /** Merged PRs mirrored with NO work item — every row this sweep writes fresh,
+   *  since MOTIR-3674 removed the attribution pass. Still mirrored with a null
+   *  link, exactly as a live delivery for an unlinked pull request does. */
+  unattributed: number;
   /** Rows written (or, on a dry run, that WOULD be written). */
   written: number;
   /** Merged PRs whose row already matched the target shape — the idempotence
    *  counter. A second consecutive run has `written: 0` and everything here. */
   unchanged: number;
-  /** Merged PRs skipped because the row carries a MANUAL link (MOTIR-1596),
-   *  which the auto-resolver never overwrites. */
-  skippedManualLink: number;
+  /** Merged PRs skipped because the row already carries a STORED link — set by
+   *  `link_pull_request` / `mark_integrated`, or historically by the retired
+   *  parse. The sweep never overwrites one (MOTIR-3674's grandfathering). */
+  skippedLinked: number;
   /** Pages fetched, so a long run's cost is visible. */
   pages: number;
   /** Whether the page bound was hit — the repo's history was NOT fully read. */
@@ -116,11 +133,10 @@ function emptyRepoReport(repo: GithubRepo): HistoricalPrRepoReport {
     repoRef: `${repo.owner}/${repo.name}`,
     workspaceId: repo.workspaceId,
     scanned: 0,
-    resolved: 0,
-    unresolvable: 0,
+    unattributed: 0,
     written: 0,
     unchanged: 0,
-    skippedManualLink: 0,
+    skippedLinked: 0,
     pages: 0,
     truncated: false,
   };
@@ -210,11 +226,13 @@ async function sweepRepo(
       for (const pr of page.merged) {
         await withSystemContext(async (tx) => {
           // ⚠️ BIND THE TENANT FIRST (MOTIR-2880). `github_pull_request` reads on
-          // the system flag, so the lock / read / upsert in `applyOne` were fine —
-          // but its `resolveChangeRequestWorkItem` reads `work_item`, which has no
-          // such arm, so under `motir_app` EVERY historical PR resolved to
-          // `unresolvable` and the whole backfill mirrored a null link. Silent: an
-          // unresolvable PR is a legitimate outcome the report counts.
+          // the system flag, so the lock / read / upsert in `applyOne` are fine —
+          // but the work-item read behind its attribution pass did not have such an
+          // arm, so under `motir_app` EVERY historical PR mirrored a null link,
+          // silently. That pass is gone (MOTIR-3674) and `applyOne` no longer reads
+          // `work_item` at all, so the bind is no longer load-bearing HERE — it is
+          // kept because it costs one statement and the next reader of this block
+          // should not have to re-derive which tables it may touch.
           //
           // The repo row carries the tenancy (MOTIR-1931), and it is already
           // resolved here — the loop is inside the per-repo pass — so there is
@@ -238,9 +256,11 @@ async function sweepRepo(
  * Decide and (unless dry-run) write ONE merged PR's mirror row.
  *
  * Mirrors `syncChangeRequestStatus`'s resolve phase step for step — the row
- * lock, the manual-link stickiness, the shared resolver, the same upsert input —
- * because a divergence in ANY of them is exactly what would make a backfilled
- * row distinguishable from a live one.
+ * lock, the stored-link stickiness, the same upsert input — because a divergence
+ * in ANY of them is exactly what would make a backfilled row distinguishable
+ * from a live one. Since MOTIR-3674 neither path resolves a work item from text,
+ * so there is no shared resolver left to keep in step: there is nothing to
+ * resolve.
  */
 async function applyOne(
   tx: Prisma.TransactionClient,
@@ -258,17 +278,18 @@ async function applyOne(
   if (!dryRun) await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
   const existing = await githubPullRequestRepository.findByRepoAndNumber(repo.id, cr.number, tx);
 
-  // A MANUAL link is the sticky override of the auto-resolver (MOTIR-1596). The
-  // live sync never re-derives one, so neither does this — a historical PR whose
-  // branch never named its key but which a human linked by hand keeps that link.
-  if (existing?.linkedManually && existing.workItemId !== null) {
-    report.skippedManualLink += 1;
+  // A STORED link is sticky, however it was made (MOTIR-3674's grandfathering —
+  // the condition is `workItemId`, not `linkedManually`, exactly as in the sync).
+  // The live sync never re-derives a link, so neither does this: a historical PR
+  // that already names a card keeps that card, and this sweep touches nothing
+  // else on the row.
+  if (existing?.workItemId != null) {
+    report.skippedLinked += 1;
     return;
   }
 
-  const workItem = await resolveChangeRequestWorkItem(repo.workspaceId, cr, tx);
-  if (workItem) report.resolved += 1;
-  else report.unresolvable += 1;
+  // No attribution pass. Every row this sweep writes carries a null link.
+  report.unattributed += 1;
 
   const target: TargetRow = {
     // `installation.provider`, NOT `repo.provider` — the sync stamps the row from
@@ -283,7 +304,9 @@ async function applyOne(
     headRef: cr.headRef,
     baseRef: cr.baseRef,
     title: cr.title,
-    workItemId: workItem?.id ?? null,
+    // Unattributed by construction: the early return above is the only path on
+    // which `existing` carries a link, and it does not reach here.
+    workItemId: null,
     linkedManually: false,
   };
 

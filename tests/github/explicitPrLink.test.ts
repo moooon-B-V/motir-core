@@ -12,6 +12,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
 
 // Story 7.10 · MOTIR-1596 — the EXPLICIT item→PR link (the manual override of
 // the MOTIR-892 auto-resolver). Covers the service branches (happy link, takeover
@@ -239,7 +240,17 @@ describe('githubPullRequestService.searchLinkCandidates (MOTIR-1596)', () => {
       { projectId: s.project.id, kind: 'task', title: 'Beta' },
       s.ctx,
     );
-    // PR#30 auto-links to itemA (branch names it); PR#40 is unlinked.
+    // PR#30 is LINKED to itemA (MOTIR-3674 — the branch naming it is no longer
+    // enough, and this case is about the takeover chip a linked PR carries);
+    // PR#40 is unlinked.
+    await linkPrByIdentifier({
+      identifier: itemA.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 30,
+      headRef: `feat/${itemA.identifier}-rate`,
+      title: 'Rate limiting alpha',
+    });
     await ingestPr({
       installationId: INST_A,
       repoProviderId: REPO_A,

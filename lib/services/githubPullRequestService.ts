@@ -4,6 +4,8 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
+import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { toLinkedPullRequestDto, toPullRequestLinkCandidateDto } from '@/lib/mappers/githubMappers';
 import {
@@ -126,6 +128,18 @@ export const githubPullRequestService = {
         tx,
       );
       return toLinkedPullRequestDto(updated);
+    }).then(async (dto) => {
+      // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
+      // on the next push. That immediacy is what makes "link it" an escape hatch
+      // instead of an instruction to go and push something. POST-COMMIT and
+      // best-effort by construction: the link is the durable fact, the check is a
+      // view of it, and a host that refuses the write must never turn a recorded
+      // link into an error the caller sees.
+      await refreshLinkCheckForPullRequest(pullRequestId);
+      // …and apply the sync the `opened` delivery could not, because at the
+      // moment it arrived this link did not exist. See `resyncLinkedPullRequest`.
+      await resyncLinkedPullRequest(pullRequestId);
+      return dto;
     });
   },
 
@@ -285,7 +299,25 @@ export const githubPullRequestService = {
         movedFrom = previous?.identifier ?? null;
       }
 
-      return { link: toLinkedPullRequestDto(updated), created: existing === null, movedFrom };
+      return {
+        link: toLinkedPullRequestDto(updated),
+        created: existing === null,
+        movedFrom,
+        prId,
+      };
+    }).then(async ({ prId, ...result }) => {
+      // MOTIR-3675 — the same post-commit refresh the sibling arm does, and this
+      // is the arm that matters most: it is the one a RUN calls, seconds after
+      // `gh pr create`, often before any delivery has arrived at all.
+      await refreshLinkCheckForPullRequest(prId);
+      // The arm a RUN calls, so the one where the delivery has almost always
+      // already been and gone — and `created` is exactly how this arm knows.
+      // A row this call CREATED means no delivery has arrived yet: there is
+      // nothing to catch up on, and the `opened` delivery still to come will
+      // transition the card itself. A row that already existed means a delivery
+      // came, found no link, and correctly moved nothing.
+      if (!result.created) await resyncLinkedPullRequest(prId);
+      return result;
     });
   },
 
@@ -328,6 +360,12 @@ export const githubPullRequestService = {
 
       const count = await workItemDeliveryRepository.remove(workItemId, pullRequestId, tx);
       return { removed: count > 0 };
+    }).then(async (result) => {
+      // The mirror of the link arm (MOTIR-3675): removing the last delivery makes
+      // the pull request unlinked again, and the check has to say so. Post-commit
+      // and best-effort, for the same reason.
+      if (result.removed) await refreshLinkCheckForPullRequest(pullRequestId);
+      return result;
     });
   },
 };

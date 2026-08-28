@@ -22,7 +22,6 @@ import {
   EMPTY_SHORTFALL,
   type RepoSetShortfall,
 } from '@/lib/workItems/repoDelivery';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   resolveChangeRequestWorkItemSet,
   type ChangeRequestWorkItemSet,
@@ -182,7 +181,8 @@ export async function syncChangeRequestStatus(
 ): Promise<ChangeRequestSyncResult> {
   // Phase 1 — resolve + persist under system context (one transaction): the
   // connection + repo (via the provider's resolver), the linked work item (from
-  // the head ref / title), the change-request row upsert, and the actor.
+  // the STORED link — MOTIR-3674 retired the head-ref / title parse), the
+  // change-request row upsert, and the actor.
   const resolved = await withSystemContext(async (tx) => {
     const ctx = await resolveContext(tx);
     if (ctx.kind === 'unknown_installation') return { kind: 'unknown_installation' as const };
@@ -202,42 +202,55 @@ export async function syncChangeRequestStatus(
     // MOTIR-1931 pinned for the resolve itself, applied one layer down.
     await bindWorkspaceContext(tx, repo.workspaceId);
 
-    // Resolve the change request's linked work item. A MANUAL link (MOTIR-1596,
-    // the explicit item→PR affordance) is the STICKY override of this branch/title
-    // auto-resolver: lock the row, and if it is already manually linked, keep that
-    // work item — this delivery does NOT re-derive the link (so a change request
-    // whose branch never named the key stays linked and still drives the status
-    // sync below, e.g. merged → Done). Otherwise resolve from the head ref / title
-    // as before. The lock closes the clobber race with a concurrent manual link.
+    // Resolve the change request's linked work item — THE STORED LINK, and
+    // nothing else (MOTIR-3674). Lock the row, read it, and use the work item it
+    // names. There is no second arm: a delivery for a pull request that carries
+    // no link resolves to no work item, whatever its head ref or title says.
+    //
+    // ⚠️ WHAT WAS DELETED HERE, so the absence reads as a decision. The `else`
+    // arm parsed `MOTIR-<n>` out of `${cr.headRef} ${cr.title}` and linked the
+    // first candidate that resolved. That is a DIFFERENT question from the one
+    // `link_pull_request` answers: the parse says *this text mentions this card*,
+    // the link says *this pull request delivers this card*, and they coincide only
+    // when the title happens to name the thing being delivered and nothing else.
+    // A title naming the parent, a sibling, the bug being fixed or a rule being
+    // cited is ordinary good writing, and every one of them mis-linked.
+    //
+    // ⚠️ THE CONDITION IS `workItemId`, NOT `linkedManually` — the GRANDFATHERING
+    // decision, and it is load-bearing rather than incidental. Gating on
+    // `linkedManually` would orphan every row the parse ever wrote: on production
+    // that is 1026 of 1096 linked rows (70 are `linked_manually`), 1007 of them
+    // already merged, and the next delivery for each would overwrite its
+    // `work_item_id` with null and empty that card's Development surface. A stored
+    // link is a link — MOTIR-3657's backfill already carried all 1096 into
+    // `work_item_delivery` for exactly this reason. What this card retires is the
+    // INFERENCE, not the history it produced. Prospectively the choice touches TWO
+    // rows: the open, parse-linked pull requests on the day it ships.
+    //
+    // `linkedManually` is left on the row as the record of HOW the link was made,
+    // and is now read by nothing here. Dropping the column is its own card, once
+    // nothing reads it (MOTIR-3721).
     await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
     const existingPr = await githubPullRequestRepository.findByRepoAndNumber(
       repo.id,
       cr.number,
       tx,
     );
-    let workItem: ResolvedChangeRequestWorkItem | null;
-    let linkedManually: boolean;
-    if (existingPr?.linkedManually && existingPr.workItemId) {
-      const manual = await workItemRepository.findById(existingPr.workItemId, tx);
-      // A manual link whose target was hard-deleted falls back to unlinked.
-      workItem = manual
+    let workItem: ResolvedChangeRequestWorkItem | null = null;
+    let linkedManually = false;
+    if (existingPr?.workItemId) {
+      const linked = await workItemRepository.findById(existingPr.workItemId, tx);
+      // A link whose target was hard-deleted falls back to unlinked.
+      workItem = linked
         ? {
-            id: manual.id,
-            identifier: manual.identifier,
-            projectId: manual.projectId,
-            status: manual.status,
-            targetRepos: manual.targetRepos,
+            id: linked.id,
+            identifier: linked.identifier,
+            projectId: linked.projectId,
+            status: linked.status,
+            targetRepos: linked.targetRepos,
           }
         : null;
-      linkedManually = manual !== null;
-    } else {
-      // `repo.workspaceId`, never `installation.workspaceId` (MOTIR-1931): the
-      // installation SELECTED this repo, the repo row says whose it is. Under
-      // Motir's shared provisioning installation the installation names no
-      // workspace at all, and under a user's own grant the two are equal — so
-      // this is the one tenancy read on both paths.
-      workItem = await resolveChangeRequestWorkItem(repo.workspaceId, cr, tx);
-      linkedManually = false;
+      linkedManually = linked !== null && existingPr.linkedManually;
     }
 
     // Upsert the change-request row — the change-request→work-item link entity.
@@ -922,42 +935,20 @@ export interface ResolvedChangeRequestWorkItem {
   targetRepos: string[];
 }
 
-/** Resolve the change request's linked work item from its head ref + title (the
- *  `MOTIR-<n>` hint the seam leaves for the consumer). Extracts every
- *  `<PREFIX>-<number>` candidate, resolves the project by prefix WITHIN the
- *  connection's workspace, then the work item by its full identifier. First
- *  resolved match wins; null when it references no work item in this workspace.
+/* ⚠️ `resolveChangeRequestWorkItem` — the head-ref / title PARSE — WAS HERE, and
+ * is deleted by MOTIR-3674 along with `parseKeyCandidates` / `KEY_CANDIDATE_RE`.
+ * Its MOTIR-1965 header argued that ONE resolver must serve both the live
+ * delivery and the historical backfill, so the two could never drift. That
+ * argument is kept and satisfied by removal: there is still exactly one rule, and
+ * it is now `work_item_delivery` / `github_pull_request.work_item_id` — a stored
+ * link, written by `link_pull_request` or `mark_integrated`, never inferred from
+ * text. The backfill stops attributing rather than growing a parser of its own
+ * (`historicalPullRequestBackfillService`, option A of the card).
  *
- *  EXPORTED as THE resolver (MOTIR-1965), not merely as this module's helper.
- *  The historical-PR backfill mirrors change requests that predate the App
- *  installation, and it must attribute them EXACTLY as a live delivery would —
- *  a second parser would silently drift (a different key regex, a different
- *  prefix-resolution order) and hand two different work items the same PR
- *  depending on which path ingested it. There is one rule; this is it. */
-export async function resolveChangeRequestWorkItem(
-  workspaceId: string,
-  cr: NormalizedChangeRequest,
-  tx: Prisma.TransactionClient,
-): Promise<ResolvedChangeRequestWorkItem | null> {
-  const seen = new Set<string>();
-  for (const { prefix, number } of parseKeyCandidates(`${cr.headRef} ${cr.title ?? ''}`)) {
-    const dedupeKey = `${prefix}-${number}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-    const project = await projectRepository.findByIdentifier(workspaceId, prefix, tx);
-    if (!project) continue;
-    const workItem = await workItemRepository.findByIdentifier(project.id, dedupeKey, tx);
-    if (workItem)
-      return {
-        id: workItem.id,
-        identifier: workItem.identifier,
-        projectId: workItem.projectId,
-        status: workItem.status,
-        targetRepos: workItem.targetRepos,
-      };
-  }
-  return null;
-}
+ * Recorded rather than silently deleted because the function was EXPORTED and its
+ * absence is the decision: a reader who wants a title to link a pull request
+ * again is re-opening MOTIR-3672, not filling a gap.
+ */
 
 /** Close out one session branch — every card a run integrated onto it (MOTIR-3007).
  *
@@ -1059,19 +1050,92 @@ export function classifyTransitionError(
   throw err;
 }
 
-const KEY_CANDIDATE_RE = /\b([A-Za-z][A-Za-z0-9]*)-(\d+)\b/g;
-
-/** Extract `<PREFIX>-<number>` work-item-key candidates from free text (head ref
- *  + title), prefix upper-cased to match the stored project identifier. A prefix
- *  that resolves to no project is simply skipped by the caller. */
-function parseKeyCandidates(text: string): Array<{ prefix: string; number: number }> {
-  const out: Array<{ prefix: string; number: number }> = [];
-  for (const match of text.matchAll(KEY_CANDIDATE_RE)) {
-    out.push({ prefix: match[1]!.toUpperCase(), number: Number(match[2]) });
-  }
-  return out;
-}
-
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
+/**
+ * Re-apply the sync for a pull request whose LINK has just arrived.
+ *
+ * ⚠️ WHY THIS EXISTS — the ordering the parse used to hide (Story MOTIR-3672).
+ * A delivery resolves its card from the STORED link, and the link is written by
+ * `link_pull_request` AFTER the pull request exists. In a real run those two
+ * happen in this order: the agent runs `gh pr create`, GitHub delivers `opened`
+ * within a second, and the agent's link call lands several seconds later. So the
+ * `opened` delivery correctly finds no card and moves nothing — and under the
+ * retired parse that never showed, because the title carried the key and the
+ * delivery attributed itself.
+ *
+ * Without this, the card would sit in In Progress until the MERGE closed it,
+ * silently skipping Implemented — the state MOTIR-2999 introduced to say "the
+ * code is pushed and no build has spoken for it". The story's own acceptance
+ * receipt asserts the card lands there from exactly this open-then-link
+ * sequence, which is what surfaced the gap.
+ *
+ * So linking runs the sync the delivery could not: same function, same gates,
+ * same outcomes. It is not a second status writer — every deferral, every repo-
+ * and delivery-set check and every refusal comment is the shipped path's.
+ *
+ * ⚠️ ONLY WHERE A DELIVERY HAS ALREADY BEEN. The caller passes a pull request
+ * whose row PRE-EXISTED the link; when the link is what created the row, no
+ * delivery has arrived yet, there is nothing to catch up on, and the `opened`
+ * delivery still to come does the transition itself. Resyncing there would move
+ * the card early and leave that delivery reporting `noop` — a true statement
+ * about a card that had already been moved by something other than the event
+ * the outcome names.
+ *
+ * ⚠️ OPEN AND UNMERGED ONLY, and that is a decision rather than an omission. A
+ * pull request that is already closed or merged reaches this through a `closed`
+ * delivery, which carries the merge facts the completion gate reads; re-deriving
+ * `done` from a link would let someone complete a card by attaching an old
+ * merged pull request to it, which is a different feature and needs its own
+ * argument. An open one asserts only what the link itself already says: this
+ * code is being written for this card.
+ *
+ * Best-effort at the call site, like the check refresh beside it: the link is the
+ * durable fact, this is a consequence of it, and a sync that cannot run must
+ * never turn a recorded link into an error the caller sees.
+ */
+export async function resyncLinkedPullRequest(
+  githubPullRequestId: string,
+): Promise<ChangeRequestSyncResult | null> {
+  const subject = await withSystemContext(async (tx: Prisma.TransactionClient) =>
+    githubPullRequestRepository.findByIdWithInstallation(githubPullRequestId, tx),
+  );
+  if (!subject || subject.state !== 'open' || subject.merged) return null;
+  // ⚠️ And a row with NO base ref does not resync. `baseRef` is nullable on the
+  // stored row (rows written before it was captured) and REQUIRED on the
+  // normalized shape, whose own contract is that a payload carrying no
+  // destination does not normalize rather than defaulting to a guess. The
+  // completion gate reads this field against the mirrored default branch, so a
+  // guess here is not a cosmetic default — it is the difference between "reached
+  // the trunk" and "merged onto a dead branch". `linkPullRequestByCoordinates`
+  // always writes one, so this skips only rows an older delivery created.
+  if (subject.baseRef === null) return null;
+
+  const cr: NormalizedChangeRequest = {
+    providerRepoId: subject.repo.repoId,
+    number: subject.number,
+    state: 'open',
+    merged: false,
+    headRef: subject.headRef,
+    baseRef: subject.baseRef,
+    title: subject.title,
+  };
+
+  return syncChangeRequestStatus(cr, 'implemented', async (tx) => {
+    // The same bind the providers' own resolvers do, for the same reason: the
+    // repo row is where the tenant is learned, and everything the sync reads
+    // below it lives in tables with no `system_admin` arm (MOTIR-2880).
+    await bindWorkspaceContext(tx, subject.repo.workspaceId);
+    return {
+      kind: 'resolved',
+      installation: subject.repo.installation,
+      repo: subject.repo,
+      // The LINKER is not the pull request's author, and this argument names the
+      // author. Passing null takes the documented owner-fallback attribution
+      // rather than crediting the wrong person for opening the branch.
+      authorBoundUserId: null,
+    };
+  });
 }

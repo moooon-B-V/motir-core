@@ -6,6 +6,8 @@ import {
   pullRequestPayload,
   seedGithubInstallation,
 } from './_helpers/github-seed';
+import { E2E_REPO } from './_helpers/github-const';
+import { linkPr } from './_helpers/pr-link';
 import { boardViewportWidth, getBoard, columnByStatus, cardIdsIn } from './_helpers/board';
 import { signUp } from './_helpers/shell-session';
 import { resetDatabase } from './_helpers/db-reset';
@@ -261,6 +263,12 @@ test('a card reaches In Review only when CI is green, and one merge closes every
     'The run finishes and opens a pull request — the card lands in Implemented',
     async () => {
       await transition(page, card.id, 'in_progress');
+      // LINKED first. Since MOTIR-3674 a pull request belongs to a card only by
+      // an explicit link — the title naming the key associates nothing — so the
+      // link is what makes the Implemented landing below a statement about the
+      // LIFECYCLE, which is this receipt's subject, rather than about the parse
+      // that used to find the card.
+      await linkPr(page, { workItemId: card.id, repo: E2E_REPO, number: 6101, headRef });
       await deliverPr(page, {
         action: 'opened',
         number: 6101,

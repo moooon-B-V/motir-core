@@ -1,0 +1,265 @@
+import { mintInstallationToken } from './appAuth';
+
+// Writing a CHECK RUN — the leaf primitive Motir did not have (MOTIR-3675).
+//
+// Until this file every GitHub check in the codebase was READ: `parseCiStatusEvent`
+// normalizes `check_run` / `check_suite` deliveries, and nothing wrote one. That
+// asymmetry was deliberate for as long as a pull request's association with a card
+// could be inferred; once MOTIR-3674 retired the parse, a pull request nobody
+// linked associates with nothing at all, and the only way that absence becomes
+// visible while somebody can still act on it is a check on the pull request
+// itself. `docs/decisions/unlinked-pull-request-check.md` is where that was
+// decided, including why option B (a workflow job per repository) does not reach
+// the population this exists for.
+//
+// ⚠️ THE PERMISSION MAY NOT BE THERE, AND THAT IS A NORMAL ANSWER, NOT AN ERROR.
+// The `motir-integration` App holds `checks: read`; `checks: write` is an ADDITION,
+// and GitHub keeps an installation on its OLD permission set until an account
+// admin approves the new one. So a deployment can be fully up to date and still be
+// refused here, per installation, for as long as nobody has clicked approve —
+// measured on 2026-08-27, `POST /check-runs` answers **403 Resource not accessible
+// by integration**. Every function below reports that as `not_permitted` rather
+// than throwing: the caller is a webhook delivery or an MCP write, and neither may
+// fail because a repository has not consented to a check.
+//
+// A leaf primitive in the `lib/email.ts` sense — SERVICES import it, routes never
+// do — and config is read at call time by `mintInstallationToken`, so a
+// self-hosted deploy that never wires the App simply cannot reach it.
+
+const GITHUB_API = 'https://api.github.com';
+
+// ⚠️ EVERY PATH SEGMENT THAT REACHES A URL IS VALIDATED FIRST — all FOUR kinds:
+// the repository's owner, its name, the commit SHA, and the pull request NUMBER.
+// The reason is not the scanner that found them (`js/request-forgery`, on two
+// reads and then, once those were guarded, on the number the third one
+// interpolates). The values ARRIVE from a webhook payload — GitHub's, signature-checked,
+// and mirrored into `github_repo` before this file sees them — so the realistic
+// exploit is thin. What is NOT thin is the failure mode: a repository row whose
+// `owner` or `name` was written wrong, by any path, turns every call in this file
+// into a request to a URL nobody wrote. `..` in a segment walks the API path;
+// a `?` or `#` truncates it. A best-effort writer that must never throw is
+// exactly the place that would do it silently.
+//
+// So the guard is a WHITELIST of the grammar GitHub itself accepts, applied at
+// the one place a URL is built, and a value outside it produces no request at
+// all — which each caller already has an arm for.
+//
+// ⚠️ AND A NUMERIC SEGMENT IS GUARDED THE SAME WAY, not with `Number.isInteger`.
+// A pull request number is arithmetic, so it reads as immune — but it arrives as
+// JSON from a webhook body or an MCP argument, and what a sender writes there is
+// only a number by convention. `Number.isInteger` also admits values that are
+// integers and still not path segments: `1e21` stringifies to `1e+21`, and a
+// negative walks a `-` into the path. Constraining what the segment SAYS is the
+// same question at all three sites, so it gets the same instrument.
+//
+// ⚠️ AND THE OWNER AND THE NAME ARE NOT THE SAME GRAMMAR, which is the mistake
+// this pair was written with and a test caught: one whitelist of
+// `[A-Za-z0-9._-]` for both ADMITS `..`, so the segment the note above names as
+// the thing it stops walked straight through it. A GitHub LOGIN is alphanumeric
+// and hyphens only, at most 39 characters and never leading with a hyphen — it
+// has no `.` to walk with. A repository NAME does take `.` (`.github` is one),
+// so there the dot-segments are excluded by name.
+const OWNER_SEGMENT = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const NAME_SEGMENT = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,100}$/;
+const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+const PULL_NUMBER = /^[1-9][0-9]{0,8}$/;
+
+/** `https://api.github.com/repos/<owner>/<name>`, or null when either segment is
+ *  not a thing GitHub could have named. */
+function repoUrl(owner: string, name: string): string | null {
+  if (!OWNER_SEGMENT.test(owner) || !NAME_SEGMENT.test(name)) return null;
+  return `${GITHUB_API}/repos/${owner}/${name}`;
+}
+
+/** `<repoUrl>/pulls/<number>`, or null when the number is not one GitHub could
+ *  have issued. Separate from `repoUrl` because only one caller addresses a
+ *  pull request, and folding it in would put an unused segment in the other
+ *  two. */
+function pullUrl(base: string, number: number): string | null {
+  const segment = String(number);
+  if (!PULL_NUMBER.test(segment)) return null;
+  return `${base}/pulls/${segment}`;
+}
+
+/** The check run's name, as a person reads it in the GitHub UI. Stable: it is
+ *  the key this module re-writes in place, and what a branch-protection rule
+ *  would name. `docs/mcp.md` documents it by this string. */
+export const LINK_CHECK_NAME = 'Motir / work item link';
+
+/** What a write attempt did. `not_permitted` is the App lacking `checks: write`
+ *  on this installation — expected, quiet, and never an error; `unavailable` is
+ *  GitHub being unreachable or refusing for any other reason. */
+export type CheckRunWriteOutcome = 'created' | 'updated' | 'not_permitted' | 'unavailable';
+
+export interface CheckRunSpec {
+  installationId: string;
+  owner: string;
+  name: string;
+  /** The commit the check is attached to. A check run belongs to a SHA, not to a
+   *  pull request, which is why every caller has to have one. */
+  headSha: string;
+  /** `success` clears a previous failure in place; `failure` is the hold. */
+  conclusion: 'success' | 'failure';
+  title: string;
+  summary: string;
+}
+
+interface GithubJson {
+  [key: string]: unknown;
+}
+
+function headers(token: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${token}`,
+    accept: 'application/vnd.github+json',
+    'user-agent': 'motir',
+    'content-type': 'application/json',
+  };
+}
+
+/**
+ * Find THIS app's existing `LINK_CHECK_NAME` run at `headSha`, if there is one.
+ *
+ * The idempotence half of the contract (the card's AC 5: *one check, not one per
+ * delivery*). `POST /check-runs` always creates, so a redelivery would stack a
+ * second identical run on the same commit and the pull request would show two.
+ * Filtering by `check_name` narrows to this check; GitHub scopes the listing to
+ * the authenticated app on its own, so no `app_id` filter is needed.
+ *
+ * Returns `null` when there is none, and also when the read fails — a failed read
+ * degrades to "create one", which is the safe direction: a duplicate check is
+ * ugly, a missing one is the defect this whole story is about.
+ */
+async function findExistingRun(
+  token: string,
+  owner: string,
+  name: string,
+  headSha: string,
+): Promise<number | null> {
+  const base = repoUrl(owner, name);
+  if (base === null || !COMMIT_SHA.test(headSha)) return null;
+  let res: Response;
+  try {
+    res = await fetch(
+      `${base}/commits/${headSha}/check-runs` +
+        `?check_name=${encodeURIComponent(LINK_CHECK_NAME)}&per_page=1`,
+      { headers: headers(token) },
+    );
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  let body: GithubJson | null;
+  try {
+    body = (await res.json()) as GithubJson;
+  } catch {
+    return null;
+  }
+  const runs = Array.isArray(body?.['check_runs']) ? (body['check_runs'] as unknown[]) : [];
+  const first = runs[0] as GithubJson | undefined;
+  const id = first?.['id'];
+  return typeof id === 'number' ? id : null;
+}
+
+/**
+ * Write (or re-write) the link check on one commit.
+ *
+ * ⚠️ It is UPSERT-BY-NAME, not create: an existing run at the same SHA is PATCHed,
+ * so linking a pull request turns the SAME check green rather than adding a
+ * second, contradictory one below the first. That is the card's *"it must CLEAR
+ * when the link arrives"* criterion, and the reason this is not two functions.
+ */
+export async function writeCheckRun(spec: CheckRunSpec): Promise<CheckRunWriteOutcome> {
+  let token: string;
+  try {
+    ({ token } = await mintInstallationToken(spec.installationId));
+  } catch {
+    // Unconfigured App, unmintable token, unreachable host — all the same answer
+    // to the caller, which is "no check was written and nothing is wrong".
+    return 'unavailable';
+  }
+
+  const base = repoUrl(spec.owner, spec.name);
+  // Same guard as the reads, and applied even though the scanner did not flag this
+  // site: an inconsistent whitelist is the shape the note above describes.
+  if (base === null || !COMMIT_SHA.test(spec.headSha)) return 'unavailable';
+
+  const existingId = await findExistingRun(token, spec.owner, spec.name, spec.headSha);
+  const payload = {
+    name: LINK_CHECK_NAME,
+    head_sha: spec.headSha,
+    status: 'completed',
+    conclusion: spec.conclusion,
+    output: { title: spec.title, summary: spec.summary },
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(
+      existingId === null ? `${base}/check-runs` : `${base}/check-runs/${existingId}`,
+      {
+        method: existingId === null ? 'POST' : 'PATCH',
+        headers: headers(token),
+        body: JSON.stringify(payload),
+      },
+    );
+  } catch {
+    return 'unavailable';
+  }
+
+  if (res.status === 403) return 'not_permitted';
+  if (!res.ok) return 'unavailable';
+  return existingId === null ? 'created' : 'updated';
+}
+
+/**
+ * The head SHA of a pull request, read from the host.
+ *
+ * ⚠️ WHY THIS EXISTS AND WHY IT IS NOT A COLUMN. A check run is addressed by
+ * commit, and only ONE of the two callers has one: a `pull_request` delivery
+ * carries `pull_request.head.sha`, while `link_pull_request` is a call about a
+ * pull request the caller may have opened seconds earlier and knows only by
+ * number. `docs/decisions/unlinked-pull-request-check.md` proposed stamping a
+ * `head_sha` column from every delivery and falling back to a read; the column is
+ * NOT added, because a schema change on the shared development database is a cost
+ * every parallel session pays (a migration it did not write shows up as drift in
+ * its own `migrate diff`), and this read is one call on a path that is already
+ * doing network I/O. The ADR is amended in the same pull request rather than left
+ * describing a design that was not built.
+ *
+ * `pull_requests: write` covers the read, so it needs no new permission.
+ */
+export async function readPullRequestHeadSha(
+  installationId: string,
+  owner: string,
+  name: string,
+  number: number,
+): Promise<string | null> {
+  let token: string;
+  try {
+    ({ token } = await mintInstallationToken(installationId));
+  } catch {
+    return null;
+  }
+  const base = repoUrl(owner, name);
+  const url = base === null ? null : pullUrl(base, number);
+  if (url === null) return null;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: headers(token),
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  let body: GithubJson | null;
+  try {
+    body = (await res.json()) as GithubJson;
+  } catch {
+    return null;
+  }
+  const head = body?.['head'];
+  const sha = typeof head === 'object' && head !== null ? (head as GithubJson)['sha'] : null;
+  return typeof sha === 'string' && sha.length > 0 ? sha : null;
+}

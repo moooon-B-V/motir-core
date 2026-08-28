@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { historicalPullRequestBackfillService } from '@/lib/services/historicalPullRequestBackfillService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -9,9 +10,16 @@ import { truncateAuthTables } from '../../helpers/db';
 
 // The historical-PR mirror backfill against real Postgres (MOTIR-1965) — the
 // half the leaf's unit suite cannot assert: that the sweep reads the right
-// repositories, resolves links through the SYNC'S OWN resolver, writes rows the
-// live path cannot tell apart from its own, and rewrites nothing on a second
-// run. Real Postgres, no mocks below the host boundary, per CLAUDE.md.
+// repositories, writes rows the live path cannot tell apart from its own, and
+// rewrites nothing on a second run. Real Postgres, no mocks below the host
+// boundary, per CLAUDE.md.
+//
+// ⚠️ MOTIR-3674 removed the ATTRIBUTION pass (option A of that card). The sweep
+// used to link each mirrored row to the work item whose key appeared in the head
+// ref or the title, through the sync's own resolver; that resolver is gone at
+// both call sites, so every row this sweep writes now carries a NULL link. The
+// cases below assert exactly that, and the indistinguishable-from-live claim is
+// unchanged — it is just that both paths now write the same null.
 //
 // Only two things are stubbed, both ABOVE the code under test: `fetch` (the
 // GitHub REST listing) and `mintInstallationToken` (a real mint needs an App
@@ -152,11 +160,13 @@ const DRY = { dryRun: true };
 const APPLY = { dryRun: false };
 
 describe('historicalPullRequestBackfillService — mirroring merged history', () => {
-  it('resolves by BRANCH and by TITLE, and mirrors an unresolvable PR with a null link', async () => {
+  it('attributes NOTHING — a branch key and a title key both mirror with a null link (MOTIR-3674)', async () => {
     const { fx, repoId } = await makeConnectedRepo();
     const byBranch = await createTestWorkItem(fx, { kind: 'task', title: 'Branch-named' });
     const byTitle = await createTestWorkItem(fx, { kind: 'task', title: 'Title-named' });
 
+    // The first two are exactly the cases that USED to link — a resolvable key in
+    // the head ref, and one in the title. Both are now text.
     serveListing([
       ghPull(1, { headRef: `subtask/${byBranch.identifier}-slug`, title: 'no key here' }),
       ghPull(2, { headRef: 'subtask/unnamed', title: `feat(x): a change (${byTitle.identifier})` }),
@@ -168,14 +178,13 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     const repo = report.repos[0]!;
     expect(repo.repoRef).toBe('moooon-B-V/motir-core');
     expect(repo.scanned).toBe(3);
-    expect(repo.resolved).toBe(2);
-    expect(repo.unresolvable).toBe(1);
+    expect(repo.unattributed).toBe(3);
     expect(repo.written).toBe(3);
-    expect((await readRow(repoId, 1)).workItemId).toBe(byBranch.id);
-    expect((await readRow(repoId, 2)).workItemId).toBe(byTitle.id);
-    // Mirrored anyway, link null — exactly what the live sync does before it
-    // returns `no_work_item`. The row is the workspace's PR history, and the
-    // explicit-link picker (MOTIR-1596) reads it.
+    // All three mirrored, all three unlinked. The rows are the workspace's pull
+    // request HISTORY — a fact worth keeping — and the explicit-link picker
+    // (MOTIR-1596) is what attaches one to a card, by a human's act.
+    expect((await readRow(repoId, 1)).workItemId).toBeNull();
+    expect((await readRow(repoId, 2)).workItemId).toBeNull();
     expect((await readRow(repoId, 3)).workItemId).toBeNull();
   });
 
@@ -221,9 +230,9 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     // Page 2 was actually REACHED, not merely requested: its one merged PR is
     // the only row written, and page 1's hundred abandoned PRs wrote none.
     expect(repo.written).toBe(1);
-    expect(repo.resolved).toBe(1);
+    expect(repo.unattributed).toBe(1);
     expect(await adminDb.githubPullRequest.count()).toBe(1);
-    expect((await readRow(repoId, 101)).workItemId).toBe(item.id);
+    expect((await readRow(repoId, 101)).workItemId).toBeNull();
   });
 
   it('a DRY RUN decides and reports but writes nothing', async () => {
@@ -235,7 +244,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
 
     expect(report.dryRun).toBe(true);
     expect(report.repos[0]!.written).toBe(1);
-    expect(report.repos[0]!.resolved).toBe(1);
+    expect(report.repos[0]!.unattributed).toBe(1);
     await expect(readRow(repoId, 5)).rejects.toThrow();
   });
 
@@ -261,7 +270,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     expect(after.updatedAt.toISOString()).toBe(first.updatedAt.toISOString());
   });
 
-  it('preserves a MANUAL link instead of re-deriving it (MOTIR-1596 stickiness)', async () => {
+  it('preserves ANY STORED link, manual or historical — the MOTIR-3674 grandfathering', async () => {
     const { fx, repoId } = await makeConnectedRepo();
     const branchItem = await createTestWorkItem(fx, { kind: 'task', title: 'Named by branch' });
     const manualItem = await createTestWorkItem(fx, { kind: 'task', title: 'Linked by hand' });
@@ -281,9 +290,39 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     serveListing([ghPull(7, { headRef: `subtask/${branchItem.identifier}` })]);
     const report = await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
 
-    expect(report.repos[0]!.skippedManualLink).toBe(1);
+    expect(report.repos[0]!.skippedLinked).toBe(1);
     expect(report.repos[0]!.written).toBe(0);
     expect((await readRow(repoId, 7)).workItemId).toBe(manualItem.id);
+  });
+
+  it('preserves a link the RETIRED PARSE wrote — `linked_manually: false` is still a link', async () => {
+    // The production population this protects: 1026 rows the parse linked, all
+    // carrying `linked_manually: false`. Gating the skip on that flag would have
+    // the sweep overwrite every one of them with a null link.
+    const { fx, repoId } = await makeConnectedRepo();
+    const parseLinked = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Linked by the parse',
+    });
+    await adminDb.githubPullRequest.create({
+      data: {
+        provider: 'github',
+        repoId,
+        number: 8,
+        state: 'closed',
+        merged: true,
+        headRef: `subtask/${parseLinked.identifier}`,
+        workItemId: parseLinked.id,
+        linkedManually: false,
+      },
+    });
+
+    serveListing([ghPull(8, { headRef: `subtask/${parseLinked.identifier}` })]);
+    const report = await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
+
+    expect(report.repos[0]!.skippedLinked).toBe(1);
+    expect(report.repos[0]!.written).toBe(0);
+    expect((await readRow(repoId, 8)).workItemId).toBe(parseLinked.id);
   });
 
   it('scopes to one workspace / one repo, and reports a skipped non-GitHub connection', async () => {
@@ -335,7 +374,10 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
       workspaceId: keep.workspaceId,
     });
     expect(scoped.repos.map((r) => r.repoRef)).toEqual(['moooon-B-V/motir-core']);
-    expect((await readRow(repoId, 8)).workItemId).toBe(item.id);
+    // The row is written for the in-scope repository and for that one only. Its
+    // link is null since MOTIR-3674 — this case is about SCOPE, and the sweep no
+    // longer attributes anything (see the first case in this file).
+    expect((await readRow(repoId, 8)).workItemId).toBeNull();
 
     const byRepo = await historicalPullRequestBackfillService.backfillMergedPullRequests({
       ...DRY,
@@ -411,7 +453,9 @@ describe('a backfilled row is INDISTINGUISHABLE from a live-ingested one', () =>
     );
     expect(live.event).toBe('pull_request');
     const liveRow = await readRow(repoId, 100);
-    expect(liveRow.workItemId).toBe(item.id);
+    // NULL since MOTIR-3674 — the live path does not infer a link either, which
+    // is what makes the two paths identical rather than merely similar.
+    expect(liveRow.workItemId).toBeNull();
 
     // (2) Now run the sweep over a listing carrying that SAME PR plus an
     //     otherwise-identical sibling #101 the webhook never saw.
@@ -431,7 +475,24 @@ describe('a backfilled row is INDISTINGUISHABLE from a live-ingested one', () =>
 });
 
 describe('composed with the provenance backfill', () => {
-  it('turns a done coding_agent item from NO evidence into byok, and leaves a stamped one alone', async () => {
+  // ⚠️ MOTIR-3674 CHANGED WHAT THIS COMPOSITION CAN DO, and the change is a real
+  // cost of retiring the parse rather than a test detail.
+  //
+  // `classifyImplementationSource` stamps `byok` on `row.hasLinkedPr`, and
+  // `hasLinkedPr` is `githubPullRequests.length > 0` — the relation on
+  // `github_pull_request.work_item_id`. The historical sweep used to SET that
+  // column from the head ref, which is how MOTIR-1965 recovered provenance for
+  // ~1100 items whose pull requests predated the App installation. With the
+  // attribution pass gone, a mirrored row carries no link, so it is not evidence
+  // for any card and the classifier keeps abstaining.
+  //
+  // That is the correct reading of the data Motir actually has: an inferred link
+  // producing a provenance STAMP is a guess wearing a fact's clothes. It is also
+  // not a regression against the live tenant — that sweep has already run, and
+  // its 1026 links are grandfathered (see the case above). What is lost is the
+  // recovery for a repository connected FROM NOW ON, and the recovery path for
+  // those is an explicit link, asserted below.
+  it('no longer recovers byok from a text-named pull request — the link is what counts', async () => {
     const { fx } = await makeConnectedRepo();
     const recovered = await createTestWorkItem(fx, { kind: 'task', title: 'Pre-App merge' });
     const alreadyStamped = await createTestWorkItem(fx, { kind: 'task', title: 'Already stamped' });
@@ -456,8 +517,28 @@ describe('composed with the provenance backfill', () => {
     ]);
     await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
 
-    // AFTER: the evidence exists, so the EXISTING rule fires. No change to the
-    // MOTIR-1758 decision table was needed — the data changed, not the reading.
+    // AFTER the sweep: the ROWS exist, but they name no work item, so there is
+    // still no evidence for `recovered` and the classifier still abstains.
+    await workItemsService.backfillProvenanceForProject(fx.projectId, fx.ownerId, {
+      dryRun: false,
+    });
+    const afterSweep = await adminDb.workItem.findMany({
+      where: { id: { in: [recovered.id, alreadyStamped.id] } },
+      select: { id: true, implementationSource: true },
+    });
+    expect(afterSweep.find((r) => r.id === recovered.id)!.implementationSource).toBeNull();
+    // The null guard is unaffected: an item that already carried a source is
+    // untouched either way.
+    expect(afterSweep.find((r) => r.id === alreadyStamped.id)!.implementationSource).toBe('manual');
+
+    // Now LINK one of the mirrored pull requests, which is the recovery path
+    // that survives — a human on the item page, or `link_pull_request`. The
+    // MOTIR-1758 decision table is untouched: the data changed, not the reading.
+    const mirrored = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 200 } });
+    await githubPullRequestService.linkPullRequest(recovered.id, mirrored.id, {
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+    });
     await workItemsService.backfillProvenanceForProject(fx.projectId, fx.ownerId, {
       dryRun: false,
     });
@@ -479,8 +560,6 @@ describe('composed with the provenance backfill', () => {
     // shipped it, and reveals nothing about the harness or the model.
     expect(recoveredRow.implementationHarness).toBeNull();
     expect(recoveredRow.implementationModel).toBeNull();
-    // The null guard holds: an item that already carried a source is untouched,
-    // even though it now has PR evidence that would have said `byok`.
     expect(stampedRow.implementationSource).toBe('manual');
   });
 });

@@ -46,11 +46,17 @@ export const execCommand: CommandRunner = (bin, args, cwd) => {
   };
 };
 
-/** The session branch a run uses. Deliberately carries NO `MOTIR-<n>` key: the
- *  status webhook parses a PR's branch AND title, and a session PR carries MANY
- *  items — a key in either would link the whole run to one of them and move
- *  only that card. The keys ride in the PR BODY, which is not parsed, and the
- *  real close-out is `motir done --session <branch>`. */
+/** The session branch a run uses. Deliberately carries NO `MOTIR-<n>` key,
+ *  because a session pull request carries MANY items and naming one of them in
+ *  the ref would be a claim about the branch that is false.
+ *
+ *  ⚠️ THE REASON CHANGED, THE RULE DID NOT (MOTIR-3674). This said *"the status
+ *  webhook parses a PR's branch AND title, so a key in either would link the
+ *  whole run to one of them and move only that card"* — a hazard, and it is
+ *  gone: the parse is retired, so a key here would link nothing at all. What
+ *  survives is the plain reading: the branch describes the run, not a card. The
+ *  cards are associated by `link_pull_request`, once per item, and the real
+ *  close-out is `motir done --session <branch>`. */
 export function sessionBranchName(runId: string): string {
   return `motir/auto-${runId}`;
 }

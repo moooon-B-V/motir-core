@@ -14,7 +14,16 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
+import { linkPr } from '../helpers/prLink';
 
+// ⚠️ MOTIR-3674 — every test below that means *this pull request delivers this
+// card* now LINKS it (`linkFor`, the `link_pull_request` service the agent calls)
+// instead of naming the key in the head ref and letting the sync parse it out.
+// The parse is retired: the branch and the title are labels, and a pull request
+// nobody linked resolves `no_work_item` however many keys its text contains. The
+// linking call goes BEFORE the first delivery, which is also the real ordering —
+// a run links the moment `gh pr create` returns, before GitHub's webhook lands.
+//
 // Story 7.10 · MOTIR-892 — the inbound webhook status-sync state machine, against
 // a real Postgres (the motir-core convention). Covers: the PR-lifecycle →
 // workflow-status transitions through the SHIPPED workItemsService, actor
@@ -103,6 +112,34 @@ function prPayload(opts: {
   };
 }
 
+/** The link a run writes immediately after `gh pr create` — since MOTIR-3674 the
+ *  ONLY association a pull request has. Mirrors `prPayload`'s refs exactly, so a
+ *  test says once which pull request delivers the item and the deliveries then
+ *  read as they always did. */
+async function linkFor(
+  s: { item: { id: string; identifier: string }; project: { id: string }; ctx: ServiceCtx },
+  opts: { number?: number; repo?: string } = {},
+) {
+  return linkPr(
+    {
+      workItemId: s.item.id,
+      projectId: s.project.id,
+      owner: 'moooon',
+      name: opts.repo ?? 'acme',
+      number: opts.number ?? 7,
+      headRef: `feat/${s.item.identifier}-a-change`,
+      baseRef: 'main',
+      title: `Some change (${s.item.identifier})`,
+    },
+    s.ctx,
+  );
+}
+
+interface ServiceCtx {
+  userId: string;
+  workspaceId: string;
+}
+
 async function statusOf(workItemId: string): Promise<string> {
   const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
@@ -133,6 +170,7 @@ afterAll(async () => {
 describe('githubWebhookService — pull_request → status sync', () => {
   it('opened → implemented, closed+merged → done, closed+unmerged → in_progress', async () => {
     const s = await makeScenario('pr@example.com');
+    await linkFor(s);
 
     const opened = await githubWebhookService.handleEvent(
       'pull_request',
@@ -159,6 +197,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
   it('closed WITHOUT merging returns the item to in_progress (the abandoned-work path)', async () => {
     const s = await makeScenario('unmerged@example.com');
+    await linkFor(s);
     // Open first so the item sits at implemented.
     await githubWebhookService.handleEvent(
       'pull_request',
@@ -184,6 +223,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     // re-delivers `opened`, and `in_progress → implemented` is a legal edge, so
     // the card lands back where an open pull request belongs.
     const s = await makeScenario('reopened@example.com');
+    await linkFor(s);
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: s.item.identifier }),
@@ -214,6 +254,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     // `classifyTransitionError` in `changeRequestStatusSync` is where that is
     // caught, and it reports the outcome rather than swallowing it silently.
     const s = await makeScenario('unreachable@example.com');
+    await linkFor(s);
     // The fixture leaves the item at `in_progress`; send it back to the queue.
     await workItemsService.updateStatus(s.item.id, 'todo', s.ctx);
     expect(await statusOf(s.item.id)).toBe('todo');
@@ -237,6 +278,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
   it('records the transition in the activity log as the BOUND author when the PR author is a member', async () => {
     const s = await makeScenario('bound@example.com');
+    await linkFor(s);
     // A second workspace member who has connected their GitHub identity.
     const dev = await usersService.createUser({
       email: 'dev@example.com',
@@ -286,6 +328,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
   it('falls back to the workspace owner when the PR author is not a bound member', async () => {
     const s = await makeScenario('fallback@example.com');
+    await linkFor(s);
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: s.item.identifier, authorGithubUserId: 999999 }),
@@ -297,6 +340,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
   it('is idempotent under a CONCURRENT redelivery race — one transition, one PR row', async () => {
     const s = await makeScenario('race@example.com');
+    await linkFor(s);
     const payload = prPayload({ action: 'opened', identifier: s.item.identifier });
 
     // Two identical deliveries at once (GitHub redelivers): the unique-(repo,number)
@@ -319,6 +363,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
   it('a sequential redelivery of the same event is a no-op (already in the target)', async () => {
     const s = await makeScenario('redeliver@example.com');
+    await linkFor(s);
     const payload = prPayload({ action: 'opened', identifier: s.item.identifier });
     await githubWebhookService.handleEvent('pull_request', payload);
     const again = await githubWebhookService.handleEvent('pull_request', payload);
@@ -375,6 +420,20 @@ describe('githubWebhookService — pull_request → status sync', () => {
       ],
     });
 
+    await linkPr(
+      {
+        workItemId: item.id,
+        projectId: project.id,
+        owner: 'moooon',
+        name: 'beta',
+        number: 7,
+        headRef: `feat/${item.identifier}-a-change`,
+        baseRef: 'main',
+        title: `Some change (${item.identifier})`,
+      },
+      { userId: user.id, workspaceId: workspace.id },
+    );
+
     const res = await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({
@@ -388,6 +447,75 @@ describe('githubWebhookService — pull_request → status sync', () => {
     );
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'illegal_transition' });
     expect(await statusOf(item.id)).toBe('todo'); // unchanged, no crash
+  });
+
+  // ── MOTIR-3674 — the parse is retired ─────────────────────────────────────
+  it('a pull request whose branch AND title name a REAL, resolvable key links NOTHING', async () => {
+    // The case that used to link, and the whole point of the card: `feat/ACME-1-a-change`
+    // plus `Some change (ACME-1)` is exactly what `parseKeyCandidates` resolved.
+    // With no explicit link there is nothing to resolve FROM, so the delivery
+    // takes the shipped `no_work_item` outcome and the card does not move.
+    const s = await makeScenario('parse-retired@example.com');
+
+    const opened = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'opened', identifier: s.item.identifier }),
+    );
+
+    expect(opened).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
+    expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
+    // The row is still mirrored — the pull request is a fact about the repository
+    // whatever it delivers. Only the LINK is absent.
+    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
+    expect(prRow).toMatchObject({
+      workItemId: null,
+      headRef: `feat/${s.item.identifier}-a-change`,
+      title: `Some change (${s.item.identifier})`,
+    });
+
+    // And it stays absent on the merge, which is the consequence that matters:
+    // a card is not closed by a pull request that merely MENTIONS it.
+    const merged = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'closed', identifier: s.item.identifier, state: 'closed', merged: true }),
+    );
+    expect(merged).toMatchObject({ outcome: 'no_work_item' });
+    expect(await statusOf(s.item.id)).toBe('in_progress');
+  });
+
+  it('GRANDFATHERS a row the retired parse linked — `linked_manually` is not the condition', async () => {
+    // The 1026 production rows the parse wrote carry `linked_manually: false`.
+    // Gating the resolve on that flag would orphan every one of them on its next
+    // delivery, overwriting `work_item_id` with null. The condition is the STORED
+    // LINK, so the row keeps driving the sync — and keeps its flag, which now
+    // records only HOW the link was made.
+    const s = await makeScenario('grandfathered@example.com');
+    const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: REPO_PROVIDER_ID } });
+    await adminDb.githubPullRequest.create({
+      data: {
+        provider: 'github',
+        repoId: repo.id,
+        number: 7,
+        state: 'open',
+        merged: false,
+        headRef: `feat/${s.item.identifier}-a-change`,
+        baseRef: 'main',
+        title: `Some change (${s.item.identifier})`,
+        workItemId: s.item.id,
+        linkedManually: false,
+      },
+    });
+
+    const merged = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'closed', identifier: s.item.identifier, state: 'closed', merged: true }),
+    );
+
+    expect(merged).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    expect(await statusOf(s.item.id)).toBe('done');
+    const after = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    expect(after.workItemId).toBe(s.item.id);
+    expect(after.linkedManually).toBe(false);
   });
 
   it('a PR on an unknown installation is a no-op', async () => {
@@ -458,6 +586,11 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
 
   it('a merge does NOT complete the item while a sibling linked PR is still open; the LAST merge does', async () => {
     const s = await makeTwoRepoScenario('twopr@example.com');
+    // Both pull requests are linked to the SAME item — one call each, which is
+    // what a card carrying a repository set instructs (one `link_pull_request`
+    // per repository, never one per card).
+    await linkFor(s, { number: 7, repo: 'acme' });
+    await linkFor(s, { number: 8, repo: 'acme-ai' });
 
     // Two OPEN PRs — one per repo — both linked to the SAME work item.
     await githubWebhookService.handleEvent(
@@ -476,7 +609,15 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
     expect(await statusOf(s.item.id)).toBe('implemented');
 
     // Merge the FIRST PR while its sibling (#8) is still open — the item MUST
-    // stay In Review, not flip to Done (the MOTIR-1604 cardinality guard).
+    // stay at Implemented, not flip to Done (the MOTIR-1604 cardinality guard).
+    //
+    // ⚠️ The OUTCOME changed with MOTIR-3674 and the change is the design
+    // working. Both pull requests are now LINKED, so each carries a
+    // `work_item_delivery` row, and `deferred_incomplete_delivery_set` — the more
+    // specific gate, evaluated first (`work-item-delivery-links.md` Q3) — answers
+    // before `deferred_open_pr` gets the question. Previously the parse wrote the
+    // scalar and no delivery row, so the card fell through to the open-PR count.
+    // The guarded BEHAVIOUR is identical: the card does not complete.
     const firstMerge = await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({
@@ -489,7 +630,7 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
     );
     expect(firstMerge).toMatchObject({
       event: 'pull_request',
-      outcome: 'deferred_open_pr',
+      outcome: 'deferred_incomplete_delivery_set',
       workItemId: s.item.id,
     });
     expect(await statusOf(s.item.id)).toBe('implemented');
@@ -512,6 +653,7 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
 
   it('a single-PR card still completes on its one merge (no regression from the guard)', async () => {
     const s = await makeTwoRepoScenario('single@example.com');
+    await linkFor(s, { number: 7, repo: 'acme' });
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: s.item.identifier, number: 7 }),

@@ -39,6 +39,7 @@ import {
   seedGitlabProject,
 } from './_helpers/gitlab-seed';
 import { E2E_GITLAB_PROJECT, E2E_GITLAB_USER } from './_helpers/gitlab-const';
+import { linkPr } from './_helpers/pr-link';
 
 // GitLab's real merge-request webhook header value; the service keys off the body's
 // `object_kind`, so this is for realism, not resolution.
@@ -224,10 +225,26 @@ test('@smoke MR opened → the linked item goes Implemented; merged → Done (to
   expect(unauthed.status(), 'unauthenticated webhook is rejected').toBe(401);
   expect(await statusOf(page, item.id)).toBe('in_progress');
 
-  // MR OPENED (source branch references the item key) → `implemented`. Both
-  // providers compute the lifecycle separately, so this is the GitLab half of
-  // MOTIR-2999's claim, not a copy of the GitHub one. The 200 + result body is
-  // the committed-state signal; the page loads after it.
+  // ⚠️ THE LINK IS WHAT ASSOCIATES THE MERGE REQUEST, not the source branch.
+  // MOTIR-3674 retired the parse for BOTH providers — the resolve is shared
+  // code, so GitLab lost the inference at the same moment GitHub did — and an
+  // unlinked delivery resolves `no_work_item`. The link is setup; the lifecycle
+  // assertions below are unchanged.
+  //
+  // It is written through the same `_test` transport the GitHub specs use, which
+  // is provider-agnostic underneath: a GitLab project is a `github_repo` row
+  // with `provider: 'gitlab'`, resolved by owner and name like any other.
+  await linkPr(page, {
+    workItemId: item.id,
+    repo: E2E_GITLAB_PROJECT,
+    number: 5101,
+    headRef: sourceBranch,
+  });
+
+  // MR OPENED → `implemented`. Both providers compute the lifecycle separately,
+  // so this is the GitLab half of MOTIR-2999's claim, not a copy of the GitHub
+  // one. The 200 + result body is the committed-state signal; the page loads
+  // after it.
   const opened = await postGitlabWebhook(
     page.request,
     MR_EVENT,
