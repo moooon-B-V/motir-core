@@ -1034,6 +1034,64 @@
       .notesBody a {
         color: var(--el-link);
       }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
       .cmdBox {
         display: flex;
         align-items: center;
@@ -1300,6 +1358,99 @@
         stroke-linejoin="round"
       >
         <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-bold"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+      </symbol>
+      <symbol
+        id="i-italic"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="19" x2="10" y1="4" y2="4" />
+        <line x1="14" x2="5" y1="20" y2="20" />
+        <line x1="15" x2="9" y1="4" y2="20" />
+      </symbol>
+      <symbol
+        id="i-strike"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+        <path d="M14 12a4 4 0 0 1 0 8H6" />
+        <line x1="4" x2="20" y1="12" y2="12" />
+      </symbol>
+      <symbol
+        id="i-code"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m16 18 6-6-6-6" />
+        <path d="m8 6-6 6 6 6" />
+      </symbol>
+      <symbol
+        id="i-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </symbol>
+      <symbol
+        id="i-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 5h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 19h.01" />
+        <path d="M8 5h13" />
+        <path d="M8 12h13" />
+        <path d="M8 19h13" />
+      </symbol>
+      <symbol
+        id="i-list-ol"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M11 5h10" />
+        <path d="M11 12h10" />
+        <path d="M11 19h10" />
+        <path d="M4 4h1v5" />
+        <path d="M4 9h2" />
+        <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" />
       </symbol>
       <symbol
         id="i-user"
@@ -2457,15 +2608,33 @@ fly deploy --app motir-core --image registry.fly.io/motir-core@sha256:6f1c0a9e4d
 
       <section class="panel">
         <h2 class="panelTitle">
-          <span class="panelNum">9</span>EDITING a row in place — the text and the command in the
-          row itself.
+          <span class="panelNum">9</span>EDITING a row in place — three kinds of text, three
+          different controls.
         </h2>
         <p class="panelNote">
-          The row becomes its own editor: the text input where the text was, the command input under
-          it, and the executor as a two-value control. The patch is <strong>sparse</strong> —
-          clearing the command field to empty sets it to <span class="font-mono">null</span> and the
-          row stops being copyable, while leaving it alone leaves it alone (MOTIR-3814's action
-          contract).
+          <strong
+            >The row becomes its own editor, and it carries THREE controls because it holds three
+            different KINDS of text.</strong
+          >
+          <span class="font-mono">text</span> is plain and one line &rarr; an
+          <span class="font-mono">Input</span>. <span class="font-mono">notesMd</span> is
+          <strong>Markdown</strong> &rarr; the shipped
+          <span class="font-mono">MarkdownEditor</span> at
+          <span class="font-mono">size="compact"</span>, the same composer the comments section on
+          this page already renders, whose button set is bold &middot; italic &middot; strike
+          &middot; inline code &middot; link &middot; bulleted &middot; numbered (<span
+            class="font-mono"
+            >components/ui/MarkdownEditor.tsx</span
+          >). <span class="font-mono">commandText</span> is one line of mono &rarr; an
+          <span class="font-mono">Input</span> again, never a rich-text surface.
+          <strong
+            >A field the product STORES as Markdown and EDITS as plain text is a field whose
+            numbered list and link a user can only produce by typing the syntax blind</strong
+          >
+          — which is the mismatch this panel exists to close. The executor is a two-value control
+          beneath them. The patch is <strong>sparse</strong> — clearing the command field to empty
+          sets it to <span class="font-mono">null</span> and the row stops being copyable, while
+          leaving it alone leaves it alone (MOTIR-3814's action contract).
         </p>
         <div class="panelBody">
           <div class="secCard">
@@ -2508,9 +2677,45 @@ fly deploy --app motir-core --image registry.fly.io/motir-core@sha256:6f1c0a9e4d
                 <li class="todoRow isHover">
                   <span class="cbox" role="checkbox" aria-checked="false"></span>
                   <div class="min-w-0">
+                    <span class="fieldLabel" style="margin-top: 0">Step</span>
                     <span class="inputBox isFocused" style="display: block"
                       >Apply the migration on staging|</span
                     >
+
+                    <span class="fieldLabel">Instructions</span>
+                    <div class="mdEditor">
+                      <div class="editorToolbar" role="toolbar" aria-label="Formatting">
+                        <button type="button" class="tbIcon" aria-label="Bold">
+                          <svg aria-hidden="true"><use href="#i-bold" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Italic">
+                          <svg aria-hidden="true"><use href="#i-italic" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Strikethrough">
+                          <svg aria-hidden="true"><use href="#i-strike" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Inline code">
+                          <svg aria-hidden="true"><use href="#i-code" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Link">
+                          <svg aria-hidden="true"><use href="#i-link" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Bulleted list">
+                          <svg aria-hidden="true"><use href="#i-list" /></svg>
+                        </button>
+                        <button type="button" class="tbIcon" aria-label="Numbered list">
+                          <svg aria-hidden="true"><use href="#i-list-ol" /></svg>
+                        </button>
+                      </div>
+                      <div class="editorArea">
+                        <ol>
+                          <li>Take the staging database out of the pool first.</li>
+                          <li>Run the command below and watch for <code>All migrations</code>.</li>
+                        </ol>
+                      </div>
+                    </div>
+
+                    <span class="fieldLabel">Command</span>
                     <div class="cmdBox">
                       <span class="inputBox font-mono text-\[12px\]"
                         >pnpm prisma migrate deploy</span

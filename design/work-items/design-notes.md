@@ -5496,6 +5496,34 @@ something a work item — a `Comment` has a Markdown body and is not one. The AD
 (§1, _Instructions_) carries the full reasoning, including why the earlier
 _"if a step needs a body, it needs a card"_ was wrong.
 
+#### Editing it — the control matches the KIND, and there are three
+
+**A field the product STORES as Markdown and EDITS as plain text is a field
+whose numbered list and link a user can only produce by typing the syntax
+blind.** So the edit row carries three different controls, one per kind:
+
+| field         | kind                  | control                                            |
+| ------------- | --------------------- | -------------------------------------------------- |
+| `text`        | plain, one line       | `Input`                                            |
+| `notesMd`     | **Markdown**          | the shipped **`MarkdownEditor`, `size="compact"`** |
+| `commandText` | plain, one line, mono | `Input` (mono) — **never** a rich-text surface     |
+
+`compact` is not a new variant: it is the mode the **comment composer on this
+same page** already uses (`CommentComposer.tsx`), and its button set —
+**bold · italic · strike · inline code · link · bulleted list · numbered list**
+(`components/ui/MarkdownEditor.tsx`) — is exactly an instruction's vocabulary. A
+dashboard flow is a numbered list with a link and a `code` span in it, and all
+three are one click.
+
+**Read and edit are the shipped PAIR**: `MarkdownView` renders the notes,
+`MarkdownEditor` edits them — the same pairing `descriptionMd` and
+`explanationMd` already use on this page. Nothing here is a new primitive.
+
+**The other two stay plain, deliberately.** Making `text` rich would break the
+one-line, one-operation bar it exists to hold, and a formatted command is a
+command that will not paste. The asymmetry is the design, not an oversight —
+panel 9 draws all three together so the next reader cannot collapse them.
+
 **Markdown, not plain text**, deliberately: a dashboard flow wants a numbered
 list and a link, and plain text strips exactly the part that makes _"go to the
 dashboard"_ actionable. Capped at **2000** characters — which is not a
@@ -5535,7 +5563,7 @@ toast reads as two events for one click.
 | **all done**       | the header's `3 of 3 done` and one quiet line, `Every step is done.` **No banner and no control offering to close the card** — §3 refuses any status change, and a tinted "Done" banner would read as exactly the status claim this surface may not make                                                              |
 | **read-only**      | an actor without `work_item:edit` keeps the rows, the marks and the count, and loses every control: no add row, no handle, no edit, no delete. The checkbox is **genuinely inert** — `role="checkbox"` + `aria-disabled="true"`, announced and not actionable — rather than a live control that silently does nothing |
 | **adding**         | the composer is the last row, not a modal. Enter commits and keeps focus in the field for the next step; Escape abandons. The command and the executor are set from the row afterwards, so the common case (a plain step) stays the fastest                                                                           |
-| **editing**        | the row becomes its own editor — text input, command input, executor as a two-value control, `Cancel` / `Save`. The patch is SPARSE: clearing the command field sets it to `null` and the row stops being copyable; leaving it alone leaves it alone                                                                  |
+| **editing**        | the row becomes its own editor — **three controls for three KINDS of text** (below), executor as a two-value control, `Cancel` / `Save`. The patch is SPARSE: clearing the command field sets it to `null` and the row stops being copyable; leaving it alone leaves it alone                                         |
 | **dragging**       | the row lifts as a dashed ghost; a 2px `--el-accent` rule marks the drop slot. One row is written                                                                                                                                                                                                                     |
 | **delete confirm** | an inline swap on the row (`Cancel` / a danger `Delete`), not a `Modal` — one step is cheap to lose and cheap to retype, and the modal primitive is reserved for the irreversible                                                                                                                                     |
 | **at scale**       | twenty rows. The section **grows**; it does not cap and it does not scroll                                                                                                                                                                                                                                            |
