@@ -13,11 +13,18 @@ import { AccountDeletionBannerBar } from './AccountDeletionBannerBar';
 // `docs/decisions/code-graph-index-fleet.md` §14.3 gives a workspace
 // hard-delete NO grace period, and states why — *"a grace period the user
 // cannot reach is not a grace period"*. An account deletion is the mirror case:
-// the reader's own credentials survive the window, so signing in IS a surface to
-// undo into, and the window is real. **But a window is only reachable if the
-// reader can FIND it.** Somebody who changes their mind on day nine opens the
-// app; they do not think to navigate to Settings › Data & privacy. Without this
-// banner the 30-day window exists only in the database.
+// the reader's own credentials survive the window, so they can sign back in and
+// the window is real. **But a window is only reachable if the reader can FIND
+// it.** Somebody who changes their mind on day nine opens the app; they do not
+// think to navigate to Settings › Data & privacy. Without this banner the
+// 30-day window exists only in the database.
+//
+// ⚠️ AND SINCE MOTIR-3742 THIS IS THE PATH, NOT A RESCUE. Signing in used to
+// cancel the deletion outright (MOTIR-3700), which — composed with the sign-out
+// scheduling performs — meant this bar rendered only when that cancel had
+// THROWN. It now renders for every reader in the window, and pressing its
+// `Cancel deletion` is how a deletion is taken back:
+// `docs/decisions/account-deletion-cancel-path.md`.
 //
 // ── MOUNTED ONCE, IN THE SHELL ──────────────────────────────────────────────
 // In `app/(authed)/layout.tsx`, above the top nav, from ONE server read — not
