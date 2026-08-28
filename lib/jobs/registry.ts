@@ -51,11 +51,25 @@ import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
 
-// The list of registered Inngest functions the serve route mounts (Story 1.6 ·
-// Subtask 1.6.2). Adding a new job = define it under `definitions/` and add it
-// here; the serve route imports from THIS file, never from individual job
-// files, so a new job never touches `app/api/inngest/route.ts`.
-export const jobFunctions = [
+// EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
+// Postgres engine by Story MOTIR-3418).
+//
+// Adding a new job = define it under `definitions/` and add it here. There is no
+// serve route to mount them on any more — what this list does is FORCE THE
+// MODULE EVALUATION that populates the engine's own tables. `defineJob` registers
+// a definition as its module is evaluated (`lib/jobs/engine/registry.ts`,
+// `lib/jobs/engine/manifest.ts`, `lib/jobs/schedules.ts`), so those tables hold
+// only the jobs something has imported — and importing THIS module is what makes
+// them complete. `scripts/worker.ts` does exactly that, for the side effect
+// rather than the value.
+//
+// ⚠️ THE ARRAY IS NOT A SECOND SOURCE OF TRUTH. Its members are the very objects
+// `registerEngineJob` recorded, returned by `defineJob`; `engineJobs()` is the
+// same set read back out of the registry. The array survives the retirement
+// because it is the RITUAL — a new job that nobody adds here is a job the worker
+// never evaluates — and because a test asserting "this job ships" has something
+// to name.
+export const jobDefinitions = [
   dailyHealthCheck,
   emailSend,
   mentionNotifyOnCommentCreated,

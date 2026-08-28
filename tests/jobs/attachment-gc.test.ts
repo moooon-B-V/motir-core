@@ -1,15 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Attachment } from '@/generated/prisma/client';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 
 // system.attachment-gc (Subtask 5.2.7) — the orphan-attachment sweep, driven
-// IN-PROCESS via @inngest/test against a REAL Postgres (no-mocks rule). The
+// IN-PROCESS via the in-process JobTestEngine against a REAL Postgres (no-mocks rule). The
 // Blob adapter is the ONE mocked external (the 2.3.7 test's pattern), which is
 // also the failure-injection seam: a rejecting `deleteAttachmentBlob` is the
 // "blob store is down / the URL is unreachable" case the blob-then-row
@@ -30,7 +29,7 @@ const { deleteAttachmentBlob } = await import('@/lib/blob/uploader');
 const blobDelete = vi.mocked(deleteAttachmentBlob);
 const { attachmentGc, ATTACHMENT_GC_CRON } = await import('@/lib/jobs/definitions/attachmentGc');
 const { attachmentsService } = await import('@/lib/services/attachmentsService');
-const { jobFunctions } = await import('@/lib/jobs/registry');
+const { jobDefinitions } = await import('@/lib/jobs/registry');
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
@@ -85,7 +84,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
     const young = await makeAttachment(fx, { createdAt: daysAgo(1) });
     const old = await makeAttachment(fx, { createdAt: daysAgo(8) });
 
-    const engine = new InngestTestEngine({ function: attachmentGc });
+    const engine = new JobTestEngine({ function: attachmentGc });
     const { result } = await engine.execute();
 
     expect(result).toEqual({ scanned: 1, deleted: 1, failed: 0 });
@@ -115,7 +114,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
       if (url === failing.blobPathname) throw new Error('blob store down');
     });
 
-    const engine = new InngestTestEngine({ function: attachmentGc });
+    const engine = new JobTestEngine({ function: attachmentGc });
     const first = await engine.execute();
     expect(first.result).toEqual({ scanned: 2, deleted: 1, failed: 1 });
     expect(await exists(failing.id)).toBe(true); // row survives = the retry marker
@@ -126,7 +125,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
     // The store recovers → the next run converges (idempotent re-run).
     blobDelete.mockReset();
     blobDelete.mockResolvedValue(undefined);
-    const second = await new InngestTestEngine({ function: attachmentGc }).execute();
+    const second = await new JobTestEngine({ function: attachmentGc }).execute();
     expect(second.result).toEqual({ scanned: 1, deleted: 1, failed: 0 });
     expect(await exists(failing.id)).toBe(false);
   });
@@ -180,25 +179,19 @@ describe('attachmentsService.sweepOrphanAttachments — paging bounds', () => {
 
 // LAST on purpose: the cron-config probe registers a second function under
 // the same id on the shared Inngest client, which would shadow the real
-// attachmentGc for any LATER InngestTestEngine run in this file.
+// attachmentGc for any LATER JobTestEngine run in this file.
 describe('system.attachment-gc wiring', () => {
   it('is mounted in the serve registry', () => {
-    expect(jobFunctions).toContain(attachmentGc);
+    expect(jobDefinitions).toContain(attachmentGc);
   });
 
-  it('wires the cron expression into the Inngest function config', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        { id: 'system.attachment-gc', cron: ATTACHMENT_GC_CRON, catchUp: 'latest' },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as
-        | { triggers?: Array<{ cron?: string }> }
-        | undefined;
-      expect(config?.triggers).toEqual([{ cron: '30 3 * * *' }]);
-    } finally {
-      spy.mockRestore();
-    }
+  it('wires the cron expression into the registered definition', () => {
+    const def = defineJob(
+      { id: 'system.attachment-gc', cron: ATTACHMENT_GC_CRON, catchUp: 'latest' },
+      () => undefined,
+    );
+    expect(def.cron).toBe('30 3 * * *');
+    // A scheduled job subscribes to no event — the scheduler enqueues it.
+    expect(def.trigger).toBeUndefined();
   });
 });

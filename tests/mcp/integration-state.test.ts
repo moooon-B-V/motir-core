@@ -1,12 +1,12 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalTransitionError } from '@/lib/workItems/errors';
-import { inngest } from '@/lib/jobs/client';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Integration-state substrate (Story 7.8 · Subtask 7.8.11): the `implemented`
 // status + `work_item.session_branch` + the integrated-dep readiness rule +
@@ -16,7 +16,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // emit `work-item/transitioned` post-commit (the transition-suite pattern).
 
 beforeEach(async () => {
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
 });
 

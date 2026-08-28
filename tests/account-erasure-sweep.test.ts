@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
 import type { AccountDeletionRequest, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { JobTestEngine } from './helpers/jobs';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
 import {
@@ -20,7 +20,7 @@ import { ERASED_USER_NAME, erasedEmailFor } from '@/lib/users/accountErasure';
 import { createTestProject, createTestUser, createTestWorkItem } from './fixtures';
 import type { WorkItemFixture } from './fixtures/workItemFixtures';
 import { adminDb } from './helpers/adminDb';
-import { truncateAuthTables, truncateJobRuns } from './helpers/db';
+import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from './helpers/db';
 
 // THE ERASURE SWEEP (Story 8.4 · Subtask MOTIR-3702) —
 // `accountErasureSweepService.sweep`, against the real Postgres.
@@ -42,7 +42,7 @@ import { truncateAuthTables, truncateJobRuns } from './helpers/db';
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "code_graph_offboarding" CASCADE');
+  await truncateCodeGraphOffboarding();
 });
 
 afterEach(async () => {
@@ -116,7 +116,10 @@ async function readUser(userId: string) {
 
 describe('the sweep is a registered cron job on a clustered minute', () => {
   it('is mounted by the registry and self-registers its schedule', () => {
-    expect(jobFunctions.map((fn) => fn.id(''))).toContain('system.account-erasure-sweep');
+    // `jobDefinitions` is what the serve route mounts — a job absent from it is
+    // a cron nobody runs, which for THIS job means a published 30-day erasure
+    // promise the product states and never keeps.
+    expect(jobDefinitions).toContain(accountErasureSweep);
 
     const schedule = jobSchedules().find((s) => s.functionId === 'system.account-erasure-sweep');
     expect(schedule?.cron).toBe(ACCOUNT_ERASURE_SWEEP_CRON);
@@ -551,7 +554,7 @@ describe('the run', () => {
 // 6. The JOB, driven in-process
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('the scheduled job (in-process Inngest run)', () => {
+describe('the scheduled job (driven in-process)', () => {
   it('erases the due account and persists its summary on the job_run ledger row', async () => {
     // The handler itself, not just the service under it: an erasure sweep whose
     // job never runs is a published 30-day promise the product states and never
@@ -563,7 +566,7 @@ describe('the scheduled job (in-process Inngest run)', () => {
     // so this is the one case that cannot pin `now`.
     await scheduleDue(user.id);
 
-    const engine = new InngestTestEngine({ function: accountErasureSweep });
+    const engine = new JobTestEngine({ function: accountErasureSweep });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({ scanned: 1, erased: 1, failed: 0 });

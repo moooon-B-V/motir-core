@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from './helpers/jobs';
 import { db } from '@/lib/db';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { OFFBOARD_ALL_REPOS } from '@/lib/codeGraph/offboarding';
@@ -7,7 +7,7 @@ import {
   codeGraphOffboardSweep,
   CODE_GRAPH_OFFBOARD_SWEEP_CRON,
 } from '@/lib/jobs/definitions/codeGraphOffboardSweep';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { codeGraphOffboardingRepository } from '@/lib/repositories/codeGraphOffboardingRepository';
 import {
@@ -80,10 +80,10 @@ afterAll(() => db.$disconnect());
 
 describe('system.code-graph-offboard-sweep is a registered cron sweep', () => {
   it('is served by the Inngest handler and self-registered in the schedule table', () => {
-    // `jobFunctions` is what `app/api/inngest/route.ts` serves — a job absent
+    // `jobDefinitions` is what `app/api/inngest/route.ts` serves — a job absent
     // from it is a cron nobody runs, which for THIS job means a retention window
     // the product states and never enforces.
-    expect(jobFunctions).toContain(codeGraphOffboardSweep);
+    expect(jobDefinitions).toContain(codeGraphOffboardSweep);
 
     // The schedule table self-registers from inside `defineJob`, so appearing
     // here proves the job actually declared a cron (MOTIR-1970) rather than
@@ -357,7 +357,7 @@ describe('the scheduled job (in-process Inngest run)', () => {
     // argument, so this is the one case that cannot pin `now`.
     await enqueueDueAt('p1', new Date(Date.now() - 60_000));
 
-    const engine = new InngestTestEngine({ function: codeGraphOffboardSweep });
+    const engine = new JobTestEngine({ function: codeGraphOffboardSweep });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({

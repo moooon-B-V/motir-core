@@ -103,7 +103,7 @@ async function enqueueInviteEmail(args: {
   //
   //   - workspaceId: the inviting workspace (a real, tenanted email).
   //   - idempotencyKey: the invite token (unique per invite) — a retried
-  //     send Action dedups to one delivery within Inngest's window.
+  //     send Action dedups to one delivery within the dedup window.
   await sendEvent('email.send', {
     workspaceId: args.workspaceId,
     idempotencyKey: args.token,

@@ -1,7 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { withUserContext } from '@/lib/workspaces/context';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
@@ -21,6 +20,7 @@ import {
   createActionsVariableFake,
   type ActionsVariableFake,
 } from '../helpers/actionsVariableFake';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // COLLABORATOR ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1900).
 //
@@ -223,7 +223,7 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   _setReadinessPollForTests({ attempts: 2, delayMs: 0 });
   installGitHub();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   // The invite path logs its own row-level failures; keep the suite's output to
   // its assertions.
   vi.spyOn(console, 'error').mockImplementation(() => {});

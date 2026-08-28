@@ -14,8 +14,8 @@ import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../../helpers/jobs';
 
 // Subtask 2.6.3 — the SINGLE cross-story Epic-2 lifecycle scenario.
 //
@@ -61,7 +61,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAll();
 });
 

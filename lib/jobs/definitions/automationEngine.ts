@@ -6,7 +6,7 @@ import type {
   WorkItemTransitionedData,
 } from '../types';
 
-// The automation EXECUTION ENGINE's Inngest jobs (Story 6.6 · Subtask 6.6.2) —
+// The automation EXECUTION ENGINE's background jobs (Story 6.6 · Subtask 6.6.2) —
 // the rule-processing queue the verified Jira model runs (rules execute
 // asynchronously, never inline with the triggering write). FOUR thin event
 // consumers over ONE engine service (automationEngineService.runForEvent), the
@@ -24,7 +24,7 @@ import type {
 //
 // `retryPolicy: 'idempotent'`: the engine is idempotent per (event × rule) by
 // construction (the 6.6.2 (rule, event) claim), so a transient DB blip is worth
-// Inngest's full 5-attempt budget — a replay re-runs only the rules that didn't
+// the `idempotent` policy's full 5-attempt budget — a replay re-runs only the rules that didn't
 // already claim this event.
 
 export const automationEngineOnCreated = defineJob(

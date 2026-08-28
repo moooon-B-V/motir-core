@@ -4,6 +4,9 @@
 // unlike work-item-setup.ts (which signs up over HTTP for speed), these go
 // through the actual sign-up + create-project UI.
 
+// Load the job registry in THIS process — see the file for why the emit path
+// cannot do it itself here.
+import './job-registry';
 import { expect, type Page } from '@playwright/test';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 

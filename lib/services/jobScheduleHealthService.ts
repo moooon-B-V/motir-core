@@ -38,7 +38,7 @@ import type { ScheduleHealthEntryDTO, ScheduleHealthReportDTO } from '@/lib/dto/
 // invoke a handler without `app/api/inngest/route.ts` having imported the
 // registry first, so the table is always complete by the time `check()` runs;
 // and at BUILD time `tests/jobs/schedule-health.test.ts` imports the registry
-// and asserts the table covers every cron job in `jobFunctions`, so a new cron
+// and asserts the table covers every cron job in `jobDefinitions`, so a new cron
 // job that somehow escaped registration fails CI.
 //
 // TOLERANCE. A job is judged against the fire BEFORE the most recent one, so

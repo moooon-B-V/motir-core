@@ -111,7 +111,7 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
       eventId: `evt-${randomToken()}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       status: 'succeeded',
       finishedAt: new Date(),

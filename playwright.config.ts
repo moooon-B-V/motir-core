@@ -72,28 +72,6 @@ const PORT = new URL(BASE_URL).port || '3000';
 // `null` for anything that is not a bulk leg id, including an unset E2E_SHARD.
 const SHARD_TEST_MATCH = legTestMatch(process.env['E2E_SHARD'] ?? '');
 
-// The Inngest dev server's port (Subtask 5.4.11 — the per-run port the :8288
-// note below asked for). :8288 was fixed, so two concurrent E2E runs (sibling
-// worktrees) collided on the executor even with distinct app PORTs. Setting
-// INNGEST_PORT gives this run its own executor: the cli gets `-p`, and the
-// Next server + the runner get INNGEST_BASE_URL (the SDK env override for the
-// dev-server origin — INNGEST_DEV=1 alone targets the :8288 default). Unset →
-// :8288, so existing invocations are unchanged.
-const INNGEST_PORT = process.env['INNGEST_PORT'] ?? '8288';
-const INNGEST_BASE_URL = `http://localhost:${INNGEST_PORT}`;
-
-// The Inngest dev-server CLI is a pinned `inngest-cli` devDependency (its
-// postinstall downloads the standalone Go binary at install time — see
-// pnpm-workspace.yaml `allowBuilds`). We invoke the binary by its direct path:
-// pnpm's generated `.bin/inngest` shim wraps the target with `node`, but the
-// postinstall OVERWRITES bin/inngest with a raw ELF binary, so `pnpm exec
-// inngest` would try to parse ELF as JS. This replaced the old `npx --yes
-// inngest-cli@<v>` approach, which re-resolved @latest every run, couldn't be
-// cached, and cold-downloaded the 95MB binary INSIDE Playwright's 120s
-// webServer window (the documented timeout flake). The pinned dep is fetched
-// once at install (outside any timeout) and cached via the pnpm store.
-const INNGEST_CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
-
 // Subtask 3.5.1 board load-model test seam: forward the cap / Done-age overrides
 // to the dev server ONLY when the run sets them, so a targeted
 // `BOARD_ISSUE_CAP_OVERRIDE=… pnpm test:e2e --grep board-at-scale` run can reach
@@ -106,23 +84,21 @@ for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
   if (v !== undefined && v !== '') BOARD_LOAD_SEAM_ENV[k] = v;
 }
 
-// The RUNNER process publishes events too (Subtask 5.4.5): seed helpers call
-// services directly (e.g. scrum-board-seed's gated updateStatus walk), and
-// those service methods emit post-commit (`work-item/transitioned`,
-// `work-item/comment.created`). Point the runner's Inngest SDK at the same
-// :8288 dev server the Next app uses (the second webServer entry below —
-// health-checked before any spec runs), so a seed-level emit publishes
-// instead of throwing "no event key". Config-module scope runs in the main
-// runner process before workers fork, and workers inherit its env.
-process.env['INNGEST_DEV'] ??= '1';
-process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
+// ⚠️ THE RUNNER USED TO NEED AN EXECUTOR POINTED AT IT (Subtask 5.4.5 /
+// 5.4.11, removed by MOTIR-3418). Seed helpers call services directly and those
+// services emit post-commit, so the runner process published events too — and
+// with no event key its SDK threw. Two config lines and a whole second webServer
+// existed for that: `INNGEST_DEV=1`, a per-run `INNGEST_PORT` so sibling
+// worktrees did not collide on :8288, and the pinned `inngest-cli` binary booted
+// as the executor. An emit is a row in the run's own database now, so the runner
+// needs nothing: the executor is `E2E_JOB_WORKER` below, a child of this process.
 
 // Story MOTIR-3414 · Subtask MOTIR-3427 — the RUNNER starts the Postgres job
 // engine's worker (globalSetup) and stops it (globalTeardown). It is a child of
 // the runner rather than a `webServer` entry because it binds no port, and this
 // flag is what globalSetup reads. Defaulted ON so the lane always carries an
-// executor for the new engine, exactly as it always carries `inngest-cli dev`
-// for the old one; export `E2E_JOB_WORKER=0` to run the suite without it.
+// executor — it is the ONLY one now (MOTIR-3418); export `E2E_JOB_WORKER=0` to
+// run the suite without it, which means no background job runs at all.
 process.env['E2E_JOB_WORKER'] ??= '1';
 // ⚠️ THE INDEX-WRITER SEAM, ON THE WORKER AND NOWHERE ELSE (MOTIR-3564). Its two
 // boundaries — motir-ai's run-credential mint and GitHub's tarball redirect — are
@@ -135,10 +111,6 @@ process.env['E2E_JOB_WORKER'] ??= '1';
 // would flip the whole lane cloud-on and break the four specs that assert the OFF
 // state. `E2E_JOB_WORKER_CODE_GRAPH_SEAM=0` turns it off.
 process.env['E2E_JOB_WORKER_CODE_GRAPH_SEAM'] ??= '1';
-// The routing override's path, for the RUNNER's own helpers. It matches the
-// value handed to the app webServer below — both processes read the same file,
-// which is the whole point of using one.
-process.env['MOTIR_POSTGRES_JOB_IDS_FILE'] ??= path.resolve('/tmp/motir-test-job-routing');
 
 // MOTIR-3473 — the PLATFORM-ADMIN identity the jobs dashboard's SYSTEM tab is
 // gated on. Set here so the spec and the app server agree on one value.
@@ -153,12 +125,6 @@ process.env['MOTIR_POSTGRES_JOB_IDS_FILE'] ??= path.resolve('/tmp/motir-test-job
 // session whose email is exactly this one, and only this spec signs up as it.
 process.env['PLATFORM_ADMIN_EMAIL'] ??= 'sched-platform-admin@example.com';
 const PLATFORM_ADMIN_EMAIL = process.env['PLATFORM_ADMIN_EMAIL'];
-// ⚠️ ONE resolved value, read back from the env, handed to BOTH the runner's
-// helpers and the server below. Hardcoding the literal in `webServer.env` (as
-// the email paths do) silently breaks any run that overrides the path: the
-// runner writes one file and the server reads another, and the only symptom is
-// a job that never appears on the engine. Cost one full lane run to find.
-const JOB_ROUTING_FILE = process.env['MOTIR_POSTGRES_JOB_IDS_FILE'];
 
 // ⚠️ THE EMAIL PATHS GET THE SAME TREATMENT, AND FOR A MEASURED REASON. They
 // were hardcoded literals in `webServer.env` while the runner-side helpers
@@ -217,14 +183,13 @@ export default defineConfig({
   // decision, same stub, as vitest.config.ts and the acceptance config; the Next
   // build still enforces the real boundary.
   tsconfig: './tsconfig.node.json',
-  // MOTIR-1565 — the harness readiness gate. Runs AFTER the two webServers
-  // below report their `url` ready, but BEFORE the first spec. Playwright's
-  // built-in `url` check treats any status < 404 as ready, so a redirecting
-  // root URL is "up" the instant the socket binds while `/sign-up` still 404s
-  // and inngest's `PUT /api/inngest` sync 404-cascades — which used to red the
-  // whole shell-flows suite from one bad shard start. This gate polls the
-  // authoritative app + inngest routes with bounded retry/backoff and throws
-  // (failing THIS step, not 8 specs) if the server never comes up. See
+  // MOTIR-1565 — the harness readiness gate. Runs AFTER the webServer below
+  // reports its `url` ready, but BEFORE the first spec. Playwright's built-in
+  // `url` check treats any status < 404 as ready, so a redirecting root URL is
+  // "up" the instant the socket binds while `/sign-up` still 404s — which used to
+  // red the whole shell-flows suite from one bad shard start. This gate polls the
+  // authoritative app route with bounded retry/backoff and throws (failing THIS
+  // step, not 8 specs) if the server never comes up. See
   // tests/e2e/global-setup.ts + tests/e2e/_helpers/readiness.ts.
   globalSetup: './tests/e2e/global-setup.ts',
   globalTeardown: './tests/e2e/global-teardown.ts',
@@ -281,13 +246,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // TWO servers (Story 1.6.3). Transactional emails are no longer sent inline
-  // — password reset + invites enqueue an `email.send` event that a background
-  // job delivers. So E2E needs the Inngest dev server (the executor) running
-  // alongside `pnpm dev`, or the email never reaches the file outbox the specs
-  // poll (waitForEmail would hang). The Next server's INNGEST_DEV=1 points the
-  // SDK at the local dev server (default :8288) instead of cloud; the cli `dev`
-  // discovers the app via the serve route and invokes the job on each event.
+  // ONE server (Story 1.6.3; the second went with MOTIR-3418). Transactional
+  // emails are not sent inline — password reset + invites enqueue an `email.send`
+  // event that a background job delivers, so the lane still needs an EXECUTOR or
+  // the email never reaches the file outbox the specs poll (waitForEmail would
+  // hang). That executor is the Postgres engine's own worker, started by
+  // `globalSetup` as a child of the runner (`E2E_JOB_WORKER` above) — it binds no
+  // port, so it is not a `webServer` entry.
   webServer: [
     {
       // MOTIR-1679: run the E2E suite against a PRODUCTION build (`next build`
@@ -333,7 +298,7 @@ export default defineConfig({
           : {}),
         // Give `next build` V8 old-space headroom (it is memory-heavy); harmless
         // for the lightweight `next start` that follows. 6 GB is safely inside
-        // the 16 GB `ubuntu-latest` budget shared with Postgres, the Inngest Go
+        // the 16 GB `ubuntu-latest` budget shared with Postgres, the worker
         // binary, the Playwright runner, and Chromium. (An earlier fix bumped
         // this to stop the `next dev` webServer GC-thrashing/OOMing under load;
         // moving to a production build removes that failure mode entirely, but
@@ -393,13 +358,6 @@ export default defineConfig({
         // limiter for the E2E dev server only; lib/auth/index.ts reads it and
         // leaves the limiter fully active everywhere it isn't set (i.e. prod).
         E2E_DISABLE_RATE_LIMIT: '1',
-        // Story 1.6.3: route enqueued email.send events to the local Inngest
-        // dev server (below), so the job runs and writes the outbox. Without
-        // this the SDK targets cloud and no E2E email is ever delivered.
-        // INNGEST_BASE_URL points the SDK at THIS run's executor port
-        // (Subtask 5.4.11 — a no-op at the :8288 default).
-        INNGEST_DEV: '1',
-        INNGEST_BASE_URL,
         // Subtask 1.6.6: arm-able deterministic email-fault injector. lib/email.ts
         // reads this file on every send and throws when the recipient matches the
         // armed substring, so the jobs-flow spec can drive the real failure →
@@ -407,14 +365,6 @@ export default defineConfig({
         // writes it via tests/e2e/_helpers/email-fault.ts; it is test-only and
         // refused in production.
         EMAIL_FAULT_PATH: EMAIL_FAULT_FILE,
-        // Story MOTIR-3414 · Subtask MOTIR-3427 — the per-job cutover switch's
-        // TEST-ONLY file channel. `lib/jobs/engine/cutover.ts` reads this file on
-        // every routing decision, so a spec can move one job onto the Postgres
-        // engine while `jobs-flow.spec.ts`, against this same server, keeps
-        // proving `email.send` on Inngest. An env var could not express both: it
-        // is fixed at boot. Absent (everything on Inngest) unless a spec writes
-        // it via tests/e2e/_helpers/job-routing.ts; refused in production.
-        ...(JOB_ROUTING_FILE ? { MOTIR_POSTGRES_JOB_IDS_FILE: JOB_ROUTING_FILE } : {}),
         // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
         // fixed portal) so it stops occluding the sidebar footer's collapse
         // toggle during the browser-driven shell-flows journey. next.config.ts
@@ -454,20 +404,6 @@ export default defineConfig({
         // developer's shell cannot leak in.
         MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR'] ?? 'fake',
       },
-    },
-    {
-      // The Inngest dev server = the executor. It discovers this app's
-      // functions by syncing the serve route (-u), then invokes `email.send`
-      // whenever the Next server publishes an event. It listens on
-      // INNGEST_PORT (default :8288 — the SDK dev-mode default); a sibling
-      // worktree run sets its own INNGEST_PORT so concurrent E2E runs no
-      // longer collide on the executor (Subtask 5.4.11).
-      command: `${INNGEST_CLI_BIN} dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
-      url: INNGEST_BASE_URL,
-      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
-      timeout: 120_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
     },
   ],
 });

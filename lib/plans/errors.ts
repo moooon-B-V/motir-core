@@ -338,7 +338,18 @@ export type PlanGrammarViolation =
    *  top-level placement of a kind that requires a parent. */
   | 'illegal_parent'
   /** An `add` proposing a `kind` that is not one of the five issue types. */
-  | 'unknown_kind';
+  | 'unknown_kind'
+  /**
+   * An `add` proposing a `type` that is not one of the fourteen `WorkItemType`
+   * members (MOTIR-3654). The twin of `unknown_kind`, and it is owed by the same
+   * argument this module's header makes for re-checking `kind`: the approved set
+   * can be edited between generation and approve (`updateProposal`), so the
+   * proposal is not trusted here. Without it an out-of-enum `type` reaches
+   * `prisma.workItem.create()` and raises a `PrismaClientValidationError` from
+   * inside the transaction — which is exactly the raw-ORM-failure-as-500 this
+   * gate exists to prevent, one column over from `kind`.
+   */
+  | 'unknown_type';
 
 /**
  * The proposal set does not satisfy the kind-parent grammar
@@ -464,6 +475,46 @@ export class PlanApproveTimedOutError extends Error {
       `Approving plan ${planId} (${itemCount} proposal${itemCount === 1 ? '' : 's'}) exceeded the transaction budget and was rolled back. Nothing was created and the plan is still awaiting a decision — retry, and if it keeps timing out the plan is too large to materialize in one transaction.`,
     );
     this.name = 'PlanApproveTimedOutError';
+  }
+}
+
+/**
+ * A proposal carried a field value the `work_item` schema will not accept, and
+ * the ORM said so from inside `materialize`'s transaction (MOTIR-3654). → 422
+ *
+ * ⚠️ THIS IS THE LAST ARM, NOT THE FIRST. Three checks stand in front of it and
+ * each is the better place to be caught: the tool schemas refuse an out-of-enum
+ * value at the append (`authorPlan.ts`, `z.enum(WORK_ITEM_TYPES)`), and
+ * `validatePlanProposals` re-checks `kind` and `type` before the transaction
+ * opens. This class exists for what gets past all three — a column widened
+ * without its writer, a value written by a path that predates the schema — and
+ * for the reason `PlanApproveTimedOutError` exists one failure over: **a
+ * `PrismaClientValidationError` escaping to the route's rethrow is a bare 500
+ * with an EMPTY BODY**, and an empty body is why Approve gets pressed twice.
+ *
+ * It names the PROPOSAL and, where the ORM's message yields it, the FIELD —
+ * because "your plan is malformed" is not actionable and "proposal
+ * `<id>`: `type` is not a valid value" is. The transaction rolled back, so the
+ * tree is byte-identical and the project's key counter has not advanced.
+ *
+ * The field is optional on purpose: it is parsed from Prisma's rendered message
+ * rather than asserted, and a null field with a real `planItemId` is strictly
+ * better than a 500. Never widen the parse into a claim the message does not
+ * carry.
+ */
+export class PlanItemFieldRejectedError extends Error {
+  readonly code = 'PLAN_ITEM_FIELD_REJECTED' as const;
+  constructor(
+    readonly planItemId: string,
+    readonly field: string | null,
+    readonly ormMessage: string,
+  ) {
+    super(
+      `Proposal ${planItemId} carries a value the work-item schema rejects${
+        field ? ` for \`${field}\`` : ''
+      }. Nothing was created and the plan still awaits a decision — correct the proposal (\`update_plan_proposal\`) and approve again.`,
+    );
+    this.name = 'PlanItemFieldRejectedError';
   }
 }
 

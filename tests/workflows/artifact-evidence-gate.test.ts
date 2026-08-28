@@ -12,7 +12,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { inngest } from '@/lib/jobs/client';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // THE CLOSE-OUT ARTIFACT-EVIDENCE GATE (MOTIR-2709) at the seam it actually
 // guards: `applyStatusTransition`, which every close-out passes through.
@@ -28,7 +28,7 @@ import { inngest } from '@/lib/jobs/client';
 beforeEach(async () => {
   // The transition paths emit `work-item/transitioned` post-commit (5.4.5) and
   // the test env has no Inngest key.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
 });
 

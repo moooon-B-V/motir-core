@@ -4,23 +4,27 @@
 // @smoke — proves the background-jobs stack (the defineJob runtime, the retry +
 // dead-letter + replay patterns, and the 1.6.5 operator dashboard) holds
 // together against a forced failure, driven through the running Next server +
-// the Inngest dev server + Postgres the Playwright config boots.
+// the engine's worker (a child of the Playwright runner, started by
+// `globalSetup`) + Postgres.
 //
 // Unlike jobs-dashboard.spec.ts (which seeds ledger rows directly to test the
 // READ surface fast), the happy-path and forced-failure scenarios here drive a
-// REAL job: an invite enqueues `email.send`, the Inngest dev server invokes it,
-// and we assert what actually landed in the ledger. That real path is the whole
-// point — it's what caught PRODECT_FINDINGS #39 (the 1.6.4 dead-letter write
-// never ran on the real executor; only the in-process unit harness made it look
-// like it did) and #40 (replay re-emitting the unchanged idempotency key was
+// REAL job: an invite enqueues `email.send`, the worker claims and runs it, and
+// we assert what actually landed in the ledger. That real path is the whole point
+// — it's what caught PRODECT_FINDINGS #39 (the 1.6.4 dead-letter write never ran
+// on the real executor; only the in-process unit harness made it look like it
+// did) and #40 (replay re-emitting the unchanged idempotency key was
 // dedup-dropped). The replay + role-gating scenarios seed a DLQ row directly
 // (the honest fixture for an action surface — same call as jobs-dashboard.spec)
 // and then exercise the real re-emit → job → outbox path.
 //
 // TIMING. The forced-failure path runs the full transient retry budget (3
-// attempts with Inngest's real backoff ≈ 0s / 30s / 72s) before `onFailure`
-// dead-letters, so that scenario needs ~90s+. Its test sets a generous timeout;
-// the others are fast.
+// attempts) before the terminal-failure hook dead-letters. The engine's backoff
+// is `retryBackoffMs` — doubling from one second with ±20% jitter — so that is a
+// few seconds rather than the ~90s the vendor's ≈ 0s / 30s / 72s cost
+// (MOTIR-3418). Its test keeps a generous timeout: the assertion polls, so a
+// budget that is larger than it needs to be costs nothing and a tight one turns a
+// loaded runner into a flake.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
@@ -246,7 +250,7 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
         functionId: 'email.send',
         eventName: 'email.send',
         eventId: `iso-evt-${i}`,
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'succeeded',
         finishedAt: new Date(),

@@ -1,7 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -13,7 +12,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
-import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
+import { captureJobEvents, type CapturedJobEvent, spyOnJobDispatch } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
@@ -328,7 +327,7 @@ describe('the wake cannot fail the teardown it hangs off', () => {
     // prevent. So the transport's failure resolves to an outcome.
     const fx = await seedTenant();
     await seedIntent(fx, { queuedAtMs: -60_000 });
-    vi.spyOn(inngest, 'send').mockRejectedValue(new Error('the event stream is unreachable'));
+    spyOnJobDispatch().mockRejectedValue(new Error('the event stream is unreachable'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(ciRunnerBootService.dispatchNextPendingForProject(fx.projectId)).resolves.toBe(

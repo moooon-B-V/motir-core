@@ -4,10 +4,8 @@ import type { AddressInfo } from 'node:net';
 import {
   assertHarnessReady,
   httpGet,
-  parseInngestFunctionCount,
   pollUntilReady,
   waitForHttp200,
-  waitForInngestReady,
 } from './e2e/_helpers/readiness';
 
 // Unit tests for the E2E harness readiness gate (MOTIR-1565). This file lives
@@ -52,20 +50,6 @@ describe('httpGet', () => {
     // Port 1 is not listening; the request errors → status 0 rather than throwing.
     const { status } = await httpGet('http://127.0.0.1:1', 300);
     expect(status).toBe(0);
-  });
-});
-
-describe('parseInngestFunctionCount', () => {
-  it('returns the length of the functions array', () => {
-    expect(
-      parseInngestFunctionCount(JSON.stringify({ functions: [{ id: 'a' }, { id: 'b' }] })),
-    ).toBe(2);
-    expect(parseInngestFunctionCount(JSON.stringify({ functions: [] }))).toBe(0);
-  });
-
-  it('returns null for non-JSON or an unrecognised shape', () => {
-    expect(parseInngestFunctionCount('<html>not json</html>')).toBeNull();
-    expect(parseInngestFunctionCount(JSON.stringify({ version: '1.2.3' }))).toBeNull();
   });
 });
 
@@ -123,69 +107,23 @@ describe('waitForHttp200', () => {
   });
 });
 
-describe('waitForInngestReady', () => {
-  it('waits until /dev reports at least one synced function (when the payload exposes one)', async () => {
-    let hits = 0;
-    const { origin } = await startServer((req, res) => {
-      if (req.url !== '/dev') {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-      hits += 1;
-      // functions empty until the app "syncs" on the 2nd probe.
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ functions: hits >= 2 ? [{ id: 'email.send' }] : [] }));
-    });
-    await waitForInngestReady(origin, { ...FAST, attempts: 10, log: () => {} });
-    expect(hits).toBeGreaterThanOrEqual(2);
-  });
-
-  it('accepts the pinned inngest-cli /dev shape ({ ids, status }, no functions list) as ready', async () => {
-    // The exact body the bundled `inngest-cli dev` returns on `/dev` — no
-    // `functions` array, so the gate must NOT hard-wait for a function count.
-    const { origin } = await startServer((req, res) => {
-      res.writeHead(req.url === '/dev' ? 200 : 404, { 'Content-Type': 'application/json' });
-      res.end(req.url === '/dev' ? JSON.stringify({ ids: ['stub'], status: 200 }) : '');
-    });
-    await expect(
-      waitForInngestReady(origin, { ...FAST, attempts: 3, log: () => {} }),
-    ).resolves.toBeUndefined();
-  });
-
-  it('throws when the dev server never returns 200', async () => {
-    const { origin } = await startServer((_req, res) => {
-      res.writeHead(500);
-      res.end();
-    });
-    await expect(
-      waitForInngestReady(origin, { ...FAST, attempts: 3, log: () => {} }),
-    ).rejects.toThrow(/inngest dev server did not become ready/);
-  });
-});
+// ⚠️ TWO `describe`s STOOD HERE — `parseInngestFunctionCount` and
+// `waitForInngestReady` (MOTIR-3418 removed both with the second webServer).
+// They probed the vendor dev server's `/dev` endpoint for a synced-function
+// count, tolerated the pinned CLI's own `{ ids, status }` shape, and failed the
+// gate when the executor never came up. The lane's executor is the engine's own
+// worker now, and `startJobWorker` waits for its `[worker] started as` line —
+// the process itself, not an HTTP probe of it.
 
 describe('assertHarnessReady', () => {
-  it('passes when the app routes 200 and inngest reports functions synced', async () => {
+  it('passes when the app auth route 200s', async () => {
     const { origin } = await startServer((req, res) => {
-      if (req.url === '/sign-up' || req.url === '/api/inngest') {
-        res.writeHead(200);
-        res.end('ok');
-        return;
-      }
-      if (req.url === '/dev') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ functions: [{ id: 'email.send' }] }));
-        return;
-      }
-      res.writeHead(404);
-      res.end();
+      res.writeHead(req.url === '/sign-up' ? 200 : 404);
+      res.end('ok');
     });
-    // Same origin serves the app routes and the inngest /dev endpoint (the
-    // paths don't collide), so one server stands in for both here.
     await expect(
       assertHarnessReady({
         baseUrl: origin,
-        inngestBaseUrl: origin,
         poll: { ...FAST, attempts: 5, log: () => {} },
       }),
     ).resolves.toBeUndefined();
@@ -193,8 +131,8 @@ describe('assertHarnessReady', () => {
 
   it('fails fast on the app auth route when /sign-up 404s (the MOTIR-1565 signature)', async () => {
     const { origin } = await startServer((req, res) => {
-      // Root redirects (server "up"), /api/inngest is fine, but /sign-up 404s —
-      // exactly the half-started-server signature this gate must catch.
+      // Root redirects (server "up") but /sign-up 404s — exactly the
+      // half-started-server signature this gate must catch.
       if (req.url === '/') {
         res.writeHead(307, { Location: '/login' });
         res.end();
@@ -206,7 +144,6 @@ describe('assertHarnessReady', () => {
     await expect(
       assertHarnessReady({
         baseUrl: origin,
-        inngestBaseUrl: origin,
         poll: { ...FAST, attempts: 3, log: () => {} },
       }),
     ).rejects.toThrow(/app auth route \/sign-up did not become ready/);

@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import {
   watcherNotifyOnCommentCreated,
   watcherNotifyOnTransitioned,
 } from '@/lib/jobs/definitions/watcherNotify';
 import { EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailSend';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { watcherCommentNotificationEmail } from '@/lib/emailTemplates/watcherCommentNotification';
 import { watcherTransitionNotificationEmail } from '@/lib/emailTemplates/watcherTransitionNotification';
@@ -42,7 +42,7 @@ import { captureEmailEvents, captureJobEvents } from '../helpers/jobs';
 //   2. the `work-item/transitioned` emit seam — post-commit from BOTH
 //      `updateStatus` and the board move, nothing on no-op / rollback;
 //   3. the two registered jobs driving the fan-out in-process via
-//      @inngest/test (job_run bookkeeping included);
+//      the in-process JobTestEngine (job_run bookkeeping included);
 //   4. the two template contracts (pure render, unredacted link, locale arms).
 
 beforeEach(async () => {
@@ -548,8 +548,8 @@ describe('work-item/transitioned emit seam', () => {
 
 describe('watcherNotify jobs — in-process runs', () => {
   it('registers both consumers in the job registry', () => {
-    expect(jobFunctions).toContain(watcherNotifyOnCommentCreated);
-    expect(jobFunctions).toContain(watcherNotifyOnTransitioned);
+    expect(jobDefinitions).toContain(watcherNotifyOnCommentCreated);
+    expect(jobDefinitions).toContain(watcherNotifyOnTransitioned);
   });
 
   it('drives the comment event end-to-end: watcher mailed, mentioned user skipped, run recorded', async () => {
@@ -575,7 +575,7 @@ describe('watcherNotify jobs — in-process runs', () => {
       authorId: s.fx.ownerId,
       mentionedUserIds: [mentioned.id],
     };
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: watcherNotifyOnCommentCreated,
       events: [{ name: 'work-item/comment.created', data }],
     });
@@ -607,7 +607,7 @@ describe('watcherNotify jobs — in-process runs', () => {
       toStatusKey: 'in_progress',
       revisionId: 'rev-e2e',
     };
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: watcherNotifyOnTransitioned,
       events: [{ name: 'work-item/transitioned', data }],
     });
@@ -654,7 +654,7 @@ describe('replay idempotency — a re-run fan-out re-emits identical keys', () =
       mentionedUserIds: [],
     };
     const run = async () => {
-      const engine = new InngestTestEngine({
+      const engine = new JobTestEngine({
         function: watcherNotifyOnCommentCreated,
         events: [{ name: 'work-item/comment.created', data }],
       });
@@ -685,7 +685,7 @@ describe('replay idempotency — a re-run fan-out re-emits identical keys', () =
       revisionId: 'rev-replay',
     };
     const run = async () => {
-      const engine = new InngestTestEngine({
+      const engine = new JobTestEngine({
         function: watcherNotifyOnTransitioned,
         events: [{ name: 'work-item/transitioned', data }],
       });

@@ -7,7 +7,7 @@ import type { UpdateWorkItemInput } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
-import { inngest } from '@/lib/jobs/client';
+import { spyOnJobDispatch } from '../../helpers/jobs';
 
 // Service-layer coverage for the edit form (Subtask 2.3.6): the finding-#46
 // status-removal guard, optimistic concurrency (StaleWorkItemError), the
@@ -32,7 +32,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAll();
 });
 

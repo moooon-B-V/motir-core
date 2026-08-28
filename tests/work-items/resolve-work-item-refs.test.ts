@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemDto } from '@/lib/dto/workItems';
@@ -8,6 +7,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Read-side reference resolution (Story 5.8 · Subtask 5.8.6) — the batched
 // `workItemsService.resolveReferenceSummaries`, which turns the references
@@ -19,7 +19,7 @@ import { truncateAuthTables } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

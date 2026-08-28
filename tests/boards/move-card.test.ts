@@ -17,8 +17,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // boardsService.moveCard (Story 3.1 · Subtask 3.1.5). Real Postgres (no mocks),
 // per CLAUDE.md. The project comes from createTestProject (→ createProject,
@@ -32,7 +32,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE →
   // project → board / board_column / board_column_status / work_item.
   await truncateAuthTables();

@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
@@ -8,6 +7,7 @@ import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Operator-dashboard read + replay surface (Story 1.6 · Subtask 1.6.5). Drives
 // the service directly against a real Postgres (no mocks except inngest.send,
@@ -33,7 +33,7 @@ async function seedRun(opts: {
       functionId: opts.functionId ?? 'email.send',
       eventName: opts.eventName ?? 'email.send',
       eventId: `evt-${randomToken()}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       status: opts.status,
     },
@@ -148,7 +148,7 @@ describe('jobsDashboardService.countDLQ', () => {
 describe('jobsDashboardService.replayDLQ', () => {
   let sendSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
-    sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    sendSpy = spyOnJobDispatch();
   });
   afterEach(() => {
     sendSpy.mockRestore();
@@ -187,16 +187,18 @@ describe('jobsDashboardService.replayDLQ', () => {
 
     const result = await jobsDashboardService.replayDLQ({ dlqId, workspaceId, userId: owner.id });
 
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-    const sent = sendSpy.mock.calls[0]![0] as {
-      name: string;
-      data: Record<string, unknown>;
-    };
-    expect(sent.name).toBe('email.send');
+    // ⚠️ READ OFF THE ROW, NOT OFF A DISPATCH SPY (MOTIR-3418). A replay used to
+    // be a re-send through the transport; it is a `job_event` + `job_queue` pair
+    // written straight into the queue now, so the row IS the observation.
+    const enqueued = await adminDb.jobEvent.findMany({ where: { name: 'email.send' } });
+    expect(enqueued).toHaveLength(1);
     // The payload is re-emitted intact EXCEPT the idempotency key, which is
-    // re-shaped to `{original}:replay:{dlqId}` so Inngest's same-key dedup
-    // doesn't drop the replay (PRODECT_FINDINGS #40).
-    expect(sent.data).toEqual({ ...eventData, idempotencyKey: `replay-key-xyz:replay:${dlqId}` });
+    // re-shaped to `{original}:replay:{dlqId}` so the `(job_id, idempotency_key)`
+    // index does not swallow the replay (PRODECT_FINDINGS #40).
+    expect(enqueued[0]!.data).toEqual({
+      ...eventData,
+      idempotencyKey: `replay-key-xyz:replay:${dlqId}`,
+    });
 
     expect(result.replayedAt).not.toBeNull();
     const reread = await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } });

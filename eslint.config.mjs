@@ -3,49 +3,43 @@ import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
 import prettier from 'eslint-config-prettier';
 
-// Background-jobs boundary (Story 1.6). The raw Inngest SDK may be imported
-// ONLY by the jobs runtime (lib/jobs/**) and the serve route
-// (app/api/inngest/**). Everywhere else goes through sendEvent() / defineJob().
-const INNGEST_RESTRICTION = {
-  group: ['inngest', 'inngest/*'],
-  message:
-    'Import the Inngest SDK only in lib/jobs/** or app/api/inngest/. Elsewhere use sendEvent() / defineJob() from @/lib/jobs.',
-};
-
 // Postgres job-engine boundary (Story MOTIR-3414 · Subtask MOTIR-3426). The
 // engine's internals — the claim loop, the step shim, the dispatcher, the queue
 // repositories — may be imported ONLY by the jobs runtime (lib/jobs/**) and the
 // worker entrypoint (scripts/worker.ts). Everywhere else goes through
-// sendEvent() / defineJob(), exactly as with Inngest.
+// sendEvent() / defineJob().
 //
-// ⚠️ THIS IS THE MIRROR OF `INNGEST_RESTRICTION`, and it exists for the reason
-// the whole epic exists: last time a job substrate's abstractions reached past
-// `lib/jobs/**`, leaving it became the cost of a whole epic. The boundary is
-// cheap to hold now and expensive to establish later.
+// ⚠️ IT IS THE SURVIVING HALF OF A PAIR, AND ITS TWIN IS WHY IT EXISTS. There
+// used to be an `INNGEST_RESTRICTION` beside it, holding the vendor SDK inside
+// the same two directories. MOTIR-3418 deleted that rule because the package it
+// named is gone — and a rule guarding an absent package is dead weight, which is
+// why its removal was made an acceptance criterion rather than a tidy-up: it is
+// the machine-checkable proof the dependency left.
+//
+// This rule is the reason that removal cost one epic instead of two. The vendor's
+// abstractions never reached past `lib/jobs/**`, so retiring it was a deletion
+// rather than a rewrite — exactly three files imported the SDK at the end, as at
+// the beginning. The boundary is cheap to hold now and expensive to establish
+// later, and the next substrate will be retired by whoever holds this one.
 const JOB_ENGINE_RESTRICTION = {
   group: ['@/lib/jobs/engine', '@/lib/jobs/engine/*', '**/lib/jobs/engine/*'],
   message:
     'The Postgres job engine is internal to the jobs runtime. Import it only in lib/jobs/** or scripts/worker.ts; elsewhere use sendEvent() / defineJob() from @/lib/jobs.',
 };
 
-// The Inngest CLIENT boundary (Story MOTIR-3415 · MOTIR-3456).
+// ⚠️ A THIRD RESTRICTION LIVED HERE AND ITS LESSON OUTLIVED IT
+// (`INNGEST_CLIENT_RESTRICTION`, MOTIR-3415 · MOTIR-3456). The SDK rule above
+// restricted the vendor PACKAGE and held from Story 1.6 — while every emitter
+// that bypassed `sendEvent` imported `@/lib/jobs/client`, our own thin wrapper
+// around that package, which is not the SDK and so was never restricted. Four
+// `system.*` events reached the queue without the emit seam being consulted at
+// all, under a green lint run.
 //
-// ⚠️ THIS EXISTS BECAUSE `INNGEST_RESTRICTION` GUARDS THE DOOR NOBODY USES. That
-// rule restricts the `inngest` PACKAGE, and it has held since Story 1.6 — but
-// every emitter that bypassed `sendEvent` imported `@/lib/jobs/client`, our own
-// thin wrapper around that package, which is not the SDK and so was never
-// restricted. Four `system.*` events reached Inngest without the per-job cutover
-// switch ever being consulted, under a green lint run.
-//
-// A boundary that can be walked around by importing one file over is a
-// convention, not a guard. So the restriction moves from the vendor's name onto
-// ours as well: outside the jobs runtime, the worker entrypoint and the serve
-// route, reach the queue through sendEvent() / sendSystemEvent() / defineJob().
-const INNGEST_CLIENT_RESTRICTION = {
-  group: ['@/lib/jobs/client', '**/lib/jobs/client'],
-  message:
-    'Import the Inngest client only in lib/jobs/**, scripts/worker.ts or app/api/inngest/. Elsewhere emit through sendEvent() / sendSystemEvent() from @/lib/jobs/sendEvent, so the per-job cutover switch is consulted.',
-};
+// The rule went with the client file in MOTIR-3418. **The lesson is why
+// `JOB_ENGINE_RESTRICTION` above names `@/lib/jobs/engine/*` and not a package:**
+// a boundary that can be walked around by importing one file over is a
+// convention, not a guard, so it is stated in terms of OUR module graph rather
+// than a vendor's name.
 
 // Async-email boundary (Story 1.6 · Subtask 1.6.3). The provider primitive
 // `@/lib/email` (`sendEmail`) may be imported ONLY by lib/services/emailService.ts,
@@ -88,23 +82,23 @@ const eslintConfig = defineConfig([
       // Two import boundaries enforced together (a file is checked against the
       // single no-restricted-imports rule, so both live here and the overrides
       // below re-state the subset that applies to each special surface):
-      //   - INNGEST: raw SDK only in lib/jobs/** + app/api/inngest/**.
+      //   - JOB ENGINE: `@/lib/jobs/engine/*` only in lib/jobs/** + scripts/worker.ts.
       //   - EMAIL: `@/lib/email` only in lib/services/emailService.ts.
       'no-restricted-imports': [
         'error',
         {
           paths: [EMAIL_RESTRICTION],
-          patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION, INNGEST_CLIENT_RESTRICTION],
+          patterns: [JOB_ENGINE_RESTRICTION],
         },
       ],
     },
   },
 
-  // The jobs runtime + serve route MAY import the Inngest SDK — but still may
-  // NOT import @/lib/email (the job handler calls emailService, it doesn't
-  // dispatch mail itself). So we drop the inngest pattern, keep the email path.
+  // The jobs runtime MAY import the engine — it IS the jobs runtime — but still
+  // may NOT import @/lib/email (the job handler calls emailService, it doesn't
+  // dispatch mail itself). So we drop the engine pattern, keep the email path.
   {
-    files: ['lib/jobs/**/*.{ts,tsx}', 'app/api/inngest/**/*.{ts,tsx}'],
+    files: ['lib/jobs/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { paths: [EMAIL_RESTRICTION] }],
     },
@@ -113,15 +107,11 @@ const eslintConfig = defineConfig([
   // The WORKER ENTRYPOINT is the one file outside lib/jobs/** that is allowed to
   // reach the engine: it is the process that RUNS it (fly.toml's `worker` group),
   // so it necessarily constructs the loop and the ledger wrapper directly. The
-  // Inngest and email boundaries still apply to it — it enqueues nothing and
-  // sends no mail.
+  // email boundary still applies to it — it sends no mail.
   {
     files: ['scripts/worker.ts'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        { paths: [EMAIL_RESTRICTION], patterns: [INNGEST_RESTRICTION] },
-      ],
+      'no-restricted-imports': ['error', { paths: [EMAIL_RESTRICTION] }],
       // ⚠️ AND ITS STDOUT IS AN INTERFACE, NOT DEBUG OUTPUT (MOTIR-3564). This
       // process has no request, no response and no UI: its boot line, its drain
       // line and its exit line are the whole of what an operator — or a lane —
@@ -135,13 +125,12 @@ const eslintConfig = defineConfig([
     },
   },
 
-  // Experiment harnesses (`scripts/experiments/**`) MAY import the Inngest SDK
-  // directly. They exist to MEASURE third-party behaviour — the fairness probe
-  // in `docs/jobs.md` builds its own standalone client and serve handler on
-  // throwaway ports precisely so it is not the app's job substrate — and going
-  // through `defineJob`/`sendEvent` would test our wrapper instead of the thing
-  // under measurement. Nothing here ships in the app; the email boundary still
-  // applies, same as for lib/jobs.
+  // Experiment harnesses (`scripts/experiments/**`) MAY reach past the app's
+  // seams. They exist to MEASURE substrate behaviour — building a standalone
+  // client on a throwaway port precisely so it is not the app's job substrate —
+  // and going through `defineJob`/`sendEvent` would measure our wrapper instead
+  // of the thing under measurement. Nothing here ships in the app; the email
+  // boundary still applies, same as for lib/jobs.
   {
     files: ['scripts/experiments/**/*.{ts,mjs,js}'],
     rules: {
@@ -149,16 +138,12 @@ const eslintConfig = defineConfig([
     },
   },
 
-  // emailService is the ONE file allowed to import @/lib/email — but it must
-  // not reach for the Inngest SDK. So we drop the email path, keep the inngest
-  // pattern.
+  // emailService is the ONE file allowed to import @/lib/email — but it must not
+  // reach into the job engine. So we drop the email path, keep the engine pattern.
   {
     files: ['lib/services/emailService.ts'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        { patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION, INNGEST_CLIENT_RESTRICTION] },
-      ],
+      'no-restricted-imports': ['error', { patterns: [JOB_ENGINE_RESTRICTION] }],
     },
   },
 

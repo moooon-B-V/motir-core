@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { maxDuration } from '@/app/api/inngest/route';
 import {
   FLEET_TIME_BUDGETS,
   pollWaitMs,
@@ -8,44 +7,49 @@ import {
 import { RUNNER_JIT_REQUEST_TIMEOUT_MS } from '@/lib/github/runnerJitConfig';
 import { ORCHESTRATOR_REQUEST_TIMEOUT_MS } from '@/lib/orchestrator/errors';
 
-// THE FLEET'S TIME BUDGETS vs THE PLATFORM CEILING (MOTIR-2007).
+// THE FLEET'S TIME BUDGETS (MOTIR-2007; re-based by MOTIR-3418).
 //
-// `docs/jobs.md` rule 2 asks that the deadlines a job spends along its slowest
-// step stay under the serve route's `maxDuration`. The fleet was the one case
-// that inequality did not hold for: supervision was allowed 3,600s inside an
-// invocation capped at 300s, and nothing anywhere compared the two numbers.
+// ⚠️ THE CEILING THIS FILE WAS WRITTEN AGAINST NO LONGER EXISTS, and that is the
+// change to read before the assertions. It used to IMPORT `maxDuration` from the
+// serve route and compare every budget against it: supervision was allowed
+// 3,600s inside an invocation capped at 300s, and nothing anywhere compared the
+// two numbers. `maxDuration = 300` was a serverless platform's function timeout,
+// and the whole stepped-supervisor shape existed to survive it.
 //
-// ⚠️ THIS FILE IS THAT COMPARISON, AND IT READS BOTH SIDES FROM THEIR REAL
-// SOURCES — `maxDuration` is IMPORTED from the route rather than restated, so a
-// change to either side has to come past this test. A hardcoded `300` here would
-// assert the constants against a copy of themselves, which is the failure mode
-// this is supposed to prevent.
+// The job substrate is a long-lived worker process now (`scripts/worker.ts` on
+// Fly), so there is no invocation to be killed and no ceiling to measure against.
+// **What survives is the part that was never about the vendor**: the budgets are
+// stated ONCE, in `FLEET_TIME_BUDGETS`, they are the CLIENTS' own numbers rather
+// than copies of them, and they are ORDERED so that each deadline can fire before
+// the next one does. Those are properties of the fleet, and they are what this
+// file asserts now.
+//
+// ⚠️ DO NOT RE-INTRODUCE AN ABSOLUTE CEILING HERE. A hardcoded `300` would assert
+// the constants against a number nothing enforces — which is worse than the gap
+// it appears to close, because it reads as a live constraint.
 
-describe('the fleet time budgets are stated once and hold against maxDuration', () => {
-  it('the route still declares an explicit ceiling — the number everything else is measured against', () => {
-    // Left implicit it would silently inherit Vercel's low default, which is the
-    // MOTIR-1974 defect. It is a reviewable number or it is nothing.
-    expect(typeof maxDuration).toBe('number');
-    expect(maxDuration).toBeGreaterThan(0);
+describe('the fleet time budgets are stated once and stay internally consistent', () => {
+  it('a step is shaped to a small, fixed amount of work — bounded on its own terms', () => {
+    // The constraint MOTIR-2007 exists to make un-regressable. It used to be
+    // expressed as `stepWorkBudgetMs <= maxDuration`, borrowing the platform's
+    // number; with no platform number left, the property is stated directly. A
+    // step does one mint or one provider call, so its budget stays in seconds —
+    // and stays well under the whole run's, or the run is one step.
+    expect(FLEET_TIME_BUDGETS.stepWorkBudgetMs).toBeGreaterThan(0);
+    expect(FLEET_TIME_BUDGETS.stepWorkBudgetMs).toBeLessThan(FLEET_TIME_BUDGETS.jobTimeoutMs);
   });
 
-  it('NO STEP of the boot path is allowed to approach the invocation ceiling', () => {
-    // The constraint the card exists to make un-regressable. Every phase the job
-    // steps — boot, one poll, teardown — is shaped to a fixed, small amount of
-    // work; this is the budget that shape is held to.
-    expect(FLEET_TIME_BUDGETS.stepWorkBudgetMs).toBeLessThanOrEqual(maxDuration * 1000);
-  });
-
-  it('the RUN may outlive the invocation ceiling — deliberately, and only because it is stepped', () => {
-    // ⚠️ THE ASSERTION THAT LOOKS BACKWARDS. A supervised CI job runs up to
-    // twelve times longer than one invocation may live. That is legal ONLY
-    // because no single step spans it: the run is a chain of invocations.
-    //
-    // It is asserted rather than merely allowed, because the tempting non-fix
-    // was to shorten this under `maxDuration` — which caps every tenant's CI job
-    // at five minutes. That is the product regressing to fit the bug, and this
-    // line is what makes someone argue with the comment before doing it.
-    expect(FLEET_TIME_BUDGETS.jobTimeoutMs).toBeGreaterThan(maxDuration * 1000);
+  it('the RUN outlives any single step by a wide margin — the reason it is stepped at all', () => {
+    // ⚠️ THE ASSERTION THAT LOOKS BACKWARDS, and still does. A supervised CI job
+    // runs far longer than one step's budget. That was legal under the old
+    // platform only because no single step spanned the invocation ceiling; it is
+    // legal now because the worker simply stays up. Either way the tempting
+    // non-fix was to shorten `jobTimeoutMs` to fit the step budget, which caps
+    // every tenant's CI job at seconds. This line is what makes someone argue
+    // with the comment before doing it.
+    expect(FLEET_TIME_BUDGETS.jobTimeoutMs).toBeGreaterThan(
+      FLEET_TIME_BUDGETS.stepWorkBudgetMs * 10,
+    );
   });
 
   it('the deadlines are ordered: poll ≤ maxPoll < bootDeadline < jobTimeout < reapAfter', () => {
@@ -91,17 +95,13 @@ describe('the fleet time budgets are stated once and hold against maxDuration', 
     // that makes one call still runs forever if the call does.
     const b = FLEET_TIME_BUDGETS;
     expect(b.mintDeadlineMs + b.containerCallDeadlineMs).toBeLessThanOrEqual(b.stepWorkBudgetMs);
-    // ...and therefore, transitively, under the invocation ceiling. Stated
-    // separately because that is the sentence `docs/jobs.md` rule 3 actually
-    // writes down, and the chain is only as good as its weakest link being
-    // asserted.
-    expect(b.mintDeadlineMs + b.containerCallDeadlineMs).toBeLessThan(maxDuration * 1000);
   });
 
   it('the deadlines are the CLIENTS OWN numbers, not a copy of them', () => {
-    // The same discipline as importing `maxDuration`: a budget that restates a
-    // client's timeout asserts the constants against themselves and goes stale
-    // the first time a client is tuned.
+    // A budget that restates a client's timeout asserts the constants against
+    // themselves and goes stale the first time a client is tuned. This is the
+    // discipline the removed `maxDuration` import used to demonstrate, applied
+    // where it still has a real second source to read from.
     expect(FLEET_TIME_BUDGETS.mintDeadlineMs).toBe(RUNNER_JIT_REQUEST_TIMEOUT_MS);
     expect(FLEET_TIME_BUDGETS.containerCallDeadlineMs).toBe(ORCHESTRATOR_REQUEST_TIMEOUT_MS);
     // Both must be real bounds — a zero or a NaN would satisfy every inequality

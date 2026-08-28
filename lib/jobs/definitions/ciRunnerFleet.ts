@@ -41,7 +41,7 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 // Motir's infrastructure bill does.
 
 /**
- * Every minute. The floor Inngest cron granularity allows, which is also the
+ * Every minute. The floor cron granularity allows, which is also the
  * honest statement of what this trigger can and cannot promise (§6).
  *
  * ⚠️ WHO OWNS ADMISSION LATENCY, AS OF MOTIR-2852: NOT THIS. A queued job is
@@ -183,7 +183,7 @@ export const ciRunnerProvisionSweep = defineJob(
         // webhook's hot path cannot emit two different events for one intent.
         //
         // Sent BARE, not through `dispatchCiRunnerBoot`: a failure here belongs
-        // to the step, and letting it propagate buys a free Inngest retry. The
+        // to the step, and letting it propagate buys a free engine retry. The
         // webhook has no such retry, which is why only it swallows. That is why
         // this is the STRICT door and not `sendSystemEvent` — the throw IS the
         // retry (MOTIR-3456).
@@ -233,7 +233,8 @@ export const ciRunnerBoot = defineJob(
     // ⚠️ THE DURABLE POLL LOOP IS GONE, AND MOTIR-2007'S FINDING IS NOT REVERSED
     // — only its remedy (MOTIR-3485). This block used to read: *"Supervising a
     // container takes up to an hour; ONE INVOCATION of
-    // `app/api/inngest/route.ts` gets `maxDuration = 300` (MOTIR-1974). Doing it
+    // the serve route got `maxDuration = 300` (MOTIR-1974; both went with
+    // MOTIR-3418 — a long-lived worker has no invocation ceiling). Doing it
     // synchronously … meant every CI job over ~5 minutes had its supervisor
     // killed with `FUNCTION_INVOCATION_TIMEOUT`: no teardown, no usage row, a
     // dead-lettered run for a job that had actually passed, and an intent left

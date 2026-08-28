@@ -18,25 +18,18 @@ vi.mock('@/lib/services/conventionEstablishService', () => ({
 }));
 
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { plansService } from '@/lib/services/plansService';
 import { conventionEstablishService } from '@/lib/services/conventionEstablishService';
 import type { WorkItemEmbeddingRequestedData } from '@/lib/jobs/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { captureEventPayloads } from '../../helpers/jobs';
 
 /** Capture every `work-item/embedding.requested` publish (and block the network). */
 function captureEmbeddingEvents(): WorkItemEmbeddingRequestedData[] {
-  const events: WorkItemEmbeddingRequestedData[] = [];
-  vi.spyOn(inngest, 'send').mockImplementation((async (payload: unknown) => {
-    for (const entry of Array.isArray(payload) ? payload : [payload]) {
-      const evt = entry as { name?: string; data?: WorkItemEmbeddingRequestedData };
-      if (evt?.name === 'work-item/embedding.requested' && evt.data) events.push(evt.data);
-    }
-    return { ids: [] as string[] };
-  }) as typeof inngest.send);
-  return events;
+  return captureEventPayloads<WorkItemEmbeddingRequestedData>('work-item/embedding.requested')
+    .events;
 }
 
 /** Create a plan, append the given proposals, and mark it `planned`. */

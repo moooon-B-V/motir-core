@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { jobFunctions } from '@/lib/jobs/registry';
+import type { EngineJobDefinition } from '@/lib/jobs/defineJob';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { FAST_LANE_CONSUMER_IDS, FAST_LANE_LATENCY_BUDGET } from '@/lib/jobs/latencyBudget';
 
 // THE FAST LANE'S LATENCY BUDGET, guarded at the seam (MOTIR-3247).
@@ -39,31 +40,23 @@ import { FAST_LANE_CONSUMER_IDS, FAST_LANE_LATENCY_BUDGET } from '@/lib/jobs/lat
 // a decision (§4 rules a cap out) rather than an accident, and a future cap added
 // "just for this one job" is exactly what it exists to catch.
 
-/** Inngest's shipped function object exposes the config it was constructed with. */
-type InngestFnConfig = {
-  id?: string;
-  concurrency?: unknown;
-  debounce?: unknown;
-  triggers?: { event?: string; cron?: string }[];
-};
-const configOf = (fn: unknown): InngestFnConfig => (fn as { opts: InngestFnConfig }).opts ?? {};
-
 /**
- * Every registered function triggered by one of the budget's events, read off
- * the SHIPPED function objects.
+ * Every registered job triggered by one of the budget's events, read off the
+ * SHIPPED definitions.
  *
- * Reading `fn.opts` pins the config Inngest was actually constructed with,
- * rather than re-deriving what the definition module is believed to pass — and
- * it is the only approach that works here: the `vi.resetModules()` + dynamic
- * import pattern used elsewhere in this directory silently captures nothing when
- * pointed at a real definition module, because the re-imported module builds
- * against a fresh client the spy never sees.
+ * ⚠️ IT USED TO READ `fn.opts` — the config the vendor SDK's function object was
+ * constructed with (MOTIR-3418). The reason for reading it survives the change of
+ * source and is worth keeping: it pins what the definition ACTUALLY declared,
+ * rather than re-deriving what the module is believed to pass. `defineJob` now
+ * returns that declaration outright, so the same property is read from a plain
+ * object rather than out of an SDK internal — and the `vi.resetModules()` +
+ * dynamic-import pattern used elsewhere in this directory still would not work
+ * here, because a re-imported definition module registers against a fresh
+ * registry the assertion never sees.
  */
-function consumersOfBudgetEvents(): InngestFnConfig[] {
+function consumersOfBudgetEvents(): EngineJobDefinition[] {
   const events = new Set<string>(FAST_LANE_LATENCY_BUDGET.events);
-  return jobFunctions
-    .map(configOf)
-    .filter((c) => (c.triggers ?? []).some((t) => t.event !== undefined && events.has(t.event)));
+  return jobDefinitions.filter((d) => d.trigger !== undefined && events.has(d.trigger));
 }
 
 describe('the fast lane carries a stated latency budget', () => {
@@ -137,19 +130,23 @@ describe('the fast lane carries a stated latency budget', () => {
     ).toEqual([...FAST_LANE_CONSUMER_IDS].sort());
   });
 
-  it('puts no fast-lane consumer behind a per-function concurrency limit', () => {
-    const capped = consumersOfBudgetEvents()
-      .filter((c) => c.concurrency !== undefined)
-      .map((c) => c.id);
-
-    expect(
-      capped,
-      'A fast-lane consumer carries a `concurrency` limit. A per-function cap is a ' +
-        'lane a slow neighbour can exhaust, which is the failure MOTIR-3245 was filed ' +
-        'about — and docs/decisions/job-lane-occupancy.md §4 rules a cap out as a ' +
-        'remedy here on measured evidence. If a cap is genuinely wanted, change the ' +
-        'record first.',
-    ).toEqual([]);
+  it('has no per-function concurrency option left to put a fast-lane consumer behind', () => {
+    // ⚠️ THIS USED TO READ THE OPTION AND ASSERT IT ABSENT (MOTIR-3418 deleted the
+    // option). A per-function cap is a lane a slow neighbour can exhaust, which is
+    // the failure MOTIR-3245 was filed about, and
+    // `docs/decisions/job-lane-occupancy.md` §4 ruled a cap out as a remedy on
+    // measured evidence — so the guard existed to make a cap added "just for this
+    // one job" fail here.
+    //
+    // No job ever declared one, and the engine never read the field, so
+    // `defineJob` dropped it rather than carrying a constraint nothing enforced.
+    // The guard therefore asserts the STRONGER thing: there is no option to
+    // declare. Re-introducing one has to come past this line, which is exactly
+    // where the §4 argument is written down.
+    for (const consumer of consumersOfBudgetEvents()) {
+      expect(Object.hasOwn(consumer, 'concurrency'), consumer.id).toBe(false);
+    }
+    expect(consumersOfBudgetEvents().length).toBeGreaterThan(0);
   });
 
   it('debounces no fast-lane consumer', () => {

@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItemLink } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { usersService } from '@/lib/services/usersService';
@@ -15,6 +14,7 @@ import { makeWorkItemFixture, createTestProject } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Auto-relate-on-mention (Story 5.8 · Subtask 5.8.3): saving a work-item text
 // field or comment that REFERENCES another item (`[KEY](motir:<id>)` token or a
@@ -32,7 +32,7 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 beforeEach(async () => {
   await truncateAuthTables();
   // Block the network for every post-commit event the hooks emit.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

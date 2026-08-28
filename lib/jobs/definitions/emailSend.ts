@@ -13,11 +13,11 @@ import type { EmailSendData } from '../types';
 // dispatch live in `emailService` (the 4-layer rule — a job handler is the
 // "service caller" for a background trigger, so it receives services via the
 // injected bag rather than importing `@/lib/email` itself). The single
-// `step.run('send', …)` makes the provider call durable across Inngest
+// `step.run('send', …)` makes the provider call durable across engine
 // retries: once a step's result is persisted, a later retry of a *different*
 // step won't re-run the send (no double-delivery).
 //
-// IDEMPOTENCY: `idempotency: 'event.data.idempotencyKey'` tells Inngest to
+// IDEMPOTENCY: `idempotency: 'event.data.idempotencyKey'` tells the engine to
 // dedup same-key events inside its window (callers pass the reset token / the
 // invite token). So a retried Server Action that re-fires the same send
 // collapses to one delivery. This is event-level dedup enforced by the Inngest
@@ -27,7 +27,7 @@ import type { EmailSendData } from '../types';
 // the caller contract (the key is supplied), not the runtime drop. See
 // docs/jobs.md → "Canonical job: email.send".
 
-/** The CEL expression Inngest evaluates against the event to dedup sends. */
+/** The event expression the engine evaluates to dedup sends. */
 export const EMAIL_SEND_IDEMPOTENCY = 'event.data.idempotencyKey';
 
 export const emailSend = defineJob(

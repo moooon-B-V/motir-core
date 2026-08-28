@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { AuthEmailUnavailableError, withAuthMailOutcome } from '@/lib/auth/authMail';
-import { inngest } from '@/lib/jobs/client';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { usersService } from '@/lib/services/usersService';
@@ -13,6 +12,7 @@ import { POST as emailChangeRoutePost } from '@/app/api/account/request-email-ch
 import { createTestWorkItem, makeWorkItemFixture } from './fixtures/workItemFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from './helpers/db';
+import { spyOnJobDispatch } from './helpers/jobs';
 
 // Bug MOTIR-3583 — an AUTHENTICATION email whose enqueue fails is no longer
 // silently dropped.
@@ -34,14 +34,12 @@ const BASE_URL = 'http://localhost:3000';
 
 /** The transport is down. Every enqueue on this test fails at the Inngest lane. */
 function breakTheQueue(): void {
-  vi.spyOn(inngest, 'send').mockRejectedValue(new Error('queue unreachable'));
+  spyOnJobDispatch().mockRejectedValue(new Error('queue unreachable'));
 }
 
 /** The transport is up, and nothing reaches the network. */
 function workingQueue(): void {
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as Awaited<
-    ReturnType<typeof inngest.send>
-  >);
+  spyOnJobDispatch();
 }
 
 function authRequest(path: string, body: unknown): Request {

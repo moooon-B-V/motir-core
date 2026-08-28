@@ -72,14 +72,13 @@ const USING_CUSTOM_ORIGIN = Boolean(process.env['E2E_BASE_URL']) || Boolean(proc
 const BASE_URL = process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3200'}`;
 const PORT = new URL(BASE_URL).port || '3200';
 
-const INNGEST_PORT = process.env['INNGEST_PORT'] ?? '8488';
-const INNGEST_BASE_URL = `http://localhost:${INNGEST_PORT}`;
-const INNGEST_CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
-
-// Seed helpers emit post-commit Inngest events; point the runner's SDK at this
-// lane's executor so a seed-level emit publishes (mirrors the main config).
-process.env['INNGEST_DEV'] ??= '1';
-process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
+// ⚠️ THE EXECUTOR IS THE ENGINE'S OWN WORKER (MOTIR-3418). This lane used to
+// boot a vendor dev server as a second `webServer` and point the runner's SDK
+// at it, because seed helpers call services that emit post-commit and a
+// key-less SDK threw. An emit is a row in this run's database now, and the
+// thing that EXECUTES it is `startJobWorker` in `globalSetup` below — without
+// which `email.send` never delivers and every `waitForEmail` in this lane hangs.
+process.env['E2E_JOB_WORKER'] ??= '1';
 
 // The cloud posture and the two reasons for it: the "Cloud posture" block in
 // this file's header. What follows is that block's mechanics — the boundary
@@ -134,6 +133,12 @@ export default defineConfig({
   // decision, same stub, as vitest.config.ts; the Next build still enforces the
   // real boundary.
   tsconfig: './tsconfig.node.json',
+  // ⚠️ ADDED BY MOTIR-3418, AND THE LANE DOES NOT WORK WITHOUT IT. `globalSetup`
+  // starts the Postgres engine's worker (and `globalTeardown` drains it) — the
+  // executor that replaced the vendor dev server this config used to boot as a
+  // second `webServer`. It is not a `webServer` entry because it binds no port.
+  globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   timeout: 90_000,
   // Assertion headroom for CI load. This lane now runs a PRODUCTION build (see
   // webServer below, MOTIR-1682), so there is NO on-demand cold-compile cost on
@@ -170,7 +175,13 @@ export default defineConfig({
       // ONLY the test seams (Secure cookies / `/api/_test` 404 gate / 'file'
       // email — see lib/e2eProdHarness.ts). This lane seeds via `/api/_test`, so
       // it MUST set the flag. `prisma generate` guards a fresh worktree.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
+      // ⚠️ `build:worker` IS PART OF THE SERVER COMMAND, and this lane needs it
+      // (MOTIR-3418). `globalSetup` starts the engine's worker from the SHIPPED
+      // bundle at `.worker/worker.mjs` — never the TypeScript source — so a lane
+      // that does not build it fails in globalSetup before a single spec runs.
+      // The main config's command has carried this since MOTIR-3427; this one did
+      // not need it while the executor was a second `webServer`.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       // Generous: now covers a full `next build` (minutes) before the server binds.
@@ -214,8 +225,6 @@ export default defineConfig({
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         MOTIR_BASE_URL: BASE_URL,
         E2E_DISABLE_RATE_LIMIT: '1',
-        INNGEST_DEV: '1',
-        INNGEST_BASE_URL,
         E2E_DISABLE_DEV_INDICATOR: '1',
         // Mock the object store so any in-app upload the spec drives never needs
         // a real store (mirrors the main lane; CI has no real credentials).
@@ -258,14 +267,6 @@ export default defineConfig({
         GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
         GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
       },
-    },
-    {
-      command: `${INNGEST_CLI_BIN} dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
-      url: INNGEST_BASE_URL,
-      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
-      timeout: 120_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
     },
   ],
 });

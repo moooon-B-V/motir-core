@@ -16,7 +16,7 @@
 //
 // WHY A SEPARATE PURE MODULE (not just exporting from issueTypes.ts). The
 // service layer is server-only and is pulled into every route handler, the
-// test harness, and Inngest jobs. issueTypes.ts imports `lucide-react` (icon
+// test harness, and background jobs. issueTypes.ts imports `lucide-react` (icon
 // component refs for pickers/badges). Importing the validation gate from
 // there would drag the icon barrel into the service's module graph for no
 // runtime benefit (the project sets no `optimizePackageImports` for lucide).

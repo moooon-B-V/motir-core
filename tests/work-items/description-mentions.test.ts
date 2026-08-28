@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -10,6 +9,7 @@ import type { WorkItemMentionedData } from '@/lib/jobs/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { captureEventPayloads } from '../helpers/jobs';
 
 // Description-mention parity (Story 5.1 · Subtask 5.1.6): mentions in a work
 // item's DESCRIPTION notify too — `workItemsService.createWorkItem` and a
@@ -38,16 +38,7 @@ afterAll(async () => {
 
 /** Capture every `work-item/mentioned` publish (and block the network). */
 function captureMentionedEvents(): WorkItemMentionedData[] {
-  const events: WorkItemMentionedData[] = [];
-  vi.spyOn(inngest, 'send').mockImplementation((async (payload: unknown) => {
-    const list = Array.isArray(payload) ? payload : [payload];
-    for (const entry of list) {
-      const evt = entry as { name?: string; data?: WorkItemMentionedData };
-      if (evt?.name === 'work-item/mentioned' && evt.data) events.push(evt.data);
-    }
-    return { ids: [] as string[] };
-  }) as typeof inngest.send);
-  return events;
+  return captureEventPayloads<WorkItemMentionedData>('work-item/mentioned').events;
 }
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;

@@ -16,13 +16,16 @@
 // and this registry has to be read the same way: a signature means "this vendor
 // will receive data at launch", not "this import exists right now".
 //
-// The consequence that bites is `inngest`, which is still a dependency in
-// `package.json` and is NOT on the page, because it is being replaced by an
-// in-product Postgres queue and will not exist at launch. A signature for it
-// would force a vendor onto a published legal page purely because a
-// mid-migration import had not been deleted yet — the guard demanding a false
-// statement. Departing vendors belong in LEAVING_BEFORE_LAUNCH below, which
-// keeps the omission deliberate and attributable instead of silent.
+// The consequence that bit was `inngest`: a dependency in `package.json` that was
+// deliberately NOT on the page, because it was being replaced by an in-product
+// Postgres queue and would not exist at launch. A signature for it would have
+// forced a vendor onto a published legal page purely because a mid-migration
+// import had not been deleted yet — the guard demanding a false statement.
+// Departing vendors belong in LEAVING_BEFORE_LAUNCH below, which keeps the
+// omission deliberate and attributable instead of silent.
+//
+// ⚠️ THAT ENTRY IS GONE, BY ITS OWN RULE (MOTIR-3418 deleted the dependency), and
+// the mechanism is what survives it — see the empty map below.
 
 /** A vendor, and the repository facts that prove it receives data. */
 export interface VendorSignature {
@@ -111,10 +114,10 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   //
   // ⚠️ Each of these vendors IS real, and excusing the console host does NOT
   // excuse the vendor — that is the distinction the whole file exists for. Neon
-  // and Sentry are disclosed on the page; Inngest is in LEAVING_BEFORE_LAUNCH.
-  // What is excused here is the DASHBOARD hostname, which is not where any data
-  // of ours goes; their API paths are covered by their own entries.
-  'app.inngest.com': "operator link to Inngest's dashboard; never requested by the server",
+  // and Sentry are disclosed on the page. What is excused here is the DASHBOARD
+  // hostname, which is not where any data of ours goes; their API paths are
+  // covered by their own entries. (`app.inngest.com` sat here until MOTIR-3418
+  // deleted the last link to it.)
   'console.neon.tech': "operator link to Neon's console; never requested by the server",
   'sentry.io': "operator link to Sentry's issue list; never requested by the server",
 
@@ -143,14 +146,19 @@ export interface DepartingVendor {
   readonly packages: readonly string[];
 }
 
-export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, DepartingVendor>> = {
-  Inngest: {
-    reason:
-      'replaced by an in-product Postgres queue (MOTIR-3413); the SDK is deleted by ' +
-      'MOTIR-3418, both before general availability',
-    packages: ['inngest'],
-  },
-};
+/**
+ * ⚠️ EMPTY, AND THAT IS A RESULT. Inngest was the entry — and the reason the type
+ * exists: it was a dependency in `package.json`, deliberately off a published
+ * legal page, because the Postgres queue replacing it landed before general
+ * availability. MOTIR-3418 deleted the dependency, at which point the guard's own
+ * "retires a departing vendor's entry once it has actually gone" assertion went
+ * red until the entry came out — which is the mechanism working, not a gap.
+ *
+ * The SHAPE stays because the situation recurs: a vendor on its way out is absent
+ * from the page by DECISION, and a decision recorded here is attributable, where
+ * a silent omission is indistinguishable from an oversight.
+ */
+export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, DepartingVendor>> = {};
 
 export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {
   Neon: 'reached over the Postgres wire protocol via DATABASE_URL, not an HTTPS host or an SDK',

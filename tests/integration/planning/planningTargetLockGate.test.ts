@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../../helpers/jobs';
 
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
@@ -418,7 +418,7 @@ describe('3 · the lock survives a crash', () => {
     // The planner dies here. Nothing marks the plan, nothing closes the thread.
     await ageAllLeases();
 
-    const { result } = await new InngestTestEngine({ function: planTargetLockSweep }).execute();
+    const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
 
     expect(result).toMatchObject({ released: 1 });
     expect(await statusOf(epic.id)).toBe('todo');
@@ -434,7 +434,7 @@ describe('3 · the lock survives a crash', () => {
     const epic = await seedItem('epic', 'Billing');
     await planOk(epic.id);
 
-    const { result } = await new InngestTestEngine({ function: planTargetLockSweep }).execute();
+    const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
 
     expect(result).toMatchObject({ released: 0 });
     expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
@@ -494,7 +494,7 @@ describe('4 · the prior status is restored, not assumed', () => {
     expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
     await ageAllLeases();
 
-    const { result } = await new InngestTestEngine({ function: planTargetLockSweep }).execute();
+    const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
 
     expect(result).toMatchObject({ released: 1 });
     expect(await statusOf(story.id)).toBe('in_progress');

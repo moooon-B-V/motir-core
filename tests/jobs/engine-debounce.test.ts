@@ -6,7 +6,6 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
-import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { debouncedRunAt, resolveDebounceKey } from '@/lib/jobs/engine/debounce';
 import { parseEventExpression, resolveEventExpression } from '@/lib/jobs/engine/eventExpression';
 import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
@@ -24,12 +23,21 @@ import type { CodeGraphRefreshData } from '@/lib/jobs/types';
 // Against REAL Postgres, because the guarantee is a row lock plus a PARTIAL
 // UNIQUE INDEX and a mock can have neither.
 
-const ORIGINAL_ENV = process.env[JOB_ENGINE_JOBS_ENV];
+// ⚠️ ONE TRIGGER PER PROBE, NOT ONE SHARED (MOTIR-3418). These three used to
+// subscribe to a single real event and be selected between by the per-job cutover
+// switch: a dispatch enqueued only the routed one, so `enqueued` named exactly the
+// job under test. With one lane a dispatch enqueues EVERY subscriber, so a shared
+// trigger returns all three plus the real consumers of that event, and every
+// assertion of the form `expect(result.enqueued).toEqual([THE_ONE])` fails on the
+// siblings. The isolation the switch used to provide is now the trigger's job.
+const DEBOUNCED_TRIGGER = 'test/debounce-composed.pushed';
+const PLAIN_TRIGGER = 'test/debounce-none.pushed';
+const CAPPED_TRIGGER = 'test/debounce-capped.pushed';
+/** The composed-key probe's trigger — what most tests in this file drive. */
+const TRIGGER = DEBOUNCED_TRIGGER;
 
-const TRIGGER = 'work-item/embedding.requested';
-
-// Three test jobs on one event, registered at module scope exactly as a real
-// definition module is: a composed key like the refresh job's, one with no
+// Three test jobs, each on its own event, registered at module scope exactly as a
+// real definition module is: a composed key like the refresh job's, one with no
 // debounce at all, and one whose deferral cap is short enough to bind.
 const DEBOUNCED_ID = 'test.debounce-composed';
 const PLAIN_ID = 'test.debounce-none';
@@ -41,7 +49,7 @@ const TIMEOUT_MS = 900_000;
 defineJob(
   {
     id: DEBOUNCED_ID as never,
-    trigger: TRIGGER,
+    trigger: DEBOUNCED_TRIGGER as never,
     debounce: {
       // The same SHAPE `codeGraphRefresh` declares — two literals joining three
       // payload fields — because that expression is the reason the resolver had
@@ -52,19 +60,15 @@ defineJob(
   },
   () => ({ ok: true }),
 );
-defineJob({ id: PLAIN_ID as never, trigger: TRIGGER }, () => ({ ok: true }));
+defineJob({ id: PLAIN_ID as never, trigger: PLAIN_TRIGGER as never }, () => ({ ok: true }));
 defineJob(
   {
     id: CAPPED_ID as never,
-    trigger: TRIGGER,
+    trigger: CAPPED_TRIGGER as never,
     debounce: { key: 'event.data.repoName', period: '2m', timeout: '15m' },
   },
   () => ({ ok: true }),
 );
-
-function route(...ids: string[]): void {
-  process.env[JOB_ENGINE_JOBS_ENV] = ids.join(',');
-}
 
 /** A push payload. `head` is the field a test uses to prove WHICH event survived. */
 function push(over: Partial<Record<string, string>> = {}): Record<string, unknown> {
@@ -84,13 +88,10 @@ const rowsFor = (jobId: string) =>
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
   await truncateJobRuns();
-  if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
-  else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });
 
 afterAll(async () => {
@@ -100,8 +101,6 @@ afterAll(async () => {
 
 describe('a same-key burst coalesces into ONE pending run carrying the LATEST event', () => {
   it('holds one row, repointed at the last event, due `period` after the last arrival', async () => {
-    route(DEBOUNCED_ID);
-
     const before = Date.now();
     const results = [];
     for (const head of ['sha-1', 'sha-2', 'sha-3', 'sha-4']) {
@@ -144,8 +143,6 @@ describe('a same-key burst coalesces into ONE pending run carrying the LATEST ev
   });
 
   it('keeps two DIFFERENT keys as two runs — the debounce does not merge tenants', async () => {
-    route(DEBOUNCED_ID);
-
     await dispatchEventToEngine(TRIGGER, push({ repoName: 'motir-core' }));
     await dispatchEventToEngine(TRIGGER, push({ repoName: 'motir-ai' }));
     await dispatchEventToEngine(TRIGGER, push({ repoName: 'motir-core', head: 'sha-2' }));
@@ -159,11 +156,9 @@ describe('a same-key burst coalesces into ONE pending run carrying the LATEST ev
   });
 
   it('leaves a job declaring NO debounce completely unaffected', async () => {
-    route(PLAIN_ID);
-
-    await dispatchEventToEngine(TRIGGER, push());
-    await dispatchEventToEngine(TRIGGER, push());
-    await dispatchEventToEngine(TRIGGER, push());
+    await dispatchEventToEngine(PLAIN_TRIGGER, push());
+    await dispatchEventToEngine(PLAIN_TRIGGER, push());
+    await dispatchEventToEngine(PLAIN_TRIGGER, push());
 
     // Three events, three runs, all due now — exactly as before this card.
     const rows = await rowsFor(PLAIN_ID);
@@ -173,8 +168,6 @@ describe('a same-key burst coalesces into ONE pending run carrying the LATEST ev
   });
 
   it('does NOT coalesce an event whose payload cannot supply the key', async () => {
-    route(DEBOUNCED_ID);
-
     // A field the expression names is absent. Inngest MERGES in this case
     // (MOTIR-2994, measured) — every such event into one bucket, N−1 lost. The
     // engine does the opposite: no key means this event gets its own row.
@@ -195,8 +188,6 @@ describe('a same-key burst coalesces into ONE pending run carrying the LATEST ev
 
 describe('the CONCURRENT first arrival — the race the partial index exists for', () => {
   it('yields one row and never a throw, with the loser coalescing rather than dropping', async () => {
-    route(DEBOUNCED_ID);
-
     // Genuinely concurrent against a warm pool. `SELECT … FOR UPDATE` cannot
     // help here: there is no row yet, so both reads see the empty set and both
     // insert. This is the case a serial test cannot see, and the reason the
@@ -227,8 +218,6 @@ describe('the CONCURRENT first arrival — the race the partial index exists for
 
 describe('the CLAIM closes the window', () => {
   it('a same-key event arriving mid-run enqueues a NEW run rather than being folded in', async () => {
-    route(DEBOUNCED_ID);
-
     await dispatchEventToEngine(TRIGGER, push({ head: 'sha-1' }));
     const [pending] = await rowsFor(DEBOUNCED_ID);
     expect(pending!.debounceKey).not.toBeNull();
@@ -265,7 +254,6 @@ describe('the CLAIM closes the window', () => {
     // `pending`, and the partial unique index rejects it — a unique violation on
     // the RETRY path, where the run then sticks `running` and is reclaimed
     // forever.
-    route(DEBOUNCED_ID);
 
     await dispatchEventToEngine(TRIGGER, push({ head: 'sha-1' }));
     const [first] = await rowsFor(DEBOUNCED_ID);
@@ -293,13 +281,11 @@ describe('the CLAIM closes the window', () => {
 
 describe('the deferral cap — the one place the engine is STRICTER than Inngest', () => {
   it('never pushes `run_at` past `first_seen + timeout`', async () => {
-    route(CAPPED_ID);
-
     // A burst that has ALREADY outlived its window, expressed as state rather
     // than as elapsed time: the row's window opened twenty minutes ago, and its
     // cap is fifteen. Driving it with real sleeps would need a sixteen-minute
     // test and would make the assertion a race.
-    await dispatchEventToEngine(TRIGGER, push());
+    await dispatchEventToEngine(CAPPED_TRIGGER, push());
     const [row] = await rowsFor(CAPPED_ID);
     const firstSeen = new Date(Date.now() - 20 * 60_000);
     await adminDb.jobQueueRun.update({
@@ -307,7 +293,7 @@ describe('the deferral cap — the one place the engine is STRICTER than Inngest
       data: { debounceFirstSeenAt: firstSeen },
     });
 
-    await dispatchEventToEngine(TRIGGER, push({ head: 'sha-2' }));
+    await dispatchEventToEngine(CAPPED_TRIGGER, push({ head: 'sha-2' }));
 
     const after = await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: row!.id } });
     // Pinned to the cap — NOT `now + period`, which is what an uncapped
@@ -339,12 +325,11 @@ describe('the deferral cap — the one place the engine is STRICTER than Inngest
 
 describe('the resolver is ONE resolver, widened — and TOTAL', () => {
   it("resolves codeGraphRefresh's declared expression against a real payload", () => {
-    // The AC's own comparison: the engine must produce for this expression what
-    // Inngest's CEL produces — the three fields joined by the two literals, in
-    // order — read off the SHIPPED declaration rather than a copy of it.
-    const declared = (codeGraphRefresh as unknown as { opts: Record<string, unknown> }).opts[
-      'debounce'
-    ] as { key: string };
+    // The AC's own comparison: the engine must produce for this expression the
+    // three fields joined by the two literals, in order — read off the SHIPPED
+    // declaration rather than a copy of it. (That declaration used to be read out
+    // of the vendor function object's `opts`; `defineJob` returns it directly.)
+    const declared = codeGraphRefresh.debounce!;
 
     const data: CodeGraphRefreshData = {
       installationId: 'inst_9',
@@ -370,7 +355,7 @@ describe('the resolver is ONE resolver, widened — and TOTAL', () => {
       defineJob(
         {
           id: 'test.debounce-bad-key' as never,
-          trigger: TRIGGER,
+          trigger: TRIGGER as never,
           debounce: { key: 'event.data.repo.name', period: '2m' },
         },
         () => ({ ok: true }),
@@ -385,7 +370,7 @@ describe('the resolver is ONE resolver, widened — and TOTAL', () => {
       defineJob(
         {
           id: 'test.debounce-bad-period' as never,
-          trigger: TRIGGER,
+          trigger: TRIGGER as never,
           debounce: { key: 'event.data.repoName', period: 'two minutes' },
         },
         () => ({ ok: true }),
@@ -400,7 +385,7 @@ describe('the resolver is ONE resolver, widened — and TOTAL', () => {
       defineJob(
         {
           id: 'test.debounce-inverted' as never,
-          trigger: TRIGGER,
+          trigger: TRIGGER as never,
           debounce: { key: 'event.data.repoName', period: '15m', timeout: '2m' },
         },
         () => ({ ok: true }),
@@ -439,14 +424,16 @@ describe('the resolver is ONE resolver, widened — and TOTAL', () => {
   });
 });
 
-describe("codeGraphRefresh's Inngest behaviour is untouched", () => {
-  it('still carries the same debounce config, read off fn.opts', () => {
+describe("codeGraphRefresh's declared debounce is untouched", () => {
+  it('still carries the same debounce config, read off the registered definition', () => {
     // MOTIR-3413's boundary is that no job's observable behaviour changes. This
-    // card adds an ENGINE reader for the option; the Inngest side must be
-    // byte-identical, and `fn.opts` is what Inngest KEPT after construction
-    // rather than what we passed in.
-    const opts = (codeGraphRefresh as unknown as { opts: Record<string, unknown> }).opts;
-    expect(opts['debounce']).toEqual({
+    // assertion is the byte-for-byte statement of that for the one job in the
+    // tree carrying a `debounce`, and MOTIR-3418 did not touch it — only where it
+    // is READ from. It used to come off the vendor function object's `opts`,
+    // which was what the SDK KEPT after construction rather than what we passed
+    // in; there is no construction now, so the declaration and the registration
+    // are the same object.
+    expect(codeGraphRefresh.debounce).toEqual({
       key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
       period: '2m',
       timeout: '15m',
@@ -456,10 +443,12 @@ describe("codeGraphRefresh's Inngest behaviour is untouched", () => {
   it('declares a debounce the engine can actually evaluate', () => {
     // The one job in the tree with a `debounce` — if the engine could not parse
     // it, registration would already have thrown at import.
-    const opts = (codeGraphRefresh as unknown as { opts: Record<string, unknown> }).opts;
-    const declared = opts['debounce'] as { key: string };
     expect(
-      parseEventExpression('system.code-graph-refresh', 'debounce.key', declared.key),
+      parseEventExpression(
+        'system.code-graph-refresh',
+        'debounce.key',
+        codeGraphRefresh.debounce!.key,
+      ),
     ).toHaveLength(5);
   });
 });

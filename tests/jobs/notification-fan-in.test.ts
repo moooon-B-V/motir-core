@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import {
   notificationFanInOnCommentCreated,
   notificationFanInOnWorkItemMentioned,
   notificationFanInOnTransitioned,
 } from '@/lib/jobs/definitions/notificationFanIn';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import {
   notificationFanInService,
   NOTIFICATION_FAN_IN_REGISTRY,
@@ -45,7 +45,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 //   2. the registry EXTENSIBILITY seam — a SYNTHETIC event type produces rows
 //      through the same core with no change, asserted WITHOUT importing 5.4/6.6
 //      code; an unregistered event is a clean no-op;
-//   3. the two registered jobs driving the fan-in in-process via @inngest/test
+//   3. the two registered jobs driving the fan-in in-process via the in-process JobTestEngine
 //      (job_run bookkeeping included).
 
 beforeEach(async () => {
@@ -491,9 +491,9 @@ describe('notificationFanInService.fanIn — registry extensibility (the 5.4/6.6
 
 describe('notificationFanIn jobs — in-process runs', () => {
   it('registers all three consumers in the job registry', () => {
-    expect(jobFunctions).toContain(notificationFanInOnCommentCreated);
-    expect(jobFunctions).toContain(notificationFanInOnWorkItemMentioned);
-    expect(jobFunctions).toContain(notificationFanInOnTransitioned);
+    expect(jobDefinitions).toContain(notificationFanInOnCommentCreated);
+    expect(jobDefinitions).toContain(notificationFanInOnWorkItemMentioned);
+    expect(jobDefinitions).toContain(notificationFanInOnTransitioned);
   });
 
   it('drives the comment-created event end-to-end: rows written, job_run recorded', async () => {
@@ -507,7 +507,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
       authorId: s.fx.ownerId,
       mentionedUserIds: [s.member.id],
     };
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: notificationFanInOnCommentCreated,
       events: [{ name: 'work-item/comment.created', data }],
     });
@@ -537,7 +537,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
       authorId: s.fx.ownerId,
       mentionedUserIds: [s.member.id],
     };
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: notificationFanInOnWorkItemMentioned,
       events: [{ name: 'work-item/mentioned', data }],
     });
@@ -560,7 +560,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
       toStatusKey: 'in_progress',
       revisionId: 'rev-transition-e2e',
     };
-    const engine = new InngestTestEngine({
+    const engine = new JobTestEngine({
       function: notificationFanInOnTransitioned,
       events: [{ name: 'work-item/transitioned', data }],
     });
