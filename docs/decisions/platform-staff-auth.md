@@ -445,16 +445,39 @@ rather than introducing a second one.
 Named with their owner, so no deliverable leaves the plan at the moment this card goes
 done (the MOTIR-1916 rule):
 
-| Not decided here                                                     | Owner                                          |
-| -------------------------------------------------------------------- | ---------------------------------------------- |
-| Which tables get a `platform_staff` READ arm, and each policy's SQL  | MOTIR-730 (10.1.3)                             |
-| The `PlatformUsageDTO` shape and the platform rollup table + its job | MOTIR-732 (10.1.5)                             |
-| The console's own layout, copy and i18n namespace                    | `design/platform-admin/` (merged) + MOTIR-2896 |
-| The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members            | MOTIR-2896 seeds it; each consumer extends it  |
-| Hash-chained tamper evidence and the audit-log viewer                | MOTIR-751 (10.3.6)                             |
-| Write-level impersonation's time-box, two-person rule and banner     | MOTIR-749 (10.3.4)                             |
-| Whether `/admin` is reachable in a self-hosted build                 | open — no card; see Consequences               |
-| The production bootstrap of the first staff row                      | **MOTIR-2932** (8.5.18), filed by this ADR     |
+| Not decided here                                                                                          | Owner                                                                          |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Which tables get a `platform_staff` READ arm, and each policy's SQL                                       | MOTIR-730 (10.1.3)                                                             |
+| The `PlatformUsageDTO` shape and the platform rollup table + its job                                      | MOTIR-732 (10.1.5)                                                             |
+| The console's own layout, copy and i18n namespace                                                         | `design/platform-admin/` (merged) + MOTIR-2896                                 |
+| The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members                                                 | MOTIR-2896 seeds it; each consumer extends it                                  |
+| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6)                                                             |
+| Write-level impersonation's time-box, two-person rule and banner                                          | MOTIR-749 (10.3.4)                                                             |
+| Whether `/admin` is reachable in a self-hosted build                                                      | open — no card; see Consequences                                               |
+| The production bootstrap of the first staff row                                                           | **MOTIR-2932** (8.5.18), filed by this ADR                                     |
+| The account-SUSPENSION **mechanism** — the `User` columns, the session revocation and the sign-in refusal | **MOTIR-1167** (8.5.11) — shipped there; added retroactively by **MOTIR-3641** |
+
+**⚠️ The row above is recorded, not deferred, and it is the one this table was missing.** §7 allocates
+_"suspend / reactivate an account"_ to MOTIR-1167 and `design/platform-admin/design-notes.md` Panel 9
+specifies the behaviour precisely (_"signed out of every session immediately and cannot sign back
+in"_) — **both allocate the ACTION, and until MOTIR-1167 merged neither allocated the MECHANISM, which
+did not exist.** On `origin/main` at `2852f19b2`: `User` carried no suspension column of any shape,
+Better-Auth's `admin` plugin (which ships `banned` / `banReason` / `banExpires`) was not in
+`lib/auth/index.ts`'s `plugins` array, and nothing anywhere refused a sign-in for a disabled account or
+revoked another user's sessions. So the ADR and the card agreed the work was owned while neither owned
+it, and the card was sealed at 5 points / 60 minutes against a delivered 35 files / +3,782 lines.
+
+It ships today as `prisma/schema.prisma`'s `User.suspendedAt` / suspension-reason columns,
+`lib/auth/accountSuspension.ts`, a `databaseHooks.session.create.before` hook in `lib/auth/index.ts`,
+a `SELECT … FOR UPDATE` guard in `lib/repositories/platformUserRepository.ts`, and a copy branch on
+**both** credential sign-in surfaces (`SignInCard.tsx`, `PublicAuthDialog.tsx`).
+
+**The general rule this produced** (MOTIR-3641, in `motir-meta/prompts/plan-rules/phase-deepen.md` and
+mirrored into `SHARED_PLANNING_RULES`): **a row of an allocation table names an ACTION, and a verb
+presupposes the thing it acts on — so every row owes a line about the SUBSTRATE that action writes to.**
+_"Send a password reset"_ had substrate (the shipped `requestPasswordReset` flow); _"suspend an
+account"_ had none, and the two are indistinguishable in a table with an owner column and a role
+column. Adding a row here is what that check produces when the answer is _absent_.
 
 ---
 
