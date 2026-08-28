@@ -8,6 +8,7 @@ import type {
 } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { evaluateLinkCheck } from './pullRequestLinkCheckService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -334,6 +335,20 @@ export const githubWebhookService = {
   },
 
   async handlePullRequest(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    // ⚠️ THE LINK CHECK RUNS ABOVE THE `HANDLED_PR_ACTIONS` GATE, ON ITS OWN
+    // ACTION SET (MOTIR-3675). It must see `synchronize` — a check run belongs
+    // to a COMMIT, so one written at `opened` disappears from view on the first
+    // push — and `ready_for_review` / `labeled` / `unlabeled`, which are the
+    // draft exemption and the escape hatch arriving.
+    //
+    // Widening `HANDLED_PR_ACTIONS` to cover them was the obvious shape and is
+    // wrong: that set bounds the file-listing capture below, whose own header
+    // says it is affordable BECAUSE `synchronize` is not in it (three deliveries
+    // per pull request, not one per push). So this takes its own list and runs
+    // neither the status sync nor the capture. Best-effort, and awaited only so
+    // a test can observe it — its failure can never reach the caller.
+    await writeLinkCheckForDelivery(body);
+
     if (!HANDLED_PR_ACTIONS.has(String(body['action']))) {
       return { event: 'pull_request', outcome: 'ignored_action' };
     }
@@ -651,6 +666,87 @@ async function reconcileInstallation(
     repos,
   });
   return 'synced';
+}
+
+/**
+ * Write the UNLINKED-PULL-REQUEST CHECK for one `pull_request` delivery
+ * (Story MOTIR-3672 · MOTIR-3675).
+ *
+ * Its own action set, deliberately narrower than "everything" and wider than
+ * `HANDLED_PR_ACTIONS`:
+ *
+ *   * `opened` / `reopened` — the pull request appears.
+ *   * `synchronize` — a NEW head commit. A check run belongs to a commit, so
+ *     without this the check written at `opened` is simply not on the sha GitHub
+ *     is showing, which reads to a person as "the check vanished".
+ *   * `ready_for_review` — the draft exemption ending.
+ *   * `labeled` / `unlabeled` — the `no-work-item` hatch arriving or being taken
+ *     away.
+ *
+ * `closed` is absent on purpose: a closed pull request cannot be linked or merged
+ * any further, and writing onto it would be noise on a page nobody acts on.
+ *
+ * SWALLOWS EVERYTHING. The delivery's load-bearing effect is the status sync; a
+ * host that refuses a check must never make GitHub retry a delivery that already
+ * moved a card (the same rule the file-listing capture below states).
+ */
+const LINK_CHECK_PR_ACTIONS = new Set([
+  'opened',
+  'reopened',
+  'synchronize',
+  'ready_for_review',
+  'labeled',
+  'unlabeled',
+]);
+
+async function writeLinkCheckForDelivery(body: Record<string, unknown>): Promise<void> {
+  try {
+    if (!LINK_CHECK_PR_ACTIONS.has(String(body['action']))) return;
+    const installationId = readInstallationId(body);
+    if (!installationId) return;
+    const pr = asRecord(body['pull_request']);
+    const repoPayload = asRecord(body['repository']);
+    const providerRepoId = readId(repoPayload?.['id']);
+    const number = typeof pr?.['number'] === 'number' ? pr['number'] : null;
+    if (!pr || !providerRepoId || number === null) return;
+
+    const repoRow = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return null;
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        providerRepoId,
+        tx,
+      );
+      return repo ? { ...repo, installation } : null;
+    });
+    // A repository outside the grant mirror is not Motir's to write on.
+    if (!repoRow) return;
+
+    const head = asRecord(pr['head']);
+    const author = asRecord(pr['user']);
+    const labels = Array.isArray(pr['labels'])
+      ? (pr['labels'] as unknown[])
+          .map((l) => asRecord(l)?.['name'])
+          .filter((n): n is string => typeof n === 'string')
+      : [];
+
+    await evaluateLinkCheck({
+      repoRow,
+      number,
+      headSha: typeof head?.['sha'] === 'string' ? head['sha'] : null,
+      authorType: typeof author?.['type'] === 'string' ? author['type'] : null,
+      draft: pr['draft'] === true,
+      labels,
+      headRef: typeof head?.['ref'] === 'string' ? head['ref'] : null,
+      title: typeof pr['title'] === 'string' ? pr['title'] : null,
+    });
+  } catch (err) {
+    console.error('[githubWebhookService] link check could not be written:', err);
+  }
 }
 
 /**

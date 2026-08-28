@@ -283,9 +283,21 @@ Named here so the build card inherits a list rather than discovering one.
    sync nor `capturePullRequestFiles`.
 3. **A head SHA to address the check to.** `GithubPullRequest` has no
    `head_sha` column, so the link-side write (the immediacy the hatch depends on)
-   has nothing to address. Stamp `head_sha` from every handled delivery, and fall
-   back to a live `GET /repos/{owner}/{repo}/pulls/{n}` when it is null on an
-   older row.
+   has nothing to address.
+
+   > **⚠️ AMENDED AT BUILD TIME (MOTIR-3675) — NO COLUMN IS ADDED.** This step
+   > said _"stamp `head_sha` from every handled delivery, and fall back to a live
+   > `GET /pulls/{n}` when it is null"_, and the fallback turned out to be the
+   > whole answer: the webhook path already carries `pull_request.head.sha` in the
+   > payload, so only the LINK path ever needs a lookup, and that path is doing
+   > network I/O either way. What the column would have bought is one saved round
+   > trip; what it costs is a schema change on a development database several
+   > parallel sessions share, where a migration one of them did not write shows up
+   > as drift in its own `migrate diff`. `readPullRequestHeadSha` in
+   > `lib/github/checkRuns.ts` is what shipped, and `pull_requests: write` already
+   > covers the read. Recorded here rather than left describing a design that was
+   > not built.
+
 4. **Recompute from the LINK side too** — `link_pull_request` and
    `unlink_pull_request` re-write the check for the affected pull request. Without
    this the hatch is "link it, then push something", which is not a hatch.

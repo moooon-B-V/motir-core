@@ -1177,6 +1177,24 @@ point at one work item; one pull request cannot point at two.
 > description to say ADDS.** Until then the two are written together and only the
 > column is read.
 
+⚠️ **A pull request nobody links carries a FAILING CHECK.** Since MOTIR-3674 the
+title and the branch link nothing, so the absence of a link is the whole failure
+mode — and it is a quiet one: a card whose pull request merged and which nobody
+moved looks exactly like a card whose work never started. Motir therefore writes a
+check run named **`Motir / work item link`** on every pull request in a repository
+it plans work in, failing while the pull request is unlinked and turning green on
+this call — not on the next push, which is what makes linking an actual remedy
+rather than an instruction to go and push something.
+
+Four kinds of pull request are exempt, stated as rules rather than as a list:
+a **bot** author (`user.type === "Bot"` — Dependabot, renovate, and whatever is
+installed next), a **draft** until it is marked ready for review, a repository
+**connected but not bound to a project**, and any pull request carrying the
+**`no-work-item`** label — the declared hatch, usable by anyone who can push.
+Whether the failing check BLOCKS a merge is the repository's own
+branch-protection setting and never Motir's.
+`docs/decisions/unlinked-pull-request-check.md` records why, and what it costs.
+
 ⚠️ **It works BEFORE any webhook delivery** — that is the case it exists for. The
 detail page's "+ Link pull request" picker can only choose a pull request Motir
 has already ingested, and addresses it by an internal id an agent has never seen.
