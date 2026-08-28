@@ -530,8 +530,10 @@ describe('§3 the guards', () => {
     // shared machine. A copy-pasted second composition fails whichever form it
     // takes — a loop that grew back, or a second consumer of the driver.
     //
-    // The CI fleet is still on the old shape and still expects its ONE loop;
-    // MOTIR-3829 is the card that converts it, and it owns flipping this arm.
+    // ⚠️ AND THE CI ARM IS FLIPPED TOO NOW (MOTIR-3829). Both fleets are on the
+    // shared machine, so both hold zero loops and one call site each — which is
+    // the property this test is named for, asserted identically on both sides
+    // rather than as a count that happened to be one.
     const linesMatching = (paths: string[], re: RegExp) =>
       paths.flatMap((p) =>
         readFileSync(p, 'utf8')
@@ -550,9 +552,12 @@ describe('§3 the guards', () => {
     ];
     expect(loops(INDEX_FILES)).toHaveLength(0);
     expect(drivers(INDEX_FILES)).toHaveLength(1);
-    expect(
-      loops(['lib/services/ciRunnerBootService.ts', 'lib/jobs/definitions/ciRunnerFleet.ts']),
-    ).toHaveLength(1);
+    const CI_FILES = [
+      'lib/services/ciRunnerBootService.ts',
+      'lib/jobs/definitions/ciRunnerFleet.ts',
+    ];
+    expect(loops(CI_FILES)).toHaveLength(0);
+    expect(drivers(CI_FILES)).toHaveLength(1);
 
     // And neither JOB file sleeps any more — the wait moved into the service, so
     // a `step.sleep` reappearing in a handler is the stepped shape returning.

@@ -13,7 +13,14 @@ import {
 
 describe('the step memo', () => {
   it('executes an id ONCE and replays it thereafter', async () => {
-    const inner = vi.fn(async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn());
+    // A plain counter rather than `vi.fn`, because a mock cannot carry the
+    // generic the seam is declared with — the inner `run` is `<T>(id, fn) =>
+    // Promise<T>`, and a `Mock` erases that to `Promise<unknown>`.
+    let innerCalls = 0;
+    const inner = async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => {
+      innerCalls += 1;
+      return fn();
+    };
     const body = vi.fn(async () => ({ container: 'c-1' }));
     const steps = inProcessMemoSteps({ run: inner });
 
@@ -25,7 +32,7 @@ describe('the step memo', () => {
     // measured at 502 `admit` calls for a 500-poll supervision, and a container
     // per poll had the orchestrator not been a fake.
     expect(body).toHaveBeenCalledTimes(1);
-    expect(inner).toHaveBeenCalledTimes(1);
+    expect(innerCalls).toBe(1);
     expect(second).toBe(first);
   });
 

@@ -11,6 +11,7 @@ import {
   pollWaitMs,
   FLEET_TIME_BUDGETS,
 } from '@/lib/services/ciRunnerBootService';
+import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import {
@@ -310,7 +311,13 @@ describe('the boot and reap handlers DELEGATE', () => {
     // rather than two kept in agreement by hand is now the deliverable, so the
     // handler must call it — and must hand it the step seam, or the boot and the
     // teardown stop being memoized and a worker restart mints a second runner.
-    const runIntent = vi.spyOn(ciRunnerBootService, 'runIntent');
+    //
+    // ⚠️ THE ENTRY POINT MOVED (MOTIR-3829): the handler drives `advanceIntent`,
+    // which does ONE poll and defers, rather than `runIntent`, which is now the
+    // in-process run-to-completion wrapper for a caller with no `job_queue` row.
+    // Same composition, one pass at a time — the run id it is handed is the
+    // handler's own, because that is what the supervision row hangs off.
+    const runIntent = vi.spyOn(ciRunnerBootService, 'advanceIntent');
     vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
       phase: 'terminal',
       outcome: { outcome: 'unknown_intent' },
@@ -320,9 +327,10 @@ describe('the boot and reap handlers DELEGATE', () => {
     await engine.execute({ events: [bootEvent(intentId)] });
 
     expect(runIntent).toHaveBeenCalled();
-    expect(runIntent.mock.calls[0]![0]).toBe(intentId);
+    expect(runIntent.mock.calls[0]![0], 'the run the supervision hangs off').toBeTruthy();
+    expect(runIntent.mock.calls[0]![1]).toBe(intentId);
     expect(
-      runIntent.mock.calls[0]![1]?.steps,
+      runIntent.mock.calls[0]![2]?.steps,
       'the handler must supply the durable seam',
     ).toBeDefined();
   });
@@ -514,11 +522,29 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
 
 /** Millisecond poll cadence for a job-level test, and an optional per-pass ceiling. */
 function superviseFast(over: { maxPollIterations?: number } = {}) {
-  const real = ciRunnerBootService.runIntent.bind(ciRunnerBootService);
+  const fast = { pollIntervalMs: 1, maxPollIntervalMs: 2, ...over };
+  // The IN-PROCESS composition — scripts, harnesses, and this suite's own
+  // service-level tests.
+  const runReal = ciRunnerBootService.runIntent.bind(ciRunnerBootService);
+  vi.spyOn(ciRunnerBootService, 'runIntent').mockImplementation((id, options) =>
+    runReal(id, { ...fast, ...options }),
+  );
+
+  // ⚠️ AND THE JOB'S ONE-PASS ENTRY (MOTIR-3829), which is what
+  // `system.ci-runner-boot` actually calls now. Two things are injected, and
+  // both are test-only uses of a seam the service already exposes: the
+  // millisecond budgets, and an IN-MEMORY supervision store — because
+  // `JobTestEngine` synthesises a `runId` rather than claiming a real
+  // `job_queue` row, and the durable store's row FKs to that table. The store
+  // carries a supervision's poll count and observation across passes, and
+  // `JobTestEngine` drives those passes; together they model the engine
+  // faithfully without a worker.
+  const supervisionStore = inMemorySupervisionStore();
+  const advanceReal = ciRunnerBootService.advanceIntent.bind(ciRunnerBootService);
   return vi
-    .spyOn(ciRunnerBootService, 'runIntent')
-    .mockImplementation((id, options) =>
-      real(id, { pollIntervalMs: 1, maxPollIntervalMs: 2, ...over, ...options }),
+    .spyOn(ciRunnerBootService, 'advanceIntent')
+    .mockImplementation((runId, id, options) =>
+      advanceReal(runId, id, { ...fast, supervisionStore, ...options }),
     );
 }
 
@@ -533,7 +559,18 @@ const SESSION = {
     createdAt: '2026-08-02T10:00:00.000Z',
   },
   githubRunnerId: 9001,
-  bootedAt: '2026-08-02T10:00:00.000Z',
+  // ⚠️ `bootedAt` IS FRESH, and the rest of the fixture's instants are not
+  // (MOTIR-3829). The supervision driver evaluates the SESSION-ANCHORED deadline
+  // itself, before it polls — `docs/decisions/job-queue-foundation.md` §13.3(a),
+  // so a resumed pass settles a container already past `jobTimeoutMs` instead of
+  // watching it for another N polls. A session frozen at 2026-08-02 is one that
+  // timed out weeks ago, so every test here would settle before its first poll.
+  //
+  // It used to be frozen and it used to be harmless, because these tests mock
+  // `pollOnce` and the old deadline check lived INSIDE it — so nothing ever
+  // evaluated it. That is a fixture that was only correct while the check was
+  // somewhere the mock covered.
+  bootedAt: new Date().toISOString(),
   queuedAt: '2026-08-02T09:59:55.000Z',
   attribution: {
     orgId: 'org-1',
