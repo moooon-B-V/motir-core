@@ -30,6 +30,12 @@
 // seed must not hand the browser a tree that is still settling.
 
 import { db } from '@/lib/db';
+// This file's OWN new seeding goes through `adminDb`, not the request-scoped
+// singleton: `tests/rls/test-singleton-statement-guard.test.ts` ratchets the
+// `tests/e2e/**` population downward, and its remedy is a seeding helper on the
+// admin client (MOTIR-2941). The `db.` statements above it are the pre-existing
+// baseline, converted by that ratchet's own card, not this one.
+import { adminDb } from '@/tests/helpers/adminDb';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -656,7 +662,7 @@ export async function seedWideRoadmap(email: string): Promise<WideRoadmapSeed> {
     { projectId, kind: 'story', title: drillSiblingTitle, parentId: drillEpic.id },
     ctx,
   );
-  await db.workItemLink.create({
+  await adminDb.workItemLink.create({
     data: {
       fromId: drillSibling.id,
       toId: drillChild.id,
@@ -677,9 +683,9 @@ export async function seedWideRoadmap(email: string): Promise<WideRoadmapSeed> {
     );
   }
 
-  await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: null } });
+  await adminDb.project.update({ where: { id: projectId }, data: { onboardingRanAt: null } });
 
-  const drilled = await db.workItem.findUniqueOrThrow({
+  const drilled = await adminDb.workItem.findUniqueOrThrow({
     where: { id: drillEpic.id },
     select: { identifier: true },
   });
