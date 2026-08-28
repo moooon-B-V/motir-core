@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 
 // The OUTWARD bug-telemetry TRIGGER, proven through the SHIPPED fan-in (Story
 // 7.6 · MOTIR-1481). A real `workItemsService.createWorkItem` emits the
@@ -69,7 +69,7 @@ describe('outwardBugTelemetryOnCreated (fan-in from work-item/created)', () => {
     );
     const data = createdSince(from);
 
-    await new InngestTestEngine({
+    await new JobTestEngine({
       function: outwardBugTelemetryOnCreated,
       events: [{ name: 'work-item/created', data }],
     }).execute();
@@ -87,7 +87,7 @@ describe('outwardBugTelemetryOnCreated (fan-in from work-item/created)', () => {
     );
     const data = createdSince(from);
 
-    await new InngestTestEngine({
+    await new JobTestEngine({
       function: outwardBugTelemetryOnCreated,
       events: [{ name: 'work-item/created', data }],
     }).execute();

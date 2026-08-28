@@ -20,7 +20,7 @@ import { defineJob } from '../defineJob';
 // confirmed removal deletes its queue row, so it stops matching `findDue`; motir-ai's
 // endpoint is itself idempotent (`DeleteObjects` over a prefix, `rm -rf`,
 // `deleteMany`), so a re-run against a partially-removed repo is a clean no-op
-// with zero counts. A transient blip is therefore worth Inngest's full 5-attempt
+// with zero counts. A transient blip is therefore worth the policy's full 5-attempt
 // budget.
 //
 // ⚠️ THE RETRY IS THE QUEUE, AND THAT IS THE WHOLE DESIGN. The service deletes a

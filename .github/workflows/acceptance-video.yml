@@ -400,8 +400,9 @@ jobs:
       EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
       # REQUIRED HERE, unlike ci.yml's build (MOTIR-1967). `next build` forces
       # NODE_ENV=production, under which `lib/email.ts`'s file provider refuses to
-      # load (it is a test-only sink) and page-data collection for /api/inngest
-      # dies. ci.yml's build job has no EMAIL_PROVIDER at all and never hits it.
+      # load (it is a test-only sink) and page-data collection dies on any route
+      # that imports it. ci.yml's build job has no EMAIL_PROVIDER at all and never
+      # hits it.
       # `E2E_PROD_HARNESS=1` is the shipped relaxation for exactly this case, and
       # the same flag `playwright.acceptance.config.ts` sets on its webServer.
       # Never set on a real deploy.

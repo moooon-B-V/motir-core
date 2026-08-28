@@ -4,13 +4,17 @@
 // "ready" (see playwright-core isURLAvailable: `statusCode >= 200 && < 404`).
 // The app's root URL redirects the instant the dev-server socket is up, so the
 // suite used to start against a HALF-started server: `/sign-up` still 404'd
-// (breaking every account-creating shell flow) and the inngest dev server's
-// `PUT /api/inngest` 404-cascaded because the serve route wasn't registered yet
-// (MOTIR-1565 — PR #1517, bulk-4: 8 red shell-flows specs from one bad shard
-// start, not a product regression).
+// (breaking every account-creating shell flow) and, until MOTIR-3418, the
+// vendor dev server's `PUT /api/inngest` 404-cascaded because the serve route
+// wasn't registered yet (MOTIR-1565 — PR #1517, bulk-4: 8 red shell-flows specs
+// from one bad shard start, not a product regression).
+//
+// ⚠️ THE SECOND HALF OF THAT GATE IS GONE WITH THE SECOND SERVER. There is one
+// webServer now and the executor is the engine's own worker, a child of the
+// runner — so what is left to probe is the app, and only the app.
 //
 // This module is the authoritative gate the Playwright globalSetup runs AFTER
-// both webServers report their `url` ready but BEFORE the first spec. It polls
+// the webServer reports its `url` ready but BEFORE the first spec. It polls
 // the routes the suite actually depends on, with bounded retry/backoff, and
 // THROWS a clear error if the server never comes up — so a genuine startup
 // failure reds the global-setup step alone, not the whole suite.
@@ -25,7 +29,7 @@ import * as https from 'node:https';
 export interface HttpProbeResult {
   /** HTTP status code, or 0 on a connection error / timeout. */
   status: number;
-  /** Response body (capped at ~1MB — we only parse the small inngest /dev JSON). */
+  /** Response body (capped at ~1MB). */
   body: string;
 }
 
@@ -133,94 +137,30 @@ export async function waitForHttp200(
   );
 }
 
-/**
- * Parse the inngest dev server's `/dev` payload for its synced-function count.
- * Returns `null` when the body isn't JSON or has no `functions` array (an
- * inngest-version shape we don't recognise) — the caller then falls back to
- * treating a 200 as ready rather than coupling the gate to an unstable shape.
- */
-export function parseInngestFunctionCount(body: string): number | null {
-  try {
-    const json: unknown = JSON.parse(body);
-    if (
-      json &&
-      typeof json === 'object' &&
-      Array.isArray((json as { functions?: unknown }).functions)
-    ) {
-      return (json as { functions: unknown[] }).functions.length;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Wait until the inngest dev server (the executor) is up and answering. Polls
- * its `/dev` probe endpoint — the SDK's own dev-server-detection route, which
- * 200s once the executor is listening. Where a payload exposes a `functions`
- * array (a positive "app synced ≥1 function" signal), we require it to be
- * non-empty; the pinned `inngest-cli` instead returns `{ ids, status }` with no
- * function list, so a 200 alone is accepted there. The AUTHORITATIVE sync
- * guarantee is the app-side `/api/inngest` 200 gate in `assertHarnessReady`:
- * once the serve route is registered, the dev server's PUT-sync (the request
- * that 404-cascaded in MOTIR-1565) can no longer fail — so this check only has
- * to confirm the executor process itself came up.
- */
-export async function waitForInngestReady(
-  inngestBaseUrl: string,
-  opts: PollOptions = {},
-): Promise<void> {
-  const devUrl = new URL('/dev', inngestBaseUrl).toString();
-  await pollUntilReady(
-    'inngest dev server',
-    async () => {
-      const { status, body } = await httpGet(
-        devUrl,
-        opts.probeTimeoutMs ?? DEFAULTS.probeTimeoutMs,
-      );
-      if (status !== 200) return { ready: false, detail: `GET ${devUrl} -> ${status}` };
-      const count = parseInngestFunctionCount(body);
-      if (count === null) {
-        return {
-          ready: true,
-          detail: `GET ${devUrl} -> 200 (functions count unknown; treating as ready)`,
-        };
-      }
-      return { ready: count > 0, detail: `GET ${devUrl} -> 200, functions=${count}` };
-    },
-    opts,
-  );
-}
-
 export interface HarnessReadyOptions {
   /** The origin Playwright drives (e.g. http://localhost:3000). */
   baseUrl: string;
-  /** The inngest dev server origin (e.g. http://localhost:8288). */
-  inngestBaseUrl: string;
   /** Shared poll tuning (attempts / backoff / log). */
   poll?: PollOptions;
 }
 
 /**
- * The full harness readiness gate, in dependency order:
- *   1. the app auth route `/sign-up` returns 200 (the exact route that 404'd —
- *      every account-creating shell flow starts here),
- *   2. the app inngest serve route `/api/inngest` returns 200 (once open, the
- *      dev server's PUT-sync can no longer 404-cascade), then
- *   3. the inngest dev server (executor) is up and answering its `/dev` probe.
- * Throws (from the first failing check) if the server never comes up cleanly.
+ * The harness readiness gate: the app auth route `/sign-up` returns 200 — the
+ * exact route that 404'd, and the one every account-creating shell flow starts
+ * at. Throws if the server never comes up cleanly.
+ *
+ * ⚠️ IT USED TO BE THREE CHECKS (MOTIR-3418 removed two). The others were the
+ * app's `/api/inngest` serve route and the vendor dev server's own `/dev` probe,
+ * in that order, because the dev server SYNCED against the serve route and a
+ * sync issued before the route existed 404-cascaded. Neither the route nor the
+ * dev server exists now, and the engine's worker needs no sync at all: it reads
+ * the registry out of its own bundle. `startJobWorker` in globalSetup already
+ * waits for the worker's own `[worker] started as` line, which is a stronger
+ * signal than any HTTP probe of it would be.
  */
 export async function assertHarnessReady({
   baseUrl,
-  inngestBaseUrl,
   poll = {},
 }: HarnessReadyOptions): Promise<void> {
   await waitForHttp200(new URL('/sign-up', baseUrl).toString(), 'app auth route /sign-up', poll);
-  await waitForHttp200(
-    new URL('/api/inngest', baseUrl).toString(),
-    'app inngest serve /api/inngest',
-    poll,
-  );
-  await waitForInngestReady(inngestBaseUrl, poll);
 }

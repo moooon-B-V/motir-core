@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
 import {
   dailyHealthCheck,
@@ -14,7 +13,7 @@ import { seedHealthyJobSchedules } from '../helpers/jobs';
 
 // Scheduled-job primitive (Story 1.6 · Subtask 1.6.4) — the replacement for the
 // 1.6.2 system.ping smoke test. Drives the `system.daily-health-check` cron job
-// IN-PROCESS via @inngest/test (no live scheduler / dev server / cloud) and
+// IN-PROCESS via the in-process JobTestEngine (no live scheduler / dev server / cloud) and
 // asserts the contract the scheduled path provides:
 //   1. the function resolves to its static payload, and
 //   2. the defineJob wrapper persisted a succeeded job_run row whose event_name
@@ -90,7 +89,7 @@ afterAll(async () => {
 });
 
 // A cron job has NO event trigger, so we invoke it WITHOUT an `events` array:
-// @inngest/test then drives it via the internal `inngest/function.invoked`
+// the in-process JobTestEngine then drives it via the internal `inngest/function.invoked`
 // event (the direct-invoke path), which bypasses trigger-event validation. The
 // wrapper records the ledger event_name as the synthetic `scheduled.{id}`
 // regardless, so the assertions below prove the override.
@@ -104,7 +103,7 @@ afterAll(async () => {
 describe('system.daily-health-check scheduled job', () => {
   it('runs to completion and returns the static payload', async () => {
     await seedHealthyJobSchedules();
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject(DAILY_HEALTH_CHECK_PAYLOAD);
@@ -112,7 +111,7 @@ describe('system.daily-health-check scheduled job', () => {
 
   it('writes a succeeded job_run row with the synthetic scheduled event name', async () => {
     await seedHealthyJobSchedules();
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     await engine.execute();
 
     // Only the wrapper writes a row for THIS function (the seed skips it), so
@@ -135,19 +134,11 @@ describe('system.daily-health-check scheduled job', () => {
   });
 
   it('wires the cron expression into the Inngest function config', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob(
-        { id: 'system.daily-health-check', cron: DAILY_HEALTH_CHECK_CRON, catchUp: 'latest' },
-        () => undefined,
-      );
-      const config = spy.mock.calls.at(-1)?.[0] as
-        | { triggers?: Array<{ cron?: string }> }
-        | undefined;
-      expect(config?.triggers).toEqual([{ cron: '0 9 * * *' }]);
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      { id: 'system.daily-health-check', cron: DAILY_HEALTH_CHECK_CRON, catchUp: 'latest' },
+      () => undefined,
+    );
+    expect(def.cron).toBe('0 9 * * *');
   });
 });
 
@@ -171,7 +162,7 @@ describe('the fleet boot preflight rides the daily health check', () => {
     // that only appeared on failure could not tell `not_applicable` from
     // `bootable`, and those are very different deployments.
     await seedHealthyJobSchedules();
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({ ok: true, fleet: { verdict: 'not_applicable' } });
@@ -205,8 +196,8 @@ describe('the fleet boot preflight rides the daily health check', () => {
       }),
     );
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
-    // `@inngest/test` CAPTURES a handler throw onto `error` rather than
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    // `the in-process JobTestEngine` CAPTURES a handler throw onto `error` rather than
     // rejecting — the same shape `schedule-health.test.ts` reads.
     const { result, error } = (await engine.execute()) as {
       result?: unknown;
@@ -240,7 +231,7 @@ describe('the fleet boot preflight rides the daily health check', () => {
       }),
     );
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
     // Green, but the indeterminate verdict is ON the row — a run of consecutive
@@ -275,7 +266,7 @@ describe("the INDEXER image's preflight rides the same health check", () => {
     stubFleet();
     vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({
@@ -297,7 +288,7 @@ describe("the INDEXER image's preflight rides the same health check", () => {
     // serves the runner.
     vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result, error } = (await engine.execute()) as {
       result?: unknown;
       error?: { message?: string };
@@ -335,7 +326,7 @@ describe("the INDEXER image's preflight rides the same health check", () => {
       }),
     );
 
-    const engine = new InngestTestEngine({ function: dailyHealthCheck });
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({

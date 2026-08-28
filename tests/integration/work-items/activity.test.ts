@@ -16,8 +16,8 @@ import type { ActivityEntryDto, ActivityEntryPartDto } from '@/lib/dto/activity'
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../../helpers/jobs';
 
 // Subtask 5.5.1 — the activity read service over the 1.4.6 revision trail.
 // Real Postgres, no mocks: every history entry asserted here was produced by
@@ -39,7 +39,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

@@ -3,7 +3,6 @@ import type { User } from '@/generated/prisma/client';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -15,6 +14,7 @@ import { runAddComment } from '@/lib/mcp/tools/addComment';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { captureJobEvents } from '../helpers/jobs';
 
 // MCP write tools (Subtask 7.8.5) over real Postgres. `create_work_item`,
 // `transition_status`, `add_comment` — each a thin adapter over an
@@ -34,16 +34,7 @@ interface CapturedEvent {
 }
 
 function captureEvents(): CapturedEvent[] {
-  const events: CapturedEvent[] = [];
-  vi.spyOn(inngest, 'send').mockImplementation((async (payload: unknown) => {
-    const list = Array.isArray(payload) ? payload : [payload];
-    for (const entry of list) {
-      const evt = entry as { name?: string; data?: Record<string, unknown> };
-      if (evt?.name && evt.data) events.push({ name: evt.name, data: evt.data });
-    }
-    return { ids: [] as string[] };
-  }) as typeof inngest.send);
-  return events;
+  return captureJobEvents().events as CapturedEvent[];
 }
 
 let events: CapturedEvent[];

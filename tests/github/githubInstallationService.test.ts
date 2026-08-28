@@ -11,6 +11,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 
 // Story 7.10 · MOTIR-891 — the installation grant service, against a real
 // Postgres (the motir-core convention). Installation rows are workspace-scoped;
@@ -293,7 +294,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: `evt-${repoRef}`,
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'succeeded',
         output: { indexed: true, repoRef, projectsIndexed: 1 },
@@ -303,8 +304,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
 
   it('a RE-bind enqueues only the repos with NO code graph yet (MOTIR-896 · MOTIR-1961)', async () => {
     stubGithubFetch();
-    const { inngest } = await import('@/lib/jobs/client');
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
     // The suite does not restore mocks between tests, so the spy is shared —
     // clear it or a sibling test's sends leak into this one's assertions.
     send.mockClear();
@@ -324,12 +324,8 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
     });
 
     expect(dto.repos.map((r) => r.name).sort()).toEqual(['motir-ai', 'motir-core']);
-    const indexSends = send.mock.calls.filter(
-      (c) => (c[0] as { name: string }).name === 'system.code-graph-index',
-    );
-    expect(indexSends.map((c) => (c[0] as { data: { repoName: string } }).data.repoName)).toEqual([
-      'motir-ai',
-    ]);
+    const indexSends = dispatchedEvents(send).filter((e) => e.name === 'system.code-graph-index');
+    expect(indexSends.map((e) => (e.data as { repoName: string }).repoName)).toEqual(['motir-ai']);
   });
 
   it('a RE-bind RECOVERS an already-mirrored repo that was never indexed (MOTIR-1961)', async () => {
@@ -337,8 +333,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
     // and has no index run. The old gate skipped it as "not newly added", so
     // re-binding — the user's most obvious remedy — repaired nothing.
     stubGithubFetch();
-    const { inngest } = await import('@/lib/jobs/client');
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
     // The suite does not restore mocks between tests, so the spy is shared —
     // clear it or a sibling test's sends leak into this one's assertions.
     send.mockClear();
@@ -354,9 +349,9 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
       installationId: 'inst-bind',
     });
 
-    const indexed = send.mock.calls
-      .filter((c) => (c[0] as { name: string }).name === 'system.code-graph-index')
-      .map((c) => (c[0] as { data: { repoName: string } }).data.repoName);
+    const indexed = dispatchedEvents(send)
+      .filter((e) => e.name === 'system.code-graph-index')
+      .map((e) => (e.data as { repoName: string }).repoName);
     expect(indexed.sort()).toEqual(['motir-ai', 'motir-core']);
   });
 
@@ -365,8 +360,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
     // SUCCEEDED job_run with no `output.repoRef` — when the workspace had no
     // projects. Reading that as "indexed" would strand the repo permanently.
     stubGithubFetch();
-    const { inngest } = await import('@/lib/jobs/client');
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const send = spyOnJobDispatch();
     // The suite does not restore mocks between tests, so the spy is shared —
     // clear it or a sibling test's sends leak into this one's assertions.
     send.mockClear();
@@ -382,7 +376,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: 'evt-no-projects',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 0,
         status: 'succeeded',
         output: { indexed: false, reason: 'no_projects' },
@@ -394,9 +388,9 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
       installationId: 'inst-bind',
     });
 
-    const indexed = send.mock.calls
-      .filter((c) => (c[0] as { name: string }).name === 'system.code-graph-index')
-      .map((c) => (c[0] as { data: { repoName: string } }).data.repoName);
+    const indexed = dispatchedEvents(send)
+      .filter((e) => e.name === 'system.code-graph-index')
+      .map((e) => (e.data as { repoName: string }).repoName);
     expect(indexed.sort()).toEqual(['motir-ai', 'motir-core']);
   });
 

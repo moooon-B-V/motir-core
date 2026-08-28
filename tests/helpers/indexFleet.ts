@@ -236,7 +236,7 @@ export function indexStepIds(ctx: { step: { run: { mock: { calls: unknown[][] } 
  *
  * ⚠️ IT REPLACES `indexSleepSteps`, AND THE REASON IS THE COLLAPSE. That helper
  * pre-fulfilled `step.sleep` state for `index-wait:*` / `index-admit-wait:*`,
- * because an un-stubbed sleep is re-found forever by `InngestTestEngine` and
+ * because an un-stubbed sleep is re-found forever by `JobTestEngine` and
  * `execute()` never resolves. There are no sleeps left in this job: the interval
  * is an ordinary `await` inside `codeGraphIndexDispatchService.runIndexContainer`
  * (`docs/decisions/job-queue-foundation.md` §13 — the durable boundary is the
@@ -274,7 +274,7 @@ export function driveIndexFleetFast(): void {
 /**
  * One `system.code-graph-index` event.
  *
- * ⚠️ THE EVENT ID IS PINNED. `InngestTestEngine` mints a FRESH one (and a fresh
+ * ⚠️ THE EVENT ID IS PINNED. `JobTestEngine` mints a FRESH one (and a fresh
  * runId) per execution, and `defineJob` correlates its ledger row by
  * (functionId, eventId) — so a generated id makes a two-execution assertion read
  * two different runs, and two repos dispatched in one test collide unless the id

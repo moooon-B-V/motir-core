@@ -1,9 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine, spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobServices } from '@/lib/jobs/services';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { RETRY_POLICIES } from '@/lib/jobs/retries';
@@ -42,23 +41,15 @@ import { randomToken, randomInt } from '../helpers/random';
 // and an unbounded invoice, "the job exists" and "the job runs" are different
 // claims, and only the second one is worth anything.
 
-/** Read a job's Inngest config by re-defining it and catching the call. */
+/** Read a job's registered definition by re-defining it. */
 function configFor(options: Parameters<typeof defineJob>[0]) {
-  const spy = vi.spyOn(inngest, 'createFunction');
-  try {
-    defineJob(options, () => undefined);
-    return spy.mock.calls.at(-1)?.[0] as
-      | { triggers?: Array<{ cron?: string; event?: string }>; retries?: number }
-      | undefined;
-  } finally {
-    spy.mockRestore();
-  }
+  return defineJob(options, () => undefined);
 }
 
 /**
  * The triggering event's id, PINNED.
  *
- * ⚠️ `InngestTestEngine` does not model event identity the way the executor
+ * ⚠️ `JobTestEngine` does not model event identity the way the executor
  * does, and the difference is load-bearing here. `individualExecution` mints a
  * fresh `runId` per replay pass and merges a fresh `createMockEvent()` UNDER
  * each supplied event, so an event handed in without an id is given a NEW one on
@@ -157,9 +148,9 @@ afterAll(async () => {
 
 describe('all three fleet jobs are REGISTERED and reach the service through the injected bag', () => {
   it('the sweep, the boot and the reaper are all served', () => {
-    expect(jobFunctions).toContain(ciRunnerProvisionSweep);
-    expect(jobFunctions).toContain(ciRunnerBoot);
-    expect(jobFunctions).toContain(ciRunnerReap);
+    expect(jobDefinitions).toContain(ciRunnerProvisionSweep);
+    expect(jobDefinitions).toContain(ciRunnerBoot);
+    expect(jobDefinitions).toContain(ciRunnerReap);
   });
 
   it('the service in the bag IS the exported singleton, not a lookalike', () => {
@@ -189,7 +180,8 @@ describe('the schedules say what they can and cannot promise', () => {
       catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
-    expect(config?.triggers).toEqual([{ cron: '0,30 * * * *' }]);
+    expect(config.cron).toBe('0,30 * * * *');
+    expect(config.trigger).toBeUndefined();
   });
 
   it('the reaper runs every 30 minutes, ON the cluster (MOTIR-3314)', () => {
@@ -214,8 +206,8 @@ describe('the retry budgets are correctness decisions, not defaults', () => {
     // having done nothing. `runIntent` returns typed outcomes instead of throwing
     // precisely so the retryable failures come back through the sweep for free.
     const config = configFor({ id: 'system.ci-runner-boot', retryPolicy: 'none' });
-    expect(config?.retries).toBe(RETRY_POLICIES.none.maxAttempts - 1);
-    expect(config?.retries).toBe(0);
+    expect(config.maxAttempts).toBe(RETRY_POLICIES.none.maxAttempts);
+    expect(config.maxAttempts).toBe(1);
   });
 
   it('the sweep and the reaper are IDEMPOTENT — both re-derive rather than re-assert', () => {
@@ -231,8 +223,8 @@ describe('the retry budgets are correctness decisions, not defaults', () => {
       catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
-    expect(sweep?.retries).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);
-    expect(reap?.retries).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);
+    expect(sweep.maxAttempts).toBe(RETRY_POLICIES.idempotent.maxAttempts);
+    expect(reap.maxAttempts).toBe(RETRY_POLICIES.idempotent.maxAttempts);
   });
 });
 
@@ -243,9 +235,9 @@ describe('the sweep fans out ONE event per intent', () => {
     // supervisor — the exact orphan the reaper exists to catch, manufactured on
     // purpose.
     vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue(['i1', 'i2']);
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+    const send = spyOnJobDispatch();
 
-    const engine = new InngestTestEngine({ function: ciRunnerProvisionSweep });
+    const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     const { result } = await engine.execute();
 
     expect(result).toEqual({ dispatched: 2 });
@@ -255,7 +247,7 @@ describe('the sweep fans out ONE event per intent', () => {
     // that produces it. `workspaceId` is `null`, never `''`: an empty string is
     // not nullish, so it survives `defineJob`'s `?? null` and trips the ledger's
     // workspace FK, which silently costs the run its `job_run` row (MOTIR-1998).
-    expect(send.mock.calls[0]![0]).toEqual({
+    expect(dispatchedEvents(send)[0]).toEqual({
       name: 'system.ci-runner-boot',
       data: { intentId: 'i1', workspaceId: null },
     });
@@ -263,9 +255,9 @@ describe('the sweep fans out ONE event per intent', () => {
 
   it('dispatches nothing — and sends nothing — when no intent is pending', async () => {
     vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue([]);
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+    const send = spyOnJobDispatch();
 
-    const engine = new InngestTestEngine({ function: ciRunnerProvisionSweep });
+    const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     const { result } = await engine.execute();
 
     expect(result).toEqual({ dispatched: 0 });
@@ -279,9 +271,9 @@ describe('the sweep fans out ONE event per intent', () => {
     vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue(
       Array.from({ length: 25 }, (_, i) => `i${i}`),
     );
-    vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+    spyOnJobDispatch();
 
-    const engine = new InngestTestEngine({ function: ciRunnerProvisionSweep });
+    const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     await engine.execute();
 
     expect(warn).toHaveBeenCalledWith(
@@ -296,7 +288,7 @@ describe('the boot and reap handlers DELEGATE', () => {
     const boot = vi
       .spyOn(ciRunnerBootService, 'bootIntent')
       .mockResolvedValue({ phase: 'terminal', outcome: { outcome: 'unknown_intent' } });
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     // Driven with the REAL payload builder, so the handler is exercised against
     // the event the two senders actually emit rather than a hand-written double.
     const { result } = await engine.execute({ events: [bootEvent('i-42')] });
@@ -324,7 +316,7 @@ describe('the boot and reap handlers DELEGATE', () => {
       outcome: { outcome: 'unknown_intent' },
     });
 
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)] });
 
     expect(runIntent).toHaveBeenCalled();
@@ -340,7 +332,7 @@ describe('the boot and reap handlers DELEGATE', () => {
       .spyOn(ciRunnerBootService, 'reapOrphans')
       .mockResolvedValue({ reaped: 2, staleClaims: 1, usages: [] });
 
-    const engine = new InngestTestEngine({ function: ciRunnerReap });
+    const engine = new JobTestEngine({ function: ciRunnerReap });
     const { result } = await engine.execute();
 
     expect(reap).toHaveBeenCalledTimes(1);
@@ -356,7 +348,7 @@ describe('the boot and reap handlers DELEGATE', () => {
     vi.stubEnv('FLY_FLEET_APP', '');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
     try {
-      const engine = new InngestTestEngine({ function: ciRunnerReap });
+      const engine = new JobTestEngine({ function: ciRunnerReap });
       const { result } = await engine.execute();
       expect(result).toEqual({ reaped: 0, staleClaims: 0, usages: [] });
     } finally {
@@ -371,7 +363,7 @@ describe('the boot and reap handlers DELEGATE', () => {
       usages: [],
     });
 
-    const engine = new InngestTestEngine({ function: ciRunnerReap });
+    const engine = new JobTestEngine({ function: ciRunnerReap });
     await engine.execute();
 
     const runs = await adminDb.jobRun.findMany();
@@ -408,7 +400,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       outcome: { outcome: 'unknown_intent' },
     });
 
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     // The REAL payload builder — the whole defect lived in the payload, so a
     // hand-written event here would test the fix out of existence.
     await engine.execute({ events: [bootEvent(intentId)] });
@@ -443,7 +435,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
     vi.spyOn(ciRunnerBootService, 'settleSupervision').mockResolvedValue(SETTLED_OUTCOME);
 
     superviseFast();
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)] });
 
     const run = await adminDb.jobRun.findFirstOrThrow();
@@ -468,7 +460,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       functionId: 'system.ci-runner-boot',
       eventName: 'system.ci-runner-boot',
       eventId: 'evt-empty',
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
     });
     expect(started).toBeNull();
@@ -481,7 +473,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       functionId: 'system.ci-runner-boot',
       eventName: 'system.ci-runner-boot',
       eventId: 'evt-null',
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
     });
     expect(untenanted).not.toBeNull();
@@ -517,7 +509,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
 // service's own options seam and changes nothing else — the composition, the
 // steps and the ledger are all real. (It replaces `sleepSteps()`, which
 // pre-fulfilled `supervise-wait:<n>` state because an un-stubbed `step.sleep`
-// hangs `InngestTestEngine` forever. There are no sleeps left to stub.)
+// hangs `JobTestEngine` forever. There are no sleeps left to stub.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Millisecond poll cadence for a job-level test, and an optional per-pass ceiling. */
@@ -604,7 +596,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
       .spyOn(ciRunnerBootService, 'settleSupervision')
       .mockResolvedValue(SETTLED_OUTCOME);
 
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     const { result } = await engine.execute({ events: [bootEvent(intentId)] });
 
     // ⚠️ TEARDOWN RAN, and it ran ONCE. This is the line MOTIR-2007 exists for:
@@ -645,7 +637,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
     vi.spyOn(ciRunnerBootService, 'settleSupervision').mockResolvedValue(SETTLED_OUTCOME);
 
     superviseFast();
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)] });
 
     const run = await adminDb.jobRun.findFirstOrThrow();
@@ -678,7 +670,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
       .mockResolvedValue(SETTLED_OUTCOME);
 
     superviseFast();
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     const { result } = await engine.execute({ events: [bootEvent(intentId)] });
 
     // ⚠️ STILL EXACTLY ONCE EACH, and the reason is unchanged: both sit inside
@@ -717,7 +709,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
       .spyOn(ciRunnerBootService, 'settleSupervision')
       .mockResolvedValue(SETTLED_OUTCOME);
 
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)] });
 
     // Three per pass, and the pass count is Inngest's business (see the note on
@@ -745,7 +737,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
     const poll = vi.spyOn(ciRunnerBootService, 'pollOnce');
     const settle = vi.spyOn(ciRunnerBootService, 'settleSupervision');
 
-    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const engine = new JobTestEngine({ function: ciRunnerBoot });
     const { result } = await engine.execute({ events: [bootEvent(intentId)] });
 
     expect(poll).not.toHaveBeenCalled();

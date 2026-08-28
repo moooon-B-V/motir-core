@@ -1,9 +1,8 @@
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine, spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -318,7 +317,7 @@ describe('a FAILING send never costs the delivery its 200', () => {
     // So the transport failure is swallowed and the sweep is the recovery.
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     captured.restore();
-    vi.spyOn(inngest, 'send').mockRejectedValue(new Error('inngest unreachable'));
+    spyOnJobDispatch().mockRejectedValue(new Error('inngest unreachable'));
     const fx = await seedTenant();
 
     const result = await handle(delivery());
@@ -335,7 +334,7 @@ describe('a FAILING send never costs the delivery its 200', () => {
   it('the ROUTE still acks 200 — the ack is what stops GitHub retrying', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     captured.restore();
-    vi.spyOn(inngest, 'send').mockRejectedValue(new Error('inngest unreachable'));
+    spyOnJobDispatch().mockRejectedValue(new Error('inngest unreachable'));
     await seedTenant();
 
     const { POST } = await import('@/app/api/github/webhook/route');
@@ -419,13 +418,13 @@ describe('the SWEEP is unchanged — it still drains a backlog', () => {
     // The recovery path is load-bearing: it is what comes back for an intent the
     // hot call dropped AND for every intent the admission gate deferred.
     vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue(['i1', 'i2', 'i3']);
-    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
+    const send = spyOnJobDispatch();
 
-    const engine = new InngestTestEngine({ function: ciRunnerProvisionSweep });
+    const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     const { result } = await engine.execute();
 
     expect(result).toEqual({ dispatched: 3 });
-    expect(send.mock.calls.map((c) => c[0])).toEqual([
+    expect(dispatchedEvents(send)).toEqual([
       ciRunnerBootEvent('i1'),
       ciRunnerBootEvent('i2'),
       ciRunnerBootEvent('i3'),

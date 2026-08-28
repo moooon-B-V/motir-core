@@ -9,7 +9,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn() }));
 
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
-import { inngest } from '@/lib/jobs/client';
 import { getPreplanState } from '@/lib/ai/motirAiClient';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -32,6 +31,8 @@ import {
   createActionsVariableFake,
   type ActionsVariableFake,
 } from '../../helpers/actionsVariableFake';
+import { spyOnJobDispatch, dispatchedEvents } from '../../helpers/jobs';
+import * as jobDispatcher from '@/lib/jobs/engine/dispatcher';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Story-level GATE for "Establish the project's REPOSITORY SET at plan
@@ -75,12 +76,9 @@ const INSTALLATION_ID = '778899';
 
 /** Every `system.code-graph-index` job the run enqueued, in order. */
 function indexJobs(): { repoName: string; workspaceId: string; repoOwner: string }[] {
-  return vi
-    .mocked(inngest.send)
-    .mock.calls.filter((c) => (c[0] as { name: string }).name === 'system.code-graph-index')
-    .map(
-      (c) => (c[0] as { data: { repoName: string; workspaceId: string; repoOwner: string } }).data,
-    );
+  return dispatchedEvents(vi.mocked(jobDispatcher.dispatchEventToEngine))
+    .filter((e) => e.name === 'system.code-graph-index')
+    .map((e) => e.data as { repoName: string; workspaceId: string; repoOwner: string });
 }
 
 function json(status: number, body: unknown): Response {
@@ -224,7 +222,7 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   _setReadinessPollForTests({ attempts: 2, delayMs: 0 });
   installGitHub();
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   vi.mocked(getPreplanState).mockResolvedValue(preplanWith({ platform: null }));
 });
 

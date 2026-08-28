@@ -1,12 +1,16 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { AuthEmailUnavailableError } from '@/lib/auth/authMail';
 import { TWO_FACTOR_OTP_PERIOD_MINUTES } from '@/lib/auth/twoFactorConfig';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
-import { captureConsoleEmails, captureEmailEvents, runEmailSendJob } from './helpers/jobs';
+import {
+  captureConsoleEmails,
+  captureEmailEvents,
+  runEmailSendJob,
+  spyOnJobDispatch,
+} from './helpers/jobs';
 
 // Story MOTIR-1213 · Subtask MOTIR-1218 — the email-OTP dispatch seam.
 //
@@ -118,7 +122,7 @@ describe('dispatchOtpEmail', () => {
     // signal that existed. It moves, though: the strict lane in `dispatchToLanes`
     // rethrows instead of logging, so `sendAuthEmail` is what writes it now.
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(inngest, 'send').mockRejectedValueOnce(new Error('queue unreachable'));
+    spyOnJobDispatch().mockRejectedValueOnce(new Error('queue unreachable'));
 
     await expect(twoFactorService.dispatchOtpEmail(ARGS)).rejects.toBeInstanceOf(
       AuthEmailUnavailableError,

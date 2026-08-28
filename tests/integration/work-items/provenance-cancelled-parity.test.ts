@@ -1,6 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import {
@@ -12,6 +11,7 @@ import {
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { spyOnJobDispatch } from '../../helpers/jobs';
 
 // MOTIR-2221 — "which TERMINAL statuses mean IMPLEMENTED?" is encoded TWICE:
 // once in the LIVE lane (`workItemsService.applyStatusTransition`, which stamps
@@ -36,7 +36,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // the logic is thinkable, not that the code runs).
 
 beforeEach(async () => {
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
 });
 

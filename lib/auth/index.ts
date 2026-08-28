@@ -125,7 +125,7 @@ export const auth = betterAuth({
     //     so this is a deliberately cross-workspace / system email.
     //   - idempotencyKey: the single-use reset token — a retried request
     //     that re-fires the same token dedups to one delivery within
-    //     Inngest's window.
+    //     the dedup window.
     //
     // The body still lives in lib/emailTemplates/passwordReset.tsx; the
     // template is rendered inside the job by emailService (per CLAUDE.md,

@@ -45,7 +45,6 @@ import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { waitForEmail, emailsTo } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
-import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -77,7 +76,6 @@ test.beforeEach(async () => {
   await clearEmailFault();
   // The fast lane PLUS `email.send`, because the watcher notification's
   // deliverable is an email and the chain has to be on one lane end to end.
-  await routeJobsToEngine(...FAST_LANE, EMAIL_SEND);
 });
 
 test.afterEach(async () => {
@@ -85,7 +83,6 @@ test.afterEach(async () => {
   // hands the next spec a server behaving differently from the one it was
   // written against — and `jobs-flow.spec.ts` asserts the opposite lane.
   await clearEmailFault();
-  await clearJobRouting();
 });
 
 test.afterAll(async () => {

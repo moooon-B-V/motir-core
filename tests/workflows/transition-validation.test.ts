@@ -14,8 +14,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { inngest } from '@/lib/jobs/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Transition validation + the gated work_item.status write (Story 2.2 ·
 // Subtask 2.2.4). Real Postgres — runs in CI. Projects come from
@@ -27,7 +27,7 @@ beforeEach(async () => {
   // Stub the Inngest publish: the status-transition paths now emit
   // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
   // has no Inngest key (the comments-suite pattern).
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
   await truncateAuthTables();
 });
 

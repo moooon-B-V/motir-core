@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { watchersService, WATCHER_PAGE_SIZE } from '@/lib/services/watchersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -17,6 +16,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // watchersService (Story 5.4 · Subtask 5.4.4) — the watch BUSINESS rules over
 // the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the verified
@@ -34,7 +34,7 @@ beforeEach(async () => {
   // The one external seam stubbed (the comments-suite pattern): the
   // post-commit job emit has no Inngest key in the test env, and the 5.4.5
   // watcher job is out of this subtask's scope anyway.
-  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  spyOnJobDispatch();
 });
 
 afterEach(() => {

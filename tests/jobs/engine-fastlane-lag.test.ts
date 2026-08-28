@@ -43,33 +43,22 @@ describe('the percentile arithmetic', () => {
     expect(Number.isNaN(probe.quantile([], 0.95))).toBe(true);
   });
 
-  it('agrees with the PREDECESSOR on the same inputs', () => {
-    // The comparison the budget rests on is 29.4s (Inngest) against whatever the
-    // engine returns. Two p95s computed differently are not a before and an
-    // after, so the two implementations are asserted to be the same function.
-    const predecessor = readFileSync(
-      join(REPO_ROOT, 'scripts', 'experiments', 'inngest-fastlane-lag.mjs'),
-      'utf8',
-    );
-    const match = predecessor.match(/const quantile = \(sorted, q\) => \{[\s\S]*?\n\};/);
-    expect(
-      match,
-      'the predecessor no longer defines `quantile` in the expected shape',
-    ).not.toBeNull();
-    // Reading the predecessor's OWN source is the point: a copy retyped here
-    // could drift from it silently, and then the two lanes' p95s would quietly
-    // stop being the same statistic.
-    const theirs = new Function(`${match![0]} return quantile;`)() as (
-      s: number[],
-      q: number,
-    ) => number;
-
-    for (const q of [0, 0.25, 0.5, 0.9, 0.95, 0.99, 1]) {
-      for (const set of [TEN, [1, 2, 3], [7], [5, 5, 5, 5]]) {
-        expect(probe.quantile(set, q), `q=${q} over ${set.length} values`).toBe(theirs(set, q));
-      }
-    }
-  });
+  // ⚠️ A TEST STOOD HERE AND ITS SOURCE OF TRUTH IS DELETED (MOTIR-3418). It read
+  // `scripts/experiments/inngest-fastlane-lag.mjs` — the PREDECESSOR probe — out
+  // of the tree, extracted its `quantile` with a regex, and asserted the two
+  // implementations agreed over four sample sets and seven quantiles. The point
+  // was that 29.4 s (the old substrate) and whatever this probe returns are only
+  // a BEFORE and an AFTER if they are the same statistic, and a retyped copy would
+  // drift silently.
+  //
+  // The predecessor went with the dependency it drove. The comparison it
+  // protected is preserved where it is actually consumed: both readings live in
+  // `FAST_LANE_LATENCY_BUDGET` (`inngestBaseline` and `engineBaseline`), and
+  // `tests/jobs/fast-lane-latency-budget.test.ts` asserts both are present with
+  // real sample counts — so the pair cannot quietly become one number. What can no
+  // longer be re-derived is the equality of the two implementations, and that is a
+  // real loss to state rather than paper over: the old figure is now a recorded
+  // measurement rather than a reproducible one.
 });
 
 describe('the six reported fields', () => {

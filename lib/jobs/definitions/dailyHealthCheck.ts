@@ -1,35 +1,27 @@
 import { defineJob } from '../defineJob';
-import {
-  describeLaneDrift,
-  reconcileLanes,
-  type LaneDrifted,
-  type LaneReconciliation,
-} from '../engine/census';
 import type { ScheduleHealthReportDTO } from '@/lib/dto/jobSchedules';
 import type { FleetBootableVerdict } from '@/lib/orchestrator';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
-// job. Runs daily at 09:00 via Inngest's cron trigger, so there is no separate
-// scheduler service to operate. It is still the worked example docs/jobs.md →
+// job. Runs daily at 09:00, enqueued by the engine's own scheduler
+// (`lib/jobs/engine/scheduler.ts`). It is still the worked example docs/jobs.md →
 // "Scheduled jobs" points at, and still proves the scheduled path end-to-end
-// (cron → defineJob wrapper → a `job_run` row whose `event_name` is the
-// synthetic `scheduled.system.daily-health-check`).
+// (cron → scheduler → a `job_run` row whose `event_name` is the synthetic
+// `scheduled.system.daily-health-check`).
 //
 // It began as a deliberate no-op. As of MOTIR-1970 it carries a real probe: the
 // SCHEDULE-HEALTH CHECK, which fails the run when a cron job has stopped firing.
-// That is the detection seam for a stale Inngest app registry — the fault where
-// the cloud's registered function list falls behind the deployed build, so
-// events for newer functions are accepted and consumed by nothing, in complete
-// silence. `jobScheduleHealthService` carries the full reasoning; the part that
-// matters HERE is why the probe lives in THIS job and not a new one:
-//
-//   this job is old (2026-06-01), so it is registered in any stale sync the
-//   cloud could still be holding. A checker defined alongside the jobs it
-//   watches would be stranded by the very fault it exists to report.
-//
-// Do not move the probe to a newer job, and do not re-declare this one under a
-// new id — either would re-open the blind spot.
+// It was written as the detection seam for a stale vendor app registry — the
+// fault where a hosted scheduler's registered function list falls behind the
+// deployed build, so a cron fires for nothing, in complete silence. That
+// particular fault died with the vendor (MOTIR-3418): the schedule now comes out
+// of the same image as the handler. The probe SURVIVES because the question it
+// asks is engine-agnostic and still worth asking daily — a job whose `cron` was
+// edited to an expression that never fires, a scheduler tick that stopped, a
+// worker process nobody noticed had been down — and because the answer lands
+// somewhere a person looks. `jobScheduleHealthService` carries the full
+// reasoning.
 //
 // As of MOTIR-2006 it carries a SECOND probe: the FLEET BOOT PREFLIGHT (§6.1 of
 // `docs/decisions/fleet-image-pull.md`) — does the registry actually serve the
@@ -44,23 +36,14 @@ import type { FleetBootableVerdict } from '@/lib/orchestrator';
 // The probes are independent faults sharing one surface, not one check: a
 // stale registry strands functions, an unpullable image strands containers.
 //
-// As of MOTIR-3716 it carries the LANE RECONCILIATION, for the same reason and
-// with the same argument: the checked-in declaration of which lane each job runs
-// on (`lib/jobs/engine/census.ts`) and the live secret that actually decides it
-// (`MOTIR_POSTGRES_JOB_IDS`) were kept equal BY HAND, and four jobs drifted in
-// ~34 hours. The fault is invisible per job — a drifted job runs, daily, on the
-// wrong lane, with every code-side signal green — so the only thing that can see
-// it is a deployment-wide assertion made somewhere a person already looks. This
-// job is that place.
-//
-// ⚠️ AND IT IS LOUD HERE AND QUIET AT BOOT, deliberately. The worker reports the
-// same difference at start-up (`logLaneReconciliation()`) and cannot throw,
-// because the deploy window in which the code is ahead of the secret is REQUIRED
-// (`docs/jobs.md`'s image trap: routing an id whose job is not in the running
-// image routes it nowhere, so deploy-then-route is the only correct order). A
-// difference that is still there at 09:00 the next morning is not a deploy
-// window, and by then the cheap moment to fix it has passed — which is exactly
-// when this job runs.
+// It briefly carried a THIRD probe, the LANE RECONCILIATION (MOTIR-3716): the
+// checked-in declaration of which lane each job ran on against the live
+// `MOTIR_POSTGRES_JOB_IDS` that actually decided it. MOTIR-3418 removed it with
+// the second lane — there is nothing left to declare and nothing left to
+// reconcile. It is named here rather than deleted silently because the fault it
+// caught (four jobs drifting in ~34 hours, each running on the wrong engine with
+// every code-side signal green) is the argument for putting the NEXT
+// deployment-wide assertion in this job too.
 //
 // As of MOTIR-2030 the boot preflight is TWO probes, because the fleet has two
 // pull paths. MOTIR-1989 added the indexer image, and §5's third constraint on
@@ -102,13 +85,6 @@ export interface DailyHealthCheckResult {
    *  deployment that runs CI but does not index reports `not_applicable` here
    *  while `fleet` says `bootable`, and the ledger can tell those apart. */
   indexFleet: FleetBootableVerdict;
-  /** The lane reconciliation's verdict (MOTIR-3716). Recorded on the healthy
-   *  tick too, and that is the point: the `in_sync` arm carries the number of
-   *  ids that agreed, so a clean deployment is readable as an ASSERTION rather
-   *  than as the absence of noise. `not_cut_over` and `not_applicable` are kept
-   *  apart for the same reason — an unconfigured deployment reading as "nothing
-   *  to see here" is the shape this probe exists to end. */
-  lanes: LaneReconciliation;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -127,8 +103,9 @@ export class ScheduledJobsOverdueError extends Error {
       .join(', ');
     super(
       `${report.overdue.length} scheduled job(s) have not run since their previous tick: ${detail}. ` +
-        `Suspect a stale Inngest app registration — re-sync with PUT /api/inngest and check that the ` +
-        `sync is happening on deploy (MOTIR-1970).`,
+        `Check that the worker process group is running and that its scheduler is ticking ` +
+        `(\`fly status -a motir-core\`, then the worker log's \`[job-scheduler]\` lines); a cron ` +
+        `expression edited to one that never fires looks identical from here (MOTIR-1970).`,
     );
     this.name = 'ScheduledJobsOverdueError';
   }
@@ -184,23 +161,6 @@ export class IndexFleetImageUnpullableError extends Error {
   }
 }
 
-/**
- * Thrown when the checked-in lane declaration and the live `MOTIR_POSTGRES_JOB_IDS`
- * disagree (MOTIR-3716) — the difference nothing in the system had ever compared.
- *
- * Its message names BOTH directions and every id in each, because that message
- * is the DLQ row's `failure` and therefore the entire thing an operator reads.
- * "The lanes have drifted" would be true and useless; a list of ids and which
- * secret to edit is a fix. The two directions are stated even when one is empty —
- * "nothing in the other direction" is itself what a reader is checking for.
- */
-export class JobLaneDriftError extends Error {
-  constructor(readonly reconciliation: LaneDrifted) {
-    super(describeLaneDrift(reconciliation));
-    this.name = 'JobLaneDriftError';
-  }
-}
-
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -226,17 +186,7 @@ export const dailyHealthCheck = defineJob(
     const indexFleet = await ctx.step.run('index-fleet-boot-preflight', () =>
       services.fleetPreflight.checkIndexFleet(),
     );
-    // ⚠️ IMPORTED DIRECTLY, NOT THROUGH `services` — and the ESLint boundary is
-    // what settles it. `lib/jobs/engine/**` is internal to the jobs runtime and
-    // is importable only from `lib/jobs/**` and `scripts/worker.ts`, so a
-    // `lib/services/*` wrapper for it would be a rule violation dressed as a
-    // seam. This is the same call `defineJob` and the scheduler make of
-    // `routedToEngine`, one file over. The probe is a pure set difference over a
-    // module constant and one environment variable, so a test seeds it by
-    // setting `MOTIR_POSTGRES_JOB_IDS` rather than by stubbing anything.
-    const lanes = await ctx.step.run('lane-reconciliation', async () => reconcileLanes());
-
-    // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stale registry, an
+    // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
     // faults, and a run that reported only the first would hide the rest for as
     // many days as the first took to fix. So all the reads are taken above and
@@ -263,17 +213,6 @@ export const dailyHealthCheck = defineJob(
     // the larger outage; both verdicts are on the row either way.
     if (indexFleet.verdict === 'unpullable') throw new IndexFleetImageUnpullableError(indexFleet);
 
-    // ⚠️ ONLY `drifted` IS LOUD, and the quiet arms are quiet for reasons that
-    // are not the same as each other. `not_applicable` means the test-only file
-    // override is armed, so there is no deployment to compare against.
-    // `not_cut_over` means the secret names nothing — every job on Inngest,
-    // which is the switch's safety default and a legitimate steady state for an
-    // install that never started the migration; dead-lettering daily over a
-    // migration somebody chose not to run would teach an operator that this row
-    // is noise. Both are still RECORDED on the `job_run` row above, which is what
-    // keeps an unconfigured deployment from reading as a clean one.
-    if (lanes.verdict === 'drifted') throw new JobLaneDriftError(lanes);
-
-    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet, indexFleet, lanes };
+    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet, indexFleet };
   },
 );

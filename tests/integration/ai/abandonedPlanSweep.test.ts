@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InngestTestEngine } from '@inngest/test';
+import { JobTestEngine } from '../../helpers/jobs';
 
 // The ONE mock: the motir-ai HTTP client — the external service boundary
 // (CLAUDE.md's sanctioned carve-out, same as the sibling plan suites).
@@ -24,7 +24,7 @@ import {
   ABANDONED_PLAN_MAX_AGE_HOURS,
 } from '@/lib/services/abandonedPlanService';
 import { abandonedPlanSweep } from '@/lib/jobs/definitions/abandonedPlanSweep';
-import { jobFunctions } from '@/lib/jobs/registry';
+import { jobDefinitions } from '@/lib/jobs/registry';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -934,13 +934,13 @@ describe('the sweep — cross-workspace, bounded, and wired', () => {
     // The wiring half: a sweep nobody scheduled reconciles nothing, and the
     // MOTIR-1970 lesson is that an unregistered job is indistinguishable from an
     // untriggered one.
-    expect(jobFunctions).toContain(abandonedPlanSweep);
+    expect(jobDefinitions).toContain(abandonedPlanSweep);
 
     const { fx } = await makeDrainedProject();
     const planId = await seedGeneratingPlan(fx);
     jobIn('failed');
 
-    const engine = new InngestTestEngine({ function: abandonedPlanSweep });
+    const engine = new JobTestEngine({ function: abandonedPlanSweep });
     const { result } = await engine.execute();
 
     expect(result).toMatchObject({ scanned: 1, declined: 1 });

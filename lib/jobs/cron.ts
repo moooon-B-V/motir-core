@@ -7,14 +7,14 @@
 // and a monthly job missing two ticks are the same fault — so it needs real
 // cron arithmetic, not a hardcoded staleness ceiling per job.
 //
-// It is deliberately NOT a general cron library. Inngest owns the actual
+// It is deliberately NOT a general cron library. `lib/jobs/engine/scheduler.ts` owns the actual
 // scheduling; this only has to READ the same expressions back. So it supports
 // exactly the standard 5-field grammar (`minute hour day-of-month month
 // day-of-week`) with `*`, `a`, `a-b`, `*/n`, `a-b/n` and comma lists, and it
 // THROWS on anything else rather than guessing — an exotic expression added to
 // a future job surfaces as a failing test, never as a silently-skipped check.
 //
-// TIMEZONE: UTC, because Inngest evaluates unqualified cron expressions in UTC.
+// TIMEZONE: UTC, because the engine's scheduler evaluates cron expressions in UTC.
 // Every date function below is the `getUTC*` family for that reason; using the
 // local-time accessors would drift the check by the runner's offset.
 

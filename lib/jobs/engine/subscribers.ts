@@ -26,7 +26,7 @@
 // ⚠️ AND THE ALTERNATIVE WAS TRIED AND REJECTED ON EVIDENCE, which is worth
 // recording so nobody re-attempts it. Deferring `defineJob`'s OWN service import
 // instead — `await import('./services')` inside the handler — also breaks the
-// cycle, and it breaks `@inngest/test`: four `system.daily-health-check` tests in
+// cycle, and it broke the in-process test harness: four `system.daily-health-check` tests in
 // `tests/jobs/schedule-health.test.ts` went red, the job returning `undefined`,
 // because the harness cannot tolerate a dynamic import inside a job handler. It
 // failed the same way with the import at the top of the handler and after the
@@ -44,14 +44,16 @@ let loading: Promise<void> | null = null;
  * Ensure the job manifest is populated in THIS process.
  *
  * Called by `dispatchEventToEngine` before it resolves subscribers. Callers on
- * the emit path must await this before reading the manifest — which is why
- * `hasInngestSubscribers` is safe to be synchronous: `sendEvent` dispatches to
- * the engine first, so by the time it asks about Inngest the load has happened.
+ * the emit path must await this before reading the manifest, and
+ * `tests/jobs/engine-subscriber-reachability.test.ts` asserts that ORDERING
+ * against the dispatcher's own source — a synchronous read of an unloaded
+ * manifest answers "no subscribers", which is indistinguishable from an event
+ * nothing consumes.
  */
 export async function ensureJobManifestLoaded(): Promise<void> {
-  // ⚠️ SHORT-CIRCUIT ON AN ALREADY-POPULATED MANIFEST. The worker, the serve
-  // route and nineteen test files import `lib/jobs/registry.ts` for their own
-  // reasons and have already paid for this; the `import()` would resolve from
+  // ⚠️ SHORT-CIRCUIT ON AN ALREADY-POPULATED MANIFEST. The worker and nineteen
+  // test files import `lib/jobs/registry.ts` for their own reasons and have
+  // already paid for this; the `import()` would resolve from
   // the module cache anyway, and returning first makes that a branch rather than
   // a microtask.
   if (manifestJobs().length > 0) return;

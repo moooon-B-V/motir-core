@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
@@ -8,6 +7,7 @@ import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 
 // MOTIR-1961 — the OPERATOR recovery sweep for repos that never got a first code
 // graph, against a real Postgres (the motir-core convention). The only mock is
@@ -66,7 +66,7 @@ async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
       eventId: `evt-${workspaceId}-${repoRef}`,
-      lane: 'inngest',
+      lane: 'engine',
       attempt: 0,
       status: 'succeeded',
       output: { indexed: true, repoRef, projectsIndexed: 1 },
@@ -76,16 +76,16 @@ async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise
 
 /** Every `system.code-graph-index` event the spy saw, as `owner/name`. */
 function enqueuedRepoRefs(): string[] {
-  return (sendSpy.mock.calls as unknown[][])
-    .map(([e]) => e as { name?: string; data?: { repoOwner: string; repoName: string } })
+  return dispatchedEvents(sendSpy)
     .filter((e) => e.name === 'system.code-graph-index')
-    .map((e) => `${e.data!.repoOwner}/${e.data!.repoName}`);
+    .map((e) => e.data as { repoOwner: string; repoName: string })
+    .map((d) => `${d.repoOwner}/${d.repoName}`);
 }
 
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  sendSpy = spyOnJobDispatch();
 });
 
 afterEach(() => {
@@ -117,9 +117,9 @@ describe('codeGraphIndexService.sweepReposMissingFirstIndex (MOTIR-1961)', () =>
     ]);
     // The payload is the SAME shape the webhook produces — the enqueue runs
     // through one chokepoint, so the job cannot tell the two producers apart.
-    const indexCalls = (sendSpy.mock.calls as unknown[][])
-      .map(([e]) => e as { name?: string; data?: unknown })
-      .filter((e) => e.name === 'system.code-graph-index');
+    const indexCalls = dispatchedEvents(sendSpy).filter(
+      (e) => e.name === 'system.code-graph-index',
+    );
     expect(indexCalls).toHaveLength(1);
     expect(indexCalls[0]!.data).toEqual({
       installationId: 'inst-1',
@@ -260,7 +260,7 @@ describe('codeGraphIndexService.sweepReposMissingFirstIndex (MOTIR-1961)', () =>
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
         eventId: 'evt-failed',
-        lane: 'inngest',
+        lane: 'engine',
         attempt: 4,
         status: 'failed',
         output: { indexed: true, repoRef: 'moooon/motir-core', projectsIndexed: 1 },

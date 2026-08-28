@@ -1,6 +1,5 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailSend';
 import type { EmailSendData } from '@/lib/jobs/types';
@@ -11,7 +10,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureConsoleEmails, runEmailSendJob } from '../helpers/jobs';
 
 // The canonical production job (Story 1.6 · Subtask 1.6.3). These tests drive
-// `email.send` IN-PROCESS via @inngest/test (no dev server / cloud) and assert
+// `email.send` IN-PROCESS via the in-process JobTestEngine (no dev server / cloud) and assert
 // the contract the job provides:
 //   1. it renders the chosen template + dispatches via the provider (the
 //      `[EMAIL]` line proves emailService → sendEmail ran);
@@ -136,13 +135,10 @@ describe('email.send job — idempotency wiring', () => {
   });
 
   it('defineJob forwards the idempotency expression into the Inngest config', () => {
-    const spy = vi.spyOn(inngest, 'createFunction');
-    try {
-      defineJob({ id: 'email.send', idempotency: EMAIL_SEND_IDEMPOTENCY }, () => undefined);
-      const config = spy.mock.calls.at(-1)?.[0] as { idempotency?: string } | undefined;
-      expect(config?.idempotency).toBe('event.data.idempotencyKey');
-    } finally {
-      spy.mockRestore();
-    }
+    const def = defineJob(
+      { id: 'email.send', idempotency: EMAIL_SEND_IDEMPOTENCY },
+      () => undefined,
+    );
+    expect(def.idempotency).toBe('event.data.idempotencyKey');
   });
 });

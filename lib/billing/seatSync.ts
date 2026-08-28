@@ -15,7 +15,7 @@ import { isCloudBilling } from '@/lib/billing/availability';
 // transport blip). So a failed enqueue is swallowed + logged, never propagated.
 //
 // Off-cloud there is no billing at all, so it is a no-op (no enqueue) — this is
-// the cheap gate that keeps self-hosted + local/test paths free of Inngest
+// the cheap gate that keeps self-hosted + local/test paths free of background-queue
 // traffic. On cloud it enqueues the idempotent `system.billing-seat-sync` job,
 // which is the AUTHORITATIVE gate: it re-derives the count and no-ops for any org
 // without an active scaled-tracker subscription (the common case).
@@ -27,7 +27,7 @@ export async function enqueueScaledTrackerSeatSync(organizationId: string): Prom
   //
   // NO local try/catch any more, and that is not a dropped guarantee — it is the
   // removal of a second copy of the same policy. `sendSystemEvent` is
-  // best-effort by construction: a transport failure (Inngest unreachable /
+  // best-effort by construction: a transport failure (the queue unreachable /
   // unconfigured) is swallowed and logged there, so it can never fail the
   // already-committed membership change. The absolute recompute-from-truth
   // design still means a later membership change (or a manual replay) re-derives

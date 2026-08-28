@@ -18,7 +18,7 @@ import { defineJob } from '../defineJob';
 //
 // `retryPolicy: 'idempotent'`: the sweep converges on re-run by construction —
 // deleted rows stop matching `expires_at < now`, and a pass that finds nothing
-// stops — so a transient DB blip is worth Inngest's full retry budget. Bounded per
+// stops — so a transient DB blip is worth the policy's full retry budget. Bounded per
 // run (batch x max-batches in `rateLimitService`), so a backlog drains over
 // several days rather than locking a large slice of a hot table in one pass.
 
