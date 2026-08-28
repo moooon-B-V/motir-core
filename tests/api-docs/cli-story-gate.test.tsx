@@ -391,9 +391,23 @@ describe('guard: the story’s own files are covered by the job that is meant to
     expect(changes, 'ci.yml has a `changes` job').not.toBe('');
 
     // The `case` patterns that leave `app` false — the exclusion set.
-    const excluded = (/case "\$f" in\n\s*([^\n]*?)\)\s*;;/.exec(changes)?.[1] ?? '')
-      .split('|')
-      .map((s) => s.trim())
+    //
+    // ⚠️ FOUND BY BODY, NEVER BY POSITION (MOTIR-3806). This used to read the
+    // first arm after `case "$f" in`, which quietly assumed the exclusion arm
+    // comes first. It cannot: `case` is FIRST-MATCH-WINS, so an arm that
+    // rescues a path from a broader exclusion has to sit ABOVE it —
+    // `content/*) app=true ;;` does, because `content/legal/*.md` is app data
+    // and the blanket `*.md` was swallowing it. The positional regex then
+    // matched nothing and this set read EMPTY, which is what the "is readable"
+    // line below exists to catch. An exclusion arm is the one with an EMPTY
+    // BODY, wherever it sits, and there may be more than one.
+    const appCase = /case "\$f" in\n([\s\S]*?)\n\s*esac/.exec(changes)?.[1] ?? '';
+    const excluded = appCase
+      .split('\n')
+      .flatMap((line) => {
+        const arm = /^\s*([^\s].*?)\)\s*;;\s*$/.exec(line);
+        return arm ? arm[1]!.split('|').map((s) => s.trim()) : [];
+      })
       .filter(Boolean);
     expect(excluded, 'the exclusion set is readable').not.toEqual([]);
     // Documentation and design assets are excluded — that is the saving.
