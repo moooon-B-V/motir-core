@@ -7143,7 +7143,6 @@
     "notesLabel": "Instructions",
     "notesShow": "Show instructions",
     "notesHide": "Hide instructions",
-    "notesPlaceholder": "How to do this step — optional",
     "errors": {
       "notFound": "That step no longer exists.",
       "forbidden": "You do not have permission to change this item's steps.",

@@ -7139,7 +7139,6 @@
     "notesLabel": "操作说明",
     "notesShow": "展开说明",
     "notesHide": "收起说明",
-    "notesPlaceholder": "这一步怎么做——可留空",
     "errors": {
       "notFound": "该步骤已不存在。",
       "forbidden": "你没有修改此工作项步骤的权限。",
