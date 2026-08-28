@@ -99,12 +99,17 @@ to ignore.
 **Published set = the PR's changed files under `design/**`\*\*, classified by
 name:
 
-| Pattern                         | Asset kind | Published as                          |
-| ------------------------------- | ---------- | ------------------------------------- |
-| `*.mock.html`                   | `mock`     | the file, whole                       |
-| `*.png`                         | `image`    | the file, whole                       |
-| `design-notes.md`               | `note`     | **only the changed SECTIONS** (below) |
-| anything else under `design/**` | —          | **not published** (ignored, logged)   |
+| Pattern                                 | Asset kind | Published as                          |
+| --------------------------------------- | ---------- | ------------------------------------- |
+| `*.mock.html`                           | `mock`     | the file, whole                       |
+| `*.png`                                 | `image`    | the file, whole                       |
+| `design-notes.md` / `*.design-notes.md` | `note`     | **only the changed SECTIONS** (below) |
+| anything else under `design/**`         | —          | **not published** (ignored, logged)   |
+
+> ⚠️ **The note row was `design-notes.md` alone until AMENDMENT 1 below
+> (MOTIR-3750, 2026-08-28).** Read that amendment before treating the exact
+> basename as the contract — it is the row that changed, and the reason it
+> changed is the reason it looked right.
 
 A path **deleted** by the PR publishes nothing for that file.
 
@@ -145,6 +150,63 @@ markdown is ALWAYS published as a `text/markdown` asset** (`DesignAsset.kind =
 truncated. 64 KiB comfortably holds the largest section on record (32,169 bytes)
 and two typical ones; the `note_file` makes the cap a rendering bound rather than
 a data-loss bound.
+
+### §1 — AMENDMENT 1 (MOTIR-3750, 2026-08-28): the note arm matches a SUFFIX, as the mock and the export already did
+
+**What changed.** `classifyDesignPath` read
+`path.basename(filePath) === 'design-notes.md'`. It now also accepts
+`*.design-notes.md`. Nothing else in §1 moves: the extraction is still
+diff-hunk → nearest enclosing `##`, the fallback above the first `##` is
+unchanged, and the 64 KiB cap plus the `note_file` companion are untouched.
+
+**Why the old row was wrong, and why it did not look wrong.** The three arms
+disagreed with each other. The mock and the export matched on SUFFIX; the note
+matched on an EXACT basename. So `landing.mock.html` and `landing.png` published
+while `landing.design-notes.md` classified as `null`, landed in `ignored`, and
+was never published. **The failure is silent and PARTIAL** — the card receives
+the pictures, none of the words, a green check and a real evidence id. Nothing
+reddens, and a reader who opens the card sees a design result rather than an
+absence.
+
+The losing name is the one `CLAUDE.md` § _Design assets — THREE files per
+surface_ literally prescribes: _"you MUST land all three, **with a shared
+basename**"_, and then exempts the note in a parenthesis. Two authors wrote a
+per-surface note against that headline rule, ten weeks apart, in two
+repositories:
+
+| file                                                       | last touched                                                  | published its note? |
+| ---------------------------------------------------------- | ------------------------------------------------------------- | ------------------- |
+| `design/org-admin/create-workspace.design-notes.md`        | 2026-06-13, and 2026-08-10 in #2004                           | never               |
+| motir-marketing `design/marketing/landing.design-notes.md` | 2026-08-28, renamed to `design-notes.md` on motir-marketing#2 | not under that name |
+
+**The alternative was rejected on shipped reality, not on taste.** Renaming the
+non-conforming file and guarding the convention is not a `git mv`:
+`design/org-admin/` already carries BOTH `design-notes.md` (the area index) AND
+`create-workspace.design-notes.md`, so the rename is a content MERGE. And it
+leaves the trap armed for the next author, whose words vanish exactly as these
+did. Widening the reader costs one predicate and cannot fail silently.
+
+**The per-area convention is UNCHANGED and still enforced.** §1's note is still
+written per AREA; `tests/design-three-file-set.test.ts` still fails an area that
+ships an asset without a `design-notes.md`. This amendment only stops the
+publisher DISCARDING a note somebody wrote beside a surface. Publishing several
+notes from one pull request has been supported since MOTIR-3145 —
+`buildPublishSet` emits EVERY note, each as its own `note_file`, and the inline
+`noteMd` is their concatenation in collection order.
+
+**The separator is load-bearing.** `<surface>.design-notes.md` publishes;
+`xdesign-notes.md` and `design-notes.markdown` do not
+(`tests/design-assets-uploader.test.ts`).
+
+**What this amendment does NOT do: republish the file that was dropped.** The
+publish step is `pull_request`-only (§6), so a note publishes only from a pull
+request whose diff contains it. `design/org-admin/create-workspace.design-notes.md`
+was last touched on 2026-08-10 in #2004 — **two days before the publisher
+existed** (`scripts/upload-design-assets.mjs` landed 2026-08-12,
+`cacfe0180`, MOTIR-2664) — so the classifier never actually cost that file a
+publish; the mechanism was not there to run. Its absence is recorded here rather
+than repaired: the next pull request that touches it publishes it, which is the
+first time any pull request could have.
 
 ### 2. Entitlement axis — NONE. A deliberate deviation from `acceptance-video.md`
 
