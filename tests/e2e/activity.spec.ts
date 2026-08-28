@@ -79,13 +79,82 @@ async function extendFeed(page: Page, fromName: string, toName: string) {
   }).toPass({ timeout: 20_000 });
 }
 
+// ── The authoritative signals this journey's writes commit through ─────────
+// (MOTIR-3694 — CLAUDE.md § *E2E tests wait on the AUTHORITATIVE signal*.)
+//
+// ⚠️ THE URL CANNOT BE THE PREDICATE ON THIS PAGE. Every mutation here is a
+// Server Action, and Next transports those as a POST to the CURRENT page URL
+// carrying a `next-action` header — so the priority edit, the status
+// transition, the link picker's candidate search, the link add, each comment
+// add and the comment delete are ALL `POST /items/<key>`, indistinguishable by
+// url + method. The discriminator has to be the request BODY, which encodes the
+// action's own arguments. Observed, in order, on one run of this journey:
+//
+//   [{"id":…,"expectedUpdatedAt":…,"priority":"high"}]   updateIssueAction
+//   [{"id":…,"toStatusKey":"in_progress"}]               changeStatusAction
+//   [<currentItemId>,"blocked_by","Blocker"]             listLinkCandidatesAction
+//   [{…,"targetId":<blocker id>,"relationship":"blocked_by"}]  createLinkAction
+//
+// Note the third and fourth both carry `"blocked_by"`: the RELATIONSHIP is not
+// a discriminator, the blocker's own id is.
+
+/**
+ * Resolve when the Server Action whose arguments contain `marker` answers.
+ *
+ * ⚠️ ARM IT BEFORE THE ACTION — a response that has already arrived can never
+ * be waited for.
+ *
+ * The predicate deliberately does NOT test the status. A write that 500s would
+ * then match nothing and hang to the test timeout; matching the request here
+ * and asserting the status at the call site fails in seconds and names the code
+ * it actually got.
+ */
+function actionWrite(page: Page, identifier: string, marker: string) {
+  return page.waitForResponse((res) => {
+    const req = res.request();
+    return (
+      req.method() === 'POST' &&
+      req.headers()['next-action'] !== undefined &&
+      new URL(res.url()).pathname === `/items/${identifier}` &&
+      (req.postData() ?? '').includes(marker)
+    );
+  });
+}
+
+/**
+ * Resolve when the detail page's own `router.refresh()` re-render lands.
+ *
+ * The 200 from a write is not the whole signal for anything this page renders
+ * from the SERVER: `AddLinkControl.submit()` awaits `createLinkAction`, closes
+ * the form, and only THEN calls `router.refresh()` — so the relationships rail
+ * is repainted by this request, not by the action's response. (Which is why the
+ * MOTIR-3694 error-context snapshot shows a CLOSED dialog above an empty rail:
+ * that is what a completed write with an unlanded refresh looks like.)
+ *
+ * The page does not prefetch itself, so a `_rsc` GET of its OWN route is the
+ * refresh. Only the writes that call `router.refresh()` may be awaited this way
+ * — the rail's own field edits reconcile in client state and issue no such
+ * request.
+ */
+function detailPageRefresh(page: Page, identifier: string) {
+  return page.waitForResponse(
+    (res) =>
+      res.request().method() === 'GET' &&
+      new URL(res.url()).pathname === `/items/${identifier}` &&
+      (res.request().headers()['rsc'] !== undefined || res.url().includes('_rsc=')),
+  );
+}
+
 /** Post a root comment through the real composer (the 5.1.5 surface). */
-async function postComment(page: Page, text: string) {
+async function postComment(page: Page, identifier: string, text: string) {
   await page.getByRole('button', { name: 'Add a comment…' }).click();
   await expect(page.locator('.ProseMirror')).toBeVisible();
   await page.locator('.ProseMirror').click();
   await page.keyboard.type(text);
+  // `bodyMd` carries the text verbatim, so it names THIS comment's write.
+  const posted = actionWrite(page, identifier, text);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  expect((await posted).status()).toBe(200);
   await expect(page.getByRole('button', { name: 'Add a comment…' })).toBeVisible();
 }
 
@@ -111,16 +180,22 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   await expect(historyFeed(page)).toHaveCount(0);
   expect(page.url()).not.toContain('activity=');
 
-  // Priority medium → high through the rail's field box.
+  // Priority medium → high through the rail's field box. `expectedUpdatedAt`
+  // is `updateIssueAction`'s concurrency check and no other action sends it.
   await page.getByRole('button', { name: 'Edit Priority' }).click();
   await page.getByRole('combobox', { name: 'Priority' }).click();
+  const priorityWritten = actionWrite(page, fx.issue.identifier, 'expectedUpdatedAt');
   await page.getByRole('option', { name: 'High', exact: true }).click();
+  expect((await priorityWritten).status()).toBe(200);
   await expect(page.getByText('High', { exact: true })).toBeVisible();
 
-  // Workflow transition To Do → In Progress.
+  // Workflow transition To Do → In Progress (`changeStatusAction`, the only
+  // action carrying `toStatusKey`).
   await page.getByRole('button', { name: 'Edit Status' }).click();
   await page.getByRole('combobox', { name: 'Status' }).click();
+  const statusWritten = actionWrite(page, fx.issue.identifier, 'toStatusKey');
   await page.getByRole('option', { name: 'In Progress' }).click();
+  expect((await statusWritten).status()).toBe(200);
   await expect(page.getByText('In Progress', { exact: true })).toBeVisible();
 
   // Link the blocker (the default Blocked-by relationship). The picker is
@@ -130,19 +205,31 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('combobox', { name: /Search by identifier or title/ }).fill('Blocker');
   await page.getByRole('option', { name: /Blocker issue/ }).click();
+  // The blocker's id rides ONLY on `createLinkAction`'s `targetId` — the
+  // candidate search above carries `"blocked_by"` too, so the relationship
+  // would match the wrong POST. And the rail below is painted by the refresh
+  // that `submit()` fires AFTER the write, so both are awaited: the write's
+  // 200, then the re-render that renders the row being asserted.
+  const linkWritten = actionWrite(page, fx.issue.identifier, made.blocker.id);
+  const railRepainted = detailPageRefresh(page, fx.issue.identifier);
   await page.getByRole('button', { name: 'Add', exact: true }).click();
+  expect((await linkWritten).status()).toBe(200);
+  expect((await railRepainted).status()).toBe(200);
   await expect(page.getByRole('link', { name: /Blocker issue/ })).toBeVisible();
 
   // Two comments; delete the second → a comment_deleted revision whose
   // CONTENT must never surface anywhere in the feeds.
-  await postComment(page, 'First note stays live');
-  await postComment(page, 'Second note gets deleted');
+  await postComment(page, fx.issue.identifier, 'First note stays live');
+  await postComment(page, fx.issue.identifier, 'Second note gets deleted');
   const doomed = page
     .getByRole('list', { name: 'Comments' })
     .getByRole('listitem')
     .filter({ hasText: 'Second note gets deleted' });
   await doomed.getByRole('button', { name: 'Delete', exact: true }).first().click();
+  // `deleteCommentAction` is the only write in this journey sending `commentId`.
+  const deleted = actionWrite(page, fx.issue.identifier, 'commentId');
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+  expect((await deleted).status()).toBe(200);
   await expect(page.getByText('Second note gets deleted')).toHaveCount(0);
 
   // ── The History tab: every manufactured change as its designed sentence ──
