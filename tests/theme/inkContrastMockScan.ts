@@ -90,6 +90,29 @@ export const FAINT_CLASS = 'text-(--el-text-faint)';
 export const FAINT_TOKEN = '--el-text-faint';
 
 /**
+ * The DANGER ink — MOTIR-3663, the design-side half of the code arm in
+ * `inkContrastScan.ts`.
+ *
+ * The two arms above are a CONTRAST rule: an ink is fine here and fails there,
+ * so the verdict needs a surface walk and a measured table. This one is a
+ * PAIRING rule — `--el-danger-text` is `--color-destructive-foreground`, the ink
+ * FOR a bright danger fill, so it is legal on exactly one background and wrong
+ * on every other. No walk, no table.
+ *
+ * ⚠️ And this arm is the one that matters most on THIS tree, because a mock is
+ * what the next implementer copies. MOTIR-1553's root cause was literally that:
+ * `.opt.danger { color: var(--el-danger-text) }` in a mock, copied into two row
+ * menus, invisible in the shipped product. The mock scanner has had no danger
+ * arm from the day it was written, so the seed that produced the defect went on
+ * being green while the component that copied it was caught.
+ */
+export const DANGER_CLASS = 'text-(--el-danger-text)';
+export const DANGER_TOKEN = '--el-danger-text';
+
+/** The one background that makes the pairing legal. */
+export const DANGER_FILL_TOKEN = '--el-danger';
+
+/**
  * The backgrounds on which `--el-text-muted` drops below 4.5:1 — CLAUDE.md's
  * measured table (MOTIR-2455): 4.17 / 4.12 / 4.34 against 4.54 on the white
  * page/card.
@@ -114,7 +137,7 @@ export interface MockFinding {
    * header's remaining boundary). `violations()` is the only place that
    * distinction is applied — everything else treats a finding as a finding.
    */
-  ink: 'muted' | 'faint';
+  ink: 'muted' | 'faint' | 'danger';
   /**
    * The `--el-*` background the surface walk resolved under the ink, or `null`
    * on the faint arm — where the verdict is a property of the ink alone, so no
@@ -582,6 +605,32 @@ export function scanMock(file: string, html: string): MockFinding[] {
   const findings: MockFinding[] = [];
 
   for (const element of elements) {
+    // ⚠️ The DANGER arm is ruled on BEFORE the two 1.4.3 grants, and that
+    // ordering is the whole difference between it and the arms below
+    // (MOTIR-3663). The grants exempt a decorative glyph and a disabled control
+    // because 1.4.3 does not MEASURE either — which is the right answer for a
+    // contrast threshold and the wrong one for a token that is simply the wrong
+    // token: an aria-hidden glyph painted `--el-danger-text` on a page is
+    // invisible, and 1.4.3 declining to measure it does not make it visible.
+    // On the code side the same divergence was worth four of the fourteen
+    // swept sites, all of them correctly-marked hidden glyphs.
+    const dangerVia = inkVia(element, elements, paint, DANGER_CLASS, DANGER_TOKEN);
+    if (dangerVia && ownSurface(element, elements, paint) !== DANGER_FILL_TOKEN) {
+      findings.push({
+        file,
+        line: element.line,
+        ink: 'danger',
+        surface: ownSurface(element, elements, paint),
+        element: element.tag,
+        via: dangerVia,
+        reason:
+          `--el-danger-text is the ink FOR a bright danger fill (--color-destructive-foreground), ` +
+          `and <${element.tag}> does not paint bg-(--el-danger) — so it specifies the fill's ink ` +
+          `on a page, which is 1.00:1 in every palette's light theme. Use --el-danger-on-surface`,
+        snippet: element.snippet,
+      });
+    }
+
     // The two 1.4.3 grants are properties of the ELEMENT, so they are read
     // once and applied to both inks — an aria-hidden glyph is exempt whichever
     // ink it takes.

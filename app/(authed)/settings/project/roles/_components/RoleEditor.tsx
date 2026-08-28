@@ -212,7 +212,7 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
       {formError ? (
         <p
           role="alert"
-          className="text-(--el-danger-text) mb-4 font-sans text-[12.5px]"
+          className="text-(--el-danger-on-surface) mb-4 font-sans text-[12.5px]"
           data-testid="role-editor-error"
         >
           {formError}

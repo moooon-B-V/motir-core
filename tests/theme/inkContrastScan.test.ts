@@ -650,3 +650,112 @@ describe('ink-contrast scanner — the surface a component INHERITS from its use
     ).toEqual([]);
   });
 });
+
+describe('the DANGER arm — --el-danger-text off its fill', () => {
+  // MOTIR-3663. The fixtures that matter here are the LEGAL ones: an arm whose
+  // rule is "flag this token" is trivially right about the fourteen defects and
+  // wrong about the one correct site, and it is the correct site that decides
+  // whether the arm can be turned on at all.
+  const danger = (source: string) =>
+    violations(scanSource('fixture.tsx', source)).filter((finding) => finding.ink === 'danger');
+
+  it('clears the ink ON its fill — the Button danger variant', () => {
+    expect(
+      danger(
+        `const button = <button className="bg-(--el-danger) text-(--el-danger-text)">Delete</button>;`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('clears a cva VARIANTS STRING carrying both, where there is no element at all', () => {
+    // `packages/design-system/src/components/ui/Button.tsx:43` is exactly this
+    // shape, and it is the whole reason this arm scopes to the class LITERAL
+    // when it cannot find an element. Attributing by element alone would have
+    // reported the tree's one correct use and made the arm unturnable-on.
+    expect(
+      danger(
+        `const variants = { danger: 'bg-(--el-danger) text-(--el-danger-text) hover:opacity-90' };`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('clears the fill written as an inline style rather than a class', () => {
+    expect(
+      danger(
+        `const chip = <span style={{ background: 'var(--el-danger)', color: 'var(--el-danger-text)' }}>x</span>;`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('flags the ink on a plain surface', () => {
+    expect(
+      danger(`const p = <p role="alert" className="text-(--el-danger-text)">failed</p>;`),
+    ).toHaveLength(1);
+  });
+
+  it('flags the ink on the danger TINT — 1.14–1.29:1, the chip that was never readable', () => {
+    // `--el-danger-surface` is a soft pastel, not the fill. The near-miss is the
+    // point: a rule written as "some danger-ish background is under it" would
+    // clear this, and the label has been unreadable for as long as it has
+    // existed (`components/planning/WorkItemNode.tsx:308`).
+    expect(
+      danger(
+        `const chip = <span className="bg-(--el-danger-surface) text-(--el-danger-text)">blocked</span>;`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('flags the ink when the fill is only on an ANCESTOR', () => {
+    // The fill has to be on the SAME element. An ancestor painting
+    // `bg-(--el-danger)` does not put the fill behind this element's own
+    // background, and the ink is `--color-destructive-foreground` — a value
+    // chosen against the fill, not against whatever the child paints.
+    expect(
+      danger(
+        `const box = <div className="bg-(--el-danger)"><span className="bg-(--el-card) text-(--el-danger-text)">x</span></div>;`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('flags a HOVER-only fill — the resting state is what the reader sees', () => {
+    // Same reasoning as the safe arm's `paintsUnprefixed` (MOTIR-2497), in the
+    // other direction: a `hover:` fill paints the danger red under the pointer
+    // and nothing every other render, so it cannot license the ink.
+    expect(
+      danger(
+        `const b = <button className="hover:bg-(--el-danger) text-(--el-danger-text)">Delete</button>;`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('flags a decorative glyph too — this arm grants no 1.4.3 exemption', () => {
+    // The deliberate divergence from the two grey arms, and it was worth four
+    // of the fourteen swept sites. 1.4.3 does not MEASURE an aria-hidden glyph,
+    // which is why the grey arms exempt one; it does not follow that painting
+    // it white-on-white is fine. Here the ink is wrong on any background but
+    // one, so the exemption would clear a real defect.
+    expect(
+      danger(`const icon = <AlertTriangle className="text-(--el-danger-text)" aria-hidden />;`),
+    ).toHaveLength(1);
+  });
+
+  it('flags an inline style with no fill beside it', () => {
+    // `app/(authed)/settings/organization/billing/_components/BillingClient.tsx:773`.
+    // A class-shaped needle would never have seen this one.
+    expect(
+      danger(`const x = <X style={{ color: 'var(--el-danger-text)' }} aria-hidden />;`),
+    ).toHaveLength(1);
+  });
+
+  it('is invisible to a COMMENT that warns about the token', () => {
+    // Three sites in the tree carry exactly such a comment, correctly, and an
+    // arm that flagged them would be asking authors to delete the warnings that
+    // were the only record of this defect for fourteen months. Comments are
+    // trivia, not nodes, so the AST walk cannot see one — this fixture pins
+    // that as a decision rather than an accident.
+    expect(
+      danger(`// \`--el-danger-text\` is the ink FOR a danger fill — do not use it here.
+              const p = <p className="text-(--el-danger-on-surface)">failed</p>;`),
+    ).toEqual([]);
+  });
+});

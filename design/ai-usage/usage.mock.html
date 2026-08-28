@@ -161,7 +161,7 @@
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-danger: var(--color-destructive);
-        --el-danger-text: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
@@ -828,7 +828,7 @@
       }
       .state.err .ico {
         background: var(--el-tint-rose);
-        color: var(--el-danger-text);
+        color: var(--el-danger-on-surface);
       }
       .state.blocked .ico {
         background: var(--el-tint-yellow);
