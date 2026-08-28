@@ -18,6 +18,8 @@ import {
 } from '@/lib/users/errors';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { archiveFilename, buildPersonalDataArchive } from '@/lib/export/personalDataArchive';
+import { toDataExportRequestDTO } from '@/lib/mappers/dataExportMappers';
+import type { DataExportRequestDTO } from '@/lib/dto/dataExport';
 
 // THE PERSONAL-DATA EXPORT (Story 8.4 · Subtask MOTIR-3701 · design of record
 // `design/settings/design-notes.md` → `Data & privacy`, DECISIONs 1 and 2).
@@ -313,5 +315,30 @@ export const dataExportService = {
     }
 
     return summary;
+  },
+
+  /**
+   * This user's most recent export request, as the pane renders it — or `null`
+   * when they have never asked for one (Story 8.4 · Subtask MOTIR-1136).
+   *
+   * ⚠️ `null` IS THE IDLE STATE, and it is a different thing from every status
+   * in the enum. A reader who has never requested an export has no row, so the
+   * pane's first panel is the absence of one; modelling idle as a fifth status
+   * would put a value in the column that no build, sweep or download ever
+   * writes. The card's export card branches on `null` first and then over the
+   * four real values — including `expired`, whose entire reason to exist is
+   * that the pane can say what happened rather than show nothing.
+   *
+   * Read-only and identity-scoped: one bound transaction under the reader's own
+   * context, so the `data_export_request` policy's `app.user_id` arm is what
+   * decides the row is theirs. Nothing is locked — a screen that paints a status
+   * derives no write from it, and the locking twin
+   * (`findLatestByUserIdForUpdate`) exists for the caller that does.
+   */
+  async getLatestExportForUser(userId: string): Promise<DataExportRequestDTO | null> {
+    const row = await withUserContext(userId, (tx) =>
+      dataExportRequestRepository.findLatestByUserId(userId, tx),
+    );
+    return row === null ? null : toDataExportRequestDTO(row);
   },
 };

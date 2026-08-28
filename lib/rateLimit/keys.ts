@@ -45,6 +45,7 @@ export type RateLimitScope =
   | 'mcp:call'
   | 'account:change-password'
   | 'account:set-password-link'
+  | 'account:data-export'
   | 'idea-draft'
   | 'upload';
 
