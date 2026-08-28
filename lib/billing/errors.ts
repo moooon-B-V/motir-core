@@ -114,23 +114,39 @@ export class EntitlementExceededError extends Error {
 }
 
 /**
- * A §4 count cap could not take the org-row lock it serializes on
- * (`organizationRepository.lockByIdForUpdate` returned `false`), so the
+ * The ROW a §4 cap serializes on, and therefore what could not be locked.
+ *
+ * The three COUNT caps (§4.1 / §4.2 / §4.4) anchor on the `organization` row —
+ * the single shared row every one of that org's creates contends on. The
+ * org-CREATION gate (§4.5) cannot: it counts the ACTOR's owner/admin
+ * memberships, and on the first create that set is EMPTY, so there is no shared
+ * org row in existence to lock. Its anchor is the actor's own `user` row
+ * (MOTIR-3717), which exists before the first organization does.
+ */
+export type CapLockSubject = 'organization' | 'user';
+
+/**
+ * A §4 cap could not take the row lock it serializes on, so the
  * `count → compare → create` guard would run UNSERIALIZED — two concurrent
- * creates could both observe `count = limit - 1` and both insert (MOTIR-3710).
+ * creates could both observe `count = limit - 1` and both insert (MOTIR-3710),
+ * or two concurrent FIRST creates could both observe zero orgs and both mint one
+ * (MOTIR-3717).
  *
  * A cap that cannot serialize must REFUSE, not admit: the alternative is a
  * revenue control failing open with no error, no log line and no metric, which
  * is exactly how this shipped for months. Not a user error and not an upgrade
  * prompt — it is a server-side invariant failure, so it carries no
- * `entitlement` and maps to **500**. Reaching it means either the org row
+ * `entitlement` and maps to **500**. Reaching it means either the anchor row
  * vanished mid-transaction or the calling context cannot admit the lock.
  */
 export class CapLockUnavailableError extends Error {
   readonly code = 'CAP_LOCK_UNAVAILABLE' as const;
-  constructor(readonly organizationId: string) {
+  constructor(
+    readonly subject: CapLockSubject,
+    readonly subjectId: string,
+  ) {
     super(
-      `Could not lock organization ${organizationId} for update; ` +
+      `Could not lock ${subject} ${subjectId} for update; ` +
         'the scale cap cannot be enforced without serialization.',
     );
     this.name = 'CapLockUnavailableError';

@@ -178,3 +178,142 @@ export class PasswordRateLimitedError extends Error {
     this.name = 'PasswordRateLimitedError';
   }
 }
+
+// ── Account-deletion errors (Story 8.4 · Subtask MOTIR-3700) ───────────────
+// The WRITE half of `Data › Data & privacy`. Design of record:
+// `design/settings/design-notes.md` → `Data & privacy` → DECISION 4 (deletion
+// SCHEDULES, it does not fire) and DECISION 5 (the block is the organization).
+//
+// ⚠️ THESE EXIST SO THAT NO PRISMA ERROR REACHES A CALLER. Scheduling races on
+// a partial unique index and cancelling races on a row lock, so both paths have
+// a losing arm that arrives as a `P2002` or as a status that moved under the
+// reader. Every one of them is translated here: the pane has to render a
+// sentence, and `Unique constraint failed on the fields: (user_id)` is not one.
+
+/**
+ * The reader is the last owner of an organization other people belong to, so
+ * the account cannot be closed (DECISION 5 — `assertNotLastOwner`'s condition,
+ * read through the impact preview rather than caught from a delete attempt).
+ *
+ * Carries the organization's NAME because the refusal is only actionable with
+ * it: the pane's way out is *"hand the owner role over in `Organization ›
+ * Members`"*, and a reader who owns three organizations needs to know which.
+ */
+export class AccountDeletionBlockedError extends Error {
+  readonly code = 'ACCOUNT_DELETION_BLOCKED' as const;
+  constructor(readonly organizationName: string) {
+    super(
+      `This account owns ${organizationName} and is its only owner. ` +
+        `Hand the owner role to somebody else before deleting the account.`,
+    );
+    this.name = 'AccountDeletionBlockedError';
+  }
+}
+
+/**
+ * A deletion is already scheduled for this account.
+ *
+ * ⚠️ RAISED FROM TWO PLACES THAT LOOK DIFFERENT AND MEAN THE SAME THING: the
+ * in-transaction `FOR UPDATE` read that found an open row, and the `P2002` on
+ * `account_deletion_request_open_per_user_key` when two requests raced past
+ * that read together (the lock cannot serialise the FIRST insert — it locks a
+ * predicate matching zero rows). One error type, because the caller's question
+ * is *"is my account already being deleted?"* and the answer is yes either way.
+ */
+export class AccountDeletionAlreadyScheduledError extends Error {
+  readonly code = 'ACCOUNT_DELETION_ALREADY_SCHEDULED' as const;
+  constructor() {
+    super('This account already has a deletion scheduled.');
+    this.name = 'AccountDeletionAlreadyScheduledError';
+  }
+}
+
+/**
+ * There is nothing to cancel — the account has no `scheduled` request. Covers
+ * "never asked" and "already cancelled" alike: both leave the reader in the
+ * state the cancel was reaching for, so the pane renders the same thing.
+ */
+export class NoOpenAccountDeletionRequestError extends Error {
+  readonly code = 'NO_OPEN_ACCOUNT_DELETION_REQUEST' as const;
+  constructor() {
+    super('This account has no scheduled deletion to cancel.');
+    this.name = 'NoOpenAccountDeletionRequestError';
+  }
+}
+
+/**
+ * The erasure has already run. Deliberately NOT folded into
+ * {@link NoOpenAccountDeletionRequestError}: *"nothing to cancel"* and *"the
+ * data is gone"* are opposite answers to the reader, and a cancel that arrives
+ * one second after the sweep committed must not be reported as though the
+ * window were still open.
+ */
+export class AccountDeletionAlreadyCompletedError extends Error {
+  readonly code = 'ACCOUNT_DELETION_ALREADY_COMPLETED' as const;
+  constructor() {
+    super('This account has already been erased and cannot be restored.');
+    this.name = 'AccountDeletionAlreadyCompletedError';
+  }
+}
+
+// ── Personal-data-export DELIVERY errors (Story 8.4 · Subtask MOTIR-3703) ──
+// The READ half of `Data › Data & privacy`. Design of record:
+// `design/settings/design-notes.md` → `Data & privacy` → DECISION 2 (the file
+// is handed over in the pane; the email only says it is ready).
+//
+// ⚠️ THREE REFUSALS, THREE TYPES, AND THE SPLIT IS THE POINT. This route hands
+// a private archive of one person's entire account to whoever calls it, so
+// "you may not have this" and "this is not ready yet" and "this is gone" are
+// three different sentences the pane has to render — and collapsing them would
+// either leak the existence of somebody else's export or tell a reader whose
+// window has closed to keep waiting.
+
+/**
+ * The export request does not resolve for the caller: no such row, or a row
+ * belonging to SOMEBODY ELSE.
+ *
+ * ⚠️ ONE TYPE FOR BOTH, deliberately — finding #44's rule, and it matters more
+ * here than anywhere else in the product: a distinguishable "exists but
+ * forbidden" would turn the download route into an oracle that confirms whether
+ * a given id is somebody's personal-data archive.
+ */
+export class DataExportNotFoundError extends Error {
+  readonly code = 'DATA_EXPORT_NOT_FOUND' as const;
+  constructor(id: string) {
+    super(`No data export found for "${id}".`);
+    this.name = 'DataExportNotFoundError';
+  }
+}
+
+/**
+ * The caller's own export exists but is not `ready` — still `preparing`, or
+ * `failed`. Carries the status because the pane renders a different thing for
+ * each (a progress note versus DECISION 2's `privacy@motir.co` route), and the
+ * pane should not have to make a second call to find out which.
+ */
+export class DataExportNotReadyError extends Error {
+  readonly code = 'DATA_EXPORT_NOT_READY' as const;
+  constructor(readonly status: string) {
+    super(`This data export is not ready to download (it is ${status}).`);
+    this.name = 'DataExportNotReadyError';
+  }
+}
+
+/**
+ * The retention window has run out. Raised for a row the sweep has already
+ * marked `expired` AND for one still reading `ready` whose `expiresAt` has
+ * passed — the sweep runs on a schedule, so there is always a window in which
+ * the row is stale and the promise is not.
+ *
+ * ⚠️ NOT folded into {@link DataExportNotReadyError}: *"come back in a moment"*
+ * and *"the file has been deleted, ask for a new one"* are opposite
+ * instructions, and the seven-day promise is only honest if the surface says
+ * plainly when it has elapsed.
+ */
+export class DataExportExpiredError extends Error {
+  readonly code = 'DATA_EXPORT_EXPIRED' as const;
+  constructor() {
+    super('This data export has expired. Request a new one to download your data.');
+    this.name = 'DataExportExpiredError';
+  }
+}

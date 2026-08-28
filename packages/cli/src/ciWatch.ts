@@ -244,6 +244,23 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
  * that correctly declines to patch around one has still used a roll. Ending the
  * loop on a no-op would turn the single most common right answer into a give-up.
  *
+ * ⚠️ AND IT SAYS WHAT NOT TO RUN, because the pull toward re-running is
+ * strongest exactly here and it does not feel like waste — it feels like
+ * checking your work. An agent handed a red suite naturally reaches for that
+ * suite to confirm the fix, and in THIS loop that reach is not merely redundant
+ * but structurally so: every fixing iteration pushes, every push re-triggers
+ * CI, so the loop's next poll is already guaranteed to produce the verdict the
+ * local run is trying to anticipate. The cost is paid three times over — an
+ * attempt out of five is blocked while it runs, the machine is shared so a wide
+ * run manufactures failures belonging to other sessions, and the copy it
+ * produces is not merged with the default branch, so it is the weaker evidence.
+ * Observed: a run whose CI named ONE file fixed that file, then ran 294 files to
+ * check the blast radius, harvested five unrelated database-contention failures,
+ * and began triaging them.
+ *
+ * The first-pass rule lives in `promptTemplate.ts` (`WHAT_TO_DO.code` step 4)
+ * and is unchanged; this is the SECOND pass, which nothing covered.
+ *
  * It is repair work on pull requests that already exist — NOT a new card. It
  * links nothing, claims nothing, and transitions nothing.
  */
@@ -276,6 +293,14 @@ export function renderFixPrompt(input: {
   lines.push('     push; the existing pull request picks it up. Open no new pull');
   lines.push('     request and link nothing — this is repair work on a pull request');
   lines.push('     that already exists.');
+  lines.push('     **THE PUSH IS THE VERIFICATION.** This loop re-triggers CI on');
+  lines.push('     every push, so the next verdict IS your confirmation — you do');
+  lines.push('     not have to produce one. You may run AT MOST the single file');
+  lines.push('     the log named, and only because it is seconds. NEVER the suite,');
+  lines.push('     never a coverage run, and never a wider sweep to check that');
+  lines.push('     nothing else broke: that is the same measurement taken twice,');
+  lines.push('     the second time slower, on a shared machine, and NOT merged');
+  lines.push('     with the default branch — so it is the less trustworthy copy.');
   lines.push('   - **ENVIRONMENTAL** — a connection reset, a runner or webServer death,');
   lines.push('     a first-hit cold-compile timeout, a different test failing each run —');
   lines.push('     then **say so and change NOTHING**. Pushing a speculative patch to');

@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { resolveBaseUrl, resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendAuthEmail } from '@/lib/auth/authMail';
 import { assertAccountNotSuspended } from '@/lib/auth/accountSuspension';
+import { cancelDeletionOnSignIn } from '@/lib/auth/accountDeletionCancellation';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
@@ -273,6 +274,16 @@ export const auth = betterAuth({
       create: {
         before: async (session) => {
           await assertAccountNotSuspended(session.userId);
+        },
+        // ⚠️ SIGNING IN CANCELS A SCHEDULED ACCOUNT DELETION (Story 8.4 ·
+        // MOTIR-3700). It sits on the same seam as the suspension guard above,
+        // for the same reason — every way in ends here and none of them shares
+        // an endpoint — but on `after` rather than `before`: the suspension has
+        // to REFUSE a session, while this is a consequence of one that
+        // succeeded. Best-effort by design; the reasoning, and why the window
+        // exists at all, is in `lib/auth/accountDeletionCancellation.ts`.
+        after: async (session) => {
+          await cancelDeletionOnSignIn(session.userId);
         },
       },
     },

@@ -3,7 +3,16 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // MOTIR-1150 — the structural guard for the brand lockup's CSS
-// (`app/globals.css`'s `.brand-*` block, copied from design-notes.md §3).
+// (the `.brand-*` block, copied from design-notes.md §3).
+//
+// ── WHERE THE CSS LIVES, AND WHY THIS TEST DID NOT MOVE WITH IT ─────────────
+// MOTIR-1456 moved the block out of `app/globals.css` into
+// `packages/brand/brand.css`, so the path below is repointed. The TEST stayed
+// here on purpose. `packages/` is excluded from the root tsconfig and the root
+// CI lanes, so a package-local copy of this guard would be verified only on
+// whichever machine last ran it by hand — and the type pin below is precisely
+// the assertion that must not go unrun. Keeping it in `tests/**` keeps it in
+// the Vitest lane every pull request executes.
 //
 // ── WHY THIS IS A TEST AND NOT A CODE REVIEW ────────────────────────────────
 // The type pin is the one requirement on this card that LOOKS CORRECT WHEN IT
@@ -17,12 +26,12 @@ import { describe, expect, it } from 'vitest';
 // The block is also read for the colour rule: the mark follows the theme and a
 // data-palette swap only because every colour in it is a Tier-3 --el-* token.
 
-const CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+const CSS = readFileSync(join(process.cwd(), 'packages/brand/brand.css'), 'utf8');
 
 /** The `.brand-*` rules, comments stripped — prose must not satisfy a guard. */
 const BRAND_CSS = (() => {
   const start = CSS.indexOf('.brand-lockup');
-  expect(start, 'app/globals.css should carry the .brand-* block').toBeGreaterThan(-1);
+  expect(start, 'packages/brand/brand.css should carry the .brand-* block').toBeGreaterThan(-1);
   return CSS.slice(start).replace(/\/\*[\s\S]*?\*\//g, '');
 })();
 

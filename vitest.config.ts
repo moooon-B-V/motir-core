@@ -244,6 +244,16 @@ export default defineConfig({
         'lib/users/dataSubjectRequests.ts',
         'lib/repositories/accountDeletionRequestRepository.ts',
         'lib/repositories/dataExportRequestRepository.ts',
+        // Story 8.4 · Subtask MOTIR-3700 — the schedule/cancel WRITE that sits on
+        // that substrate, and the sign-in seam that cancels. Both MEASURED at
+        // 100/100/100/100 on this branch before being pinned. They are gated for
+        // the reason the substrate is: an account deletion is the most
+        // destructive thing a reader can ask for, and the two arms a regression
+        // would silently take out — the `P2002` translation and the best-effort
+        // catch around the sign-in cancel — are exactly the ones no happy-path
+        // test exercises.
+        'lib/services/accountDeletionService.ts',
+        'lib/auth/accountDeletionCancellation.ts',
         'lib/repositories/publicFollowRepository.ts',
         'lib/services/publicFollowService.ts',
         'lib/services/publicFollowDigestService.ts',
@@ -1783,6 +1793,20 @@ export default defineConfig({
           statements: 90,
         },
         'lib/repositories/dataExportRequestRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story 8.4 · Subtask MOTIR-3700 — both measured at 100 on every axis
+        // (see the `include` block's note). 90 is the standard floor.
+        'lib/services/accountDeletionService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/auth/accountDeletionCancellation.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

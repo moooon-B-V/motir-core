@@ -43,6 +43,22 @@ export const dataExportRequestRepository = {
   },
 
   /**
+   * ONE request by its id, or null — the read the DOWNLOAD route resolves
+   * (Story 8.4 · Subtask MOTIR-3703).
+   *
+   * ⚠️ THE `tx` IS THE AUTHORIZATION, not a transactional nicety. The table's
+   * policy (`data_export_request_owner_or_system`) admits a row only when
+   * `app.user_id` matches it, so this call under `withUserContext(caller)`
+   * cannot see another person's archive — and under no context at all it sees
+   * nothing, silently. That is the whole reason every method here takes `tx`,
+   * and the reason a caller must never reach for the `db` singleton to "just
+   * look up the row".
+   */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<DataExportRequest | null> {
+    return tx.dataExportRequest.findUnique({ where: { id } });
+  },
+
+  /**
    * This user's most recent request, or null — what the pane renders. Newest
    * first by `requestedAt`, tie-broken on `id` so the answer is deterministic
    * when two rows share a millisecond (a retry, or a fixture that pins the
@@ -89,6 +105,31 @@ export const dataExportRequestRepository = {
        FOR UPDATE
     `;
     return rows[0] ?? null;
+  },
+
+  /**
+   * Every `ready` archive whose retention window has run out — the expiry
+   * sweep's read (Story 8.4 · MOTIR-3701). Both columns are the model's
+   * `[status, expiresAt]` index, which exists for this query.
+   *
+   * `ready` ONLY, deliberately. A `failed` or already-`expired` row has no blob
+   * to delete, and a `preparing` one has no `expiresAt` yet — widening this to
+   * "past expiry" would sweep rows whose build is still running the moment a
+   * null date sorted early.
+   *
+   * Cross-tenant: the sweep runs under `withSystemContext`, which the table's
+   * policy arms for exactly this reader.
+   */
+  async listExpirable(
+    input: { now: Date; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<DataExportRequest, 'id' | 'userId' | 'blobPathname'>>> {
+    return tx.dataExportRequest.findMany({
+      where: { status: 'ready', expiresAt: { lte: input.now } },
+      select: { id: true, userId: true, blobPathname: true },
+      orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+      take: input.take,
+    });
   },
 
   /** Record a build's outcome (ready + its blob, failed + its reason, expired).

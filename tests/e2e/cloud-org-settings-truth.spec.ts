@@ -73,7 +73,19 @@ test('the organization settings page offers no address it cannot resolve, and no
 
   await chapter('The General card carries a name — and no address', async () => {
     // The one editable thing on the card is still there and still works.
-    await expect(page.getByLabel('Organization name')).toBeVisible();
+    //
+    // ⚠️ `getByRole`, NOT `getByLabel` (MOTIR-3725). During a navigation React
+    // keeps the OUTGOING subtree mounted while the incoming one streams, so both
+    // are in the DOM at once and an unscoped `getByLabel` matches BOTH — strict
+    // mode then fails on a page that is perfectly correct. `CLAUDE.md`'s
+    // loading-boundary rule states the remedy outright: *"`getByRole` is immune —
+    // the accessibility tree excludes the hidden copy"*, and of the 30 assertions
+    // that class once broke, exactly zero used it.
+    //
+    // The failure named its own fix: Playwright reported the live element as
+    // `aka getByRole('textbox', { name: 'Organization name' })` and the stale
+    // twin only by raw id, so the role query resolves to the one that matters.
+    await expect(page.getByRole('textbox', { name: 'Organization name' })).toBeVisible();
 
     // The absence, checked three independent ways. Any one of these surviving
     // would mean the row is still on the page in some form.
@@ -114,7 +126,18 @@ test('the organization settings page offers no address it cannot resolve, and no
   await chapter('The acceptance-video card, on an organization that must pay', async () => {
     // A brand-new org is NOT meta. On a cloud harness it should still see the
     // plan gate — the fix narrowed the denial, it did not remove it.
-    const card = page.locator('#acceptance-video');
+    //
+    // ⚠️ SCOPED TO `#main` (MOTIR-3725). Same cause as the `getByRole` note
+    // above, and this one has no role to reach for — an `id` is a raw CSS query,
+    // so it matches the outgoing subtree as readily as the live one. `CLAUDE.md`
+    // gives the second remedy for exactly this case: *"reach for `getByRole`, or
+    // scope to the live subtree"*. It bites hardest after the `page.reload()`
+    // below, where nothing settles the transition at all.
+    //
+    // `#main` is the shell's live region, and Playwright named it itself:
+    // `aka locator('#main #acceptance-video')` was element 1 of the strict-mode
+    // violation, the stale twin being reachable only as `.nth(1)`.
+    const card = page.locator('#main #acceptance-video');
     await expect(card).toBeVisible();
 
     if (CLOUD) {

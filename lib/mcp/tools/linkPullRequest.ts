@@ -239,7 +239,8 @@ export async function runLinkPullRequest(
 
     const where = `${result.link.repo}#${result.link.number}`;
     const note = result.movedFrom
-      ? ` (MOVED from ${result.movedFrom} — one pull request links to one work item)`
+      ? ` (MOVED from ${result.movedFrom} — that is the SINGULAR link, the one the completion` +
+        ` gate reads; ${result.movedFrom} KEEPS its delivery row, which only the item page removes)`
       : result.created
         ? ' (no delivery had arrived yet — the row was created by this call)'
         : '';
@@ -270,10 +271,16 @@ export function registerLinkPullRequest(
         'the pull request, once per pull request. You know the answer with certainty at that ' +
         'moment; nothing else does. The link is what the completion gate and the status sync ' +
         'read, so a merge moves the card whether or not any title ever named it. ' +
-        '⚠️ IT MOVES, IT DOES NOT ADD: a work item’s pull-request link is SINGULAR, so calling ' +
-        'this again naming a DIFFERENT work item takes the link off the first one — the result ' +
-        'says which item it was moved from. Two pull requests may point at one work item; one ' +
-        'pull request cannot point at two. ' +
+        '⚠️ IT WRITES TWO LINKS AND THEY BEHAVE DIFFERENTLY. The link a work item CARRIES is ' +
+        'SINGULAR, so calling this again naming a DIFFERENT work item MOVES it off the first one ' +
+        '— the result says which item it was moved from. The call ALSO records the (work item, ' +
+        'pull request) pair in a delivery table, and THAT one pull request may fill for several ' +
+        'work items; it is what the item page’s Development panel lists. ' +
+        '⚠️ The completion gate and the status sync still read the SINGULAR link, so ONE pull ' +
+        'request delivering a parent and its children is linked to the PARENT, once — link the ' +
+        'children instead and every call walks the link off the last, the merge closes only ' +
+        'whichever card it happened to end on, and the siblings are stranded. The merge cascades ' +
+        'DOWN from the parent on its own. ' +
         'Address the pull request as `repository` ("owner/name") + `number`, or as the `url` ' +
         '`gh pr create` printed. It works BEFORE GitHub’s webhook has delivered anything — ' +
         'that is the case it exists for — writing the row from the `headRef` / `baseRef` / ' +

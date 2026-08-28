@@ -40,7 +40,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
     "prepare": "husky",
-    "postinstall": "prisma generate && pnpm --filter @motir/design-system build",
+    "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build",
     "build:worker": "node scripts/build-worker.mjs"
   },
   "lint-staged": {
@@ -61,6 +61,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "1.26.0",
+    "@motir/brand": "workspace:*",
     "@motir/design-system": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
@@ -85,6 +86,7 @@
     "better-auth": "^1.6.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fflate": "^0.8.2",
     "fractional-indexing": "^3.2.0",
     "inngest": "4.5.0",
     "jose": "^6.2.3",

@@ -132,10 +132,13 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     //
     // ⚠️ THE COUNT MOVES AS JOBS ARRIVE; THE SHAPE IS WHAT §21 PINS. Bumping this
     // number is the expected maintenance for a new `system.*` cron — what must
-    // NOT move is everything below it. 16 since `system.job-run-reap`
-    // (MOTIR-3683), whose first draft picked `10 4 * * *` and was stopped by the
-    // minute assertion above, exactly as §21 predicts a fifteenth job would be.
-    expect(jobSchedules().length).toBe(16);
+    // NOT move is everything below it. 17 since
+    // `system.data-export-expiry-sweep` (MOTIR-3701), which took `30 5 * * *` —
+    // an already-clustered minute, so it cost no new wake. It was 16 since
+    // `system.job-run-reap` (MOTIR-3683), whose first draft picked `10 4 * * *`
+    // and was stopped by the minute assertion above, exactly as §21 predicts a
+    // fifteenth job would be.
+    expect(jobSchedules().length).toBe(17);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

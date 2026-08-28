@@ -72,6 +72,7 @@ import { JOB_ENGINE_JOBS_ENV, JOB_ENGINE_JOBS_FILE_ENV, routedJobIds } from './c
  * of the reconciliation below is that the two halves are now compared.
  */
 export const MIGRATED_TO_ENGINE = [
+  'account/data-export.requested',
   'automation-engine/commented',
   'automation-engine/created',
   'automation-engine/field.changed',
@@ -95,10 +96,14 @@ export const MIGRATED_TO_ENGINE = [
   'system.billing-seat-sync',
   'system.ci-actions-gate-sweep',
   'system.ci-minutes-reconcile',
+  'system.ci-runner-boot',
   'system.ci-runner-provision-sweep',
   'system.ci-runner-reap',
+  'system.code-graph-index',
   'system.code-graph-offboard-sweep',
+  'system.code-graph-refresh',
   'system.daily-health-check',
+  'system.data-export-expiry-sweep',
   'system.filter-subscription-tick',
   'system.job-run-reap',
   'system.migrate-onboarding-sweep',
@@ -120,9 +125,24 @@ export const MIGRATED_TO_ENGINE = [
  * premised on, and the honest way to check that premise.
  */
 export const DELIBERATELY_ON_INNGEST: ReadonlyArray<{ id: string; because: string }> = [
-  { id: 'system.code-graph-index', because: 'container supervisor — MOTIR-3489 owns the flip' },
-  { id: 'system.code-graph-refresh', because: 'container supervisor — MOTIR-3489 owns the flip' },
-  { id: 'system.ci-runner-boot', because: 'container supervisor — MOTIR-3489 owns the flip' },
+  // ⚠️ EMPTY, AND THAT IS A RESULT — not a list nobody has filled in yet.
+  //
+  // The three container supervisors (`system.code-graph-index`,
+  // `system.code-graph-refresh`, `system.ci-runner-boot`) were the last entries
+  // and moved to {@link MIGRATED_TO_ENGINE} above with MOTIR-3489, which is the
+  // card that also carried the operator half — the `fly secrets set` that puts
+  // the same three ids into `MOTIR_POSTGRES_JOB_IDS`.
+  //
+  // This list being empty is the condition MOTIR-3418 (_"Retire Inngest"_) is
+  // premised on: NOTHING is deliberately left on the old lane. It is the honest
+  // way to check that premise, and the assertion in
+  // `tests/jobs/lane-reconciliation.test.ts` now states it positively — every
+  // registered job is declared for the engine — rather than sampling `[0]`.
+  //
+  // ⚠️ AN ENTRY HERE IS STILL LEGAL, and re-adding one is not a regression: a
+  // job that must stay on Inngest belongs here WITH ITS REASON rather than
+  // undeclared. What the emptiness records is that on 2026-08-27 no such job
+  // existed. Nothing about the list's SHAPE changed; only its contents.
 ];
 
 /** The declared engine set, as a set. The left-hand side of the reconciliation. */
