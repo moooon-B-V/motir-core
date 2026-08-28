@@ -1954,9 +1954,25 @@ would have been the more dangerous choice.
 
 ## DECISION 4 — a 30-day grace period, because here the window is REACHABLE
 
-**Deletion schedules; it does not fire.** The account closes immediately — the
-reader is signed out and the account stops being usable by anyone else — and the
-erasure runs 30 days later. Signing in before then cancels it.
+**Deletion schedules; it does not fire.** Confirming signs every device out — so
+the account is closed as far as any open session is concerned — and the erasure
+runs 30 days later. **Signing back in during those 30 days does NOT cancel it:
+the reader lands on the app-wide banner and cancels from there, or from this
+pane.** Both doors are one press, with no second confirmation.
+
+~~Signing in before then cancels it.~~ **AMENDED 2026-08-28 (MOTIR-3742), struck
+on the record rather than deleted, because it was built from and cited by five
+files across the auth seam, the service, the banner and this asset.** That
+auto-cancel shipped (MOTIR-3700, on
+`session.create.after`) and it contradicted the day-nine paragraph below, which
+is this decision's own argument for the banner: scheduling revokes every
+session, so the reader's next act is a sign-in — and an auto-cancel there took
+the deletion back **before any page rendered**, leaving both drawn doors
+reachable only when that cancel had thrown. It also revoked, silently, the
+deletion of anyone who signed in once to collect the export MOTIR-3703 delivers
+through an authenticated download. The hook is removed;
+`docs/decisions/account-deletion-cancel-path.md` carries the decision, the
+rejected alternative, and what the placement argument is replaced by.
 
 **The product already holds the doctrine that decides this.**
 `docs/decisions/code-graph-index-fleet.md` §14.3 gives a workspace hard-delete
@@ -1964,9 +1980,10 @@ erasure runs 30 days later. Signing in before then cancels it.
 grace period."_ A workspace delete cascades away every surface a user could undo
 into, so a window there would only extend retention.
 
-**An account deletion is the mirror case: signing in IS a surface to undo into.**
-The reader's own credentials are the undo affordance, and they survive until the
-erasure runs. So the same doctrine that refuses a window there requires one here —
+**An account deletion is the mirror case: the reader can get BACK to a surface to
+undo into.** Their own credentials survive until the erasure runs, so signing in
+is the way back to the window — it is not itself the undo. So the same doctrine
+that refuses a window there requires one here —
 and the number is not invented: `content/legal/privacy.md` §6 already promises
 _"we erase or anonymise within 30 days"_, and
 `CODE_GRAPH_RETENTION_WINDOW_DAYS = 30` is the constant the product already
@@ -1980,7 +1997,18 @@ therefore draws **two** doors: this pane, and an **app-wide banner on every page
 carrying the date and a `Cancel deletion` action. A reader who changes their mind
 on day nine will not think to navigate to Settings › Data & privacy to do it, and
 a window they cannot find is the same as no window — which is the §14.3 test,
-applied to its own mirror case.
+applied to its own mirror case. **These two are the ONLY doors, and that is what
+the amendment above buys**: the banner is mounted once in the authed layout, so
+it is on every page the reader lands on whichever way they signed in, and panel 5
+draws the state the product is actually in for all 30 days rather than one it
+reached by erroring.
+
+**What a reader sees, in order.** Confirm → signed out, on `/sign-in` → sign back
+in whenever they like → every page carries the banner with the date and
+`Cancel deletion` → they press it, or day 30 arrives and the erasure runs. The
+account is **scheduled**, not suspended: until the erasure they sign in, their
+workspaces are open, and their team sees no difference, which is what panel 5's
+own copy says.
 
 ## DECISION 5 — the BLOCKED case is the ORGANIZATION, and it is drawn at rest
 

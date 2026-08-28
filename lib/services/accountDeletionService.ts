@@ -32,10 +32,17 @@ import type { AccountDeletionRequestDTO } from '@/lib/dto/accountErasure';
 // (`docs/decisions/code-graph-index-fleet.md` §14.3). §14.3 uses that doctrine
 // to refuse a window for a workspace hard-delete, because deleting a workspace
 // cascades away every surface a user could undo INTO. An account deletion is
-// the mirror case: the reader's own credentials survive the window, so signing
-// in IS a surface to undo into — which is why {@link cancelDeletionOnSignIn} in
-// `lib/auth/accountDeletionCancellation.ts` exists at all, and why it is a
-// requirement rather than a nicety.
+// the mirror case: the reader's own credentials survive the window, so they can
+// sign back in — and what they land on is MOTIR-3704's app-wide banner, with
+// `Cancel deletion` on it, on every authed page.
+//
+// ⚠️ SIGNING IN IS THE WAY BACK TO THE WINDOW; IT IS NOT ITSELF THE CANCEL
+// (MOTIR-3742). MOTIR-3700 wired an auto-cancel onto `session.create.after`,
+// and composed with the sign-out below it took the deletion back before any
+// page rendered — leaving the two doors the design DRAWS reachable only when
+// that cancel had thrown, and silently revoking the deletion of anyone who
+// signed in to collect their export. The cancel is now the deliberate act:
+// `docs/decisions/account-deletion-cancel-path.md`.
 //
 // ── THE BLOCK IS READ, NOT CAUGHT ───────────────────────────────────────────
 // {@link scheduleAccountDeletion} asks the impact preview for its verdict and
@@ -85,7 +92,7 @@ async function revokeEverySession(userId: string): Promise<void> {
 /**
  * What a cancel found. Three outcomes rather than a nullable row, because
  * *"nothing scheduled"* and *"already erased"* are opposite answers to the
- * reader and only the callers know which of them is worth an exception.
+ * reader, and the surface renders a different sentence for each.
  */
 type CancelOutcome =
   | { outcome: 'cancelled'; request: AccountDeletionRequest }
@@ -94,8 +101,8 @@ type CancelOutcome =
 
 /**
  * Lock this account's latest request, re-read its status under the lock, and
- * cancel it if it is still open. The one locked transaction both cancel doors
- * share.
+ * cancel it if it is still open. The one locked transaction both DRAWN cancel
+ * doors share, through {@link cancelAccountDeletion}.
  *
  * ⚠️ THE LOCK READS THE LATEST ROW, NOT THE OPEN ONE — its predicate is
  * `user_id` alone so that a cancel which LOSES the race is handed the row with
@@ -215,28 +222,10 @@ export const accountDeletionService = {
   },
 
   /**
-   * The OPPORTUNISTIC cancel: take the deletion back if there is one, and say
-   * so by returning `null` if there is not. Called on every successful sign-in
-   * (`lib/auth/accountDeletionCancellation.ts`).
-   *
-   * ⚠️ IT RETURNS RATHER THAN THROWS, and that is why it is a second method
-   * instead of a `try` around the first. Almost every sign-in belongs to an
-   * account with no deletion scheduled, so the "nothing to cancel" arm is the
-   * NORMAL path here and the exceptional one above — and a hook that raises and
-   * swallows an error on every successful login buries the one occurrence that
-   * would have meant something. Same locked transaction either way; only the
-   * reporting differs.
-   */
-  async cancelAccountDeletionIfScheduled(
-    userId: string,
-  ): Promise<AccountDeletionRequestDTO | null> {
-    const result = await cancelOpenRequest(userId);
-    return result.outcome === 'cancelled' ? toAccountDeletionRequestDTO(result.request) : null;
-  },
-
-  /**
-   * This account's open request, or `null` — what the pane renders at rest and
-   * what the sign-in hook checks before doing anything.
+   * This account's open request, or `null` — what the pane renders at rest, and
+   * what the app-wide banner reads on every authed request (MOTIR-3704). Since
+   * MOTIR-3742 that banner is the whole of the reader's way back: nothing on
+   * the sign-in path consults this any more.
    *
    * Read-only, and it still opens a transaction: `account_deletion_request` is
    * RLS-gated on `app.user_id`, a GUC only a transaction can bind. On the `db`

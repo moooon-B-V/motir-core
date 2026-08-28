@@ -40,8 +40,12 @@
           membership is a CHOICE listed in the ledger (panel 3).
         • THE GRACE PERIOD follows the product's own doctrine:
           docs/decisions/code-graph-index-fleet.md §14.3 — "a grace period the
-          user cannot reach is not a grace period". Signing in IS a reachable
-          undo, so the window is real; hence the app-wide banner in panel 5.
+          user cannot reach is not a grace period". The reader can sign back in,
+          so the window is REACHABLE; the app-wide banner in panel 5 is what
+          makes it FINDABLE once they are there. Signing in is the way back to
+          the window, not the undo itself — MOTIR-3742 removed the auto-cancel
+          that made panel 5 an error state
+          (docs/decisions/account-deletion-cancel-path.md).
 
       Colour via --el-* only (never Tier-0 --color-*); shape via element-semantic
       tokens (--radius-*/--spacing-*/--height-*/--shadow-*), never raw
@@ -3211,11 +3215,12 @@
       holds the doctrine this state is built on:
       <code>docs/decisions/code-graph-index-fleet.md</code> §14.3 says
       <i>&ldquo;a grace period the user cannot reach is not a grace period&rdquo;</i>, and gives a
-      workspace delete none for exactly that reason. An account delete is the opposite case —
-      signing in IS a surface to undo into — so the window is real and the design has to make it
+      workspace delete none for exactly that reason. An account delete is the opposite case — the
+      reader can sign back in — so the window is real and the design has to make it
       <b>reachable</b>. Hence two doors: this pane, and an app-wide banner on every page, because a
       reader who changes their mind will not think to come back to Settings › Data &amp; privacy to
-      do it.
+      do it. <b>Signing in is the way back to this state, not the cancel</b> — it used to be both,
+      which made this panel a drawing of a failed cancel rather than of the window (MOTIR-3742).
     </div>
     <div class="panel">
       <div class="stage">
