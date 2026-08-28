@@ -326,12 +326,12 @@ test('an organization requires a second factor, and nobody loses their place', a
       // very same "Required by {org}" chip. A text query sees both copies and
       // strict mode refuses; `getByRole` would not, because the accessibility
       // tree excludes the hidden one, which is why the switch assertion below
-      // never noticed. Observed once on CI, green on the run before it.
+      // never noticed. `CLAUDE.md` records the class under the loading-boundary
+      // rule.
       //
       // The wait has to be TEXT-based for the same reason: a role query resolves
       // against the a11y tree and would report the old page gone while its DOM
-      // is still there. `CLAUDE.md` records the class under the loading-boundary
-      // rule.
+      // is still there.
       await expect(page.getByText('Organization settings')).toHaveCount(0);
 
       // ⚠️ THE OTHER FRAME THAT HAS TO BE LEGIBLE. The organization requires it,
@@ -340,9 +340,23 @@ test('an organization requires a second factor, and nobody loses their place', a
       // a hidden control would have told them nothing at all.
       const locked = page.getByRole('switch', { name: SWITCH });
       await expect(locked).toBeDisabled();
-      await expect(page.getByText(`Required by ${org.name}`)).toBeVisible();
+
+      // ⚠️ AND SCOPED TO `#main`, because the wait above is NOT SUFFICIENT and a
+      // failed CI run proved it: the outgoing page's heading unmounts BEFORE its
+      // fold-in chip does, so `Organization settings` reaches zero while the
+      // duplicate "Required by {org}" is still in the DOM. The failure's own
+      // screenshot showed the incoming page rendered correctly with one visible
+      // chip — the second match was never on screen.
+      //
+      // `#main` is the discriminator Playwright itself named in the strict-mode
+      // error (`aka locator('#main').getByText(…)` for the live one, a bare
+      // `.nth(1)` for the retained one), and it is the "scope to the live
+      // subtree" half of CLAUDE.md's rule — the half that applies when the text
+      // carries no role for `getByRole` to reach, as a Pill's does not.
+      const live = page.locator('#main');
+      await expect(live.getByText(`Required by ${org.name}`)).toBeVisible();
       await expect(
-        page.getByText(new RegExp(`${org.name} requires two-factor authentication`)),
+        live.getByText(new RegExp(`${org.name} requires two-factor authentication`)),
       ).toBeVisible();
       await beat();
     });
