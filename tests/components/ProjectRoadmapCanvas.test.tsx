@@ -1380,3 +1380,25 @@ describe('ProjectRoadmapCanvas — the level seam (onLevelChange + controlledTra
     });
   });
 });
+
+// ── THE ARRIVAL VIEW (MOTIR-3837) ───────────────────────────────────────────
+//
+// The GEOMETRY is unit-tested in `tests/planning/canvasGeometry.test.ts` and the
+// FOCAL LADDER in `tests/planning/projectCanvasModel.test.ts` — both pure. What
+// this component owns is that the opt-in defaults OFF, so the three consumers
+// that do not ask for a readable arrival keep today's plain fit.
+describe('ProjectRoadmapCanvas — arriveAtReadableScale is opt-in', () => {
+  const one: RoadmapLevel = { nodes: [node('A', 'a')], deps: [] };
+
+  it('renders the engine with no arrival configuration by default', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(one)} />);
+    expect(await screen.findByText('a')).toBeTruthy();
+    expect(screen.getByTestId('planning-canvas')).toBeTruthy();
+  });
+
+  it('renders the same level when the roadmap adapter opts in', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(one)} arriveAtReadableScale />);
+    expect(await screen.findByText('a')).toBeTruthy();
+    expect(screen.getByTestId('planning-canvas')).toBeTruthy();
+  });
+});

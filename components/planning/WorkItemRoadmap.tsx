@@ -441,6 +441,12 @@ export function WorkItemRoadmap({
         // children" must show them even when there is exactly one, because the
         // descent would then be showing something else's children entirely.
         autoDescendSingleParent={!rooted}
+        // ARRIVE AT A READABLE SCALE (MOTIR-3837), on BOTH mounts. Unlike the
+        // root-level behaviours a subtree-rooted mount turns off (MOTIR-2287), an
+        // arrival scale makes no claim about the PROJECT's road — it is only about
+        // whether a card can be read, which is as true inside a Children panel as
+        // on the full-page roadmap.
+        arriveAtReadableScale
         initialTrail={initialTrail}
         controlledTrail={controlledTrail}
         onLevelChange={onLevelChange}

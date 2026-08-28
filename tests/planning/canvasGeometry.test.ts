@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { Bounds } from '@/lib/planning/canvasGeometry';
 import {
+  ARRIVAL_MIN_SCALE,
   MAX_SCALE,
   MIN_SCALE,
+  arrivalView,
   centerOn,
   clampScale,
   fitView,
@@ -205,5 +208,82 @@ describe('routeEdges', () => {
     const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 200, y: 0, w: 100, h: 50 } };
     const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
     expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThanOrEqual(0); // no bow
+  });
+});
+
+// ── THE ARRIVAL VIEW (MOTIR-3837) ───────────────────────────────────────────
+//
+// `fitView` with a legibility FLOOR: a level that would be shrunk below the floor
+// arrives AT it, centred per axis rather than framed. A strict superset — every
+// level that already fits legibly is untouched.
+describe('arrivalView', () => {
+  const viewport = { w: 1136, h: 620 };
+  // The shipped 3-column layout's root level: 18 cards at 280x124, gaps 80/72.
+  const bigLevel: Bounds = { minX: 40, minY: 40, maxX: 1040, maxY: 1364 };
+  // A five-node level — two rows.
+  const smallLevel: Bounds = { minX: 40, minY: 40, maxX: 1040, maxY: 360 };
+
+  it('is IDENTICAL to fitView when the fit lands at or above the floor', () => {
+    const fit = fitView(smallLevel, viewport);
+    expect(fit.scale).toBeGreaterThanOrEqual(ARRIVAL_MIN_SCALE);
+    expect(arrivalView(smallLevel, viewport, ARRIVAL_MIN_SCALE)).toEqual(fit);
+    // …and a focal rect cannot change that: above the floor the level is framed.
+    expect(
+      arrivalView(smallLevel, viewport, ARRIVAL_MIN_SCALE, { x: 40, y: 40, w: 280, h: 124 }),
+    ).toEqual(fit);
+  });
+
+  it('arrives AT the floor when the fit would be smaller, and centres the FOCAL card on the constrained axis', () => {
+    expect(fitView(bigLevel, viewport).scale).toBeLessThan(ARRIVAL_MIN_SCALE);
+    // The `here` frontier: row 3, column 1.
+    const focal = { x: 40, y: 432, w: 280, h: 124 };
+    const v = arrivalView(bigLevel, viewport, ARRIVAL_MIN_SCALE, focal);
+
+    expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
+    // VERTICAL is constrained (1324 * 0.8 = 1059 > 620), so the focal card's centre
+    // lands at the viewport's centre.
+    const cy = focal.y + focal.h / 2;
+    expect(cy * v.scale + v.ty).toBeCloseTo(viewport.h / 2, 6);
+    // HORIZONTAL fits (1000 * 0.8 = 800, + 96 padding, < 1136), so the LEVEL is
+    // centred — not the card. Centring the card on both axes would park a
+    // first-column card in the middle and leave a third of the canvas empty.
+    const levelCx = (bigLevel.minX + bigLevel.maxX) / 2;
+    expect(levelCx * v.scale + v.tx).toBeCloseTo(viewport.w / 2, 6);
+    expect(focal.x + focal.w / 2).not.toBeCloseTo(levelCx, 6); // the two really differ
+  });
+
+  it('centres the BOUNDS on both axes when there is no focal rect', () => {
+    const v = arrivalView(bigLevel, viewport, ARRIVAL_MIN_SCALE);
+    expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
+    const cx = (bigLevel.minX + bigLevel.maxX) / 2;
+    const cy = (bigLevel.minY + bigLevel.maxY) / 2;
+    expect(cx * v.scale + v.tx).toBeCloseTo(viewport.w / 2, 6);
+    expect(cy * v.scale + v.ty).toBeCloseTo(viewport.h / 2, 6);
+  });
+
+  it('fits a SINGLE-node level exactly as fitView does — well above the floor', () => {
+    const one: Bounds = { minX: 0, minY: 0, maxX: 280, maxY: 124 };
+    expect(arrivalView(one, viewport, ARRIVAL_MIN_SCALE)).toEqual(fitView(one, viewport));
+  });
+
+  it('returns finite numbers for a ZERO-SIZE viewport — no NaN, no divide-by-zero', () => {
+    const v = arrivalView(bigLevel, { w: 0, h: 0 }, ARRIVAL_MIN_SCALE);
+    expect(Number.isFinite(v.scale)).toBe(true);
+    expect(Number.isFinite(v.tx)).toBe(true);
+    expect(Number.isFinite(v.ty)).toBe(true);
+    expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
+  });
+
+  it('never returns a scale outside the engine’s own zoom range', () => {
+    // A floor above MAX_SCALE is clamped like any other scale.
+    const v = arrivalView(bigLevel, viewport, 99);
+    expect(v.scale).toBe(MAX_SCALE);
+  });
+
+  it('the FLOOR is the design’s measured number', () => {
+    // `design/roadmap/design-notes.md` derives it: the title (14px) never renders
+    // below the card's own smallest authored type (the 11px status chip).
+    expect(ARRIVAL_MIN_SCALE).toBe(0.8);
+    expect(14 * ARRIVAL_MIN_SCALE).toBeGreaterThanOrEqual(11);
   });
 });

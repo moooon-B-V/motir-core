@@ -167,6 +167,26 @@ export function hasChildren(nodes: ProjectCanvasNode[], id: string): boolean {
   return nodes.some((n) => n.parentId === id);
 }
 
+/**
+ * THE FOCAL CARD of a level (MOTIR-3837) — the node an ARRIVAL centres on when the
+ * level cannot be drawn legibly whole.
+ *
+ * The ladder is the LOCATE control's own (`ProjectRoadmapCanvas`'s
+ * `locateActionable`): the in-progress **`here`** frontier first — a single
+ * destination — else the first **`ready`** node, else the level's first node in
+ * layout order. Sharing one ladder is the point: where the canvas OPENS and where
+ * Locate TAKES you must not be able to drift apart.
+ *
+ * A `decorative` node is never the focal card, for the same reason it is not a
+ * level's WORK (MOTIR-1824): the pinned planning-origin cluster is provenance drawn
+ * beside the road, not a place to be taken to. A level of nothing but decoration
+ * has no focal card, and an arrival then centres the level's bounds.
+ */
+export function focalNode(nodes: readonly ProjectCanvasNode[]): string | null {
+  const work = nodes.filter((n) => n.decorative !== true);
+  return work.find((n) => n.here)?.id ?? work.find((n) => n.ready)?.id ?? work[0]?.id ?? null;
+}
+
 /** The drill level a target node lives ON — the focus that makes it visible. */
 export function levelOf(nodes: ProjectCanvasNode[], id: string): string | null {
   const byId = indexNodes(nodes);

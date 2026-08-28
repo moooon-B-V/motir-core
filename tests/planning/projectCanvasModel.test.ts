@@ -5,6 +5,7 @@ import {
   childrenOf,
   computeLevel,
   deterministicLayout,
+  focalNode,
   hasChildren,
   levelOf,
   searchMatches,
@@ -165,5 +166,43 @@ describe('searchMatches', () => {
   });
   it('a blank query matches nothing (locate, not filter-to-empty)', () => {
     expect(searchMatches(forest(), '   ')).toEqual([]);
+  });
+});
+
+// ── THE FOCAL CARD (MOTIR-3837) ─────────────────────────────────────────────
+describe('focalNode', () => {
+  const n = (id: string, over: Partial<ProjectCanvasNode> = {}): ProjectCanvasNode => ({
+    id,
+    parentId: null,
+    searchText: id,
+    content: null,
+    ...over,
+  });
+
+  it('prefers the `here` frontier over everything else', () => {
+    expect(focalNode([n('A'), n('B', { ready: true }), n('C', { here: true })])).toBe('C');
+  });
+
+  it('falls to the FIRST ready node when there is no frontier', () => {
+    expect(focalNode([n('A'), n('B', { ready: true }), n('C', { ready: true })])).toBe('B');
+  });
+
+  it('falls to the level’s first node in layout order when there is neither', () => {
+    expect(focalNode([n('A'), n('B')])).toBe('A');
+  });
+
+  it('NEVER picks a decorative node — not even when it is first, and not even when it is `here`', () => {
+    // The pinned planning-origin cluster is provenance drawn beside the road, not
+    // the level's work (MOTIR-1824 established that rule for auto-descend).
+    expect(focalNode([n('__origin__', { decorative: true }), n('A')])).toBe('A');
+    expect(focalNode([n('__origin__', { decorative: true, here: true }), n('A')])).toBe('A');
+    expect(focalNode([n('__origin__', { decorative: true }), n('A'), n('B', { here: true })])).toBe(
+      'B',
+    );
+  });
+
+  it('returns null for an empty level, and for one that is ALL decoration', () => {
+    expect(focalNode([])).toBeNull();
+    expect(focalNode([n('__origin__', { decorative: true })])).toBeNull();
   });
 });

@@ -19,10 +19,12 @@ import {
 } from '@/components/planning/PlanningCanvas';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
+import { ARRIVAL_MIN_SCALE } from '@/lib/planning/canvasGeometry';
 import {
   NODE_H,
   NODE_W,
   deterministicLayout,
+  focalNode,
   searchMatches,
   type CanvasCrumb,
   type ProjectCanvasDep,
@@ -237,6 +239,26 @@ export interface ProjectRoadmapCanvasProps {
    */
   controlledTrail?: readonly CanvasCrumb[];
   /**
+   * ARRIVE AT A READABLE SCALE (MOTIR-3837) — opt-in, OFF by default.
+   *
+   * The engine already resets the scale on every level change (this component
+   * remounts it per level, so it auto-fits to the new level's overview); what is
+   * wrong without this is WHAT it resets to. `fitView` is clamped only by the
+   * absolute `MIN_SCALE = 0.3`, so a level that cannot fit legibly is drawn at
+   * 0.3× rather than not fitted — and the project root, with every epic on it, is
+   * the surface most people open first.
+   *
+   * Opted in, a level whose fit lands below `ARRIVAL_MIN_SCALE` arrives AT that
+   * floor, centred on this level's FOCAL card. The focal ladder is the LOCATE
+   * control's own — the `here` frontier, then the first `ready` node, then the
+   * level's first non-`decorative` node — so where the canvas OPENS and where
+   * LOCATE takes you cannot drift apart.
+   *
+   * OFF by default because this canvas is the foundation behind four consumers and
+   * only the work-item roadmap asks for it.
+   */
+  arriveAtReadableScale?: boolean;
+  /**
    * FOLLOW a node the consumer RE-KEYS under a mounted canvas (bug MOTIR-3439).
    *
    * The canvas HOLDS two things by node id — its drilled `focusId` and every
@@ -317,6 +339,7 @@ export function ProjectRoadmapCanvas({
   initialTrail,
   onLevelChange,
   controlledTrail,
+  arriveAtReadableScale = false,
   resolveHeldNode,
   levelCaption,
 }: ProjectRoadmapCanvasProps) {
@@ -809,6 +832,13 @@ export function ProjectRoadmapCanvas({
   const readyIds = useMemo(() => nodes.filter((n) => n.ready).map((n) => n.id), [nodes]);
   const readySig = readyIds.join('|');
   const canLocate = hereId !== null || readyIds.length > 0;
+  // THE FOCAL CARD of this level (MOTIR-3837) — the node an arrival centres on when
+  // the level cannot be shown legibly whole. The ladder is LOCATE's own, one line
+  // up, so "where the canvas opens" and "where Locate takes you" cannot disagree:
+  // the `here` frontier, else the first `ready` node, else the level's first node in
+  // layout order. A `decorative` node — the pinned planning-origin cluster — is
+  // never it, for the same reason it is not a level's WORK (MOTIR-1824).
+  const focalNodeId = useMemo(() => focalNode(nodes), [nodes]);
   // The index of the ready node centred by the LAST locate click (-1 = none yet).
   const [locateIndex, setLocateIndex] = useState(-1);
   // Reset the cycle cursor when the level's targets change (a drill / re-plan) so the
@@ -1281,6 +1311,7 @@ export function ProjectRoadmapCanvas({
           onNodeMove={onNodeMove ? handleMove : undefined}
           onNodeActivate={handleActivate}
           selectedId={selectedId}
+          arrival={arriveAtReadableScale ? { floor: ARRIVAL_MIN_SCALE, focalNodeId } : undefined}
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}
