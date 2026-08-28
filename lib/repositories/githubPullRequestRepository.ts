@@ -1,9 +1,9 @@
 import {
+  Prisma,
   type GithubCheckRun,
   type GithubInstallation,
   type GithubPullRequest,
   type GithubRepo,
-  type Prisma,
 } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
@@ -280,26 +280,52 @@ export const githubPullRequestRepository = {
   },
 
   /**
-   * Which of these repositories has a pull request that reached MERGE without
-   * ever recording a check run (MOTIR-3823) — the second half, and the one that
-   * is EVIDENCE rather than the absence of it.
+   * Which of these repositories has a pull request that Motir WATCHED all the way
+   * to MERGE without ever recording a check run (MOTIR-3823) — the second half of
+   * the CI-less question, and the one that is EVIDENCE rather than the absence of
+   * it.
    *
    * A merged pull request had its whole lifetime to produce a check and produced
    * none, which is what separates *this repository has no CI* from *this
    * repository has not run CI yet*. The interpretation is
-   * `repoCannotReportChecks` in `lib/workItems/deliverySet.ts`; this read
-   * supplies a fact and decides nothing.
+   * `repoCannotReportChecks` in `lib/workItems/deliverySet.ts`; this read supplies
+   * a fact and decides nothing.
+   *
+   * ⚠️ `created_at <= merged_at` IS THE LOAD-BEARING CLAUSE, AND IT IS WHY THIS IS
+   * RAW SQL. Without it the BACKFILL supplies the evidence:
+   * `historicalPullRequestBackfillService` mirrors a repository's pre-connection
+   * pull requests through the same upsert, merged, and with no check rows —
+   * because Motir was not there to receive them. A repository connected mid-life
+   * therefore arrives carrying dozens of merged silent rows and would read as
+   * CI-less on its first day, promoting every one of its cards to In Review before
+   * any build had spoken. That is the exact regression this whole discriminator
+   * exists to avoid, arriving through the back door.
+   *
+   * A row Motir WATCHED was created by the `opened` delivery, so it predates its
+   * own merge; a row the backfill wrote was created long after. Comparing two
+   * columns of the same row is not expressible in Prisma's typed `where`, so this
+   * is `$queryRaw` — the sanctioned repository escape, still one operation.
+   *
+   * A null `merged_at` fails the comparison and is excluded, which is the
+   * withholding direction: a row that does not know when it merged is not
+   * evidence about anything.
    */
-  async listRepoIdsWithAMergedPullRequestWithoutChecks(
+  async listRepoIdsWithAWatchedMergeWithoutChecks(
     repoIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<string[]> {
     if (repoIds.length === 0) return [];
-    const rows = await tx.githubPullRequest.findMany({
-      where: { repoId: { in: [...repoIds] }, merged: true, checkRuns: { none: {} } },
-      select: { repoId: true },
-      distinct: ['repoId'],
-    });
+    const rows = await tx.$queryRaw<Array<{ repoId: string }>>`
+      SELECT DISTINCT pr."repo_id" AS "repoId"
+      FROM "github_pull_request" pr
+      WHERE pr."repo_id" IN (${Prisma.join([...repoIds])})
+        AND pr."merged" = true
+        AND pr."merged_at" IS NOT NULL
+        AND pr."created_at" <= pr."merged_at"
+        AND NOT EXISTS (
+          SELECT 1 FROM "github_check_run" cr WHERE cr."pull_request_id" = pr."id"
+        )
+    `;
     return rows.map((row) => row.repoId);
   },
 

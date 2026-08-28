@@ -786,6 +786,11 @@ async function mergedSilentPr(number: number) {
       number,
       state: 'closed',
       merged: true,
+      // GitHub always carries this on a merged pull request, and the
+      // discriminator READS it: a row whose `created_at` postdates its own
+      // `merged_at` was written by the historical backfill, not watched, and is
+      // not evidence. Omitting it here would exercise a shape GitHub never sends.
+      merged_at: new Date().toISOString(),
       title: `A docs change (${headRef})`,
       head: { ref: headRef },
       base: { ref: 'main' },
@@ -923,6 +928,42 @@ describe('a delivery that has simply NOT REPORTED YET is not green — the trap'
     // …and the repository's first MERGE without a check resolves it: the same
     // card, re-asked, now promotes.
     await mergedSilentPr(76);
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(true);
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a BACKFILLED merge is not evidence — a repository connected mid-life still holds', async () => {
+    // The hole the WATCHED clause closes, and it is the worst one available:
+    // `historicalPullRequestBackfillService` mirrors a repository's
+    // PRE-CONNECTION pull requests through the same upsert — merged, with no
+    // check rows, because Motir was not there to receive them. A repository
+    // connected mid-life therefore arrives carrying merged silent rows, and a
+    // rule reading "has a merged pull request with no checks" would call it
+    // CI-less on its first day and promote EVERY one of its cards to In Review
+    // before any build had spoken.
+    //
+    // The tell is on the row: a backfilled one was created long AFTER it merged,
+    // where a watched one was created by the `opened` delivery and predates its
+    // own merge. Built here by aging the row into that shape rather than by
+    // driving the sweep, which needs the GitHub API — the shape is the fact under
+    // test, and it is the exact shape that service produces.
+    const s = await makeScenario('cil-backfilled@example.com');
+    await mergedSilentPr(78);
+    await adminDb.githubPullRequest.updateMany({
+      where: { number: 78 },
+      data: {
+        mergedAt: new Date('2026-01-01T00:00:00.000Z'),
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+      },
+    });
+
+    const card = await cardWithDocsPr(s, 'a card in a mid-life repository', 79);
+
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(false);
+
+    // …and a merge Motir actually WATCHED, in the same repository, does resolve it.
+    await mergedSilentPr(80);
     expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(true);
     expect(await statusOf(card.id)).toBe('in_review');
   });

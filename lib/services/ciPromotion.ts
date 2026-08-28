@@ -147,7 +147,7 @@ async function everyDeliveryIsGreen(
   const silentRepoIds = [...new Set(members.filter((m) => m.state === null).map((m) => m.repoId))];
   const [reporting, mergedSilent] = await Promise.all([
     githubPullRequestRepository.listRepoIdsWithAnyCheckRun(silentRepoIds, tx),
-    githubPullRequestRepository.listRepoIdsWithAMergedPullRequestWithoutChecks(silentRepoIds, tx),
+    githubPullRequestRepository.listRepoIdsWithAWatchedMergeWithoutChecks(silentRepoIds, tx),
   ]);
   const hasReported = new Set(reporting);
   const hasMergedSilently = new Set(mergedSilent);

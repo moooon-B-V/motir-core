@@ -277,12 +277,12 @@ export function deliverySetIsGreen(states: readonly (string | null)[]): boolean 
  * as a pass, which is the regression above.
  *
  * **The residual failure, stated so the next reader does not over-trust it:** a
- * genuinely CI-less repository holds its cards until ONE of its pull requests
- * has merged. Bounded to the start of a repository's life, in the safe
+ * genuinely CI-less repository holds its cards until ONE of its pull requests has
+ * been WATCHED to merge. Bounded to the start of a repository's life, in the safe
  * direction, and it clears itself. The mirror failure — a repository that HAS CI
- * but has never run it promoting a card early — is what the merge evidence buys
- * out: its first pull request cannot have merged-without-reporting before its
- * first check unless CI genuinely never ran for it.
+ * but has never run it promoting a card early — is what the watched-merge
+ * evidence buys out: a pull request Motir saw open and saw merge, with nothing
+ * reported in between, is a repository that did not run CI for it.
  *
  * `docs/decisions/ci-less-repository-is-green.md` is the record.
  */
