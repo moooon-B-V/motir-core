@@ -17,20 +17,19 @@ import { type GithubCheckRun, type Prisma } from '@/generated/prisma/client';
 // into one. Which rows still get a VOTE is `lib/github/checkSuites.ts`.
 //
 // ⚠️ THE FEEDBACK COMMENT'S IDENTITY IS NOT HERE ANY MORE, AND NEITHER IS ITS
-// COLUMN (MOTIR-3770 → MOTIR-3863). It was `feedback_comment_id`, a scalar on a
+// COLUMN (MOTIR-3770 → MOTIR-3863 → MOTIR-3803). It was `feedback_comment_id`, a scalar on a
 // table whose grain is one row PER CHECK: never keyed at this grain (MOTIR-2946
 // made every row at one `(pull_request_id, commit_sha)` point at the same
 // comment), and unable to name more than one card however many a pull request
 // delivers. `github_ci_feedback_comment` supersedes it, keyed on
 // `(pull request, head commit, work item)` — read THAT.
 //
-// The COLUMN is still in the database. MOTIR-3863 is the SCHEMA-ONLY phase of the
-// three-phase drop `docs/decisions/delivery-reader-migration.md` §6a specifies:
-// the field carries `@ignore` in `prisma/schema.prisma`, so the generated client
-// stops selecting it — including through the bare relation includes nobody can
-// grep for — while the column and its FK stay exactly where they are. The
-// CONTRACT phase (MOTIR-3803) drops both, and may only do so once THIS build is on
-// every machine.
+// The COLUMN IS GONE. It was retired over the three phases
+// `docs/decisions/delivery-reader-migration.md` §6a specifies: MOTIR-3863
+// `@ignore`d the field so the generated client stopped selecting it — including
+// through the bare relation includes nobody can grep for — MOTIR-3864 verified
+// that build had reached every machine, and MOTIR-3803 then dropped the column
+// and its FK. Doing the last two in one release is MOTIR-3852, an outage.
 
 export interface UpsertGithubCheckRunInput {
   pullRequestId: string;

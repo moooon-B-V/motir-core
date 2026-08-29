@@ -312,14 +312,20 @@ describe('a ONE-card delivery is unchanged, and a session pull request still com
     expect(comments).toHaveLength(1);
     const rows = await adminDb.githubCheckRun.findMany({ where: { commitSha: 'sha-f' } });
     expect(rows).toHaveLength(1);
-    // Raw SQL because the field is `@ignore`d — the generated client cannot name
-    // it, which is exactly the property MOTIR-3863 delivers. The COLUMN is still
-    // there (`tests/github/checkRunFeedbackColumnRetired.test.ts` asserts that);
-    // what this asserts is that the delivery left it NULL.
-    const mirrored = await adminDb.$queryRaw<{ feedback_comment_id: string | null }[]>`
-      SELECT "feedback_comment_id" FROM "github_check_run" WHERE "commit_sha" = 'sha-f'
+    // ⚠️ THE MIRROR IS GONE ENTIRELY (MOTIR-3803). This used to raw-SELECT
+    // `github_check_run.feedback_comment_id` and assert the delivery left it
+    // NULL — the property the SCHEMA-ONLY phase needed before the column could be
+    // dropped. The CONTRACT phase has since dropped it, so the strongest form of
+    // that assertion is now that the column does not exist at all: nothing can
+    // hold a second, stale answer because there is no longer anywhere to hold one.
+    const mirror = await adminDb.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'github_check_run'
+        AND column_name = 'feedback_comment_id'
     `;
-    expect(mirrored).toMatchObject([{ feedback_comment_id: null }]);
+    expect(mirror).toEqual([]);
     expect(
       await adminDb.githubCiFeedbackComment.findMany({ where: { commitSha: 'sha-f' } }),
     ).toMatchObject([{ workItemId: card.id, commentId: comments[0]!.id }]);
