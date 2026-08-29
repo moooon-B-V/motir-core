@@ -26,6 +26,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { waitForDerivedStatus } from './_helpers/derivedStatus';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -117,7 +118,15 @@ async function seed(page: Page): Promise<{ ctx: ServiceContext; projectId: strin
     ctx,
   );
   await shipItem(child.id, ctx);
-  await shipItem(epic.id, ctx);
+  // ⚠️ THE EPIC IS NOT SHIPPED BY HAND — IT IS ALREADY BEING SHIPPED (MOTIR-3915).
+  // Completing its only child completes the epic by derivation, asynchronously.
+  // The manual walk this replaced (`shipItem(epic.id, ctx)`) raced that job and
+  // lost whenever the job won a hop: the walk read `done`, tried
+  // `done -> in_review`, and threw `IllegalTransitionError` because that is not
+  // an edge in the default workflow — the first recorded instance of this class
+  // (MOTIR-3859, run 33223925559). Waiting for the derived value is both correct
+  // and more honest: the epic reaches `done` the way production puts it there.
+  await waitForDerivedStatus(epic.id, 'done');
   await workItemsService.setEpicPrivacy(epic.id, true, ctx);
 
   await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
