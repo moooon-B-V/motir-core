@@ -29,6 +29,25 @@ import { jobServices } from '../services';
 // where it started — not three rows, which is what a naive per-attempt insert
 // would produce and what would make the dashboard unreadable.
 //
+// ⚠️ AND IT SURVIVES A DEFER FOR THE SAME REASON, WHICH IS A FINDING RATHER
+// THAN AN OMISSION (MOTIR-3825). A `JobRunDefer` (`./defer.ts`) is a THROW, so
+// `executeWithLedger` never reaches `job-run:succeeded` on a deferred pass —
+// which is exactly right, because the run is not finished. The next pass
+// re-enters from the top, finds `job-run:start` already memoized on
+// `(run_id, step_id)`, and writes no second row. So a supervision that defers a
+// hundred times and settles on the hundred-and-first leaves ONE `job_run` row,
+// `succeeded`, carrying the last pass's output, and nothing in the dead-letter
+// queue — the shape `docs/decisions/code-graph-index-fleet.md` §6 requires and
+// `docs/decisions/job-queue-foundation.md` §16.1 relies on.
+//
+// **This file therefore needs no defer arm, and adding one would be a
+// regression.** A `catch (err) { if (isJobRunDefer(err)) … }` here could only
+// either re-throw (a no-op) or swallow (which would mark a suspended run
+// succeeded and, on `system.code-graph-index`, tell every downstream reader that
+// a repo has a code graph nothing built). `tests/jobs/engine-defer.test.ts`
+// asserts the row counts over three passes rather than leaving them inferred
+// from that reasoning.
+//
 // ===========================================================================
 // ⚠️ WHY THE TERMINAL FAILURE IS NOT WRITTEN FROM A `catch` — READ THIS BEFORE
 // SIMPLIFYING IT
@@ -99,9 +118,10 @@ export function ledgerIdentity(run: JobQueueRun): {
 /**
  * Execute one claimed run WITH the ledger around it.
  *
- * Throws whatever the handler throws — `JobStepYield` included. Deciding what a
- * throw means is the worker's job; swallowing it here would make a failed run
- * look successful.
+ * Throws whatever the handler throws — `JobStepYield` and `JobRunDefer`
+ * included. Deciding what a throw MEANS is the worker's job; swallowing it here
+ * would make a failed run look successful, and swallowing a suspension would
+ * make an unfinished one look finished.
  */
 export async function executeWithLedger(run: JobQueueRun, eventData: unknown): Promise<unknown> {
   const def = engineJob(run.jobId);

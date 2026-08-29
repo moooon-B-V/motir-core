@@ -260,7 +260,12 @@ export const ciRunnerBoot = defineJob(
     // did: the boot executes on the first pass and replays from `job_step` on
     // every later one, so `supervision_key` / `supervision_outcome` stay dropped.
     // That property is a property of the STEP, and the step is still here.
-    return services.ciRunnerBoot.runIntent(intentId, {
+    // ⚠️ ONE PASS PER RUN (MOTIR-3829). `advanceIntent` boots from its memoized
+    // step and advances the supervision by exactly one poll, then DEFERS this
+    // run — so the worker's slot is free between polls
+    // (`docs/decisions/job-queue-foundation.md` §16). `runIntent` survives as the
+    // in-process run-to-completion wrapper, for a caller with no queue row.
+    return services.ciRunnerBoot.advanceIntent(ctx.runId, intentId, {
       steps: {
         run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
           // ONE cast, at the boundary — the same shape and reason as

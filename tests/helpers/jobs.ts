@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import * as jobDispatcher from '@/lib/jobs/engine/dispatcher';
 import { jobServices } from '@/lib/jobs/services';
+import { isJobRunDefer } from '@/lib/jobs/engine/defer';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { EngineJobDefinition, JobContext } from '@/lib/jobs/defineJob';
 import { emailSend } from '@/lib/jobs/definitions/emailSend';
@@ -245,7 +246,7 @@ export class JobTestEngine {
     );
 
     try {
-      const result = await def.handler(ctx as unknown as JobContext, jobServices);
+      const result = await this.driveToCompletion(def, ctx);
       // `recordStart` returns null when the run's tenant vanished before the row
       // could be written (MOTIR-1545) — the same guard the real ledger carries.
       if (jobRun) {
@@ -261,7 +262,51 @@ export class JobTestEngine {
       return { error: err instanceof Error ? err : new Error(String(err)), ctx };
     }
   }
+
+  /**
+   * Invoke the handler, and KEEP invoking it while it DEFERS (MOTIR-3828).
+   *
+   * ⚠️ THIS IS THE HARNESS'S MODEL OF THE ENGINE, not a convenience. A
+   * self-rescheduling supervision does one poll per RUN and throws
+   * `JobRunDefer`, which the worker turns into `rescheduleAt(…, { refundAttempt:
+   * true })` and a later claim re-invokes the handler FROM THE TOP against the
+   * same `job_step` rows. This loop is exactly that, minus the queue: the same
+   * `ctx`, so the same memo, re-entered until the handler returns.
+   *
+   * ⚠️ IT DOES NOT SLEEP, and a job-level suite must not read that as the
+   * cadence being tested. `resumeAt` is ignored here — what a pass is owed
+   * between polls is asserted BY VALUE against the fleet budgets, and end to end
+   * against a real worker in the story gate. What this harness is for is the
+   * SHAPE and the LEDGER.
+   *
+   * The pass ceiling is a runaway guard: a handler that defers for ever would
+   * otherwise hang the suite with no output, which reads as a slow test rather
+   * than as a broken one.
+   */
+  private async driveToCompletion(
+    def: EngineJobDefinition,
+    ctx: JobTestEngineContext,
+  ): Promise<unknown> {
+    for (let pass = 1; pass <= MAX_TEST_ENGINE_PASSES; pass += 1) {
+      try {
+        return await def.handler(ctx as unknown as JobContext, jobServices);
+      } catch (err) {
+        if (!isJobRunDefer(err)) throw err;
+      }
+    }
+    throw new Error(
+      `JobTestEngine: ${def.id} deferred ${MAX_TEST_ENGINE_PASSES} times without settling`,
+    );
+  }
 }
+
+/**
+ * How many times this harness will re-invoke a deferring handler before calling
+ * it a runaway. Comfortably above the shipped poll ceilings a supervision suite
+ * lowers anyway, and low enough that a genuinely stuck machine fails with a
+ * message rather than a timeout.
+ */
+const MAX_TEST_ENGINE_PASSES = 5_000;
 
 /** JSON-roundtrip a handler result for the ledger's `output` column, as the real one does. */
 function serializeOutput(result: unknown): unknown {

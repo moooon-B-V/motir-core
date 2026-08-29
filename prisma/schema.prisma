@@ -1031,6 +1031,7 @@ model Workspace {
   jobEvents                   JobEvent[]
   jobQueueRuns                JobQueueRun[]
   jobSteps                    JobStep[]
+  jobSupervisions             JobSupervision[]
   emailDeliveries             EmailDelivery[]
   workflowStatuses            WorkflowStatus[]
   workflowTransitions         WorkflowTransition[]
@@ -3309,9 +3310,10 @@ model JobQueueRun {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  event     JobEvent?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  steps     JobStep[]
+  event        JobEvent?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  workspace    Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps        JobStep[]
+  supervisions JobSupervision[]
 
   /// FAN-OUT IDEMPOTENCY (consumed by MOTIR-3423). One run per (event, job), so
   /// a dispatcher that retries cannot double-enqueue. Scheduled runs carry a
@@ -3434,6 +3436,119 @@ enum JobStepKind {
   sleep
 
   @@map("job_step_kind")
+}
+
+/// WHERE A SUPERVISION IS IN ITS OWN LIFECYCLE (Story MOTIR-3778 · MOTIR-3826).
+///
+/// A closed three-member set, and an ENUM rather than TEXT for exactly that
+/// reason: `docs/decisions/job-queue-foundation.md` §16.4 makes the terminal
+/// transition an invariant with three named entrances, so a fourth member is a
+/// change to the invariant and should cost a migration and a reader.
+/// {@link JobSupervision.kind} is TEXT for the opposite reason — see it there.
+enum JobSupervisionState {
+  /// The chain is advancing: one poll per run, deferring itself between them.
+  watching
+  /// A terminal transition has been entered and teardown is in flight. Distinct
+  /// from `watching` so a concurrent pass (a lease reclaim overlapping the
+  /// previous claimant's last moments) does not start a second teardown, and
+  /// distinct from `settled` so the sweep can tell "tearing down now" from
+  /// "torn down".
+  settling
+  /// Teardown completed. The row is deleted with the rest of the run's state;
+  /// this member exists for the window between the teardown and that delete.
+  settled
+
+  @@map("job_supervision_state")
+}
+
+/// THE PER-POLL STATE OF ONE SUPERVISION (Story MOTIR-3778 · Subtask MOTIR-3826).
+///
+/// `docs/decisions/job-queue-foundation.md` §16.2 decides that this is a table
+/// rather than the queue row's payload or an existing fleet row, and §16.3 is
+/// why it cannot be the step ledger: a `step.run` under a fixed id freezes its
+/// FIRST answer for the life of the run (§13.3(b) rejected `index-started:<pid>`
+/// by name), and this is precisely the state that must CHANGE between passes.
+///
+/// ⚠️ IT HOLDS THE OBSERVATIONS AND NOT THE HANDLES. The container handle,
+/// `bootedAt`, `queuedAt`, the credential expiry, the admission ticket and the
+/// `slotRef` all keep riding `index-boot:<pid>`'s / `boot-runner`'s memo, which
+/// is what buys re-attachment after a worker restart TODAY. Copying them here
+/// would create a second source of truth for the one fact whose second copy
+/// costs a billed container.
+///
+/// ⚠️ AND ANYTHING DERIVABLE FROM THOSE TWO IS NOT A COLUMN. The CI fleet's
+/// `bootLatencyMs` is `startedAt − session.queuedAt` — one field from this row
+/// and one from the boot memo — so it is recomputed on the pass that needs it
+/// rather than carried.
+model JobSupervision {
+  id                      String              @id @default(cuid())
+  runId                   String              @map("run_id")
+  /// WHAT is being supervised, within this run — the `projectId` for the index
+  /// fleet, the intent id for the CI fleet.
+  ///
+  /// ⚠️ THE ROW IS NOT ONE PER RUN, AND THAT IS THE DESIGN QUESTION RATHER THAN
+  /// A DETAIL. `runIndexFleetSteps` fans out over `target.projectIds` — one
+  /// container per (repo × project) — so a supervision is a SET whose degenerate
+  /// case is one. A schema keyed by `run_id` alone models the fan-out as a
+  /// singular and is re-shaped the first time a workspace has two projects.
+  ///
+  /// It is also what builds the step ids the sweep reads a session back out of
+  /// (`index-boot:<subject>`), which is the same discipline §13.1 limb 4 states
+  /// for a step id: it names the UNIT OF WORK, never a loop position.
+  subject                 String
+  /// WHICH supervisor this row belongs to — `index` / `ci-runner`.
+  ///
+  /// TEXT rather than an enum, the same call `FleetInFlightSlot.workload` makes
+  /// and for the same reason: a third supervisor should be a registry edit
+  /// rather than a migration, and the driver's exhaustive handler map is what
+  /// makes forgetting one a COMPILE error. {@link JobSupervisionState} is an
+  /// enum because it is a closed lifecycle rather than an open registry.
+  kind                    String
+  /// How many polls this supervision has performed, across every pass. It was a
+  /// PER-PASS counter while a pass was a whole loop (§13.3(a) demoted the
+  /// iteration ceiling to a runaway guard for exactly that reason); a pass is
+  /// one poll now, so a durable count is a real total-poll bound again.
+  pollNumber              Int                 @default(0) @map("poll_number")
+  /// ISO instant at which the container was OBSERVED running — null until a
+  /// SUCCESSFUL provider read has produced one. §13.3(b)'s state, in a home that
+  /// can hold it, and §13.1's corollary still governs it: a boot-deadline
+  /// verdict may only be reached from a successful read, never from the absence
+  /// of an observation.
+  startedAt               DateTime?           @map("started_at")
+  /// Consecutive failed provider reads, carried between polls so the
+  /// read-failure tolerance still applies when the polls are in different
+  /// processes.
+  consecutiveReadFailures Int                 @default(0) @map("consecutive_read_failures")
+  /// When the next poll is due — the instant the run was deferred to. The
+  /// SWEEP's predicate reads it: a chain that has stopped advancing is one whose
+  /// next poll is long past and whose state is still `watching`.
+  nextPollAt              DateTime            @map("next_poll_at")
+  state                   JobSupervisionState @default(watching)
+  /// Denormalised from the run, exactly as `job_step.workspace_id` is and for
+  /// the same reason: the policy below is then the same predicate as the other
+  /// job tables, and the hot `(run_id, subject)` lookup stays a single index
+  /// probe with no join to `job_queue` for the tenancy check. Never a tenancy
+  /// boundary of its own — the supervisors span tenants because the
+  /// infrastructure bill does.
+  workspaceId             String?             @map("workspace_id")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+
+  run       JobQueueRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  workspace Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// THE identity. Two projects of one index run hold two rows; a second write
+  /// for the same pair is a constraint violation rather than a silent overwrite.
+  @@unique([runId, subject])
+  /// THE SWEEP'S READ: `WHERE state = 'watching' AND next_poll_at < $1`. A plain
+  /// `@@index`, deliberately — a hand-written PARTIAL index on `next_poll_at`
+  /// alone would share no column list with this one, but a partial index that
+  /// DID share one is the permanent-spurious-RENAME trap `CLAUDE.md`
+  /// § Migrations records, and the table is small enough (a row per LIVE
+  /// supervision, deleted at teardown) that the difference cannot pay for a
+  /// standing drift hazard.
+  @@index([state, nextPollAt])
+  @@map("job_supervision")
 }
 
 // ───────────────────────────────────────────────────────────────────────────

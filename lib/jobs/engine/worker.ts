@@ -3,6 +3,7 @@ import type { JobQueueRun } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { isJobStepYield } from './step';
+import { isJobRunDefer } from './defer';
 
 // The WORKER (Story MOTIR-3414 · Subtask MOTIR-3421) — the process that claims
 // due runs, executes them, records the outcome, and repeats.
@@ -60,7 +61,37 @@ import { isJobStepYield } from './step';
 // a change is on.
 //
 // ===========================================================================
-// The lease, and the two ways a claim ends badly
+// THE THREE WAYS A CLAIM ENDS WITHOUT THE WORK BEING FINISHED — and only one
+// of them is bad (MOTIR-3825)
+// ===========================================================================
+// This section used to be headed "the two ways a claim ends badly" and was
+// about the lease alone. There are three now, they are settled in three
+// different places, and telling them apart is what `settle()` does:
+//
+//   * a `JobStepYield` — a `step.sleep`. The run is re-enqueued at the sleep's
+//     deadline, the attempt is REFUNDED, and the handler resumes back into the
+//     same place in the same loop because every earlier step replays from
+//     `job_step`.
+//   * a `JobRunDefer` (`./defer.ts`) — the handler has advanced ONE unit of
+//     work and wants the run back at an instant it names. Same three effects on
+//     the row, and a different promise to the handler: nothing is checkpointed,
+//     the next pass starts at the TOP, and the handler owns whatever it needs to
+//     remember in a durable row of its own
+//     (`docs/decisions/job-queue-foundation.md` §16.1).
+//   * a LOST LEASE — the one that is actually bad, and the only one this
+//     section's remaining paragraphs are about. Nobody asked for it: the worker
+//     DIED holding the row.
+//
+// ⚠️ THE FIRST TWO ARE INDISTINGUISHABLE AT THE ROW AND MUST NOT BE MERGED IN
+// THE CODE. Both end at `rescheduleAt(..., { refundAttempt: true })`, so a
+// reader who reaches for one arm to serve both is reading the effect rather than
+// the contract. The contracts differ in what the HANDLER may assume on the next
+// pass, `onOutcome` reports them under different names so an operator can tell a
+// sleeping supervisor from an advancing one, and `./defer.ts`'s header carries
+// the table.
+//
+// ===========================================================================
+// The lease, and the way a claim ends badly
 // ===========================================================================
 // A claim carries a LEASE: `lease_expires_at`, renewed by a heartbeat while the
 // worker is alive. It exists for the one failure a graceful shutdown cannot
@@ -110,7 +141,11 @@ import { isJobStepYield } from './step';
 // Graceful shutdown
 // ===========================================================================
 // On SIGTERM: stop claiming, let in-flight runs finish (or checkpoint, if they
-// yield), then RELEASE the claims so another machine can take them immediately.
+// yield or defer), then RELEASE the claims so another machine can take them
+// immediately. A pass that defers during the drain needs nothing special: it has
+// already returned its row to `pending` with `claimed_by` null, so it leaves
+// `inFlight` on its own and the unconditional release below finds nothing of its
+// to release.
 // A deploy is a routine event — several a day — and must not orphan work or cost
 // an attempt.
 //
@@ -160,7 +195,12 @@ export const JOB_QUEUE_CHANNEL = 'motir_job_queue';
 export type JobRunExecutor = (run: JobQueueRun) => Promise<void>;
 
 export interface JobWorkerOptions {
-  /** Executes one claimed run. Throws to signal failure; throws a `JobStepYield` to signal a durable sleep. */
+  /**
+   * Executes one claimed run. Throws to signal failure; throws a `JobStepYield`
+   * to signal a durable sleep, or a `JobRunDefer` (`./defer.ts`) to signal that
+   * the handler advanced one unit of work and wants the run back at an instant
+   * it names. The header's *three ways a claim ends* is the difference.
+   */
   execute: JobRunExecutor;
   /** Identifies this worker in `claimed_by`. Defaults to a per-process UUID. */
   workerId?: string;
@@ -174,8 +214,21 @@ export interface JobWorkerOptions {
     claimBatch: number;
     poolSize: number;
   }>;
-  /** Called on every terminal outcome. */
-  onOutcome?: (run: JobQueueRun, outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded') => void;
+  /**
+   * Called on every outcome of one PASS — which is not the same as every
+   * outcome of a run: `retrying`, `yielded` and `deferred` all mean the row is
+   * back in the queue and will be claimed again.
+   *
+   * ⚠️ `yielded` AND `deferred` ARE DIFFERENT AND BOTH ARE REPORTED. They have
+   * identical effects on the row (see the header) and different contracts, and
+   * an operator reading a stream of these is the one consumer who can tell a
+   * supervisor SLEEPING from a supervisor ADVANCING. Collapsing them would
+   * make a stalled chain look exactly like a healthy one.
+   */
+  onOutcome?: (
+    run: JobQueueRun,
+    outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded' | 'deferred',
+  ) => void;
   /**
    * ⚠️ THE AFTER-ALL-RETRIES-EXHAUSTED HOOK — the engine's `onFailure`
    * (MOTIR-3424). Invoked when the budget is spent, BEFORE the row is marked
@@ -442,6 +495,25 @@ export class JobWorker {
           jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx, { refundAttempt: true }),
         );
         this.onOutcome(run, 'yielded');
+        return;
+      }
+
+      if (isJobRunDefer(err)) {
+        // THE HANDLER ADVANCED ONE UNIT OF WORK AND WANTS THE RUN BACK
+        // (MOTIR-3825). Same three effects on the row as the yield above —
+        // `pending` at the named instant, claim released, attempt refunded —
+        // and a different contract with the handler, which is why it is its own
+        // arm rather than a second `isJobStepYield` case.
+        //
+        // ⚠️ IT SITS BEFORE THE FAILURE PATH, and that ordering is the whole
+        // safety of the primitive. Reaching the failure path would spend an
+        // attempt on a suspension, and on `system.ci-runner-boot`
+        // (`retryPolicy: 'none'`, a budget of exactly one) the second poll would
+        // dead-letter a CI job that was fine.
+        await withSystemContext((tx) =>
+          jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx, { refundAttempt: true }),
+        );
+        this.onOutcome(run, 'deferred');
         return;
       }
 

@@ -315,18 +315,36 @@ test('a worker KILLED mid-index resumes on the SAME container — one boot, no o
   // FINISH, which would prove the opposite of the story's criterion.
   await killJobWorker();
 
-  // ⚠️ THE DEAD WORKER'S LEASE, EXPIRED AS STATE. A SIGKILLed worker leaves the
-  // row `running` with a lease nobody renews, and it becomes reclaimable only
-  // once that lease passes — `LEASE_MS` is 60 s. The property under test is that
-  // the resumed pass REPLAYS THE BOOT rather than provisioning again; the lease's
-  // length is the worker's own contract and is asserted in
-  // `tests/jobs/supervisor-cutover-story-gate.test.ts`, by value. Waiting it out
-  // here would add a minute of sleeping to prove a number this spec is not about.
+  // ⚠️ AMENDED ON THE RECORD (MOTIR-3778): A KILLED WORKER USUALLY LEAVES NO
+  // CLAIM AT ALL NOW, AND THIS STEP IS SETUP RATHER THAN THE SUBJECT.
+  //
+  // It used to assert the row was `running` — *"a SIGKILLed worker leaves the row
+  // `running` with a lease nobody renews"* — and that was TRUE of a supervisor
+  // that HELD its claim for its container's whole life. `docs/decisions/
+  // job-queue-foundation.md` §16 makes a supervision a state machine over RUNS:
+  // between polls the row is `pending` with `claimed_by: null`, and the window in
+  // which a kill can strand a claim is one provider read wide. So the kill now
+  // lands on a `pending` row almost every time and on a `running` one
+  // occasionally, and BOTH are correct.
+  //
+  // ⚠️ THE PROPERTY THIS SPEC IS NAMED FOR IS UNCHANGED and is asserted below: the
+  // resumed pass REPLAYS THE BOOT rather than provisioning again. What the resume
+  // needs from this step is only that the run is CLAIMABLE — a `running` row
+  // waits out `LEASE_MS` (60 s) before `reclaimExpiredLeases` can take it, so its
+  // lease is expired here exactly as before; a deferred row is already unclaimed
+  // and simply needs to be due. Both are forced in one write. Waiting either out
+  // would add a minute of sleeping to prove numbers this spec is not about — the
+  // lease's length is asserted by value in
+  // `tests/jobs/supervisor-cutover-story-gate.test.ts`, and the poll cadence in
+  // `tests/jobs/code-graph-index-self-rescheduling.test.ts`.
   const orphaned = await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: queued!.id } });
-  expect(orphaned.state, 'the killed worker left its claim behind').toBe('running');
+  expect(
+    orphaned.state,
+    'a killed worker leaves the run either claimed-and-stale or already deferred back',
+  ).toMatch(/^(running|pending)$/);
   await adminDb.jobQueueRun.update({
     where: { id: queued!.id },
-    data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
+    data: { leaseExpiresAt: new Date(Date.now() - 1_000), runAt: new Date(Date.now() - 1_000) },
   });
 
   await startJobWorker();
@@ -343,6 +361,16 @@ test('a worker KILLED mid-index resumes on the SAME container — one boot, no o
   // double-boot case too — and a second boot is a second billed container and a
   // second admission slot. The boot sits inside a memoized step, so the resumed
   // pass replayed it instead of provisioning again.
+  //
+  // ⚠️ AND IT IS ONLY EXPRESSIBLE BECAUSE THE FAKE'S CONTAINER OUTLIVES THE
+  // WORKER (MOTIR-3828). Boot and first poll used to be the same pass in the same
+  // process, so the fake's module-level machine map was indistinguishable from a
+  // real provider; they are now different processes by design, and an in-memory
+  // map would report this container `exists: false` — which
+  // `pollIndexContainer` correctly classifies `never_started`. The lane's worker
+  // therefore runs the fake with `MOTIR_FAKE_CONTAINER_STATE_PATH` set; see that
+  // seam's block in `lib/orchestrator/adapters/fake` for why it belongs to the
+  // fake rather than to this spec.
   const steps = await adminDb.jobStep.findMany({ where: { runId: queued!.id } });
   const boots = steps.filter((s) => s.stepId.startsWith('index-boot:'));
   expect(boots, 'exactly one boot across both passes').toHaveLength(1);

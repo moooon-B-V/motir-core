@@ -20,6 +20,16 @@ import {
   RUNNER_JIT_REQUEST_TIMEOUT_MS,
 } from '@/lib/github/runnerJitConfig';
 import { dispatchCiRunnerBoot, type CiRunnerBootDispatchOutcome } from '@/lib/ciFleet/bootDispatch';
+import {
+  driveSupervisionInProcess,
+  inProcessMemoSteps,
+} from '@/lib/jobs/supervision/inProcessSteps';
+import {
+  advanceSupervision,
+  inMemorySupervisionStore,
+  type SupervisionStore,
+  type SupervisionTerminalReason,
+} from '@/lib/jobs/supervision/driver';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
@@ -353,6 +363,14 @@ export interface SupervisionOptions {
    * {@link INLINE_RUNNER_STEPS}.
    */
   steps?: RunnerSupervisionSteps;
+  /**
+   * WHERE the supervision's per-pass state lives
+   * (`lib/jobs/supervision/driver.ts`). Omitted by the job, which gets the
+   * durable `job_supervision` row; supplied by
+   * {@link ciRunnerBootService.runIntent}, which drives a supervision to
+   * completion for a caller with no `job_queue` row to hang one off.
+   */
+  supervisionStore?: SupervisionStore;
 }
 
 /**
@@ -509,6 +527,52 @@ function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : 'unknown';
 }
 
+/**
+ * Boot latency, RE-DERIVED rather than carried across a pass.
+ *
+ * `pollContainerOnce` computes it as `startedAt − session.queuedAt` — GitHub's
+ * own queue instant, because §6's budget is the span a USER experiences as "CI
+ * is slow to start". Both halves survive a defer already: `startedAt` is on the
+ * supervision row and `queuedAt` rides the memoized boot, so a column for the
+ * difference would be a third copy of a fact two places hold (§16.2).
+ */
+function bootLatencyFrom(session: SupervisionSession, startedAt: string | null): number | null {
+  if (!startedAt) return null;
+  return Math.max(0, new Date(startedAt).getTime() - new Date(session.queuedAt).getTime());
+}
+
+/**
+ * The `failureDetail` a supervision writes when it settles for a reason of its
+ * OWN rather than because the container stopped.
+ *
+ * One function rather than a ternary at the call site, because each string is
+ * what an operator reads off a settled intent to tell four cases apart — and
+ * `job_timed_out` is the `TeardownReason` for all four, so the detail is the
+ * only place the distinction survives.
+ */
+function runnerSupervisionFailureDetail(
+  reason: SupervisionTerminalReason,
+  maxPolls: number,
+  timeoutMs: number,
+): string {
+  switch (reason) {
+    case 'poll_ceiling':
+      return `supervision hit the ${maxPolls}-poll ceiling`;
+    case 'deadline':
+      return `supervision passed its ${timeoutMs}ms deadline before this pass polled`;
+    case 'failed':
+      return 'a poll threw; the container is torn down before the failure propagates';
+    /* v8 ignore next 6 -- `completed` always carries the poll's own verdict and
+       `replayed` always hits the caller's `settle-runner` memo, so neither
+       reaches this fallback. They are enumerated rather than left to a `default`
+       so a new reason added to the union fails the exhaustiveness check here
+       instead of silently taking a string written for something else. */
+    case 'completed':
+    case 'replayed':
+      return `supervision settled (${reason})`;
+  }
+}
+
 export const ciRunnerBootService = {
   /**
    * STEP 1 OF THE DURABLE POLL LOOP — admit, mint, boot, and hand back a session
@@ -570,94 +634,179 @@ export const ciRunnerBootService = {
   },
 
   /**
-   * Boot ONE intent and supervise it to its end — THE composition, and since
-   * MOTIR-3485 the only one.
+   * ONE PASS of an intent's supervision: boot, then advance the state machine by
+   * exactly one poll (Story MOTIR-3778 · Subtask MOTIR-3829).
    *
-   * ⚠️ THIS COMMENT USED TO SAY "NOT THE PRODUCTION PATH, and deliberately not
-   * reachable from one", because *"calling this from a job would rebuild the
-   * hour-long invocation MOTIR-2007 removed"*. That was a statement about
-   * `app/api/inngest/route.ts`'s `maxDuration = 300` — a Vercel ceiling.
-   * `Dockerfile` ends `CMD ["node", "server.js"]` and motir-core has run as a
-   * long-lived Fly process since MOTIR-2384, so no invocation ceiling applies to
-   * a run, and `system.ci-runner-boot` now drives THIS function through the
-   * {@link RunnerSupervisionSteps} seam. One composition again — the second one
-   * existed only to be kept in agreement with this one by hand.
+   * ⚠️ IT USUALLY DOES NOT RETURN — it THROWS `JobRunDefer`. Each pass does one
+   * provider read and hands its own `job_queue` row back at the next poll
+   * instant, so the worker's slot is held for the duration of one `describe`
+   * rather than for the duration of a container
+   * (`docs/decisions/job-queue-foundation.md` §16). It RETURNS only on a
+   * terminal transition, with the run outcome.
    *
-   * ⚠️ AND MOTIR-2007'S FINDING IS NOT REVERSED, only its remedy. That incident
-   * was real: an hour-long supervision inside one SERVERLESS invocation meant
-   * every CI job over ~5 minutes had its supervisor killed with no teardown, the
-   * intent stuck holding a fleet slot, and the run dead-lettered while the job
-   * had actually passed. What has changed is that there is no invocation to be
-   * killed. Every guarantee it bought is kept and re-grounded below.
+   * ⚠️ THE COMMENT ABOVE THIS METHOD HAS BEEN CORRECTED TWICE AND BOTH ARE KEPT,
+   * because a reader has to be able to see that the world changed rather than
+   * that the code did.
    *
-   * What survived the collapse, per `docs/decisions/job-queue-foundation.md`
-   * §13.4's disposition table:
+   *   1. It first said this composition was NOT the production path, because
+   *      "calling this from a job would rebuild the hour-long invocation
+   *      MOTIR-2007 removed" — a statement about `maxDuration = 300`, a Vercel
+   *      ceiling that went with the platform.
+   *   2. MOTIR-3485 then made it the only composition, with an ordinary `for`
+   *      loop and a `finally`, on the ground that a long-lived worker makes both
+   *      trustworthy again. **That is still true, and it was never the argument
+   *      that mattered here.** What the loop costs is OCCUPANCY, not durability:
+   *      one of `POOL_SIZE` in-flight slots held for a container's whole life.
    *
-   *   • BOOT and SETTLE are memoized `step.run`s. `bootIntent` admits, claims the
-   *     intent, mints a JIT runner registration and provisions a machine;
-   *     `settleSupervision` destroys it, de-registers the runner, meters it and
-   *     settles the intent. Either running twice leaves something existing twice.
-   *   • The INTERVAL and the POLL are ordinary calls. A restart forgets them and
-   *     forgetting them costs nothing: the boot replays from its memo and the
-   *     loop re-attaches to the same container.
-   *   • The iteration ceiling is a PER-PASS guard now (§13.3(a)) — a restart
-   *     resets it, and {@link DEFAULT_JOB_TIMEOUT_MS}, anchored on the memoized
-   *     `session.bootedAt`, was always the bound that mattered.
+   * ⚠️ AND MOTIR-2007'S FINDING IS STILL NOT REVERSED. That incident was real —
+   * an hour-long supervision inside one serverless invocation meant every CI job
+   * over ~5 minutes had its supervisor killed with no teardown, the intent stuck
+   * holding a fleet slot, and the run dead-lettered while the job had actually
+   * passed. Every guarantee it bought is kept:
    *
-   * ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP, and the MECHANISM
-   * CHANGED while the guarantee did not. It was a step reachable from both exits
-   * precisely because a `finally` could not be trusted across invocations (the
-   * module header's guarantee 3). It is an ordinary `finally` again — which is
-   * what a long-lived process makes trustworthy — so §13.4 requires the property
-   * be RE-PROVEN per exit path rather than inherited: a `done` verdict, the
-   * iteration ceiling, and a throw from inside the loop each have their own test.
+   *   • BOOT and SETTLE are still memoized `step.run`s. `bootIntent` admits,
+   *     claims the intent, mints a JIT runner registration and provisions a
+   *     machine; a resumed pass replays it and re-attaches rather than
+   *     registering a second runner.
+   *   • The wall clock is still anchored on the memoized `session.bootedAt`, so
+   *     `jobTimeoutMs` bounds a container across a restart (§13.2).
+   *   • **GUARANTEE 3 CHANGES ITS MECHANISM AND KEEPS ITS CONTENT.** It read
+   *     *"the poll loop cannot exit except into `settleSupervision`"*, and there
+   *     is no loop to exit. It is now: **the machine has exactly one terminal
+   *     transition, reached from three named places and from nothing else, and a
+   *     DEFER reaches none of them** (§16.4). There is no `finally` here at all —
+   *     which is the point, because a defer is a THROW and a `finally` would
+   *     tear the container down on the first suspension, exactly as §15.4
+   *     measured.
+   *
+   * ⚠️ AND `retryPolicy: 'none'` STILL SURVIVES A RESTART. It is the one job in
+   * the tree whose budget is exactly ONE, so the difference between resuming and
+   * dead-lettering is whether a suspension spends an attempt. A defer refunds it
+   * exactly as `reclaimExpiredLeases` and `releaseClaims` do — asserted against
+   * the worker's real settle path rather than cited, which is what §13.4 asked
+   * for when this mechanism last changed and asks for again now.
    */
-  async runIntent(intentId: string, options: SupervisionOptions = {}): Promise<RunIntentOutcome> {
-    const sleep = options.sleep ?? sleepFor;
+  async advanceIntent(
+    /** The `job_queue` row this supervision hangs off — `ctx.runId` for a job. */
+    runId: string,
+    intentId: string,
+    options: SupervisionOptions = {},
+  ): Promise<RunIntentOutcome> {
     const steps = options.steps ?? INLINE_RUNNER_STEPS;
-    // Bounded by the shipped guard: a test may LOWER it, never raise it.
-    const maxIterations = Math.min(
+    // Bounded by the shipped guard: a test may LOWER it, never raise it. A TOTAL
+    // bound again rather than the per-pass runaway guard §13.3(a) demoted it to,
+    // because the count lives in `job_supervision` now.
+    const maxPolls = Math.min(
       options.maxPollIterations ?? MAX_POLL_ITERATIONS,
       MAX_POLL_ITERATIONS,
     );
+    const jobTimeoutMs = options.jobTimeoutMs ?? DEFAULT_JOB_TIMEOUT_MS;
 
     const booted = await steps.run('boot-runner', () => this.bootIntent(intentId, options));
     if (booted.phase === 'terminal') return booted.outcome;
     const { session } = booted;
 
-    let state = INITIAL_POLL_STATE;
-    let verdict: Extract<PollResult, { done: true }> | null = null;
-    let outcome: RunIntentOutcome | undefined;
-    try {
-      for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-        await sleep(pollWaitMs(iteration, options));
-        const polled = await this.pollOnce(session, state, options);
-        if (polled.done) {
-          verdict = polled;
-          break;
-        }
-        state = polled;
-      }
-    } finally {
-      // Settle rather than abandon: a container nothing tears down is the failure
-      // this whole file exists to prevent. On a throw this runs FIRST and the
-      // error propagates after it, which is the arm a step reachable from the two
-      // normal exits could never cover.
-      outcome = await steps.run('settle-runner', () =>
-        this.settleSupervision(
-          session,
-          verdict ?? {
-            done: true,
-            reason: 'job_timed_out',
-            startedAt: state.startedAt,
-            bootLatencyMs: state.bootLatencyMs,
-            failureDetail: `supervision hit the ${maxIterations}-poll ceiling`,
-          },
-          options,
-        ),
-      );
-    }
-    return outcome;
+    const result = await advanceSupervision<Extract<PollResult, { done: true }>, RunIntentOutcome>(
+      runId,
+      {
+        kind: 'ci-runner',
+        // ONE intent is ONE container — no fan-out — so the subject is the
+        // intent. It is still a subject rather than an implicit singleton,
+        // because the row's identity is `(run_id, subject)` for both fleets and
+        // one shared shape is what makes these two conversions the same
+        // conversion.
+        subject: intentId,
+        workspaceId: session.attribution.workspaceId,
+        bootedAt: new Date(session.bootedAt),
+      },
+      {
+        maxPolls,
+        timeoutMs: jobTimeoutMs,
+        waitMs: (pollNumber) => pollWaitMs(pollNumber, options),
+        ...(options.now ? { now: options.now } : {}),
+        ...(options.supervisionStore ? { store: options.supervisionStore } : {}),
+        // ONE provider read. `pollOnce` is unchanged, including its own
+        // boot-deadline arm — which stays there, where a SUCCESSFUL read is
+        // available, because §13.3(b) forbids reaching that verdict from the
+        // absence of an observation.
+        //
+        // ⚠️ `bootLatencyMs` IS RE-DERIVED, NOT CARRIED. It is
+        // `startedAt − session.queuedAt` — one field from the supervision row and
+        // one from the memoized boot — so a column for it would be a third copy
+        // of a fact two places already hold (§16.2).
+        poll: async (state) => {
+          const startedAt = state.startedAt ? state.startedAt.toISOString() : null;
+          const polled = await this.pollOnce(
+            session,
+            {
+              done: false,
+              startedAt,
+              bootLatencyMs: bootLatencyFrom(session, startedAt),
+              consecutiveReadFailures: state.consecutiveReadFailures,
+            },
+            options,
+          );
+          if (polled.done) return { done: true, verdict: polled };
+          return {
+            done: false,
+            startedAt: polled.startedAt ? new Date(polled.startedAt) : null,
+            consecutiveReadFailures: polled.consecutiveReadFailures,
+          };
+        },
+        // THE TEARDOWN, still a memoized step, and still the only thing that
+        // destroys the container, de-registers the runner, meters it, settles
+        // the intent and fires the admission wake.
+        settle: async (reason, state, verdict) =>
+          steps.run('settle-runner', () => {
+            const startedAt = state.startedAt ? state.startedAt.toISOString() : null;
+            return this.settleSupervision(
+              session,
+              verdict ?? {
+                done: true,
+                reason: 'job_timed_out',
+                startedAt,
+                bootLatencyMs: bootLatencyFrom(session, startedAt),
+                failureDetail: runnerSupervisionFailureDetail(reason, maxPolls, jobTimeoutMs),
+              },
+              options,
+            );
+          }),
+      },
+    );
+    return result.outcome;
+  },
+
+  /**
+   * Boot ONE intent and supervise it TO COMPLETION, in this process — for a
+   * caller that has no `job_queue` row to hang a supervision off.
+   *
+   * ⚠️ A WRAPPER, NOT A SECOND COMPOSITION. Every ordering, every transition and
+   * the suspension invariant live in {@link advanceIntent} and the driver
+   * beneath it; this supplies an in-process store and an in-process step memo,
+   * and `driveSupervisionInProcess` turns each defer back into a wait. Two copies
+   * of a supervision loop kept in agreement by hand is the defect MOTIR-3485
+   * spent a card deleting.
+   *
+   * Its callers are scripts, local harnesses and the tests that drive this
+   * service directly. `system.ci-runner-boot` goes through {@link advanceIntent}.
+   */
+  async runIntent(intentId: string, options: SupervisionOptions = {}): Promise<RunIntentOutcome> {
+    const sleep = options.sleep ?? sleepFor;
+    const now = options.now ?? ((): Date => new Date());
+    // ONE store and ONE memo per call: their lifetime is this loop. Without the
+    // memo every pass would re-execute the BOOT — which on this fleet means a
+    // second JIT runner registration and a second billed machine.
+    const supervisionStore = options.supervisionStore ?? inMemorySupervisionStore();
+    const steps = inProcessMemoSteps(options.steps ?? INLINE_RUNNER_STEPS);
+    // The loop lives in `lib/jobs/supervision/`, not here: `eslint.config`'s
+    // `JOB_ENGINE_RESTRICTION` confines `@/lib/jobs/engine/*` to `lib/jobs/**`,
+    // so this file may not name the deferral signal — and re-exporting the
+    // predicate one folder over would be exactly the walk-around that rule's own
+    // comment refuses.
+    return driveSupervisionInProcess(
+      () => this.advanceIntent(intentId, intentId, { ...options, steps, supervisionStore }),
+      { sleep, now },
+    );
   },
 
   /**

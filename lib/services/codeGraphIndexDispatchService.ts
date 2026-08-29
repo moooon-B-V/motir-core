@@ -25,6 +25,16 @@ import type {
   TeardownReason,
   UsageAttribution,
 } from '@/lib/orchestrator/types';
+import {
+  driveSupervisionInProcess,
+  inProcessMemoSteps,
+} from '@/lib/jobs/supervision/inProcessSteps';
+import {
+  advanceSupervision,
+  inMemorySupervisionStore,
+  type SupervisionStore,
+  type SupervisionTerminalReason,
+} from '@/lib/jobs/supervision/driver';
 
 // THE INDEX DISPATCH SERVICE (Story MOTIR-1981 · MOTIR-2026) — boot ONE index
 // container, supervise it in BOUNDED steps, and turn what happened into a typed
@@ -384,6 +394,15 @@ export interface IndexSupervisionOptions {
   maxPollIterations?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * WHERE the supervision's per-pass state lives
+   * (`lib/jobs/supervision/driver.ts`). Omitted by every job-driven caller,
+   * which gets the durable `job_supervision` row; supplied by
+   * {@link codeGraphIndexDispatchService.runIndexContainer}, which drives a
+   * supervision to completion in one call for a caller that has no `job_queue`
+   * row to hang one off.
+   */
+  supervisionStore?: SupervisionStore;
 }
 
 /** ONE (repo × project) dispatch — everything the boot needs, already resolved.
@@ -1331,46 +1350,57 @@ export const codeGraphIndexDispatchService = {
   },
 
   /**
-   * Boot ONE index container and supervise it to its end — THE composition, and
-   * since MOTIR-3484 the only one.
+   * ONE PASS of a (repo × project) supervision: admit, boot, and then advance
+   * the state machine by exactly one poll (Story MOTIR-3778 · MOTIR-3828).
    *
-   * ⚠️ THIS COMMENT USED TO SAY "NOT THE PRODUCTION PATH", AND THE REASON IT SAID
-   * SO HAS GONE. It read: *"The job (MOTIR-2027) drives `bootIndexContainer` /
-   * `pollIndexContainer` / `settleIndexContainer` as separate durable steps;
-   * calling this from a job would rebuild the hour-long invocation MOTIR-2007
-   * removed for CI."* That was a statement about `app/api/inngest/route.ts`'s
-   * `maxDuration = 300` — a Vercel ceiling. `Dockerfile` ends
-   * `CMD ["node", "server.js"]` and motir-core has run as a long-lived Fly
-   * process since MOTIR-2384, so an invocation ceiling binds nothing any more,
-   * and the job now drives THIS function through the {@link SupervisionSteps}
-   * seam. **There is one composition again, and that is this card's real
-   * deliverable** — two copies of a supervision loop kept in agreement by hand is
-   * a defect waiting for the first divergence.
+   * ⚠️ IT USUALLY DOES NOT RETURN — it THROWS `JobRunDefer`, and that is the
+   * whole shape. `docs/decisions/job-queue-foundation.md` §16 replaces the loop
+   * that used to live here with a state machine over RUNS: each pass does one
+   * provider read and hands its own `job_queue` row back at the next poll
+   * instant, so the worker's slot is held for the duration of one `describe`
+   * rather than for the duration of a container. It RETURNS only on a terminal
+   * transition, with the dispatch outcome.
    *
-   * What survived the collapse, and what did not, is decided in
-   * `docs/decisions/job-queue-foundation.md` §13 rather than here:
+   * ⚠️ THE HEADER ABOVE THIS METHOD HAS NOW BEEN CORRECTED TWICE, and both
+   * corrections are kept because a reader has to be able to see that the world
+   * changed rather than that the code did.
    *
-   *   • ADMIT and BOOT and SETTLE are memoized `step.run`s — they claim capacity,
-   *     provision a billed container, and destroy one. If any ran twice,
-   *     something would exist twice.
-   *   • The INTERVAL and the POLL are ordinary calls. A restart forgets them, and
-   *     forgetting them costs nothing: the boot replays from its memo, the
-   *     session comes back with it, and the loop re-attaches to the same
-   *     container.
-   *   • The ADMISSION BACKOFF is inside the admit step, not around it (§13.3(c)).
-   *     A resume that re-asked admission AFTER the settle step had released the
-   *     slot would be granted a fresh one, replay the settle from its memo, and
-   *     never release it — a slot leaked until its TTL, on a path where nothing
-   *     looks wrong.
+   *   1. It first said this composition was NOT the production path, because
+   *      "calling this from a job would rebuild the hour-long invocation
+   *      MOTIR-2007 removed for CI" — a statement about `maxDuration = 300`, a
+   *      Vercel ceiling that went with the platform.
+   *   2. MOTIR-3484 then made it the ONLY composition, with an ordinary `while`
+   *      loop and a `finally`, on the ground that a long-lived worker makes both
+   *      trustworthy again. **Every word of that is still true, and it was never
+   *      the argument that mattered here.** What the loop costs is not
+   *      durability, it is OCCUPANCY: one of `POOL_SIZE` in-flight slots held
+   *      for a container's whole life (`docs/decisions/job-lane-occupancy.md`).
+   *      §15.4 measured the two shapes that release it and §16 decided this one.
    *
-   * ⚠️ AND THE ITERATION CEILING IS NOW A PER-PASS GUARD, not a bound on total
-   * polls (§13.3(a)). A restart resets the counter. That is accepted because the
-   * ceiling was never the real bound — {@link pollIndexContainer} measures
-   * `elapsed` from `session.bootedAt`, which rides the memoized boot, so the
-   * first poll of a resumed pass settles a container already past
-   * `indexTimeoutMs` instead of watching it for another 500.
+   * What SURVIVES, unchanged, and is the reason this is a re-shaping rather than
+   * a rewrite:
+   *
+   *   • ADMIT, BOOT and SETTLE are still memoized `step.run`s. A pass replays
+   *     the boot from `job_step` and re-attaches to the same container — the
+   *     property §13.2 records, bought exactly where it is bought today and
+   *     nowhere twice.
+   *   • The ADMISSION BACKOFF is still INSIDE the admit step (§13.3(c)), not a
+   *     defer loop of its own. §16.6 decides that explicitly: a resume that
+   *     re-asked admission after the settle step had released the slot would be
+   *     granted a fresh one and never release it.
+   *   • `indexPollWaitMs`, `INDEX_FLEET_TIME_BUDGETS` and
+   *     `INDEX_ADMISSION_BUDGETS` are READ, never edited. The wait moves from an
+   *     in-process `await` to a `run_at`; the numbers do not move at all.
+   *
+   * What CHANGES: the poll loop, the iteration counter, the observed
+   * `startedAt`, the read-failure tally and the project cursor all move into
+   * `job_supervision` — and the `finally` goes, because teardown is a terminal
+   * transition now (§16.4) and a `finally` would tear the container down on the
+   * first suspension, which is exactly what §15.4 measured.
    */
-  async runIndexContainer(
+  async advanceIndexContainer(
+    /** The `job_queue` row this supervision hangs off — `ctx.runId` for a job. */
+    runId: string,
     input: IndexDispatchInput,
     options: IndexSupervisionOptions = {},
   ): Promise<IndexDispatchOutcome> {
@@ -1379,7 +1409,7 @@ export const codeGraphIndexDispatchService = {
     const { projectId } = input;
 
     // ── 0 · QUEUE FOR ADMISSION — over the cap means WAIT, never drop ─────────
-    // ONE memoized step containing the whole backoff, for the reason above.
+    // ONE memoized step containing the whole backoff, unchanged (§13.3(c)).
     const admitted = await steps.run(`index-admit:${projectId}`, () =>
       this.waitForAdmission(input, sleep, options),
     );
@@ -1397,50 +1427,124 @@ export const codeGraphIndexDispatchService = {
     if (booted.phase === 'terminal') return booted.outcome;
     const { session } = booted;
 
-    // Bounded by the shipped guard: a test may LOWER it, never raise it.
-    const maxIterations = Math.min(
+    // Bounded by the shipped guard: a test may LOWER it, never raise it. It is a
+    // TOTAL bound again rather than the per-pass runaway guard §13.3(a) demoted
+    // it to, because the count lives in the row now.
+    const maxPolls = Math.min(
       options.maxPollIterations ?? MAX_POLL_ITERATIONS,
       MAX_POLL_ITERATIONS,
     );
-    let state = INITIAL_INDEX_POLL_STATE;
-    let verdict: Extract<IndexPollResult, { done: true }> | null = null;
-    let outcome: IndexDispatchOutcome | undefined;
-    try {
-      for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-        await sleep(indexPollWaitMs(iteration, options));
-        const polled = await this.pollIndexContainer(session, state, options);
-        if (polled.done) {
-          verdict = polled;
-          break;
-        }
-        state = polled;
-      }
-    } finally {
-      // ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP — and it is an
-      // ordinary `finally` again. It could not be one while the run spanned many
-      // invocations: the process holding it would already be gone. A long-lived
-      // worker makes the language construct trustworthy, and MOTIR-3482 §13.4
-      // requires the guarantee be RE-PROVEN per exit path rather than inherited,
-      // because the mechanism changed even though the property did not.
-      //
-      // A container nothing tears down is the failure every guarantee in this
-      // file exists to prevent, so this runs on the `done` verdict, on the
-      // iteration ceiling, AND on a throw from inside the loop — in the last case
-      // settling first and letting the error propagate after.
-      outcome = await steps.run(`index-settle:${projectId}`, () =>
-        this.settleIndexContainer(
-          session,
-          verdict ?? {
-            done: true,
-            reason: 'job_timed_out',
-            startedAt: state.startedAt,
-            exitCode: null,
-            failureDetail: `supervision hit the ${maxIterations}-poll ceiling`,
-          },
-        ),
-      );
-    }
-    return outcome;
+    const indexTimeoutMs = options.indexTimeoutMs ?? DEFAULT_INDEX_TIMEOUT_MS;
+
+    const result = await advanceSupervision<
+      Extract<IndexPollResult, { done: true }>,
+      IndexDispatchOutcome
+    >(
+      runId,
+      {
+        kind: 'index',
+        subject: projectId,
+        workspaceId: input.workspaceId,
+        // From the MEMOIZED boot, so the wall clock stays anchored to the
+        // SESSION and a resumed pass settles a container already past its
+        // timeout instead of watching it afresh (§13.2).
+        bootedAt: new Date(session.bootedAt),
+      },
+      {
+        maxPolls,
+        timeoutMs: indexTimeoutMs,
+        waitMs: (pollNumber) => indexPollWaitMs(pollNumber, options),
+        ...(options.now ? { now: options.now } : {}),
+        ...(options.supervisionStore ? { store: options.supervisionStore } : {}),
+        // ONE provider read. `pollIndexContainer` is unchanged, including its
+        // own boot-deadline arm — which stays HERE, where a successful read is
+        // available, because §13.3(b) forbids reaching that verdict from the
+        // absence of an observation.
+        poll: async (state) => {
+          const polled = await this.pollIndexContainer(
+            session,
+            {
+              done: false,
+              startedAt: state.startedAt ? state.startedAt.toISOString() : null,
+              consecutiveReadFailures: state.consecutiveReadFailures,
+            },
+            options,
+          );
+          if (polled.done) return { done: true, verdict: polled };
+          return {
+            done: false,
+            startedAt: polled.startedAt ? new Date(polled.startedAt) : null,
+            consecutiveReadFailures: polled.consecutiveReadFailures,
+          };
+        },
+        // THE TEARDOWN, still a memoized step. The driver calls it from three
+        // named transitions and from nowhere else, and never on a defer.
+        settle: async (reason, state, verdict) =>
+          steps.run(`index-settle:${projectId}`, () =>
+            this.settleIndexContainer(
+              session,
+              verdict ?? {
+                done: true,
+                reason: 'job_timed_out',
+                startedAt: state.startedAt ? state.startedAt.toISOString() : null,
+                exitCode: null,
+                failureDetail: supervisionFailureDetail(reason, maxPolls, indexTimeoutMs),
+              },
+            ),
+          ),
+      },
+    );
+    return result.outcome;
+  },
+
+  /**
+   * Boot ONE index container and supervise it TO COMPLETION, in this process —
+   * for a caller that has no `job_queue` row to hang a supervision off.
+   *
+   * ⚠️ IT IS A WRAPPER, NOT A SECOND COMPOSITION, and the difference is the
+   * whole reason it is three lines. Every ordering, every transition and the
+   * suspension invariant live in {@link advanceIndexContainer} and the driver
+   * beneath it; this loop supplies an in-process store and turns each defer back
+   * into a wait. Two copies of a supervision loop kept in agreement by hand is
+   * the defect MOTIR-3484 spent a card deleting, and it is not being
+   * reintroduced one layer up.
+   *
+   * Its callers are scripts, local harnesses and the tests that drive the
+   * dispatch service directly. `system.code-graph-index` and
+   * `system.code-graph-refresh` go through {@link advanceIndexContainer}.
+   */
+  async runIndexContainer(
+    input: IndexDispatchInput,
+    options: IndexSupervisionOptions = {},
+  ): Promise<IndexDispatchOutcome> {
+    const sleep = options.sleep ?? sleepFor;
+    const now = options.now ?? ((): Date => new Date());
+    // ONE store per call: its lifetime is this loop, and sharing one across
+    // calls would make two unrelated supervisions collide on their key.
+    const supervisionStore = options.supervisionStore ?? inMemorySupervisionStore();
+    // ⚠️ AND ONE STEP MEMO PER CALL, WHICH IS NOT OPTIONAL. Each iteration
+    // re-enters `advanceIndexContainer` from the top, so without a memo the
+    // admission and the BOOT re-execute on every poll — measured at 502 `admit`
+    // calls for a 500-poll supervision, and a container per poll had the
+    // orchestrator not been a fake. On the job path `job_step` is what makes the
+    // replay free; here this is (`lib/jobs/supervision/inProcessSteps.ts`).
+    const steps = inProcessMemoSteps(options.steps ?? INLINE_STEPS);
+    // ⚠️ THE LOOP LIVES IN `lib/jobs/supervision/`, NOT HERE, and that is a
+    // BOUNDARY rather than a preference. `eslint.config`'s
+    // `JOB_ENGINE_RESTRICTION` confines `@/lib/jobs/engine/*` to `lib/jobs/**`,
+    // so this file may not name the deferral signal — and its own comment says
+    // why that rule is stated over our module graph: *"a boundary that can be
+    // walked around by importing one file over is a convention, not a guard."*
+    // Re-exporting the predicate one folder over would be exactly that walk.
+    return driveSupervisionInProcess(
+      () =>
+        this.advanceIndexContainer(input.runId, input, {
+          ...options,
+          steps,
+          supervisionStore,
+        }),
+      { sleep, now },
+    );
   },
 
   /**
@@ -1491,6 +1595,38 @@ export const codeGraphIndexDispatchService = {
     };
   },
 };
+
+/**
+ * The `failureDetail` a supervision writes when it settles for a reason of its
+ * OWN rather than because the container stopped.
+ *
+ * One function rather than a ternary at the call site, because each string is
+ * what an operator reads off a failed `job_run` to tell four different things
+ * apart — and `job_timed_out` is the `TeardownReason` for all four, so the
+ * detail is the only place the distinction survives.
+ */
+function supervisionFailureDetail(
+  reason: SupervisionTerminalReason,
+  maxPolls: number,
+  timeoutMs: number,
+): string {
+  switch (reason) {
+    case 'poll_ceiling':
+      return `supervision hit the ${maxPolls}-poll ceiling`;
+    case 'deadline':
+      return `supervision passed its ${timeoutMs}ms deadline before this pass polled`;
+    case 'failed':
+      return 'a poll threw; the container is torn down before the failure propagates';
+    /* v8 ignore next 6 -- `completed` always carries the poll's own verdict and
+       `replayed` always hits the caller's `index-settle` memo, so neither
+       reaches this fallback. They are enumerated rather than left to a `default`
+       so that a new reason added to the union fails the exhaustiveness check
+       here instead of silently taking a string written for something else. */
+    case 'completed':
+    case 'replayed':
+      return `supervision settled (${reason})`;
+  }
+}
 
 /** What a `done` verdict means for the RUN, as opposed to for the container. */
 function exitVerdictFor(verdict: Extract<IndexPollResult, { done: true }>): IndexExitVerdict {
