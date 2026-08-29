@@ -167,7 +167,66 @@ const FILES_TOPIC: HelpTopic = {
     ].join('\n'),
 };
 
-export const HELP_TOPICS: readonly HelpTopic[] = [ENVIRONMENT_TOPIC, FILES_TOPIC];
+const RUNS_TOPIC: HelpTopic = {
+  name: 'runs',
+  summary: 'What a dispatch run records, where to watch it, and what leaves your machine.',
+  body: () =>
+    [
+      'DISPATCH RUNS',
+      '',
+      '  Every dispatch command opens a RUN — `motir next`, `motir run <KEY>`,',
+      '  `motir run <scope>`, `motir batch` and `motir auto` alike. A run is a',
+      '  record of what this invocation DID: which cards it owned, in what order,',
+      '  what happened to each, and why it stopped.',
+      '',
+      '  A run covers a SET, not a card. Three shapes:',
+      '',
+      '    one card         `motir next` / `motir run <KEY>` — a set of one.',
+      '    a claimed scope  `motir run <story>` / `motir run sprint` — every',
+      '                     member the claim locked, in the dependency order the',
+      '                     run then works them in.',
+      '    a frozen batch   `motir batch` — the snapshot it took, INCLUDING every',
+      '                     card it decided to skip and the reason for each.',
+      '',
+      '  `motir auto` is the exception, by design: it holds no plan and asks the',
+      '  server for one card at a time, so its run starts empty and grows a leg',
+      '  per card as it goes.',
+      '',
+      'WHERE TO WATCH IT',
+      '',
+      '  /runs/<id>            the run: its set, each card’s state, the skips',
+      '                        and their reasons, and the stop reason.',
+      '  the work item         a run section on the card, live, saying which of',
+      '                        N it is in this run, plus that card’s run history.',
+      '  /ready                a strip on the row a run is working.',
+      '',
+      'WHAT LEAVES YOUR MACHINE',
+      '',
+      '  Motir records what your run DID — the command, the cards it worked,',
+      '  what happened to each, and why it stopped. That is all it sends by',
+      '  default.',
+      '',
+      '  Your agent’s output stays on your machine. Log lines, file contents,',
+      '  diffs and prompts are only sent if you pass `--report-log` (or set',
+      '  `reportLogBodies` in your config), and they are deleted after 30 days.',
+      '',
+      '  There is deliberately no server-side setting for this: the machine that',
+      '  holds the content is the machine that decides whether it leaves.',
+      '',
+      'IF REPORTING FAILS',
+      '',
+      '  Reporting is BEST-EFFORT and can never break a run. If Motir is',
+      '  unreachable — or answers 500, or your token has expired — the CLI prints',
+      '  ONE line saying so and carries on: the agent still runs, cards still',
+      '  move, and the exit code is unchanged. The run page shows that run as',
+      '  REPORTING-OFFLINE. That is a run whose record is incomplete, not a run',
+      '  that failed.',
+      '',
+      '  See also: `motir help environment`, and docs/cli.md § Dispatch runs.',
+    ].join('\n'),
+};
+
+export const HELP_TOPICS: readonly HelpTopic[] = [ENVIRONMENT_TOPIC, FILES_TOPIC, RUNS_TOPIC];
 
 export function findHelpTopic(name: string): HelpTopic | undefined {
   return HELP_TOPICS.find((topic) => topic.name === name);
