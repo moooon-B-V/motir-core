@@ -194,10 +194,17 @@ export interface PlanItemProposedFields {
    * survives the shipped set validation) and the role is still recorded, so the
    * two pins never disagree about the outcome.
    *
-   * Materialize only RECORDS it (onto `work_item.targetRepoRole`); resolving a
-   * role to a repo name happens later, when that role's row becomes established
-   * (MOTIR-1913) — it cannot happen here, because `proposeRepositorySet` runs
-   * AFTER the approve transaction commits and its rows start `proposed`.
+   * ⚠️ Materialize RESOLVES it to a repository REFERENCE (`proposalRepoRef` →
+   * a `work_item_repo` row); it does NOT record the role on the item. ~~Materialize
+   * only RECORDS it (onto `work_item.targetRepoRole`); resolving a role to a repo
+   * name happens later, when that role's row becomes established (MOTIR-1913).~~
+   * That column, and MOTIR-1913's resolution pass, are RETIRED (Story MOTIR-2732 ·
+   * MOTIR-3040, ADR `work-item-repository-set.md` "Amendment 2026-08-18" §A3): a
+   * row reference is stable before the repository exists AND across its rename, so
+   * the role's reason to exist was discharged. The field REMAINS here — a plan
+   * still pins by role before any row exists — but the work item has nowhere to
+   * hold one, which is why the review diff for this key has no old side to read
+   * (`planReviewService.buildChanges`, MOTIR-3868).
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
 }
@@ -310,6 +317,63 @@ export interface PlanItemPatch {
   blockedByAdd?: string[];
   blockedByRemove?: string[];
 }
+
+/**
+ * Every key a {@link PlanItemPatch} may carry — THE SINGLE DECLARED SOURCE, in
+ * the interface's own declaration order (MOTIR-3868).
+ *
+ * ⚠️ It exists because a key added to the patch reaches SOME of its consumers
+ * and not others, and nothing anywhere compares the two lists. Three times now:
+ * `storyPoints` / `estimateMinutes` reached `buildChanges` and not the label
+ * catalogs (MOTIR-3151); `explanationMd` / `targetRepo` / `targetRepoRole`
+ * reached this patch and not motir-ai's mirror (MOTIR-3860); and `targetRepo` /
+ * `targetRepoRole` reached `applyModify` and not the plan-REVIEW diff at all —
+ * so the one field a re-pin changes was invisible on the surface that approves
+ * it. Each was found by accident, months later.
+ *
+ * A runtime test cannot enumerate an interface's keys, so this array is what a
+ * test can hold a consumer against — and the assertion below is what holds the
+ * ARRAY to the interface, in both directions, at `tsc` time. Together they mean
+ * the NEXT key added to `PlanItemPatch` fails in the pull request that adds it:
+ * the compiler here, then `tests/dto/planReviewFieldParity.test.ts`, which
+ * demands an explicit disposition for it against the review vocabulary.
+ *
+ * `motir-ai`'s `MODIFY_PATCH_KEYS` (`src/llm/treeGeneration.ts`) is the same
+ * instrument for the same patch, one boundary over, and is what this mirrors.
+ */
+export const PLAN_ITEM_PATCH_KEYS = [
+  'title',
+  'descriptionMd',
+  'explanationMd',
+  'priority',
+  'type',
+  'storyPoints',
+  'estimateMinutes',
+  'targetRepo',
+  'targetRepoRole',
+  'parentRef',
+  'blockedByAdd',
+  'blockedByRemove',
+] as const;
+
+export type PlanItemPatchKey = (typeof PLAN_ITEM_PATCH_KEYS)[number];
+
+/**
+ * The COMPILE-TIME half of the drift guard: {@link PlanItemPatch}'s keys and
+ * {@link PLAN_ITEM_PATCH_KEYS} are the same set, in both directions.
+ *
+ * Adding a field to the interface without adding it to the constant (or the
+ * reverse) fails `pnpm build` before any test runs.
+ */
+type PatchKeyMissingFromConstant = Exclude<keyof PlanItemPatch, PlanItemPatchKey>;
+type PatchKeyMissingFromInterface = Exclude<PlanItemPatchKey, keyof PlanItemPatch>;
+const _planItemPatchKeysAreExhaustive: [
+  PatchKeyMissingFromConstant,
+  PatchKeyMissingFromInterface,
+] extends [never, never]
+  ? true
+  : never = true;
+void _planItemPatchKeysAreExhaustive;
 
 /** One proposed operation in a plan, as the API returns it. */
 export interface PlanItemDto {

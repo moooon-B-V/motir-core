@@ -203,6 +203,11 @@ export const FIELD_KEY: Record<string, string> = {
   estimateMinutes: 'estimate',
   storyPoints: 'points',
   parent: 'parent',
+  // Where the card SHIPS (MOTIR-3868) — the twin of `parent` above. This map is
+  // the QUIETEST of the three: it DROPS what it does not recognise, so a field
+  // missing here simply vanishes from the changed node's summary.
+  targetRepo: 'repo',
+  targetRepoRole: 'repoRole',
 };
 
 /** The fields a `modify` proposal changes, as those copy keys — the compact "what
