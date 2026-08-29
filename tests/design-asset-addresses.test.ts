@@ -989,6 +989,29 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
   },
 
+  // ── Forward-looking: the DISPATCH RUN decision record (MOTIR-1790) ────────
+  //    Exactly the shape the note below records, one story later, and the same
+  //    two rows for the same reason: `design/runs/` (MOTIR-1795) cites the ADR
+  //    it is built to, the ADR is MOTIR-1790's deliverable, and the two reach
+  //    `main` through DIFFERENT pull requests — the design ships alone because
+  //    it is a STOPPER that needs sign-off before its dependents build on it,
+  //    while the record rides the story's parent branch.
+  //
+  //    ⚠️ THESE TWO ROWS DELETE THEMSELVES when the parent pull request brings
+  //    `docs/decisions/dispatch-run-record.md` into the tree. `carries no
+  //    KNOWN_PATHS entry that has stopped applying` below is what turns that
+  //    into a red build rather than a stale exemption — nobody has to remember.
+  {
+    file: 'design/runs/design-notes.md',
+    path: 'docs/decisions/dispatch-run-record.md',
+    why: "Forward-looking: the notes' *Where each behaviour came from* table cites the decision this area is built to. MOTIR-1790's deliverable, on Story MOTIR-1789's parent branch; this design ships alone as a stopper. DELETE THIS ROW when the parent pull request merges.",
+  },
+  {
+    file: 'design/runs/run-section.mock.html',
+    path: 'docs/decisions/dispatch-run-record.md',
+    why: "Forward-looking: the mock's own header block names the decision record it builds to, exactly as `design/work-items/todo-list.mock.html` named its own. Same story, same parent branch, same self-deleting reason. DELETE THIS ROW when the parent pull request merges.",
+  },
+
   // (The two FORWARD-LOOKING rows for `docs/decisions/work-item-todo-list.md`
   //  lived here for exactly as long as their own `why` said they would. The
   //  asset cites the ADR, the ADR is MOTIR-3811's deliverable, and the two
