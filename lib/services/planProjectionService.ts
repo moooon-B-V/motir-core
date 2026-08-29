@@ -27,10 +27,17 @@ import type { WorkItem } from '@/generated/prisma/client';
 //   • `add`    → a NEW not-done node under `resolve(parentRef)` with `blocked_by`
 //                = `resolve(blockedByRefs)`. It lands in the BACKLOG (no sprint),
 //                so it is NOT a sprint member unless a future field says so.
-//   • `modify` → only `patch.blockedByAdd` / `blockedByRemove` affect
-//                finishability; applied to the target's edge set. (The projected
-//                READS additionally surface the patch's other fields — see
-//                `proposalByRef` / `patchByWorkItemId` below.)
+//   • `modify` → `patch.parentRef` MOVES the target (the projected `parentId`,
+//                and therefore `childrenByParent` on BOTH sides), and
+//                `patch.blockedByAdd` / `blockedByRemove` change its edge set.
+//                Those three are what alter the SHAPE the walks read; the rest of
+//                the patch is content the projected READS surface — see
+//                `proposalByRef` / `patchByWorkItemId` below. Every one of them is
+//                SPARSE: an absent key leaves the live value, and an explicit
+//                `null` `parentRef` projects the target at the ROOT.
+//                (MOTIR-3859 added the key to `PlanItemPatch`; until MOTIR-3867
+//                this line said only the two edge keys, and it was the rule this
+//                file was actually applying.)
 //   • `remove` → the target node AND every edge touching it are dropped (a removed
 //                item neither gates nor is gated — single-node, like archive).
 //   • a temp-ref `planItem:<id>` resolves to that same-plan `add`; a real id to
@@ -293,6 +300,26 @@ export async function buildProjection(planId: string, ctx: ServiceContext): Prom
     // executor is never projected — the stored value stands.
     if (item.patch && 'type' in item.patch) {
       projectedType.set(item.workItemId, item.patch.type ?? null);
+    }
+    // The RE-PARENT (MOTIR-3859's `patch.parentRef`, projected by MOTIR-3867).
+    // Same sparse-patch semantics, and here they are load-bearing rather than
+    // tidy: collapsing ABSENT into `null` would project every untouched `modify`
+    // at the project root. Mutating the node's `parentId` in place is the whole
+    // fix — `childrenByParent` is derived from the FINAL `nodes` map below, so
+    // the vacated parent loses the child and the joined parent gains it from this
+    // one write, in the same pass and with no second adjacency to keep in step.
+    //
+    // Applied UNCONDITIONALLY, exactly as `materialize` applies it: a temp-ref is
+    // refused at the append (`validateProposals`' `assertReparentLegal`, AMENDMENT
+    // 11 D2), as is a cross-project, kind-illegal, cyclic, too-deep or terminal
+    // parent — so a `parentRef` that reaches here already names a live, legal,
+    // same-project row, which `buildProjection`'s whole-project load always holds.
+    if (item.patch && 'parentRef' in item.patch) {
+      const ref = item.patch.parentRef;
+      // `!` rather than a guard: this loop already `continue`d on
+      // `!nodes.has(item.workItemId)`, so a defensive arm here would be dead code
+      // the per-file coverage gate would then ask for a test that cannot be written.
+      nodes.get(item.workItemId)!.parentId = ref == null ? null : resolveRef(ref);
     }
     for (const ref of item.patch?.blockedByAdd ?? []) {
       const toId = resolveRef(ref);

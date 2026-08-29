@@ -3,7 +3,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planValidityService } from '@/lib/services/planValidityService';
-import { buildProjection } from '@/lib/services/planProjectionService';
+import { buildProjection, projectedWorkItem } from '@/lib/services/planProjectionService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
@@ -37,7 +37,7 @@ afterAll(async () => {
 const mk = (
   fx: WorkItemFixture,
   title: string,
-  kind: 'story' | 'task' | 'subtask',
+  kind: 'epic' | 'story' | 'task' | 'subtask',
   parentId?: string,
 ) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
 
@@ -1748,5 +1748,212 @@ describe('validateProjectedPlan — the APPROVABILITY half (MOTIR-3575)', () => 
     await plansService.markPlanned(planId, fx.ctx);
     const approved = await plansService.approvePlan(planId, fx.ctx);
     expect(approved.status).toBe('approved');
+  });
+});
+
+// ── A `modify`'s `patch.parentRef` MOVES the card IN THE PROJECTION (MOTIR-3867) ──
+//
+// MOTIR-3859 gave `PlanItemPatch` the SITS half of D3's pair; the PROJECTION was
+// not widened with it, so `buildProjection` read `parentId` from the live row and
+// from an `add`'s `parentRef` and from nowhere else. An authoring agent that
+// appended the `modify` and projected the target to check its own work was shown
+// the card's OLD parent — not an error, not a null, but the same correct-looking
+// value the call returned before the plan existed.
+//
+// These live here rather than in `modifyReparent.test.ts` (the APPROVE side) or in
+// `tests/mcp/plan-projection-gate.test.ts` (the MCP surface, whose own comment says
+// the projection RULES belong to this file): what is asserted is the merge.
+describe("a `modify`'s `patch.parentRef` moves the card in the PROJECTION (MOTIR-3867)", () => {
+  /** Append ONE `modify` carrying just a re-parent. */
+  const reparent = (
+    fx: WorkItemFixture,
+    planId: string,
+    workItemId: string,
+    parentRef: string | null,
+  ) =>
+    plansService.addProposals(planId, [{ op: 'modify', workItemId, patch: { parentRef } }], fx.ctx);
+
+  it('an explicit ref re-parents the projected node, and `childrenByParent` moves it on BOTH sides', async () => {
+    const fx = await makeWorkItemFixture();
+    const from = await mk(fx, 'The story it leaves', 'story');
+    const to = await mk(fx, 'The story it joins', 'story');
+    const card = await mk(fx, 'The card', 'subtask', from.id);
+
+    const planId = await freshPlan(fx);
+    await reparent(fx, planId, card.id, to.id);
+
+    const proj = await buildProjection(planId, fx.ctx);
+    expect(proj.nodes.get(card.id)!.parentId).toBe(to.id);
+    // BOTH adjacency entries, in one assertion — the vacated parent losing the
+    // child and the joined parent gaining it are two separate ways for a derived
+    // map to be wrong, and reading only the moved node's `parentId` catches neither.
+    expect(proj.childrenByParent.get(from.id) ?? []).toEqual([]);
+    expect(proj.childrenByParent.get(to.id) ?? []).toEqual([card.id]);
+
+    // …and the same thing through the READ an authoring agent actually calls —
+    // `get_work_item { planId }`. This is the assertion the defect was ABOUT: the
+    // wrong answer was never an error or a null, it was `from` — the card's real,
+    // current, correct-looking parent, which reads as *the re-parent did not take*.
+    const detail = await projectedWorkItem(planId, card.identifier, fx.ctx);
+    expect(detail.target.parent).toBe(to.identifier);
+    expect(detail.parent!.key).toBe(to.identifier);
+    const vacated = await projectedWorkItem(planId, from.identifier, fx.ctx);
+    expect(vacated.committedChildren).toEqual([]);
+    const joined = await projectedWorkItem(planId, to.identifier, fx.ctx);
+    expect(joined.committedChildren.map((r) => r.key)).toEqual([card.identifier]);
+  });
+
+  it('an explicit `null` projects the target at the ROOT, and the vacated parent loses it', async () => {
+    const fx = await makeWorkItemFixture();
+    // A `task` may sit at the root; a `subtask` may not — the same arm
+    // `modifyReparent.test.ts` pins on the approve side.
+    const epic = await mk(fx, 'The epic', 'epic');
+    const card = await mk(fx, 'The card', 'task', epic.id);
+
+    const planId = await freshPlan(fx);
+    await reparent(fx, planId, card.id, null);
+
+    const proj = await buildProjection(planId, fx.ctx);
+    expect(proj.nodes.get(card.id)!.parentId).toBeNull();
+    expect(proj.childrenByParent.get(epic.id) ?? []).toEqual([]);
+  });
+
+  it('an ABSENT `parentRef` leaves the LIVE parent — the sparse contract, as its own case', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'The story', 'story');
+    const card = await mk(fx, 'The card', 'subtask', story.id);
+
+    const planId = await freshPlan(fx);
+    // A patch that changes something ELSE. This is the case that decides the
+    // implementation: `'parentRef' in patch` versus `patch.parentRef ?? null`.
+    // Collapsing absent into `null` would project EVERY untouched `modify` at the
+    // project root, and the two explicit cases above would still pass.
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: card.id, patch: { title: 'Renamed only' } }],
+      fx.ctx,
+    );
+
+    const proj = await buildProjection(planId, fx.ctx);
+    expect(proj.nodes.get(card.id)!.parentId).toBe(story.id);
+    expect(proj.childrenByParent.get(story.id) ?? []).toEqual([card.id]);
+  });
+
+  it('the projected SUBTREE verdict is taken over the POST-move containment, on both sides of the move', async () => {
+    const fx = await makeWorkItemFixture();
+    const from = await mk(fx, 'The story it leaves', 'story');
+    const to = await mk(fx, 'The story it joins', 'story');
+    const leaf = await mk(fx, 'The leaf that moves', 'subtask', from.id);
+    // The blocker lives under `to`, so containment is the ONLY thing that decides
+    // either verdict: it is out-of-subtree for `from` and in-subtree for `to`.
+    const gate = await mk(fx, 'The gate', 'subtask', to.id);
+    await link(fx, leaf.id, gate.id);
+
+    const planId = await freshPlan(fx);
+    // Before the move the plan is empty, so this is the LIVE verdict.
+    const beforeFrom = await planValidityService.validateProjectedWorkItem(
+      planId,
+      from.identifier,
+      fx.ctx,
+    );
+    expect(beforeFrom.valid).toBe(false);
+    expect(beforeFrom.blockers).toEqual([
+      {
+        item: leaf.identifier,
+        blockedBy: gate.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+
+    await reparent(fx, planId, leaf.id, to.id);
+
+    // The vacated subtree no longer CONTAINS the gated leaf, so it is finishable…
+    const afterFrom = await planValidityService.validateProjectedWorkItem(
+      planId,
+      from.identifier,
+      fx.ctx,
+    );
+    expect(afterFrom.valid).toBe(true);
+    expect(afterFrom.blockers).toEqual([]);
+    // …and the joined subtree now contains BOTH ends of the edge, which is what
+    // makes it satisfied there. Read `to` before the move for the control.
+    const afterTo = await planValidityService.validateProjectedWorkItem(
+      planId,
+      to.identifier,
+      fx.ctx,
+    );
+    expect(afterTo.valid).toBe(true);
+    // TIGHT is what proves the move was actually READ: under `tight` a blocker is
+    // satisfied ONLY by being in the set, so the leaf's edge passes here for
+    // exactly one reason — the projection put the leaf inside `to`.
+    const tightTo = await planValidityService.validateProjectedWorkItem(
+      planId,
+      to.identifier,
+      fx.ctx,
+      'tight',
+    );
+    expect(tightTo.valid).toBe(true);
+    const tightFrom = await planValidityService.validateProjectedWorkItem(
+      planId,
+      from.identifier,
+      fx.ctx,
+      'tight',
+    );
+    expect(tightFrom.valid).toBe(true);
+  });
+
+  it("`validate_plan`'s whole-forest walk descends the POST-move tree", async () => {
+    const fx = await makeWorkItemFixture();
+    const from = await mk(fx, 'The story it leaves', 'story');
+    const to = await mk(fx, 'The story it joins', 'story');
+    const leaf = await mk(fx, 'The leaf that moves', 'subtask', from.id);
+    const outside = await mk(fx, 'Outside the project tree', 'task');
+    await markDone(outside.id);
+    await link(fx, leaf.id, outside.id);
+
+    const planId = await freshPlan(fx);
+    await reparent(fx, planId, leaf.id, to.id);
+
+    const forest = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(forest.valid).toBe(true);
+    expect(forest.blockers).toEqual([]);
+
+    // ⚠️ MEASURED, and stated because it is not what the phrase "judges the
+    // post-move containment" suggests. `validateProjectedPlan`'s member set S is
+    // the WHOLE projected forest — every node reachable down from every root — so
+    // an intra-project move cannot add or drop a member, and the forest verdict is
+    // INVARIANT under a re-parent by construction. What the move changes is the
+    // PATH the walk takes to the leaf, and that is what is asserted here: the leaf
+    // is reached as a child of `to` and not of `from`. The verdict that a
+    // containment change moves is the SUBTREE one, asserted in the case above —
+    // which is the read `validate_work_item { planId }` answers with.
+    const proj = await buildProjection(planId, fx.ctx);
+    expect(proj.childrenByParent.get(to.id) ?? []).toEqual([leaf.id]);
+    expect(proj.childrenByParent.get(from.id) ?? []).toEqual([]);
+  });
+
+  it('a `planItem:` parent needs NO projection branch — the append refuses one outright', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'The story', 'story');
+    const card = await mk(fx, 'The card', 'subtask', story.id);
+
+    const planId = await freshPlan(fx);
+    const added = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'A proposed story', kind: 'story' },
+    });
+    const proposedRef = `${TEMP_REF_PREFIX}${itemIdByTitle(added, 'A proposed story')}`;
+
+    // ON THE RECORD, because it is why `buildProjection` resolves a patched
+    // `parentRef` and never has to reason about a not-yet-materialized parent:
+    // `PlanItemPatch.parentRef` refuses a temp-ref AT THE APPEND
+    // (`agent-authored-plans.md` AMENDMENT 11 D2), so a projected re-parent is
+    // always onto a committed node.
+    await expect(reparent(fx, planId, card.id, proposedRef)).rejects.toThrow(/ALREADY/);
+
+    // And the projection is untouched by the refused append.
+    const proj = await buildProjection(planId, fx.ctx);
+    expect(proj.nodes.get(card.id)!.parentId).toBe(story.id);
   });
 });
