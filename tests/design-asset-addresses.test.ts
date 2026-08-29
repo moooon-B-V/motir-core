@@ -389,6 +389,33 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/runs/run_7f2c',
     why: 'Forward-looking: the "4 of 11 — see the whole run" link-out, which is the single most useful sentence on the run section. MOTIR-3895 builds the route.',
   },
+  // ── Forward-looking: the two run PAGES (MOTIR-3893's asset) ──────────────
+  //    The design draws the surfaces; MOTIR-3895 builds `/runs/[id]` and
+  //    MOTIR-3923 builds `/runs` and its rail row. Each of these four rows
+  //    DELETES ITSELF when its route lands — the `carries no KNOWN entry that
+  //    has stopped applying` check above is what turns a stale exemption into a
+  //    red build rather than a quiet one.
+  {
+    file: 'design/runs/run-view.mock.html',
+    address: '/runs',
+    why: 'Forward-looking: the breadcrumb BACK to the index, drawn on the run view because this page is reached from three places and only one of them gets you to the others. MOTIR-3923 builds the route. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
+  },
+  {
+    file: 'design/runs/run-view.mock.html',
+    address: '/runs/[id]',
+    why: 'Forward-looking: the surface this asset IS — named in its own header comment. MOTIR-3895 builds the route. DELETE THIS ROW when `app/(authed)/runs/[id]/page.tsx` lands.',
+  },
+  {
+    file: 'design/runs/runs-index.mock.html',
+    address: '/runs',
+    why: 'Forward-looking: the surface this asset IS, and the rail row that reaches it. MOTIR-3923 builds both. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
+  },
+  {
+    file: 'design/runs/runs-index.mock.html',
+    address: '/runs/[id]',
+    why: 'Forward-looking: every row of the index links to one run. MOTIR-3895 builds the route. DELETE THIS ROW when `app/(authed)/runs/[id]/page.tsx` lands.',
+  },
+
   {
     file: 'design/runs/design-notes.md',
     address: '/runs',
