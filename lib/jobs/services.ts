@@ -1,3 +1,4 @@
+import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -90,6 +91,10 @@ export const jobServices = {
   dataExport: dataExportService,
   // The nightly erasure of accounts whose grace period has run out (MOTIR-3702).
   accountErasureSweep: accountErasureSweepService,
+  // The dispatch-run housekeeping (Story MOTIR-1789 · MOTIR-1792): the 30-day
+  // log-body retention window, and the reap that closes a run nothing is
+  // holding. One service because they share a cadence and a tenancy shape.
+  dispatchRunSweep: dispatchRunSweepService,
 };
 
 export type JobServices = typeof jobServices;

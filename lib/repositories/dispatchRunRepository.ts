@@ -181,6 +181,31 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * The SWEEP's CROSS-TENANT discovery read (MOTIR-1792): every run still
+   * `running` past the cut-off, in ANY workspace, oldest first.
+   *
+   * ⚠️ IT MUST RUN UNDER `withSystemContext`, and it returns the WHOLE ROW so the
+   * caller can read `workspaceId` off it. The abandoned runs a sweep has to close
+   * are spread across tenants by construction — one operator's laptop died, and
+   * another's did — and the workspace is not known until the first row comes
+   * back, so no wrapper could have bound it up front. The `FOR SELECT` system arm
+   * (`20260829130000_dispatch_run_system_read`) is what admits this read, and it
+   * is READ-ONLY: every write the sweep then makes re-binds to that row's own
+   * workspace.
+   */
+  async listStaleRunningAcrossWorkspaces(
+    startedBefore: Date,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRun[]> {
+    return tx.dispatchRun.findMany({
+      where: { status: 'running', startedAt: { lt: startedBefore } },
+      orderBy: { startedAt: 'asc' },
+      take,
+    });
+  },
+
+  /**
    * The ABANDONED-RUN REAP's discovery read (MOTIR-1792): runs still `running`
    * that started before a cut-off, oldest first.
    *

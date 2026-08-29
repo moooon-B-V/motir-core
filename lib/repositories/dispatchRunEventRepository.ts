@@ -68,13 +68,14 @@ export const dispatchRunEventRepository = {
   /**
    * The highest `seq` this run has stored, or `null` for a run with no events.
    *
-   * ⚠️ THIS IS NOT A SEQUENCE ALLOCATOR, and must not be used as one. The
-   * reporter numbers its own events — it is the only party that knows the order
-   * they happened in — and the unique index is what refuses a collision. Reading
-   * the max and adding one would hand two concurrent appenders the same number
-   * and lose one of their events to `skipDuplicates`, silently. What this
-   * answers is the different question a RESUMING reader asks: how far along is
-   * this run's stream right now.
+   * ⚠️ THIS IS THE ALLOCATOR'S INPUT, AND IT IS ONLY SAFE UNDER THE RUN'S ROW
+   * LOCK. `dispatchRunService.appendEvents` takes
+   * `dispatchRunRepository.findTerminalStateForUpdate` first and numbers from
+   * this value; read WITHOUT that lock it hands two concurrent appenders the
+   * same number, and the unique index then rejects one of their batches —
+   * turning a routine retry into a lost stream. It is also the answer a RESUMING
+   * READER wants (how far along is this run), which needs no lock at all: the
+   * two callers differ in what they do next, not in what they read.
    */
   async maxSeq(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number | null> {
     const row = await tx.dispatchRunEvent.aggregate({
@@ -90,6 +91,32 @@ export const dispatchRunEventRepository = {
    */
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.dispatchRunEvent.count({ where: { dispatchRunId } });
+  },
+
+  /**
+   * The RETENTION SWEEP's CROSS-TENANT discovery read (MOTIR-1792): which
+   * workspaces still hold a log body past the cut-off.
+   *
+   * ⚠️ RUNS UNDER `withSystemContext`, for the same reason the run reap's
+   * discovery does: an expiring body is in whichever tenant happened to opt in,
+   * and the sweep cannot bind a workspace it has not learned yet. It returns
+   * WORKSPACE IDS and nothing else — the bodies themselves are never read
+   * cross-tenant, only counted — and the clearing write then re-binds per
+   * workspace.
+   */
+  async listWorkspacesWithExpiredBodies(
+    createdBefore: Date,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.dispatchRunEvent.findMany({
+      where: { createdAt: { lt: createdBefore }, body: { not: null } },
+      select: { workspaceId: true },
+      distinct: ['workspaceId'],
+      orderBy: { workspaceId: 'asc' },
+      take,
+    });
+    return rows.map((r) => r.workspaceId);
   },
 
   /**

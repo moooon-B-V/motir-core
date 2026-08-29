@@ -555,6 +555,46 @@ describe('every operation’s REAL response validates against its declared schem
       send('/api/v1/scope-claims', 'POST', { kind: 'work_item', key: scopeRoot }),
     );
 
+    // ── The DISPATCH RUN ingest (Story MOTIR-1789 · MOTIR-1792) ────────────
+    // All three in ORDER on ONE run, because they are a lifecycle rather than
+    // three independent endpoints: the append needs an open run and the close
+    // needs an un-closed one. The card they name is its OWN item — the open
+    // records the SET but moves no status, so it could safely share, and giving
+    // it its own leaves the run page's fixture legible to whoever reads this next.
+    const runCard = await createItem('An item a dispatch run owns');
+    const opened = await drive(
+      'openDispatchRun',
+      () => import('@/app/api/v1/dispatch-runs/route'),
+      send('/api/v1/dispatch-runs', 'POST', {
+        projectKey: caller.projectKey,
+        command: 'run_scope',
+        agent: 'claude',
+        model: 'claude-opus-5',
+        idempotencyKey: 'drift-guard-run-1',
+        cards: [{ key: runCard, disposition: 'queued' }],
+      }),
+    );
+    const runId = (opened.body as { run: { id: string } }).run.id;
+
+    await drive(
+      'appendDispatchRunEvents',
+      () => import('@/app/api/v1/dispatch-runs/[id]/events/route'),
+      send(`/api/v1/dispatch-runs/${runId}/events`, 'POST', {
+        events: [
+          { kind: 'run_opened', data: { command: 'run_scope' } },
+          { kind: 'card_claimed', workItemKey: runCard, disposition: 'running' },
+        ],
+      }),
+      { id: runId },
+    );
+
+    await drive(
+      'closeDispatchRun',
+      () => import('@/app/api/v1/dispatch-runs/[id]/close/route'),
+      send(`/api/v1/dispatch-runs/${runId}/close`, 'POST', { stopReason: 'completed' }),
+      { id: runId },
+    );
+
     // ── Session close-out (Story 11.7) ──────────────────────────────────────
     // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
     // `in_review` and `completeSession` then closes it, so driving them on the
