@@ -6,4 +6,5 @@
 // module instead. `isolatedModules` is on and `verbatimModuleSyntax` is not, so
 // `export *` correctly carries both the types and the values.
 export * from './BrandMark.js';
+export * from './ogFonts.js';
 export * from './waveBand.js';

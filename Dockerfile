@@ -168,7 +168,9 @@ RUN pnpm build:worker
 # Next's tracer used to sweep the repo root into `.next/standalone`: 381 MB, of
 # which `design/` was 222 MB, `tests/` 15 MB, `scripts/` 6 MB and `docs/` 5 MB.
 # Nothing serving a request reads any of them (the only runtime file reads in
-# app code are `app/_brand/fonts/*.ttf` and an env-supplied test-only path in
+# app code are the three Inter faces the OG cards load — `app/_brand/fonts/*.ttf`
+# then, `packages/brand/fonts/*.ttf` since MOTIR-3848 gave them one home across
+# both properties — and an env-supplied test-only path in
 # `lib/email.ts`), and the release lane gets `prisma/` + its two scripts by
 # explicit COPY in the runner below, never from the trace. So this step deleted
 # them, and it failed loudly if one was missing — *"if a Next upgrade stops

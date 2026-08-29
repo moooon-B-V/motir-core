@@ -296,7 +296,7 @@ describe('Dockerfile — the standalone SCOPE ASSERTION, RUN rather than read (M
   /** Directories nothing serving a request reads. None may reach the output. */
   const NEVER_SERVED = ['design', 'tests', 'docs', 'scripts'];
   /** Directories the running server needs — the step must not care about them. */
-  const KEEP = ['app/_brand/fonts', 'node_modules', 'prisma'];
+  const KEEP = ['packages/brand/fonts', 'node_modules', 'prisma'];
 
   /**
    * Build a fake `.next/standalone` holding `present` (plus the KEEP set), run
@@ -333,7 +333,9 @@ describe('Dockerfile — the standalone SCOPE ASSERTION, RUN rather than read (M
     // 464 → 124 MB.
     //
     // The KEEP set is asserted for the same reason it always was — the OG cards
-    // read `app/_brand/fonts/*.ttf` off disk at request time — but now against a
+    // read the three Inter faces off disk at request time (MOTIR-3848 moved them
+    // out of `app/_brand/fonts/` and into `@motir/brand`, which in this
+    // workspace IS `packages/brand/fonts/`) — but now against a
     // step that must not DELETE anything, which is the stronger property: there
     // is no `rm` left in it to reach the wrong path.
     withScopeCheck([], (res, standalone) => {

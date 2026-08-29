@@ -22,3 +22,27 @@ If you are building a product with Motir's design system, install
 `@motir/design-system` and use your own brand assets. If you need to refer to
 Motir — in documentation, an integration listing, or a comparison — ordinary
 nominative use needs no permission from us.
+
+
+NOTICE — third-party fonts
+==========================
+
+This package ships three static font files under `fonts/`:
+
+    Inter-Regular.ttf    Inter-Bold.ttf    Inter-ExtraBold.ttf
+
+They are the Inter v20 static instances Google Fonts serves for legacy formats,
+and they are NOT covered by this repository's GPL-3.0-only licence. Inter is
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter),
+licensed under the SIL Open Font License, Version 1.1
+(https://openfontlicense.org).
+
+They are redistributed here — rather than fetched at build time — because
+`next/og` renders through satori, outside the CSS tree, and the only way one of
+Motir's social cards gets a typeface at all is `ImageResponse`'s `fonts` option,
+which takes font BYTES. The OFL permits this redistribution; it reserves the
+Reserved Font Name "Inter", so a modified derivative must be renamed. Nothing in
+this package modifies them: they are shipped byte-for-byte as obtained.
+
+The trademark reservation above concerns Motir's own marks and does not extend
+to these files.
