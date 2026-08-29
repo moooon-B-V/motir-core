@@ -304,14 +304,38 @@ ALTER TABLE "github_check_run" DROP COLUMN "feedback_comment_id";
   });
 
   it('a column still declared in the datamodel is caught, with its table', () => {
-    // The mechanical check, run against a violation: `feedback_comment_id` IS
-    // still declared today, so dropping it now would be exactly this failure.
-    const declared = declaredColumnsByTable(readFileSync(SCHEMA_PATH, 'utf8'));
+    // The mechanical check, run against a violation.
+    //
+    // ⚠️ THE FIXTURE IS SYNTHETIC, AND THAT IS THE CORRECTION MOTIR-3803 MADE.
+    // This assertion used to read the LIVE `prisma/schema.prisma` and assert that
+    // `github_check_run.feedback_comment_id` was still declared — true while the
+    // SCHEMA-ONLY phase was in flight, and false the moment the CONTRACT phase
+    // landed. So the negative case for a guard about dropping columns was itself
+    // pinned to a column about to be dropped, and completing the very sequence
+    // this guard exists to enforce turned it red. A guard's own fixture must not
+    // depend on a transient state of the tree it guards.
+    const schema = `model GithubCheckRun {
+  id                String  @id
+  feedbackCommentId String? @map("feedback_comment_id")
+
+  @@map("github_check_run")
+}`;
+    const declared = declaredColumnsByTable(schema);
     expect(declared.get('github_check_run')?.has('feedback_comment_id')).toBe(true);
     const dropped = droppedColumns(SAFE);
     expect(
       dropped.some(({ table, column }) => declared.get(table)?.has(column)),
       'a marked migration is still refused while the field is in the datamodel',
     ).toBe(true);
+  });
+
+  it('and the REAL schema no longer declares it, so the drop that just landed is clean', () => {
+    // The positive counterpart, against the live schema: the CONTRACT phase
+    // removed the field in the same commit as the migration, which is the whole
+    // property `no column dropped outside that set is still declared` asserts
+    // over the corpus. Named here too so the pair reads as one fact.
+    const declared = declaredColumnsByTable(readFileSync(SCHEMA_PATH, 'utf8'));
+    expect(declared.get('github_check_run')?.has('feedback_comment_id')).toBe(false);
+    expect(declared.get('github_check_run')?.has('conclusion')).toBe(true);
   });
 });

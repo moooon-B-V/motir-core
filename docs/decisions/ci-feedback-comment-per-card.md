@@ -104,7 +104,12 @@ the third is the one that decided it:
 
 ## Consequences
 
-- **`github_check_run.feedback_comment_id` is NOT dropped.** This is the EXPAND
+- **`github_check_run.feedback_comment_id` is NOT dropped.** ~~This is the EXPAND
+  half~~ — **⚠️ SUPERSEDED (MOTIR-3803, 2026-08-29): the column HAS now been
+  dropped**, by migration `20260829120000_drop_github_check_run_feedback_comment_id`,
+  completing the sequence. The paragraph is kept because it records why the column
+  outlived its readers by two releases, which is the reasoning the three-phase rule
+  is made of. As written it was the EXPAND
   half, following the sequence `delivery-reader-migration.md` established: the
   column keeps its FK, and the service keeps WRITING it as a mirror of the FIRST
   delivered card's comment. Two reasons — the rollback stays a code revert, and an
