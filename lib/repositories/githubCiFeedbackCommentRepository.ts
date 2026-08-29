@@ -14,9 +14,12 @@ import { type GithubCiFeedbackComment, type Prisma } from '@/generated/prisma/cl
 // ⚠️ THIS SUPERSEDES `github_check_run.feedback_comment_id`, which is a scalar on
 // a table whose grain is one row PER CHECK. It held one id, replicated across
 // every check row at the commit, so a pull request delivering N cards commented on
-// exactly one of them while writing all N `ciState`s. The column is still written
-// as a MIRROR of the first delivered card's comment while both readers live side
-// by side (the EXPAND half); read THIS table.
+// exactly one of them while writing all N `ciState`s. That column is now RETIRED
+// (MOTIR-3863): nothing reads it, nothing writes it, and it is `@ignore`d out of
+// the generated client while it waits to be dropped. **This table is the only
+// record of a feedback comment's identity** — which is also the cost, and it is
+// the same one the cascade below describes: lose a row and the comment's identity
+// is gone, so the next conclusion posts a fresh one.
 //
 // ⚠️ THE FK CASCADES ON THE COMMENT, and that is the property this shape exists
 // for. The id handed to the edit path must be LIVE: a person deleting a feedback

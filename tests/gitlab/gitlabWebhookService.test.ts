@@ -400,7 +400,13 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       commitSha: 'sha1',
       checkName: 'pipeline',
     });
-    expect(checkRows[0]!.feedbackCommentId).toBe(comments[0]!.id);
+    // WHICH comment the verdict is, per delivered card — the identity lives in
+    // `github_ci_feedback_comment` (MOTIR-3770); the superseded
+    // `githubCheckRun.feedbackCommentId` mirror left the generated client with
+    // MOTIR-3863. Provider-neutral, like everything else on this path.
+    expect(
+      await adminDb.githubCiFeedbackComment.findMany({ where: { commitSha: 'sha1' } }),
+    ).toMatchObject([{ workItemId: s.item.id, commentId: comments[0]!.id }]);
   });
 
   it('a failed pipeline posts the failure summary + MR pipelines link and flips to not-ready', async () => {
@@ -462,7 +468,8 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
     expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
-    expect(rows[0]!).toMatchObject({ conclusion: 'pending', feedbackCommentId: null });
+    expect(rows[0]!).toMatchObject({ conclusion: 'pending' });
+    expect(await adminDb.githubCiFeedbackComment.count({ where: { commitSha: 'sha1' } })).toBe(0);
     expect(await commentsOn(s.item.id)).toHaveLength(0);
     expect(await ciStateOf(s.item.id)).toBeNull();
   });
