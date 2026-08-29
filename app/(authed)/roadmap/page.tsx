@@ -32,6 +32,54 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 // header pill. Unauthenticated → /sign-in; no active project → a hint; no browse
 // access → the no-access state.
 
+// THE ARRIVAL LEVEL (MOTIR-3836). `?item=MOTIR-1234` means "the canvas is showing
+// MOTIR-1234's CHILDREN" — you are INSIDE it, which is where a drill leaves you —
+// so the trail is `ancestors ++ [the item itself]` and its LAST crumb is the level
+// the canvas loads. (Deliberately one crumb deeper than `/planning?item=`, which
+// opens on the anchor's OWN level so the anchor is visible; the two surfaces want
+// different things and keep the same param name.)
+//
+// Resolved through the same view-gated read `/planning` uses, with the same SILENT
+// catch: an unknown key, another project's item, an archived one, or one this actor
+// cannot browse all yield an empty trail and the roadmap opens at its root. A stale
+// link is not a failure — it is a level that no longer exists — so there is no error
+// surface and no redirect. The `?item=` param is left in the URL rather than
+// rewritten, because a history write on load is a worse surprise than a stale param.
+async function resolveArrivalTrail(
+  projectId: string,
+  searchParams: Promise<Record<string, string | string[] | undefined>> | undefined,
+  wsCtx: { userId: string; workspaceId: string },
+): Promise<CanvasCrumb[]> {
+  const itemParam = (await searchParams)?.['item'];
+  // A repeated `?item=` arrives as an array; there is no right answer to which
+  // one was meant, so the level is the root.
+  const itemKey = typeof itemParam === 'string' ? itemParam : null;
+  if (!itemKey) return [];
+  try {
+    const { item, ancestors } = await workItemsService.getWorkItemWithAncestors(
+      projectId,
+      itemKey,
+      wsCtx,
+    );
+    return [...ancestors, item].map((a) => ({
+      id: a.id,
+      crumbKey: a.identifier,
+      label: workItemCrumbLabel(a.identifier, a.title),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ⚠️ MODULE SCOPE ON PURPOSE — do not fold this back into the page body.
+// `loading-boundary-guard`'s serial-read ratchet counts the awaits in the page
+// function's OWN body, and a nested helper's await is counted there even though
+// this one runs INSIDE the `Promise.all` wave, concurrently with the sprint read.
+// Nested, the page measured 6 and the ratchet read a sixth SERIAL read that does
+// not exist; hoisted, it measures the 5 waves the page actually arrives in. The
+// closure over `searchParams` / `wsCtx` is what nested it — both are parameters
+// now, which is also what makes it callable from a test on its own.
+
 export default async function RoadmapPage({
   searchParams,
 }: {
@@ -127,43 +175,8 @@ export default async function RoadmapPage({
   // rather than two.
   const [activeSprint, initialTrail] = await Promise.all([
     sprintsService.getActiveSprint(ctx.projectId, wsCtx),
-    resolveArrivalTrail(ctx.projectId),
+    resolveArrivalTrail(ctx.projectId, searchParams, wsCtx),
   ]);
-
-  // THE ARRIVAL LEVEL (MOTIR-3836). `?item=MOTIR-1234` means "the canvas is showing
-  // MOTIR-1234's CHILDREN" — you are INSIDE it, which is where a drill leaves you —
-  // so the trail is `ancestors ++ [the item itself]` and its LAST crumb is the level
-  // the canvas loads. (Deliberately one crumb deeper than `/planning?item=`, which
-  // opens on the anchor's OWN level so the anchor is visible; the two surfaces want
-  // different things and keep the same param name.)
-  //
-  // Resolved through the same view-gated read `/planning` uses, with the same SILENT
-  // catch: an unknown key, another project's item, an archived one, or one this actor
-  // cannot browse all yield an empty trail and the roadmap opens at its root. A stale
-  // link is not a failure — it is a level that no longer exists — so there is no error
-  // surface and no redirect. The `?item=` param is left in the URL rather than
-  // rewritten, because a history write on load is a worse surprise than a stale param.
-  async function resolveArrivalTrail(projectId: string): Promise<CanvasCrumb[]> {
-    const itemParam = (await searchParams)?.['item'];
-    // A repeated `?item=` arrives as an array; there is no right answer to which
-    // one was meant, so the level is the root.
-    const itemKey = typeof itemParam === 'string' ? itemParam : null;
-    if (!itemKey) return [];
-    try {
-      const { item, ancestors } = await workItemsService.getWorkItemWithAncestors(
-        projectId,
-        itemKey,
-        wsCtx,
-      );
-      return [...ancestors, item].map((a) => ({
-        id: a.id,
-        crumbKey: a.identifier,
-        label: workItemCrumbLabel(a.identifier, a.title),
-      }));
-    } catch {
-      return [];
-    }
-  }
 
   return (
     <RoadmapView
