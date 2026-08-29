@@ -134,13 +134,27 @@ const nextConfig: NextConfig = {
   // not error — the card falls back to a face nobody chose, invisibly, because
   // locally the file is always there. Naming the directory declares the intent.
   //
+  // ⚠️ THE DIRECTORY MOVED (MOTIR-3848). The bytes now live in `@motir/brand` —
+  // one home across both Motir properties, per MOTIR-3724 — and here that
+  // package is the WORKSPACE one, so the app reads `packages/brand/fonts`
+  // directly rather than through `node_modules/@motir/brand`. That is not a
+  // stylistic choice: `node_modules/@motir/brand` is a symlink pointing OUTSIDE
+  // `node_modules`, and `copyTracedFiles` reproduces traced files at their
+  // resolved path without re-creating it, so the node_modules spelling resolves
+  // in dev, test and CI and ENOENTs in the deployed image. motir-marketing
+  // installs the same package from npm, where both spellings survive, and reads
+  // `node_modules/@motir/brand/fonts`. See `app/_brand/ogFonts.ts` for the
+  // measurement.
+  //
   // ⚠️ This key does NOT currently do anything, and the fonts arrive anyway —
   // both halves verified, MOTIR-2403. `outputFileTracingIncludes` /
   // `outputFileTracingExcludes` are read in exactly one place,
   // `next/dist/build/collect-build-traces.js`, and `next/dist/build/index.js`
   // guards that call with `if (bundler !== Bundler.Turbopack && …)`. Next 16
   // builds with Turbopack, so the module never runs and neither key is consulted.
-  // Turbopack's own tracer follows the read on its own: the three TTFs appear in
+  // Turbopack's own tracer follows the read on its own — because every segment of
+  // `FONT_DIR` and every entry of `OG_FONT_FACES` in `app/_brand/ogFonts.ts` is a
+  // literal — and the three TTFs appear in
   // `.next/server/app/(public)/explore/(square)/opengraph-image-*/route.js.nft.json` and
   // in no unrelated route's trace.
   //
@@ -149,8 +163,8 @@ const nextConfig: NextConfig = {
   // (`next build --webpack`, which CI still has available). Anything that
   // depends on it taking effect must not assume this build applies it.
   outputFileTracingIncludes: {
-    '/explore/opengraph-image': ['./app/_brand/fonts/**'],
-    '/p/[identifier]/opengraph-image': ['./app/_brand/fonts/**'],
+    '/explore/opengraph-image': ['./packages/brand/fonts/**'],
+    '/p/[identifier]/opengraph-image': ['./packages/brand/fonts/**'],
   },
   // The Next.js dev-mode tools indicator renders a fixed portal in the
   // bottom-left corner by default — directly over the app shell's sidebar

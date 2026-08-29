@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { OG_FONT_FACES as PACKAGE_FACES } from '@motir/brand';
 import picomatch from 'next/dist/compiled/picomatch';
 import { describe, expect, it, vi } from 'vitest';
 import { DOCS_REDIRECTS } from '@/next.config';
-import { loadOgFonts, OG_FONT_FAMILY } from '@/app/_brand/ogFonts';
+import { loadOgFonts, OG_FONT_FACES as APP_FACES, OG_FONT_FAMILY } from '@/app/_brand/ogFonts';
 
 // MOTIR-1150 — the two OpenGraph cards (design/brand/design-notes.md §6).
 //
@@ -19,9 +20,18 @@ import { loadOgFonts, OG_FONT_FAMILY } from '@/app/_brand/ogFonts';
 // them.
 //
 // (`next.config.ts` is imported for the tracing entries: `readFile` under
-// `process.cwd()` is invisible to Next's dependency tracer, so those entries are
-// the only reason the fonts exist in the deployed function at all. They are as
-// load-bearing as the code and as easy to delete by accident.)
+// `process.cwd()` is invisible to a WEBPACK dependency trace, so those entries
+// are the webpack-path net. They are as easy to delete by accident as they are
+// to point at a directory that no longer exists — which is what MOTIR-3848 would
+// have done silently, since the key is inert under Turbopack either way.)
+//
+// ── AND WHERE THE BYTES LIVE (MOTIR-3848) ───────────────────────────────────
+// They are `@motir/brand`'s, not this app's: the same three faces were committed
+// here AND in motir-marketing, against MOTIR-3724's ruling that Motir's brand
+// chrome has one home. The package exports a MANIFEST and never a path helper,
+// because a path returned from a function call defeats Turbopack's tracer and
+// makes it sweep the whole project (MOTIR-3219). The first test below is what
+// keeps this app's literal `OG_FONT_FACES` in step with the package's.
 
 vi.mock('@/lib/auth', () => ({ getSession: vi.fn(async () => null) }));
 vi.mock('@/lib/services/publicProjectsService', () => ({
@@ -35,6 +45,48 @@ async function renderRoute(image: { arrayBuffer(): Promise<ArrayBuffer> }): Prom
 }
 
 describe('the fonts the cards are set in (§6)', () => {
+  it('reads the faces `@motir/brand` actually ships, and keeps no copy of its own', () => {
+    // MOTIR-3848. The app repeats the package's face list as LITERALS on purpose
+    // — importing `OG_FONT_FACES` and mapping over it would hand Turbopack a
+    // value it cannot constant-fold, and its fallback for an unresolvable read
+    // is to trace the entire project. So the literals are pinned here instead:
+    // a face added, dropped or re-cut in the package fails THIS test rather than
+    // silently re-weighting a card nobody looks at.
+    expect(APP_FACES).toEqual(PACKAGE_FACES);
+    expect(APP_FACES.length).toBe(3);
+
+    // The bytes have exactly one home. `app/_brand/fonts/` is what this card
+    // deleted; re-creating it would restore the duplicate without failing
+    // anything else, because both copies render identically.
+    //
+    // The path asserted below is `packages/brand/**` rather than
+    // `node_modules/@motir/brand/**` on purpose — the two are the same directory
+    // here, through a symlink `copyTracedFiles` does NOT reproduce in the
+    // standalone output. `app/_brand/ogFonts.ts`'s header carries the
+    // measurement and why motir-marketing's literal differs.
+    expect(existsSync(join(process.cwd(), 'app/_brand/fonts'))).toBe(false);
+    for (const { file } of PACKAGE_FACES) {
+      expect(existsSync(join(process.cwd(), 'node_modules/@motir/brand/fonts', file)), file).toBe(
+        true,
+      );
+    }
+  });
+
+  it('is DECLARED by the package that ships it — `files` and `exports`, not just the disk', () => {
+    // A `files` entry is a claim, not a delivery: the faces are present in this
+    // repository through the workspace link whether or not the published tarball
+    // carries them, and motir-marketing reads the PUBLISHED one. So the two
+    // manifest keys that decide what a consumer actually gets are asserted here,
+    // where a bump that drops them fails on the pull request rather than at the
+    // next release. (The delivery itself is proven by `npm pack` at release
+    // time — the artifact-obtainable check; this is the half a test can hold.)
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), 'packages/brand/package.json'), 'utf8'),
+    ) as { files: string[]; exports: Record<string, unknown> };
+    expect(pkg.files).toContain('fonts');
+    expect(pkg.exports['./fonts/*']).toBe('./fonts/*');
+  });
+
   it('loads the three weights the template uses, as parseable TTFs', async () => {
     // satori does not synthesise weight — an absent one silently snaps to the
     // nearest present face, which would quietly re-weight the design.
@@ -81,7 +133,7 @@ describe('the fonts the cards are set in (§6)', () => {
       const matching = Object.entries(includes!).filter(([key]) =>
         picomatch(key, { dot: true, contains: true })(route),
       );
-      expect(matching.map(([, v]) => v).flat(), route).toContain('./app/_brand/fonts/**');
+      expect(matching.map(([, v]) => v).flat(), route).toContain('./packages/brand/fonts/**');
     }
     // ...and only those routes: a key broad enough to hit every page would put
     // ~1 MB of fonts into every serverless function in the app.
@@ -100,7 +152,7 @@ describe('the fonts the cards are set in (§6)', () => {
       const fontsOnThisRoute = Object.entries(includes!)
         .filter(([key]) => picomatch(key, { dot: true, contains: true })(route))
         .flatMap(([, patterns]) => patterns)
-        .filter((pattern) => pattern.includes('_brand/fonts'));
+        .filter((pattern) => pattern.includes('brand/fonts'));
       expect(fontsOnThisRoute, route).toEqual([]);
     }
     // Sanity that we imported the real config and not an empty module.
