@@ -64,24 +64,30 @@ product acquires two answers to one question.
 
 ---
 
-## Placement: the run section joins the late stack, after Development
+## Placement: the run section joins the late stack, BEFORE Development
 
 `design/work-items/design-notes.md` § _The item page at ARRIVAL, and while it STREAMS_ allocates the
 page in three tiers. The run section is a **sixth late region**, and its row in that table reads:
 
 | Region                                              | Tier               | Its pending face                                                         |
 | --------------------------------------------------- | ------------------ | ------------------------------------------------------------------------ |
-| Development (linked PRs + CI)                       | **AFTER the page** | card chrome + row-shaped pulse bars                                      |
 | **Run (this card's live run, and its recent runs)** | **AFTER the page** | **card chrome + row-shaped pulse bars — the same face Development uses** |
+| Development (linked PRs + CI)                       | **AFTER the page** | card chrome + row-shaped pulse bars                                      |
 | Acceptance                                          | **AFTER the page** | card chrome + a two-line body pulse                                      |
 | Design result                                       | **AFTER the page** | card chrome + a thumbnail-shaped pulse                                   |
 | Attachments                                         | **AFTER the page** | tile-shaped pulse skeletons                                              |
 | Activity                                            | **AFTER the page** | comment-row-shaped pulse skeletons                                       |
 
-**Directly after Development, and adjacency is the argument.** Development answers _did it ship_;
-the run answers _what happened while it was being made_. A reader who has just read one wants the
-other without scrolling past Acceptance and Design result to find it — and the two share a boundary
-of meaning that panel 11 draws explicitly.
+**Directly BEFORE Development, and the argument is CAUSAL ORDER rather than mere adjacency.** The
+run is what PRODUCES the pull request. Reading down, a person meets _an agent worked this card_ and
+then _and here is what it shipped_ — the order the events actually happened in, and the order the
+run's own timeline ends in, since **_pull request linked_ is its second-to-last row**. Reversed, the
+page shows the artefact above the act that made it, and the reader has to scroll past a merged pull
+request to find out where its branch came from. The two still share a boundary of meaning, which
+panel 11 draws explicitly; what changed is which side of it comes first.
+
+_(Yue, 2026-08-29: the first revision put the run section after Development and argued adjacency.
+Adjacency was the right property and the wrong side of it — "run first, then the PRs are there".)_
 
 **⚠️ IT FILLS WITH THE ONE SETTLE. It is not a sixth arrival.** The host decides that the page
 settles TWICE — once when the first content replaces the frame, once when the late stack fills — and
@@ -93,6 +99,41 @@ face is therefore the stack's own, and its read joins `lateReads`.
 
 _(The host's note on why "one settle" is delivered by TWO boundaries — `ChildPanel` is tier 2 and
 renders between Design result and Attachments — is unchanged and is not restated here.)_
+
+---
+
+## The CONNECTION — SSE, and only while a run is live
+
+**No WebSocket, anywhere in this area.** The transport is **Server-Sent Events** — one long GET on
+`/api/dispatch-runs/[id]/stream`, resumable from `?since=<seq>` — chosen because the traffic is
+strictly one-way (the page reads a run; it never writes to one) and because the product already has
+exactly this convention in `app/api/ai/plan/generate/[jobId]/stream/route.ts`. A second streaming
+mechanism would mean two heartbeat intervals, two frame formats and two sets of proxy-timeout bugs
+to learn about separately.
+
+**⚠️ AND THE SECTION OPENS NO CONNECTION AT ALL UNLESS THIS CARD HAS A LIVE RUN.** This is the rule
+that decides what the panel COSTS, and it has to be written down because the obvious implementation
+gets it wrong: a section that subscribes on mount opens a stream on **every item page a person
+opens**, and the overwhelming majority of cards are not being worked. The item page is the most
+visited surface in the product.
+
+So, per state:
+
+| what the card has             | what the section does                                                |
+| ----------------------------- | -------------------------------------------------------------------- |
+| no run ever                   | renders the empty state. **No stream.**                              |
+| only finished runs            | renders the history from the page's own read. **No stream.**         |
+| a run in a NON-terminal state | opens the stream, resuming from the last `seq` it holds              |
+| that run reaches terminal     | the server writes `done` and **closes**; the section does not reopen |
+
+The server half already refuses to hold a pointless connection — an already-terminal run replays
+from the cursor and closes rather than parking a socket — but that only bounds the damage after the
+connection exists. **The client must not open one in the first place**, and the fact it needs is
+already on the page: the history read's first row IS the current run, so whether a stream is owed is
+answered by data the section has before it renders anything.
+
+The **stream-reconnecting** state (panel 7) is what a dropped connection looks like _while a run is
+still live_; it is a transport state, not a run state, and it is never shown for a card at rest.
 
 ---
 
@@ -229,6 +270,7 @@ head sit on `--el-surface-soft`. `--el-text-faint` is used nowhere at all.
 | the log console, its opt-in, and the 30-day retention                      | the same decision's **Q4**                                                                           |
 | reporting is best-effort, hence _reporting-offline_ as a first-class state | MOTIR-1794 (the CLI reporter) — the emissions this visualises                                        |
 | ordering by `seq`, hence a resumable stream and the reconnecting notice    | MOTIR-1791 (`@@unique([dispatchRunId, seq])`) and MOTIR-1793 (the `?since=` cursor)                  |
+| SSE rather than a WebSocket, and the terminal `done` frame that closes it  | MOTIR-1793's stream route, which mirrors the shipped plan-generation stream                          |
 | the run history is "every run that carried a leg for this card"            | MOTIR-1793's read                                                                                    |
 | the late stack's ONE settle                                                | `design/work-items/design-notes.md` § _The item page at ARRIVAL_ (MOTIR-3432, amended by MOTIR-3465) |
 

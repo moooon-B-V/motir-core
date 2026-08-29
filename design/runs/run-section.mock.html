@@ -1899,18 +1899,23 @@
 
       <section class="panel">
         <h2 class="panelTitle">
-          <span class="panelNum">0</span>PLACEMENT — the late stack, after Development, filling with
-          the ONE settle.
+          <span class="panelNum">0</span>PLACEMENT — the late stack, BEFORE Development, filling
+          with the ONE settle.
         </h2>
         <p class="panelNote">
           The item page’s tier table (<span class="font-mono"
             >design/work-items/design-notes.md</span
           >
           § <em>The item page at ARRIVAL</em>) allocates five late regions; this is the sixth, and
-          it goes <strong>directly after Development</strong>. Adjacency is the argument:
-          Development answers <em>did it ship</em> and this answers
-          <em>what happened while it was being made</em>, and a reader who has just read one wants
-          the other without scrolling past Acceptance to find it.
+          it goes <strong>directly BEFORE Development</strong>, at the head of the late stack.
+          <strong>CAUSAL ORDER is the argument, not merely adjacency</strong>: the run is what
+          PRODUCES the pull request. A reader scanning down reads
+          <em>an agent worked this card</em> and then <em>and here is what it shipped</em> — the
+          order the events actually happened in, and the order the run's own timeline ends in (<em
+            >pull request linked</em
+          >
+          is its second-to-last row). Reversed, the page shows the artefact before the act that made
+          it.
           <strong>It arrives with the late stack’s ONE settle, not on its own.</strong>
           The page settles TWICE — once when the first content replaces the frame, once when the
           late stack fills — and a sixth independent boundary would make it settle three times for a
@@ -1919,16 +1924,16 @@
         </p>
         <div class="stage">
           <div class="grid gap-2">
-            <div class="regionBox">
-              <span class="flex items-center justify-between gap-2"
-                ><span>Development — linked pull requests + CI</span
-                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
-              >
-            </div>
             <div class="regionBox is-new">
               <span class="flex items-center justify-between gap-2"
                 ><span>Run — this card’s live run, and its recent runs</span
                 ><span class="font-mono" style="font-size: 11px">AFTER the page — NEW</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Development — linked pull requests + CI</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
               >
             </div>
             <div class="regionBox">
@@ -2800,46 +2805,18 @@
 
       <section class="panel">
         <h2 class="panelTitle">
-          <span class="panelNum">11</span>ADJACENCY — Development above, Run below.
+          <span class="panelNum">11</span>ADJACENCY — Run above, Development below.
         </h2>
         <p class="panelNote">
           Drawn together once so the relationship is legible and the boundary is obvious:
-          <strong>the pull request and its CI belong upstairs</strong>. The run section names the
-          pull request in its timeline as an EVENT — “pull request linked” — and does not draw its
-          state, because a second CI verdict on one page is how a person ends up with two answers to
-          <em>is it green</em>.
+          <strong>the pull request and its CI belong DOWNSTAIRS</strong>. The order is the causal
+          one — the run is what produced the pull request, so the timeline ends where the
+          Development section begins. The run names that pull request as an EVENT — “pull request
+          linked” — and draws no state for it, because a second CI verdict on one page is how a
+          person ends up with two answers to <em>is it green</em>.
         </p>
         <div class="stage">
           <div class="grid gap-3">
-            <div class="secCard">
-              <div class="secHead">
-                <h2>Development</h2>
-                <span class="secSub">— what shipped</span>
-              </div>
-              <div class="secBody">
-                <div class="flex items-center gap-2" style="font-size: 0.875rem">
-                  <svg
-                    class="ic"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    style="color: var(--el-status-done)"
-                  >
-                    <use href="#i-git-pr" />
-                  </svg>
-                  <span class="mono">motir-core#2461</span>
-                  <span style="color: var(--el-text-secondary)"
-                    >MOTIR-1792 the run service and the ingest</span
-                  >
-                  <span class="runPill t-integrated" style="margin-left: auto"
-                    ><span class="dot" aria-hidden="true"></span>Merged · checks passed</span
-                  >
-                </div>
-                <p class="caption">
-                  Drawn at <span class="font-mono">design/work-items/delivery-set.mock.html</span> —
-                  cited here, not re-specified.
-                </p>
-              </div>
-            </div>
             <div class="secCard">
               <div class="secHead">
                 <h2>Run</h2>
@@ -2892,6 +2869,35 @@
                     <span class="tlWhen">14:19:45</span>
                   </li>
                 </ul>
+              </div>
+            </div>
+            <div class="secCard">
+              <div class="secHead">
+                <h2>Development</h2>
+                <span class="secSub">— what shipped</span>
+              </div>
+              <div class="secBody">
+                <div class="flex items-center gap-2" style="font-size: 0.875rem">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    style="color: var(--el-status-done)"
+                  >
+                    <use href="#i-git-pr" />
+                  </svg>
+                  <span class="mono">motir-core#2461</span>
+                  <span style="color: var(--el-text-secondary)"
+                    >MOTIR-1792 the run service and the ingest</span
+                  >
+                  <span class="runPill t-integrated" style="margin-left: auto"
+                    ><span class="dot" aria-hidden="true"></span>Merged · checks passed</span
+                  >
+                </div>
+                <p class="caption">
+                  Drawn at <span class="font-mono">design/work-items/delivery-set.mock.html</span> —
+                  cited here, not re-specified.
+                </p>
               </div>
             </div>
           </div>
