@@ -368,6 +368,38 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //    addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of
   //    them in the assets, so those rows are gone too.)
 
+  // ── Forward-looking: the RUN VIEW (Story MOTIR-1789 · MOTIR-3895) ─────────
+  //    `design/runs/` (MOTIR-1795) draws two surfaces that LINK to a run's own
+  //    page, and that page does not exist yet: `app/(authed)/` holds no `runs`
+  //    segment at all. MOTIR-3895 builds `/runs/[id]` and — per the pattern
+  //    above — is the card that deletes these rows in the commit that adds the
+  //    route, which `expired()` below enforces.
+  //
+  //    The link is the whole point of both surfaces rather than decoration: a
+  //    ready-row strip that named a run without reaching it, and a card that
+  //    said "4 of 11" without letting the reader see the other ten, would each
+  //    be drawing the half of the answer that is already on the page.
+  {
+    file: 'design/runs/design-notes.md',
+    address: '/runs/[id]',
+    why: 'Forward-looking: the run view MOTIR-3895 builds. Named in the surface table as the third surface of this area, whose asset is MOTIR-3893’s.',
+  },
+  {
+    file: 'design/runs/run-section.mock.html',
+    address: '/runs/run_7f2c',
+    why: 'Forward-looking: the "4 of 11 — see the whole run" link-out, which is the single most useful sentence on the run section. MOTIR-3895 builds the route.',
+  },
+  {
+    file: 'design/runs/ready-strip.mock.html',
+    address: '/runs/run_7f2c',
+    why: 'Forward-looking: the strip is an ANCHOR rather than a badge — the point of seeing it is to follow it. MOTIR-3895 builds the route.',
+  },
+  {
+    file: 'design/runs/ready-strip.mock.html',
+    address: '/runs/run_91aa',
+    why: 'Forward-looking: the same anchor on the reporting-offline row, which links to a DIFFERENT run. MOTIR-3895 builds the route.',
+  },
+
   // ── Forward-looking: the Roles & permissions settings page (MOTIR-2263) ───
   //    The asset (MOTIR-2259, #1889) draws a settings page that does not exist
   //    yet: `app/(authed)/settings/project/` holds `members`, `board`,
