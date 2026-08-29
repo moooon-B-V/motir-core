@@ -261,11 +261,13 @@ describe('a DELETED comment does not turn the next delivery into a throw (MOTIR-
     // A person deletes the FIRST card's comment.
     await adminDb.comment.delete({ where: { id: firstBefore![0]!.id } });
 
-    // The record goes with it (FK cascade), and the legacy mirror column — which
-    // named that same comment — is SET NULL by its own FK. Neither is left stale.
+    // The record goes with it (FK cascade), and nothing else held the id: the
+    // superseded `github_check_run.feedback_comment_id` mirror was retired by
+    // MOTIR-3863, so there is no second place for a stale one to survive. The
+    // check ROWS are untouched — this cascade is about the comment, not the check.
     expect(await adminDb.githubCiFeedbackComment.count({ where: { commitSha: 'sha-e' } })).toBe(1);
     const checkRows = await adminDb.githubCheckRun.findMany({ where: { commitSha: 'sha-e' } });
-    expect(checkRows.every((r) => r.feedbackCommentId === null)).toBe(true);
+    expect(checkRows.length).toBeGreaterThan(0);
 
     // A later conclusion at the SAME commit RESOLVES rather than throwing.
     const res = await ci({
@@ -291,11 +293,14 @@ describe('a DELETED comment does not turn the next delivery into a throw (MOTIR-
 });
 
 describe('a ONE-card delivery is unchanged, and a session pull request still comments on nothing (MOTIR-3770 AC 5)', () => {
-  it('posts exactly one comment and still writes the legacy mirror column', async () => {
-    // The mirror is what an instance running the PREVIOUS build reads during a
-    // deploy window. Left null there, that instance finds no comment and opens a
-    // SECOND one on a card this build just commented on — so the column is still
-    // written, and asserted, until its readers retire.
+  it('posts exactly one comment, and NO LONGER writes the legacy mirror column', async () => {
+    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT SAID UNTIL MOTIR-3863, AND THE
+    // INVERSION IS THE CARD. The mirror existed for an instance running the
+    // PREVIOUS build during the EXPAND's deploy window: left null, that instance
+    // found no comment and opened a SECOND one on a card this build had just
+    // commented on. MOTIR-3818 verified the EXPAND is on every machine, so no
+    // such instance exists — and the column is now written by nothing, which is
+    // the precondition MOTIR-3803 needs before it may drop it.
     const s = await makeScenario('one-card@example.com');
     const card = await makeCard(s, 'the only card');
     await openPr(905, 'subtask/MOTIR-1-solo');
@@ -307,18 +312,34 @@ describe('a ONE-card delivery is unchanged, and a session pull request still com
     expect(comments).toHaveLength(1);
     const rows = await adminDb.githubCheckRun.findMany({ where: { commitSha: 'sha-f' } });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.feedbackCommentId).toBe(comments[0]!.id);
+    // Raw SQL because the field is `@ignore`d — the generated client cannot name
+    // it, which is exactly the property MOTIR-3863 delivers. The COLUMN is still
+    // there (`tests/github/checkRunFeedbackColumnRetired.test.ts` asserts that);
+    // what this asserts is that the delivery left it NULL.
+    const mirrored = await adminDb.$queryRaw<{ feedback_comment_id: string | null }[]>`
+      SELECT "feedback_comment_id" FROM "github_check_run" WHERE "commit_sha" = 'sha-f'
+    `;
+    expect(mirrored).toMatchObject([{ feedback_comment_id: null }]);
     expect(
       await adminDb.githubCiFeedbackComment.findMany({ where: { commitSha: 'sha-f' } }),
     ).toMatchObject([{ workItemId: card.id, commentId: comments[0]!.id }]);
   });
 
-  it('ADOPTS a comment that only the legacy column names, instead of opening a second one', async () => {
-    // The deploy-window case in the other direction, and the reason the fallback
-    // read exists at all: a `(change request, head commit)` whose first verdict was
-    // written by a build that had only the scalar — every row this card's migration
-    // backfilled, and any an older instance writes while the deploy rolls. The
-    // fixture strips the per-card row to leave the column as the only record.
+  it('no longer ADOPTS off the legacy column — with no per-card record it posts a fresh comment', async () => {
+    // ⚠️ ALSO INVERTED BY MOTIR-3863, and this is the last reader the card moved.
+    // The fallback existed for a `(change request, head commit)` whose first
+    // verdict was written by a build that had only the scalar. That population is
+    // closed from both ends: the EXPAND migration BACKFILLED every such row into
+    // `github_ci_feedback_comment` (reading the card off the COMMENT, not off a
+    // link column), and MOTIR-3818 verified the per-card build is on every
+    // machine, so no instance writes the column any more either.
+    //
+    // The fixture strips the per-card row — which no longer models anything that
+    // can happen, and is now simply "the record is missing". The behaviour that
+    // follows is the SAME one the deleted-comment case above produces: a fresh
+    // comment. That is the cost of the retirement, stated as an assertion rather
+    // than left to be discovered: `github_ci_feedback_comment` is now the only
+    // record, so losing a row loses the comment's identity.
     const s = await makeScenario('adopt@example.com');
     const card = await makeCard(s, 'the only card');
     await openPr(906, 'subtask/MOTIR-2-solo');
@@ -338,13 +359,14 @@ describe('a ONE-card delivery is unchanged, and a session pull request still com
     expect(res).toMatchObject({ outcome: 'failed' });
 
     const after = await commentsOn(card.id);
-    expect(after).toHaveLength(1); // adopted and edited — NOT a second comment
-    expect(after[0]!.id).toBe(before[0]!.id);
-    expect(after[0]!.bodyMd).toContain('CI failed');
-    // …and the adoption is recorded, so the fallback fires at most once.
+    expect(after).toHaveLength(2); // a FRESH comment — the fallback is gone
+    expect(after.map((c) => c.id)).toContain(before[0]!.id);
+    expect(after[1]!.id).not.toBe(before[0]!.id);
+    expect(after[1]!.bodyMd).toContain('CI failed');
+    // …and the fresh one is recorded, so the next conclusion edits it in place.
     expect(
       await adminDb.githubCiFeedbackComment.findMany({ where: { commitSha: 'sha-g' } }),
-    ).toMatchObject([{ workItemId: card.id, commentId: before[0]!.id }]);
+    ).toMatchObject([{ workItemId: card.id, commentId: after[1]!.id }]);
   });
 
   it('a SESSION pull request still posts none — its cards are reached by the promotion', async () => {

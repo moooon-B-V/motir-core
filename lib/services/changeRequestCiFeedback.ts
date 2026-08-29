@@ -35,9 +35,13 @@ import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 // ⚠️ ONE COMMENT PER `(changeRequest, headSha)` PER DELIVERED CARD — not per
 // check (MOTIR-2946), and not one for the whole delivery (MOTIR-3770). The
 // per-card coordinate is stored in `github_ci_feedback_comment`, one row per
-// `(pull request, head commit, work item)`; `github_check_run.feedback_comment_id`
-// is now a WRITTEN MIRROR of the first delivered card's id, kept while its readers
-// live (`docs/decisions/ci-feedback-comment-per-card.md`). The rest of this note
+// `(pull request, head commit, work item)`, and that is now the ONLY place the
+// comment's identity lives: MOTIR-3863 took the superseded
+// `github_check_run.feedback_comment_id` mirror out of the generated client (the
+// SCHEMA-ONLY phase — the column is still in the database and is written by
+// nothing), so this file neither reads nor writes it
+// (`docs/decisions/ci-feedback-comment-per-card.md`,
+// `docs/decisions/delivery-reader-migration.md` §6a). The rest of this note
 // is about the `(changeRequest, headSha)` half, which is unchanged. The
 // INGESTION key is `(pr, headSha, checkName, checkSuiteId)`: one `githubCheckRun`
 // row per check PER RUN, which is what the Development surface derives "Checks
@@ -208,9 +212,11 @@ export async function applyCiStatusFeedback(
       commentedWorkItemIds,
       prId: cr.id,
       checksUrl: buildChecksUrl(cr.number),
-      existing: existing
-        ? { conclusion: existing.conclusion, feedbackCommentId: existing.feedbackCommentId }
-        : null,
+      /** The prior row for THIS check, for the idempotency guard below. Its
+       *  conclusion and nothing else: the legacy `feedback_comment_id` scalar
+       *  left the generated client with MOTIR-3863, and the comment's identity
+       *  is `github_ci_feedback_comment`'s. */
+      existing: existing ? { conclusion: existing.conclusion } : null,
       actorUserId: owner?.userId ?? null,
     };
   });
@@ -222,19 +228,20 @@ export async function applyCiStatusFeedback(
   if (resolved.kind === 'no_work_item') return { event: 'ci', outcome: 'no_work_item' };
 
   // The FIRST delivered card. It is no longer "the card the comment lands on" —
-  // the comment reaches EVERY delivered card since MOTIR-3770 — but it is still
-  // two things: the card this result REPORTS in its scalar `workItemId` field
-  // (which callers and tests read), and the one whose comment is mirrored into the
-  // legacy `github_check_run.feedback_comment_id` column while that column's
-  // readers still exist.
+  // the comment reaches EVERY delivered card since MOTIR-3770 — and since
+  // MOTIR-3863 it is no longer the card whose comment is mirrored into the legacy
+  // `github_check_run.feedback_comment_id` column either. It is now ONE thing: the
+  // card this result REPORTS in its scalar `workItemId` field, which callers and
+  // tests read.
   const [firstDelivered] = resolved.deliveredWorkItemIds;
 
   // An in-flight check: RECORD the row (conclusion 'pending') so the per-change-request
   // "Checks running" state is derivable (MOTIR-1579), but with NONE of the terminal
   // side-effects — no feedback comment, no `WorkItem.ciState` flip (both stay
-  // terminal-only, the MOTIR-894 contract). The upsert PRESERVES an existing
-  // feedback-comment link so a re-run's later terminal conclusion still updates the
-  // same comment in place.
+  // terminal-only, the MOTIR-894 contract). Nothing about the comment is written
+  // here: its identity lives in `github_ci_feedback_comment`, keyed per
+  // `(change request, head commit, card)`, and a pending conclusion reaches no
+  // card.
   if (event.conclusion === 'pending') {
     await withSystemContext(async (tx) => {
       await githubCheckRunRepository.upsert(
@@ -244,7 +251,6 @@ export async function applyCiStatusFeedback(
           checkName: event.context,
           checkSuiteId: suiteId,
           conclusion: 'pending',
-          feedbackCommentId: resolved.existing?.feedbackCommentId ?? null,
         },
         tx,
       );
@@ -274,10 +280,19 @@ export async function applyCiStatusFeedback(
   // carrying no comment at all. The per-card set is what makes the guard say what
   // it has always claimed to say; for a single-card delivery the two agree, which
   // is why nothing about that case changes.
+  //
+  // ⚠️ THE NON-EMPTY TEST IS THE SCALAR ARM'S JOB, NOT A NEW CONDITION
+  // (MOTIR-3863). `resolved.existing.feedbackCommentId` used to stand for "some
+  // comment exists at all", and on the SESSION arm — where `deliveredWorkItemIds`
+  // is empty and `every` is therefore vacuously TRUE — it was the only thing
+  // stopping a redelivery reporting `noop`. A session pull request writes no
+  // comment, so the column stayed null and the guard never fired for one. With the
+  // column gone from the client, that half has to be said out loud: an empty
+  // delivery set has commented on nothing and can never be a commented redelivery.
   if (
     resolved.existing &&
     resolved.existing.conclusion === event.conclusion &&
-    resolved.existing.feedbackCommentId &&
+    resolved.deliveredWorkItemIds.length > 0 &&
     resolved.deliveredWorkItemIds.every((id) => resolved.commentedWorkItemIds.includes(id))
   ) {
     return {
@@ -327,21 +342,15 @@ export async function applyCiStatusFeedback(
       recordedComments.map((row) => [row.workItemId, row.commentId] as const),
     );
 
-    // The LEGACY scalar, read for exactly one case and no other: a
+    // ⚠️ THE LEGACY SCALAR IS NO LONGER READ, AND THIS IS THE WHOLE OF MOTIR-3863
+    // ON THIS PATH. It used to be a fallback for exactly one case — a
     // `(change request, head commit)` whose first verdict was written by a build
-    // that had only the column — the rows this migration backfilled, and any
-    // written by an instance still running the previous build during a deploy
-    // window. It names the comment on the FIRST delivered card, which is the only
-    // card that build could reach, so it is a fallback for that card alone. The
-    // loop below ADOPTS whatever it finds into the per-card table, so the fallback
-    // fires at most once per commit.
-    const legacyCommentId =
-      siblings.find((r) => r.feedbackCommentId)?.feedbackCommentId ??
-      resolved.existing?.feedbackCommentId ??
-      null;
-    const existingCommentId =
-      (firstDelivered ? commentByWorkItem.get(firstDelivered) : null) ?? legacyCommentId;
-
+    // that had only the column — and that case is now closed from both ends: the
+    // EXPAND migration BACKFILLED every such row into
+    // `github_ci_feedback_comment` (reading the card off the COMMENT, not off a
+    // link column), and MOTIR-3818 verified the per-card build is on every
+    // machine, so no instance writes the column any more either. What is left is
+    // `commentByWorkItem`, which is the source of truth and always was.
     const recorded = await githubCheckRunRepository.upsert(
       {
         pullRequestId: resolved.prId,
@@ -349,7 +358,6 @@ export async function applyCiStatusFeedback(
         checkName: event.context,
         checkSuiteId: suiteId,
         conclusion: event.conclusion,
-        feedbackCommentId: existingCommentId,
       },
       tx,
     );
@@ -357,9 +365,9 @@ export async function applyCiStatusFeedback(
     // The authoritative check set at this head commit: the siblings plus this
     // delivery's own row, which the upsert either created or just refreshed —
     // MINUS every run a later run has replaced (MOTIR-3209). Filtering here
-    // rather than in the query is deliberate: `legacyCommentId` above must see
-    // the WHOLE set, because the comment belongs to the head commit and a
-    // replacement run has to edit the one its predecessor opened.
+    // rather than in the query is deliberate: the query's own answer is the whole
+    // set, and `liveCheckRows` is the one place that decides which of them still
+    // votes.
     const rows = liveCheckRows([...siblings.filter((r) => r.id !== recorded.id), recorded]);
     const bodyMd = feedbackCommentBody(summarizeChecks(rows), resolved.checksUrl, noun);
 
@@ -375,45 +383,19 @@ export async function applyCiStatusFeedback(
     // loop runs zero times for one, and once for an ordinary single-card pull
     // request, which is why that case is byte-identical to what it was.
     for (const workItemId of resolved.deliveredWorkItemIds) {
-      // The legacy column only ever named the FIRST card's comment, so it is a
-      // fallback for that card and never for a sibling — reading it for a sibling
-      // would EDIT the first card's comment while claiming to write the second's.
-      const known =
-        commentByWorkItem.get(workItemId) ??
-        (workItemId === firstDelivered ? legacyCommentId : null);
-
-      let commentId = known;
+      let commentId = commentByWorkItem.get(workItemId) ?? null;
       if (commentId) {
         await commentsService.editComment(commentId, { bodyMd }, actorCtx);
       } else {
         commentId = (await commentsService.addComment(workItemId, { bodyMd }, actorCtx)).id;
       }
 
-      // Record it per card — an upsert, so a comment that only the legacy scalar
-      // named is ADOPTED here rather than left for the fallback to find again.
+      // Record it per card — an upsert, so a re-entry at the same key converges
+      // on the one row rather than racing a second one onto it.
       await githubCiFeedbackCommentRepository.upsert(
         { pullRequestId: resolved.prId, commitSha: event.commitSha, workItemId, commentId },
         tx,
       );
-
-      // Keep the legacy column in step with the FIRST card's comment while its
-      // readers still exist (the EXPAND half). It is what an instance running the
-      // previous build reads during a deploy window, and leaving it null there is
-      // how that instance opens a SECOND comment on a card this one just
-      // commented on.
-      if (workItemId === firstDelivered && commentId !== legacyCommentId) {
-        await githubCheckRunRepository.upsert(
-          {
-            pullRequestId: resolved.prId,
-            commitSha: event.commitSha,
-            checkName: event.context,
-            checkSuiteId: suiteId,
-            conclusion: event.conclusion,
-            feedbackCommentId: commentId,
-          },
-          tx,
-        );
-      }
     }
 
     return deriveCiState(rows.map((r) => r.conclusion));

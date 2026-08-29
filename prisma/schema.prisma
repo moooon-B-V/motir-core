@@ -4009,10 +4009,11 @@ model Comment {
   replies         Comment[]                 @relation("CommentReplies")
   mentions        CommentMention[]
   // CI feedback (Subtask 7.10.6 / MOTIR-894): the check-run rows whose feedback
-  // comment THIS is — so a re-run updates it in place. SetNull on delete.
-  // ⚠️ That column is now a MIRROR of the first delivered card's comment; the
-  // source of truth is `ciFeedbackFor` below (MOTIR-3770).
-  githubCheckRuns GithubCheckRun[]
+  // comment THIS is. ⚠️ `@ignore`d with the far side (MOTIR-3863) — the column it
+  // reads is retired and out of the generated client, and Prisma requires both
+  // halves of a relation to be ignored together. The source of truth is
+  // `ciFeedbackFor` below (MOTIR-3770). Both are dropped by the CONTRACT phase.
+  githubCheckRuns GithubCheckRun[] @ignore
   // The (change request, head commit, card) THIS comment is the CI feedback for
   // — MOTIR-3770. CASCADE, deliberately: deleting the comment must leave no
   // dangling id for the next delivery to edit, which is the property that keeps
@@ -5817,12 +5818,13 @@ model WorkItemDelivery {
 /// `check_run` webhook delivery, resolved to its PR and persisted so the CI
 /// feedback is IDEMPOTENT. The unique `(pull_request_id, commit_sha, check_name)`
 /// is the card's idempotency key: a redelivery or a re-run of the SAME check at
-/// the SAME head commit converges on this one row and UPDATES its feedback
-/// comment in place (via `feedback_comment_id`) rather than piling duplicate
-/// comments on the subtask. `conclusion` is the normalized `CiConclusion`
-/// (`success` | `failure` | `pending` | `neutral`) the `GitProvider` seam emits;
-/// `feedback_comment_id` links the posted feedback `Comment` (SetNull so the row
-/// survives a comment deletion). Provider-neutral: a GitLab pipeline (7.23)
+/// the SAME head commit converges on this one row rather than recording a second
+/// one. `conclusion` is the normalized `CiConclusion`
+/// (`success` | `failure` | `pending` | `neutral`) the `GitProvider` seam emits.
+/// The feedback COMMENT's identity is `GithubCiFeedbackComment`'s, not this
+/// table's — `feedback_comment_id` below is RETIRED and `@ignore`d, kept only so
+/// the column can be dropped in a later release (MOTIR-3863 → MOTIR-3803).
+/// Provider-neutral: a GitLab pipeline (7.23)
 /// normalizes into the same shape. The work item's own `ciState` signal is
 /// derived from these rows and denormalized onto `WorkItem.ciState`.
 model GithubCheckRun {
@@ -5854,23 +5856,43 @@ model GithubCheckRun {
   checkSuiteId      String   @default("") @map("check_suite_id")
   /// Normalized `CiConclusion`: "success" | "failure" | "pending" | "neutral".
   conclusion        String
-  /// The feedback `Comment` posted for this check, updated in place on a re-run.
-  /// Null until the first terminal (success/failure) delivery posts one.
+  /// ⚠️ RETIRED, AND DELIBERATELY STILL DECLARED. `@ignore` KEEPS IT OUT OF THE
+  /// GENERATED CLIENT WHILE THE COLUMN STAYS IN THE DATABASE — the SCHEMA-ONLY
+  /// phase (MOTIR-3863) of the three-phase drop
+  /// `docs/decisions/delivery-reader-migration.md` §6a specifies. **DO NOT delete
+  /// this field and DO NOT remove the attribute on its own**: the field and the
+  /// column must go in the SAME commit, and that commit is the CONTRACT phase's
+  /// (MOTIR-3803), which may only run once THIS build is on every machine.
   ///
-  /// ⚠️ SUPERSEDED AS THE SOURCE OF TRUTH by `GithubCiFeedbackComment`
-  /// (MOTIR-3770), and kept as a WRITTEN MIRROR of the FIRST delivered card's
-  /// comment while the readers of both live side by side — the EXPAND half of
-  /// `docs/decisions/ci-feedback-comment-per-card.md`. A scalar can hold ONE id,
-  /// so a pull request delivering N cards could comment on one of them; the
-  /// per-card table holds N. Read the table; this column exists so a rollback is
-  /// a code revert and so an instance still running the previous build cannot
-  /// open a SECOND comment during a deploy window.
-  feedbackCommentId String?  @map("feedback_comment_id")
+  /// It was the feedback `Comment` posted for this check. SUPERSEDED AS THE
+  /// SOURCE OF TRUTH by `GithubCiFeedbackComment` (MOTIR-3770) — a scalar holds
+  /// ONE id, so a pull request delivering N cards commented on one of them — and
+  /// then retired outright by MOTIR-3863, which moved its last reader (the
+  /// deploy-window fallback in `changeRequestCiFeedback`) once the EXPAND was
+  /// verified on every machine (MOTIR-3818). Nothing reads it; nothing writes it.
+  ///
+  /// ⚠️ WHY `@ignore` RATHER THAN DELETION, MEASURED. A bare relation include —
+  /// `{ pullRequest: { include: { checkRuns: true } } }`, which is what
+  /// `workItemDeliveryRepository` and `githubPullRequestRepository` use — selects
+  /// every scalar THIS DECLARATION names, so the declaration is itself a reader
+  /// and the one no grep finds (MOTIR-3852). Deleting the field stops that read
+  /// and breaks the drift gate in the same edit: `prisma migrate diff
+  /// --from-schema prisma/schema.prisma --to-config-datasource --exit-code`
+  /// answers `[+] Added column feedback_comment_id` / `[+] Added foreign key`,
+  /// exit 2. With `@ignore` the same command answers `No difference detected`,
+  /// exit 0, and the emitted SQL for the bare include drops the column. What
+  /// `@ignore` does NOT protect is a future bare include over some OTHER retired
+  /// column — the attribute is per field, not a rule.
+  feedbackCommentId String?  @map("feedback_comment_id") @ignore
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   pullRequest     GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
-  feedbackComment Comment?          @relation(fields: [feedbackCommentId], references: [id], onDelete: SetNull)
+  /// `@ignore`d with the scalar it hangs on (MOTIR-3863). A relation left in the
+  /// client keeps the column reachable through `include: { feedbackComment: true }`,
+  /// which is precisely the reader this phase exists to remove. The FK and its
+  /// `onDelete: SetNull` are untouched in the database.
+  feedbackComment Comment?          @relation(fields: [feedbackCommentId], references: [id], onDelete: SetNull) @ignore
 
   @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])

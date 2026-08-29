@@ -111,13 +111,30 @@ the third is the one that decided it:
   instance still running the previous build during a deploy window reads that
   column, finds the comment this build opened and EDITS it rather than opening a
   second one. **A CONTRACT card drops it once nothing reads it.**
+
+  > **⚠️ AMENDED (MOTIR-3863, 2026-08-29) — the mirror and the fallback below are
+  > both RETIRED, and the column is no longer written or read.** MOTIR-3818
+  > verified this EXPAND is deployed on every machine, which closes the
+  > deploy-window case both bullets exist for; the migration had already
+  > backfilled every pre-table row into `github_ci_feedback_comment`. The column
+  > and its FK are still in the database and the field is still declared,
+  > `@ignore`d so the generated client stops selecting it — the SCHEMA-ONLY phase
+  > of `delivery-reader-migration.md` §6a, whose mechanism and cost are §6b.
+  > **The drop itself is still MOTIR-3803's, and still may not run until this
+  > build is on every machine (MOTIR-3864).** The two bullets are kept as written
+  > because their REASONING is what makes the retirement checkable: what is gone
+  > is the window they describe, not the argument.
+
 - **The service reads the legacy column as a FALLBACK, for the first card only.**
   A `(change request, head commit)` whose first verdict predates this table — every
   row the migration backfilled, and any an older instance writes mid-deploy — is
   named only there. The loop ADOPTS what it finds into the per-card table, so the
   fallback fires at most once per commit. Reading it for a SIBLING card would be a
   bug of its own: it would edit the first card's comment while claiming to write
-  the second's.
+  the second's. **(RETIRED by MOTIR-3863 — see the amendment above. The cost is
+  that `github_ci_feedback_comment` is now the only record, so a row lost to the
+  comment's own cascade means a fresh comment rather than an adoption, which is
+  the behaviour the deletion case above already had.)**
 - **The idempotency guard's predicate changed, and it now says what it always
   claimed.** _"A redelivery of the same conclusion we already recorded and
   commented"_ was answered off the scalar, which reports whether the FIRST card has

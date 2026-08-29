@@ -16,13 +16,21 @@ import { type GithubCheckRun, type Prisma } from '@/generated/prisma/client';
 // the names differ. Merging them was never idempotency; it was two runs written
 // into one. Which rows still get a VOTE is `lib/github/checkSuites.ts`.
 //
-// ⚠️ `feedbackCommentId` is NOT keyed at this grain (MOTIR-2946). Every row at one
-// `(pull_request_id, commit_sha)` points at the SAME feedback comment — the one
-// comment that carries the aggregate verdict for that head commit. It used to be
-// one comment per check name, which put ~34 of them on a motir-core work item per
-// PR. The column stays here (it is where the link is stored and what
-// `onDelete: SetNull` cleans up); what changed is that the consumer reads it
-// across the sha's rows instead of only its own.
+// ⚠️ THE FEEDBACK COMMENT'S IDENTITY IS NOT HERE ANY MORE, AND NEITHER IS ITS
+// COLUMN (MOTIR-3770 → MOTIR-3863). It was `feedback_comment_id`, a scalar on a
+// table whose grain is one row PER CHECK: never keyed at this grain (MOTIR-2946
+// made every row at one `(pull_request_id, commit_sha)` point at the same
+// comment), and unable to name more than one card however many a pull request
+// delivers. `github_ci_feedback_comment` supersedes it, keyed on
+// `(pull request, head commit, work item)` — read THAT.
+//
+// The COLUMN is still in the database. MOTIR-3863 is the SCHEMA-ONLY phase of the
+// three-phase drop `docs/decisions/delivery-reader-migration.md` §6a specifies:
+// the field carries `@ignore` in `prisma/schema.prisma`, so the generated client
+// stops selecting it — including through the bare relation includes nobody can
+// grep for — while the column and its FK stay exactly where they are. The
+// CONTRACT phase (MOTIR-3803) drops both, and may only do so once THIS build is on
+// every machine.
 
 export interface UpsertGithubCheckRunInput {
   pullRequestId: string;
@@ -33,7 +41,6 @@ export interface UpsertGithubCheckRunInput {
    *  stop the upsert converging (see the schema's note). */
   checkSuiteId: string;
   conclusion: string;
-  feedbackCommentId: string | null;
 }
 
 export const githubCheckRunRepository = {
@@ -60,11 +67,8 @@ export const githubCheckRunRepository = {
 
   /** Every check row recorded for a PR at one head commit — EVERY run's,
    *  including a superseded one's. The verdict is derived from the surviving
-   *  subset (`liveCheckRows`), but the `feedbackCommentId` lookup deliberately
-   *  reads the whole set: the comment is keyed per `(change request, head sha)`
-   *  (MOTIR-2946), so a replacement run must find and EDIT the comment the run
-   *  it replaced opened, never start a second one. Ordered oldest-first so both
-   *  are deterministic. */
+   *  subset (`liveCheckRows`), and the caller needs the whole set to derive it.
+   *  Ordered oldest-first so the answer is deterministic. */
   async listByPrAndSha(
     pullRequestId: string,
     commitSha: string,
@@ -78,9 +82,9 @@ export const githubCheckRunRepository = {
 
   /** Create-or-refresh a check row, keyed on the unique
    *  `(pull_request_id, commit_sha, check_name, check_suite_id)`. Refreshes
-   *  `conclusion` + `feedbackCommentId` so a REDELIVERY of one run's check
-   *  converges on one row — while a DIFFERENT run's check of the same name gets
-   *  its own row, which is what lets the derivation retire the loser. */
+   *  `conclusion` so a REDELIVERY of one run's check converges on one row —
+   *  while a DIFFERENT run's check of the same name gets its own row, which is
+   *  what lets the derivation retire the loser. */
   async upsert(
     input: UpsertGithubCheckRunInput,
     tx: Prisma.TransactionClient,

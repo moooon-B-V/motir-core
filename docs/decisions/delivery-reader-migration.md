@@ -755,6 +755,96 @@ between them.
 
 ---
 
+## 6b · AMENDMENT (MOTIR-3863) — HOW phase 2 excludes the field, measured
+
+§6a states the constraint on the SCHEMA-ONLY phase — _exclude the field from the
+client without removing it from the datamodel_ — and deliberately names no
+mechanism. This records the one chosen when the phase was first executed, on
+`github_check_run.feedback_comment_id`, with what it costs and what it does not
+protect.
+
+### The three candidates, and the measurement that decided between them
+
+The constraint that rules is CI's schema-drift gate (`Assert the datamodel and
+the migrations agree`, MOTIR-1960):
+
+```
+pnpm prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource --exit-code
+```
+
+run in the `build` job against a from-empty replay of every migration. Measured
+on this schema against a throwaway database built by `prisma migrate deploy`:
+
+| variant                               | drift gate                                                                   | client emits the column? |
+| ------------------------------------- | ---------------------------------------------------------------------------- | ------------------------ |
+| baseline (`origin/main`)              | `No difference detected`, exit **0**                                         | **yes**                  |
+| **field + relation `@ignore`d**       | `No difference detected`, exit **0**                                         | **no**                   |
+| field + relation DELETED, column left | `[+] Added column feedback_comment_id` · `[+] Added foreign key`, exit **2** | no                       |
+
+So _"just delete the field"_ is not available, exactly as §6a says — and the
+bare deletion fails in the SAFE direction (a red build), which is the only
+reason the two-phase mistake was ever reachable at all: the unsafe edit is the
+one that also drops the column, and it goes green.
+
+**The other two candidates were rejected on grep results, not on taste:**
+
+- **An explicit `select` at every call site.** Sound, and the widest blast
+  radius: every delivery and check read would enumerate its scalars, and a field
+  added to the model later would then be silently missing from those reads —
+  trading a loud failure for a quiet one.
+- **Narrowing the shared include constants alone** (`WITH_PR` / `WITH_CHECKS` in
+  `workItemDeliveryRepository`). The cheapest, and it holds only while no other
+  bare include exists. It does not:
+  `githubPullRequestRepository` carries four more (`include: { … checkRuns: true }`
+  at four sites). That is a claim to grep, and the grep falsifies it.
+
+### The cost
+
+- **The field is invisible to the generated client, including to tests.** Every
+  assertion that read `githubCheckRun.feedbackCommentId` had to move — to
+  `github_ci_feedback_comment`, which is where the fact actually lives, or to
+  raw SQL where the assertion is genuinely _about the column_ (the one-card
+  delivery now asserts the mirror stays NULL, and it can only say so in SQL).
+- **`@ignore` is contagious across a relation.** Prisma requires both halves of
+  a relation whose scalar is ignored to be ignored too, so `GithubCheckRun.feedbackComment`
+  and `Comment.githubCheckRuns` carry it as well. That is a feature here — a
+  relation left in the client would keep the column reachable through
+  `include: { feedbackComment: true }` — but it means the attribute is never a
+  one-line edit.
+- **One line in the schema, and a rule a person can be wrong about**, exactly as
+  the marker in §6a is. The field must not be deleted on its own, and the
+  attribute must not be removed on its own; the two move together with the
+  `DROP COLUMN`, in the CONTRACT commit.
+
+### What it does NOT protect
+
+**`@ignore` is per FIELD, not a rule.** It stops the bare includes selecting
+_this_ column and says nothing about the next retired one — a bare include added
+after this card, over some other model whose scalar is still declared, has
+exactly the shape MOTIR-3852 had. The general property is unenforceable
+statically for the reason §6a already records: at the contract commit the safe
+and unsafe trees are identical. What is enforceable, and what
+`tests/github/checkRunFeedbackColumnRetired.test.ts` holds, is the property for
+THIS column, read off the SQL the client actually emits rather than off the
+schema — including the positive half (the projection is real and still carries
+the columns the verdict derives from), so the check cannot pass by the read
+quietly disappearing.
+
+### Applied to the sibling pair
+
+`changeRequestCiFeedback`'s last reader was the deploy-window FALLBACK — a
+`(change request, head commit)` whose first verdict was written by a build that
+had only the scalar. It is retired rather than moved, because its population is
+closed from both ends: the EXPAND migration backfilled every such row into
+`github_ci_feedback_comment`, and MOTIR-3818 verified the per-card build is on
+every machine, so nothing writes the column any more either. The idempotency
+guard's scalar arm was doing a second job nobody had written down — standing in
+for _"the delivery set is non-empty"_ on the session arm, where `every` over an
+empty array is vacuously true — and that half is now said out loud rather than
+inherited from a column's nullability.
+
+---
+
 ## Consequences
 
 - **`work_item_delivery` gains a `system_admin` policy arm.** The tenancy surface
@@ -773,6 +863,11 @@ between them.
   datamodel's field declaration is itself a reader, so the client must stop
   selecting the column in a RELEASE of its own before the drop lands.
   Enforced by `tests/contract-phase-guard.test.ts`.
+- **Phase 2 excludes the field with `@ignore`, not by deleting it** (§6b,
+  MOTIR-3863) — measured: `@ignore` keeps the drift gate at exit 0 while the
+  emitted SQL drops the column; deleting the field exits 2. It is per FIELD and
+  protects no other column; `tests/github/checkRunFeedbackColumnRetired.test.ts`
+  holds the property for this one, off the SQL rather than off the schema.
 
 ## References
 

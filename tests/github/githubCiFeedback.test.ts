@@ -154,6 +154,17 @@ function checkRunPayload(opts: {
 async function commentsOn(workItemId: string) {
   return adminDb.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
 }
+/** THE feedback comment records for one head commit — one row per delivered card
+ *  (`github_ci_feedback_comment`, MOTIR-3770). This is where the comment's
+ *  identity lives; `githubCheckRun.feedbackCommentId` was its superseded mirror
+ *  and left the generated client with MOTIR-3863 (the SCHEMA-ONLY phase of the
+ *  column's three-phase drop). */
+async function feedbackRecords(commitSha: string) {
+  return adminDb.githubCiFeedbackComment.findMany({
+    where: { commitSha },
+    orderBy: { createdAt: 'asc' },
+  });
+}
 async function ciStateOf(workItemId: string): Promise<string | null> {
   const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.ciState;
@@ -197,7 +208,13 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const checkRows = await adminDb.githubCheckRun.findMany();
     expect(checkRows).toHaveLength(1);
     expect(checkRows[0]).toMatchObject({ conclusion: 'success', commitSha: 'sha1' });
-    expect(checkRows[0]!.feedbackCommentId).toBe(comments[0]!.id);
+    // WHICH comment this verdict is, per card — `github_ci_feedback_comment`
+    // (MOTIR-3770). It used to be asserted off `githubCheckRun.feedbackCommentId`,
+    // which MOTIR-3863 took out of the generated client on its way to being
+    // dropped; the fact under test is unchanged and only its home moved.
+    expect(await feedbackRecords('sha1')).toMatchObject([
+      { workItemId: item.id, commentId: comments[0]!.id },
+    ]);
   });
 
   it('a failing check_suite posts the failure summary + link and flips the item to not-ready', async () => {
@@ -321,7 +338,8 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
-    expect(rows[0]!).toMatchObject({ conclusion: 'pending', feedbackCommentId: null });
+    expect(rows[0]!).toMatchObject({ conclusion: 'pending' });
+    expect(await feedbackRecords('sha1')).toEqual([]);
     expect(await commentsOn(item.id)).toHaveLength(0);
     expect(await ciStateOf(item.id)).toBeNull();
   });
@@ -378,7 +396,9 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.conclusion).toBe('pending');
-    expect(rows[0]!.feedbackCommentId).toBe(afterSuccess[0]!.id);
+    // The pending upsert must not lose the comment already recorded for this
+    // commit — the record is per card now, so that is what the assertion reads.
+    expect(await feedbackRecords('sha1')).toMatchObject([{ commentId: afterSuccess[0]!.id }]);
     expect(await ciStateOf(item.id)).toBe('passing'); // terminal-only signal untouched
 
     // 3. The re-run concludes FAILURE → the SAME comment updates in place
@@ -467,11 +487,14 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(comments[0]!.bodyMd).toBe(
       '✅ **CI passing** — all 34 checks succeeded on the linked pull request. This work is verified.',
     );
-    // Ingestion is UNCHANGED: still one row per check name, and every row at the
-    // sha points at the one comment.
+    // Ingestion is UNCHANGED: still one row per check name. The COMMENT is one
+    // per (change request, head commit, card), so 34 check rows record exactly
+    // one feedback row naming the one comment.
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(34);
-    expect(new Set(rows.map((r) => r.feedbackCommentId))).toEqual(new Set([comments[0]!.id]));
+    expect(await feedbackRecords('sha1')).toMatchObject([
+      { workItemId: item.id, commentId: comments[0]!.id },
+    ]);
     expect(await ciStateOf(item.id)).toBe('passing');
   });
 
@@ -623,7 +646,9 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(comments).toHaveLength(1);
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(6);
-    expect(new Set(rows.map((r) => r.feedbackCommentId))).toEqual(new Set([comments[0]!.id]));
+    expect(await feedbackRecords('sha1')).toMatchObject([
+      { workItemId: item.id, commentId: comments[0]!.id },
+    ]);
     expect(await ciStateOf(item.id)).toBe('passing');
   });
 
