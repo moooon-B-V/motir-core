@@ -11,6 +11,8 @@ import {
   toWorkItemCount,
   toCompleteSessionResult,
   toDispatchPrompt,
+  toDispatchRunAppended,
+  toDispatchRunOpened,
   toExpandSubmitResult,
   toScopeClaim,
   toWorkItemClaim,
@@ -801,6 +803,102 @@ export interface CompleteSessionOutcome {
   reason?: string | null;
 }
 
+// ── The DISPATCH RUN report (Story MOTIR-1789 · MOTIR-1794) ────────────────
+//
+// The three shapes `dispatchRunReporter` reads back off the ingest. Narrow on
+// purpose: the reporter is an OBSERVER, and a wide type here would make the run
+// loop's behaviour depend on fields the ingest is free to change.
+
+/** One card in the SET a run is opened with. */
+export interface DispatchRunCardInput {
+  key: string;
+  disposition: 'queued' | 'skipped';
+  /** Required when `disposition` is `skipped`, forbidden otherwise. */
+  skipReason?: DispatchSkipReason;
+}
+
+/** Why a card was left out — the ADR's closed vocabulary. */
+export type DispatchSkipReason =
+  | 'needs_planning'
+  | 'needs_human'
+  | 'claim_refused'
+  | 'blocked_in_scope'
+  | 'integrated_dep'
+  | 'replan_submitted'
+  | 'checkout_unavailable';
+
+/** A LEG's state — the ADR's closed vocabulary. */
+export type DispatchCardDisposition =
+  | 'queued'
+  | 'running'
+  | 'integrated'
+  | 'implemented'
+  | 'failed'
+  | 'replanned'
+  | 'skipped'
+  | 'not_reached';
+
+/** Why the run ended — the ADR's closed vocabulary. */
+export type DispatchStopReason =
+  | 'drained'
+  | 'completed'
+  | 'max'
+  | 'halted'
+  | 'interrupted'
+  | 'replanned'
+  | 'gated'
+  | 'abandoned';
+
+/** The ordered stream's vocabulary — the ADR's closed enum. */
+export type DispatchEventKind =
+  | 'run_opened'
+  | 'scope_claimed'
+  | 'snapshot_frozen'
+  | 'session_pr'
+  | 'plan_approved'
+  | 'run_closed'
+  | 'card_claimed'
+  | 'card_skipped'
+  | 'checkout_ready'
+  | 'prompt_issued'
+  | 'agent_started'
+  | 'agent_exited'
+  | 'leg_verdict'
+  | 'delivery_linked'
+  | 'ci_verdict'
+  | 'ci_fix_attempt'
+  | 'ci_gave_up'
+  | 'card_settled'
+  | 'log';
+
+export interface DispatchRunOpened {
+  runId: string;
+  /** `false` when the same `idempotencyKey` had already opened this run. */
+  created: boolean;
+  status: string;
+  seq: number;
+  cards: Array<{ key: string | null; disposition: string }>;
+}
+
+export interface DispatchRunAppended {
+  runId: string;
+  appended: number;
+  /** The run's new highest `seq`. */
+  seq: number;
+}
+
+/** One event on the wire. `body` is the OPT-IN log payload — default OFF. */
+export interface DispatchRunEventInput {
+  kind: DispatchEventKind;
+  workItemKey?: string;
+  data?: unknown;
+  body?: string;
+  disposition?: DispatchCardDisposition;
+  skipReason?: DispatchSkipReason;
+  sessionBranch?: string;
+  exitCode?: number;
+}
+
 export interface CompleteSessionResult {
   sessionBranch: string;
   results: CompleteSessionOutcome[];
@@ -1510,6 +1608,66 @@ export class MotirClient {
             : { kind: 'sprint', projectKey: args.projectKey },
       }),
     );
+  }
+
+  /**
+   * OPEN a dispatch run WITH ITS SET (Story MOTIR-1789 · MOTIR-1794).
+   *
+   * ⚠️ THE SET RIDES HERE BECAUSE THIS IS THE ONE MOMENT IT EXISTS: a scope
+   * claim has just returned its members, or a batch snapshot has just been
+   * frozen. Rebuilt afterwards from per-card events it degrades into a list of
+   * what the run got round to, and the SKIPPED cards vanish entirely.
+   *
+   * IDEMPOTENT on `idempotencyKey`, which is the run id `runIdFromDate` already
+   * produced — so the session branch, the session pull-request body and the run
+   * row in Motir all name the same run, and a retry cannot fork it.
+   */
+  async openDispatchRun(args: {
+    projectKey: string;
+    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto';
+    idempotencyKey: string;
+    cards: DispatchRunCardInput[];
+    scopeKey?: string;
+    scopeLabel?: string;
+    agent?: string;
+    model?: string;
+  }): Promise<DispatchRunOpened> {
+    return toDispatchRunOpened(
+      await this.v1.request('openDispatchRun', {
+        body: {
+          projectKey: args.projectKey,
+          command: args.command,
+          origin: 'local',
+          idempotencyKey: args.idempotencyKey,
+          cards: args.cards,
+          ...(args.scopeKey === undefined ? {} : { scopeKey: args.scopeKey }),
+          ...(args.scopeLabel === undefined ? {} : { scopeLabel: args.scopeLabel }),
+          ...(args.agent === undefined ? {} : { agent: args.agent }),
+          ...(args.model === undefined ? {} : { model: args.model }),
+        },
+      }),
+    );
+  }
+
+  /** APPEND a batch of run events. The server assigns each its `seq`. */
+  async appendDispatchRunEvents(args: {
+    runId: string;
+    events: DispatchRunEventInput[];
+  }): Promise<DispatchRunAppended> {
+    return toDispatchRunAppended(
+      await this.v1.request('appendDispatchRunEvents', {
+        path: { id: args.runId },
+        body: { events: args.events },
+      }),
+    );
+  }
+
+  /** CLOSE the run with its stop reason. The status is DERIVED server-side. */
+  async closeDispatchRun(args: { runId: string; stopReason: DispatchStopReason }): Promise<void> {
+    await this.v1.request('closeDispatchRun', {
+      path: { id: args.runId },
+      body: { stopReason: args.stopReason },
+    });
   }
 
   /** Bulk close-out for a merged session PR (7.8.11): every item recorded on

@@ -11,6 +11,11 @@ import {
 } from './dispatch.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
+import {
+  createDispatchRunReporter,
+  nullDispatchRunReporter,
+  type DispatchRunReporter,
+} from '../dispatchRunReporter.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
   agentSubmittedReplan,
@@ -310,6 +315,26 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
     // ONE `whoami` for the whole run: the owner cannot change mid-loop, and an
     // unattended drain that asked per item would spend a request on a constant.
     const ownerId = await resolveOwnerId(session.client);
+
+    // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────────
+    //
+    // ⚠️ OPENED WITH AN EMPTY SET, deliberately. This loop holds no plan: it
+    // asks the server for exactly one item per iteration, because the ready set
+    // changes underneath it as an integrated card unblocks its dependents. A
+    // list materialised here to make the run page look complete would be wrong
+    // by the second iteration AND would break the property the loop exists to
+    // have — so the legs arrive one at a time, from inside the loop.
+    const reporter = createDispatchRunReporter({ client: session.client });
+    await reporter.open({
+      projectKey: session.projectKey,
+      command: 'auto',
+      // The id the session branch and the pull-request body already name.
+      runId,
+      cards: [],
+      agent: agent.parsed.binary,
+    });
+    reporter.event({ kind: 'run_opened', data: { command: 'auto', branch } });
+
     const summary = await runAutoLoop({
       // `motir auto` is the lane that opens each repository's pull request at its
       // first implemented card (MOTIR-3681). See `LoopInput.openPrEagerly`.
@@ -325,9 +350,23 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       clock,
       runAgentFn: deps.runAgentFn ?? runAgent,
       ownerId,
+      reporter,
       ...(deps.sleep ? { sleep: deps.sleep } : {}),
     });
     closeOutRepos(summary, run);
+    for (const pr of summary.prs) {
+      reporter.event({
+        kind: 'session_pr',
+        data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
+      });
+    }
+    for (const approval of summary.approvals) {
+      // ⚠️ WHAT THE RUN DECIDED WHILE NOBODY WAS WATCHING (MOTIR-3023). Every
+      // other event says what the loop BUILT; this one says what it did to a
+      // plan someone else owns, and it is the first thing they should be able to
+      // find in the morning.
+      reporter.event({ kind: 'plan_approved', workItemKey: approval.key, data: approval });
+    }
 
     // ── THE CI WATCH (Story MOTIR-3655 · MOTIR-3685) ────────────────────────
     //
@@ -342,6 +381,9 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
     // spanning three repositories has three branches, and a fix must be
     // committed to the one CI is red on.
     const watched = await watchRunCi(summary, session, agent, opts, deps);
+    reporter.event({ kind: 'ci_verdict', data: { green: watched } });
+    reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
+    await reporter.close(summary.stopReason);
 
     info('');
     info(renderAutoSummary(summary));
@@ -380,6 +422,19 @@ export interface LoopInput {
   /** The token owner — every card this run takes is CLAIMED for them, and rows
    *  claimed by anyone else are not taken at all (MOTIR-2427). */
   ownerId: string;
+  /**
+   * The run REPORTER (Story MOTIR-1789 · MOTIR-1794), already OPENED by the
+   * command with an EMPTY set.
+   *
+   * ⚠️ EMPTY, AND THIS LOOP MUST NOT FILL IT UP FRONT. `autoLoop.ts`'s own header
+   * states the loop's defining property: it holds no plan of the run, asks the
+   * server for exactly ONE item per iteration, and *"there is deliberately no
+   * function here that takes or returns a ready LIST"*. A reporter that
+   * materialised a list to draw a nicer page would break the property the loop
+   * exists to have — so a leg is APPENDED as each card is picked, and nothing
+   * here reads a set.
+   */
+  reporter?: DispatchRunReporter;
   /** The approval-retry wait (MOTIR-3025), injected by the tests. */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -403,6 +458,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
     openPrEagerly = false,
   } = input;
   const { client, serverUrl, projectKey } = session;
+  const reporter = input.reporter ?? nullDispatchRunReporter;
 
   if (opts.reset) {
     const cleared = clearExcludes(serverUrl, projectKey);
@@ -500,6 +556,16 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // Not dispatched, so NOT transitioned: a planning item and a human item
         // are both left exactly as the loop found them.
         skipped.push({ key: item.key, title: item.title, reason: disposition });
+        // The LEG is appended here too — a card the run looked at and left is
+        // exactly the thing that exists nowhere else, and a skip with no leg is
+        // a skip nobody can read.
+        await reporter.addCard({ key: item.key, disposition: 'skipped', skipReason: disposition });
+        reporter.event({
+          kind: 'card_skipped',
+          workItemKey: item.key,
+          disposition: 'skipped',
+          skipReason: disposition,
+        });
         excludedKeys.add(item.key.toUpperCase());
         info(
           `${item.key}: skipped — ${
@@ -576,6 +642,9 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         });
       }
 
+      // ⚠️ THE LEG ARRIVES NOW, one card at a time — the loop's own shape.
+      await reporter.addCard({ key: item.key, disposition: 'queued' });
+
       const outcome = await dispatchOne({
         client,
         item,
@@ -591,6 +660,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // The card is integrated in EVERY repository of its lineage, so it is
         // carried by every one of their pull requests (MOTIR-3135).
         onIntegrated: (key) => repo?.forEach((s) => s.keys.push(key)),
+        reporter,
       });
       if (outcome.kind === 'skipped') {
         // The claim was refused. Recorded beside the loop's other skips — not in
@@ -696,6 +766,10 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
     process.off('SIGINT', onSigint);
   }
 
+  // Whatever the loop queued reaches the server before the command closes the
+  // run — best-effort, so a failure is one stderr line and nothing else.
+  await reporter.flush();
+
   return {
     runId,
     records,
@@ -762,6 +836,20 @@ export interface DispatchOneInput {
   onIntegrated: (key: string) => void;
   /** The loop's git runner — the push check (MOTIR-3004) uses it. */
   run: CommandRunner;
+  /**
+   * The run REPORTER (Story MOTIR-1789 · MOTIR-1794), or absent.
+   *
+   * ⚠️ HOOKED HERE ONCE AND IT SERVES BOTH LOOPS. This function's own header
+   * says `auto` and the scoped drain "differ in how they pick the next card and
+   * in nothing else" — which is exactly why the events belong here rather than
+   * in each command: a card dispatched by either produces the same sequence, and
+   * a per-command copy would be two places for it to drift.
+   *
+   * Defaults to the null reporter, so wiring it in changed no behaviour and
+   * every existing caller keeps working. Reporting is best-effort by
+   * construction: none of these calls can throw.
+   */
+  reporter?: DispatchRunReporter;
 }
 
 /**
@@ -803,6 +891,26 @@ export type DispatchOneResult =
  */
 export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
   const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, run } = input;
+  const reporter = input.reporter ?? nullDispatchRunReporter;
+
+  /** Report the leg's terminal disposition, then return the result unchanged. */
+  const settle = (
+    result: DispatchOneResult,
+    disposition: 'integrated' | 'implemented' | 'failed' | 'replanned',
+  ): DispatchOneResult => {
+    reporter.event({
+      kind: 'card_settled',
+      workItemKey: item.key,
+      disposition,
+      ...(result.kind === 'record' && result.record.sessionBranch
+        ? { sessionBranch: result.record.sessionBranch }
+        : {}),
+      ...(result.kind === 'record' && result.record.detail
+        ? { data: { detail: result.record.detail } }
+        : {}),
+    });
+    return result;
+  };
 
   // THE CLAIM, and it can say no (MOTIR-3048). The pick already narrowed to rows
   // this loop may take, but that read and this write are not one act — so a
@@ -810,6 +918,14 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   // that can tell us so. Nothing below has run yet, so a refusal costs the loop
   // one request and no state.
   const claim = await ensureInProgress(client, item.key);
+  reporter.event({
+    kind: 'card_claimed',
+    workItemKey: item.key,
+    data: { outcome: claim.outcome },
+    ...(claimAllowsDispatch(claim)
+      ? { disposition: 'running' as const }
+      : { disposition: 'skipped' as const, skipReason: 'claim_refused' as const }),
+  });
   if (!claimAllowsDispatch(claim)) {
     info('');
     info(renderClaimRefusal(claim));
@@ -833,14 +949,28 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   // dispatch order — this function is `auto`'s loop AND the scoped drain's, so
   // both transcripts are produced by the same line.
   echoPromptIfAsked(input.opts, item.key, dispatch);
+  reporter.event({ kind: 'prompt_issued', workItemKey: item.key });
 
   const started = clock();
+  reporter.event({
+    kind: 'agent_started',
+    workItemKey: item.key,
+    data: { agent: agent.parsed.binary },
+  });
   const result = await runAgentFn({
     command: agent.parsed,
     prompt: dispatch.prompt,
     cwd: target.cwd,
   });
   const durationMs = clock() - started;
+  reporter.event({
+    kind: 'agent_exited',
+    workItemKey: item.key,
+    exitCode: result.exitCode,
+    // The model only the AGENT can answer for (MOTIR-2419) — its self-report, or
+    // null. Never a guess.
+    data: { model: result.model ?? null, signal: result.signal ?? null, durationMs },
+  });
 
   const base = {
     key: item.key,
@@ -856,15 +986,18 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
 
   if (result.exitCode !== 0) {
     info(`${item.key}: agent exited ${result.exitCode} — left In Progress, nothing reverted.`);
-    return {
-      kind: 'record',
-      record: {
-        ...base,
-        outcome: 'failed',
-        sessionBranch: null,
-        detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+    return settle(
+      {
+        kind: 'record',
+        record: {
+          ...base,
+          outcome: 'failed',
+          sessionBranch: null,
+          detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+        },
       },
-    };
+      'failed',
+    );
   }
 
   // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
@@ -882,10 +1015,10 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     // A RECORD, not a skip — and the distinction is the point. A skip means
     // nothing ran; here an agent ran, read its card and reported. The run has an
     // outcome to name (MOTIR-3048 introduced the union around this).
-    return {
-      kind: 'record',
-      record: { ...base, outcome: 'replanned', sessionBranch: null },
-    };
+    return settle(
+      { kind: 'record', record: { ...base, outcome: 'replanned', sessionBranch: null } },
+      'replanned',
+    );
   }
 
   // A bootstrap dispatch that did not produce its checkout is a FAILED dispatch,
@@ -895,15 +1028,18 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   if (suspect) {
     info(`${item.key}: ${suspect.message}`);
     info(`Hint: ${suspect.hint}`);
-    return {
-      kind: 'record',
-      record: {
-        ...base,
-        outcome: 'failed',
-        sessionBranch: null,
-        detail: 'bootstrap checkout missing',
+    return settle(
+      {
+        kind: 'record',
+        record: {
+          ...base,
+          outcome: 'failed',
+          sessionBranch: null,
+          detail: 'bootstrap checkout missing',
+        },
       },
-    };
+      'failed',
+    );
   }
 
   if (dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch) {
@@ -918,10 +1054,13 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     });
     onIntegrated(item.key);
     info(`${item.key}: integrated on ${dispatch.sessionBranch} in ${formatDuration(durationMs)}.`);
-    return {
-      kind: 'record',
-      record: { ...base, outcome: 'integrated', sessionBranch: dispatch.sessionBranch },
-    };
+    return settle(
+      {
+        kind: 'record',
+        record: { ...base, outcome: 'integrated', sessionBranch: dispatch.sessionBranch },
+      },
+      'integrated',
+    );
   }
 
   // The server kept this item off the session lineage — a target with no repo
@@ -932,15 +1071,18 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   // single-item path checks it, and with the loop's own git runner.
   if (workReachedRemote(target.cwd, item.key, null, run) === 'nothing') {
     info(`${item.key}: agent exited 0 but nothing reached the remote — left In Progress.`);
-    return {
-      kind: 'record',
-      record: {
-        ...base,
-        outcome: 'failed',
-        sessionBranch: null,
-        detail: 'nothing reached the remote',
+    return settle(
+      {
+        kind: 'record',
+        record: {
+          ...base,
+          outcome: 'failed',
+          sessionBranch: null,
+          detail: 'nothing reached the remote',
+        },
       },
-    };
+      'failed',
+    );
   }
   // ⚠️ THE REFUSAL IS AN OUTCOME, NOT A CRASH (Bug MOTIR-3268). A CONTAINER
   // reaching this line — a `task` or `bug` that acquired children of its own —
@@ -952,23 +1094,29 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   const refusal = await transitionToImplemented(client, item.key);
   if (refusal) {
     info(`${item.key}: ${refusal}`);
-    return {
-      kind: 'record',
-      record: {
-        ...base,
-        outcome: 'failed',
-        sessionBranch: null,
-        detail: 'container has open children',
+    return settle(
+      {
+        kind: 'record',
+        record: {
+          ...base,
+          outcome: 'failed',
+          sessionBranch: null,
+          detail: 'container has open children',
+        },
       },
-    };
+      'failed',
+    );
   }
   info(
     `${item.key}: Implemented via its own pull request in ${formatDuration(durationMs)} — CI decides when it is reviewable.`,
   );
-  return {
-    kind: 'record',
-    record: { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' },
-  };
+  return settle(
+    {
+      kind: 'record',
+      record: { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' },
+    },
+    'implemented',
+  );
 }
 
 /**

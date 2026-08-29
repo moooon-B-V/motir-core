@@ -10,6 +10,7 @@ import {
 import { execCommand, workReachedRemote, type CommandRunner } from './git.js';
 import type { DispatchPrompt, MotirClient } from './client.js';
 import type { ParsedAgentCommand } from './agentProfiles.js';
+import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the one implementation of
 // "materialize, spawn the agent, and decide what actually happened."
@@ -109,45 +110,103 @@ export interface DispatchLegInput {
     cwd: string;
   }) => Promise<AgentRunResult>;
   run?: CommandRunner;
+  /**
+   * The run REPORTER (Story MOTIR-1789 · MOTIR-1794), or absent.
+   *
+   * ⚠️ THE EVENTS BELONG HERE RATHER THAN IN EACH COMMAND, for the same reason
+   * the four checks above do: `next`, `run <KEY>` and `batch` all come through
+   * this function, and a per-command copy would be three places for the event
+   * sequence to drift. A card dispatched through any of them therefore produces
+   * the SAME events.
+   *
+   * Defaults to the null reporter, so wiring this in changed no behaviour and
+   * every existing caller keeps working without learning about run reporting.
+   * Reporting is best-effort by construction: none of these calls can throw.
+   */
+  reporter?: DispatchRunReporter;
 }
 
 export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchLegVerdict> {
   const { client, rootDir, key, dispatch, agent, targets, primary } = input;
   const over = targets.length > 0 ? targets : [primary];
+  const reporter = input.reporter ?? nullDispatchRunReporter;
+
+  /** Report the verdict and return it, so no arm can report a different one. */
+  const settle = (verdict: DispatchLegVerdict): DispatchLegVerdict => {
+    reporter.event({
+      kind: 'leg_verdict',
+      workItemKey: key,
+      data: verdict,
+      ...(verdict.kind === 'checkout_unavailable'
+        ? { disposition: 'skipped' as const, skipReason: 'checkout_unavailable' as const }
+        : {}),
+      ...(verdict.kind === 'agent_failed' ? { disposition: 'failed' as const } : {}),
+      ...(verdict.kind === 'replan_submitted' ? { disposition: 'replanned' as const } : {}),
+    });
+    return verdict;
+  };
 
   // ⚠️ MATERIALIZE BEFORE THE SPAWN (MOTIR-3588).
   const materialized = materializeDispatchCheckouts(rootDir, over);
   input.onMaterialization(renderMaterialization(materialized));
-  if (materialized.failures.length > 0) return { kind: 'checkout_unavailable' };
+  reporter.event({
+    kind: 'checkout_ready',
+    workItemKey: key,
+    data: {
+      repositories: over.map((t) => t.targetRepo),
+      failures: materialized.failures.length,
+    },
+  });
+  if (materialized.failures.length > 0) return settle({ kind: 'checkout_unavailable' });
 
   // BEFORE the spawn (MOTIR-3052) — the run you most want the transcript for is
   // the one whose agent is about to be killed.
   input.beforeSpawn();
+  reporter.event({ kind: 'prompt_issued', workItemKey: key });
   const runAgentFn = input.runAgentFn ?? defaultRunAgent;
+  reporter.event({
+    kind: 'agent_started',
+    workItemKey: key,
+    disposition: 'running',
+    data: { agent: agent.binary },
+  });
   const result = await runAgentFn({
     command: agent,
     prompt: dispatch.prompt,
     cwd: primary.cwd,
   });
+  reporter.event({
+    kind: 'agent_exited',
+    workItemKey: key,
+    exitCode: result.exitCode,
+    // The model only the AGENT can answer for (MOTIR-2419) — its self-report, or
+    // null. Never a guess: an absent report is a null model, and the surface
+    // renders that rather than inventing one.
+    data: { model: result.model ?? null, signal: result.signal ?? null },
+  });
 
   if (result.exitCode !== 0) {
-    return { kind: 'agent_failed', exitCode: result.exitCode, signal: result.signal ?? null };
+    return settle({
+      kind: 'agent_failed',
+      exitCode: result.exitCode,
+      signal: result.signal ?? null,
+    });
   }
 
   // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018), and this read comes BEFORE the push
   // check — see the header for why the order is not cosmetic.
-  if (await agentSubmittedReplan(client, key)) return { kind: 'replan_submitted' };
+  if (await agentSubmittedReplan(client, key)) return settle({ kind: 'replan_submitted' });
 
   // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004).
   if (
     workReachedRemote(primary.cwd, key, input.sessionBranch, input.run ?? execCommand) === 'nothing'
   ) {
-    return { kind: 'nothing_pushed' };
+    return settle({ kind: 'nothing_pushed' });
   }
 
   // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
   // second half had no checkout to happen in is exactly the run that otherwise
   // exits 0 with half the work missing.
   const suspects = over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
-  return { kind: 'succeeded', model: result.model ?? null, suspects };
+  return settle({ kind: 'succeeded', model: result.model ?? null, suspects });
 }

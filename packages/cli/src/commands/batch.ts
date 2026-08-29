@@ -26,8 +26,9 @@ import {
   resolveDispatchTarget,
   resolveDispatchTargets,
 } from '../dispatch.js';
-import { execCommand, type CommandRunner } from '../git.js';
+import { execCommand, runIdFromDate, type CommandRunner } from '../git.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
+import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { runCiWatchPhase } from '../ciWatch.js';
 import {
   batchExitCode,
@@ -300,6 +301,27 @@ export interface BatchInput {
   run?: CommandRunner;
   /** The between-iteration gate — see {@link BatchDeps.afterCard}. */
   afterCard?: (record: BatchRecord, context: { cwd: string }) => Promise<'continue' | 'stop'>;
+  /**
+   * The run REPORTER (Story MOTIR-1789 · MOTIR-1794).
+   *
+   * Opened INSIDE this function rather than by the command, because the SET it
+   * carries is the FROZEN SNAPSHOT — `taken` in dispatch order plus every
+   * `skipped` entry with its reason — and the snapshot does not exist until this
+   * function computes it. That set is the whole reason `motir batch` is worth
+   * reporting: the four cards it deliberately left out exist nowhere else.
+   */
+  reporter?: DispatchRunReporter;
+  /**
+   * Now, for the run id.
+   *
+   * ⚠️ `motir batch` is the ONE path with no run id of its own — it opens a pull
+   * request per card and has no session branch to derive one for. It mints one
+   * here through the SAME `runIdFromDate` every other path uses, so the
+   * idempotency key a retried batch presents has the same shape and the same
+   * meaning as `auto`'s and the scoped run's. Injectable for the same reason
+   * `clock` is: a driven drain must produce a deterministic id.
+   */
+  now?: () => Date;
 }
 
 /** Snapshot, print, drain. Exported so the whole command can be driven against
@@ -352,6 +374,33 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
 
   info(renderSnapshotPlan(snapshot));
 
+  // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────────
+  //
+  // ⚠️ OPENED WITH THE FROZEN SNAPSHOT — BOTH HALVES. `taken` in dispatch order,
+  // and every `skipped` entry WITH its reason. The skips are the useful half:
+  // they are the only record anywhere of what this run deliberately did not do,
+  // and nothing that happens later could reconstruct them, because nothing
+  // happens to a card that was never dispatched.
+  const reporter = input.reporter ?? createDispatchRunReporter({ client });
+  await reporter.open({
+    projectKey,
+    command: 'batch',
+    runId: runIdFromDate((input.now ?? (() => new Date()))()),
+    cards: [
+      ...snapshot.taken.map((entry) => ({ key: entry.key, disposition: 'queued' as const })),
+      ...snapshot.skipped.map((skip) => ({
+        key: skip.key,
+        disposition: 'skipped' as const,
+        skipReason: skip.reason,
+      })),
+    ],
+    agent: agent.parsed.binary,
+  });
+  reporter.event({
+    kind: 'snapshot_frozen',
+    data: { taken: snapshot.taken.length, skipped: snapshot.skipped.length },
+  });
+
   const records: BatchRecord[] = [];
   const skipped: SnapshotSkip[] = [...snapshot.skipped];
   let stopIndex = snapshot.taken.length;
@@ -388,10 +437,17 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
         clock,
         runAgentFn,
         run: gitRun,
+        reporter,
       });
       if (outcome.kind === 'skipped') {
         skipped.push(outcome.skip);
         skippedKeys.add(entry.key.toUpperCase());
+        reporter.event({
+          kind: 'card_skipped',
+          workItemKey: entry.key,
+          disposition: 'skipped',
+          skipReason: outcome.skip.reason,
+        });
         continue;
       }
 
@@ -424,6 +480,9 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   const notReached = snapshot.taken
     .slice(stopIndex)
     .filter((e) => !skippedKeys.has(e.key.toUpperCase()) && !records.some((r) => r.key === e.key));
+
+  reporter.event({ kind: 'run_closed', data: { stopReason } });
+  await reporter.close(stopReason);
 
   return {
     records,
@@ -540,6 +599,8 @@ interface DispatchOneInput {
   /** The git runner the push check uses (MOTIR-3004) — the same injection seam
    *  `motir auto` takes its runner through. */
   run: CommandRunner;
+  /** The run reporter, threaded into the shared leg. */
+  reporter: DispatchRunReporter;
 }
 
 type DispatchOneResult =
@@ -636,6 +697,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     rootDir: link.dir,
     key: entry.key,
     dispatch,
+    reporter: input.reporter,
     agent: agent.parsed,
     targets,
     primary: target,
