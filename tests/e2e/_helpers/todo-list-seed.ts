@@ -18,7 +18,7 @@
 // positions the product never produced.
 
 import { expect, type Page } from '@playwright/test';
-import { db } from './db-reset';
+import { adminDb } from './db-reset';
 import { signUp, createFirstProject } from './shell-session';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
@@ -43,11 +43,19 @@ export async function seedTodoListFixture(page: Page, pmEmail: string): Promise<
   await createFirstProject(page, 'Platform');
 
   const local = pmEmail.split('@')[0]!;
-  const pm = await db.user.findFirst({ where: { email: pmEmail } });
-  const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
+  // ⚠️ `adminDb`, NOT the `db` singleton. A seeding helper that reads through
+  // the runtime client neither raises nor works once `motir_app` is the only
+  // connection — the write matches nothing and the read returns `[]`, so the
+  // spec drives a browser against a database it believes it populated.
+  // `tests/rls/test-singleton-statement-guard.test.ts` ratchets the remaining
+  // `tests/e2e/**` sites and may only ever fall, so a new helper does not add
+  // to them (it went red at 454 > 452 on this branch's first CI run, which is
+  // the instrument doing its job).
+  const pm = await adminDb.user.findFirst({ where: { email: pmEmail } });
+  const ws = await adminDb.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(pm, 'PM user exists after sign-up').not.toBeNull();
   expect(ws, 'auto workspace exists').not.toBeNull();
-  const project = await db.project.findFirst({ where: { workspaceId: ws!.id } });
+  const project = await adminDb.project.findFirst({ where: { workspaceId: ws!.id } });
   expect(project, 'first project exists').not.toBeNull();
 
   const ctx = { userId: pm!.id, workspaceId: ws!.id };
