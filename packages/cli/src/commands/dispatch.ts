@@ -119,6 +119,19 @@ export interface DeliveryOptions extends FindingsPolicyOptions, PromptEchoOption
    * commander's `unknown option` (MOTIR-1828 / MOTIR-1830).
    */
   autoApproveReplan?: boolean;
+  /**
+   * `--report-log` — ALSO send the agent's output to Motir (Story MOTIR-1789 ·
+   * MOTIR-1794), so a failed run shows its tail on the run page.
+   *
+   * ⚠️ OFF BY DEFAULT, AND THE DEFAULT IS THE PROMISE. A BYOK run executes on
+   * the operator's own machine, against a checkout Motir has never seen, under a
+   * key Motir does not hold; its log carries file paths, source excerpts, error
+   * output and possibly environment secrets. Without this flag the lifecycle
+   * goes and no body does — the stripping is enforced in ONE place, in the
+   * reporter, because a call site that forgot would leak and there are dozens.
+   * `docs/decisions/dispatch-run-record.md` Q4 is the decision.
+   */
+  reportLog?: boolean;
 }
 
 /**
@@ -360,7 +373,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   // reporter swallows its own failures by construction; there is deliberately no
   // error handling at this call site, because handling would imply there is
   // something a caller could do.
-  const reporter = createDispatchRunReporter({ client });
+  const reporter = createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
   await reporter.open({
     projectKey,
     command: input.command,
@@ -775,7 +788,10 @@ export async function runCommand(
       // The order comes from the SAME `orderClaimedSet` the drain uses, so the
       // positions a person reads on the run page are the order the drain
       // actually worked. Nothing is re-queried to produce it.
-      const reporter = createDispatchRunReporter({ client });
+      const reporter = createDispatchRunReporter({
+        client,
+        reportLogBodies: opts.reportLog === true,
+      });
       const claimOrder = orderClaimedSet(
         claimed.ready.map((m) => m.key),
         claimed.edges,

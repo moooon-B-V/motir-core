@@ -324,7 +324,10 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
     // list materialised here to make the run page look complete would be wrong
     // by the second iteration AND would break the property the loop exists to
     // have — so the legs arrive one at a time, from inside the loop.
-    const reporter = createDispatchRunReporter({ client: session.client });
+    const reporter = createDispatchRunReporter({
+      client: session.client,
+      reportLogBodies: opts.reportLog === true,
+    });
     await reporter.open({
       projectKey: session.projectKey,
       command: 'auto',

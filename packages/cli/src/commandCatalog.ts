@@ -443,6 +443,15 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         description:
           'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
       },
+      // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ─────
+      // Spelled and described IDENTICALLY on all four commands: the boundary it
+      // moves is the same boundary whichever command a person happens to type,
+      // and a table that described one promise four ways would be four promises.
+      {
+        flags: '--report-log',
+        description:
+          'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+      },
     ],
   },
   {
@@ -524,6 +533,15 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         description:
           'Not supported — a scoped run drains the whole claimed set, not a filtered subset.',
       },
+      // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ─────
+      // Spelled and described IDENTICALLY on all four commands: the boundary it
+      // moves is the same boundary whichever command a person happens to type,
+      // and a table that described one promise four ways would be four promises.
+      {
+        flags: '--report-log',
+        description:
+          'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+      },
     ],
   },
   {
@@ -592,6 +610,15 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         description:
           'Approve a re-plan the agent submitted and keep looping, instead of stopping for you.',
       },
+      // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ─────
+      // Spelled and described IDENTICALLY on all four commands: the boundary it
+      // moves is the same boundary whichever command a person happens to type,
+      // and a table that described one promise four ways would be four promises.
+      {
+        flags: '--report-log',
+        description:
+          'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+      },
     ],
   },
   {
@@ -654,6 +681,15 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--auto-approve-replan',
         description:
           'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+      },
+      // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ─────
+      // Spelled and described IDENTICALLY on all four commands: the boundary it
+      // moves is the same boundary whichever command a person happens to type,
+      // and a table that described one promise four ways would be four promises.
+      {
+        flags: '--report-log',
+        description:
+          'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
       },
     ],
   },

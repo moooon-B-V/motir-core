@@ -381,7 +381,9 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   // they are the only record anywhere of what this run deliberately did not do,
   // and nothing that happens later could reconstruct them, because nothing
   // happens to a card that was never dispatched.
-  const reporter = input.reporter ?? createDispatchRunReporter({ client });
+  const reporter =
+    input.reporter ??
+    createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
   await reporter.open({
     projectKey,
     command: 'batch',
