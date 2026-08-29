@@ -27,7 +27,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
-import { randomToken, randomInt } from '../helpers/random';
+import { randomToken } from '../helpers/random';
 
 // The runner FLEET's job WIRING (Story MOTIR-1916 · MOTIR-1921).
 //
@@ -110,7 +110,14 @@ const SETTLED_JSON = JSON.parse(JSON.stringify(SETTLED_OUTCOME)) as unknown;
  *  needs only its tenancy to be real. */
 let intentId: string;
 
+/** The per-call `jobId` counter. `runId` / `runAttempt` are fixed, so this column
+ *  alone carries `@@unique([runId, runAttempt, jobId])` — and a random draw over
+ *  900 values is not identity, however unique it usually happens to be
+ *  (MOTIR-3845). */
+let jobSeq = 0;
+
 async function seedIntent(): Promise<string> {
+  jobSeq += 1;
   const email = `fleet-jobs-${randomToken(6)}@example.com`;
   const user = await usersService.createUser({ email, password: 'hunter2hunter2', name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
@@ -124,7 +131,7 @@ async function seedIntent(): Promise<string> {
       installationId: '556677',
       runId: '7001',
       runAttempt: 1,
-      jobId: String(44000 + randomInt(900)),
+      jobId: String(44_000 + jobSeq),
       repoOwner: 'moooon-B-V',
       repoName: 'motir-core',
       requestedLabels: ['motir-runner'],
