@@ -5,6 +5,7 @@ import { Archive } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -43,6 +44,7 @@ import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
+import { TodoListSection } from './_components/TodoListSection';
 import { IssueQuickViewController } from '../_components/IssueQuickViewController';
 import { parseActivityTab } from '@/lib/activity/tab';
 
@@ -212,6 +214,7 @@ export default async function IssueDetailPage({
     parentRollup,
     locale,
     workItemRefs,
+    todoList,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -270,6 +273,13 @@ export default async function IssueDetailPage({
       ctx.projectId,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     ),
+    // The card's own TO-DO LIST (Story MOTIR-3808 · MOTIR-3815). TIER TWO, in
+    // THIS group rather than the late stack, and that placement is measured
+    // rather than assumed: at 1280x900 the section sits above the fold
+    // (`design/work-items/design-notes.md` § *Placement*), and on a card whose
+    // work IS the list it is what the reader came for. One small ordered read
+    // on the same card, so it costs the group nothing and adds no serial await.
+    workItemTodosService.listTodos(item.id, ctx),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -443,6 +453,18 @@ export default async function IssueDetailPage({
               explanationSource={item.explanationSource}
               editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
               workItemRefs={workItemRefs}
+            />
+            {/* MOTIR-3815: the to-do list — after Explanation and BEFORE
+              Relationships, the slot `design/work-items/todo-list.mock.html`
+              panel 0 measures. `canEdit` is the same `work_item:edit` the rest
+              of this page reads; the section hides its controls without it and
+              every action re-checks server-side, because a hidden control is
+              not an authorization. */}
+            <TodoListSection
+              workItemId={item.id}
+              initialTodos={todoList.items}
+              initialProgress={todoList.progress}
+              canEdit={canEdit}
             />
             {/* 2.4.5: the relationships section + ready/blocked banner — a left-
               column section card (per the approved mockup), after Explanation.

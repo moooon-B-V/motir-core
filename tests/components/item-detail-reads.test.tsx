@@ -112,6 +112,11 @@ vi.mock('@/lib/services/assignableMembersService', () => ({
 vi.mock('@/lib/services/sprintsService', () => ({
   sprintsService: { listByProject: deferred('sprints', []) },
 }));
+vi.mock('@/lib/services/workItemTodosService', () => ({
+  workItemTodosService: {
+    listTodos: deferred('todoList', { items: [], progress: { done: 0, total: 0 } }),
+  },
+}));
 vi.mock('@/lib/services/commentsService', () => ({
   commentsService: { listComments: deferred('comments', null) },
 }));
@@ -278,6 +283,10 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       'components',
       'estimationConfig',
       'workItemRefs',
+      // The to-do list (MOTIR-3808) is an unconditional tier-two member: every
+      // card has a list, even when it is empty, so this read is never skipped
+      // and must not be the one that gets serialised back out of the group.
+      'todoList',
     ]) {
       expect(started, `${name} should already be in flight`).toContain(name);
     }
