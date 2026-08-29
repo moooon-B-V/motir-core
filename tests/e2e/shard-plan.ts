@@ -28,18 +28,43 @@
 // the Playwright config imports it at module scope, and so does a vitest guard.
 
 /** The bulk legs, in matrix order. */
-export const BULK_LEG_IDS = ['bulk-1', 'bulk-2', 'bulk-3', 'bulk-4', 'bulk-5'] as const;
+export const BULK_LEG_IDS = [
+  'bulk-1',
+  'bulk-2',
+  'bulk-3',
+  'bulk-4',
+  'bulk-5',
+  'bulk-6',
+  'bulk-7',
+  'bulk-8',
+] as const;
 
 export type BulkLegId = (typeof BULK_LEG_IDS)[number];
 
 /**
  * MEASURED per-spec cost, in seconds of test execution.
  *
- * Source: the `playwright-report-bulk-{1..5}` artifacts of two green `main` CI
- * runs — **31438176201** (2026-08-10 22:24Z) and **31440981319** (2026-08-10
- * 23:05Z) — summing every `result.duration` per spec file and averaging the two.
- * Playwright attributes hook time to the test it runs for, so this includes each
- * spec's seeding, not just its assertions.
+ * Source: the `e2e-harness/*.jsonl` series of the five `playwright-report-bulk-*`
+ * artifacts of run **33251966134** (2026-08-29, PR #2453, green), summing every
+ * `test` record's `durationMs` per spec file. Playwright attributes hook time to
+ * the test it runs for, so this includes each spec's seeding, not just its
+ * assertions. One run, not an average of two — said plainly rather than dressed
+ * up as the older method below.
+ *
+ * ⚠️ THE NUMBERS THIS REPLACED WERE FROM 2026-08-10 AND HAD DRIFTED FAR ENOUGH TO
+ * MATTER (MOTIR-3913). The guard checks these costs against THEMSELVES — it
+ * asserts the legs balance to within 15% of what this table says — so it stayed
+ * green for nineteen days while reality moved. Net of each leg's pre-test boot,
+ * the five legs actually ran 269 / 321 / 381 / 315 / 337 s: a 1.42x spread, not
+ * the 1.007x the old table predicted. The two worst entries had moved by more
+ * than a factor of two in OPPOSITE directions — `jobs-flow.spec.ts` 89.7 → 25.7 s
+ * and `code-graph-refresh-engine.spec.ts` 26.0 → 56.6 s — which is why the drift
+ * did not simply cancel. The lesson for whoever reads this next: a green guard is
+ * not evidence this table is current, and only a run can tell you.
+ *
+ * `app-role-surfaces.spec.ts` moved 0 → 1.3 s, which is a category change rather
+ * than drift: it now contributes tests to a bulk leg where it previously
+ * contributed none. See the `0` paragraph below for why that distinction matters.
  *
  * A `0` is a real measurement, not a gap: those specs contribute NO tests to a
  * bulk leg because every test in them is selected away by the legs'
@@ -49,9 +74,13 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * exactly one leg" stays a total statement the guard can check.
  *
  * TO RE-MEASURE: download the `playwright-report-bulk-*` artifacts of a green
- * run and sum durations per file — or read the `out/e2e-harness/*.jsonl` series
- * the harness watchdog now uploads with every leg, whose `test` records carry
- * the same per-spec durations alongside the memory samples.
+ * run and read the `e2e-harness/*.jsonl` series inside them — the harness
+ * watchdog's `test` records carry a per-spec `durationMs` alongside the memory
+ * samples, and summing those is what produced the numbers above. (The HTML
+ * report in the same artifact shards its data across content-hashed files and is
+ * the harder path to the same figures.) Re-measure whenever a leg's OBSERVED
+ * test time drifts from what this table predicts — that comparison, not the
+ * guard, is the thing that can tell you these numbers have aged.
  *
  * ⚠️ THE TWELVE SPECS PROMOTED BY MOTIR-2769 carry a DIFFERENT provenance, stated
  * so nobody averages them with the rest: they were measured LOCALLY, in one run
@@ -357,147 +386,147 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * it.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
-  'activity.spec.ts': 11.2,
-  'app-role-surfaces.spec.ts': 0,
-  'ai-callout-gate.spec.ts': 1.5,
+  'activity.spec.ts': 13.8,
+  'app-role-surfaces.spec.ts': 1.3,
+  'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
-  'api-docs.spec.ts': 15.0,
-  'api-tokens.spec.ts': 18.2,
-  'appearance-sync.spec.ts': 4.9,
-  'archive-flow.spec.ts': 10.3,
-  'attachments.spec.ts': 14.9,
-  'auth-credentials.spec.ts': 3.6,
-  'auth-google.spec.ts': 3.5,
-  'auth-post-auth-landing.spec.ts': 12.0,
-  'auth-signed-in-bounce.spec.ts': 4.5,
-  'automation.spec.ts': 12.1,
-  'backlog-filter.spec.ts': 3.1,
-  'backlog.spec.ts': 16.9,
-  'billing-selfhost.spec.ts': 2.2,
+  'api-docs.spec.ts': 24.8,
+  'api-tokens.spec.ts': 29.2,
+  'appearance-sync.spec.ts': 7.0,
+  'archive-flow.spec.ts': 14.7,
+  'attachments.spec.ts': 21.1,
+  'auth-credentials.spec.ts': 5.4,
+  'auth-google.spec.ts': 4.2,
+  'auth-post-auth-landing.spec.ts': 4.2,
+  'auth-signed-in-bounce.spec.ts': 4.3,
+  'automation.spec.ts': 12.8,
+  'backlog-filter.spec.ts': 4.0,
+  'backlog.spec.ts': 23.6,
+  'billing-selfhost.spec.ts': 2.7,
   'board-a11y.spec.ts': 0,
   'board-at-scale-interaction.spec.ts': 0,
   'board-at-scale.spec.ts': 0,
-  'board-config.spec.ts': 11.0,
-  'board-crud.spec.ts': 16.8,
-  'board-filter.spec.ts': 3.4,
-  'board-load.spec.ts': 5.7,
-  'board-projection.spec.ts': 7.5,
+  'board-config.spec.ts': 15.1,
+  'board-crud.spec.ts': 24.9,
+  'board-filter.spec.ts': 4.5,
+  'board-load.spec.ts': 7.5,
+  'board-projection.spec.ts': 10.9,
   'board-scrum-at-scale-interaction.spec.ts': 0,
   'board-scrum-at-scale.spec.ts': 0,
-  'board-scrum.spec.ts': 11.0,
-  'board-swimlanes.spec.ts': 12.3,
-  'board-ui.spec.ts': 45.1,
-  'build-in-public-flow.spec.ts': 8.0,
-  'canvas-detail.spec.ts': 5.7,
-  'cascade-under-load.spec.ts': 5.0,
-  'charts.spec.ts': 8.9,
-  'child-panel-graph.spec.ts': 4.4,
-  'cli-connect.spec.ts': 20.2,
-  'code-graph-refresh-engine.spec.ts': 26.0,
-  'code-graph-writer-seam.spec.ts': 6.5,
+  'board-scrum.spec.ts': 14.0,
+  'board-swimlanes.spec.ts': 16.9,
+  'board-ui.spec.ts': 43.5,
+  'build-in-public-flow.spec.ts': 8.8,
+  'canvas-detail.spec.ts': 6.1,
+  'cascade-under-load.spec.ts': 3.7,
+  'charts.spec.ts': 9.7,
+  'child-panel-graph.spec.ts': 7.5,
+  'cli-connect.spec.ts': 17.2,
+  'code-graph-refresh-engine.spec.ts': 56.6,
+  'code-graph-writer-seam.spec.ts': 14.8,
   'collab-at-scale.spec.ts': 0,
-  'collab-journey.spec.ts': 10.4,
-  'comments.spec.ts': 11.6,
-  'custom-fields.spec.ts': 18.5,
-  'custom-roles.spec.ts': 8.2,
-  'data-subject-request-journey.spec.ts': 6.0,
-  'dashboards.spec.ts': 12.6,
-  'design-result.spec.ts': 6.3,
-  'docs-index.spec.ts': 1.7,
-  'epic-privacy-flow.spec.ts': 6.5,
-  'epic2-acceptance.spec.ts': 6.7,
+  'collab-journey.spec.ts': 11.4,
+  'comments.spec.ts': 12.1,
+  'custom-fields.spec.ts': 20.6,
+  'custom-roles.spec.ts': 16.0,
+  'data-subject-request-journey.spec.ts': 8.5,
+  'dashboards.spec.ts': 13.9,
+  'design-result.spec.ts': 9.2,
+  'docs-index.spec.ts': 3.1,
+  'epic-privacy-flow.spec.ts': 7.2,
+  'epic2-acceptance.spec.ts': 7.4,
   'epic6-at-scale.spec.ts': 0,
-  'epic6-journey.spec.ts': 12.7,
-  'estimation.spec.ts': 12.9,
-  'filter-builder.spec.ts': 20.0,
-  'follow-the-build-flow.spec.ts': 3.3,
-  'github.spec.ts': 7.1,
-  'gitlab.spec.ts': 4.9,
-  'home.spec.ts': 8.0,
-  'import.spec.ts': 7.4,
-  'issue-create-edit-flow.spec.ts': 14.1,
-  'issue-detail-flow.spec.ts': 46.7,
-  'issue-list-flow.spec.ts': 44.7,
-  'jobs-dashboard.spec.ts': 7.4,
-  'jobs-fanout-engine.spec.ts': 8.3,
-  'jobs-flow.spec.ts': 89.7,
-  'jobs-postgres-engine.spec.ts': 22.0,
-  'jobs-scheduled-engine.spec.ts': 25.0,
-  'labels-components-watch.spec.ts': 27.6,
-  'link-search-flow.spec.ts': 12.6,
-  'mcp-docs.spec.ts': 2.2,
-  'member-facing-permissions.spec.ts': 6.6,
-  'migrate-index-fleet.spec.ts': 26.1,
-  'multi-tenant-isolation.spec.ts': 2.2,
-  'notifications.spec.ts': 13.8,
-  'onboarding-discovery.spec.ts': 2.5,
-  'onboarding-entrance.spec.ts': 5.8,
-  'onboarding-entry.spec.ts': 3.5,
-  'onboarding-fresh.spec.ts': 8.6,
-  'onboarding-migrate.spec.ts': 43.5,
-  'onboarding-ran-gate.spec.ts': 11.9,
-  'org-admin.spec.ts': 7.9,
-  'per-domain-admin-permissions.spec.ts': 11.4,
-  'permission-gated-ui.spec.ts': 10.8,
-  'plan-change-planner-turn.spec.ts': 6.7,
-  'plan-decision-permission.spec.ts': 2.8,
-  'plan-proposal-correction.spec.ts': 14.7,
-  'planning-anchor-level.spec.ts': 9.4,
-  'plans-review.spec.ts': 6.3,
-  'profile.spec.ts': 10.8,
-  'project-access.spec.ts': 8.7,
-  'project-details.spec.ts': 8.0,
-  'project-isolation.spec.ts': 4.9,
-  'project-logo.spec.ts': 9.0,
-  'project-repositories-api.spec.ts': 3.2,
-  'project-square-flow.spec.ts': 4.3,
-  'projects-flow.spec.ts': 5.3,
-  'provenance.spec.ts': 14.8,
-  'public-overview-edit.spec.ts': 7.0,
-  'public-project-flow.spec.ts': 7.2,
-  'public-signin-modal.spec.ts': 3.4,
-  'quick-view-edit.spec.ts': 14.5,
-  'ready.spec.ts': 5.9,
-  'reports.spec.ts': 18.0,
+  'epic6-journey.spec.ts': 14.4,
+  'estimation.spec.ts': 14.6,
+  'filter-builder.spec.ts': 23.8,
+  'follow-the-build-flow.spec.ts': 7.1,
+  'github.spec.ts': 8.3,
+  'gitlab.spec.ts': 6.1,
+  'home.spec.ts': 10.9,
+  'import.spec.ts': 9.1,
+  'issue-create-edit-flow.spec.ts': 16.7,
+  'issue-detail-flow.spec.ts': 51.7,
+  'issue-list-flow.spec.ts': 51.7,
+  'jobs-dashboard.spec.ts': 8.6,
+  'jobs-fanout-engine.spec.ts': 11.7,
+  'jobs-flow.spec.ts': 25.7,
+  'jobs-postgres-engine.spec.ts': 24.8,
+  'jobs-scheduled-engine.spec.ts': 14.6,
+  'labels-components-watch.spec.ts': 28.5,
+  'link-search-flow.spec.ts': 14.6,
+  'mcp-docs.spec.ts': 4.1,
+  'member-facing-permissions.spec.ts': 7.7,
+  'migrate-index-fleet.spec.ts': 26.7,
+  'multi-tenant-isolation.spec.ts': 2.5,
+  'notifications.spec.ts': 14.3,
+  'onboarding-discovery.spec.ts': 2.6,
+  'onboarding-entrance.spec.ts': 6.8,
+  'onboarding-entry.spec.ts': 2.9,
+  'onboarding-fresh.spec.ts': 9.3,
+  'onboarding-migrate.spec.ts': 42.0,
+  'onboarding-ran-gate.spec.ts': 14.1,
+  'org-admin.spec.ts': 8.6,
+  'per-domain-admin-permissions.spec.ts': 12.4,
+  'permission-gated-ui.spec.ts': 14.0,
+  'plan-change-planner-turn.spec.ts': 7.6,
+  'plan-decision-permission.spec.ts': 4.5,
+  'plan-proposal-correction.spec.ts': 4.4,
+  'planning-anchor-level.spec.ts': 11.0,
+  'plans-review.spec.ts': 14.8,
+  'profile.spec.ts': 11.4,
+  'project-access.spec.ts': 9.7,
+  'project-details.spec.ts': 7.7,
+  'project-isolation.spec.ts': 5.4,
+  'project-logo.spec.ts': 12.7,
+  'project-repositories-api.spec.ts': 3.1,
+  'project-square-flow.spec.ts': 6.4,
+  'projects-flow.spec.ts': 5.8,
+  'provenance.spec.ts': 15.2,
+  'public-overview-edit.spec.ts': 8.0,
+  'public-project-flow.spec.ts': 8.3,
+  'public-signin-modal.spec.ts': 3.9,
+  'quick-view-edit.spec.ts': 16.4,
+  'ready.spec.ts': 6.7,
+  'reports.spec.ts': 20.9,
   // ⚠️ A FOURTH provenance (MOTIR-3009): promoted out of the acceptance lane by
   // the story that changed the lifecycle it walks, and measured LOCALLY in this
   // lane on 2026-08-19 against a production build — it had never run here. The
   // number is small because `_helpers/promoted-regression` makes its ~10 pacing
   // beats no-ops; the SAME spec takes about a minute when it is recording. Like
   // the twelve above, re-measure it from the first green CI run that includes it.
-  'repository-set.spec.ts': 2.2,
-  'roadmap-auto-drill.spec.ts': 4.0,
-  'roadmap-done-ready.spec.ts': 2.6,
-  'roadmap-flow.spec.ts': 4.8,
-  'roadmap-fullscreen.spec.ts': 2.9,
-  'roadmap-locate.spec.ts': 3.1,
-  'roadmap-refresh-scope.spec.ts': 8.5,
-  'roadmap-scope-toggle.spec.ts': 5.8,
-  'roles-permissions.spec.ts': 9.3,
-  'saved-filters.spec.ts': 15.2,
-  'settings-area.spec.ts': 10.8,
+  'repository-set.spec.ts': 4.7,
+  'roadmap-auto-drill.spec.ts': 6.9,
+  'roadmap-done-ready.spec.ts': 3.0,
+  'roadmap-flow.spec.ts': 5.7,
+  'roadmap-fullscreen.spec.ts': 3.5,
+  'roadmap-locate.spec.ts': 4.2,
+  'roadmap-refresh-scope.spec.ts': 10.7,
+  'roadmap-scope-toggle.spec.ts': 7.2,
+  'roles-permissions.spec.ts': 15.9,
+  'saved-filters.spec.ts': 17.0,
+  'settings-area.spec.ts': 13.0,
   'shell-a11y-detail.spec.ts': 0,
   'shell-a11y-tokens.spec.ts': 0,
   'shell-a11y-wide.spec.ts': 0,
   'shell-a11y.spec.ts': 0,
-  'shell-context-path.spec.ts': 12.6,
-  'shell-empty-projects.spec.ts': 2.5,
-  'shell-flows.spec.ts': 38.2,
+  'shell-context-path.spec.ts': 14.1,
+  'shell-empty-projects.spec.ts': 1.8,
+  'shell-flows.spec.ts': 41.1,
   'shell-keyboard.spec.ts': 0,
-  'shell-viewport-floor.spec.ts': 9.5,
+  'shell-viewport-floor.spec.ts': 11.4,
   'shell.spec.ts': 2.7,
-  'sprint-delete.spec.ts': 6.7,
-  'sprint-edit-dates.spec.ts': 5.8,
-  'sprint-field.spec.ts': 6.7,
-  'sprint-lifecycle.spec.ts': 8.0,
-  'sprint-rename.spec.ts': 6.3,
-  'status-derivation.spec.ts': 15.5,
-  'supervision-pool-under-load.spec.ts': 11.0,
-  'token-permissions.spec.ts': 2.2,
-  'top-bar-budget.spec.ts': 6.8,
-  'triage-flow.spec.ts': 11.6,
-  'passkeys.spec.ts': 4.7,
-  'two-factor.spec.ts': 13.3,
+  'sprint-delete.spec.ts': 7.2,
+  'sprint-edit-dates.spec.ts': 6.5,
+  'sprint-field.spec.ts': 7.5,
+  'sprint-lifecycle.spec.ts': 8.8,
+  'sprint-rename.spec.ts': 7.2,
+  'status-derivation.spec.ts': 22.6,
+  'supervision-pool-under-load.spec.ts': 4.7,
+  'token-permissions.spec.ts': 4.4,
+  'top-bar-budget.spec.ts': 7.2,
+  'triage-flow.spec.ts': 13.1,
+  'passkeys.spec.ts': 7.7,
+  'two-factor.spec.ts': 20.2,
   // ⚠️ MEASURED LOCALLY, not from a CI artifact (Story MOTIR-1215 · MOTIR-3650).
   // The file is new, so there is no green `main` run to read `result.duration`
   // out of yet. Summing the five tests' durations against a local prod build:
@@ -505,16 +534,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // hook time to the test it runs for — measured on a quieter box than a CI
   // runner, so treat it as a FLOOR and re-measure from the artifacts on the next
   // green run, exactly as this file's header prescribes.
-  'two-factor-enforcement.spec.ts': 35.9,
-  'work-item-delete.spec.ts': 5.7,
-  'work-item-mentions.spec.ts': 5.6,
-  'work-item-type-vocabulary.spec.ts': 7.4,
-  'work-item-type.spec.ts': 6.9,
-  'work-items-isolation.spec.ts': 10.2,
-  'workflow-delete-reassign.spec.ts': 5.5,
-  'workflow-flow.spec.ts': 2.1,
-  'workflow-settings.spec.ts': 5.4,
-  'workspace-flows.spec.ts': 7.1,
+  'two-factor-enforcement.spec.ts': 17.6,
+  'work-item-delete.spec.ts': 6.8,
+  'work-item-mentions.spec.ts': 6.5,
+  'work-item-type-vocabulary.spec.ts': 6.9,
+  'work-item-type.spec.ts': 7.8,
+  'work-items-isolation.spec.ts': 17.6,
+  'workflow-delete-reassign.spec.ts': 10.0,
+  'workflow-flow.spec.ts': 6.0,
+  'workflow-settings.spec.ts': 6.4,
+  'workspace-flows.spec.ts': 7.5,
 };
 
 /**

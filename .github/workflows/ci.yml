@@ -770,14 +770,28 @@ jobs:
     # contention (the local shared-:5433
     # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)
     # to max(slowest leg).
-    #   • 5 "bulk" legs — the non-at-scale, non-a11y suite, split by MEASURED
+    #   • 8 "bulk" legs — the non-at-scale, non-a11y suite, split by MEASURED
     #     per-spec cost (`tests/e2e/shard-plan.ts`, MOTIR-2617), NOT by
-    #     Playwright's `--shard=i/5`. Bumped 4→5 to shrink the slowest bulk leg;
-    #     pulling the @a11y sweeps out into their own leg (below) already removed
-    #     the worst long pole, so 5 is the balance — each leg re-pays the install
-    #     + dual-webServer boot, and more legs past this give diminishing returns
-    #     for the cost.
-    #     WHY NOT `--shard=i/5`: it partitions by test COUNT in discovery order,
+    #     Playwright's `--shard=i/8`. Bumped 4→5 to shrink the slowest bulk leg;
+    #     pulling the @a11y sweeps out into their own leg (below) removed the
+    #     worst long pole. Bumped 5→8 by MOTIR-3913, once the Vitest lane stopped
+    #     hiding this one: with Vitest balanced, E2E is what sets CI's wall clock.
+    #     THE "DIMINISHING RETURNS" THIS COMMENT USED TO ASSERT ARE REAL AND NOW
+    #     HAVE A NUMBER. Read off bulk-3 on run 33251966134, a leg's 650s is 83s
+    #     of job steps + 178s inside the run step BEFORE its first test (dual
+    #     `next start` + seeding) + 389s of tests. So 261s per leg is fixed and
+    #     re-paid, against 1624s of measured test work for the whole suite:
+    #       5 legs → 325s tests → ~602s job (worst 650s), 1305s fixed
+    #       8 legs → 203s tests → ~464s job,              2088s fixed
+    #      10 legs → 162s tests → ~423s job,              2610s fixed
+    #     8 is the knee: 5→8 takes ~3 min off the slowest leg for ~13 extra
+    #     runner-minutes, 8→10 buys 0.7 min more for another 9. Below ~8 the boot
+    #     dominates and the curve flattens. ⚠️ THAT 178s BOOT IS NOW 45% OF A LEG
+    #     and 2088s of runner time per run — more than the test work it protects.
+    #     Halving it beats adding legs; it is a separate investigation (dual
+    #     `next start` vs. seeding vs. `migrate deploy`, none of them separated by
+    #     measurement yet) and deliberately not folded in here.
+    #     WHY NOT `--shard=i/8`: it partitions by test COUNT in discovery order,
     #     so what a spec costs never enters the split. Measured across two green
     #     `main` runs (31438176201 + 31440981319) the five legs ran 159–280s of
     #     test time — 55% of mean, slowest leg ~1.75x the fastest — and the
@@ -865,6 +879,15 @@ jobs:
             args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           - id: bulk-5
             shard: bulk-5
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
+          - id: bulk-6
+            shard: bulk-6
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
+          - id: bulk-7
+            shard: bulk-7
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
+          - id: bulk-8
+            shard: bulk-8
             args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           # Every @a11y axe sweep (the shell-a11y* files + the per-feature a11y
           # closers), pulled into one parallel leg so the slow sweeps stop
