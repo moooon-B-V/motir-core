@@ -87,6 +87,19 @@ async function installE2ESeams(): Promise<void> {
     console.info('[worker] E2E_TEST_SLOW_JOB active — the long-running probe is registered.');
   }
 
+  // The SELF-RESCHEDULING PROBE (MOTIR-3832) — its own flag, and the same
+  // independent-seam shape as the one above. It is a supervision rather than a
+  // slow run: `lib/test-deferring-job.ts`'s header says why the two cannot be
+  // one probe.
+  const { deferringJobEnabled } = await import('@/lib/test-deferring-job');
+  if (deferringJobEnabled()) {
+    const { registerDeferringTestJob } = await import('@/lib/test-deferring-job');
+    registerDeferringTestJob();
+    console.info(
+      '[worker] E2E_TEST_DEFERRING_JOB active — the self-rescheduling probe is registered.',
+    );
+  }
+
   const { codeGraphMockEnabled } = await import('@/lib/test-code-graph-mock');
   if (!codeGraphMockEnabled()) return;
   const { installSharedMockAgent } = await import('@/lib/test-mock-agent');

@@ -5,6 +5,7 @@ import {
   childrenOf,
   computeLevel,
   deterministicLayout,
+  focalNode,
   hasChildren,
   levelOf,
   searchMatches,
@@ -165,5 +166,101 @@ describe('searchMatches', () => {
   });
   it('a blank query matches nothing (locate, not filter-to-empty)', () => {
     expect(searchMatches(forest(), '   ')).toEqual([]);
+  });
+});
+
+// ── THE FOCAL CARD (MOTIR-3837) ─────────────────────────────────────────────
+describe('focalNode', () => {
+  const n = (id: string, over: Partial<ProjectCanvasNode> = {}): ProjectCanvasNode => ({
+    id,
+    parentId: null,
+    searchText: id,
+    content: null,
+    ...over,
+  });
+
+  it('prefers the `here` frontier over everything else', () => {
+    expect(focalNode([n('A'), n('B', { ready: true }), n('C', { here: true })])).toBe('C');
+  });
+
+  it('falls to the FIRST ready node when there is no frontier', () => {
+    expect(focalNode([n('A'), n('B', { ready: true }), n('C', { ready: true })])).toBe('B');
+  });
+
+  it('falls to the level’s first node in layout order when there is neither', () => {
+    expect(focalNode([n('A'), n('B')])).toBe('A');
+  });
+
+  it('NEVER picks a decorative node — not even when it is first, and not even when it is `here`', () => {
+    // The pinned planning-origin cluster is provenance drawn beside the road, not
+    // the level's work (MOTIR-1824 established that rule for auto-descend).
+    expect(focalNode([n('__origin__', { decorative: true }), n('A')])).toBe('A');
+    expect(focalNode([n('__origin__', { decorative: true, here: true }), n('A')])).toBe('A');
+    expect(focalNode([n('__origin__', { decorative: true }), n('A'), n('B', { here: true })])).toBe(
+      'B',
+    );
+  });
+
+  it('returns null for an empty level, and for one that is ALL decoration', () => {
+    expect(focalNode([])).toBeNull();
+    expect(focalNode([n('__origin__', { decorative: true })])).toBeNull();
+  });
+});
+
+// ── the pure layout/order fallbacks ─────────────────────────────────────────
+describe('topologicalOrder and deterministicLayout — the defensive arms', () => {
+  it('ignores an edge naming a node that is not in the set, and a self-edge', () => {
+    const ids = ['A', 'B'];
+    const order = topologicalOrder(ids, [
+      { from: 'A', to: 'B' },
+      { from: 'A', to: 'GHOST' }, // not a member
+      { from: 'B', to: 'B' }, // self
+    ]);
+    expect(order).toEqual(['A', 'B']);
+  });
+
+  it('still emits every node when the edges form a CYCLE (no member has in-degree 0)', () => {
+    // The queue starts empty, so the drain loop never runs and the tail pass is
+    // what produces the order — the arm a well-formed DAG never reaches.
+    const order = topologicalOrder(
+      ['A', 'B', 'C'],
+      [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'C' },
+        { from: 'C', to: 'A' },
+      ],
+    );
+    expect([...order].sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('lays out a CYCLE without hanging, and places every node exactly once', () => {
+    const pos = deterministicLayout(
+      ['A', 'B'],
+      [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'A' },
+      ],
+    );
+    expect(Object.keys(pos).sort()).toEqual(['A', 'B']);
+    expect(pos['A']).not.toEqual(pos['B']);
+  });
+
+  it('lays out a set with NO edges at all — every node is loose', () => {
+    const pos = deterministicLayout(['A', 'B', 'C', 'D'], []);
+    expect(Object.keys(pos)).toHaveLength(4);
+    // The loose band is a grid, so the first row shares a `y`.
+    expect(pos['A']!.y).toBe(pos['B']!.y);
+  });
+
+  it('lays out a chain DEEPER than one layer, stacking each node past its predecessor', () => {
+    const pos = deterministicLayout(
+      ['A', 'B', 'C'],
+      [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'C' },
+      ],
+    );
+    expect(pos['A']!.x).toBeLessThan(pos['B']!.x);
+    expect(pos['B']!.x).toBeLessThan(pos['C']!.x);
   });
 });

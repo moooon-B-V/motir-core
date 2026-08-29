@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 // Guard for MOTIR-2442: the design-asset guards must run on a `design/*`
@@ -230,51 +230,62 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
     ).toEqual([]);
   });
 
-  // ── The design-result publish step (MOTIR-2664 / MOTIR-2668) ──────────────
+  // ── The design-result publish is RETIRED (MOTIR-3797) ────────────────────
   //
-  // The step lives in THIS job rather than a workflow of its own, so that a
-  // design PR gains no new check. That arrangement is only safe while four
-  // things hold, and none of them is visible to a typechecker or a linter — a
-  // workflow file is not executed by any suite, so this is where they are
-  // stated.
+  // This block used to assert four properties of a `Publish the design result`
+  // STEP in this job: that it existed here rather than in a workflow of its
+  // own, that the job requested `id-token: write` for its keyless OIDC
+  // identity, that it ran on `pull_request` only, and that it carried no
+  // `continue-on-error`. All four were correct while a CI script did the
+  // publishing. None of them describes anything now: the AGENT publishes,
+  // through the `publish_design_result` MCP tool
+  // (`docs/decisions/design-result.md` AMENDMENT 2).
+  //
+  // ⚠️ THE ASSERTIONS ARE INVERTED, NOT DELETED, and the reason is the one the
+  // retirement itself is about. A publisher that has to BE PRESENT in a
+  // repository is GREEN when it is stale, absent or forked — nothing imports
+  // it, nothing type-checks it, no check compares it to anything. The mirror
+  // hazard is a publisher that comes BACK: a copied job, a restored step, a
+  // second workflow added by somebody who remembers this repo used to publish
+  // from CI. That would be just as invisible, because a workflow file is not
+  // typechecked, linted or executed by any suite — which is the same sentence
+  // this file's header opens with, pointed the other way.
 
-  it('publishes the design result from THIS job — no second workflow, no new check', () => {
-    expect(guardCode).toContain('scripts/upload-design-assets.mjs');
-
-    // A sibling workflow would mean a new PR check on every design PR, which is
-    // the cost the step-in-an-existing-job arrangement exists to avoid.
-    const workflows = readdirSync(join(ROOT, '.github/workflows'));
+  it('runs NO design publisher — not in this job, not in any workflow', () => {
+    // The entry point is gone from the tree, so nothing can invoke it …
+    expect(existsSync(join(ROOT, 'scripts/upload-design-assets.mjs'))).toBe(false);
+    // … and no workflow names it, or any successor script, by any route.
+    const workflowDir = join(ROOT, '.github/workflows');
+    for (const file of readdirSync(workflowDir).filter((f) => /\.ya?ml$/.test(f))) {
+      const yaml = readFileSync(join(workflowDir, file), 'utf8');
+      expect(yaml, file).not.toContain('upload-design-assets');
+      expect(yaml, file).not.toContain('design-evidence');
+    }
+    // A design-publish workflow of its own is the other way it comes back —
+    // and would add a check to every design pull request while it was at it.
+    const workflows = readdirSync(workflowDir);
     expect(workflows).not.toContain('design-result.yml');
     expect(workflows).not.toContain('design-assets.yml');
   });
 
-  it('requests `id-token: write`, or the keyless publish cannot authenticate', () => {
-    // Without it GitHub injects no OIDC request token, the script finds no
-    // identity, and every publish silently degrades to the PAT fallback — which
-    // on a repo with no secret set means: no receipts, no error, forever.
-    expect(guardCode).toMatch(/permissions:[\s\S]*id-token:\s*write/);
+  it('requests NO `id-token: write` — this job authenticates to nothing', () => {
+    // The permission existed solely for the keyless OIDC identity the publish
+    // step used (MOTIR-2668). With the step gone it grants a capability with no
+    // consumer, which is how a retired mechanism leaves a live credential
+    // behind. `authenticateGithubOidc` is untouched — the acceptance-video
+    // publisher still uses it, from its OWN workflow's own `id-token: write`,
+    // which is why this assertion is scoped to THIS job and not to the file.
+    expect(guardCode).not.toMatch(/id-token:\s*write/);
   });
 
-  it('publishes on `pull_request` ONLY — never again on the push to `main`', () => {
-    // ci.yml runs on both. Re-publishing an identical result after merge is the
-    // behaviour acceptance-video.yml avoids too — and since MOTIR-2760 it avoids
-    // it the same way this lane does, by gating its publish step on the event
-    // (it now has a `push: main` baseline that tests without publishing). This
-    // comment previously said "by having no `push:` trigger at all".
-    expect(ci).toMatch(/^on:\s*$/m);
-    expect(ci).toMatch(/^\s{2}push:\s*$/m);
-
-    const publishStep = guardCode.slice(guardCode.indexOf('Publish the design result'));
-    expect(publishStep).toMatch(/if:\s*github\.event_name == 'pull_request'/);
-  });
-
-  it('carries NO `continue-on-error` — a lost publish must be able to go red', () => {
-    // MOTIR-2499 removed one from the acceptance publish after it rewrote a
-    // failing step's conclusion to `success` for days while two stories lost
-    // their receipts. The cases that would justify one (no credential, no
-    // resolvable target) are handled inside the script, which exits 0 for each.
-    const publishStep = guardCode.slice(guardCode.indexOf('Publish the design result'));
-    expect(publishStep).not.toContain('continue-on-error');
+  it('still carries the guard step it exists for — the JOB stays, the publish went', () => {
+    // The failure this pair is written against is a sweep that reads "retire
+    // the design-result lane" and takes the guards with it. The job's whole
+    // reason to exist (running `vitest.design.config.ts` unconditionally) is
+    // asserted above; this restates the boundary at the point somebody would
+    // be deleting.
+    expect(guardCode).toContain('pnpm vitest run --config vitest.design.config.ts');
+    expect(guardCode).not.toContain('Publish the design result');
   });
 
   it('keeps the exclusion list honest in both directions', () => {

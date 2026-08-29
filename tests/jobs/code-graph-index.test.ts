@@ -150,12 +150,18 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     stubIndexFleet();
     containerExitsWith(0);
     // ⚠️ THE ASSERTION IS INVERTED FROM WHAT IT WAS, deliberately. It used to be
-    // that the JOB must NEVER call `runIndexContainer` — "a job that called it
-    // would rebuild the hour-long invocation MOTIR-2007 removed for CI". That
-    // ceiling is gone, and having ONE composition instead of two kept in
-    // agreement by hand is this card's actual deliverable. So the job must call
+    // that the JOB must NEVER call the service's composition — "a job that
+    // called it would rebuild the hour-long invocation MOTIR-2007 removed for
+    // CI". That ceiling is gone, and having ONE composition instead of two kept
+    // in agreement by hand is what MOTIR-3484 delivered. So the job must call
     // it, and must call it with a step seam.
-    const composed = vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer');
+    //
+    // ⚠️ THE ENTRY POINT MOVED (MOTIR-3828): the job drives
+    // `advanceIndexContainer`, which does ONE poll and defers, rather than
+    // `runIndexContainer`, which is now the in-process run-to-completion wrapper
+    // for a caller with no `job_queue` row. Same composition, one pass at a
+    // time — `docs/decisions/job-queue-foundation.md` §16.
+    const composed = vi.spyOn(codeGraphIndexDispatchService, 'advanceIndexContainer');
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
     const engine = new JobTestEngine({ function: codeGraphIndex });
@@ -166,7 +172,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
     expect(composed).toHaveBeenCalled();
     for (const call of composed.mock.calls) {
-      expect(call[1]?.steps, 'the job must supply the durable seam').toBeDefined();
+      expect(call[2]?.steps, 'the job must supply the durable seam').toBeDefined();
     }
     // ⚠️ COUNT THE MEMOIZED WORK, NOT THE CALLS. `composed` is called on EVERY
     // replay pass, because Inngest re-invokes the handler from the top at each

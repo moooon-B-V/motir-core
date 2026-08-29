@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { fireEvent } from '@testing-library/dom';
@@ -8,6 +8,10 @@ import {
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import type { ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
+import {
+  DEPENDENCY_LEGEND_COLLAPSED_STORAGE_KEY,
+  resetDependencyLegendCollapsedForTests,
+} from '@/lib/hooks/useDependencyLegendCollapsed';
 
 afterEach(() => cleanup());
 
@@ -1117,5 +1121,434 @@ describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', ()
     );
     await screen.findByText('a');
     expect(screen.getByTestId('show-changes-toggle').textContent).not.toContain('of');
+  });
+});
+
+// ── THE LEVEL SEAM (MOTIR-3835) ─────────────────────────────────────────────
+//
+// `initialTrail` seeds the level once; these two props are the other two
+// directions — REPORTING where the canvas went, and being TOLD to go somewhere
+// without a remount. Both are opt-in and absent by default, which the "three
+// other consumers" test at the bottom of this block is what actually protects.
+describe('ProjectRoadmapCanvas — the level seam (onLevelChange + controlledTrail)', () => {
+  // A two-level tree with a KEY on every drillable node, so the reported trail
+  // can be asserted to carry the identifier and not only the display label.
+  function keyed(id: string, label: string, key: string, drillable = false): ProjectCanvasNode {
+    return {
+      id,
+      parentId: null,
+      searchText: label,
+      crumbLabel: `${key} · ${label}`,
+      crumbKey: key,
+      drillable,
+      content: <div>{label}</div>,
+    };
+  }
+  const tree: Record<string, RoadmapLevel> = {
+    __root__: {
+      nodes: [keyed('E1', 'Epic one', 'MOTIR-1', true), keyed('E2', 'Epic two', 'MOTIR-2')],
+      deps: [],
+    },
+    E1: {
+      nodes: [keyed('S1', 'Story one', 'MOTIR-11', true), keyed('S2', 'Story two', 'MOTIR-12')],
+      deps: [],
+    },
+    S1: { nodes: [keyed('T1', 'Task one', 'MOTIR-111')], deps: [] },
+  };
+  const load = (parentId: string | null): Promise<RoadmapLevel> =>
+    Promise.resolve(tree[parentId ?? '__root__'] ?? { nodes: [], deps: [] });
+
+  describe('onLevelChange — reporting the level', () => {
+    it('is NOT called for the mount-time seed, nor when a level LOAD resolves', async () => {
+      const onLevelChange = vi.fn();
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          onLevelChange={onLevelChange}
+          initialTrail={[{ id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' }]}
+        />,
+      );
+      // The seeded level has loaded — the canvas is sitting on it.
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(onLevelChange).not.toHaveBeenCalled();
+    });
+
+    it('reports the full trail root-first on a DRILL, with the crumb KEY', async () => {
+      const onLevelChange = vi.fn();
+      render(
+        <ProjectRoadmapCanvas loadLevel={load} onLevelChange={onLevelChange} rootLabel="Root" />,
+      );
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      expect(onLevelChange).toHaveBeenCalledTimes(1);
+      expect(onLevelChange.mock.calls[0]![0]).toEqual([
+        { id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' },
+      ]);
+
+      // A second drill APPENDS — the trail is cumulative, root-first.
+      fireEvent.keyDown(el('S1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Task one');
+      expect(onLevelChange).toHaveBeenCalledTimes(2);
+      expect(onLevelChange.mock.calls[1]![0]).toEqual([
+        { id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' },
+        { id: 'S1', label: 'MOTIR-11 · Story one', crumbKey: 'MOTIR-11' },
+      ]);
+    });
+
+    it('reports `[]` when Back returns the canvas to its ROOT level', async () => {
+      const onLevelChange = vi.fn();
+      render(
+        <ProjectRoadmapCanvas loadLevel={load} onLevelChange={onLevelChange} rootLabel="Root" />,
+      );
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      onLevelChange.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      await screen.findByText('Epic one');
+      expect(onLevelChange).toHaveBeenCalledTimes(1);
+      expect(onLevelChange.mock.calls[0]![0]).toEqual([]);
+    });
+
+    it('reports the TRUNCATED trail when a middle crumb is clicked', async () => {
+      const onLevelChange = vi.fn();
+      render(
+        <ProjectRoadmapCanvas loadLevel={load} onLevelChange={onLevelChange} rootLabel="Root" />,
+      );
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      fireEvent.keyDown(el('S1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Task one');
+      onLevelChange.mockClear();
+
+      const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      fireEvent.click(within(crumb).getByText('MOTIR-1 · Epic one'));
+      await screen.findByText('Story one');
+      expect(onLevelChange.mock.calls[0]![0]).toEqual([
+        { id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' },
+      ]);
+    });
+
+    it('an AUTO-DESCENDED arrival reports exactly like a hand-drilled one', async () => {
+      // A root level of ONE drillable node: nobody clicks, the canvas descends
+      // itself — and the report must still name the level it landed on.
+      const lone: Record<string, RoadmapLevel> = {
+        __root__: { nodes: [keyed('E1', 'Epic one', 'MOTIR-1', true)], deps: [] },
+        E1: {
+          nodes: [keyed('S1', 'Story one', 'MOTIR-11'), keyed('S2', 'Story two', 'MOTIR-12')],
+          deps: [],
+        },
+      };
+      const onLevelChange = vi.fn();
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={(p) => Promise.resolve(lone[p ?? '__root__'] ?? { nodes: [], deps: [] })}
+          onLevelChange={onLevelChange}
+          autoDescendSingleParent
+        />,
+      );
+      await screen.findByText('Story one');
+      expect(onLevelChange).toHaveBeenCalledTimes(1);
+      expect(onLevelChange.mock.calls[0]![0]).toEqual([
+        { id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' },
+      ]);
+    });
+
+    it('omits crumbKey entirely for a node that carries none', async () => {
+      const onLevelChange = vi.fn();
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          onLevelChange={onLevelChange}
+          rootLabel="Root"
+        />,
+      );
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      // `node()` (the file's own helper) sets no crumbKey — the crumb has none.
+      expect(onLevelChange.mock.calls[0]![0]).toEqual([{ id: 'E1', label: 'E1' }]);
+    });
+  });
+
+  describe('controlledTrail — being told where to go', () => {
+    it('ADOPTS a level that differs from the canvas’s own, without a remount', async () => {
+      const seen: Array<string | null> = [];
+      const spy = (p: string | null) => {
+        seen.push(p);
+        return load(p);
+      };
+      const { rerender } = render(<ProjectRoadmapCanvas loadLevel={spy} controlledTrail={[]} />);
+      await screen.findByText('Epic one');
+      expect(seen).toEqual([null]);
+
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={spy}
+          controlledTrail={[{ id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' }]}
+        />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      // ONE further read — the adopted level itself. Not a walk of the chain.
+      expect(seen).toEqual([null, 'E1']);
+      // The breadcrumb is the adopted trail, so Back / the crumbs keep working.
+      const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(within(crumb).getByText('MOTIR-1 · Epic one')).toBeTruthy();
+    });
+
+    it('is a NO-OP when the controlled level equals the current one — one read, no loop', async () => {
+      const spy = vi.fn(load);
+      const trail = [{ id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' }];
+      const { rerender } = render(<ProjectRoadmapCanvas loadLevel={spy} controlledTrail={trail} />);
+      await screen.findByText('Story one');
+      const callsAfterMount = spy.mock.calls.length;
+      rerender(<ProjectRoadmapCanvas loadLevel={spy} controlledTrail={[...trail]} />);
+      await screen.findByText('Story one');
+      expect(spy.mock.calls.length).toBe(callsAfterMount);
+    });
+
+    it('does NOT report back through onLevelChange — an adoption is the consumer’s own word', async () => {
+      const onLevelChange = vi.fn();
+      const { rerender } = render(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          controlledTrail={[]}
+          onLevelChange={onLevelChange}
+        />,
+      );
+      await screen.findByText('Epic one');
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          controlledTrail={[{ id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' }]}
+          onLevelChange={onLevelChange}
+        />,
+      );
+      await screen.findByText('Story one');
+      expect(onLevelChange).not.toHaveBeenCalled();
+    });
+
+    it('SUPPRESSES auto-descend for the adopted level', async () => {
+      // The adopted level holds exactly one drillable node, so an unsuppressed
+      // canvas would descend straight back out of the level it was just told to
+      // show. The consumer asked to SEE this level.
+      const chain: Record<string, RoadmapLevel> = {
+        __root__: {
+          nodes: [keyed('E1', 'Epic one', 'MOTIR-1', true), keyed('E2', 'Epic two', 'MOTIR-2')],
+          deps: [],
+        },
+        E1: { nodes: [keyed('S1', 'Story one', 'MOTIR-11', true)], deps: [] },
+        S1: { nodes: [keyed('T1', 'Task one', 'MOTIR-111')], deps: [] },
+      };
+      const { rerender } = render(
+        <ProjectRoadmapCanvas
+          loadLevel={(p) => Promise.resolve(chain[p ?? '__root__'] ?? { nodes: [], deps: [] })}
+          controlledTrail={[]}
+          autoDescendSingleParent
+        />,
+      );
+      await screen.findByText('Epic one');
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={(p) => Promise.resolve(chain[p ?? '__root__'] ?? { nodes: [], deps: [] })}
+          controlledTrail={[{ id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' }]}
+          autoDescendSingleParent
+        />,
+      );
+      // It stays on E1's level, showing the lone story — it does not descend to T1.
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(el('T1')).toBeNull();
+    });
+
+    it('clears the per-level state a drill clears — the selection does not survive', async () => {
+      const { rerender } = render(<ProjectRoadmapCanvas loadLevel={load} controlledTrail={[]} />);
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E2')!, { key: 'Enter' });
+      expect(el('E2')!.querySelector('[data-selected]')).toBeTruthy();
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          controlledTrail={[{ id: 'E1', label: 'MOTIR-1 · Epic one', crumbKey: 'MOTIR-1' }]}
+        />,
+      );
+      await screen.findByText('Story one');
+      expect(document.querySelector('[data-selected="true"]')).toBeNull();
+    });
+  });
+});
+
+// ── THE ARRIVAL VIEW (MOTIR-3837) ───────────────────────────────────────────
+//
+// The GEOMETRY is unit-tested in `tests/planning/canvasGeometry.test.ts` and the
+// FOCAL LADDER in `tests/planning/projectCanvasModel.test.ts` — both pure. What
+// this component owns is that the opt-in defaults OFF, so the three consumers
+// that do not ask for a readable arrival keep today's plain fit.
+describe('ProjectRoadmapCanvas — arriveAtReadableScale is opt-in', () => {
+  const one: RoadmapLevel = { nodes: [node('A', 'a')], deps: [] };
+
+  it('renders the engine with no arrival configuration by default', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(one)} />);
+    expect(await screen.findByText('a')).toBeTruthy();
+    expect(screen.getByTestId('planning-canvas')).toBeTruthy();
+  });
+
+  it('renders the same level when the roadmap adapter opts in', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(one)} arriveAtReadableScale />);
+    expect(await screen.findByText('a')).toBeTruthy();
+    expect(screen.getByTestId('planning-canvas')).toBeTruthy();
+  });
+});
+
+// ── THE COLLAPSIBLE DEPENDENCIES LEGEND (MOTIR-3838) ────────────────────────
+describe('ProjectRoadmapCanvas — the Dependencies legend collapses', () => {
+  const withDeps: RoadmapLevel = {
+    nodes: [node('A', 'a'), node('B', 'b')],
+    deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
+  };
+  const flowOnly: RoadmapLevel = {
+    nodes: [node('A', 'a'), node('B', 'b')],
+    deps: [{ from: 'A', to: 'B', kind: 'flow' }],
+  };
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetDependencyLegendCollapsedForTests();
+  });
+
+  it('renders EXPANDED by default — the shipped state — with the three style rows', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    const legend = await screen.findByTestId('edge-legend');
+    expect(within(legend).getByText('blocks')).toBeTruthy();
+    expect(within(legend).getByText('pending')).toBeTruthy();
+    const toggle = screen.getByTestId('edge-legend-toggle');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Hide the dependency legend');
+    // `aria-controls` names a real element in the document.
+    expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeTruthy();
+  });
+
+  it('COLLAPSES to the heading alone — the control stays findable', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    const toggle = await screen.findByTestId('edge-legend-toggle');
+    fireEvent.click(toggle);
+
+    const legend = screen.getByTestId('edge-legend');
+    // The heading survives; a legend that vanished entirely could not be reopened.
+    expect(within(legend).getByText('Dependencies')).toBeTruthy();
+    // The rows are HIDDEN, not unmounted — the disclosure pattern, so
+    // `aria-controls` keeps naming a real element and `hidden` takes the rows out
+    // of the accessibility tree and out of the layout.
+    const rows = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(rows.hidden).toBe(true);
+    expect(rows.contains(within(legend).getByText('blocks'))).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Show the dependency legend');
+  });
+
+  it('PERSISTS the choice under the shipped `motir.*` key, and re-reads it on a fresh mount', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    fireEvent.click(await screen.findByTestId('edge-legend-toggle'));
+    expect(window.localStorage.getItem(DEPENDENCY_LEGEND_COLLAPSED_STORAGE_KEY)).toBe('true');
+
+    cleanup();
+    resetDependencyLegendCollapsedForTests();
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    const toggle2 = await screen.findByTestId('edge-legend-toggle');
+    expect(toggle2.getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById(toggle2.getAttribute('aria-controls')!)!.hidden).toBe(true);
+  });
+
+  it('renders EXPANDED and does not throw when localStorage is unavailable', async () => {
+    // happy-dom's `localStorage` is a Proxy, so an instance spy must be restored
+    // explicitly (`restoreAllMocks` does not undo it) — see the `finally` below.
+    const getItem = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: private mode');
+    });
+    try {
+      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+      const toggle3 = await screen.findByTestId('edge-legend-toggle');
+      expect(toggle3.getAttribute('aria-expanded')).toBe('true');
+      expect(document.getElementById(toggle3.getAttribute('aria-controls')!)!.hidden).toBe(false);
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
+  it('still shows NO legend at all on a level whose edges are all `flow`', async () => {
+    // The onboarding station serpentine — drawn, but not dependencies.
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(flowOnly)} />);
+    await screen.findByText('a');
+    expect(screen.queryByTestId('edge-legend')).toBeNull();
+    expect(screen.queryByTestId('edge-legend-toggle')).toBeNull();
+  });
+
+  it('collapsing does NOT move the legend, the zoom cluster, Locate or Reset layout', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(withDeps)}
+        locatable
+        onResetPositions={() => {}}
+        onNodeMove={() => {}}
+      />,
+    );
+    const legend = await screen.findByTestId('edge-legend');
+    const before = legend.className;
+    const locateBefore = screen.getByTestId('locate-button').parentElement!.className;
+
+    fireEvent.click(screen.getByTestId('edge-legend-toggle'));
+
+    // The panel collapses IN PLACE — same slot, so it can never land on the
+    // engine's zoom cluster at `bottom-4 left-4`.
+    expect(screen.getByTestId('edge-legend').className).toBe(before);
+    expect(screen.getByTestId('locate-button').parentElement!.className).toBe(locateBefore);
+  });
+});
+
+// ── THE BOTTOM-RIGHT CONTROL AND THE FOLD (MOTIR-3839) ──────────────────────
+describe('ProjectRoadmapCanvas — "Reset layout" respects the fold inset', () => {
+  const arranged: RoadmapLevel = { nodes: [node('A', 'a'), node('B', 'b')], deps: [] };
+
+  it('offsets from the bottom by `--canvas-fold-inset`, which DEFAULTS to 0 for every other mount', async () => {
+    // The floating Plan-with-AI orb is `fixed right-5 bottom-5` — a 76px reach from
+    // both edges — so only a bottom-RIGHT control can meet it. A consumer whose box
+    // SPENDS the shell's clearance band declares the inset; every other mount
+    // inherits nothing and the control stays exactly where it is today.
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(arranged)}
+        positions={{ A: { x: 500, y: 500 } }}
+        onResetPositions={() => {}}
+        onNodeMove={() => {}}
+      />,
+    );
+    await screen.findByText('a');
+    const reset = screen.getByRole('button', { name: 'Reset layout' });
+    expect(reset.className).toContain('bottom-[calc(1rem+var(--canvas-fold-inset,0px))]');
+    // Anchored right — the only side the orb can reach.
+    expect(reset.className).toContain('right-3');
+  });
+
+  it('leaves every LEFT-anchored overlay at its shipped offset', async () => {
+    const withDep: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b')],
+      deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDep)} locatable />);
+    // The legend and Locate are bottom-LEFT; the orb cannot reach them, so the fold
+    // must not move them.
+    const legend = await screen.findByTestId('edge-legend');
+    expect(legend.className).toContain('bottom-[4.25rem]');
+    expect(legend.className).toContain('left-3');
+    expect(screen.getByTestId('locate-button').parentElement!.className).toContain(
+      'bottom-4 left-[8.25rem]',
+    );
   });
 });

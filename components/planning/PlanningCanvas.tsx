@@ -14,6 +14,7 @@ import { useTranslations } from 'next-intl';
 import {
   type Rect,
   type View,
+  arrivalView,
   centerOn,
   fitView,
   nodesBounds,
@@ -88,6 +89,16 @@ export interface PlanningCanvasProps {
   /** A press on empty canvas that did not pan — used to clear the selection. */
   onBackgroundClick?: () => void;
   ariaLabel?: string;
+  /**
+   * The ARRIVAL configuration (MOTIR-3837) — the once-only fit, with a legibility
+   * FLOOR and a focal node to centre on when the level cannot be shown whole.
+   *
+   * ABSENT (the default) is byte-for-byte today's `fitView`, which is what the
+   * three canvas consumers that do not ask for this keep. It changes the ARRIVAL
+   * only: the explicit fit-to-view control still frames the WHOLE level down to
+   * `MIN_SCALE`, and `focalNodeId` naming nothing simply centres the bounds.
+   */
+  arrival?: { floor: number; focalNodeId?: string | null };
   className?: string;
 }
 
@@ -124,6 +135,7 @@ export function PlanningCanvas({
   selectedId,
   onBackgroundClick,
   ariaLabel,
+  arrival,
   className,
 }: PlanningCanvasProps) {
   const t = useTranslations('roadmap.canvas');
@@ -149,8 +161,23 @@ export function PlanningCanvas({
       h: s?.h ?? n.height ?? FALLBACK.h,
     };
   };
+  // The explicit fit-to-view control's view: the WHOLE level, framed, down to
+  // `MIN_SCALE`. Unchanged by MOTIR-3837 — that is what the control is for.
   const computeFit = (vw: number, vh: number): View =>
     fitView(nodesBounds(nodes.map(rectOf)), { w: vw, h: vh });
+  // The ARRIVAL view: the same fit unless the consumer asked for a legibility floor
+  // (MOTIR-3837), in which case a level that cannot be shown legibly arrives AT the
+  // floor, centred per axis on the focal card rather than shrunk to frame.
+  const computeArrival = (vw: number, vh: number): View => {
+    if (!arrival) return computeFit(vw, vh);
+    const focal = arrival.focalNodeId ? nodeById.get(arrival.focalNodeId) : undefined;
+    return arrivalView(
+      nodesBounds(nodes.map(rectOf)),
+      { w: vw, h: vh },
+      arrival.floor,
+      focal ? rectOf(focal) : undefined,
+    );
+  };
 
   // Route ALL edges together so the global lane pass keeps every connector on its
   // own track (one entry per edge, aligned to `edges`; null where a node is gone).
@@ -191,7 +218,7 @@ export function PlanningCanvas({
       const r = vp.getBoundingClientRect();
       if (r.width === 0) return;
       didFit.current = true;
-      setView(computeFit(r.width, r.height));
+      setView(computeArrival(r.width, r.height));
     });
     ro.observe(vp);
     return () => ro.disconnect();

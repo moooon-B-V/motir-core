@@ -636,32 +636,52 @@ notes), is **incomplete** — do not open the design PR / mark the subtask done
 until all three are committed. (The `motir-meta` `MOTIR.md` design-reference
 rule carries the same definition-of-done for the planner side.)
 
-**How the `.png` reaches the board.** The "tenant-visible face" above is not a
-wish — CI publishes the note, the mock and the screenshot onto the work item from
-a step in `ci.yml`'s **design-asset guards** job, and the item page renders them
-in its **Design result** panel. Two things follow, and the second is the one that
-bites:
+**How the `.png` reaches the board — YOU publish it.** The "tenant-visible face"
+above is not a wish and it is not automatic: once the three files are committed,
+**call the `publish_design_result` MCP tool** with the card's key, the
+`*.mock.html` as `mock`, the `.png` as `image`, the note file as `note_file`, and
+`noteMd` carrying the `##` SECTIONS this work wrote — never a whole area note.
+The item page then renders them in its **Design result** panel. Two things
+follow, and the second is the one that bites:
 
 - **You still commit all three files.** The published result is the card's VIEW
   of the asset; the repository stays the source of truth.
-- **⚠️ That publish step SHARES a job with the guards and runs AFTER them, so a
-  failing guard skips it silently** — and the script also exits 0 without
-  publishing on a fork (no credential) or a branch whose name yields no work-item
-  key. In every case the run looks perfect: files written, commit landed, push
-  accepted, pull request opened. The only symptom is an empty card, on a surface
-  the run never opens. So **confirm the result arrived** before calling a design
-  card done: look for `Published N design artifact(s)` in the job log, or read
-  the card. If it is absent, publish it yourself through the design-evidence
-  routes — the token a dispatched run carries already holds the permission they
-  assert. (The dispatched `design` step list says so too; see
-  `lib/dispatch/promptTemplate.ts`.)
+- **⚠️ NOTHING ELSE MAKES THAT CALL, AND A MISSING PUBLISH LOOKS EXACTLY LIKE A
+  SUCCESSFUL RUN.** There is no CI step, no check and no background job behind
+  it. A design card that writes its files, lands its commit, pushes and opens a
+  green pull request — and never calls the tool — is indistinguishable from one
+  that finished, except for an empty panel on a surface the run never opens. So
+  **confirm the result arrived** before calling a design card done: the
+  confirmation is the **evidence `id` the call returns**, and putting it on the
+  card is what makes it checkable by somebody else. No call ⇒ nothing was
+  published, whatever the pull request says.
+
+> ⚠️ **This warning is OLDER than the tool, and it is kept because the hazard
+> outlived the mechanism.** It was written when CI did the publishing: the
+> publish step shared a job with the guards and ran after them, so a failing
+> guard skipped it silently, and the script also exited 0 on a fork (no
+> credential) or a branch whose name yielded no work-item key. That publisher is
+> retired in every repository (MOTIR-3797) and none of those causes exists any
+> more. The SHAPE is identical and now has one cause instead of three — a call
+> nobody made — which is a fair trade only because a forgotten call costs one
+> card its result, while an absent publisher cost every card in a repository
+> every result, silently, for as long as nobody looked
+> (`docs/decisions/design-result.md` AMENDMENT 2 Q2).
+
+**Which card it publishes to is the key you PASS.** Nothing is inferred from a
+branch, a title or a diff. The server refuses the two mistakes it can see: a
+CONTAINER target (a design result belongs to the leaf that produced it), and a
+key that is not a child of a declared `withinParentKey`.
 
 **A design asset does NOT go through the general attachment door.** `attach_file`
 and `POST /api/v1/work-items/{key}/attachments` exist for a deliverable that has
 no lifecycle of its own — a research findings document, a review's notes. A
-design result has its own publisher and its own panel, and `text/html` is refused
-by the general door anyway, so routing one through it would split the three-file
-set across two surfaces (`docs/decisions/attachment-api-door.md` §3).
+design result has its own publisher (`publish_design_result`) and its own panel,
+and `text/html` is refused by the general door anyway, so routing one through it
+would split the three-file set across two surfaces
+(`docs/decisions/attachment-api-door.md` §3). If you are publishing from
+something that is not an MCP client, the `design-evidence` HTTP routes are still
+the supported door (`docs/decisions/design-result.md` AMENDMENT 2 Q1).
 
 **Re-export the `.png` with `node scripts/render-design-mock.mjs <mock.html>`,
 AFTER `prettier --write` on the mock.** It recovers the viewport width from the

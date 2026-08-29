@@ -5735,7 +5735,9 @@
         "blockedElsewhere": "受阻于别处",
         "blockedElsewhereMeaning": "阻塞项位于计划中的别处",
         "blockerNotInSprint": "阻塞项不在冲刺中",
-        "blockerNotInSprintMeaning": "未完成且在冲刺之外"
+        "blockerNotInSprintMeaning": "未完成且在冲刺之外",
+        "collapse": "隐藏依赖图例",
+        "expand": "显示依赖图例"
       },
       "origin": {
         "planning": "规划",
@@ -6811,8 +6813,8 @@
     "publishedBy": "发布自",
     "empty": {
       "title": "尚未发布设计结果",
-      "body": "当改动这张卡片设计文件的 PR 运行 CI 后，设计结果会出现在这里。",
-      "bodyDesign": "当这张卡片的 PR 运行 CI 后，设计结果会出现在这里 — 说明、页面设计稿和截图都会自动发布，无需手动上传。"
+      "body": "当负责这张卡片的智能体发布后，设计结果会出现在这里。没有其他机制会发布它。",
+      "bodyDesign": "当这张卡片的智能体调用publish_design_result发布后，设计结果会出现在这里：说明、页面设计稿和截图一次提交。没有其他机制会发布它，面板为空即表示这次调用没有发生。"
     },
     "frameLoading": "正在加载设计稿…"
   },

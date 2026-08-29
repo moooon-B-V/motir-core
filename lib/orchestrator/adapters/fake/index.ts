@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { buildContainerUsage } from '../../usage';
 import { OrchestratorApiError } from '../../errors';
 import type {
@@ -114,9 +116,101 @@ let nextProvisionFailure: string | null = null;
 let nextTeardownFailure: string | null = null;
 let sequence = 0;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ THE CROSS-PROCESS *CONTAINER* SEAM (Story MOTIR-3778 · MOTIR-3828)
+// ═══════════════════════════════════════════════════════════════════════════
+// `MOTIR_FAKE_CONTAINER_AUTO_EXIT_CODE` below is a way to drive the fake from
+// OUTSIDE its own process. This is the other half: a way for a container to
+// OUTLIVE its own process.
+//
+// ⚠️ IT IS NOT A CONVENIENCE — WITHOUT IT THE FAKE CANNOT EXPRESS THE PROPERTY
+// THE FLEET IS BUILT ON. `docs/decisions/job-queue-foundation.md` §13 keeps the
+// BOOT inside a memoized step for one reason: *"a supervisor that forgets it
+// BOOTED provisions a SECOND billed container"* — so a container must survive
+// the supervisor that provisioned it, and a resumed pass must re-attach to it.
+// While a supervision was a `while` loop inside ONE run, boot and first poll
+// were always the same pass in the same process, and a module-level `Map` was
+// indistinguishable from a real provider. §16 makes a supervision a state
+// machine over RUNS: the pass that boots and the pass that polls are DIFFERENT
+// worker processes by design, and an in-memory map then reports a perfectly
+// healthy container as `exists: false` — which `pollIndexContainer` correctly
+// classifies `never_started`.
+//
+// So a fake that cannot outlive its process cannot verify re-attachment at all,
+// and would instead assert the opposite of the port's contract. The fix belongs
+// HERE rather than in the spec, for the reason this file's own header gives one
+// level up: the fake is the second implementation that shows the port is a
+// port, and a port that cannot express "the container is still there" is not
+// modelling the thing Fly does.
+//
+// OPT-IN and file-backed: absent the variable this is byte-for-byte the
+// in-memory singleton every vitest suite drives, `reset()` and all. It is set
+// only in the E2E lane's worker env, which is the one process pair that needs
+// it.
+const STATE_PATH_ENV = 'MOTIR_FAKE_CONTAINER_STATE_PATH';
+
+interface PersistedMachine extends Omit<FakeMachine, 'createdAt' | 'startedAt' | 'stoppedAt'> {
+  createdAt: string;
+  startedAt: string | null;
+  stoppedAt: string | null;
+}
+
+function statePath(): string | null {
+  const raw = process.env[STATE_PATH_ENV];
+  return raw !== undefined && raw !== '' ? raw : null;
+}
+
+/** Read the shared file over this process's map. A no-op when the seam is off. */
+function loadShared(): void {
+  const path = statePath();
+  if (!path || !existsSync(path)) return;
+  let parsed: Record<string, PersistedMachine>;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, PersistedMachine>;
+  } catch {
+    // A half-written file is a torn read, not a corrupt fake: the next write
+    // replaces it. Keeping what this process already has is strictly better
+    // than throwing inside a provider call.
+    return;
+  }
+  machines.clear();
+  for (const [id, m] of Object.entries(parsed)) {
+    machines.set(id, {
+      ...m,
+      handle: { ...m.handle, createdAt: new Date(m.handle.createdAt) },
+      createdAt: new Date(m.createdAt),
+      startedAt: m.startedAt ? new Date(m.startedAt) : null,
+      stoppedAt: m.stoppedAt ? new Date(m.stoppedAt) : null,
+    });
+  }
+}
+
+/** Write this process's map to the shared file. A no-op when the seam is off. */
+function saveShared(): void {
+  const path = statePath();
+  if (!path) return;
+  const out: Record<string, PersistedMachine> = {};
+  for (const [id, m] of machines) {
+    out[id] = {
+      ...m,
+      handle: { ...m.handle, createdAt: m.handle.createdAt.toISOString() },
+      createdAt: m.createdAt.toISOString(),
+      startedAt: m.startedAt ? m.startedAt.toISOString() : null,
+      stoppedAt: m.stoppedAt ? m.stoppedAt.toISOString() : null,
+    } as unknown as PersistedMachine;
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(out), 'utf8');
+}
+
 function nextId(): string {
   sequence += 1;
-  return `fake-machine-${sequence}`;
+  // ⚠️ THE ID MUST BE UNIQUE ACROSS PROCESSES when the shared store is on, or a
+  // restarted worker's first provision would collide with the previous one's —
+  // `sequence` restarts at 0 in a fresh process. The suffix is added ONLY under
+  // the seam so every existing suite keeps the stable `fake-machine-1` ids its
+  // assertions read.
+  return statePath() ? `fake-machine-${process.pid}-${sequence}` : `fake-machine-${sequence}`;
 }
 
 export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls = {
@@ -130,6 +224,9 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
 
   reset() {
     machines.clear();
+    // The shared file goes with the map, so a lane that resets between specs
+    // does not inherit a previous spec's containers through the seam.
+    saveShared();
     usageByHandle.clear();
     provisioned.length = 0;
     specs.length = 0;
@@ -153,6 +250,7 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
   },
 
   completeJob(handleId, options = {}) {
+    loadShared();
     const machine = machines.get(handleId);
     if (!machine) throw new Error(`fake orchestrator has no container ${handleId}`);
     machine.state = 'destroyed';
@@ -162,16 +260,20 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
     // longer has it. This is what makes the happy path the hardest case for
     // metering, and the reason `UsageAttribution.observedStartedAt` exists.
     machine.gone = true;
+    saveShared();
   },
 
   backdate(handleId, createdAt) {
+    loadShared();
     const machine = machines.get(handleId);
     if (!machine) throw new Error(`fake orchestrator has no container ${handleId}`);
     machine.createdAt = createdAt;
     machine.handle = { ...machine.handle, createdAt };
+    saveShared();
   },
 
   liveContainerIds() {
+    loadShared();
     return [...machines.values()].filter((m) => !m.gone).map((m) => m.handle.id);
   },
 
@@ -205,10 +307,15 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
       gone: false,
     });
     provisioned.push(handle);
+    saveShared();
     return handle;
   },
 
   async describe(handle: ContainerHandle): Promise<ContainerStatus> {
+    // ⚠️ THE READ THAT MAKES RE-ATTACHMENT EXPRESSIBLE. Under the shared-store
+    // seam this is how a pass running in a DIFFERENT worker process than the one
+    // that provisioned still sees the container — see the seam's block above.
+    loadShared();
     const machine = machines.get(handle.id);
     // ⚠️ THE CROSS-PROCESS EXIT SEAM (Story MOTIR-3417 · MOTIR-3564).
     //
@@ -284,6 +391,11 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
     }
 
     teardowns.push({ handleId: handle.id, reason });
+    // ⚠️ AND THE TEARDOWN READS THE SHARED STORE TOO, so the pass that settles a
+    // container the previous worker booted still sees its lifecycle — which is
+    // what `buildContainerUsage` meters from. Without it the usage row would be
+    // built from the handle alone and lose the observed start.
+    loadShared();
 
     // IDEMPOTENT, literally: the second call returns the row the first produced.
     // Both the `finally` path and the reaper can reach the same container, and a
@@ -311,10 +423,12 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
       machine.stoppedAt = stoppedAt;
     }
     usageByHandle.set(handle.id, usage);
+    saveShared();
     return usage;
   },
 
   async reap(olderThan: Date, resolve: UsageAttributionResolver): Promise<ContainerUsage[]> {
+    loadShared();
     const usages: ContainerUsage[] = [];
     for (const machine of [...machines.values()]) {
       if (machine.gone) continue;

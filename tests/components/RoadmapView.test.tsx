@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RoadmapView } from '@/components/planning/RoadmapView';
@@ -347,5 +347,197 @@ describe('RoadmapView — manual refresh (MOTIR-1542)', () => {
     expect(
       (screen.getByRole('button', { name: 'Refresh roadmap' }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+});
+
+// ── THE LEVEL IS THE URL (MOTIR-3836) ───────────────────────────────────────
+//
+// `?item=<KEY>` names the item whose CHILDREN are the level in view. These specs
+// drive the wiring RoadmapView owns: the seeded arrival, the shallow write on a
+// level change, browser Back served from the session trail cache, an unknown key
+// falling back to the root without a fetch, and `?scope=` composing with it.
+describe('RoadmapView — the level is the URL (?item=)', () => {
+  // The whole-project root's drillable epic (the fixture above): id `E1`,
+  // identifier `MOTIR-1`. The sprint root's is `E7` / `MOTIR-464`.
+  const trail = [{ id: 'E1', crumbKey: 'MOTIR-1', label: 'MOTIR-1 · Whole-project epic' }];
+
+  it('opens on the SEEDED level, and the canvas reads that level and not the root', async () => {
+    sp.current = 'item=MOTIR-1';
+    render(<RoadmapView {...baseProps({ initialTrail: trail })} />);
+    await waitFor(() => expect(fetchUrls.length).toBeGreaterThan(0));
+    // The canvas loads the SEEDED level (parentId=E1), never the project root first.
+    expect(fetchUrls.every((u) => u.includes('parentId=E1'))).toBe(true);
+    const crumb = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(crumb).getByText('MOTIR-1 · Whole-project epic')).toBeTruthy();
+  });
+
+  it('WRITES the level shallowly on a drill — a history entry, and no server navigation', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    const href = String(pushState.mock.calls.at(-1)![2]);
+    expect(href).toBe('/roadmap?item=MOTIR-1');
+    // Shallow: the router is never asked to navigate or refresh.
+    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('drops `item` from the URL when the canvas returns to its ROOT level', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    pushState.mockClear();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    expect(String(pushState.mock.calls.at(-1)![2])).toBe('/roadmap');
+  });
+
+  it('PRESERVES ?scope=sprint across the level write', async () => {
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('In-sprint epic');
+    // The SPRINT fixture's drillable epic — id `E7`, identifier `MOTIR-464`.
+    fireEvent.keyDown(document.querySelector('[data-node-id="E7"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    const href = String(pushState.mock.calls.at(-1)![2]);
+    expect(href).toContain('scope=sprint');
+    expect(href).toContain('item=MOTIR-464');
+  });
+
+  it('a SCOPE switch drops ?item= — the canvas remounts to the new scope’s own root', async () => {
+    sp.current = 'item=MOTIR-1';
+    render(<RoadmapView {...baseProps({ initialTrail: trail })} />);
+    await waitFor(() => expect(fetchUrls.length).toBeGreaterThan(0));
+    pushState.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
+    expect(String(pushState.mock.calls.at(-1)![2])).toBe('/roadmap?scope=sprint');
+  });
+
+  it('browser BACK moves the canvas IN PLACE — the popstate handler, not a remount', async () => {
+    // Drill, so the view caches the trail under its key and writes the URL.
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    expect(String(pushState.mock.calls.at(-1)![2])).toBe('/roadmap?item=MOTIR-1');
+    await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    const afterDrill = fetchUrls.length;
+
+    // BACK. happy-dom keeps no real session history, so the test drives the two
+    // things a Back actually does: the address bar goes back to the previous URL,
+    // and `popstate` fires. The view reads `window.location` in that handler
+    // precisely because the event — not `useSearchParams` — is the authority.
+    window.history.replaceState(null, '', '/roadmap');
+    fireEvent.popState(window);
+
+    // The canvas adopts the ROOT level in place: the breadcrumb goes away without
+    // the component unmounting, and the root level is re-read.
+    await waitFor(() =>
+      expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull(),
+    );
+    expect(await screen.findByText('Whole-project epic')).toBeTruthy();
+    // And it cost NOTHING: the root level is served from `WorkItemRoadmap`'s level
+    // cache and the trail from this view's session cache, so Back issues no request
+    // at all — no per-level read, and nothing resolving an ancestor chain.
+    expect(fetchUrls.length).toBe(afterDrill);
+    expect(fetchUrls.every((u) => !u.includes('ancestors'))).toBe(true);
+  });
+
+  it('an UNKNOWN ?item= falls back to the ROOT level and fetches no ancestor chain', async () => {
+    sp.current = 'item=MOTIR-999999';
+    // No seeded trail: the server could not resolve it, and the session cache has
+    // never seen it. The canvas opens at the root.
+    render(<RoadmapView {...baseProps()} />);
+    expect(await screen.findByText('Whole-project epic')).toBeTruthy();
+    // Only per-level roadmap reads — nothing resolving an ancestor chain.
+    expect(fetchUrls.every((u) => u.includes('/roadmap'))).toBe(true);
+    expect(fetchUrls.every((u) => !u.includes('ancestors'))).toBe(true);
+  });
+});
+
+// ── THE CANVAS FILLS THE FOLD (MOTIR-3839) ──────────────────────────────────
+//
+// The BEHAVIOUR is geometry and is measured in a real Chromium (the table is in
+// the pull request; happy-dom does no layout, so a height cannot be asserted
+// here). What IS assertable — and what a later edit would silently break — is the
+// STRUCTURE the geometry rests on: the budget, the way the band is spent, and the
+// inset that keeps the canvas's bottom-right control off the floating orb.
+describe('RoadmapView — the canvas box’s vertical budget', () => {
+  function box(): HTMLElement {
+    // The canvas frame: the element that carries the fold height.
+    return document.querySelector('[style*="--canvas-fold-inset"]') as HTMLElement;
+  }
+
+  it('subtracts the MEASURED chrome (10rem) and no longer double-spends the shell’s band', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    const cls = box().className;
+    expect(cls).toContain('h-[calc(100dvh_-_10rem)]');
+    // The old value subtracted 11.5rem — 24px more than the chrome costs — AND
+    // `--shell-bottom-clearance`, which the shell has already spent as padding.
+    expect(cls).not.toContain('11.5rem');
+    expect(cls).not.toContain('h-[calc(100dvh_-_10rem_-_var(--shell-bottom-clearance');
+  });
+
+  it('SPENDS the shell’s clearance band with a negative bottom margin, not by changing the shell', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    expect(box().className).toContain('mb-[calc(-1*var(--shell-bottom-clearance,1.5rem))]');
+  });
+
+  it('keeps min-h-[28rem] — the floor that stops the frame collapsing on a short window', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    expect(box().className).toContain('min-h-[28rem]');
+  });
+
+  it('declares `--canvas-fold-inset` so the canvas’s bottom-RIGHT control clears the orb', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    // Declared on the box that TAKES the band — so every other mount of the same
+    // canvas inherits nothing and is untouched.
+    expect(box().getAttribute('style')).toContain('--shell-bottom-clearance');
+  });
+});
+
+// ── The remaining branches of the header + the popstate fallback ────────────
+describe('RoadmapView — subtitle variants and the unknown-key fallback', () => {
+  it('shows the SPRINT NAME alone when the active sprint has no goal', async () => {
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps({ sprintGoal: null })} />);
+    expect(await screen.findByText('Sprint 32')).toBeTruthy();
+  });
+
+  it('falls back to the project subtitle when the sprint has neither name nor goal', async () => {
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps({ sprintName: null, sprintGoal: null })} />);
+    expect(await screen.findByText("Acme's roadmap")).toBeTruthy();
+  });
+
+  it('a popstate to a key the session cache does NOT know falls back to the root level', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    fireEvent.keyDown(document.querySelector('[data-node-id="E1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByRole('navigation', { name: 'Breadcrumb' });
+
+    // Only reachable by hand-editing the address bar without a reload. The view
+    // does NOT fetch an ancestor chain for it — it opens the root.
+    const before = fetchUrls.length;
+    window.history.replaceState(null, '', '/roadmap?item=MOTIR-NEVER-SEEN');
+    fireEvent.popState(window);
+    await waitFor(() =>
+      expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull(),
+    );
+    expect(fetchUrls.length).toBe(before);
+    expect(fetchUrls.every((u) => !u.includes('ancestors'))).toBe(true);
   });
 });

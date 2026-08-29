@@ -265,11 +265,14 @@ in this repository:
 origin/main..origin/<branch>`, `git log --reverse … origin/main..origin/<branch>`
   — and a range read across a shallow boundary is wrong rather than slow.
 - **A shallow graft has already broken a shipped guard in this repository, by hiding
-  HEAD's parents.** `scripts/upload-design-assets.mjs` carries the incident in its own
+  HEAD's parents.** `scripts/upload-design-assets.mjs` carried the incident in its own
   comments: _"a shallow clone HIDES the parents … a shallow clone GRAFTS its boundary
-  commits, and a grafted commit reports **no** parents"_, and the script has to buy its own
-  precondition back with `git fetch --depth=2 --no-tags origin <sha>` before it can trust
-  what it reads (`:269`–`:319`). CI pays the same tax the other way: `ci.yml:100` sets
+  commits, and a grafted commit reports **no** parents"_, and the script had to buy its own
+  precondition back with `git fetch --depth=2 --no-tags origin <sha>` before it could trust
+  what it read. **That script was deleted by MOTIR-3797** — the agent publishes a design
+  result through `publish_design_result` now — so the citation is history and the file is
+  no longer in the tree; the SHALLOW-GRAFT hazard it evidenced is not, and is the reason
+  this bullet survives its own source. CI pays the same tax the other way: `ci.yml` sets
   `fetch-depth: 0` because _"The three-dot diff below needs the merge base, which a
   shallow [checkout lacks]"_.
 
