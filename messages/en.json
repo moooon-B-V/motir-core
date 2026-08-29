@@ -6812,8 +6812,8 @@
     "publishedBy": "published by",
     "empty": {
       "title": "No design result published yet",
-      "body": "A design result appears here when a pull request that changes this card’s design assets runs CI.",
-      "bodyDesign": "A design result appears here when this card’s pull request runs CI — the note, the page/view mock and the screenshot are published automatically. Nothing to upload."
+      "body": "A design result appears here once the agent working this card publishes it. Nothing else does.",
+      "bodyDesign": "A design result appears here once this card’s agent publishes it with publish_design_result — the note, the page/view mock and the screenshot, in one call. Nothing else publishes it, so an empty panel means the call was not made."
     },
     "frameLoading": "Loading the mock…"
   },

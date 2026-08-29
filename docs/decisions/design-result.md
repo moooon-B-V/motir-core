@@ -420,11 +420,13 @@ exactly those inferences.
 `POST …/design-evidence` **stay**, and this paragraph is the record that says so.
 
 **Measured, on `origin/main` after AMENDMENT 1.** Their only non-test callers
-today are `scripts/upload-design-assets.mjs:646` and `:686` — the script this
-story deletes — plus two PROSE references that instruct an agent to POST them
-(`CLAUDE.md:654`, `lib/dispatch/promptTemplate.ts:276`), both of which MOTIR-3783
-and MOTIR-3791 rewrite to name the tool. **After this story, their internal
-caller count is zero, and that is the expected steady state, not a defect.**
+were `scripts/upload-design-assets.mjs:646` and `:686` — the script this story
+deletes — plus two PROSE references that instructed an agent to POST them
+(`CLAUDE.md`, `lib/dispatch/promptTemplate.ts`), both since rewritten to name the
+tool. **⚠️ EXECUTED (MOTIR-3797 / MOTIR-3800, 2026-08-28): the script is deleted
+and their internal caller count is now ZERO. That is the expected steady state,
+not a defect** — the paragraphs below are what a later sweep must read before
+reaching for the routes.
 
 **This is exactly the shape `kind-story.md`'s CALLER TEST names as an ORPHANED
 DELIVERABLE** — _"a service or route whose only callers are its own routes"_ —
@@ -446,6 +448,33 @@ one has a named, measured, in-tree job.
 routes keep `authenticateCiPublisher` and `authenticateGithubOidc` exactly as
 they are — those are shared with the acceptance-video publisher, which is
 untouched by this story and would fail silently if either were narrowed.
+
+#### Q1a — `id-token: write` on an UNCONNECTED repository is a RED CHECK, not a quiet skip
+
+**Preserved here by MOTIR-3799**, which deleted the `motir-marketing` job whose
+comment block was the only place this was written down. It is a fact about
+`authenticateGithubOidc`, not about that workflow, so it outlives the YAML that
+held it — and it still governs the surviving HTTP publish routes, which is why it
+sits under Q1.
+
+The keyless path resolves the TENANT from the OIDC token's verified `repository`
+claim (`githubRepoRepository.findConnectedByName`). So the permission has a
+precondition, and it is the repository being **connected to Motir**:
+
+- **Connected** ⇒ the claim resolves, the publish is keyless, nothing is minted
+  or stored.
+- **NOT connected** ⇒ the claim resolves to nothing and the request is
+  `403 repo_not_connected`. Because the credential was _present_, the script does
+  not take its no-credential arm — so the job goes **RED on every pull request**
+  rather than skipping quietly.
+
+`motir-marketing` shipped its lane deliberately WITHOUT the permission for
+exactly this reason (MOTIR-3750) and gained it only once MOTIR-3743 connected the
+repository. **The rule that follows: grant `id-token: write` to a publish job in
+the same change that connects the repository, and remove it in the same change
+that disconnects one.** The failure mode of getting it wrong is a red check on
+every pull request, which is loud — but loud in a way that looks like the
+publisher being broken rather than the repository being unconnected.
 
 #### Q2 — the AGENT supplies the sections, and here is what that gives up
 
