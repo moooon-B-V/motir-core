@@ -8,7 +8,13 @@
       DESIGN ASSET (HTML mockup) — THE RUN SECTION ON A WORK ITEM.
       Story MOTIR-1789, subtask MOTIR-1795 (design). Gates MOTIR-1796 (the
       section) and, through this folder's tone table, MOTIR-3893 / MOTIR-3895
-      (the run view) and MOTIR-1797 (the /ready strip).
+      (the run view) and MOTIR-3923 (the runs index).
+
+      ⚠️ IT USED TO GATE MOTIR-1797, THE /ready RUN STRIP, AND THAT CARD IS
+      ARCHIVED. The strip drew a ready row whose item has a live run, and that
+      row cannot occur: /ready lists only `todo` leaves, and claiming a card
+      flips it to in_progress before the first agent starts. The runs index
+      replaced it. See design-notes.md § WHAT THIS AREA DREW ONCE.
 
       WHY IT EXISTS. `design/runs/` did not exist. A run is a NEW object in the
       product — nothing in `design/work-items/` draws one — so this is the

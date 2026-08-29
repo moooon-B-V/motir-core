@@ -390,15 +390,18 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'Forward-looking: the "4 of 11 — see the whole run" link-out, which is the single most useful sentence on the run section. MOTIR-3895 builds the route.',
   },
   {
-    file: 'design/runs/ready-strip.mock.html',
-    address: '/runs/run_7f2c',
-    why: 'Forward-looking: the strip is an ANCHOR rather than a badge — the point of seeing it is to follow it. MOTIR-3895 builds the route.',
+    file: 'design/runs/design-notes.md',
+    address: '/runs',
+    why: 'Forward-looking: the RUNS INDEX, named in the surface table as the surface that makes a run findable at all. MOTIR-3893 draws it, MOTIR-3923 builds the route and its primary-nav row. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
   },
-  {
-    file: 'design/runs/ready-strip.mock.html',
-    address: '/runs/run_91aa',
-    why: 'Forward-looking: the same anchor on the reporting-offline row, which links to a DIFFERENT run. MOTIR-3895 builds the route.',
-  },
+
+  //    ⚠️ TWO ROWS FOR `design/runs/ready-strip.mock.html` STOOD HERE AND ARE
+  //    GONE WITH THE ASSET (MOTIR-3914). The strip drew a live-run indicator on
+  //    a `/ready` row; that row cannot occur, because `/ready` lists only `todo`
+  //    leaves and claiming a card flips it to `in_progress` before the first
+  //    agent starts. The `carries no KNOWN entry that has stopped applying`
+  //    check above is what caught them the moment the file was deleted — which
+  //    is the whole reason these rows carry a deletion condition in their `why`.
 
   // ── Forward-looking: the Roles & permissions settings page (MOTIR-2263) ───
   //    The asset (MOTIR-2259, #1889) draws a settings page that does not exist

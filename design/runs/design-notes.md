@@ -15,8 +15,26 @@ machine and is gone when the window closes. These surfaces are that account, in 
 | Surface                            | Asset                                           | What it settles                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The run SECTION on a work item** | **`run-section.mock.html`** + `run-section.png` | The card's own run: its live timeline over the CARD-SCOPED event vocabulary, the "one of N" link-out when the run covers a set, this card's recent runs as a paged list, and the collapsed log console. Every terminal state, including the two that get improvised when undrawn — **re-planned** and **reporting-offline**. **Also carries this area's TONE TABLE** (panel 12), which every other run surface consumes. MOTIR-1795 (design). Gates MOTIR-1796. |
-| **The `/ready` run STRIP**         | **`ready-strip.mock.html`** + `ready-strip.png` | A ready row whose item has a live run: the inline indicator, its current step, and the link through. Drawn in both states, measured to cost the row no height, and shown at list scale where one row moves and the others do not. MOTIR-1795 (design). Gates MOTIR-1797.                                                                                                                                                                                        |
 | **The run VIEW** (`/runs/[id]`)    | _MOTIR-3893's — not in this folder yet_         | The whole SET a scoped or batch run works: every card's disposition, the skips and their reasons, and the run's own states. It **consumes this folder's tone table** rather than defining a second one, and adds its own row to this table when it lands.                                                                                                                                                                                                       |
+| **The RUNS INDEX** (`/runs`)       | _MOTIR-3893's — not in this folder yet_         | Every run the project has made, current and past, with its own primary-nav entry. It is the surface that makes a run FINDABLE at all, and it is what replaced the `/ready` strip this area used to draw (below). Same design card as the run view, same tone table.                                                                                                                                                                                             |
+
+### ⚠️ WHAT THIS AREA DREW ONCE AND WILL NOT DRAW AGAIN — the `/ready` run STRIP
+
+An earlier revision of this area carried a third surface: `ready-strip.mock.html`, a live-run
+indicator on a `/ready` row, drawn in both states and measured to cost the row no height. **It is
+deleted, and the reason is not taste — the row it decorated cannot occur.** `/ready` renders
+`workItemsService.listReady`, whose `collectReadyLeaves` collects only _the ready, childless `todo`
+leaves_, and `claimNextReady` / `claimScope` flip every claimed card to `in_progress` **before** the
+first agent starts. A card with a live run has therefore left the list the strip lives on, by
+construction — the transition that creates the state worth indicating is the transition that removes
+the row.
+
+The asset had noticed half of this and stopped one step short: its own state table said _"a finished
+card has left the ready set, so no strip state exists for it"_, which is the same sentence one word
+away from being true of a RUNNING card.
+
+**What the strip was FOR is now the runs index**, which is reachable from the rail rather than from
+the one page a run's cards have just left. Recorded on MOTIR-3914; the archived card is MOTIR-1797.
 
 ---
 
@@ -31,18 +49,18 @@ product acquires two answers to one question.
    panel 11 draws the two adjacent so the relationship is legible; that panel is the whole of what
    this area says about a pull request.
 2. **The work item's STATUS belongs to the board.** A run is not a status and must not read as one.
-   The `/ready` strip in particular exists _because_ the status column has stopped being able to
-   answer — a scoped run puts eleven cards at _In Progress_ simultaneously — so a strip that looked
-   like a second status pill would be re-drawing the thing it exists to compensate for.
+   This whole area exists _because_ the status column has stopped being able to answer — a scoped run
+   puts eleven cards at _In Progress_ simultaneously, so the column reports the run's footprint and
+   not its cursor — and a run surface that looked like a second status pill would be re-drawing the
+   thing it exists to compensate for.
 3. **Tokens, usage and cost are not drawn at all**, and not because they are "not yet": a BYOK run
    never touches the gateway and has no cost. See _Out of scope_ below.
 
 ## What it composes
 
-| Host                                                                           | Composed how                                                                                                                                                                                                                                                         |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design/work-items/` + `app/(authed)/items/[key]/_components/LateSections.tsx` | The run section is a **new row in the item page's tier table** (below). It is `ContentSectionCard`'s header grammar over `Card`, in the LATE STACK. The host's layout, header, rail and navigation are cited, never re-specified.                                    |
-| `design/ready/` + `app/(authed)/ready/_components/ReadyList.tsx`               | The run strip is a **state on the shipped `.rcard` row**. Every `.rcard` / `.pill` / `.person` / `.avatar` / `.copy-btn` rule in `ready-strip.mock.html` is copied 1:1 from `design/ready/ready.mock.html`. The page, its header and its empty state are the host's. |
+| Host                                                                           | Composed how                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design/work-items/` + `app/(authed)/items/[key]/_components/LateSections.tsx` | The run section is a **new row in the item page's tier table** (below). It is `ContentSectionCard`'s header grammar over `Card`, in the LATE STACK. The host's layout, header, rail and navigation are cited, never re-specified. |
 
 ---
 
@@ -88,7 +106,7 @@ two visual languages for _failed_.
 **The shape of every tone is the same**: a tinted background carrying `--el-text-strong`, with the
 hue in a **7px dot** rather than in the ink. That is the AA-safe pairing `CLAUDE.md`'s measured table
 requires (a coloured chip puts the hue in the tint BACKGROUND, never in the text), and it means a
-status is legible at the strip's 22px and in a table row without a second treatment.
+status is legible in a compact chip and in a table row without a second treatment.
 
 | Status                | Background           | Dot                       | Why this tone                                                                                           |
 | --------------------- | -------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -115,7 +133,8 @@ coherently.
   to add a colour.
 - **Never signal a run state with a border style.** No dashed, dotted or doubled border anywhere in
   this area. A border style is not a state signal — it is invisible at a glance, it collides with
-  the `unassigned` avatar's dashed ring on the same `/ready` row, and it survives no palette.
+  the dashed rings and outlines the product already uses for other meanings, and it survives no
+  palette.
 
 ### The two states that get improvised if nobody draws them
 
@@ -133,18 +152,19 @@ coherently.
 
 ## Every state, and where it is drawn
 
-| State                     | `run-section.mock.html` | `ready-strip.mock.html` | Note                                                                                                                      |
-| ------------------------- | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| empty — "nothing has run" | panel 8                 | —                       | **Must not read as an error**: muted glyph, one sentence of fact, the command that changes it.                            |
-| running                   | panel 1                 | panel 1, 3, 4           | The section shows the timeline; the strip shows the current step and the place in the set.                                |
-| succeeded (implemented)   | panel 2                 | —                       | A finished card has left the ready set, so no strip state exists for it.                                                  |
-| failed                    | panel 4                 | —                       | The body says the card stays In Progress and nothing was reverted.                                                        |
-| re-planned                | panel 3                 | —                       | Links to the plan.                                                                                                        |
-| cancelled                 | panel 5                 | —                       | Neutral tone: a decision, not a fault.                                                                                    |
-| timed out                 | panel 5                 | —                       | Warning tone. The copy says what is unknown, not what failed.                                                             |
-| **reporting-offline**     | panel 6                 | panel 4                 | The notice names which of the two facts is missing and points at Development for what shipped.                            |
-| stream-reconnecting       | panel 7                 | —                       | **A transport state, not a run state**: the notice sits above the timeline and the run's own pill keeps saying _Running_. |
-| queued (in a run)         | panel 12 (tone)         | panel 3, 4              | Only meaningful where a run owns a card it has not reached.                                                               |
+| State                         | `run-section.mock.html` | Note                                                                                                                      |
+| ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| empty — "nothing has run"     | panel 8                 | **Must not read as an error**: muted glyph, one sentence of fact, the command that changes it.                            |
+| running                       | panel 1                 | The live timeline, one row per card-scoped event, with the "one of N" line when the run covers a set.                     |
+| succeeded (implemented)       | panel 2                 | The terminal disposition, and the log console is deliberately absent.                                                     |
+| failed                        | panel 4                 | The body says the card stays In Progress and nothing was reverted.                                                        |
+| re-planned                    | panel 3                 | Links to the plan.                                                                                                        |
+| cancelled                     | panel 5                 | Neutral tone: a decision, not a fault.                                                                                    |
+| timed out                     | panel 5                 | Warning tone. The copy says what is unknown, not what failed.                                                             |
+| **reporting-offline**         | panel 6                 | The notice names which of the two facts is missing and points at Development for what shipped.                            |
+| stream-reconnecting           | panel 7                 | **A transport state, not a run state**: the notice sits above the timeline and the run's own pill keeps saying _Running_. |
+| **skipped — this card's leg** | panel 9                 | A run owned this card and decided not to work it. **A skipped row is a real row**, always carrying its reason.            |
+| queued (in a run)             | panel 12 (tone)         | Only meaningful where a run owns a card it has not reached.                                                               |
 
 ---
 
@@ -175,42 +195,26 @@ switch that exfiltrates somebody else's laptop is the exact shape the decision r
 
 **Primitives composed** (nothing hand-rolled that a primitive owns):
 
-| Primitive                                | Used for                                                                         |
-| ---------------------------------------- | -------------------------------------------------------------------------------- |
-| `ContentSectionCard` + `Card`            | the section's chrome, header row and body padding — the late stack's own grammar |
-| `Pill`                                   | every run-status chip, and the `/ready` priority chip the strip sits beside      |
-| `Button` (ghost, `sm`)                   | "Show more" on the recent-runs list                                              |
-| the shipped `/ready` row (`.rcard`)      | the host the strip is a state ON                                                 |
-| the shipped copy icon-button + `Tooltip` | unchanged on the `/ready` row; the strip does not displace it                    |
+| Primitive                     | Used for                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `ContentSectionCard` + `Card` | the section's chrome, header row and body padding — the late stack's own grammar |
+| `Pill`                        | every run-status chip                                                            |
+| `Button` (ghost, `sm`)        | "Show more" on the recent-runs list                                              |
 
 **Shape tokens** — every surface's own box, nothing raw:
 
-| Element                      | Tokens                                                                |
-| ---------------------------- | --------------------------------------------------------------------- |
-| the section card             | `--radius-card` · `--spacing-card-padding` · `--shadow-card`          |
-| every run-status pill        | `--radius-badge` · `--spacing-chip-x` / `--spacing-chip-y`            |
-| the `/ready` run strip       | `--radius-badge` · `--spacing-chip-x` · **22px**, the avatar's height |
-| the log console              | `--radius-control` · `--spacing-control-x` / `--spacing-control-y`    |
-| the "Show more" button       | `--radius-btn` · `--height-btn-sm` · `--spacing-btn-x-sm`             |
-| the timeline / list dividers | `--el-border-soft`                                                    |
+| Element                      | Tokens                                                             |
+| ---------------------------- | ------------------------------------------------------------------ |
+| the section card             | `--radius-card` · `--spacing-card-padding` · `--shadow-card`       |
+| every run-status pill        | `--radius-badge` · `--spacing-chip-x` / `--spacing-chip-y`         |
+| the log console              | `--radius-control` · `--spacing-control-x` / `--spacing-control-y` |
+| the "Show more" button       | `--radius-btn` · `--height-btn-sm` · `--spacing-btn-x-sm`          |
+| the timeline / list dividers | `--el-border-soft`                                                 |
 
 **Ink**: body text is `--el-text`; every secondary line is **`--el-text-secondary`**, which clears AA
 on all four surfaces in both themes. `--el-text-muted` is used **nowhere** in this area — it fails AA
 on `--el-surface`, `--el-surface-soft` and `--el-muted`, and both the section body and the console
 head sit on `--el-surface-soft`. `--el-text-faint` is used nowhere at all.
-
-### The 22px measurement, which is the strip's whole design
-
-`ReadyList.tsx` virtualizes the row at a **44px** estimate. The row is 12px padding over its tallest
-child, and today that child is the **22px avatar** (the priority Pill is 20px, the type icon 18px),
-so the row is **46px**. **The strip is drawn at 22px — the avatar's height, deliberately — so it
-joins the row without becoming its tallest child.** A 24px strip would add 2px to every virtualized
-row and re-open a measurement that has already survived several rounds of E2E selectors.
-
-It sits **after the title and before the meta cluster**: the title is the flexible cell, so a strip
-placed there shrinks the title rather than pushing the priority, the assignee and the copy button
-around — and those three are the row's stable right edge, which both the selectors and the reader's
-eye depend on.
 
 ---
 
@@ -227,7 +231,6 @@ eye depend on.
 | ordering by `seq`, hence a resumable stream and the reconnecting notice    | MOTIR-1791 (`@@unique([dispatchRunId, seq])`) and MOTIR-1793 (the `?since=` cursor)                  |
 | the run history is "every run that carried a leg for this card"            | MOTIR-1793's read                                                                                    |
 | the late stack's ONE settle                                                | `design/work-items/design-notes.md` § _The item page at ARRIVAL_ (MOTIR-3432, amended by MOTIR-3465) |
-| the `/ready` row's shape, rhythm and copy button                           | `design/ready/design-notes.md` + `ReadyList.tsx`                                                     |
 
 ---
 
