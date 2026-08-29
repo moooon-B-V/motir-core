@@ -140,6 +140,17 @@ export const STRUCTURAL_GUARD_SPECS = [
   // nothing from `lib/` or `app/`, so it carries no coverage into the merged
   // report.
   'tests/jobs/inngest-retired.test.ts',
+  // ── the Vitest leg plan's guard (MOTIR-3912) ──────────────────────────────
+  // Here for a reason none of the entries above share, and the strongest reason
+  // on the list: it guards the SPLIT of the sharded suite. Left in that suite it
+  // would be a guard the plan under test gets to place — on whichever leg the
+  // bin-packer picks, or, in the failure it exists to catch, on no leg at all. A
+  // check that its own subject can switch off is not a check. It also fits the
+  // lane on the ordinary grounds: it asks a whole-tree question (glob every test
+  // file, compare against the plan's assignment), opens no database, and imports
+  // nothing from `lib/` or `app/`, so it carries no coverage into the merged
+  // report.
+  'tests/vitest-shard-plan.test.ts',
 ] as const;
 
 /**
