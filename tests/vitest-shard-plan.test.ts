@@ -122,10 +122,40 @@ describe('the Vitest leg plan divides the suite exactly once (MOTIR-3912)', () =
     expect(stale, 'delete the cost entry when the test file goes').toEqual([]);
   });
 
+  it('is applied by the SEQUENCER the collect config installs, partitioning exactly once', async () => {
+    // The plan above is arithmetic; this is the wiring that makes CI obey it,
+    // and the two can drift apart silently — a correct plan nothing consults
+    // leaves Vitest's own sha1 slice in place, and every leg still goes green.
+    //
+    // It also pins the mechanism against the repair that looks equivalent and is
+    // not: applying the membership by narrowing `test.include` selects the same
+    // tests and costs 567–1100s per leg of post-test coverage work (measured,
+    // MOTIR-3912). If someone moves this back into `include`, `sequencer` stops
+    // being this class and this fails.
+    const { default: collectConfig } = await import('../vitest.collect.config');
+    const { default: Sequencer } = await import('./helpers/vitestShardSequencer');
+    expect(collectConfig.test?.sequence?.sequencer).toBe(Sequencer);
+
+    const root = '/repo';
+    const files = discoverTestFiles();
+    const specs = files.map((f) => ({ moduleId: `${root}/${f}` }));
+    const seen: string[] = [];
+    for (const [i, leg] of VITEST_LEG_IDS.entries()) {
+      const ctx = { config: { root, shard: { index: i + 1, count: VITEST_LEG_IDS.length } } };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const out = await new (Sequencer as any)(ctx).shard(specs);
+      expect(out.length, `leg ${leg} got nothing`).toBeGreaterThan(0);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const s of out as any[]) seen.push(s.moduleId as string);
+    }
+    expect(new Set(seen).size, 'a spec reached two legs').toBe(seen.length);
+    expect(seen.sort()).toEqual(specs.map((s) => s.moduleId).sort());
+  });
+
   it("matches ci.yml's `test` matrix leg ids", () => {
-    // The matrix supplies VITEST_LEG. A leg id in one and not the other either
-    // throws in vitest.collect.config.ts (an id the plan does not know) or
-    // silently never runs its files (a leg the matrix does not launch).
+    // A leg id in the matrix that the plan does not know runs Vitest's own
+    // partition instead of ours (the sequencer falls back on an unknown count);
+    // a leg the plan knows and the matrix does not launch never runs its files.
     const matrix = /\n {8}leg: \[([^\]]+)\]/.exec(CI_YML);
     expect(matrix, 'ci.yml `test` job declares a `leg:` matrix').not.toBeNull();
     const ids = (matrix?.[1] ?? '')
@@ -133,12 +163,12 @@ describe('the Vitest leg plan divides the suite exactly once (MOTIR-3912)', () =
       .map((s) => s.trim().replace(/^'|'$/g, ''))
       .filter(Boolean);
     expect(ids).toEqual([...VITEST_LEG_IDS]);
-    // And the step must pass it, with a per-leg blob name — see the blob-file
-    // collision note in the job's own comment.
-    expect(CI_YML).toContain('VITEST_LEG: ${{ matrix.leg }}');
-    expect(CI_YML).toContain('--outputFile.blob=.vitest-reports/blob-${{ matrix.leg }}.json');
-    expect(CI_YML, 'the cost-based plan replaces --shard, it does not join it').not.toContain(
-      '--shard=${{ matrix.leg }}',
+    // `--shard` STAYS: it is what makes Vitest call the sequencer's `shard()`,
+    // and what gives each leg a distinct `blob-<index>-<count>.json`. Removing
+    // it is the change that silently collapses eight coverage blobs into one.
+    expect(CI_YML).toContain('--shard=${{ matrix.leg }}/8 ');
+    expect(CI_YML, 'the leg count and the --shard denominator are one number').toContain(
+      `--shard=\${{ matrix.leg }}/${VITEST_LEG_IDS.length} `,
     );
   });
 });

@@ -586,16 +586,25 @@ jobs:
     # (MOTIR-754). Coverage runs separately in the `coverage` job below to avoid
     # cross-shard merge complexity.
     #
-    # ⚠️ THE LEG MEMBERSHIP IS NOT `--shard=i/8`. It is a cost-based bin-pack in
-    # `tests/helpers/vitestShardPlan.ts`, selected by the `VITEST_LEG` env var
-    # below. `--shard` keeps whole files together in DISCOVERY (alphabetical)
-    # order and slices contiguously, so nothing in the split knows what a file
-    # costs — and the expensive files cluster by DIRECTORY, which is contiguous
-    # in that order. On run 33251966134, the first 8-shard run, that put **19 of
-    # the suite's 30 most expensive files on leg 6**: 2562s of test time against
-    # a 1458s mean, a 2.52x spread across legs whose FILE COUNTS were even to
-    # within one, and the run's critical path. Packing the same measurements by
-    # cost gives 1.03x.
+    # ⚠️ VITEST DECIDES WHICH LEG RUNS WHICH FILES ONLY UNTIL THE SEQUENCER DOES.
+    # `--shard` is still passed (see the step's own note for why), but
+    # `tests/helpers/vitestShardSequencer.ts` overrides `shard()` and returns a
+    # cost-based bin-pack from `tests/helpers/vitestShardPlan.ts` instead.
+    #
+    # WHAT VITEST'S OWN PARTITION DOES, stated precisely because the intuitive
+    # answer is wrong: it is NOT an alphabetical slice. `BaseSequencer.shard()`
+    # sorts the specs by the SHA1 of their path and slices that — a fixed
+    # pseudo-random partition. It is cost-blind, and because the hash is stable
+    # the same draw recurs on every run for the same file set.
+    #
+    # On run 33251966134, the first 8-shard run, that draw put **19 of the
+    # suite's 30 most expensive files on leg 6**: 2562s of test time against a
+    # 1458s mean, a 2.52x spread across legs whose FILE COUNTS were even to
+    # within one, and the run's critical path. Improbable, and — this is the part
+    # that makes it worth fixing rather than re-rolling — FROZEN: nothing about a
+    # hash partition drifts back toward balance. Replaying the sha1 slice offline
+    # reproduces that run's per-leg costs to within rounding. Packing the same
+    # measurements by cost gives 1.03x.
     #
     # ⚠️ WHY THE LEG COUNT IS THE ONLY OTHER LEVER THIS LANE HAS. Parallelism INSIDE
     # a leg is pinned to `TEST_DB_WORKERS` = `min(availableParallelism(), 8)`
@@ -706,18 +715,16 @@ jobs:
       # (carrying v8 coverage) for the merge job to consume. Blob is NOT
       # auto-enabled, so it must be passed explicitly.
       #
-      # ⚠️ `--outputFile.blob` IS LOAD-BEARING, NOT TIDINESS (MOTIR-3912). The
-      # blob reporter resolves its path as `options.outputFile ??
-      # getOutputFile(config, 'blob')`, and only if BOTH are absent falls back to
-      # `.vitest-reports/blob-<index>-<count>.json` WHEN `--shard` is set —
-      # otherwise `.vitest-reports/blob.json`, the same name on every leg. This
-      # lane no longer passes `--shard`, so without an explicit name all eight
-      # legs would write one filename, and the `coverage` job's
-      # `merge-multiple: true` download flattens them into a single directory:
-      # seven blobs overwrite one another and the >=90% gate measures ONE leg.
-      - run: pnpm vitest run --config vitest.collect.config.ts --reporter=default --reporter=blob --outputFile.blob=.vitest-reports/blob-${{ matrix.leg }}.json --coverage
-        env:
-          VITEST_LEG: ${{ matrix.leg }}
+      # ⚠️ `--shard` STAYS ON THE COMMAND LINE even though the plan, not Vitest,
+      # decides the membership (MOTIR-3912) — it is what makes Vitest CALL the
+      # sequencer's `shard()` at all, and it is what names the blob. The blob
+      # reporter resolves `options.outputFile ?? getOutputFile(config, 'blob')`
+      # and only then falls back to `blob-<index>-<count>.json` WHEN `--shard` is
+      # set, else `blob.json` — the same name on every leg. Drop the flag and the
+      # `coverage` job's `merge-multiple: true` download flattens eight identical
+      # names into one directory, seven blobs overwrite each other, and the >=90%
+      # gate measures a single leg while every check stays green.
+      - run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/8 --reporter=default --reporter=blob --coverage
       # Share this leg's blob report with the `coverage` merge job.
       # `include-hidden-files: true` is REQUIRED: the blob reporter writes to
       # .vitest-reports/ (a dot-directory), and upload-artifact EXCLUDES hidden

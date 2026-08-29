@@ -5,15 +5,23 @@ import { STRUCTURAL_GUARD_SPECS } from './structuralGuardLane';
 // The Vitest leg plan (MOTIR-3912) — file→leg membership derived from MEASURED
 // per-file cost, not from Vitest's `--shard=i/8` slice.
 //
-// WHY this exists. `--shard=i/n` keeps whole files together in DISCOVERY
-// (alphabetical) order and slices contiguously, so nothing in the split knows
-// what a file costs. The expensive files cluster by DIRECTORY, and a directory
-// is contiguous in that order — so one leg inherits a whole cluster. On run
-// 33251966134, the first 8-shard run, **19 of the 30 most expensive files in the
-// suite landed on leg 6**: it took most of `tests/integration/**`, ran 2562s of
-// test time against a 1458s mean, and was the run's critical path. The legs'
-// FILE COUNTS were even to within one; only the cost was not. That recurs every
-// run until the split changes — it is a property of the ordering, not a flake.
+// WHY this exists. Vitest's own `--shard=i/n` is cost-blind, and it is worth
+// saying precisely what it does because the intuitive answer is wrong: it is NOT
+// an alphabetical slice. `BaseSequencer.shard()` sorts the specs by the SHA1 of
+// their path and slices that — a fixed pseudo-random partition.
+//
+// On run 33251966134, the first 8-shard run, that draw put **19 of the 30 most
+// expensive files in the suite on leg 6**: 2562s of test time against a 1458s
+// mean, and the run's critical path. The legs' FILE COUNTS were even to within
+// one; only the cost was not.
+//
+// ⚠️ THAT IS AN IMPROBABLE DRAW, AND THE REASON TO FIX IT RATHER THAN RE-ROLL IS
+// THAT IT IS FROZEN. The hash is stable, so the same partition — and the same
+// long pole — recurs on every run for the same file set; nothing about it drifts
+// back toward balance. Replaying the sha1 slice offline against that run's
+// measurements reproduces its per-leg costs (1323/1012/1353/1324/1452/2562/
+// 1359/1279s) to within rounding, which is how the mechanism was confirmed
+// rather than guessed at.
 //
 // So membership is computed here instead: `FILE_TEST_SECONDS` records what the
 // expensive files actually cost and `assignLegs` bin-packs them across the legs
@@ -36,8 +44,10 @@ import { STRUCTURAL_GUARD_SPECS } from './structuralGuardLane';
 //     `DEFAULT_TEST_SECONDS`, lands on a leg, and runs. It costs a little
 //     balance — never a red build, and never a skipped test.
 //
-// Consumed by `vitest.collect.config.ts` (VITEST_LEG → `include`) and by the
-// `test` matrix in `.github/workflows/ci.yml`. Guarded by
+// Consumed by `tests/helpers/vitestShardSequencer.ts`, which `vitest.collect.config.ts`
+// installs as the run's sequencer — see that file for why the membership is
+// applied there and NOT by narrowing `test.include`, which is the obvious move
+// and a 7x performance bug. Guarded by
 // `tests/vitest-shard-plan.test.ts`, which runs in the STRUCTURAL-GUARD lane
 // rather than the sharded suite — a guard that rode on a leg would be a guard
 // this plan could assign away, and the plan is what it exists to check.

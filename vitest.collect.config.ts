@@ -1,6 +1,6 @@
 import { defineConfig, mergeConfig } from 'vitest/config';
 import baseConfig from './vitest.config';
-import { VITEST_LEG_IDS, filesForLeg } from './tests/helpers/vitestShardPlan';
+import CostBalancedSequencer from './tests/helpers/vitestShardSequencer';
 
 // CI test-shard coverage COLLECTION config (MOTIR-1711). Identical to the base
 // vitest.config.ts (same `include`, setupFiles, globalSetup, provider) EXCEPT
@@ -15,31 +15,19 @@ import { VITEST_LEG_IDS, filesForLeg } from './tests/helpers/vitestShardPlan';
 const config = mergeConfig(baseConfig, defineConfig({}));
 config.test!.coverage!.thresholds = {};
 
-// MOTIR-3912 — narrow `include` to THIS leg's files when the CI matrix names
-// one. `VITEST_LEG` replaces the `--shard=i/8` flag the job used to pass: the
-// membership now comes from a cost-based bin-pack (tests/helpers/vitestShardPlan.ts)
-// rather than from a contiguous slice of the alphabet, which is what put 19 of
-// the suite's 30 most expensive files on a single leg.
+// MOTIR-3912 — divide the suite across the CI legs by MEASURED COST rather than
+// by Vitest's own `--shard` partition. The CLI still passes `--shard=<leg>/8`;
+// `CostBalancedSequencer.shard()` is what Vitest calls with the discovered
+// specs, and it returns this leg's bin-packed subset instead of Vitest's slice.
 //
-// Unset — every local run, and the `coverage` merge job — leaves `include`
-// exactly as the base config has it, so a developer's `pnpm test` is untouched.
+// ⚠️ THE OBVIOUS ALTERNATIVE — narrowing `test.include` to the leg's 170 file
+// paths — WORKS AND IS A SEVERE PERFORMANCE BUG. See the sequencer's header for
+// the measurements (20s → 148s on a single 8ms test locally; 567–1100s of
+// post-test time per leg in CI against a 55–97s baseline, with every leg still
+// green). Do not "simplify" this back into an `include` list.
 //
-// ⚠️ AN UNRECOGNISED VALUE THROWS RATHER THAN FALLING BACK. The quiet failure
-// this replaces is a leg that runs FEWER files and still reports green: falling
-// back to the full suite would instead make all eight legs run everything, which
-// is 8x the work and equally invisible. Neither is acceptable, so a typo in the
-// matrix stops the job.
-const leg = process.env['VITEST_LEG'];
-if (leg !== undefined && leg !== '') {
-  const files = filesForLeg(leg);
-  if (files === null) {
-    throw new Error(
-      `VITEST_LEG="${leg}" is not one of the plan's legs (${VITEST_LEG_IDS.join(', ')}). ` +
-        'It comes from the `test` matrix in .github/workflows/ci.yml, which ' +
-        '`tests/vitest-shard-plan.test.ts` cross-checks against the plan.',
-    );
-  }
-  config.test!.include = files;
-}
+// Nothing here fires for a local `pnpm test`: `shard()` runs only when `--shard`
+// is passed, so a developer's run is untouched by the plan.
+config.test!.sequence = { ...(config.test!.sequence ?? {}), sequencer: CostBalancedSequencer };
 
 export default config;
