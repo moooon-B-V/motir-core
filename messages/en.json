@@ -209,6 +209,8 @@
     "field_explanation": "Explanation",
     "field_links": "Dependencies",
     "field_parent": "Parent",
+    "field_targetRepo": "Repository",
+    "field_targetRepoRole": "Repository role",
     "moreChanges": "+{n} more",
     "staleBadge": "Out of date",
     "staleSummary": "{n, plural, one {# item may be out of date} other {# items may be out of date}}",
@@ -320,6 +322,8 @@
     "field_explanation": "Explanation",
     "field_links": "Links",
     "field_parent": "Parent",
+    "field_targetRepo": "Repository",
+    "field_targetRepoRole": "Repository role",
     "noChanges": "No field changes",
     "approveCta": "Approve — add {n, plural, one {# item} other {# items}}",
     "declineCta": "Discard",
@@ -6021,7 +6025,9 @@
           "explanation": "explanation",
           "points": "points",
           "links": "dependencies",
-          "parent": "parent"
+          "parent": "parent",
+          "repo": "repository",
+          "repoRole": "repository role"
         },
         "remove": "removed",
         "willRemove": "goes on approve"

@@ -192,6 +192,9 @@ export const FIELD_KEYS: Record<string, string> = {
   // Where the card SITS (MOTIR-3859) — a `modify` can re-parent its target now,
   // and the dock names the change like any other field.
   parent: 'field_parent',
+  // …and where it SHIPS (MOTIR-3868), the other half of the same pair.
+  targetRepo: 'field_targetRepo',
+  targetRepoRole: 'field_targetRepoRole',
 };
 
 function ProposalRow({ item }: { item: PlanReviewItemDto }) {

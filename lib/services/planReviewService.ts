@@ -75,6 +75,18 @@ function prosePreview(value: string | null | undefined): string | null {
   return flat.length > PROSE_PREVIEW_CHARS ? `${flat.slice(0, PROSE_PREVIEW_CHARS - 1)}…` : flat;
 }
 
+/** A repo pin as the APPROVE will store it: a blank / whitespace-only string is
+ *  an UNPIN, exactly as `PlanItemPatch.targetRepo` documents and as
+ *  `resolveAuthoredTargetRepoInProject` applies it (MOTIR-3868). Diffing the raw
+ *  string instead would render `motir-core → "  "` as a change to a repository
+ *  whose name is two spaces, and would report a no-op unpin of an already-null
+ *  pin as a change. */
+function blankToNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
 /** The OLD → NEW field changes a `modify` proposes (its diff overlay).
  *
  *  `nameParent` renders a parent id as the reader's own word for it — the
@@ -167,6 +179,44 @@ function buildChanges(
     const from = nameParent(target?.parentId ?? null);
     const to = nameParent(patch.parentRef ?? null);
     if (from !== to) changes.push({ field: 'parent', from, to });
+  }
+  // WHERE THE CARD SHIPS (MOTIR-1884 / MOTIR-1912, surfaced by bug MOTIR-3868) —
+  // the SHIPS half of the pair `parent` above completes. Both keys reached
+  // `applyModify` and neither reached this producer, so a `modify` carrying only
+  // a re-pin rendered with an EMPTY change list. That is silent in the direction
+  // that hides it: an empty `changes` array is a legal, ordinary shape (a
+  // `remove` has one), so nothing rendered wrong and nothing failed — the
+  // approver's only options were to approve a change they could not see or
+  // decline a plan that may have been entirely correct.
+  //
+  // Blank normalizes to null, mirroring the patch's own documented contract
+  // (*"an explicit `null` (or a blank string, which normalizes to `null`)
+  // UNPINS"*) and `resolveAuthoredTargetRepoInProject`, which is what actually
+  // applies it — so the cell renders the value the approve will write, not the
+  // string that was typed. An explicit unpin is an empty NEW side.
+  if (patch.targetRepo !== undefined) {
+    const from = blankToNull(target?.targetRepo ?? null);
+    const to = blankToNull(patch.targetRepo);
+    if (from !== to) changes.push({ field: 'targetRepo', from, to });
+  }
+  // …and the ROLE, which is emitted on KEY PRESENCE rather than on a difference,
+  // because there is NO OLD SIDE TO COMPARE AGAINST.
+  //
+  // ⚠️ `work_item.targetRepoRole` is RETIRED (Story MOTIR-2732 · MOTIR-3040, ADR
+  // `work-item-repository-set.md` §A3). The role is an ADDRESSING MODE resolved
+  // at approve — `proposalRepoRef(name, role, refs)` picks a `project_repo` row
+  // by name first and by role second — not an attribute stored on the item, so
+  // `target` cannot supply a `from` and a difference cannot be computed. Presence
+  // is exactly the right trigger regardless: `applyModify` rewrites the item's
+  // repository reference whenever this key is present (`repoPins.has(item.id) ||
+  // patch.targetRepoRole !== undefined`), including when the resolved name does
+  // not change. So the row appears precisely when the approve will act.
+  //
+  // A null `from` is honest here and is NOT MOTIR-3191's `— → updated`: that cell
+  // hid a value that EXISTED. This one names the new role on the side that has
+  // one, and the absent old side is the schema's own shape.
+  if (patch.targetRepoRole !== undefined) {
+    changes.push({ field: 'targetRepoRole', from: null, to: patch.targetRepoRole ?? null });
   }
   const added = patch.blockedByAdd?.length ?? 0;
   const removed = patch.blockedByRemove?.length ?? 0;
