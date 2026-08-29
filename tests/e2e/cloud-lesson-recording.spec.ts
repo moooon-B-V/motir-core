@@ -5,7 +5,11 @@ import path from 'node:path';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedLessonLibrary, type LessonLibrarySeed } from './_helpers/lesson-library-seed';
-import { openAiPlanningSettings } from './_helpers/ai-planning-settings';
+import {
+  aiPlanningSavedToast,
+  clickAiPlanningSave,
+  openAiPlanningSettings,
+} from './_helpers/ai-planning-settings';
 import { expectSettledVisible } from './_helpers/settle';
 
 // Story MOTIR-3331 — "Record planning mistakes", end to end (Subtask MOTIR-3353).
@@ -175,8 +179,8 @@ test('the setting reads ON by default, explains itself, and switching it off sto
 
   // ── 3 · Switch it off; reload and confirm it STAYED off ───────────────────
   await recordSwitch(page).click();
-  await page.getByTestId('ai-planning-save').click();
-  await expect(page.getByText('AI planning settings saved')).toBeVisible();
+  await clickAiPlanningSave(page);
+  await expect(aiPlanningSavedToast(page)).toBeVisible();
 
   await page.reload();
   await expect(recordSwitch(page)).toHaveAttribute('aria-checked', 'false');
@@ -208,8 +212,8 @@ test('the setting reads ON by default, explains itself, and switching it off sto
   // ── 5 · Switch it back on; the SAME pass records one ───────────────────────
   await openAiPlanningSettings(page);
   await recordSwitch(page).click();
-  await page.getByTestId('ai-planning-save').click();
-  await expect(page.getByText('AI planning settings saved')).toBeVisible();
+  await clickAiPlanningSave(page);
+  await expect(aiPlanningSavedToast(page)).toBeVisible();
 
   const beforeOn = readStore();
   await runPlanningPass(page, seed);

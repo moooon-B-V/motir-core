@@ -51,7 +51,7 @@ import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import { openAiPlanningSettings } from './_helpers/ai-planning-settings';
+import { clickAiPlanningSave, openAiPlanningSettings } from './_helpers/ai-planning-settings';
 import {
   AUTO_PLAN_THRESHOLD,
   SPRINT_JOB_ID,
@@ -143,7 +143,7 @@ async function saveAiSettings(page: Page, projectKey: string): Promise<void> {
       r.url().includes(`/api/projects/${projectKey}/ai-settings`) &&
       r.request().method() === 'PATCH',
   );
-  await page.getByTestId('ai-planning-save').click();
+  await clickAiPlanningSave(page);
   expect((await saved).status()).toBe(200);
 }
 
