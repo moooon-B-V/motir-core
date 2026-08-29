@@ -111,6 +111,7 @@ export type PersonalDataDelegate =
   | 'plan'
   | 'planChangeSession'
   | 'planChangeTurn'
+  | 'workItemTodo'
   | 'planRevision';
 
 const byUserId = (userId: string) => ({ userId });
@@ -443,6 +444,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Turns the reader wrote in a plan-change conversation.',
     where: (userId) => ({ authorId: userId }),
+  },
+  {
+    table: 'work_item_todo',
+    model: 'workItemTodo',
+    tier: 'tenant',
+    // `done_by_id` records WHO ticked a step, which is an attribution of an act
+    // to a person — the same shape as `plan_revision.changedById` and
+    // `design_evidence.withdrawnById`, both of which are exported. So this is
+    // EXPORTED rather than excluded: a table carrying "this person did this" is
+    // personal data whatever the row is otherwise about.
+    basis: 'To-do steps the reader ticked off.',
+    where: (userId) => ({ doneById: userId }),
   },
   {
     table: 'plan_revision',
