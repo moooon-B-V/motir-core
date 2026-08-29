@@ -555,6 +555,13 @@ silently-empty read in a different pull request from the fix for it.
 
 ## 6 · Q5 — the BUILD SHAPE
 
+> **⚠️ SUPERSEDED IN ONE RESPECT — read §6a first.** The shape below is
+> EXPAND → CONTRACT, and a column drop needs a THIRD phase between them: the
+> release that takes the field out of the generated client while the column
+> stays. Executing this table as written is what took `get_work_item` down
+> tenant-wide on 2026-08-28 (MOTIR-3852). Everything else here — the cut by
+> failure mode, the per-card scopes, the ordering — stands.
+
 ### Not one card, and not a pair
 
 MOTIR-3721 stands at 8 points, which `kind-leaf-deepen.md`'s estimation gate reads
@@ -631,6 +638,123 @@ database actually breaks.
 
 ---
 
+## 6a · AMENDMENT (MOTIR-3852) — the build shape above is TWO phases and a column drop needs THREE
+
+§6's table is EXPAND → CONTRACT, and executing it exactly as written took
+`get_work_item` down tenant-wide for about six minutes on 2026-08-28. The
+sequence was not performed carelessly. It was performed correctly, and the shape
+is one phase short.
+
+### What happened
+
+`Deploy to Fly` on run `33218107466` (head `741e7cec3`) ran **`23:12:13Z →
+23:18:37Z`**, its `Build the image and release it` step spanning `23:12:33Z →
+23:18:35Z`. Inside that window every `get_work_item` returned
+
+```
+Invalid `prisma.workItemDelivery.findMany()` invocation:
+The column `github_pull_request.work_item_id` does not exist in the current database.
+```
+
+Observed OK at `23:12`, 500 three times at `23:17`, and 200 again at `23:40` once
+the rollout finished — the outage is bounded by the deploy job to the minute.
+
+### Why the reader sweep did not prevent it, and could not have
+
+§0 re-measured the reader inventory twice and got it right; re-run at
+`origin/main` today it returns nothing. **The reader still selecting the column
+was not a reader anybody wrote.**
+
+`workItemDeliveryRepository` reads `include: WITH_PR`, where
+
+```ts
+const WITH_PR = { pullRequest: true, repo: true } as const;
+```
+
+A relation include with no `select` emits **every scalar the model declares**, so
+the column list a query touches is a property of `prisma/schema.prisma` and of no
+line of application code. **The model declaration is itself a reader — and it is
+the one reader a search for the field's name cannot find**, which is precisely
+why a complete sweep and a total outage are compatible facts.
+
+That declaration was removed by `4466ea7ff`, the same commit that dropped the
+column. So the client stopped asking and the column disappeared in ONE release,
+with no interval between them. `fly.toml`'s `release_command` runs
+`prisma migrate deploy` in a temporary machine _"before any new machine takes
+traffic"_ (`scripts/release-migrate.mjs`, its own header) — the correct ordering
+for an ADDITIVE migration, and for a destructive one it guarantees an interval in
+which the schema no longer has what the still-serving image is asking for.
+
+### The rule
+
+> **The image that is SERVING when a `DROP COLUMN` lands must already have a
+> client that does not select it** — which is only true if the client stopped
+> selecting it in an EARLIER release.
+
+So a column removal is three phases, and the boundary between the last two is a
+DEPLOY:
+
+|       | phase           | ships                                                            | released before the next phase merges?     |
+| ----- | --------------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| **1** | **EXPAND**      | move the application readers; the column and the field both stay | yes                                        |
+| **2** | **SCHEMA-ONLY** | take the field out of the GENERATED CLIENT; the column stays     | **yes — this is the one that was missing** |
+| **3** | **CONTRACT**    | drop the column                                                  | —                                          |
+
+Phase 2 is constrained by the drift gate (`Assert the datamodel and the
+migrations agree`, MOTIR-1960): deleting a field while its column remains IS
+drift, and the gate is right to say so. The phase therefore has to exclude the
+field from the client without removing it from the datamodel.
+
+### A release gate on phase 1 is necessary and NOT sufficient
+
+MOTIR-3818 is the right instrument — a `verification` card holding a CONTRACT
+until its EXPAND is genuinely deployed — and it was created at `19:05Z`, an hour
+before MOTIR-3757 merged without one. It would not have prevented this. It asks
+whether the REPLACEMENT is live; the question that decides whether a drop is safe
+is whether anything still SELECTS the old column, and after phase 1 the answer is
+still yes. Both gates are owed, and they are different questions.
+
+### What enforces it
+
+`tests/contract-phase-guard.test.ts`. A migration containing `DROP COLUMN` or
+`DROP TABLE` must carry
+
+```sql
+-- @client-stopped-selecting: MOTIR-<n>
+```
+
+naming the work item whose release stopped the client selecting it, plus a second
+check that needs no declaration at all: a column being dropped may not still be
+declared in the datamodel.
+
+**Its cost and its blind spot, recorded rather than left to be discovered.** The
+property that matters is HISTORICAL — _was the client already not selecting this
+in the previous release?_ — and at the contract commit the tree is identical
+either way, so nothing static can tell the safe case from the unsafe one. Reading
+the diff was measured and **rejected**: `tests/api/v1/work-loop-story-gate.test.ts`
+GUARD 4 already records `git diff --name-only <merge-base>` as _"WRONG — not
+weak, wrong … a check that only works in the author's worktree is worse than
+none, because it reads as coverage"_, and only one of `ci.yml`'s thirteen
+checkouts pays `fetch-depth: 0`. So the guard holds the property the diff stood
+in for, as a DECLARATION — **the marker's truth is asserted by the author, and no
+check here can prove the named release happened.** What it removes is the SILENT
+version: a two-phase drop can no longer be written by someone who never
+considered the question.
+
+The ten destructive migrations that predate the rule are exempted as an
+enumerated SET (measured at `origin/main` `2a30b92fd`, 10 of 188), never as a
+date cutoff — coverage is a set, and a cutoff would exempt anything that sorted
+below it, including a migration added later on a long-lived branch.
+
+### The consequence for the sibling pair, already applied
+
+MOTIR-3803 was written as phase 2 and phase 3 in one card and would have
+reproduced this on `github_check_run.feedback_comment_id`. It is re-scoped to the
+drop alone; MOTIR-3863 is the schema-only phase and MOTIR-3864 the deploy gate
+between them.
+
+---
+
 ## Consequences
 
 - **`work_item_delivery` gains a `system_admin` policy arm.** The tenancy surface
@@ -645,6 +769,10 @@ database actually breaks.
 - **`findTouchingPaths` loses a parameter** and the subsumption advisory excludes
   on CONTAINS (§4).
 - **MOTIR-3721 is re-scoped to EXPAND-1** and two cards are proposed beside it.
+- **A column removal is THREE phases, not two** (§6a, MOTIR-3852). The
+  datamodel's field declaration is itself a reader, so the client must stop
+  selecting the column in a RELEASE of its own before the drop lands.
+  Enforced by `tests/contract-phase-guard.test.ts`.
 
 ## References
 
