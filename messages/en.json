@@ -208,6 +208,7 @@
     "field_description": "Description",
     "field_explanation": "Explanation",
     "field_links": "Dependencies",
+    "field_parent": "Parent",
     "moreChanges": "+{n} more",
     "staleBadge": "Out of date",
     "staleSummary": "{n, plural, one {# item may be out of date} other {# items may be out of date}}",
@@ -318,6 +319,7 @@
     "field_description": "Description",
     "field_explanation": "Explanation",
     "field_links": "Links",
+    "field_parent": "Parent",
     "noChanges": "No field changes",
     "approveCta": "Approve — add {n, plural, one {# item} other {# items}}",
     "declineCta": "Discard",
@@ -6016,7 +6018,8 @@
           "description": "description",
           "explanation": "explanation",
           "points": "points",
-          "links": "dependencies"
+          "links": "dependencies",
+          "parent": "parent"
         },
         "remove": "removed",
         "willRemove": "goes on approve"

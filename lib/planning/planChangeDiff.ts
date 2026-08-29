@@ -202,6 +202,7 @@ export const FIELD_KEY: Record<string, string> = {
   links: 'links',
   estimateMinutes: 'estimate',
   storyPoints: 'points',
+  parent: 'parent',
 };
 
 /** The fields a `modify` proposal changes, as those copy keys — the compact "what

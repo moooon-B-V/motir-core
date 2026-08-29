@@ -1818,6 +1818,12 @@ one blocks implement the acquire, the refusal and the release.
   the work item is the source of truth, `declined` because it is a closed decision. D3(c)'s
   mutable-ref-graph objection is answered by MOTIR-3539's append-time check, which the correction
   re-runs. No grant change, no UI, no change to what approve materializes.
+- **A `modify` may RE-PARENT its target** (AMENDMENT 11, MOTIR-3859): `PlanItemPatch` gains
+  `parentRef`, so D3's `SITS or SHIPS` pair — widened for SHIPS by MOTIR-1884 / MOTIR-1912 and for
+  SITS by nothing — is whole. A `planItem:` temp-ref is refused (every guard a re-parent owes is a
+  question about a live row), a `done`-category parent is refused (derivation walks the re-open up the
+  whole ancestor chain, and an approve has nobody watching), and the check runs at the APPEND through
+  the same function the approve runs.
 - **A `planned` plan can be REVISED, and an approve that races one is REFUSED** (AMENDMENT 10,
   MOTIR-3596): an append is legal on a `planned` plan exactly when it declares itself part of a
   revision and records itself on the trail as one — the `generating` assertion was never about
@@ -2092,3 +2098,132 @@ with a fifth value in the world and renders something wrong.
 `approvePlan` keeps BOTH its `runPersistGate` calls. They answer whether the world moved while the plan
 waited, and no check taken at the close can foresee that. The whole point of D4 is that Class B is real
 and permanent; the status makes it _legible_, not preventable.
+
+---
+
+## AMENDMENT 11 — a `modify` may RE-PARENT its target: the patch carries D3's `SITS` half at last (MOTIR-3859, 2026-08-29)
+
+AMENDMENT 8 widened what a CORRECTION may reach and left one thing where it found it: `parentRef` is
+an `add`-only column on the `plan_item` row, so for a `modify` the widening reached only the `patch` —
+**and the patch had no parent key.** This amendment adds one.
+
+### The defect this answers
+
+**D3's own pair came apart, and nobody decided that it should.** D3 draws the deepen line as _"a
+deepen may change what a card SAYS and who ACTS on it; it may not change where the card **SITS or
+SHIPS**"_ — one sentence naming two halves. The `modify` patch was then given **SHIPS** twice, each
+time with its own reasoning and its own card (`targetRepo`, MOTIR-1884; `targetRepoRole`,
+MOTIR-1912), and was given **SITS** never. Nothing anywhere in this document argues it should not
+have been. The two halves were widened by different cards and only one of them ran.
+
+Two consequences, both observed on 2026-08-28 in one `motir re-plan MOTIR-1043`:
+
+1. **A re-plan stopped being one reviewable act.** The corrected shape moved a card between two
+   stories; the plan could carry the re-scope and not the move, so the re-plan was split across two
+   doors — the scope through plan `cmtdl09xr003jhvphju1lwjoy`, the placement through a direct
+   `move_to_parent`. Half of it was a proposal a person approves; the other half was already applied
+   and could not be declined with it. **That is the exact property routing a re-plan through the
+   proposal door exists to buy, spent.**
+2. **A cross-parent `blocked_by` edge had to be ARGUED instead of avoided.** Dependency edges are
+   legal between siblings; a card in the wrong story generates cross-parent edges that then need the
+   no-legal-lift justification written onto the card in prose, where nothing can check it. The move
+   made the edge ordinary — but only after the plan had been written the other way.
+
+And in `motir-ai`, `modify_node`'s own description promised the operation three times
+(_"propose a `modify` (**re-parent** / re-scope / re-sequence / re-title)"_, plus two prompt lines)
+while carrying no parameter for it. **A tool that advertises an operation it silently discards is
+worse than one that never offered it**: the model gets a success, and the plan it believes it wrote
+is not the plan it wrote.
+
+### D1 — the key rides in the `patch`, not on the row
+
+`plan_item.parentRef` stays `add`-only and `correctProposal`'s existing refusal —
+_"Only an `add` proposal carries a `parentRef`"_ — stays correct and unchanged. The new key is
+`PlanItemPatch.parentRef`, which the correction door already reaches (AMENDMENT 8 gave it a
+`modify`'s whole `patch`), so **one field lands the capability on both the append and the correction
+paths with no third door.**
+
+Sparse like every patch key: absent leaves the parent alone, an explicit `null` moves the target to
+the project root.
+
+### ⚠️ D2 — a `planItem:` temp-ref is REFUSED, and that is a decision rather than an omission
+
+The other four ref sites accept an intra-plan temp-ref. This one does not.
+
+**Every guard a re-parent owes is a question about a LIVE row** — the kind-parent matrix, same-project
+tenancy, the no-cycle walk, the depth cap, and D3's terminal-parent refusal below — and a proposal has
+none until approve. Admitting a temp-ref would mean a re-parent that nothing could check until the
+`work_item` triggers raised a raw SQLSTATE from inside `materialize`, at the approve button, where the
+plan is immutable and the only repair is to author a new one. That is precisely the failure
+`validatePlanProposals` exists to prevent.
+
+**Nothing is lost.** A card that must land under a card the same plan is adding is already
+expressible — `add` it with that `parentRef`.
+
+### D3 — a re-parent onto a `done`-category parent is REFUSED, and this is the load-bearing check
+
+The interactive `move_to_parent` permits it. The plan path must not, and the asymmetry is not
+timidity:
+
+Status derivation recomputes a container from its **CURRENT child set** on
+`work-item/child-set.changed` and applies the result BACKWARD (`docs/decisions/status-derivation.md`
+§3a). So materializing a re-parent under a finished card returns that card to an open status and walks
+the re-open **up its whole ancestor chain** — dropping every card `blocked_by` anything that came back
+out of the ready set. **A plan path that skips this check is strictly more dangerous than the
+interactive one, because nobody is watching at approve time**: `moveWorkItem` is a person clicking, and
+an approve is a person saying yes to a summary.
+
+It surfaces as `PlanGrammarError` with `reason: 'parent_terminal'`, naming the parent's status.
+
+### D4 — validated at the APPEND, through the SAME function the approve runs
+
+`assertReparentLegal` is one pure function in `lib/plans/validateProposals.ts`, called from
+`plansService.addProposals` (under the plan's row lock, before the first insert) and from
+`validatePlanProposals` (step 3c, at the close and again under the approve's row locks). One
+implementation, so a move refused at the append cannot be admitted at approve or the reverse.
+
+**⚠️ It is the one append-time check that costs a workspace read**, and the header on the pure gate
+says such a check belongs at the close. A re-parent is the case that argument does not cover: its
+questions are about a row that must exist ALREADY, so **nothing a later call does can turn an illegal
+move into a legal one** — which is `assertTempRefsResolvable`'s own argument (MOTIR-3539) for refusing
+where the ref is written. The read is skipped entirely when no proposal in the batch carries
+`patch.parentRef`, so a plan that re-parents nothing costs exactly what it cost before.
+
+The depth arithmetic MIRRORS `enforce_work_item_depth_limit` rather than replacing it — the trigger
+stays the structural backstop, as it does for the kind matrix.
+
+### D5 — the move is VISIBLE on the surface that approves it
+
+A re-parent that the review canvas drew in the card's OLD level would be the plan review showing the
+approver the opposite of what approving does. So `planReviewService` gains a `parent` entry in
+`PLAN_ITEM_CHANGE_FIELDS` (with copy in both catalogs and all three hand-maintained label maps, per
+MOTIR-3151), and `parentNodeIdOf` reads `patch.parentRef` — the canvas draws the card where the plan
+proposes to put it.
+
+### What the approve owes BESIDES the column
+
+A move is not one write. `moveWorkItem` has always done three things, and the plan path now does the
+same three:
+
+- the `parentId` **revision diff cell**, inside the existing one-revision-per-modify guarantee;
+- the **derived repository set** recomputed on BOTH chains — the one joined AND the one vacated. The
+  end-of-pass rollup walks up from the moved row, so after the write it climbs the NEW chain and never
+  visits the parent the row LEFT, whose set is now wrong in the other direction;
+- the **`work-item/child-set.changed` event**, post-commit, naming both parents. `work-item/transitioned`
+  fires on neither end of a move, which is the whole reason that event exists (MOTIR-2892) — and it is
+  the check `moveWorkItem` itself went without until MOTIR-2888, when a `move_to_parent` reached no job
+  in the system at all.
+
+### The consumer half
+
+`motir-ai`'s `modify_node` gains the parameter — in the tool schema, in `ModifyPatch`, in
+`modifyExecutor`, and in the four handler payloads — and a call whose ONLY change is the parent stops
+being rejected as _"needs at least one changed field"_, which was false: it did specify a change, and
+the tool could not carry it. **No prompt change is needed for that half; the prose it already ships
+becomes true.**
+
+### What this does NOT change
+
+`UpdateProposalInput` and `update_plan_item` are untouched: D3's line still holds for a **deepen**, and
+a re-parent is not one. This widens the `modify` PATCH — an act whose whole content is "change this
+existing card" — not the turn that fills in a proposal's own body.

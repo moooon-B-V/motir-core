@@ -52,8 +52,17 @@ export interface ProposalNode {
    * a write: the proposed `kind` and the proposed `type` (MOTIR-3654).
    */
   proposedFields: { kind?: string | null; type?: string | null } | null;
-  /** `modify` only — the gate reads just the edge refs. */
-  patch: { blockedByAdd?: string[] | null; blockedByRemove?: string[] | null } | null;
+  /**
+   * `modify` only — the gate reads the edge refs, and (MOTIR-3859) the
+   * `parentRef` a re-parent travels on. `undefined` and `null` are DIFFERENT
+   * here, as everywhere in a sparse patch: absent leaves the parent alone, an
+   * explicit `null` moves the target to the project root.
+   */
+  patch: {
+    parentRef?: string | null;
+    blockedByAdd?: string[] | null;
+    blockedByRemove?: string[] | null;
+  } | null;
 }
 
 /** A live work item the plan references (a real parent, or a modify/remove target). */
@@ -90,6 +99,23 @@ export interface ValidatePlanProposalsInput {
    * question in this gate whose answer depends on WHERE a live row sits.
    */
   planProjectId: string;
+  /**
+   * The ANCESTOR CHAIN of every work item a `modify` proposes as a new parent
+   * (MOTIR-3859) — `parentId → … → root`, nearest first — resolved by the
+   * service in one batched read (`workItemRepository.findAncestorIdsForItems`).
+   *
+   * It is what makes the CYCLE and DEPTH questions answerable in a pure
+   * function: a re-parent's legality is a property of the tree above the new
+   * parent, which is the only thing in this gate that neither the proposal set
+   * nor a single row can supply. An id with no entry reads as a ROOT (an empty
+   * chain), which is what an item with no parent actually has — so a caller that
+   * resolves nothing degrades to "the parent is a root", the permissive answer,
+   * and the DB triggers stay the backstop.
+   *
+   * REQUIRED rather than optional, deliberately: an optional map defaulting to
+   * empty would let a caller that forgot it pass a cycle silently.
+   */
+  ancestorIdsById: ReadonlyMap<string, readonly string[]>;
 }
 
 /** The proposed kind of an `add`, defaulted the way `materialize` defaults it. */
@@ -153,6 +179,10 @@ export function collectReferencedWorkItemIds(items: readonly ProposalNode[]): st
     addReal(item.parentRef);
     for (const ref of item.blockedByRefs) addReal(ref);
     if (item.op === 'modify' || item.op === 'remove') addReal(item.workItemId);
+    // The RE-PARENT target (MOTIR-3859) — the new parent has to be in `liveById`
+    // for every one of its guards, and it is the one ref site that is a single
+    // nullable value rather than a list.
+    if (item.op === 'modify' && item.patch?.parentRef) addReal(item.patch.parentRef);
     for (const ref of item.patch?.blockedByAdd ?? []) addReal(ref);
     for (const ref of item.patch?.blockedByRemove ?? []) addReal(ref);
   }
@@ -160,7 +190,12 @@ export function collectReferencedWorkItemIds(items: readonly ProposalNode[]): st
 }
 
 /** Where a ref was written, for the rejection message. */
-type RefSite = 'parentRef' | 'blockedByRefs' | 'patch.blockedByAdd' | 'patch.blockedByRemove';
+type RefSite =
+  | 'parentRef'
+  | 'blockedByRefs'
+  | 'patch.parentRef'
+  | 'patch.blockedByAdd'
+  | 'patch.blockedByRemove';
 
 /**
  * Every (site, refs) pair one proposal carries, so the two passes below walk the
@@ -172,6 +207,9 @@ function refSitesOf(item: ProposalNode): Array<[RefSite, readonly string[]]> {
   if (item.parentRef !== null) sites.push(['parentRef', [item.parentRef]]);
   sites.push(['blockedByRefs', item.blockedByRefs]);
   if (item.op === 'modify') {
+    // An explicit `null` is a move to the ROOT and names nothing, so it carries
+    // no ref to resolve — only a non-null value is a site (MOTIR-3859).
+    if (item.patch?.parentRef) sites.push(['patch.parentRef', [item.patch.parentRef]]);
     sites.push(['patch.blockedByAdd', item.patch?.blockedByAdd ?? []]);
     sites.push(['patch.blockedByRemove', item.patch?.blockedByRemove ?? []]);
   }
@@ -336,6 +374,191 @@ function effectiveParentKind(
   return live.kind;
 }
 
+// ── The RE-PARENT gate (MOTIR-3859) ──────────────────────────────────────────
+//
+// A `modify` may now move its target (`patch.parentRef`), which is the ONE patch
+// key whose legality is a question about the TREE rather than about the row. The
+// five checks below are the same five the interactive path is subject to — three
+// of them asserted by `workItemsService.moveWorkItem` and two by the `work_item`
+// triggers — collected into one pure function so the APPEND and the APPROVE ask
+// them identically. That is the whole reason it is a function and not two
+// inlined copies: a re-parent refused at the append and admitted at approve, or
+// the reverse, is worse than either answer.
+
+/**
+ * The tree's depth cap, mirrored from `enforce_work_item_depth_limit`
+ * (`prisma/sql/work_item_triggers.sql`): a root is depth 1, and a row whose
+ * resulting depth exceeds this raises `WI_DEPTH_LIMIT_EXCEEDED`.
+ *
+ * ⚠️ A MIRROR, and therefore a thing to keep in lockstep — the trigger is the
+ * backstop and stays authoritative. It is duplicated here for the reason the
+ * kind-parent matrix is NOT (that one is a shared module this file imports): the
+ * cap lives in SQL, there is no TypeScript module owning it, and inventing one
+ * to hold a single integer would put a third name on a two-name fact.
+ */
+const MAX_WORK_ITEM_DEPTH = 4;
+
+/**
+ * Assert one `modify`'s proposed re-parent is legal, or throw the typed
+ * rejection that says why (MOTIR-3859). A no-op for every proposal that does not
+ * carry `patch.parentRef` — which is all of them, on the overwhelming majority
+ * of plans.
+ *
+ * PURE. Everything it needs is resolved by the caller: the live rows in
+ * `liveById` (the target and the new parent), and `ancestorIdsById` — the new
+ * parent's ancestor chain, which is what makes the CYCLE and DEPTH questions
+ * answerable without a query. `workItemRepository.findAncestorIdsForItems` is
+ * the one batched read that supplies it.
+ *
+ * The order is the same discipline the gate above follows — a malformed
+ * re-parent fails with the MOST specific reason:
+ *
+ *   1. a temp-ref parent (refused outright — see `PlanItemPatch.parentRef`)
+ *   2. tenancy — the parent is in this project
+ *   3. self / descendant — the move would create a cycle
+ *   4. depth — the resulting depth is within the cap
+ *   5. the kind-parent matrix, and the parent is not terminal
+ *
+ * A target that resolves to NOTHING is left alone: `materialize` raises
+ * `PlanItemTargetMissingError` for it and rolls the approve back, which is the
+ * more specific reason, and step 4 of the gate already declines to invent one.
+ */
+export function assertReparentLegal(
+  item: ProposalNode,
+  liveById: ValidatePlanProposalsInput['liveById'],
+  ancestorIdsById: ValidatePlanProposalsInput['ancestorIdsById'],
+  terminalStatusKeys: ReadonlySet<string>,
+  planProjectId: string,
+): void {
+  if (item.op !== 'modify') return;
+  const ref = item.patch?.parentRef;
+  if (ref === undefined) return;
+
+  const target = item.workItemId ? liveById.get(item.workItemId) : undefined;
+  // Left to `materialize`, which raises the specific reason (see the doc above).
+  if (!target) return;
+  if (!isIssueType(target.kind)) {
+    // Unreachable through the schema, guarded for the same reason
+    // `effectiveParentKind`'s twin is.
+    throw new PlanGrammarError(
+      'unknown_kind',
+      item.id,
+      `Proposal ${item.id}'s target ${target.id} has kind "${target.kind}", which is not a valid issue type.`,
+    );
+  }
+
+  // An explicit `null` moves the target to the PROJECT ROOT. The only thing that
+  // can be wrong with it is the kind — a subtask has no legal top-level
+  // placement — and `assertValidParent` is the arm that says so.
+  if (ref === null) {
+    assertParentKindLegal(item, null, target.kind);
+    return;
+  }
+
+  // 1. A proposal is not a legal parent for an existing card. The refusal is
+  //    also made at the append boundary (`validateProposal`), where it reaches
+  //    the author first; this is the backstop that keeps the two gate stages
+  //    total over the same input.
+  if (isTempRef(ref)) {
+    throw new PlanGrammarError(
+      'illegal_parent',
+      item.id,
+      `Proposal ${item.id}'s patch.parentRef "${ref}" names a proposal in this plan. A \`modify\` may only re-parent onto a work item that ALREADY EXISTS: every check a re-parent owes — the kind-parent matrix, same-project tenancy, the no-cycle walk, the depth cap and the terminal-parent refusal — is a question about a live row, and a proposal has none until approve. To land a card under one this plan is adding, \`add\` it with that \`parentRef\` instead.`,
+    );
+  }
+
+  // Resolution is guaranteed by `assertRefsResolvable`.
+  const parent = liveById.get(ref)!;
+
+  // 2. TENANCY — same rule, same reason and deliberately the same message shape
+  //    as an `add`'s parentRef (step 3b): parentage is same-project by invariant
+  //    on three enforcing layers, while a `blocked_by` edge is workspace-scoped
+  //    by design.
+  if (parent.projectId !== planProjectId) {
+    throw new PlanGrammarError(
+      'illegal_parent',
+      item.id,
+      `Proposal ${item.id}'s patch.parentRef "${ref}" names a work item in a DIFFERENT project of this workspace. A work item's parent must live in the same project (a cross-project parent is refused by workItemsService and by the work_item parent-tenancy trigger).`,
+    );
+  }
+
+  // 3. CYCLE — the target itself, or anything below it. `enforce_work_item_no_cycle`
+  //    walks UP from the new parent and rejects when the chain reaches the row
+  //    being moved; this is that walk, taken from the chain the caller resolved.
+  const chain = ancestorIdsById.get(parent.id) ?? [];
+  if (parent.id === target.id) {
+    throw new PlanRefGraphError(
+      'cycle',
+      item.id,
+      `Proposal ${item.id} would re-parent work item ${target.id} under ITSELF.`,
+    );
+  }
+  if (chain.includes(target.id)) {
+    throw new PlanRefGraphError(
+      'cycle',
+      item.id,
+      `Proposal ${item.id} would re-parent work item ${target.id} under ${parent.id}, which is one of its own DESCENDANTS — the move would create a cycle.`,
+    );
+  }
+
+  // 4. DEPTH — the new parent's own chain plus the parent plus the moved row.
+  //    `chain` holds the parent's ANCESTORS, so the parent sits at
+  //    `chain.length + 1` and the target would land at `chain.length + 2`, which
+  //    is exactly `ancestor_depth + 1` in the trigger's arithmetic.
+  const resultingDepth = chain.length + 2;
+  if (resultingDepth > MAX_WORK_ITEM_DEPTH) {
+    throw new PlanGrammarError(
+      'parent_depth_limit',
+      item.id,
+      `Proposal ${item.id} would place work item ${target.id} at depth ${resultingDepth}, past the limit of ${MAX_WORK_ITEM_DEPTH}.`,
+    );
+  }
+
+  // 5a. The kind-parent matrix — asked of `lib/issues/parentRules.ts`, the same
+  //     single source of truth every human create / move is gated on.
+  if (!isIssueType(parent.kind)) {
+    throw new PlanGrammarError(
+      'unknown_kind',
+      item.id,
+      `Proposal ${item.id}'s patch.parentRef work item ${parent.id} has kind "${parent.kind}", which is not a valid issue type.`,
+    );
+  }
+  assertParentKindLegal(item, parent.kind, target.kind);
+
+  // 5b. …and the parent is not FINISHED. See `PlanGrammarViolation`'s
+  //     `parent_terminal` member for why this one is not cosmetic: the derived
+  //     re-open walks the whole ancestor chain, and an approve has nobody
+  //     watching it.
+  if (terminalStatusKeys.has(parent.status)) {
+    throw new PlanGrammarError(
+      'parent_terminal',
+      item.id,
+      `Proposal ${item.id} would re-parent work item ${target.id} under ${parent.id}, which is in the terminal status "${parent.status}". Completing work is derived from a container's CURRENT child set, so giving a finished parent a new open child re-opens it and every ancestor above it.`,
+    );
+  }
+}
+
+/** `assertValidParent`, with its `IllegalParentTypeError` re-thrown as the plan
+ *  gate's own typed rejection — the same translation step 3 makes for an `add`. */
+function assertParentKindLegal(
+  item: ProposalNode,
+  parentKind: IssueType | null,
+  childKind: IssueType,
+): void {
+  try {
+    assertValidParent(parentKind, childKind);
+  } catch (err) {
+    if (err instanceof IllegalParentTypeError) {
+      throw new PlanGrammarError(
+        'illegal_parent',
+        item.id,
+        `Proposal ${item.id} is not a legal placement: ${err.message}`,
+      );
+    }
+    throw err;
+  }
+}
+
 /**
  * THE GATE. Re-validate an approved proposal set independently, before it
  * becomes rows. Throws the first violation as a typed error — `PlanRefGraphError`
@@ -353,7 +576,7 @@ function effectiveParentKind(
  * therefore cannot move earlier than the CLOSE.
  */
 export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
-  const { items, liveById, terminalStatusKeys, planProjectId } = input;
+  const { items, liveById, terminalStatusKeys, planProjectId, ancestorIdsById } = input;
 
   const adds = items.filter((i) => i.op === 'add');
   const addsById = new Map(adds.map((a) => [a.id, a]));
@@ -437,6 +660,16 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
           `blockedByRefs.`,
       );
     }
+  }
+
+  // 3c. The RE-PARENT a `modify` may now propose (MOTIR-3859) — tenancy, cycle,
+  //     depth, the kind matrix, and the terminal-parent refusal, in that order.
+  //     It sits with the other placement questions rather than with step 4
+  //     because it IS one: everything it asks is about where a card may SIT.
+  //     `addProposals` runs the same function at the APPEND, which is where the
+  //     author still has the plan to fix.
+  for (const item of items) {
+    assertReparentLegal(item, liveById, ancestorIdsById, terminalStatusKeys, planProjectId);
   }
 
   // 4. Done-work immutability. A `modify`/`remove` never rewrites completed work.

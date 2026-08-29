@@ -390,7 +390,27 @@ export type PlanGrammarViolation =
    * inside the transaction — which is exactly the raw-ORM-failure-as-500 this
    * gate exists to prevent, one column over from `kind`.
    */
-  | 'unknown_type';
+  | 'unknown_type'
+  /**
+   * A `modify` whose `patch.parentRef` would push the target past the tree's
+   * depth cap of 4 (MOTIR-3859). The SAME arithmetic
+   * `enforce_work_item_depth_limit` runs — the new parent's own chain length
+   * plus one — taken here so the refusal names the plan item instead of
+   * arriving as `WI_DEPTH_LIMIT_EXCEEDED` wrapped in a `PlanPersistenceError`
+   * halfway through an approve.
+   */
+  | 'parent_depth_limit'
+  /**
+   * A `modify` whose `patch.parentRef` names a parent in a TERMINAL status
+   * (MOTIR-3859). Not an aesthetic rule: status derivation recomputes a parent
+   * from its CURRENT child set on `work-item/child-set.changed` and applies the
+   * result backward, so materializing a re-parent under a `done` card returns
+   * that card to an open status and walks the re-open up its whole ancestor
+   * chain — dropping every card `blocked_by` anything that came back out of the
+   * ready set. The interactive `move_to_parent` has a human watching it; an
+   * approve has nobody, which is why the plan path is the one that must refuse.
+   */
+  | 'parent_terminal';
 
 /**
  * The proposal set does not satisfy the kind-parent grammar

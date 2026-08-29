@@ -1166,6 +1166,74 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
     await client.close();
   });
 
+  it('resolves a `patch.parentRef` key — the FIFTH ref site (MOTIR-3859)', async () => {
+    const fx = await makeWorkItemFixture();
+    const home = await createTestWorkItem(fx, { kind: 'story', title: 'Where it is' });
+    const destination = await createTestWorkItem(fx, { kind: 'story', title: 'Where it belongs' });
+    const card = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'The card',
+      parentId: home.id,
+    });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: card.id,
+          // The KEY, exactly as `get_work_item` and `move_to_parent` take it. An
+          // agent that has just read the destination by key has no reason to
+          // believe the argument changed meaning three lines later.
+          patch: { parentRef: destination.identifier },
+        },
+      ],
+    });
+    expect(appended.isError).toBeFalsy();
+
+    const patch = (await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(appended)[0]! } }))
+      .patch as { parentRef: string };
+    expect(patch.parentRef).toBe(destination.id);
+    await client.close();
+  });
+
+  it('REFUSES a `planItem:` temp-ref in `patch.parentRef`, and appends nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const home = await createTestWorkItem(fx, { kind: 'story', title: 'Where it is' });
+    const card = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'The card',
+      parentId: home.id,
+    });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'add', proposedFields: { title: 'A proposed story', kind: 'story' } }],
+    });
+    const proposedStoryId = ids(first)[0]!;
+
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: card.id,
+          patch: { parentRef: `planItem:${proposedStoryId}` },
+        },
+      ],
+    });
+    expect(refused.isError).toBe(true);
+    // The refusal has to SAY what to do instead, because the caller is a machine
+    // that can act on an instruction and cannot act on a rejection.
+    expect(JSON.stringify(refused.content)).toContain('ALREADY');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+    await client.close();
+  });
+
   it('is case-INSENSITIVE, exactly as `get_work_item` is', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
