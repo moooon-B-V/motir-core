@@ -19,8 +19,9 @@ See the keystone decision: [`docs/decisions/design-system-package.md`](../../doc
 
 - **`@motir/design-system/theme.css`** — the full token layer as a distributable
   stylesheet: the Tailwind v4 `@theme` block, `@custom-variant dark`, the Tier-3
-  `--el-*` element tokens, and every `[data-palette]` / `[data-style]` /
-  `[data-type]` / `[data-surface]` override + surface-material block.
+  `--el-*` element tokens, every `[data-palette]` / `[data-style]` /
+  `[data-type]` / `[data-surface]` override + surface-material block, and the
+  **motion floor** below.
 - **`@motir/design-system`** (JS entry) — the axis **registries**
   (`STYLE_IDS` / `PALETTE_IDS` / `TYPE_IDS`, `resolve*`, `is*Id`,
   `STYLE_DEFAULT_TYPE`), the **theme-apply API** (`buildThemeInitScript`,
@@ -56,6 +57,34 @@ Use the primitives + provider as normal React components:
 ```tsx
 import { ThemeProvider, Button, Card } from '@motir/design-system';
 ```
+
+## Motion — the reduced-motion floor is the PACKAGE's, not the consumer's
+
+**`theme.css` owns the `prefers-reduced-motion` guard for every animation the
+design system ships.** A consumer imports the stylesheet and is done; it does
+not have to know which primitives animate, and it must not have to rediscover
+the guard per surface. Two kinds live here:
+
+- **Style-axis motion** — the `aurora` canvas drift, the `3d-immersive` tilt and
+  menu unfold — gated inside the `[data-style]` block that introduced it,
+  because the motion belongs to that style.
+- **The motion floor** — motion that belongs to no style and renders under every
+  axis combination. Today that is `.animate-spin`, which `Spinner` paints and
+  `<Button loading>` inherits: under `prefers-reduced-motion: reduce` it sets
+  `animation: none` and nothing else (MOTIR-3844). It is unlayered, which is what
+  makes it outrank Tailwind's `@layer utilities` copy of the same class whatever
+  the specificity or the `@import` order.
+
+**Stop the rotation, keep the glyph.** A spinner is the only signal that a
+control is working, so the guard stills it rather than hiding it — the ring keeps
+its size, its border and its `role="status"`. A consumer whose only in-flight cue
+is the rotation should pair it with a **label change**, since with the animation
+stilled the word is the whole of the state.
+
+**Adding an animation to this package means adding its guard here**, in the same
+change — `tests/theme/reducedMotionSpinner.test.ts` in `motir-core` reads the
+floor back off the COMPILED stylesheet for both consumer shapes, so a guard that
+does not survive compilation fails there rather than in someone's browser.
 
 ## Boundary notes (how the extraction applied the ADR's rule)
 

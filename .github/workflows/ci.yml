@@ -63,7 +63,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# ── Job time ceilings (MOTIR-3569) ─────────────────────────────────────────────
+# ── Job time ceilings (MOTIR-3569, widened to every workflow by MOTIR-3768) ────
 #
 # EVERY job below that declares `runs-on` also declares `timeout-minutes`.
 # GitHub's default is 360 minutes, and a job with no bound produces no VERDICT:
@@ -94,11 +94,16 @@ concurrency:
 #
 # `sandbox` and `runner-image` carry none, and cannot: they call a reusable
 # workflow, and GitHub does not accept `timeout-minutes` on a `uses:` job. Their
-# ceilings belong in `sandbox-images.yml` / `runner-image.yml` — see MOTIR-3768.
+# ceilings live in `sandbox-images.yml` / `runner-image.yml`, where MOTIR-3768
+# put them — so the two jobs `ci-complete` waits on are bounded even though the
+# numbers are not written here. That card also gave the other nine workflow
+# files their ceilings; every one of the 33 runner jobs in this directory now
+# declares one.
 #
 # `tests/ci-job-timeouts.test.ts` asserts the invariant by re-deriving the job
-# list from this file, so a job added later without a ceiling fails the suite
-# rather than inheriting six hours in silence.
+# list from EVERY file in `.github/workflows/` — this one included — so a job
+# added later without a ceiling, in any workflow, fails the suite rather than
+# inheriting six hours in silence.
 jobs:
   # ── What the diff can actually reach (MOTIR-3148) ───────────────────────────
   #

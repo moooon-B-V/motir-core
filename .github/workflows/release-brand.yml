@@ -61,6 +61,13 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # NO run on record — this lane has never fired (`gh api
+    # actions/workflows/release-brand.yml/runs` → `total_count: 0`) → 15, a
+    # STATED FLOOR rather than a measurement. The only comparable evidence is
+    # `release-cli.yml`, a structurally identical npm publish (build, pack,
+    # check, publish) observed at 1.2–1.4 min; the floor is raised above the
+    # usual 10 because that is a proxy and not this lane's own number.
+    timeout-minutes: 15
     env:
       PACKAGE: '@motir/brand'
       PKG_DIR: packages/brand
