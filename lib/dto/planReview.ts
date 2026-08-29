@@ -57,6 +57,18 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
    *  say about a card, and the whole reason the move was routed through the
    *  proposal door rather than applied directly. */
   'parent',
+  /** Where the target SHIPS — a `modify`'s `patch.targetRepo` (MOTIR-1884) and
+   *  `patch.targetRepoRole` (MOTIR-1912), the other half of D3's `SITS or SHIPS`
+   *  pair `parent` above completes (bug MOTIR-3868).
+   *
+   *  Neither had a row at all, so a `modify` carrying ONLY a re-pin rendered as a
+   *  proposal with an EMPTY change list — a row that says a card is being changed
+   *  and declines to say how — while `applyModify` read and applied both. A re-pin
+   *  decides which repository the card ships in, which checkout the CLI is
+   *  dispatched into, and (through the container rollup) the derived repository set
+   *  of every ancestor; it is the wrong field to be silent about. */
+  'targetRepo',
+  'targetRepoRole',
 ] as const;
 
 export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PLAN_ITEM_PATCH_KEYS, type PlanItemPatchKey } from '@/lib/dto/plans';
+import { PLAN_ITEM_CHANGE_FIELDS, type PlanItemChangeField } from '@/lib/dto/planReview';
 
 // The PARITY GUARD (MOTIR-3084 / bug MOTIR-3070).
 //
@@ -149,5 +151,126 @@ describe('PlanItemPatch edge carriers ⟷ planReviewService', () => {
     expect(service).toContain('item.patch?.blockedByAdd');
     expect(service).not.toContain('item.patch?.blockedByRemove');
     expect(service).toMatch(/`blockedByRemove` is deliberately NOT here/);
+  });
+});
+
+// ── The CHANGE-ROW totality guard (bug MOTIR-3868) ───────────────────────────
+//
+// The two guards above hold the review model against what a proposal CARRIES.
+// This one holds the review VOCABULARY against what a `modify` can PATCH — the
+// third consumer of `PlanItemPatch`, and the one where a missing key is most
+// nearly invisible.
+//
+// ── What went wrong ─────────────────────────────────────────────────────────
+// `buildChanges` emits a `PlanItemChangeDto` per patched field, and it had no row
+// for `targetRepo` (MOTIR-1884) or `targetRepoRole` (MOTIR-1912) — two keys that
+// `applyModify` read and applied. So a `modify` carrying `{ targetRepo: 'motir-ai' }`
+// and nothing else rendered in the review dock and on the canvas as a proposal
+// with an EMPTY change list: a row that says a card is being modified and
+// declines to say how. The approver's only options were to approve a change they
+// could not see, or decline a plan that may have been entirely correct.
+//
+// It is silent in the direction that hides it. An empty `changes` array is a
+// legal, ordinary shape (a `remove` has one), so nothing rendered wrong and
+// nothing failed. `buildChanges` is typed to the closed wire vocabulary, which
+// makes a WRONG literal a compile error and says nothing about a MISSING one.
+//
+// ── Why THIS test, and not the one that already exists ──────────────────────
+// `tests/components/plan-change-field-labels.test.tsx` is total over
+// `PLAN_ITEM_CHANGE_FIELDS` — it holds the three label maps and both catalogs to
+// the vocabulary, and it could never see this: it holds the labels to the
+// vocabulary, and the VOCABULARY is what was short. Totality over a list cannot
+// detect that the list itself is missing a member; only a comparison against a
+// SECOND, independently-maintained list can.
+//
+// This is the third time a key added to `PlanItemPatch` reached one consumer and
+// not another — the sizing pair reached the producer and not the labels
+// (MOTIR-3151), three keys reached the core patch and not motir-ai (MOTIR-3860),
+// and these two reached the applier and not the review. Each was found by
+// accident, months later. `motir-ai`'s `MODIFY_PATCH_KEYS` is this same
+// instrument one boundary over, and is what this mirrors.
+describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
+  const declared = interfaceKeys('lib/dto/plans.ts', 'PlanItemPatch');
+
+  /**
+   * What the review surface does with each patch key: the change row it produces,
+   * or a NAMED reason it deliberately produces none.
+   *
+   * ⚠️ `Record<PlanItemPatchKey, …>` is total by TYPE, so a key added to
+   * `PlanItemPatch` (and therefore to `PLAN_ITEM_PATCH_KEYS`, which the compiler
+   * already forces) fails to compile HERE until somebody states what the approver
+   * sees for it. That is the whole ratchet: the answer may legitimately be
+   * "nothing", but it has to be written down rather than defaulted into.
+   *
+   * `noRow` has no members today — every key a `modify` can carry is now visible
+   * to the approver — and the arm is kept because the next key is the one this
+   * guard exists for.
+   */
+  type ChangeRowDisposition = { row: PlanItemChangeField } | { noRow: string };
+  const DISPOSITION: Record<PlanItemPatchKey, ChangeRowDisposition> = {
+    title: { row: 'title' },
+    descriptionMd: { row: 'description' },
+    explanationMd: { row: 'explanation' },
+    priority: { row: 'priority' },
+    type: { row: 'type' },
+    storyPoints: { row: 'storyPoints' },
+    estimateMinutes: { row: 'estimateMinutes' },
+    // The two this bug was filed about.
+    targetRepo: { row: 'targetRepo' },
+    targetRepoRole: { row: 'targetRepoRole' },
+    parentRef: { row: 'parent' },
+    // BOTH edge carriers collapse onto one row — the diff cell reads
+    // `+2 / −1 blockers` rather than naming each edge (MOTIR-3366's carriers).
+    blockedByAdd: { row: 'links' },
+    blockedByRemove: { row: 'links' },
+  };
+
+  it('declares the patch key set exactly — the constant cannot drift from the interface', () => {
+    // The COMPILE-TIME half lives in `lib/dto/plans.ts`
+    // (`_planItemPatchKeysAreExhaustive`). This is the runtime half, and it is not
+    // redundant: it reads the interface's own source text, so it still fails if
+    // someone relaxes that assertion, and it names the offending key rather than
+    // producing a `never` type error.
+    expect([...PLAN_ITEM_PATCH_KEYS].sort()).toEqual([...declared].sort());
+  });
+
+  it('states a disposition for EVERY patch key', () => {
+    const undispositioned = [...PLAN_ITEM_PATCH_KEYS].filter((k) => !(k in DISPOSITION));
+    const stale = Object.keys(DISPOSITION).filter(
+      (k) => !(PLAN_ITEM_PATCH_KEYS as readonly string[]).includes(k),
+    );
+    expect({ undispositioned, stale }).toEqual({ undispositioned: [], stale: [] });
+  });
+
+  it('emits only rows the wire vocabulary can name', () => {
+    const rows = Object.values(DISPOSITION).flatMap((d) => ('row' in d ? [d.row] : []));
+    const unknown = rows.filter((r) => !(PLAN_ITEM_CHANGE_FIELDS as readonly string[]).includes(r));
+    expect({ unknown }).toEqual({ unknown: [] });
+  });
+
+  it('leaves no vocabulary member that nothing can produce', () => {
+    // The other direction. A member of the vocabulary that no patch key emits is
+    // dead copy every catalog and all three label maps are nonetheless forced to
+    // carry — the mirror-image drift, and the one a totality-over-the-vocabulary
+    // test reads as healthy.
+    const produced = new Set(
+      Object.values(DISPOSITION).flatMap((d) => ('row' in d ? [d.row as string] : [])),
+    );
+    const unproducible = PLAN_ITEM_CHANGE_FIELDS.filter((f) => !produced.has(f));
+    expect({ unproducible }).toEqual({ unproducible: [] });
+  });
+
+  it('parses the interface — a guard that read nothing would pass vacuously', () => {
+    expect(declared.size).toBeGreaterThan(10);
+    expect(declared.has('targetRepo')).toBe(true);
+  });
+
+  it('would have caught the two keys that shipped invisible', () => {
+    // The regression this guard is built from, asserted as itself: before the fix
+    // the vocabulary held neither, so the first assertion in this block went red
+    // only once `PLAN_ITEM_PATCH_KEYS` existed — and `unproducible` / `unknown`
+    // are what keep them there.
+    expect(PLAN_ITEM_CHANGE_FIELDS).toContain('targetRepo');
+    expect(PLAN_ITEM_CHANGE_FIELDS).toContain('targetRepoRole');
   });
 });

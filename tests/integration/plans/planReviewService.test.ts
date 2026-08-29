@@ -231,6 +231,116 @@ describe('planReviewService.getPlanReview', () => {
     expect(modify.changes.map((c) => c.field)).toEqual(['title']);
   });
 
+  // ── WHERE THE CARD SHIPS (bug MOTIR-3868) ────────────────────────────────
+  // The SHIPS half of D3's `SITS or SHIPS` pair. Both keys reached `applyModify`
+  // and neither reached `buildChanges`, so a `modify` carrying only a re-pin
+  // rendered as a proposal with an EMPTY change list — a row that says a card is
+  // being changed and declines to say how.
+
+  it('surfaces a repo RE-PIN in the change preview so the approver SEES it (MOTIR-3868)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card that moves repo');
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { targetRepo: 'motir-core' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-pin plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { targetRepo: 'motir-ai' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.changes.find((c) => c.field === 'targetRepo')).toEqual({
+      field: 'targetRepo',
+      from: 'motir-core',
+      to: 'motir-ai',
+    });
+  });
+
+  it('renders a NON-EMPTY change list for a modify whose ONLY change is a re-pin (MOTIR-3868)', async () => {
+    // ⚠️ THE DEFECT'S WHOLE SHAPE, asserted directly. An empty `changes` array is
+    // a legal, ordinary value elsewhere (a `remove` has one), so nothing rendered
+    // wrong and nothing failed — the approver's only options were to approve a
+    // change they could not see or to decline a plan that may have been entirely
+    // correct. A count assertion is what this case needs; a per-field `find` on a
+    // short vocabulary passes vacuously on `undefined`.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card whose only change is where it ships');
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { targetRepo: 'motir-core' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Pin-only plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { targetRepo: 'motir-ai' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.changes).not.toHaveLength(0);
+    expect(modify.changes.map((c) => c.field)).toEqual(['targetRepo']);
+  });
+
+  it('renders an explicit UNPIN as an empty NEW side, and says nothing when the key is absent (MOTIR-3868)', async () => {
+    // Sparse in BOTH directions — the half a `find`-based assertion cannot state.
+    const fx = await makeWorkItemFixture();
+    const unpinned = await seedItem(fx, 'Card that loses its pin');
+    const untouched = await seedItem(fx, 'Card whose pin stands');
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [unpinned.id, untouched.id] } },
+      data: { targetRepo: 'motir-core' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Unpin plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: unpinned.id, patch: { targetRepo: null } },
+        { op: 'modify', workItemId: untouched.id, patch: { title: 'Renamed only' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const unpin = review.items.find((i) => i.nodeId === unpinned.id)!;
+    expect(unpin.changes).toEqual([{ field: 'targetRepo', from: 'motir-core', to: null }]);
+
+    const stands = review.items.find((i) => i.nodeId === untouched.id)!;
+    expect(stands.changes.map((c) => c.field)).toEqual(['title']);
+  });
+
+  it('surfaces a repo ROLE re-pin on KEY PRESENCE, with no old side to read (MOTIR-3868)', async () => {
+    // ⚠️ `work_item.targetRepoRole` is RETIRED (MOTIR-2732 · MOTIR-3040), so the
+    // target cannot supply a `from` and a difference cannot be computed. Presence
+    // is the right trigger anyway: `applyModify` rewrites the item's repository
+    // REFERENCE whenever this key is present, including when the resolved name
+    // does not change — so the row appears exactly when the approve will act.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card that changes repo ROLE');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-role plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { targetRepoRole: 'api' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.changes).toEqual([{ field: 'targetRepoRole', from: null, to: 'api' }]);
+  });
+
   it('resolves the decider name + an approved history event after approve', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Tiny plan' }, fx.ctx);
