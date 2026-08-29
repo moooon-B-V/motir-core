@@ -62,6 +62,9 @@ describe('the reference covers the registry', () => {
       // MOTIR-3049 — the scope claim, beside the session close-out for the same
       // reason: it acts on a SET of work items and is addressed by none of them.
       'scope-claims',
+      // MOTIR-1792 — the dispatch-run ingest, after the claim because that is the
+      // order an operator meets them: claim a scope, then report what you did.
+      'dispatch-runs',
       'sprints',
       'planning',
       'plans',
