@@ -215,6 +215,22 @@ claimed scope reads _In Progress_ on the board from the moment of the claim, whi
 at a time.
 
 **Every word of the vocabulary is the shipped one**, and the notes name the source so a later reader
+
+**⚠️ AND ONE NUMBER IN THAT VOCABULARY IS NOT WHAT THE CLI FILE SAYS.**
+`batchPlan.ts`'s `SKIP_LABEL` is `Record<SnapshotSkipReason, string>` and carries **six** reasons, so
+anything counting from that file gets six — and the batch panel is right to draw six, because a
+snapshot cannot produce more. **The RECORD's `DispatchSkipReason` has SEVEN**: the schema says
+outright that it is _"the union of `SkipRecord.reason` and `SnapshotSkipReason`"_, and the extra
+member is **`blocked_in_scope`**, which only a CLAIMED SCOPE can produce (the claim takes every
+member in the to-do category, `blocked` included, which is not the same as being allowed to build one
+out of order — so such a card is _skipped and NAMED, never forced_). It is drawn in the claimed-scope
+panel, where it can occur, rather than in the batch panel, where it cannot.
+
+**This was found by the CODE, not by re-reading the asset** — MOTIR-1796's
+`satisfies Record<DispatchSkipReason, string>` failed to compile on six, which is the whole argument
+for writing these maps as `satisfies` rather than as a `switch` with a default. Every "six" in this
+story's prose came from reading the batch file, and a surface total over six of seven renders the
+seventh as nothing.
 can check rather than trust: the stop reasons and their sentences from `packages/cli/src/autoLoop.ts`
 and `packages/cli/src/batchPlan.ts` (`STOP_LABEL`), the six skip reasons and their sentences from
 `batchPlan.ts` (`SKIP_LABEL`), the claimed-scope split and the In-Progress warning from

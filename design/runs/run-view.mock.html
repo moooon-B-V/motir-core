@@ -2262,6 +2262,22 @@
                   <td class="num dim nw">—</td>
                   <td class="dim">—</td>
                 </tr>
+                <tr class="grpRow">
+                  <td colspan="5">Skipped — its blockers inside this scope did not land (1)</td>
+                </tr>
+                <tr>
+                  <td class="dim num">7</td>
+                  <td>
+                    <span class="mono">MOTIR-1798</span> <span class="dim">Story vitest gate</span>
+                  </td>
+                  <td>
+                    <span class="runPill t-skipped"
+                      ><span class="dot" aria-hidden="true"></span>Skipped</span
+                    >
+                  </td>
+                  <td class="num dim nw">—</td>
+                  <td class="dim">—</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -2270,6 +2286,20 @@
             dependency graph in the client. The order came from the intra-scope edges, computed once
             at claim time; re-deriving it in a browser would be a second opinion about a fact the
             record already holds.
+          </p>
+          <p class="caption">
+            <strong
+              >⚠️ <span class="mono">blocked_in_scope</span> is the SEVENTH skip reason, and a
+              claimed scope is the only shape that produces it.</strong
+            >
+            The claim took every member in the to-do category —
+            <span class="mono">blocked</span> included — which is not the same as being allowed to
+            build one out of order, so a card whose in-scope blockers never landed is
+            <em>skipped and NAMED, never forced</em>. It is drawn here rather than in the batch
+            panel because a batch snapshot cannot reach it: <span class="mono">batchPlan.ts</span>’s
+            <span class="mono">SKIP_LABEL</span> is total over SIX, and the record’s
+            <span class="mono">DispatchSkipReason</span> is the UNION of that with the loop’s own
+            reasons, which is SEVEN.
           </p>
         </div>
       </section>
@@ -2282,10 +2312,15 @@
         <p class="panelNote">
           <span class="mono">motir batch</span> decides its whole set before it dispatches anything,
           and the SKIPS are the half that exists nowhere else — reconstructing a run afterwards from
-          per-card rows yields what it got round to and loses the skips entirely. All six reasons
-          are drawn, each with the sentence <span class="font-mono">batchPlan.ts</span>’s
-          <span class="font-mono">SKIP_LABEL</span>
+          per-card rows yields what it got round to and loses the skips entirely. All
+          <strong>six reasons a SNAPSHOT can carry</strong> are drawn, each with the sentence
+          <span class="font-mono">batchPlan.ts</span>’s <span class="font-mono">SKIP_LABEL</span>
           already prints, plus the two tail groups.
+          <strong>Six is this shape’s number, not the record’s</strong> — the schema’s
+          <span class="mono">DispatchSkipReason</span> is the UNION of the snapshot’s reasons and
+          the loop’s, so it has SEVEN, and the seventh (<span class="mono">blocked_in_scope</span>)
+          belongs to the claimed scope in panel 1. A renderer total over six of seven draws the
+          seventh as nothing.
         </p>
         <p class="panelNote">
           <strong
