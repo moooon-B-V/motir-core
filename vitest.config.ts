@@ -292,6 +292,21 @@ export default defineConfig({
         // 99.7 lines over the set, with every FILE clearing 90 on all four axes.
         // Pinned at the project's 90 rather than at the measurement, so ordinary
         // churn does not fail the build while a real regression does.
+        // Story MOTIR-1789 (Agent runs) — the DISPATCH RUN seam's own files, and
+        // the point of naming them here is that until now NONE of the story's
+        // surface was in the report at all, so the ≥90% per-file gate has never
+        // applied to a line of it.
+        //
+        // ⚠️ REPORT-ONLY, deliberately: added to `include` and NOT to
+        // `thresholds`, by the rule the blocks above state — measure first, then
+        // pin. Pinning blind is how a gate gets loosened later to make a build
+        // pass, which is worse than not having one. MOTIR-1798 is the story's
+        // coverage gate and the card that reads these numbers off a real CI run
+        // and adds the `thresholds` entries; putting the files in the report now
+        // is what gives it a number to read instead of nothing.
+        'lib/services/dispatchRunService.ts',
+        'lib/repositories/dispatchRun*.ts',
+        'lib/mappers/dispatchRunMappers.ts',
         'lib/jobs/engine/**',
         'lib/repositories/jobQueueRepository.ts',
         'lib/repositories/jobStepRepository.ts',

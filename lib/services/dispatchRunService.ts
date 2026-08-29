@@ -5,6 +5,7 @@ import type {
   DispatchEventKind,
   DispatchRunCard,
   DispatchRunOrigin,
+  DispatchRunStatus,
   DispatchSkipReason,
   DispatchStopReason,
 } from '@/generated/prisma/client';
@@ -23,12 +24,14 @@ import type {
   DispatchRunDetailDto,
   DispatchRunDto,
   DispatchRunEventDto,
+  DispatchRunListItemDto,
   DispatchRunOpenedDto,
 } from '@/lib/dto/dispatchRuns';
 import {
   toDispatchRunCardDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
+  toDispatchRunListItemDto,
 } from '@/lib/mappers/dispatchRunMappers';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
@@ -94,6 +97,41 @@ export const DISPATCH_RUN_BODY_RETENTION_DAYS = 30;
  * re-examines.
  */
 export const DISPATCH_RUN_ABANDON_AFTER_HOURS = 12;
+
+/** One page of the RUNS INDEX, and the ceiling a caller cannot ask past. */
+export const DISPATCH_RUN_LIST_DEFAULT_TAKE = 25;
+export const DISPATCH_RUN_LIST_MAX_TAKE = 100;
+
+/**
+ * IS THIS RUN STILL GOING? — the live / past partition the runs index reads,
+ * stated ONCE and TOTAL over `DispatchRunStatus`.
+ *
+ * ⚠️ `satisfies Record<DispatchRunStatus, boolean>` is the whole value of
+ * writing it as a map rather than as `status === 'running'`. A new status is
+ * then a compile error HERE, at the one place that decides which half of the
+ * index a run falls into — and the alternative fails in the quietest possible
+ * way, by sorting an unknown status into *past* and letting a live run vanish
+ * from the surface built to watch it.
+ *
+ * `timed_out` is terminal on purpose: it is what the abandoned-run reap writes
+ * for a run whose machine stopped reporting, so the run is over whatever the
+ * process is doing.
+ */
+const RUN_IS_LIVE = {
+  running: true,
+  succeeded: false,
+  failed: false,
+  cancelled: false,
+  timed_out: false,
+} as const satisfies Record<DispatchRunStatus, boolean>;
+
+const statusesWhere = (live: boolean): DispatchRunStatus[] =>
+  (Object.keys(RUN_IS_LIVE) as DispatchRunStatus[]).filter((s) => RUN_IS_LIVE[s] === live);
+
+/** The statuses a run is still going in — what `?status=live` narrows to. */
+export const DISPATCH_RUN_LIVE_STATUSES = statusesWhere(true);
+/** The statuses a run has finished in — what `?status=past` narrows to. */
+export const DISPATCH_RUN_PAST_STATUSES = statusesWhere(false);
 
 /** One card in the SET a run is opened with. */
 export interface OpenDispatchRunCardInput {
@@ -592,6 +630,75 @@ export const dispatchRunService = {
         // The `seq` on a HISTORY row is not worth a read per run — the page
         // renders a list, and a client that opens one asks for its detail.
         return runs.map((run) => toDispatchRunDto(run, 0));
+      },
+    );
+  },
+
+  /**
+   * A PROJECT'S RUNS — current AND past, newest first, cursor-paginated
+   * (MOTIR-3922). The read the RUNS INDEX stands on.
+   *
+   * ⚠️ THIS IS THE QUESTION THE STORY SHIPPED THREE READS WITHOUT ANSWERING.
+   * One run by id, one card's runs, and the project's live runs each start from
+   * something the caller already holds — an id, or a card already known to be in
+   * the set. So a run that finished last night could not be found at all. This
+   * one starts from the project, which is the only handle a person opening Motir
+   * actually has.
+   *
+   * Two narrowings, and both are applied by the QUERY rather than to the page —
+   * a filtered page would be short, and at a boundary empty with a cursor still
+   * to follow, which every client reads as the end of the list:
+   *
+   *   · `statuses` — the live / past partition, from {@link RUN_IS_LIVE}.
+   *   · `scopeWorkItemKey` — runs whose SCOPE is that container, which is a
+   *     different question from `listRunsForWorkItemKey`'s: a scoped run's legs
+   *     are the container's CHILDREN, so a story never appears in its own card
+   *     history and this is the only way to ask for its runs.
+   *
+   * Rows carry the set as COUNTS, never as legs. The index renders a list that
+   * grows without bound — run headers are append-only and the retention sweep
+   * clears event BODIES, not rows — so a row that carried every leg would make
+   * the list pay for a run view nobody opened.
+   */
+  async listRunsForProject(
+    projectKey: string,
+    page: {
+      take: number;
+      cursor?: string | undefined;
+      statuses?: DispatchRunStatus[] | undefined;
+      scopeWorkItemKey?: string | undefined;
+    },
+    ctx: ServiceContext,
+  ): Promise<DispatchRunListItemDto[]> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertCanBrowse(project.id, ctx);
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const bounded = {
+          take: Math.min(Math.max(page.take, 1), DISPATCH_RUN_LIST_MAX_TAKE),
+          ...(page.cursor ? { cursor: page.cursor } : {}),
+          ...(page.statuses && page.statuses.length > 0 ? { statuses: page.statuses } : {}),
+        };
+
+        // A SCOPE narrowing resolves its key inside the same transaction, so the
+        // lookup is subject to the same workspace binding as the read it gates —
+        // an unresolvable key is a 404 rather than an empty list, which is the
+        // difference between "that story has no runs" and "that story is not
+        // yours" (finding #44 keeps those indistinguishable to the CLIENT; they
+        // must not be indistinguishable to this method).
+        const runs = await (async () => {
+          if (!page.scopeWorkItemKey) {
+            return dispatchRunRepository.listByProject(project.id, bounded, tx);
+          }
+          const identifier = page.scopeWorkItemKey.trim().toUpperCase();
+          const scope = await workItemRepository.findByIdentifier(project.id, identifier, tx);
+          if (!scope) throw new WorkItemNotFoundError(identifier);
+          return dispatchRunRepository.listByScope(scope.id, bounded, tx);
+        })();
+
+        return runs.map(toDispatchRunListItemDto);
       },
     );
   },

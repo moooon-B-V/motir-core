@@ -1,8 +1,15 @@
-import type { DispatchRun, DispatchRunCard, DispatchRunEvent } from '@/generated/prisma/client';
+import type {
+  DispatchCardDisposition,
+  DispatchRun,
+  DispatchRunCard,
+  DispatchRunEvent,
+} from '@/generated/prisma/client';
 import type {
   DispatchRunCardDto,
   DispatchRunDto,
   DispatchRunEventDto,
+  DispatchRunLegCountsDto,
+  DispatchRunListItemDto,
 } from '@/lib/dto/dispatchRuns';
 
 // Prisma rows → DISPATCH RUN DTOs (Story MOTIR-1789 · MOTIR-1792).
@@ -71,5 +78,62 @@ export function toDispatchRunDto(
     createdById: row.createdById,
     cards: row.cards.map(toDispatchRunCardDto),
     seq,
+  };
+}
+
+/**
+ * Every disposition at zero — the base a run's leg counts are added onto.
+ *
+ * ⚠️ WRITTEN OUT RATHER THAN DERIVED, and `satisfies` is what makes that safe:
+ * the generated client exports the enum as a TYPE here, and a runtime list of
+ * its members would be a second copy of a closed set to keep total. Spelling the
+ * keys makes adding a disposition to the ADR a compile error in this file, which
+ * is exactly where a new value needs to be noticed — the index renders these
+ * counts, so a member missing here renders as nothing at all.
+ */
+const NO_LEGS = {
+  queued: 0,
+  running: 0,
+  integrated: 0,
+  implemented: 0,
+  failed: 0,
+  replanned: 0,
+  skipped: 0,
+  not_reached: 0,
+} as const satisfies Record<DispatchCardDisposition, number>;
+
+/** The run's legs COUNTED by disposition, total over the enum. */
+export function toDispatchRunLegCounts(cards: DispatchRunCard[]): DispatchRunLegCountsDto {
+  const counts: DispatchRunLegCountsDto = { ...NO_LEGS };
+  for (const card of cards) counts[card.disposition] += 1;
+  return counts;
+}
+
+/**
+ * One row of the RUNS INDEX (MOTIR-3922): the header, and the set as COUNTS.
+ *
+ * The counts are derived from the `cards` the query already included, so a page
+ * of fifty runs costs the same one query a page of one does. Nothing here reads
+ * a leg's key: the index says how a run came out, and the run view says which
+ * cards it came out that way on.
+ */
+export function toDispatchRunListItemDto(
+  row: DispatchRun & { cards: DispatchRunCard[] },
+): DispatchRunListItemDto {
+  return {
+    id: row.id,
+    command: row.command,
+    origin: row.origin,
+    scopeWorkItemId: row.scopeWorkItemId,
+    scopeLabel: row.scopeLabel,
+    status: row.status,
+    stopReason: row.stopReason,
+    agent: row.agent,
+    model: row.model,
+    startedAt: row.startedAt.toISOString(),
+    endedAt: row.endedAt?.toISOString() ?? null,
+    createdById: row.createdById,
+    cardCount: row.cards.length,
+    legs: toDispatchRunLegCounts(row.cards),
   };
 }

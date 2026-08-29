@@ -156,12 +156,66 @@ export interface DispatchRunDetailDto extends Omit<DispatchRunDto, 'cards'> {
 }
 
 /**
- * One LIVE run in a project, as `/ready`'s strip reads it.
+ * How a run's SET came out, COUNTED — the runs index's summary of one run
+ * (MOTIR-3922).
  *
- * Deliberately NARROWER than the detail shape: the strip renders a per-row
- * indicator over a list that can be long, so it needs each leg's KEY and
- * DISPOSITION and nothing else. Sending the full detail for every live run would
- * make the busiest surface in the product pay for a run view nobody opened.
+ * ⚠️ TOTAL over `DispatchCardDisposition`, zeros included, and that is the
+ * point rather than payload hygiene. A partial map with *absent means zero*
+ * hands every renderer an `undefined` to remember, and the day the ADR grows a
+ * disposition a partial map keeps compiling while the new value renders as
+ * nothing — the same silent-default failure the run surfaces' totality tests
+ * exist to make loud. A dozen zeros per row is a price worth paying for a map
+ * the compiler checks.
+ */
+export type DispatchRunLegCountsDto = Record<DispatchCardDisposition, number>;
+
+/**
+ * One run as the RUNS INDEX reads it (MOTIR-3922) — the header, and its set
+ * SUMMARISED rather than listed.
+ *
+ * ⚠️ IT CARRIES NO `cards` ARRAY, deliberately. The index renders a list that
+ * grows without bound — run headers are append-only and nothing deletes them —
+ * so sending every leg of every run would make the list pay for a run view
+ * nobody opened, exactly as {@link ActiveDispatchRunDto} refuses to. What a row
+ * needs is *how it came out*: "9 of 11 implemented, 1 skipped, 1 not reached".
+ * The counts come from the same include the query already makes, so the page
+ * costs one query however many runs it holds.
+ */
+export interface DispatchRunListItemDto {
+  id: string;
+  command: DispatchCommand;
+  origin: DispatchRunOrigin;
+  /** The scope's work-item id, or null for an unscoped run (`auto`, `batch`). */
+  scopeWorkItemId: string | null;
+  /** What the CLI printed for the scope. Survives the scope card's deletion. */
+  scopeLabel: string | null;
+  status: DispatchRunStatus;
+  stopReason: DispatchStopReason | null;
+  agent: string | null;
+  model: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  createdById: string | null;
+  /** How many cards this run owned. Zero is a real answer, not an error. */
+  cardCount: number;
+  legs: DispatchRunLegCountsDto;
+}
+
+/**
+ * One LIVE run in a project, keyed by LEG.
+ *
+ * Deliberately NARROWER than the detail shape: it carries each leg's KEY and
+ * DISPOSITION and nothing else, so a caller can answer *is THIS card being
+ * worked?* for many cards from one request.
+ *
+ * ⚠️ ITS ORIGINAL CONSUMER IS GONE. This shape was built for the `/ready` run
+ * strip, which is archived — a ready row cannot have a live run, because
+ * `collectReadyLeaves` lists only `todo` leaves and claiming a card flips it to
+ * `in_progress` first (MOTIR-3914). It is kept because the question it answers
+ * is per-CARD, which {@link DispatchRunListItemDto} deliberately does not
+ * answer: the index summarises a run's legs by COUNT and never by key. Whether
+ * anything still needs the per-card form is MOTIR-3923's to settle when it
+ * builds the index; if the answer is no, this shape and its route go together.
  */
 export interface ActiveDispatchRunDto {
   id: string;

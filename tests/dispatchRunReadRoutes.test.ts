@@ -26,6 +26,7 @@ const { GET: getRun } = await import('@/app/api/dispatch-runs/[id]/route');
 const { GET: getStream } = await import('@/app/api/dispatch-runs/[id]/stream/route');
 const { GET: getCardHistory } = await import('@/app/api/work-items/[key]/dispatch-runs/route');
 const { GET: getActive } = await import('@/app/api/projects/[key]/dispatch-runs/active/route');
+const { GET: getHistory } = await import('@/app/api/projects/[key]/dispatch-runs/route');
 const { dispatchRunService } = await import('@/lib/services/dispatchRunService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 
@@ -410,5 +411,85 @@ describe('GET /api/projects/[key]/dispatch-runs/active', () => {
       { params: Promise.resolve({ key: fixture.projectIdentifier }) },
     );
     expect(crossTenant.status).toBe(404);
+  });
+});
+
+// ── GET /api/projects/[key]/dispatch-runs (MOTIR-3922) ──────────────────────
+// The RUNS INDEX's read. The service half is covered in
+// `tests/dispatchRunProjectHistory.test.ts` — the narrowings, the cursor, the
+// leg counts and the tenancy binding. What is asserted HERE is what only the
+// route owns: the session gate, the query-string parsing, and the cursor it
+// hands back.
+
+describe('GET /api/projects/[key]/dispatch-runs', () => {
+  const path = (qs = '') =>
+    `/api/projects/${fixture.projectIdentifier}/dispatch-runs${qs ? `?${qs}` : ''}`;
+  const params = () => ({ params: Promise.resolve({ key: fixture.projectIdentifier }) });
+
+  it('returns the page and a nextCursor only while there is another page', async () => {
+    const keys = await seedCards(2);
+    const opened: string[] = [];
+    for (let i = 0; i < 3; i += 1) opened.push((await openRun([keys[0]!, keys[1]!])).id);
+
+    const first = await getHistory(req(path('limit=2')), params());
+    expect(first.status).toBe(200);
+    const page1 = (await first.json()) as {
+      runs: Array<{ id: string; cardCount: number; legs: Record<string, number> }>;
+      nextCursor: string | null;
+    };
+    expect(page1.runs).toHaveLength(2);
+    expect(page1.nextCursor).toBe(page1.runs[1]!.id);
+    // The row carries its set as COUNTS and no leg array at all.
+    expect(page1.runs[0]).toMatchObject({ cardCount: 2 });
+    expect(page1.runs[0]!.legs.queued).toBe(2);
+    expect(page1.runs[0]).not.toHaveProperty('cards');
+
+    const second = await getHistory(req(path(`limit=2&cursor=${page1.nextCursor}`)), params());
+    const page2 = (await second.json()) as {
+      runs: Array<{ id: string }>;
+      nextCursor: string | null;
+    };
+    expect(page2.runs).toHaveLength(1);
+    // A short page is the LAST page, so the cursor is null rather than an id
+    // that would walk a client into an empty request.
+    expect(page2.nextCursor).toBeNull();
+    expect([...page1.runs, ...page2.runs].map((r) => r.id).sort()).toEqual([...opened].sort());
+  });
+
+  it('narrows on ?status=live / past, and 400s on a status it does not know', async () => {
+    const keys = await seedCards(1);
+    const live = await openRun([keys[0]!]);
+    const done = await openRun([keys[0]!], 'batch');
+    await dispatchRunService.close(done.id, { stopReason: 'completed' }, fixture.ctx);
+
+    const liveRes = await getHistory(req(path('status=live')), params());
+    expect(
+      ((await liveRes.json()) as { runs: Array<{ id: string }> }).runs.map((r) => r.id),
+    ).toEqual([live.id]);
+    const pastRes = await getHistory(req(path('status=past')), params());
+    expect(
+      ((await pastRes.json()) as { runs: Array<{ id: string }> }).runs.map((r) => r.id),
+    ).toEqual([done.id]);
+    const rawRes = await getHistory(req(path('status=succeeded')), params());
+    expect(
+      ((await rawRes.json()) as { runs: Array<{ id: string }> }).runs.map((r) => r.id),
+    ).toEqual([done.id]);
+
+    // ⚠️ A MISTYPED FILTER IS A 400, NOT THE WHOLE LIST. Returning everything
+    // would tell a client its filter worked.
+    const bad = await getHistory(req(path('status=finished')), params());
+    expect(bad.status).toBe(400);
+  });
+
+  it('404s for an unresolvable ?scope, and 401 without a session', async () => {
+    const missing = await getHistory(req(path('scope=PROD-999999')), params());
+    expect(missing.status).toBe(404);
+
+    workspaceCtx.current = null;
+    expect((await getHistory(req(path()), params())).status).toBe(401);
+
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    workspaceCtx.current = { userId: other.ownerId, workspaceId: other.workspaceId };
+    expect((await getHistory(req(path()), params())).status).toBe(404);
   });
 });

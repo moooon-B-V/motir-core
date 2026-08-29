@@ -1,4 +1,4 @@
-import type { DispatchRun, Prisma } from '@/generated/prisma/client';
+import type { DispatchRun, DispatchRunStatus, Prisma } from '@/generated/prisma/client';
 
 // Single Prisma operations on `dispatch_run` — the HEADER of one CLI invocation
 // (Story MOTIR-1789 · MOTIR-1791, ADR `docs/decisions/dispatch-run-record.md`).
@@ -23,6 +23,22 @@ export type DispatchRunWithCards = Prisma.DispatchRunGetPayload<{
 }>;
 
 const WITH_CARDS = { cards: { orderBy: { position: 'asc' } } } as const;
+
+/**
+ * One page of a run listing: the cap, the opaque cursor, and — for the reads
+ * that offer it — the STATUS narrowing.
+ *
+ * `startedAt DESC, id DESC` is already a TOTAL order because `id` breaks the
+ * tie, which is what makes the cursor safe: two runs opened in the same
+ * millisecond cannot straddle a page boundary in an order the next call
+ * disagrees with.
+ */
+export interface DispatchRunPage {
+  take: number;
+  cursor?: string | undefined;
+  /** Omit for every status; a non-empty list narrows the query itself. */
+  statuses?: DispatchRunStatus[] | undefined;
+}
 
 /**
  * The terminal columns, read under a row lock.
@@ -112,11 +128,11 @@ export const dispatchRunRepository = {
    */
   async listByScope(
     scopeWorkItemId: string,
-    { take, cursor }: { take: number; cursor?: string | undefined },
+    { take, cursor, statuses }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { scopeWorkItemId },
+      where: { scopeWorkItemId, ...(statuses ? { status: { in: statuses } } : {}) },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
@@ -124,14 +140,21 @@ export const dispatchRunRepository = {
     });
   },
 
-  /** A project's runs, newest first — the run list and the `/ready` strip's read. */
+  /**
+   * A project's runs, newest first — the RUNS INDEX's read (MOTIR-3922).
+   *
+   * ⚠️ THE FILTER IS APPLIED HERE, NOT BY THE CALLER. `statuses` narrows the
+   * query rather than the page, because a service that filtered the rows it got
+   * back would hand out short pages and, at a page boundary, an empty one with a
+   * cursor still to follow — which every client reads as "no more runs".
+   */
   async listByProject(
     projectId: string,
-    { take, cursor }: { take: number; cursor?: string | undefined },
+    { take, cursor, statuses }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { projectId },
+      where: { projectId, ...(statuses ? { status: { in: statuses } } : {}) },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
