@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Eye,
   LocateFixed,
   Maximize,
@@ -18,11 +20,14 @@ import {
   type CanvasNode,
 } from '@/components/planning/PlanningCanvas';
 import { Input } from '@/components/ui/Input';
+import { useDependencyLegendCollapsed } from '@/lib/hooks/useDependencyLegendCollapsed';
 import { Spinner } from '@/components/ui/Spinner';
+import { ARRIVAL_MIN_SCALE } from '@/lib/planning/canvasGeometry';
 import {
   NODE_H,
   NODE_W,
   deterministicLayout,
+  focalNode,
   searchMatches,
   type CanvasCrumb,
   type ProjectCanvasDep,
@@ -186,6 +191,77 @@ export interface ProjectRoadmapCanvasProps {
    */
   initialTrail?: readonly CanvasCrumb[];
   /**
+   * REPORT the level (MOTIR-3835) — the other half of `initialTrail`.
+   *
+   * Fired whenever the canvas's OWN level moves, with the full trail root-first
+   * (`[]` at the root level). There are exactly three movers and they funnel
+   * through two functions: `applyDrill` — shared by the explicit "Open"
+   * affordance AND the auto-descend, deliberately kept single — and `navigate`,
+   * shared by a crumb click and `goBack`. So an AUTO-DESCENDED arrival
+   * (MOTIR-1807) reports exactly like a hand-drilled one, which is the shipped
+   * design position that an arrival must be indistinguishable from a drill.
+   *
+   * ⚠️ NOT fired for the mount-time `initialTrail` seed, and not fired when a
+   * level LOAD resolves. The consumer supplied that trail; telling it what it
+   * just said is a write loop waiting to happen.
+   *
+   * Absent by default — the four other consumers are untouched.
+   */
+  onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
+  /**
+   * A CONTROLLED level (MOTIR-3835) — the consumer moving the canvas IN PLACE.
+   *
+   * `initialTrail` above is a SEED, read once, and it is right about that: where
+   * the canvas SITS is the user's. This prop is the other half, and the two
+   * COMPOSE — the seed decides where the canvas opens, this decides where it is
+   * moved to afterwards. While it is supplied the level is the CONSUMER's, and
+   * the canvas adopts any value that differs from where it currently is.
+   * `undefined` (the default) leaves the canvas uncontrolled; `[]` names the
+   * root level. Passing both, agreeing at mount, is the ordinary case: the
+   * arrival costs no adoption, and every later move is one.
+   *
+   * Adoption happens DURING RENDER — React's adjust-state-when-an-input-changes
+   * pattern, the same one `remappedFocus` and `prevTargetSig` use — never a
+   * `useEffect` + `setState`, which the CI lint rule
+   * (`react-hooks/set-state-in-effect`) forbids and which would render one frame
+   * of the old level first. It clears exactly what a drill clears
+   * (`localPositions` / `selectedId` / `highlightId` / `showChanges`) and lets
+   * the existing load effect read the new level: **no remount**, so the
+   * consumer's level cache, the canvas chrome and the breadcrumb machinery all
+   * survive, which is the whole reason this is not a `key`.
+   *
+   * An adopted level SUPPRESSES auto-descend for that level, exactly as
+   * `navigate` does: a consumer asking for a level is asking to SEE it, not to
+   * be carried past it. Suppression is per ADOPTION, not per controlled-ness —
+   * a controlled canvas arriving at a root it was not moved to still
+   * auto-descends normally.
+   *
+   * ⚠️ Not combinable with `resolveHeldNode`: that follows an id the canvas
+   * HOLDS, and this replaces it, so a consumer using both would have the two
+   * fight over `focusId`. No shipped consumer passes both.
+   */
+  controlledTrail?: readonly CanvasCrumb[];
+  /**
+   * ARRIVE AT A READABLE SCALE (MOTIR-3837) — opt-in, OFF by default.
+   *
+   * The engine already resets the scale on every level change (this component
+   * remounts it per level, so it auto-fits to the new level's overview); what is
+   * wrong without this is WHAT it resets to. `fitView` is clamped only by the
+   * absolute `MIN_SCALE = 0.3`, so a level that cannot fit legibly is drawn at
+   * 0.3× rather than not fitted — and the project root, with every epic on it, is
+   * the surface most people open first.
+   *
+   * Opted in, a level whose fit lands below `ARRIVAL_MIN_SCALE` arrives AT that
+   * floor, centred on this level's FOCAL card. The focal ladder is the LOCATE
+   * control's own — the `here` frontier, then the first `ready` node, then the
+   * level's first non-`decorative` node — so where the canvas OPENS and where
+   * LOCATE takes you cannot drift apart.
+   *
+   * OFF by default because this canvas is the foundation behind four consumers and
+   * only the work-item roadmap asks for it.
+   */
+  arriveAtReadableScale?: boolean;
+  /**
    * FOLLOW a node the consumer RE-KEYS under a mounted canvas (bug MOTIR-3439).
    *
    * The canvas HOLDS two things by node id — its drilled `focusId` and every
@@ -235,6 +311,9 @@ const levelKey = (id: string | null) => id ?? ROOT_LEVEL_KEY;
 interface Crumb {
   id: string;
   label: string;
+  /** The work item's `<PREFIX>-<n>` key, when the node carried one (MOTIR-3835).
+   *  Keeps this local shape assignable to the model's `CanvasCrumb`. */
+  crumbKey?: string;
 }
 
 // The readable default zoom the LOCATE control snaps to (MOTIR-1421) — 1× shows a
@@ -261,6 +340,9 @@ export function ProjectRoadmapCanvas({
   loadingFallback,
   emptyRoot,
   initialTrail,
+  onLevelChange,
+  controlledTrail,
+  arriveAtReadableScale = false,
   resolveHeldNode,
   levelCaption,
 }: ProjectRoadmapCanvasProps) {
@@ -283,7 +365,19 @@ export function ProjectRoadmapCanvas({
     () => initialTrail?.[initialTrail.length - 1]?.id ?? null,
   );
   const [crumbs, setCrumbs] = useState<Crumb[]>(() => [...(initialTrail ?? [])]);
-  const [level, setLevel] = useState<RoadmapLevel | null>(null);
+  // The level, TOGETHER WITH the focus it was loaded for (MOTIR-3837).
+  //
+  // ⚠️ THE TWO CANNOT BE SEPARATE, and separating them is a real bug rather than
+  // untidiness. `focusId` moves the INSTANT a drill happens, while the level's
+  // data arrives one round trip later — deliberately, so the prior level stays
+  // visible instead of flashing. The engine below is remounted per level, and it
+  // FITS ONCE on mount: keyed on `focusId`, the new instance mounts during that
+  // window, sees the PREVIOUS level's nodes, fits THOSE, and marks itself
+  // fitted — so the level the reader actually lands on is drawn at the scale of
+  // the one they left. Keying on the focus the LEVEL belongs to closes the
+  // window: the engine remounts exactly when the data it will fit has arrived,
+  // and the prior level stays on screen until then, unchanged.
+  const [level, setLevel] = useState<{ focusId: string | null; data: RoadmapLevel } | null>(null);
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -308,6 +402,14 @@ export function ProjectRoadmapCanvas({
   // OS chrome hides too; if it rejects (e.g. headless / no user-gesture trust) the
   // overlay still fills the viewport, so the feature degrades cleanly.
   const [expanded, setExpanded] = useState(false);
+  // The dependency-legend collapse (MOTIR-3838) — a per-VIEWER preference, shared
+  // by every canvas that draws the legend and persisted on the shell's own
+  // localStorage recipe. Not opt-in: the legend is this canvas's own chrome, and
+  // giving two consumers a legend you can dismiss and two you cannot is a
+  // distinction no reader could infer.
+  const [legendCollapsed, toggleLegendCollapsed] = useDependencyLegendCollapsed();
+  // A per-instance id, so `aria-controls` is unique when two canvases coexist.
+  const legendRowsId = `${useId().replace(/:/g, '')}-legend-rows`;
   const reqSeq = useRef(0);
   // AUTO-DESCEND suppression (MOTIR-1807; design `auto-drill.*` panel F). `navigate()`
   // and `goBack()` are the user EXPLICITLY asking to see a level — if auto-descend then
@@ -332,6 +434,9 @@ export function ProjectRoadmapCanvas({
   // our own descent path would otherwise descend forever, hanging the canvas rather
   // than failing visibly. Never descend into an ancestor; render the level instead.
   const crumbIdsRef = useRef<Set<string>>(new Set());
+  // The crumbs themselves, for the level REPORTERS (MOTIR-3835) — see the sync
+  // effect below for why a ref rather than a dependency.
+  const crumbsRef = useRef<Crumb[]>(crumbs);
 
   // ── FOLLOW a RE-KEYED node (bug MOTIR-3439) ─────────────────────────────────
   //
@@ -354,6 +459,40 @@ export function ProjectRoadmapCanvas({
       })
     : crumbs;
   if (remappedCrumbs.some((crumb, i) => crumb !== crumbs[i])) setCrumbs(remappedCrumbs);
+
+  // ── ADOPT a CONTROLLED level (MOTIR-3835) ───────────────────────────────────
+  //
+  // The mirror of `remappedFocus` directly above, and the same mechanism: an
+  // adjust-state-during-render, never a `useEffect` + `setState`. The difference is
+  // what each one is FOR — the remap changes a level's ADDRESS, this MOVES the
+  // canvas — and this one is idempotent by construction: once the state settles,
+  // `controlledFocusId === focusId` and the branch stops firing, so a re-render with
+  // an unchanged value is a true no-op and cannot loop.
+  const controlledFocusId =
+    controlledTrail === undefined
+      ? undefined
+      : (controlledTrail[controlledTrail.length - 1]?.id ?? null);
+  // The adoption EVENT, as state rather than a ref, because a ref may not be written
+  // during render. Its object identity is what re-arms the suppression effect below,
+  // so adopting the same level twice (drilled away, then restored) suppresses twice.
+  const [adoption, setAdoption] = useState<{ level: string | null } | null>(null);
+  if (controlledFocusId !== undefined && controlledFocusId !== focusId) {
+    setFocusId(controlledFocusId);
+    setCrumbs([...(controlledTrail ?? [])]);
+    // Exactly what a drill / a `navigate` clears — an adopted level is a level
+    // change, so nothing per-level may survive it.
+    setLocalPositions({});
+    setSelectedId(null);
+    setHighlightId(null);
+    setShowChanges(false);
+    setAdoption({ level: controlledFocusId });
+  }
+  // Record the suppression OUTSIDE render. Auto-descend must not carry the reader
+  // out of a level the consumer explicitly asked for — the same rule `navigate`
+  // applies for a crumb click, and the same `suppressedLevelRef` it writes.
+  useEffect(() => {
+    if (adoption !== null) suppressedLevelRef.current = levelKey(adoption.level);
+  }, [adoption]);
 
   // The opt-in flag, held in a ref so the load effect stays keyed strictly on level
   // identity (`focusId` / `reloadKey`) — toggling the prop must not refetch a level.
@@ -411,10 +550,22 @@ export function ProjectRoadmapCanvas({
   useEffect(() => {
     resolveHeldNodeRef.current = resolveHeldNode;
   }, [resolveHeldNode]);
+  // Same reason, for `onLevelChange` (MOTIR-3835): the reporters are `useCallback`s
+  // with empty deps, and a consumer's handler is commonly recreated every render.
+  const onLevelChangeRef = useRef(onLevelChange);
+  useEffect(() => {
+    onLevelChangeRef.current = onLevelChange;
+  }, [onLevelChange]);
   // Mirror the crumb ids for the auto-descend's cycle guard (a ref, so the load
   // effect can read the current path without re-running on every crumb change).
+  // `crumbsRef` mirrors the crumbs THEMSELVES for the same reason (MOTIR-3835):
+  // `applyDrill` and `navigate` must report the trail they are producing, and they
+  // hold no `crumbs` dependency by design — the functional `setCrumbs` updater is
+  // what keeps them stable, and calling a consumer's callback from inside an updater
+  // would fire it twice under StrictMode.
   useEffect(() => {
     crumbIdsRef.current = new Set(crumbs.map((c) => c.id));
+    crumbsRef.current = crumbs;
   }, [crumbs]);
 
   // `/` focuses the search field (unless already typing into one).
@@ -440,12 +591,24 @@ export function ProjectRoadmapCanvas({
   // the breadcrumb, search, locate, zoom and full-screen all keep working with no
   // special case.
   const applyDrill = useCallback((node: ProjectCanvasNode) => {
-    setCrumbs((c) => [...c, { id: node.id, label: node.crumbLabel ?? node.searchText }]);
+    const crumb: Crumb = {
+      id: node.id,
+      label: node.crumbLabel ?? node.searchText,
+      ...(node.crumbKey === undefined ? {} : { crumbKey: node.crumbKey }),
+    };
+    setCrumbs((c) => [...c, crumb]);
     setLocalPositions({});
     setSelectedId(null);
     setFocusId(node.id);
     setHighlightId(null);
     setShowChanges(false);
+    // REPORT the new level (MOTIR-3835). Computed from the crumbs ref rather than
+    // inside the updater above: an updater may run twice (StrictMode), and a
+    // consumer's callback is not something to fire twice. Because this is the ONE
+    // drill transition, an auto-descended arrival reports identically to a
+    // hand-drilled one — including each hop of a chained descent, which is what
+    // makes the final report name the level actually landed on.
+    onLevelChangeRef.current?.([...crumbsRef.current, crumb]);
   }, []);
 
   // Fetch the current level. The PRIOR level stays visible during a refetch (no
@@ -495,9 +658,9 @@ export function ProjectRoadmapCanvas({
           applyDrill(only);
           return;
         }
-        setLevel(lvl);
+        setLevel({ focusId, data: lvl });
       } catch {
-        if (alive && seq === reqSeq.current) setLevel({ nodes: [], deps: [] });
+        if (alive && seq === reqSeq.current) setLevel({ focusId, data: { nodes: [], deps: [] } });
       }
     })();
     return () => {
@@ -505,8 +668,8 @@ export function ProjectRoadmapCanvas({
     };
   }, [focusId, reloadKey, applyDrill]);
 
-  const nodes = useMemo(() => level?.nodes ?? [], [level]);
-  const deps = useMemo(() => level?.deps ?? [], [level]);
+  const nodes = useMemo(() => level?.data.nodes ?? [], [level]);
+  const deps = useMemo(() => level?.data.deps ?? [], [level]);
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const matchIds = useMemo(() => new Set(searchMatches(nodes, query)), [nodes, query]);
 
@@ -659,13 +822,15 @@ export function ProjectRoadmapCanvas({
     if (crumbId === null) {
       setCrumbs([]);
       setFocusId(null);
+      onLevelChangeRef.current?.([]);
       return;
     }
-    setCrumbs((c) => {
-      const i = c.findIndex((x) => x.id === crumbId);
-      return i >= 0 ? c.slice(0, i + 1) : c;
-    });
+    const cur = crumbsRef.current;
+    const i = cur.findIndex((x) => x.id === crumbId);
+    const next = i >= 0 ? cur.slice(0, i + 1) : cur;
+    setCrumbs(next);
     setFocusId(crumbId);
+    onLevelChangeRef.current?.(next);
   }, []);
 
   const goBack = useCallback(() => {
@@ -690,6 +855,13 @@ export function ProjectRoadmapCanvas({
   const readyIds = useMemo(() => nodes.filter((n) => n.ready).map((n) => n.id), [nodes]);
   const readySig = readyIds.join('|');
   const canLocate = hereId !== null || readyIds.length > 0;
+  // THE FOCAL CARD of this level (MOTIR-3837) — the node an arrival centres on when
+  // the level cannot be shown legibly whole. The ladder is LOCATE's own, one line
+  // up, so "where the canvas opens" and "where Locate takes you" cannot disagree:
+  // the `here` frontier, else the first `ready` node, else the level's first node in
+  // layout order. A `decorative` node — the pinned planning-origin cluster — is
+  // never it, for the same reason it is not a level's WORK (MOTIR-1824).
+  const focalNodeId = useMemo(() => focalNode(nodes), [nodes]);
   // The index of the ready node centred by the LAST locate click (-1 = none yet).
   const [locateIndex, setLocateIndex] = useState(-1);
   // Reset the cycle cursor when the level's targets change (a drill / re-plan) so the
@@ -1008,7 +1180,15 @@ export function ProjectRoadmapCanvas({
         <button
           type="button"
           onClick={resetLayout}
-          className="absolute right-3 bottom-4 z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          // THE ONE control the fold can collide with (MOTIR-3839). Every other
+          // bottom-anchored overlay on this canvas is anchored LEFT; the floating
+          // Plan-with-AI orb is `fixed right-5 bottom-5`, 56px square — a 76px
+          // reach from both edges — so only a bottom-RIGHT control can meet it.
+          // `--canvas-fold-inset` is declared by a consumer whose box SPENDS the
+          // shell's clearance band (today: the roadmap page); it defaults to `0px`,
+          // so every other mount — the item page's Children panel, the two plan
+          // canvases — is exactly where it is now.
+          className="absolute right-3 bottom-[calc(1rem+var(--canvas-fold-inset,0px))] z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" />
           {t('resetLayout')}
@@ -1079,49 +1259,81 @@ export function ProjectRoadmapCanvas({
       {deps.some((d) => d.kind !== 'flow') && (
         <div
           data-testid="edge-legend"
+          data-collapsed={legendCollapsed || undefined}
           className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
         >
-          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
-            {t('legend.heading')}
-          </span>
-          {(
-            [
-              ['committed', t('legend.blocks'), t('legend.blocksMeaning')],
-              ['pending', t('legend.pending'), t('legend.pendingMeaning')],
-              ['warning', resolvedWarningLegend.label, resolvedWarningLegend.meaning],
-            ] as const
-          ).map(([kind, label, meaning]) => (
-            <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
-              <svg viewBox="0 0 40 12" className="h-3 w-10 shrink-0" aria-hidden="true">
-                <path
-                  d="M2 6H31"
-                  fill="none"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeDasharray={kind === 'pending' ? '2 5' : undefined}
-                  className={
-                    kind === 'warning'
-                      ? 'stroke-(--el-warning)'
-                      : kind === 'pending'
-                        ? 'stroke-(--el-canvas-edge-pending)'
-                        : 'stroke-(--el-canvas-edge-committed)'
-                  }
-                />
-                <path
-                  d="M30 2 36 6 30 10z"
-                  className={
-                    kind === 'warning'
-                      ? 'fill-(--el-warning)'
-                      : kind === 'pending'
-                        ? 'fill-(--el-canvas-edge-pending)'
-                        : 'fill-(--el-canvas-edge-committed)'
-                  }
-                />
-              </svg>
-              {label}
-              <span className="text-(--el-text-secondary)">· {meaning}</span>
+          {/* COLLAPSE (MOTIR-3838). The chevron rides the panel's OWN heading row
+              rather than being a bare pill beside it: the heading is the one thing
+              that must survive the collapse — a legend that vanishes entirely
+              cannot be brought back — so the control belongs next to it. The panel
+              collapses IN PLACE: the slot is unchanged, so the control does not
+              move under the reader's cursor and can never land on the engine's
+              zoom cluster at `bottom-4 left-4`. */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
+              {t('legend.heading')}
             </span>
-          ))}
+            <button
+              type="button"
+              data-testid="edge-legend-toggle"
+              onClick={toggleLegendCollapsed}
+              aria-expanded={!legendCollapsed}
+              aria-controls={legendRowsId}
+              aria-label={t(legendCollapsed ? 'legend.expand' : 'legend.collapse')}
+              title={t(legendCollapsed ? 'legend.expand' : 'legend.collapse')}
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {legendCollapsed ? (
+                <ChevronUp className="size-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="size-3.5" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+          <div
+            id={legendRowsId}
+            hidden={legendCollapsed}
+            className={legendCollapsed ? undefined : 'flex flex-col gap-1.5'}
+          >
+            {(
+              [
+                ['committed', t('legend.blocks'), t('legend.blocksMeaning')],
+                ['pending', t('legend.pending'), t('legend.pendingMeaning')],
+                ['warning', resolvedWarningLegend.label, resolvedWarningLegend.meaning],
+              ] as const
+            ).map(([kind, label, meaning]) => (
+              <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
+                <svg viewBox="0 0 40 12" className="h-3 w-10 shrink-0" aria-hidden="true">
+                  <path
+                    d="M2 6H31"
+                    fill="none"
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                    strokeDasharray={kind === 'pending' ? '2 5' : undefined}
+                    className={
+                      kind === 'warning'
+                        ? 'stroke-(--el-warning)'
+                        : kind === 'pending'
+                          ? 'stroke-(--el-canvas-edge-pending)'
+                          : 'stroke-(--el-canvas-edge-committed)'
+                    }
+                  />
+                  <path
+                    d="M30 2 36 6 30 10z"
+                    className={
+                      kind === 'warning'
+                        ? 'fill-(--el-warning)'
+                        : kind === 'pending'
+                          ? 'fill-(--el-canvas-edge-pending)'
+                          : 'fill-(--el-canvas-edge-committed)'
+                    }
+                  />
+                </svg>
+                {label}
+                <span className="text-(--el-text-secondary)">· {meaning}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1155,13 +1367,17 @@ export function ProjectRoadmapCanvas({
       ) : (
         <PlanningCanvas
           // Remount per drill level so the new level auto-fits to its own overview.
-          key={`level:${focusId ?? 'root'}`}
+          // Keyed on the focus the LEVEL belongs to, NOT on `focusId` — see the
+          // note on the `level` state above. The two differ for exactly one round
+          // trip, and that window is where the arrival scale was being lost.
+          key={`level:${level.focusId ?? 'root'}`}
           nodes={canvasNodes}
           edges={canvasEdges}
           renderNode={renderNode}
           onNodeMove={onNodeMove ? handleMove : undefined}
           onNodeActivate={handleActivate}
           selectedId={selectedId}
+          arrival={arriveAtReadableScale ? { floor: ARRIVAL_MIN_SCALE, focalNodeId } : undefined}
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}

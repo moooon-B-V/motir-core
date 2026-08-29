@@ -10,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { RoadmapView } from '@/components/planning/RoadmapView';
+import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
 // The project Roadmap VIEW (Story 7.20 · Subtask 7.20.5 / MOTIR-1011) — the route
@@ -31,7 +32,65 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 // header pill. Unauthenticated → /sign-in; no active project → a hint; no browse
 // access → the no-access state.
 
-export default async function RoadmapPage() {
+// THE ARRIVAL LEVEL (MOTIR-3836). `?item=MOTIR-1234` means "the canvas is showing
+// MOTIR-1234's CHILDREN" — you are INSIDE it, which is where a drill leaves you —
+// so the trail is `ancestors ++ [the item itself]` and its LAST crumb is the level
+// the canvas loads. (Deliberately one crumb deeper than `/planning?item=`, which
+// opens on the anchor's OWN level so the anchor is visible; the two surfaces want
+// different things and keep the same param name.)
+//
+// Resolved through the same view-gated read `/planning` uses, with the same SILENT
+// catch: an unknown key, another project's item, an archived one, or one this actor
+// cannot browse all yield an empty trail and the roadmap opens at its root. A stale
+// link is not a failure — it is a level that no longer exists — so there is no error
+// surface and no redirect. The `?item=` param is left in the URL rather than
+// rewritten, because a history write on load is a worse surprise than a stale param.
+async function resolveArrivalTrail(
+  projectId: string,
+  searchParams: Promise<Record<string, string | string[] | undefined>> | undefined,
+  wsCtx: { userId: string; workspaceId: string },
+): Promise<CanvasCrumb[]> {
+  const itemParam = (await searchParams)?.['item'];
+  // A repeated `?item=` arrives as an array; there is no right answer to which
+  // one was meant, so the level is the root.
+  const itemKey = typeof itemParam === 'string' ? itemParam : null;
+  if (!itemKey) return [];
+  try {
+    const { item, ancestors } = await workItemsService.getWorkItemWithAncestors(
+      projectId,
+      itemKey,
+      wsCtx,
+    );
+    return [...ancestors, item].map((a) => ({
+      id: a.id,
+      crumbKey: a.identifier,
+      label: workItemCrumbLabel(a.identifier, a.title),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ⚠️ MODULE SCOPE ON PURPOSE — do not fold this back into the page body.
+// `loading-boundary-guard`'s serial-read ratchet counts the awaits in the page
+// function's OWN body, and a nested helper's await is counted there even though
+// this one runs INSIDE the `Promise.all` wave, concurrently with the sprint read.
+// Nested, the page measured 6 and the ratchet read a sixth SERIAL read that does
+// not exist; hoisted, it measures the 5 waves the page actually arrives in. The
+// closure over `searchParams` / `wsCtx` is what nested it — both are parameters
+// now, which is also what makes it callable from a test on its own.
+
+export default async function RoadmapPage({
+  searchParams,
+}: {
+  // `?item=<KEY>` — the DRILLED LEVEL, restored on a cold arrival (MOTIR-3836):
+  // a reload, a pasted link, a bookmark. `?scope=` stays the client island's
+  // (MOTIR-1541); this one has to be resolved here because the ancestor chain is a
+  // browse-gated read and the browser has nothing at first paint.
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  // Defaulted, so the page's own guard file (`tests/planning/roadmapPageStreaming`)
+  // keeps calling it with no arguments and stays unmodified by this card.
+} = {}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -104,11 +163,24 @@ export default async function RoadmapPage() {
   }
 
   // Resolve the active sprint (MOTIR-1382) so the client wrapper can label the
-  // sprint-scope subtitle and render the no-active-sprint state for the toggle.
-  const activeSprint = await sprintsService.getActiveSprint(ctx.projectId, wsCtx);
+  // sprint-scope subtitle and render the no-active-sprint state for the toggle —
+  // CONCURRENTLY with the arrival-level resolve below, which is independent of it.
+  //
+  // ⚠️ This is NOT the concurrency change `design/roadmap/design-notes.md`'s
+  // MOTIR-3445 amendment REFUSED, and the distinction is the empty branch. That one
+  // would have paired `getProjectRoadmap` with `getActiveSprint`, and the page
+  // RETURNS EARLY for an empty roadmap — so a first-run project would have paid for
+  // a sprint read it never uses. Both reads here sit AFTER that branch, so nobody
+  // pays for one they do not need, and the `?item=` path costs one round trip
+  // rather than two.
+  const [activeSprint, initialTrail] = await Promise.all([
+    sprintsService.getActiveSprint(ctx.projectId, wsCtx),
+    resolveArrivalTrail(ctx.projectId, searchParams, wsCtx),
+  ]);
 
   return (
     <RoadmapView
+      initialTrail={initialTrail}
       projectKey={ctx.project.identifier}
       projectName={ctx.project.name}
       ariaLabel={t('canvasAria', { project: ctx.project.name })}

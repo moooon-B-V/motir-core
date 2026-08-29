@@ -87,6 +87,78 @@ export function fitView(bounds: Bounds, viewport: { w: number; h: number }, padd
 }
 
 /**
+ * The legibility FLOOR on an ARRIVAL scale (MOTIR-3837).
+ *
+ * ⚠️ THIS NUMBER IS THE DESIGN'S, NOT THIS FILE'S. It is measured and tabulated in
+ * `design/roadmap/design-notes.md` § *The roadmap you come back to* → *2. The
+ * ARRIVAL VIEW*: the real `WorkItemNode` at `NODE_W`×`NODE_H` = 280×124, rendered
+ * in Chromium at `deviceScaleFactor: 1` and read at candidate scales, across four
+ * viewports. The rule it derives is *the title never renders smaller than the
+ * smallest type the card itself authors* — the 11 px status chip — so
+ * 14 × s ≥ 11 ⟹ s ≥ 0.786, rounded up to a clean 0.80. At the floor the title is
+ * 11.2 px, the identifier 9.6 px and the chip 8.8 px.
+ *
+ * Do not re-derive it here. A legibility threshold picked in code is a guess with
+ * a constant's authority; this one is a decision the plan holds.
+ */
+export const ARRIVAL_MIN_SCALE = 0.8;
+
+/**
+ * The view a level ARRIVES at (MOTIR-3837) — {@link fitView} with a legibility
+ * floor, and a focal anchor for when the level cannot be shown whole.
+ *
+ * **A strict superset of `fitView`.** When the fit lands at or above `floor`, this
+ * IS the fit — every level that already arrives legibly is untouched, which is the
+ * behaviour every drilled level has today and must keep. Only a level that would
+ * be shrunk below the floor is treated differently: it arrives AT the floor, and
+ * the viewport is centred rather than the bounds framed.
+ *
+ * **The centring is PER AXIS**, and that clause is what stops the result looking
+ * wrong (`design-notes.md`, same section). On an axis where the level FITS at the
+ * floor, the level's BOUNDS are centred; on an axis where it does not, the FOCAL
+ * rect is. The project root is 800 px wide at the floor inside a 1136 px canvas,
+ * so it is centred horizontally while only the vertical follows the frontier —
+ * centring the focal card on both axes parks a first-column card in the middle and
+ * leaves a third of the canvas empty.
+ *
+ * `focal` absent → the bounds' centre is used on both axes, which is what a level
+ * with no actionable card should do.
+ *
+ * This is the ARRIVAL only. The explicit fit-to-view control still frames the WHOLE
+ * level on demand, down to {@link MIN_SCALE} — that is what it is for.
+ */
+export function arrivalView(
+  bounds: Bounds,
+  viewport: { w: number; h: number },
+  floor: number,
+  focal?: Rect,
+  padding = 48,
+): View {
+  const fit = fitView(bounds, viewport, padding);
+  if (fit.scale >= floor) return fit;
+  const scale = clampScale(floor);
+  const bw = Math.max(1, bounds.maxX - bounds.minX) * scale;
+  const bh = Math.max(1, bounds.maxY - bounds.minY) * scale;
+  const centre = focal
+    ? { x: focal.x + focal.w / 2, y: focal.y + focal.h / 2 }
+    : {
+        x: (bounds.minX + bounds.maxX) / 2,
+        y: (bounds.minY + bounds.maxY) / 2,
+      };
+  return {
+    scale,
+    tx:
+      bw + padding * 2 <= viewport.w
+        ? (viewport.w - bw) / 2 - bounds.minX * scale
+        : viewport.w / 2 - centre.x * scale,
+    ty:
+      bh + padding * 2 <= viewport.h
+        ? (viewport.h - bh) / 2 - bounds.minY * scale
+        : viewport.h / 2 - centre.y * scale,
+  };
+}
+
+/**
  * The view that CENTRES a single world `rect` in the `viewport` at the current
  * `scale` (the scale is left untouched — a pan, not a zoom). Used by
  * search-to-focus: locate a node, then pan it to the middle of the screen.

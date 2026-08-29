@@ -5733,7 +5733,9 @@
         "blockedElsewhere": "受阻于别处",
         "blockedElsewhereMeaning": "阻塞项位于计划中的别处",
         "blockerNotInSprint": "阻塞项不在冲刺中",
-        "blockerNotInSprintMeaning": "未完成且在冲刺之外"
+        "blockerNotInSprintMeaning": "未完成且在冲刺之外",
+        "collapse": "隐藏依赖图例",
+        "expand": "显示依赖图例"
       },
       "origin": {
         "planning": "规划",

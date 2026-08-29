@@ -282,6 +282,11 @@ export function buildWorkItemLevel(
       // so no special mode is introduced. Shared with the trail the planning host
       // SEEDS the canvas with (MOTIR-2070) via one helper, so the two can't drift.
       crumbLabel: workItemCrumbLabel(item.identifier, item.title),
+      // The KEY, beside the display label (MOTIR-3835). `crumbLabel` is
+      // `identifier · title` and is free to change; a consumer writing a shareable
+      // address needs the identifier itself, and recovering it by splitting a display
+      // string is the drift this field exists to avoid.
+      crumbKey: item.identifier,
       drillable: item.hasChildren,
       // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
       // anchors below are off-level blocker STUBS — they are ALSO viewable now
