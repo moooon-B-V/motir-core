@@ -1,0 +1,3078 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The RUN SECTION on a work item (MOTIR-1789 · MOTIR-1795)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE RUN SECTION ON A WORK ITEM.
+      Story MOTIR-1789, subtask MOTIR-1795 (design). Gates MOTIR-1796 (the
+      section) and, through this folder's tone table, MOTIR-3893 / MOTIR-3895
+      (the run view) and MOTIR-3923 (the runs index).
+
+      ⚠️ IT USED TO GATE MOTIR-1797, THE /ready RUN STRIP, AND THAT CARD IS
+      ARCHIVED. The strip drew a ready row whose item has a live run, and that
+      row cannot occur: /ready lists only `todo` leaves, and claiming a card
+      flips it to in_progress before the first agent starts. The runs index
+      replaced it. See design-notes.md § WHAT THIS AREA DREW ONCE.
+
+      WHY IT EXISTS. `design/runs/` did not exist. A run is a NEW object in the
+      product — nothing in `design/work-items/` draws one — so this is the
+      NONE-exists case and every code sibling is `blocked_by` it.
+
+      COMPOSES, DOES NOT REDRAW. The section is the shipped `ContentSectionCard`
+      header grammar over the shipped `Card` / `Pill` / `Button` primitives, in
+      the LATE STACK of `app/(authed)/items/[key]/page.tsx`
+      (`_components/LateSections.tsx`). Every token below is copied 1:1 from
+      `design/work-items/todo-list.mock.html`, itself extracted from
+      `packages/design-system/theme.css` by script, so this file cannot drift
+      from the shipped layer. Nothing invents a colour or a radius.
+
+      ⚠️ IT DOES NOT REDRAW THE PULL REQUEST. The card's pull requests and their
+      CI state are the DEVELOPMENT section's, one card up the same stack, drawn
+      at `design/work-items/delivery-set.mock.html`. Panel 11 draws the two
+      adjacent so the relationship is legible; panels 1–8 draw the run alone.
+
+      WHAT IT SETTLES. The section's position in the late stack's tier table and
+      that it fills with the ONE settle (panel 0) · the live timeline over the
+      CARD-SCOPED event vocabulary the ADR closes (panel 1) · every terminal
+      state including the two that get improvised when undrawn — RE-PLANNED and
+      REPORTING-OFFLINE (panels 3, 6) · the recent-runs list designed for twenty
+      runs rather than three (panel 9) · and the log console as a
+      collapsed-by-default region with tail-follow (panel 10).
+
+      WHAT IT DOES NOT DRAW. The hosted-run control, the agent selector and the
+      credit-cost panel are MOTIR-691 (9.1.1)'s AMENDMENT to this surface, not a
+      second surface — a BYOK run has no credit cost. See the notes' Out of scope.
+
+      The decision record this builds to is
+      `docs/decisions/dispatch-run-record.md` (MOTIR-1790) — it lands in the
+      same story, on the parent branch, so it is not on `main` at the moment
+      this asset's own pull request is open.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .dsPillDanger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
+         its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
+         surface is a left-column section card and has no rail, so a single
+         child would otherwise land in the 18rem track and render at a width the
+         product never uses. */
+      .panelBody {
+        display: block;
+      }
+      /* The left column's real width: the item page is a `1fr 18rem` grid with a
+         24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
+         section card below is drawn at that width, which is what makes the
+         overflow panels (13–14) measurements rather than illustrations. */
+      .secCard,
+      .panelBody > .grid {
+        max-width: 800px;
+      }
+      .twoUp {
+        max-width: 100%;
+      }
+
+      /* ── Extra utility shims this asset needs, same tokens ─────────────── */
+      .w-full {
+        width: 100%;
+      }
+      .gap-3 {
+        gap: 12px;
+      }
+      .gap-0\.5 {
+        gap: 2px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .ml-auto {
+        margin-left: auto;
+      }
+      .line-through {
+        text-decoration: line-through;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .cursor-grab {
+        cursor: grab;
+      }
+      .select-none {
+        user-select: none;
+      }
+      .whitespace-pre {
+        white-space: pre;
+      }
+      .opacity-60 {
+        opacity: 0.6;
+      }
+      .h-5 {
+        height: 20px;
+      }
+      .w-5 {
+        width: 20px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .py-2 {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .px-2 {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .pl-7 {
+        padding-left: 28px;
+      }
+      .text-\[12px\] {
+        font-size: 12px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+
+      /* ── The asset's OWN elements ─────────────────────────────────────── */
+      /* A section card, `ContentSectionCard` markup-for-markup. */
+      .secCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .secBody {
+        padding: 8px var(--spacing-card-padding) 16px;
+      }
+      /* ONE to-do row. A grid so the checkbox, the body and the row actions
+         each get their own track — and so the body track can be `min-w-0`,
+         which is what lets a long command scroll inside itself instead of
+         widening the row. */
+      .todoRow {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 9px 4px;
+        border-radius: var(--radius-control, 8px);
+      }
+      .todoRow + .todoRow {
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .todoRow.isHover {
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      /* The shipped `Checkbox` primitive's box. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border: 1px solid var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 6px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-card, var(--color-background));
+        color: transparent;
+        flex: none;
+      }
+      .cbox.isOn {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.isInert {
+        border-color: var(--el-border);
+        background: var(--el-muted, var(--color-muted));
+      }
+      /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .cmdBox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .cmdVal {
+        /* A `<pre>`, not a `<code>`: `white-space: pre` is only honoured if the
+           markup preserves the line, and a formatter will reflow the contents of
+           an inline element. This is also what the shipped `CodeBlock` renders
+           (`ScrollableRegion as="pre"`). */
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: pre;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 6px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn, 8px);
+        background: var(--el-card, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 5px 10px;
+        line-height: 1.2;
+      }
+      .btnIcon {
+        padding: 5px;
+      }
+      .btnPrimary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btnDanger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .rowActions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .execMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .execMark.isAgent {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .addRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 4px 2px;
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .inputBox {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+      }
+      .inputBox.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .dropGap {
+        height: 2px;
+        margin: 2px 4px;
+        border-radius: 2px;
+        background: var(--el-accent);
+      }
+      .ghostRow {
+        opacity: 0.5;
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 8px);
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg, var(--color-background));
+      }
+      .colLabel {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .twoUp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .foldRule {
+        position: relative;
+        border-top: 2px dashed var(--el-accent);
+        margin: 4px 0;
+      }
+      .foldRule span {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--el-page-bg, var(--color-background));
+        padding: 0 6px;
+        color: var(--el-accent-on-surface, var(--el-text-secondary));
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 8px);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .regionBox.isThis {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .narrow {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-card, var(--color-background));
+      }
+    </style>
+    <style>
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0 0 10px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .stage {
+        max-width: 720px;
+      }
+      .stageWide {
+        max-width: 980px;
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        padding: 10px 14px;
+        font-size: 12.5px;
+      }
+      .regionBox.is-new {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* ── the shipped section chrome (ContentSectionCard over Card) ───────── */
+      .secCard {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-card-padding);
+        padding-bottom: 0;
+      }
+      .secHead h2 {
+        margin: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-base);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .secSub {
+        font-size: var(--font-size-sm);
+        color: var(--el-text-secondary);
+      }
+      .secBody {
+        padding: var(--spacing-card-padding);
+      }
+      .secRight {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── the run-status pill: ONE vocabulary, tinted background + strong ink ── */
+      .runPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        line-height: 1rem;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .runPill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .t-queued {
+        background: var(--el-muted);
+      }
+      .t-queued .dot {
+        background: var(--el-status-todo);
+      }
+      .t-running {
+        background: var(--el-tint-sky);
+      }
+      .t-running .dot {
+        background: var(--el-status-in-progress);
+      }
+      .t-integrated {
+        background: var(--el-tint-mint);
+      }
+      .t-integrated .dot {
+        background: var(--el-status-done);
+      }
+      .t-implemented {
+        background: var(--el-tint-mint);
+      }
+      .t-implemented .dot {
+        background: var(--el-status-done);
+      }
+      .t-failed {
+        background: var(--el-tint-rose);
+      }
+      .t-failed .dot {
+        background: var(--el-danger);
+      }
+      .t-replanned {
+        background: var(--el-tint-lavender);
+      }
+      .t-replanned .dot {
+        background: var(--el-status-planning);
+      }
+      .t-skipped {
+        background: var(--el-muted);
+      }
+      .t-skipped .dot {
+        background: var(--el-text-tertiary);
+      }
+      .t-cancelled {
+        background: var(--el-muted);
+      }
+      .t-cancelled .dot {
+        background: var(--el-status-cancelled);
+      }
+      .t-timedout {
+        background: var(--el-tint-peach);
+      }
+      .t-timedout .dot {
+        background: var(--el-warning);
+      }
+      .t-offline {
+        background: var(--el-tint-peach);
+      }
+      .t-offline .dot {
+        background: var(--el-text-tertiary);
+      }
+
+      /* ── the live timeline ─────────────────────────────────────────────── */
+      .tl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+      }
+      .tl::before {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 10px;
+        bottom: 10px;
+        width: 1px;
+        background: var(--el-border);
+      }
+      .tlRow {
+        position: relative;
+        display: grid;
+        grid-template-columns: 16px 1fr auto;
+        align-items: baseline;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      .tlDot {
+        width: 9px;
+        height: 9px;
+        margin-left: 3px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        position: relative;
+        top: 4px;
+      }
+      .tlRow.is-done .tlDot {
+        background: var(--el-status-done);
+      }
+      .tlRow.is-now .tlDot {
+        background: var(--el-status-in-progress);
+        box-shadow: 0 0 0 3px var(--el-tint-sky);
+      }
+      .tlRow.is-fail .tlDot {
+        background: var(--el-danger);
+      }
+      .tlRow.is-pending .tlDot {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+      }
+      .tlLabel {
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .tlRow.is-pending .tlLabel {
+        color: var(--el-text-secondary);
+      }
+      .tlDetail {
+        display: block;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      .tlWhen {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      .metaRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .metaRow .k {
+        color: var(--el-text-tertiary);
+      }
+      .mono {
+        font-family: var(--font-mono, monospace);
+      }
+
+      /* the "one of N" line — the single most useful sentence on this card */
+      .setLine {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: var(--font-size-sm);
+      }
+      .setLine a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .notice {
+        display: flex;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        font-size: var(--font-size-sm);
+        color: var(--el-text-strong);
+        margin-bottom: 14px;
+      }
+      .notice.warn {
+        background: var(--el-warning-surface);
+      }
+      .notice.info {
+        background: var(--el-notice-info-bg);
+      }
+      .notice .body {
+        min-width: 0;
+      }
+      .notice .body strong {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .notice .body span {
+        color: var(--el-text-strong);
+      }
+
+      /* the recent-runs list */
+      .runList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .runList li {
+        display: grid;
+        grid-template-columns: 8.5rem 1fr auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: var(--font-size-sm);
+      }
+      .runList .when {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+      }
+      .runList .who {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .runList .dur {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .listFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .btnGhost {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        cursor: pointer;
+      }
+
+      /* the collapsed log console */
+      .console {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        margin-top: 14px;
+      }
+      .consoleHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-surface-soft);
+        border: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .consoleHead .chev {
+        transition: transform var(--transition-duration);
+      }
+      .consoleHead.is-open .chev {
+        transform: rotate(90deg);
+      }
+      .consoleHead .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .consoleBody {
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        line-height: 1.65;
+        padding: 10px 12px;
+        max-height: 190px;
+        overflow: auto;
+        border-top: 1px solid var(--el-border);
+      }
+      .consoleFoot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--el-surface-soft);
+        border-top: 1px solid var(--el-border);
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .emptyBox {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 26px 20px;
+        color: var(--el-text-secondary);
+      }
+      .emptyBox .glyph {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-muted);
+        color: var(--el-icon-muted);
+        margin-bottom: 12px;
+      }
+      .emptyBox .glyph svg {
+        width: 20px;
+        height: 20px;
+      }
+      .emptyBox h3 {
+        margin: 0 0 4px;
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .emptyBox p {
+        margin: 0;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+        line-height: 1.6;
+      }
+
+      .toneTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .toneTable th,
+      .toneTable td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: middle;
+      }
+      .toneTable th {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .toneTable td.mono {
+        color: var(--el-text-secondary);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .caption {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-bot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </symbol>
+      <symbol
+        id="i-chevron"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+        />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-cloud-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m2 2 20 20" />
+        <path d="M5.8 5.8A7 7 0 0 0 8 19h9a4 4 0 0 0 1.8-.4" />
+        <path d="M9.5 4.6A7 7 0 0 1 19 10a4 4 0 0 1 1.9 7.4" />
+      </symbol>
+      <symbol
+        id="i-git-pr"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M6 9v6" />
+        <circle cx="18" cy="18" r="3" />
+        <path d="M18 15V9a3 3 0 0 0-3-3h-2" />
+        <path d="m15 9-2-3 2-3" />
+      </symbol>
+    </svg>
+
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>The RUN SECTION on a work item</h1>
+        <p>
+          MOTIR-1789 · MOTIR-1795. A person who dispatches one card wants to know one thing: is it
+          working, and where did it end up. Today Motir answers with a status pill that says
+          <em>In&nbsp;Progress</em> while the account of what actually happened scrolls past in a
+          terminal on one machine and disappears when the window closes. This section is that
+          account, on the card.
+        </p>
+        <p>
+          <strong>It COMPOSES the shipped page.</strong> The section is
+          <span class="font-mono">ContentSectionCard</span>’s header grammar over the shipped
+          <span class="font-mono">Card</span> and <span class="font-mono">Pill</span>, in the LATE
+          STACK of <span class="font-mono">app/(authed)/items/[key]/page.tsx</span>. Nothing here is
+          a new primitive, a new colour or a new radius.
+        </p>
+        <p>
+          <strong>It does NOT redraw the pull request.</strong> The card’s pull requests and their
+          CI state are the <em>Development</em> section’s, one card up the same stack, drawn at
+          <span class="font-mono">design/work-items/delivery-set.mock.html</span>. The run section
+          shows the RUN; the delivery section shows the DELIVERY. Panel&nbsp;11 draws them adjacent.
+        </p>
+        <p>
+          <strong>Every state is drawn, and two of them are the reason the list matters.</strong>
+          <em>Re-planned</em> is neither a success nor a failure and will be drawn as one of them if
+          nobody draws it. <em>Reporting-offline</em> is a state only a BYOK run can be in — the
+          work happened, the machine simply could not say so — and it exists precisely because the
+          reporter is allowed to fail without breaking the run.
+        </p>
+      </div>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">0</span>PLACEMENT — the late stack, BEFORE Development, filling
+          with the ONE settle.
+        </h2>
+        <p class="panelNote">
+          The item page’s tier table (<span class="font-mono"
+            >design/work-items/design-notes.md</span
+          >
+          § <em>The item page at ARRIVAL</em>) allocates five late regions; this is the sixth, and
+          it goes <strong>directly BEFORE Development</strong>, at the head of the late stack.
+          <strong>CAUSAL ORDER is the argument, not merely adjacency</strong>: the run is what
+          PRODUCES the pull request. A reader scanning down reads
+          <em>an agent worked this card</em> and then <em>and here is what it shipped</em> — the
+          order the events actually happened in, and the order the run's own timeline ends in (<em
+            >pull request linked</em
+          >
+          is its second-to-last row). Reversed, the page shows the artefact before the act that made
+          it.
+          <strong>It arrives with the late stack’s ONE settle, not on its own.</strong>
+          The page settles TWICE — once when the first content replaces the frame, once when the
+          late stack fills — and a sixth independent boundary would make it settle three times for a
+          region that sits below the fold at arrival. Its pending face is the late stack’s own card
+          chrome plus row-shaped pulse bars, exactly as Development’s is.
+        </p>
+        <div class="stage">
+          <div class="grid gap-2">
+            <div class="regionBox is-new">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Run — this card’s live run, and its recent runs</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page — NEW</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Development — linked pull requests + CI</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Acceptance</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Design result</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Attachments</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
+              >
+            </div>
+            <div class="regionBox">
+              <span class="flex items-center justify-between gap-2"
+                ><span>Activity</span
+                ><span class="font-mono" style="font-size: 11px">AFTER the page</span></span
+              >
+            </div>
+          </div>
+          <p class="caption">
+            The five shipped late regions with the run section inserted. Children (tier 2) still
+            renders between Design result and Attachments and is not drawn here — see the host’s own
+            note on why the stack is two boundaries awaiting one promise.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">1</span>RUNNING — the live timeline.</h2>
+        <p class="panelNote">
+          One row per CARD-SCOPED event the decision closes, in <span class="font-mono">seq</span>
+          order — never by timestamp, because two events written in the same millisecond have no
+          order at all under a clock. Rows that have not happened are drawn as EMPTY rings rather
+          than omitted, so the timeline does not resize as it fills. The
+          <strong>“4 of 11” line is the single most useful sentence on this card</strong>: it is how
+          a person learns their card was swept up by a story run, and it exists because a run covers
+          a SET.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-running"
+                  ><span class="dot" aria-hidden="true"></span>Running</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <p class="setLine">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bot" /></svg>
+                <span
+                  >This card is <strong>4 of 11</strong> in a run of
+                  <span class="mono">MOTIR-1789</span>.
+                  <a href="/runs/run_7f2c">See the whole run →</a></span
+                >
+              </p>
+              <ul class="tl">
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Claimed
+                    <span class="tlDetail">PROD-42 moved to In&nbsp;Progress</span>
+                  </span>
+                  <span class="tlWhen">14:02:11</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Checkout ready
+                    <span class="tlDetail">motir-core</span>
+                  </span>
+                  <span class="tlWhen">14:02:12</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Prompt issued </span>
+                  <span class="tlWhen">14:02:12</span>
+                </li>
+                <li class="tlRow is-now">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel" aria-current="step">
+                    Agent running
+                    <span class="tlDetail">claude · claude-opus-5</span>
+                  </span>
+                  <span class="tlWhen">14:02:13</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Agent exits </span>
+                  <span class="tlWhen">—</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Pull request linked </span>
+                  <span class="tlWhen">—</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Settled </span>
+                  <span class="tlWhen">—</span>
+                </li>
+              </ul>
+              <div class="metaRow">
+                <span><span class="k">Agent</span> <span class="mono">claude</span></span>
+                <span><span class="k">Model</span> <span class="mono">claude-opus-5</span></span>
+                <span
+                  ><span class="k">Command</span>
+                  <span class="mono">motir run MOTIR-1789</span></span
+                >
+                <span><span class="k">Elapsed</span> <span class="mono">4m 06s</span></span>
+              </div>
+              <div class="console">
+                <button class="consoleHead is-open" aria-expanded="true" aria-controls="log-1">
+                  <svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevron" />
+                  </svg>
+                  <span class="grow">Agent output</span>
+                  <span class="runPill t-running"
+                    ><span class="dot" aria-hidden="true"></span>following</span
+                  >
+                </button>
+                <!--
+                  ⚠️ THE SAMPLE LINES NAME FILES THAT EXIST ON `main`, ON PURPOSE.
+                  They are ILLUSTRATIVE agent output rather than citations — but
+                  `tests/design-asset-addresses.test.ts` cannot tell the two apart,
+                  and it is right not to try: a path written in a design asset is a
+                  path the next reader will open. Rather than exempt five lines of
+                  DECORATION in a table meant for real citations, the sample is
+                  written from files that resolve.
+                -->
+                <div class="consoleBody" id="log-1" role="log" aria-live="polite">
+                  <div>14:05:41 Reading lib/services/workItemsService.ts</div>
+                  <div>14:05:52 Editing lib/repositories/workItemRepository.ts</div>
+                  <div>14:06:03 $ pnpm exec vitest run tests/workItems/deliveryLinks.test.ts</div>
+                  <div>14:06:29 ✓ tests/workItems/deliveryLinks.test.ts (19)</div>
+                  <div>14:06:31 Writing tests/workItems/deliverySetDto.test.ts</div>
+                </div>
+                <div class="consoleFoot">
+                  <span
+                    >Sent because this run was started with
+                    <span class="mono">--report-log</span>.</span
+                  >
+                  <span style="margin-left: auto">Deleted after 30 days.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span>SUCCEEDED — and the log console is <em>not</em> here.
+        </h2>
+        <p class="panelNote">
+          A single-card run, finished. The console renders in its <strong>not-sent</strong> face
+          because this run was started without <span class="font-mono">--report-log</span> — which
+          is the default, and the one a reader is most likely to meet. It says what stayed on the
+          machine rather than showing an empty box, because an empty box reads as a failure to
+          record.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-implemented"
+                  ><span class="dot" aria-hidden="true"></span>Implemented</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <ul class="tl">
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Claimed </span>
+                  <span class="tlWhen">14:02:11</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Checkout ready
+                    <span class="tlDetail">motir-core</span>
+                  </span>
+                  <span class="tlWhen">14:02:12</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Prompt issued </span>
+                  <span class="tlWhen">14:02:12</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Agent exited 0
+                    <span class="tlDetail">claude · claude-opus-5</span>
+                  </span>
+                  <span class="tlWhen">14:19:40</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Pull request linked
+                    <span class="tlDetail">motir-core#2461</span>
+                  </span>
+                  <span class="tlWhen">14:19:44</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Implemented </span>
+                  <span class="tlWhen">14:19:45</span>
+                </li>
+              </ul>
+              <div class="metaRow">
+                <span><span class="k">Agent</span> <span class="mono">claude</span></span>
+                <span><span class="k">Model</span> <span class="mono">claude-opus-5</span></span>
+                <span
+                  ><span class="k">Command</span> <span class="mono">motir run PROD-42</span></span
+                >
+                <span><span class="k">Elapsed</span> <span class="mono">17m 34s</span></span>
+              </div>
+              <div class="console">
+                <button class="consoleHead" aria-expanded="false" aria-controls="log-2">
+                  <svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevron" />
+                  </svg>
+                  <span class="grow">Agent output</span>
+                  <span class="runPill t-skipped"
+                    ><span class="dot" aria-hidden="true"></span>not sent</span
+                  >
+                </button>
+                <div class="consoleFoot">
+                  <span
+                    >Your agent’s output stayed on your machine. Pass
+                    <span class="mono">--report-log</span> to send it.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">3</span>RE-PLANNED — neither a success nor a failure.
+        </h2>
+        <p class="panelNote">
+          The agent read the card, found its premise false, reverted, submitted a plan and exited
+          <strong>0</strong>. Nothing was built and nothing was broken. It takes the
+          <span class="font-mono">--el-tint-lavender</span> tone the product already uses for
+          <em>Planning</em>, so it reads as <em>a decision was made</em> rather than as green or red
+          — and the body says what to do next, because a state whose whole content is “somebody must
+          look at this” is useless without the link.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-replanned"
+                  ><span class="dot" aria-hidden="true"></span>Re-planned</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <ul class="tl">
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Claimed </span>
+                  <span class="tlWhen">11:40:07</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Checkout ready
+                    <span class="tlDetail">motir-core</span>
+                  </span>
+                  <span class="tlWhen">11:40:08</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Prompt issued </span>
+                  <span class="tlWhen">11:40:08</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Agent exited 0
+                    <span class="tlDetail">claude · claude-opus-5</span>
+                  </span>
+                  <span class="tlWhen">11:52:19</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Re-plan submitted
+                    <span class="tlDetail"
+                      >the card moved to Planning; a plan is waiting for you</span
+                    >
+                  </span>
+                  <span class="tlWhen">11:52:20</span>
+                </li>
+              </ul>
+              <p class="setLine">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bot" /></svg>
+                <span
+                  >The agent submitted a plan rather than building this card.
+                  <a href="/plans/pl_91c4">Review the plan →</a></span
+                >
+              </p>
+              <div class="metaRow">
+                <span><span class="k">Agent</span> <span class="mono">claude</span></span>
+                <span><span class="k">Model</span> <span class="mono">claude-opus-5</span></span>
+                <span
+                  ><span class="k">Command</span> <span class="mono">motir run PROD-42</span></span
+                >
+                <span><span class="k">Elapsed</span> <span class="mono">17m 34s</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">4</span>FAILED.</h2>
+        <p class="panelNote">
+          The agent exited non-zero. The card stays In&nbsp;Progress and nothing was reverted —
+          which the body says in words, because “failed” alone leads a reader to assume the work was
+          rolled back. The exit code is shown because it is the one fact a person can act on.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-failed"
+                  ><span class="dot" aria-hidden="true"></span>Failed</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <ul class="tl">
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Claimed </span>
+                  <span class="tlWhen">09:14:02</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Checkout ready
+                    <span class="tlDetail">motir-core</span>
+                  </span>
+                  <span class="tlWhen">09:14:03</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Prompt issued </span>
+                  <span class="tlWhen">09:14:03</span>
+                </li>
+                <li class="tlRow is-fail">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Agent exited 3
+                    <span class="tlDetail">claude · claude-opus-5</span>
+                  </span>
+                  <span class="tlWhen">09:31:58</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Settled — failed
+                    <span class="tlDetail">left In&nbsp;Progress; nothing was reverted</span>
+                  </span>
+                  <span class="tlWhen">09:31:58</span>
+                </li>
+              </ul>
+              <div class="metaRow">
+                <span><span class="k">Agent</span> <span class="mono">claude</span></span>
+                <span><span class="k">Model</span> <span class="mono">claude-opus-5</span></span>
+                <span
+                  ><span class="k">Command</span> <span class="mono">motir run PROD-42</span></span
+                >
+                <span><span class="k">Elapsed</span> <span class="mono">17m 34s</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span>CANCELLED and TIMED&nbsp;OUT — two ends that are not
+          failures.
+        </h2>
+        <p class="panelNote">
+          <strong>Cancelled</strong> is Ctrl-C: a decision, not a fault, so it takes the neutral
+          <span class="font-mono">--el-muted</span> tone. <strong>Timed out</strong> is the one
+          state no client ever reports — a process that died cannot say so — and it is written by
+          the server’s reap. It takes the warning tone rather than the danger one: the run is not
+          known to have failed, it is known to have stopped saying anything.
+        </p>
+        <div class="stageWide">
+          <div class="grid2">
+            <div>
+              <div class="secCard">
+                <div class="secHead">
+                  <h2>Run</h2>
+                  <span class="secSub">— what the agent did</span>
+                  <span class="secRight">
+                    <span class="runPill t-cancelled"
+                      ><span class="dot" aria-hidden="true"></span>Cancelled</span
+                    >
+                  </span>
+                </div>
+                <div class="secBody">
+                  <ul class="tl">
+                    <li class="tlRow is-done">
+                      <span class="tlDot" aria-hidden="true"></span>
+                      <span class="tlLabel"> Claimed </span>
+                      <span class="tlWhen">16:20:00</span>
+                    </li>
+                    <li class="tlRow is-done">
+                      <span class="tlDot" aria-hidden="true"></span>
+                      <span class="tlLabel">
+                        Agent running
+                        <span class="tlDetail">claude · claude-opus-5</span>
+                      </span>
+                      <span class="tlWhen">16:20:02</span>
+                    </li>
+                    <li class="tlRow is-done">
+                      <span class="tlDot" aria-hidden="true"></span>
+                      <span class="tlLabel">
+                        Interrupted
+                        <span class="tlDetail">you pressed Ctrl-C</span>
+                      </span>
+                      <span class="tlWhen">16:24:51</span>
+                    </li>
+                  </ul>
+                  <p class="panelNote" style="margin: 12px 0 0">
+                    Nothing was reverted; the card is where the run left it.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="secCard">
+                <div class="secHead">
+                  <h2>Run</h2>
+                  <span class="secSub">— what the agent did</span>
+                  <span class="secRight">
+                    <span class="runPill t-timedout"
+                      ><span class="dot" aria-hidden="true"></span>Timed out</span
+                    >
+                  </span>
+                </div>
+                <div class="secBody">
+                  <ul class="tl">
+                    <li class="tlRow is-done">
+                      <span class="tlDot" aria-hidden="true"></span>
+                      <span class="tlLabel"> Claimed </span>
+                      <span class="tlWhen">02:11:40</span>
+                    </li>
+                    <li class="tlRow is-done">
+                      <span class="tlDot" aria-hidden="true"></span>
+                      <span class="tlLabel">
+                        Agent running
+                        <span class="tlDetail">claude · claude-opus-5</span>
+                      </span>
+                      <span class="tlWhen">02:11:42</span>
+                    </li>
+                    <li class="tlRow is-fail">
+                      <span class="tlDot" aria-hidden="true"></span>
+                      <span class="tlLabel">
+                        No report for 12 hours
+                        <span class="tlDetail"
+                          >closed by Motir — the machine stopped reporting</span
+                        >
+                      </span>
+                      <span class="tlWhen">14:11:42</span>
+                    </li>
+                  </ul>
+                  <p class="panelNote" style="margin: 12px 0 0">
+                    The run may or may not have finished on that machine. Motir only knows it
+                    stopped saying.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">6</span>REPORTING-OFFLINE — the run happened; the record did not.
+        </h2>
+        <p class="panelNote">
+          The state most likely to be improvised if it is undrawn, and the one a hosted run can
+          never be in. Reporting is best-effort by design: a 500, an expired token or a dead network
+          must never break a run, so the CLI prints one line and carries on. What reaches Motir is a
+          run that opened and then went quiet.
+          <strong>It must not read as a failed run</strong> — the work may have shipped perfectly —
+          so the pill is neutral-warning, the notice says which of the two facts is unknown, and the
+          timeline keeps the rows it did receive rather than showing an empty card.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-offline"
+                  ><span class="dot" aria-hidden="true"></span>Reporting offline</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <p class="notice warn">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-cloud-off" />
+                </svg>
+                <span class="body"
+                  ><strong>This run stopped reporting to Motir.</strong>
+                  <span
+                    >The run itself was unaffected — the agent kept working and your cards still
+                    moved. What is missing is the record, not the work. Check the Development
+                    section for what shipped.</span
+                  ></span
+                >
+              </p>
+              <ul class="tl">
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Claimed </span>
+                  <span class="tlWhen">10:03:11</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Checkout ready
+                    <span class="tlDetail">motir-core</span>
+                  </span>
+                  <span class="tlWhen">10:03:12</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Agent running
+                    <span class="tlDetail">claude · claude-opus-5</span>
+                  </span>
+                  <span class="tlWhen">10:03:13</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Nothing further was received </span>
+                  <span class="tlWhen">—</span>
+                </li>
+              </ul>
+              <div class="metaRow">
+                <span><span class="k">Agent</span> <span class="mono">claude</span></span>
+                <span><span class="k">Model</span> <span class="mono">claude-opus-5</span></span>
+                <span
+                  ><span class="k">Command</span> <span class="mono">motir run PROD-42</span></span
+                >
+                <span><span class="k">Elapsed</span> <span class="mono">17m 34s</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">7</span>STREAM-RECONNECTING — a transport state, not a run state.
+        </h2>
+        <p class="panelNote">
+          The browser’s connection dropped, not the run. So the notice sits ABOVE the timeline and
+          the pill keeps saying <em>Running</em>: changing the run’s own tone here would tell a
+          reader something about their agent that is not true. When the stream resumes it replays
+          from the last <span class="font-mono">seq</span> the page holds, so no row is duplicated
+          and none is missed — which is why the copy can promise “nothing will be missed”.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-running"
+                  ><span class="dot" aria-hidden="true"></span>Running</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <p class="notice info">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span class="body"
+                  ><strong>Reconnecting…</strong>
+                  <span
+                    >The live connection dropped. The run is still going; this page will catch up
+                    from where it left off, so nothing will be missed.</span
+                  ></span
+                >
+              </p>
+              <ul class="tl">
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Claimed
+                    <span class="tlDetail">PROD-42 moved to In&nbsp;Progress</span>
+                  </span>
+                  <span class="tlWhen">14:02:11</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel">
+                    Checkout ready
+                    <span class="tlDetail">motir-core</span>
+                  </span>
+                  <span class="tlWhen">14:02:12</span>
+                </li>
+                <li class="tlRow is-done">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Prompt issued </span>
+                  <span class="tlWhen">14:02:12</span>
+                </li>
+                <li class="tlRow is-now">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel" aria-current="step">
+                    Agent running
+                    <span class="tlDetail">claude · claude-opus-5</span>
+                  </span>
+                  <span class="tlWhen">14:02:13</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Agent exits </span>
+                  <span class="tlWhen">—</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Pull request linked </span>
+                  <span class="tlWhen">—</span>
+                </li>
+                <li class="tlRow is-pending">
+                  <span class="tlDot" aria-hidden="true"></span>
+                  <span class="tlLabel"> Settled </span>
+                  <span class="tlWhen">—</span>
+                </li>
+              </ul>
+              <div class="metaRow">
+                <span><span class="k">Agent</span> <span class="mono">claude</span></span>
+                <span><span class="k">Model</span> <span class="mono">claude-opus-5</span></span>
+                <span
+                  ><span class="k">Command</span>
+                  <span class="mono">motir run MOTIR-1789</span></span
+                >
+                <span><span class="k">Elapsed</span> <span class="mono">4m 06s</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">8</span>EMPTY — “nothing has run”, and it must not read as an
+          error.
+        </h2>
+        <p class="panelNote">
+          A card that has never been dispatched. The section still renders — its absence would be a
+          third thing for a reader to interpret — but it is quiet: a muted glyph, one sentence of
+          fact, and the command that would change it. No red, no warning tone, no “no data” framing.
+          The copy button is the same one <span class="font-mono">/ready</span> already ships.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+            </div>
+            <div class="secBody">
+              <div class="emptyBox">
+                <span class="glyph" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-bot" /></svg>
+                </span>
+                <h3>No runs yet</h3>
+                <p>
+                  Nothing has been dispatched for this card. When an agent works it, what it did
+                  shows up here.
+                </p>
+                <p style="margin-top: 12px">
+                  <span class="mono" style="font-size: 12px">motir run PROD-42</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">9</span>RECENT RUNS — designed for twenty, not three.
+        </h2>
+        <p class="panelNote">
+          A card worked by <span class="font-mono">motir auto</span> every night accumulates a run
+          per night for as long as the project lives, so the list is
+          <strong>cursor-paged and capped at five</strong> with an explicit “Show more”. Newest
+          first, which is load-bearing rather than a default: the item page reads the CURRENT run
+          off the first row, which is why there is no separate “current run” read to keep in step.
+          Each row is agent · disposition · duration · when, and a run that covered a set says so in
+          the same line rather than in a second column.
+        </p>
+        <div class="stage">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-implemented"
+                  ><span class="dot" aria-hidden="true"></span>Implemented</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <p class="panelNote" style="margin: 0 0 10px">Recent runs</p>
+              <ul class="runList">
+                <li>
+                  <span class="runPill t-implemented"
+                    ><span class="dot" aria-hidden="true"></span>Implemented</span
+                  >
+                  <span class="who">claude · claude-opus-5 · 4 of 11 in MOTIR-1789</span>
+                  <span class="dur">17m 34s</span>
+                  <span class="when">today, 14:19</span>
+                </li>
+                <li>
+                  <span class="runPill t-failed"
+                    ><span class="dot" aria-hidden="true"></span>Failed</span
+                  >
+                  <span class="who">claude · claude-opus-5 · exit 3</span>
+                  <span class="dur">17m 56s</span>
+                  <span class="when">today, 09:31</span>
+                </li>
+                <li>
+                  <span class="runPill t-replanned"
+                    ><span class="dot" aria-hidden="true"></span>Re-planned</span
+                  >
+                  <span class="who">claude · claude-opus-5</span>
+                  <span class="dur">12m 12s</span>
+                  <span class="when">yesterday, 11:52</span>
+                </li>
+                <li>
+                  <span class="runPill t-offline"
+                    ><span class="dot" aria-hidden="true"></span>Reporting offline</span
+                  >
+                  <span class="who">claude · unknown model</span>
+                  <span class="dur">—</span>
+                  <span class="when">yesterday, 10:03</span>
+                </li>
+                <li>
+                  <span class="runPill t-skipped"
+                    ><span class="dot" aria-hidden="true"></span>Skipped</span
+                  >
+                  <span class="who">needs a human · in a batch of 9</span>
+                  <span class="dur">—</span>
+                  <span class="when">Tue, 08:40</span>
+                </li>
+              </ul>
+              <div class="listFoot">
+                <span>Showing 5 of 23 runs</span>
+                <button class="btnGhost">Show more</button>
+              </div>
+            </div>
+          </div>
+          <p class="caption">
+            A SKIPPED row is a real row: the run owned this card and decided not to work it, which
+            is a fact about the card that exists nowhere else.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">10</span>THE LOG CONSOLE — collapsed by default, tail-following
+          when open.
+        </h2>
+        <p class="panelNote">
+          Only ever present when the run was started with
+          <span class="font-mono">--report-log</span>. It is a
+          <strong>collapsed region inside the section</strong>, never an always-expanded wall of
+          text beside the work item’s own content: the item page is where a person reads the CARD,
+          and a live log is the loudest thing on any page it appears on. Open, it is capped at a
+          scroll region and follows the tail; the footer states the retention window, because that
+          is the promise the flag is half of.
+        </p>
+        <div class="stage">
+          <div class="grid2">
+            <div>
+              <div class="console">
+                <button class="consoleHead is-open" aria-expanded="true" aria-controls="log-1">
+                  <svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevron" />
+                  </svg>
+                  <span class="grow">Agent output</span>
+                  <span class="runPill t-running"
+                    ><span class="dot" aria-hidden="true"></span>following</span
+                  >
+                </button>
+                <div class="consoleBody" id="log-1" role="log" aria-live="polite">
+                  <div>14:05:41 Reading lib/services/workItemsService.ts</div>
+                  <div>14:05:52 Editing lib/repositories/workItemRepository.ts</div>
+                  <div>14:06:03 $ pnpm exec vitest run tests/workItems/deliveryLinks.test.ts</div>
+                  <div>14:06:29 ✓ tests/workItems/deliveryLinks.test.ts (19)</div>
+                  <div>14:06:31 Writing tests/workItems/deliverySetDto.test.ts</div>
+                </div>
+                <div class="consoleFoot">
+                  <span
+                    >Sent because this run was started with
+                    <span class="mono">--report-log</span>.</span
+                  >
+                  <span style="margin-left: auto">Deleted after 30 days.</span>
+                </div>
+              </div>
+              <p class="caption">
+                Open, following the tail. The <em>following</em> chip is the state, not a control.
+              </p>
+            </div>
+            <div>
+              <div class="console">
+                <button class="consoleHead" aria-expanded="false" aria-controls="log-2">
+                  <svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevron" />
+                  </svg>
+                  <span class="grow">Agent output</span>
+                  <span class="runPill t-skipped"
+                    ><span class="dot" aria-hidden="true"></span>not sent</span
+                  >
+                </button>
+                <div class="consoleFoot">
+                  <span
+                    >Your agent’s output stayed on your machine. Pass
+                    <span class="mono">--report-log</span> to send it.</span
+                  >
+                </div>
+              </div>
+              <p class="caption">
+                Closed and empty — the ordinary case. It states the promise rather than showing a
+                blank box.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">11</span>ADJACENCY — Run above, Development below.
+        </h2>
+        <p class="panelNote">
+          Drawn together once so the relationship is legible and the boundary is obvious:
+          <strong>the pull request and its CI belong DOWNSTAIRS</strong>. The order is the causal
+          one — the run is what produced the pull request, so the timeline ends where the
+          Development section begins. The run names that pull request as an EVENT — “pull request
+          linked” — and draws no state for it, because a second CI verdict on one page is how a
+          person ends up with two answers to <em>is it green</em>.
+        </p>
+        <div class="stage">
+          <div class="grid gap-3">
+            <div class="secCard">
+              <div class="secHead">
+                <h2>Run</h2>
+                <span class="secSub">— what the agent did</span>
+                <span class="secRight">
+                  <span class="runPill t-implemented"
+                    ><span class="dot" aria-hidden="true"></span>Implemented</span
+                  >
+                </span>
+              </div>
+              <div class="secBody">
+                <ul class="tl">
+                  <li class="tlRow is-done">
+                    <span class="tlDot" aria-hidden="true"></span>
+                    <span class="tlLabel"> Claimed </span>
+                    <span class="tlWhen">14:02:11</span>
+                  </li>
+                  <li class="tlRow is-done">
+                    <span class="tlDot" aria-hidden="true"></span>
+                    <span class="tlLabel">
+                      Checkout ready
+                      <span class="tlDetail">motir-core</span>
+                    </span>
+                    <span class="tlWhen">14:02:12</span>
+                  </li>
+                  <li class="tlRow is-done">
+                    <span class="tlDot" aria-hidden="true"></span>
+                    <span class="tlLabel"> Prompt issued </span>
+                    <span class="tlWhen">14:02:12</span>
+                  </li>
+                  <li class="tlRow is-done">
+                    <span class="tlDot" aria-hidden="true"></span>
+                    <span class="tlLabel">
+                      Agent exited 0
+                      <span class="tlDetail">claude · claude-opus-5</span>
+                    </span>
+                    <span class="tlWhen">14:19:40</span>
+                  </li>
+                  <li class="tlRow is-done">
+                    <span class="tlDot" aria-hidden="true"></span>
+                    <span class="tlLabel">
+                      Pull request linked
+                      <span class="tlDetail">motir-core#2461</span>
+                    </span>
+                    <span class="tlWhen">14:19:44</span>
+                  </li>
+                  <li class="tlRow is-done">
+                    <span class="tlDot" aria-hidden="true"></span>
+                    <span class="tlLabel"> Implemented </span>
+                    <span class="tlWhen">14:19:45</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div class="secCard">
+              <div class="secHead">
+                <h2>Development</h2>
+                <span class="secSub">— what shipped</span>
+              </div>
+              <div class="secBody">
+                <div class="flex items-center gap-2" style="font-size: 0.875rem">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    style="color: var(--el-status-done)"
+                  >
+                    <use href="#i-git-pr" />
+                  </svg>
+                  <span class="mono">motir-core#2461</span>
+                  <span style="color: var(--el-text-secondary)"
+                    >MOTIR-1792 the run service and the ingest</span
+                  >
+                  <span class="runPill t-integrated" style="margin-left: auto"
+                    ><span class="dot" aria-hidden="true"></span>Merged · checks passed</span
+                  >
+                </div>
+                <p class="caption">
+                  Drawn at <span class="font-mono">design/work-items/delivery-set.mock.html</span> —
+                  cited here, not re-specified.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" style="border-bottom: 0">
+        <h2 class="panelTitle">
+          <span class="panelNum">12</span>THE TONE VOCABULARY — defined once, reused by every run
+          surface.
+        </h2>
+        <p class="panelNote">
+          One row per status. Every tone is a
+          <strong
+            >tinted background carrying <span class="font-mono">--el-text-strong</span></strong
+          >
+          — the AA-safe pairing the token rules require — with the hue in a 7px dot rather than in
+          the ink. Nothing signals a run state with a dashed or dotted border, and nothing invents a
+          hue: each dot is an existing <span class="font-mono">--el-*</span> token. The run VIEW —
+          MOTIR-3893's design, which lands in this folder — consumes this table rather than defining
+          a second one.
+        </p>
+        <div class="stageWide">
+          <table class="toneTable">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Pill</th>
+                <th>Background</th>
+                <th>Dot</th>
+                <th>Why this tone</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>queued</td>
+                <td>
+                  <span class="runPill t-queued"
+                    ><span class="dot" aria-hidden="true"></span>Queued</span
+                  >
+                </td>
+                <td class="mono">--el-muted</td>
+                <td class="mono">--el-status-todo</td>
+                <td>Owned, not started. Neutral because nothing has happened yet.</td>
+              </tr>
+              <tr>
+                <td>running</td>
+                <td>
+                  <span class="runPill t-running"
+                    ><span class="dot" aria-hidden="true"></span>Running</span
+                  >
+                </td>
+                <td class="mono">--el-tint-sky</td>
+                <td class="mono">--el-status-in-progress</td>
+                <td>
+                  The product’s existing In-Progress hue, so a run in flight reads like work in
+                  flight.
+                </td>
+              </tr>
+              <tr>
+                <td>integrated</td>
+                <td>
+                  <span class="runPill t-integrated"
+                    ><span class="dot" aria-hidden="true"></span>Integrated</span
+                  >
+                </td>
+                <td class="mono">--el-tint-mint</td>
+                <td class="mono">--el-status-done</td>
+                <td>
+                  On a session branch. Success tone; the delivery section says whether it merged.
+                </td>
+              </tr>
+              <tr>
+                <td>implemented</td>
+                <td>
+                  <span class="runPill t-implemented"
+                    ><span class="dot" aria-hidden="true"></span>Implemented</span
+                  >
+                </td>
+                <td class="mono">--el-tint-mint</td>
+                <td class="mono">--el-status-done</td>
+                <td>
+                  Its own pull request is open. Shares integrated’s tone: both mean the agent
+                  finished.
+                </td>
+              </tr>
+              <tr>
+                <td>failed</td>
+                <td>
+                  <span class="runPill t-failed"
+                    ><span class="dot" aria-hidden="true"></span>Failed</span
+                  >
+                </td>
+                <td class="mono">--el-tint-rose</td>
+                <td class="mono">--el-danger</td>
+                <td>
+                  The only danger tone in the set. Reserve it: everything else here is a legitimate
+                  ending.
+                </td>
+              </tr>
+              <tr>
+                <td>re-planned</td>
+                <td>
+                  <span class="runPill t-replanned"
+                    ><span class="dot" aria-hidden="true"></span>Re-planned</span
+                  >
+                </td>
+                <td class="mono">--el-tint-lavender</td>
+                <td class="mono">--el-status-planning</td>
+                <td>
+                  The Planning hue. Neither green nor red, which is the whole point of the row.
+                </td>
+              </tr>
+              <tr>
+                <td>skipped</td>
+                <td>
+                  <span class="runPill t-skipped"
+                    ><span class="dot" aria-hidden="true"></span>Skipped</span
+                  >
+                </td>
+                <td class="mono">--el-muted</td>
+                <td class="mono">--el-text-tertiary</td>
+                <td>
+                  A decision the run made. Always shown WITH its reason; a bare “skipped” says
+                  nothing.
+                </td>
+              </tr>
+              <tr>
+                <td>cancelled</td>
+                <td>
+                  <span class="runPill t-cancelled"
+                    ><span class="dot" aria-hidden="true"></span>Cancelled</span
+                  >
+                </td>
+                <td class="mono">--el-muted</td>
+                <td class="mono">--el-status-cancelled</td>
+                <td>Somebody pressed Ctrl-C. A decision, not a fault.</td>
+              </tr>
+              <tr>
+                <td>timed out</td>
+                <td>
+                  <span class="runPill t-timedout"
+                    ><span class="dot" aria-hidden="true"></span>Timed out</span
+                  >
+                </td>
+                <td class="mono">--el-tint-peach</td>
+                <td class="mono">--el-warning</td>
+                <td>
+                  Written by the server’s reap, never by a client. Warning, not danger: unknown ≠
+                  failed.
+                </td>
+              </tr>
+              <tr>
+                <td>reporting-offline</td>
+                <td>
+                  <span class="runPill t-offline"
+                    ><span class="dot" aria-hidden="true"></span>Reporting offline</span
+                  >
+                </td>
+                <td class="mono">--el-tint-peach</td>
+                <td class="mono">--el-text-tertiary</td>
+                <td>
+                  The RECORD is incomplete, not the run. Warning ground, neutral dot — deliberately
+                  not danger.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="caption">
+            Ten statuses, five backgrounds. The collisions are deliberate: integrated/implemented
+            are one outcome to a reader, and queued/skipped/cancelled are all “nothing ran”, told
+            apart by their dot and their label rather than by a sixth tint nobody could name.
+          </p>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
