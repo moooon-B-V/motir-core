@@ -2277,11 +2277,19 @@ remedy was to author a whole second plan and ask a person to decline the first.
 | `parentRef`                          | string \| null | no       | `add` only. Re-parent it; `null` makes it top-level.              |
 | `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it. |
 | `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                       |
+| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.   |
 | `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                |
 
-**It reaches the four things the deepen cannot, and that is the whole point.** The
+**It reaches the five things the deepen cannot, and that is the whole point.** The
 field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no
 door could touch at all — because that is where an intra-plan dependency edit rides.
+
+**`targetRepoRole` is the half an ONBOARDING plan actually carries** (MOTIR-3865). At
+generation the project's repositories do not exist yet — the set is derived from the
+tree — so a fresh plan pins a ROLE and no name at all, and a correction that could
+re-pin only the NAME could not correct that plan's pin. It is validated against the
+closed role vocabulary (`web` / `api` / `mobile` / `shared` / `infra` / `other`)
+rather than the project's rows, which is exactly what makes it sayable this early.
 
 **Legal on `generating` AND `planned`.** Correcting a plan a reviewer is already
 holding is the case this exists for, and it is safe because the correction lands on
@@ -2317,7 +2325,8 @@ same one `add_plan_items` and `update_plan_item` name.
 Errors: `PLAN_NOT_FOUND` / `PLAN_ITEM_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an
 `approved` or `declined` plan; `UNRESOLVED_PLAN_REF` for a ref naming no proposal;
 `INVALID_PROPOSAL` for a `patch` on an `add`, a body field on a `modify`, or a
-correction that changes nothing.
+correction that changes nothing; `PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE` for a
+`targetRepoRole` outside the vocabulary.
 
 ##### `withdraw_plan_proposal` — take ONE proposal off a plan
 

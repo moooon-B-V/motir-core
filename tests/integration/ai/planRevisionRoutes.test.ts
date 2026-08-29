@@ -10,6 +10,12 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 import { db } from '@/lib/db';
+import {
+  CORRECT_PROPOSAL_KEYS,
+  UPDATE_PROPOSAL_KEYS,
+  type CorrectProposalKey,
+  type UpdateProposalKey,
+} from '@/lib/dto/plans';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
 import {
@@ -110,6 +116,24 @@ async function plannedPlan(fx: WorkItemFixture, jobId: string) {
   return { planId: plan.id, firstId: first.items[0]!.id, secondId: second.items[1]!.id };
 }
 
+/** The `generating` twin of {@link plannedPlan} — the status the DEEPEN mode
+ *  gates on, so a key can be asserted on BOTH modes rather than only the one
+ *  that happened to be under test. */
+async function generatingPlan(fx: WorkItemFixture, jobId: string) {
+  const plan = await plansService.createPlan(
+    fx.projectId,
+    { title: 'Still generating', authorSource: 'native', authorHarness: 'Motir' },
+    fx.ctx,
+  );
+  const appended = await plansService.addProposals(
+    plan.id,
+    [{ op: 'add', proposedFields: { title: 'A skeleton card', kind: 'subtask' } }],
+    fx.ctx,
+  );
+  await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: jobId } });
+  return { planId: plan.id, itemId: appended.items[0]!.id };
+}
+
 describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   it('carries the STRUCTURAL fields the deepen turn may not touch', async () => {
     const fx = await makeWorkItemFixture();
@@ -206,6 +230,167 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     });
     expect(res.status).toBe(422);
     expect(await res.json()).toMatchObject({ code: 'UNRESOLVED_PLAN_REF' });
+  });
+
+  // ── MOTIR-3865 · THE TRANSPORT PARITY GUARD ─────────────────────────────────
+  //
+  // ⚠️ THE FAILURE THIS ENDS IS SILENT AT EVERY LAYER. A key declared on
+  // `UpdateProposalInput` / `CorrectProposalInput` that this route's parser never
+  // picks off the body is dropped without a word: the request succeeds, the
+  // response is a `200`, and the proposal simply keeps the value it had. That is
+  // how `explanationMd` sat DECLARED-and-unread here while
+  // `lib/mcp/tools/authorPlan.ts` — the door an EXTERNAL agent uses — parsed it,
+  // so an outside MCP client could rewrite a landed plan's rationale and Motir's
+  // own hosted planner could not.
+  //
+  // So the samples below are typed `satisfies Record<…Key, unknown>` — TOTAL over
+  // the declared constant in both directions, checked by `tsc` — and asserted
+  // total again at runtime. A field added to either input with no parser reaching
+  // it fails HERE, in the pull request that adds it, rather than being discovered
+  // months later by a re-plan that quietly under-delivered. (The compile-time half
+  // — the constants against the INTERFACES — is in `lib/dto/plans.ts`; this is the
+  // half that was missing, because the interfaces and the parser were each
+  // internally consistent and had never been compared.)
+  const CONTENT_SAMPLE = {
+    title: 'The dependent, corrected',
+    kind: 'task',
+    descriptionMd: 'The corrected spec.',
+    type: 'code',
+    priority: 'high',
+    storyPoints: 3,
+    estimateMinutes: 45,
+    explanationMd: 'The corrected WHY — the key this route never read.',
+    executor: 'human',
+  } satisfies Record<UpdateProposalKey, unknown>;
+
+  /** Each STRUCTURAL key → where the correction lands it, or `null` for a key
+   *  this test does not exercise (with the reason, by name). */
+  const STRUCTURAL_LANDS_IN: Record<
+    Exclude<CorrectProposalKey, UpdateProposalKey>,
+    string | null
+  > = {
+    parentRef: 'planItem.parentRef',
+    blockedByRefs: 'planItem.blockedByRefs',
+    targetRepo: 'proposedFields.targetRepo',
+    targetRepoRole: 'proposedFields.targetRepoRole',
+    // `modify` ONLY, and mutually exclusive with an `add`'s content bag — the
+    // service refuses the two together by design. Its own transport (the
+    // `modifyPatch` rename) is asserted by the `a modify's patch rides
+    // modifyPatch` test above.
+    patch: null,
+  };
+
+  it('every key `UpdateProposalInput` declares SURVIVES from the request body into the proposal (MOTIR-3865)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { firstId, secondId } = await plannedPlan(fx, 'job-keys');
+    expect(Object.keys(CONTENT_SAMPLE).sort()).toEqual([...UPDATE_PROPOSAL_KEYS].sort());
+    expect(Object.keys(STRUCTURAL_LANDS_IN).sort()).toEqual(
+      [...CORRECT_PROPOSAL_KEYS].filter((k) => !UPDATE_PROPOSAL_KEYS.includes(k as never)).sort(),
+    );
+
+    const res = await patch(fx, secondId, {
+      jobId: 'job-keys',
+      mode: 'correct',
+      patch: CONTENT_SAMPLE,
+      parentRef: `planItem:${firstId}`,
+      blockedByRefs: [`planItem:${firstId}`],
+      // A ROLE needs no repository to exist — the closed vocabulary is exactly
+      // what makes it pinnable this early, and it is the pin an ONBOARDING plan
+      // carries.
+      targetRepoRole: 'api',
+    });
+    expect(res.status).toBe(200);
+
+    const stored = await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } });
+    expect(stored.proposedFields).toMatchObject({ ...CONTENT_SAMPLE, targetRepoRole: 'api' });
+    expect(stored.parentRef).toBe(`planItem:${firstId}`);
+    expect(stored.blockedByRefs).toEqual([`planItem:${firstId}`]);
+  });
+
+  it('`explanationMd` reaches the proposal on the DEEPEN mode too, not only on `correct`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await generatingPlan(fx, 'job-deepen');
+
+    // No `mode` — the generation-time deepen seam, which is where a titles-first
+    // proposal gains its body. One parser serves both modes, so the key has to
+    // land on both or the deepen turn keeps writing a description with no WHY.
+    const res = await patch(fx, itemId, {
+      jobId: 'job-deepen',
+      patch: {
+        descriptionMd: 'The body.',
+        explanationMd: 'And the WHY beside it.',
+        type: 'code',
+        executor: 'coding_agent',
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields,
+    ).toMatchObject({
+      descriptionMd: 'The body.',
+      explanationMd: 'And the WHY beside it.',
+      type: 'code',
+      executor: 'coding_agent',
+    });
+  });
+
+  it('`targetRepoRole` is SPARSE — an explicit `null` unpins, an absent key leaves the pin alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Pinned', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    const appended = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Pinned to a role', kind: 'task', targetRepoRole: 'web' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: 'job-role' } });
+    const itemId = appended.items[0]!.id;
+
+    // ABSENT — a correction that touches something else must not disturb the pin.
+    // Collapsing "absent" and "null" is the bug this shape exists to avoid.
+    expect(
+      (await patch(fx, itemId, { jobId: 'job-role', mode: 'correct', patch: { title: 'Renamed' } }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields,
+    ).toMatchObject({ targetRepoRole: 'web' });
+
+    // EXPLICIT `null` — the unpin, which is unsayable if the two collapse.
+    expect(
+      (await patch(fx, itemId, { jobId: 'job-role', mode: 'correct', targetRepoRole: null }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields,
+    ).toMatchObject({ targetRepoRole: null });
+  });
+
+  it('an UNKNOWN `targetRepoRole` is a typed 422, never a 500 — the same refusal the append gives', async () => {
+    const fx = await makeWorkItemFixture();
+    const { secondId } = await plannedPlan(fx, 'job-badrole');
+
+    const res = await patch(fx, secondId, {
+      jobId: 'job-badrole',
+      mode: 'correct',
+      targetRepoRole: 'backend',
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code: 'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE' });
+    // …and NOTHING was written: the role is validated before the update, so a
+    // refused correction leaves the proposal exactly as it was.
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } })).proposedFields,
+    ).not.toHaveProperty('targetRepoRole');
   });
 });
 

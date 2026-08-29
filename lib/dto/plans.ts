@@ -499,10 +499,100 @@ export interface CorrectProposalInput extends UpdateProposalInput {
   /** `add` only — the repo pin, re-validated against the project's connected
    *  repositories exactly as approve does; `null` unpins. */
   targetRepo?: string | null;
+  /**
+   * `add` only — RE-PIN the proposal's repo ROLE (MOTIR-3865), the portable half
+   * of the pin beside {@link targetRepo}'s settled one. `null` unpins.
+   *
+   * It is here because a correction that could re-pin the repository NAME and not
+   * its ROLE could not correct an ONBOARDING plan's pin at all: at generation the
+   * repositories do not exist yet, so a fresh plan pins a ROLE and nothing else
+   * (ADR §5.4 · `PlanItemProposedFields.targetRepoRole`). A `modify` proposal's
+   * own patch has carried it since MOTIR-1912; the top-level correction did not,
+   * so the one shape that always carries a role was the one a correction could
+   * not reach.
+   *
+   * Validated against the closed role VOCABULARY (`PROJECT_REPO_ROLES`), not the
+   * project's repository set — the same check the append and a `modify`'s patch
+   * run, and the reason a role is emittable before any row exists.
+   */
+  targetRepoRole?: ProjectRepoRoleDto | null;
   /** `modify` only — REPLACES the patch. The op that carries a dependency edit,
    *  and the one no door could touch at all before this. */
   patch?: PlanItemPatch | null;
 }
+
+/**
+ * The keys {@link UpdateProposalInput} declares — THE SINGLE DECLARED SOURCE
+ * every transport onto the deepen / correction service derives from (MOTIR-3865).
+ *
+ * ⚠️ It exists because a key declared on an input type and read by NO transport
+ * is invisible from both ends: the request succeeds, the response is a `200`, and
+ * the proposal simply keeps the value it had. That happened three times to one
+ * contract — `explanationMd` reached `PlanItemPatch` and not `modify_node`
+ * (MOTIR-3860), then reached `UpdateProposalInput` and not the internal
+ * correction route (this card) — each time in a change that was locally complete
+ * and correct, because nothing anywhere compared the two lists.
+ *
+ * So every layer that has to agree DERIVES the set from here rather than
+ * re-typing it: the compile-time assertion below holds the INTERFACES to it, and
+ * `tests/integration/ai/planRevisionRoutes.test.ts` holds the internal route's
+ * parser to it. A key added to either input with no transport carrying it fails
+ * in the pull request that adds it. (The same guard shape as `MODIFY_PATCH_KEYS`
+ * in motir-ai `src/llm/treeGeneration.ts`.)
+ */
+export const UPDATE_PROPOSAL_KEYS = [
+  'title',
+  'kind',
+  'descriptionMd',
+  'type',
+  'priority',
+  'storyPoints',
+  'estimateMinutes',
+  'explanationMd',
+  'executor',
+] as const;
+
+export type UpdateProposalKey = (typeof UPDATE_PROPOSAL_KEYS)[number];
+
+/**
+ * The keys {@link CorrectProposalInput} declares — {@link UPDATE_PROPOSAL_KEYS}
+ * plus the STRUCTURAL members a correction adds. Same guard, same reason.
+ */
+export const CORRECT_PROPOSAL_KEYS = [
+  ...UPDATE_PROPOSAL_KEYS,
+  'parentRef',
+  'blockedByRefs',
+  'targetRepo',
+  'targetRepoRole',
+  'patch',
+] as const;
+
+export type CorrectProposalKey = (typeof CORRECT_PROPOSAL_KEYS)[number];
+
+/**
+ * The COMPILE-TIME half of the drift guard: each input's keys and its constant
+ * are the same set, in BOTH directions.
+ *
+ * A runtime test cannot enumerate an interface's keys, so this is where the TYPE
+ * is held to the constant — adding a field to either input without adding it to
+ * its constant (or the reverse) fails `tsc`, before any test runs. The route test
+ * then holds the TRANSPORT to the same constant, which is the half that was
+ * missing: the interfaces and the parser were each internally consistent and had
+ * never been compared.
+ */
+type UpdateKeyMissingFromConstant = Exclude<keyof UpdateProposalInput, UpdateProposalKey>;
+type UpdateKeyMissingFromInterface = Exclude<UpdateProposalKey, keyof UpdateProposalInput>;
+type CorrectKeyMissingFromConstant = Exclude<keyof CorrectProposalInput, CorrectProposalKey>;
+type CorrectKeyMissingFromInterface = Exclude<CorrectProposalKey, keyof CorrectProposalInput>;
+const _proposalInputKeysAreExhaustive: [
+  UpdateKeyMissingFromConstant,
+  UpdateKeyMissingFromInterface,
+  CorrectKeyMissingFromConstant,
+  CorrectKeyMissingFromInterface,
+] extends [never, never, never, never]
+  ? true
+  : never = true;
+void _proposalInputKeysAreExhaustive;
 
 /** Options for `plansService.listPlans`. */
 export interface ListPlansOptions {

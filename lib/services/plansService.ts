@@ -2755,6 +2755,28 @@ export const plansService = {
           const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
           const next = mergeProposedFields(current, input);
           if (resolvedTargetRepo !== undefined) next.targetRepo = resolvedTargetRepo;
+          // The ROLE half of the pin (MOTIR-3865), applied HERE rather than in
+          // `mergeProposedFields` for the same reason its NAME twin is: that
+          // helper is the DEEPEN turn's merge and the repo pin is deliberately
+          // outside the deepen's editable set. A correction is the different act
+          // AMENDMENT 7 opened, and it reaches both halves of the pin or it
+          // cannot correct an ONBOARDING plan at all — such a plan pins a role
+          // and no name, because its repositories do not exist yet.
+          //
+          // Validated against the closed VOCABULARY, exactly as the append and a
+          // `modify`'s patch are, and before the write: an unrecognised role is
+          // `PlanItemUnknownTargetRepoRoleError` (a typed 422 at the transport),
+          // never a string smuggled into `proposedFields`. `undefined` leaves the
+          // pin alone and an explicit `null` unpins — `assertKnownRepoRole` passes
+          // both, which is what makes the sparse semantics expressible.
+          if (input.targetRepoRole !== undefined) {
+            assertKnownRepoRole(
+              input.targetRepoRole,
+              item.id,
+              proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+            );
+            next.targetRepoRole = input.targetRepoRole;
+          }
           if (!next.title?.trim()) {
             throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
           }
