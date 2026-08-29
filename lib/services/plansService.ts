@@ -44,11 +44,13 @@ import { NoInitialStatusError } from '@/lib/workItems/errors';
 import {
   TEMP_REF_PREFIX,
   assertTempRefsResolvable,
+  isTempRef,
   tempRefsOf,
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
 import {
   assertProposalSetSelfConsistent,
+  assertReparentLegal,
   collectReferencedWorkItemIds,
   validatePlanProposals,
   type LiveWorkItemState,
@@ -255,6 +257,34 @@ function validateProposal(p: ProposalInput): void {
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
+    // A `modify` may RE-PARENT the target (MOTIR-3859) — and the ONE form of
+    // that key which is refused at the boundary rather than validated is an
+    // intra-plan temp-ref. It is checked HERE, in the pure per-proposal pass,
+    // for the same reason the repo role is: the answer needs no read at all, and
+    // an author writing a plan is the right person to hear it. The FIVE checks
+    // that DO need the tree run in `assertReparentLegal`, which the append and
+    // the approve share. See `PlanItemPatch.parentRef` for why a proposal is not
+    // a legal parent for an existing card.
+    if (typeof p.patch.parentRef === 'string') {
+      const ref = p.patch.parentRef.trim();
+      if (ref.length === 0) {
+        throw new InvalidProposalError(
+          `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`patch.parentRef\` is blank. ` +
+            'Send a work-item key / id to re-parent under it, an explicit `null` to move it to the ' +
+            'project root, or omit the key to leave the parent alone.',
+        );
+      }
+      if (isTempRef(ref)) {
+        throw new InvalidProposalError(
+          `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`patch.parentRef\` names a ` +
+            'proposal in this plan. A `modify` may only re-parent onto a work item that ALREADY ' +
+            'EXISTS — every check a re-parent owes (the kind-parent matrix, same-project tenancy, ' +
+            'the no-cycle walk, the depth cap, the terminal-parent refusal) is a question about a ' +
+            'live row, and a proposal has none until approve. To land a card under one this plan ' +
+            'is adding, `add` it with that `parentRef` instead.',
+        );
+      }
+    }
   } else {
     // remove
     if (!p.workItemId) throw new InvalidProposalError('A `remove` proposal requires workItemId.');
@@ -513,7 +543,50 @@ async function runPersistGate(
   const liveById = new Map<string, LiveWorkItemState>(
     rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status, projectId: r.projectId }]),
   );
-  validatePlanProposals({ items: nodes, liveById, terminalStatusKeys, planProjectId });
+  // The ANCESTOR CHAINS the re-parent gate needs (MOTIR-3859) — one batched
+  // recursive read, and only when some `modify` actually proposes a new parent,
+  // so a plan that re-parents nothing costs exactly what it cost before. Bound
+  // the same way the row read above is, for the same reason.
+  const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
+  validatePlanProposals({
+    items: nodes,
+    liveById,
+    terminalStatusKeys,
+    planProjectId,
+    ancestorIdsById,
+  });
+}
+
+/** Every real work-item id a `modify` in `nodes` proposes as a NEW parent. */
+function proposedParentIds(nodes: readonly ProposalNode[]): string[] {
+  return [
+    ...new Set(
+      nodes
+        .filter((n) => n.op === 'modify')
+        .map((n) => n.patch?.parentRef)
+        .filter((ref): ref is string => typeof ref === 'string' && !isTempRef(ref)),
+    ),
+  ];
+}
+
+/**
+ * The `parentId → … → root` chain of every proposed new parent (MOTIR-3859), as
+ * `assertReparentLegal` reads it. Empty map when nothing re-parents — the read is
+ * skipped entirely, which is what keeps the re-parent gate free on the plans that
+ * do not use it.
+ */
+async function resolveReparentAncestors(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const parentIds = proposedParentIds(nodes);
+  if (parentIds.length === 0) return new Map();
+  return tx
+    ? await workItemRepository.findAncestorIdsForItems(parentIds, ctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        workItemRepository.findAncestorIdsForItems(parentIds, ctx.workspaceId, t),
+      );
 }
 
 /**
@@ -982,7 +1055,7 @@ async function materialize(
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
   repoRefs: ProposalRepoRefs,
-): Promise<string[]> {
+): Promise<MaterializeResult> {
   const project = await projectRepository.findById(plan.projectId, tx);
   if (!project) throw new ProjectNotFoundError(plan.projectId);
   const statusKey = await workflowsService.getInitialStatusKey(plan.projectId, ctx.workspaceId);
@@ -1382,6 +1455,8 @@ async function materialize(
   // from `createdAdds` rather than re-derived, so a create that Pass 3 rewrote
   // is named exactly once.
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
+  /** The re-parents this pass performed (MOTIR-3859) — see {@link ReparentMove}. */
+  const reparented: ReparentMove[] = [];
 
   // modify + remove against existing targets (locked + re-read inside the tx).
   //
@@ -1399,7 +1474,17 @@ async function materialize(
   // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      await applyModify(item, ctx, resolveRef, tx, repoPins, repoRefs, planItemToWorkItem, plan.id);
+      const moved = await applyModify(
+        item,
+        ctx,
+        resolveRef,
+        tx,
+        repoPins,
+        repoRefs,
+        planItemToWorkItem,
+        plan.id,
+      );
+      if (moved) reparented.push(moved);
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -1426,9 +1511,28 @@ async function materialize(
   // DISTINCT ancestors of everything this pass touched — each container derived
   // exactly once no matter how many of its descendants moved. Inside the same
   // transaction, so a plan and the repository sets it implies commit together.
-  await recomputeContainersForTouched(touchedWorkItemIds, ctx.workspaceId, tx);
+  //
+  // ⚠️ AND A RE-PARENT VACATES A CONTAINER THE TOUCHED SET NO LONGER REACHES
+  // (MOTIR-3859). The walk above starts from the moved row, so after the write it
+  // climbs the NEW chain and never visits the parent the row LEFT — whose derived
+  // repository set is now wrong in the other direction. `moveWorkItem` recomputes
+  // both chains for exactly this reason; the vacated ids are passed in as
+  // containers in their own right so this pass does too.
+  await recomputeContainersForTouched(
+    touchedWorkItemIds,
+    reparented.map((r) => r.previousParentId).filter((id): id is string => id !== null),
+    ctx.workspaceId,
+    tx,
+  );
 
-  return touchedWorkItemIds;
+  return { touchedWorkItemIds, reparented };
+}
+
+/** What one `materialize` pass did to the tree — the ids it touched (the
+ *  embedding trigger's input) and the re-parents it performed (MOTIR-3859). */
+interface MaterializeResult {
+  touchedWorkItemIds: string[];
+  reparented: ReparentMove[];
 }
 
 /**
@@ -1446,21 +1550,31 @@ async function materialize(
  */
 async function recomputeContainersForTouched(
   touchedIds: readonly string[],
+  vacatedContainerIds: readonly string[],
   workspaceId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  if (touchedIds.length === 0) return;
+  if (touchedIds.length === 0 && vacatedContainerIds.length === 0) return;
   // depth → the containers at that depth, so the walk can go deepest-first.
   const byDepth = new Map<string, number>();
+  const register = (id: string, depth: number): void => {
+    const seen = byDepth.get(id);
+    if (seen === undefined || depth < seen) byDepth.set(id, depth);
+  };
   for (const id of touchedIds) {
     const ancestors = await workItemRepository.findAncestors(id, workspaceId, tx);
     // `findAncestors` returns ROOT→self, so the LAST entry is the immediate
     // parent: index from the end to get a depth that compares across chains.
-    ancestors.forEach((a, i) => {
-      const depth = ancestors.length - 1 - i;
-      const seen = byDepth.get(a.id);
-      if (seen === undefined || depth < seen) byDepth.set(a.id, depth);
-    });
+    ancestors.forEach((a, i) => register(a.id, ancestors.length - 1 - i));
+  }
+  // A VACATED parent (MOTIR-3859) is a container in its OWN right, not an
+  // ancestor of anything that moved — the row that made it one has just left. It
+  // enters at depth 0, the same slot a touched item's immediate parent takes, so
+  // it is still derived before its own ancestors are.
+  for (const id of vacatedContainerIds) {
+    register(id, 0);
+    const ancestors = await workItemRepository.findAncestors(id, workspaceId, tx);
+    ancestors.forEach((a, i) => register(a.id, ancestors.length - i));
   }
   const ordered = [...byDepth.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
   for (const containerId of ordered) {
@@ -1518,7 +1632,7 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-): Promise<void> {
+): Promise<ReparentMove | null> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
   if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
@@ -1681,6 +1795,37 @@ async function applyModify(
   // resolving that role to a REFERENCE — done above, beside the name — and there
   // is no column left for it to also be recorded in. The plan keeps the field;
   // the work item does not.
+  // RE-PARENT the target (MOTIR-3859) — the SITS half of D3's pair, the mirror
+  // of the `add` path's `parentRef` and the twin of the repo re-pin directly
+  // above. Present in the patch ONLY when the proposal actually carried the key,
+  // which is what keeps "leave the parent alone" distinct from "move it to the
+  // root" (an explicit `null`).
+  //
+  // ⚠️ EVERY GUARD HAS ALREADY RUN — twice. `assertReparentLegal` judged this
+  // move at the APPEND and again in `validatePlanProposals`, the second time
+  // under the row locks `assertProposalsPersistable` takes. So no check is
+  // repeated here, deliberately: a third copy would be a third thing to keep in
+  // lockstep, and the `work_item` triggers (kind / cotenancy / cycle / depth) are
+  // the structural backstop under the write either way.
+  //
+  // `parentId` already has a diff-cell disposition in lib/activity/renderers.ts —
+  // `moveWorkItem` and the patch path both emit it — so the modify revision
+  // renders with no new registry entry.
+  let reparent: ReparentMove | null = null;
+  const patchedParentRef = patch.parentRef;
+  if (patchedParentRef !== undefined) {
+    const nextParentId = patchedParentRef === null ? null : resolveRef(patchedParentRef);
+    if (nextParentId !== current.parentId) {
+      update.parentId = nextParentId;
+      diff.parentId = { from: current.parentId, to: nextParentId };
+      reparent = {
+        workItemId: item.workItemId,
+        previousParentId: current.parentId,
+        newParentId: nextParentId,
+      };
+    }
+  }
+
   if (Object.keys(update).length > 0) {
     await workItemRepository.update(item.workItemId, update, tx);
   }
@@ -1744,6 +1889,25 @@ async function applyModify(
     { workItemId: item.workItemId, changedById: ctx.userId, changeKind: 'updated', diff },
     tx,
   );
+
+  // Handed back rather than acted on here: BOTH of a move's consequences are
+  // whole-pass facts. The repo-set recompute has to run once per container after
+  // every op has landed (the rollup below), and the `child-set.changed` event has
+  // to be emitted AFTER the approve transaction commits, like every `work-item/*`
+  // event on this path.
+  return reparent;
+}
+
+/**
+ * One re-parent an approved `modify` performed (MOTIR-3859) — the two parent ids
+ * whose DIRECT child set changed, plus the row that moved between them. Exactly
+ * the shape `moveWorkItem` emits `work-item/child-set.changed` from, because it
+ * is the same edit through a different door.
+ */
+interface ReparentMove {
+  workItemId: string;
+  previousParentId: string | null;
+  newParentId: string | null;
 }
 
 /**
@@ -1757,6 +1921,60 @@ async function applyModify(
  *   • `updateProposal` — the user review edit, `planned`        (7.21.6 · MOTIR-1370)
  *   • `deepenProposal` — the generation-time deepen, `generating` (7.4.4a · MOTIR-1441)
  */
+/**
+ * Run the RE-PARENT gate over a proposal set at the APPEND (MOTIR-3859).
+ *
+ * The same `assertReparentLegal` the approve path runs, given the same three
+ * inputs — so a move admitted here cannot be refused there for a reason the
+ * author could have been told while the plan was still theirs to fix.
+ *
+ * ⚠️ THE PROJECT NARROWING IS SUSPENDED, for exactly the reason
+ * `assertProposalsPersistable` suspends it (MOTIR-3581): `withWorkspaceContext`
+ * binds `app.project_id` and `work_item_project_narrow` is a RESTRICTIVE policy,
+ * so a cross-project parent would be invisible to the read and the refusal would
+ * say "names no work item" about a row that plainly exists — the failure mode of
+ * a refusal whose stated reason the caller can observe to be false. Suspended, the
+ * tenancy check reports the real reason.
+ *
+ * The whole batch is judged, INCLUDING the proposals already on the plan: an
+ * append re-runs the gate over the plan's whole ref graph for the same reason
+ * `assertProposalSetSelfConsistent` does (MOTIR-3573).
+ */
+async function assertReparentsLegalAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const terminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+    planProjectId,
+    ctx.workspaceId,
+  );
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const referenced = collectReferencedWorkItemIds(nodes);
+    const rows = await workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, tx);
+    const liveById = new Map<string, LiveWorkItemState>(
+      rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status, projectId: r.projectId }]),
+    );
+    const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
+    for (const node of nodes) {
+      // The ref must RESOLVE before the gate can judge it — the same
+      // precondition `validatePlanProposals` gives `assertReparentLegal` through
+      // its step 2, restated here because this path runs the one check rather
+      // than the whole ordered gate.
+      const ref = node.op === 'modify' ? node.patch?.parentRef : undefined;
+      if (typeof ref === 'string' && !isTempRef(ref) && !liveById.has(ref)) {
+        throw new PlanRefGraphError(
+          'dangling',
+          node.id,
+          `Proposal ${node.id}'s patch.parentRef "${ref}" names no work item in this workspace.`,
+        );
+      }
+      assertReparentLegal(node, liveById, ancestorIdsById, terminalStatusKeys, planProjectId);
+    }
+  });
+}
+
 async function editAddProposal(
   planId: string,
   planItemId: string,
@@ -2243,6 +2461,34 @@ export const plansService = {
               resolvable,
               (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
             );
+          }
+
+          // ⚠️ THE RE-PARENT GATE, AT THE APPEND (MOTIR-3859) — and it is the one
+          // check on this path that COSTS A WORKSPACE READ, so it is worth saying
+          // why it is here rather than left to the close.
+          //
+          // The header on the pure gate above says what deliberately does NOT run
+          // at the append: the arm that needs `liveById`, because the read is not
+          // free and a plan may legitimately reference an item created between
+          // the append and the close. A re-parent is the case that argument does
+          // NOT cover. Its five questions are about a live row that has to exist
+          // ALREADY — a proposal is refused as a parent outright — so nothing a
+          // later call does can turn an illegal move into a legal one, which is
+          // exactly `assertTempRefsResolvable`'s own argument for refusing where
+          // the ref is written. And the alternative is the worst version: the DB
+          // triggers catch a cycle or an over-deep move mid-`materialize`, as a
+          // raw SQLSTATE inside `PlanPersistenceError`, at the approve button,
+          // where the plan is immutable and the only repair is to author a new one.
+          //
+          // It is skipped entirely — no read, no terminal-status lookup — when no
+          // proposal in the batch carries `patch.parentRef`, which is every plan
+          // that does not use the key.
+          const withIncoming = [
+            ...existing.map(toProposalNode),
+            ...proposals.map(toIncomingProposalNode),
+          ];
+          if (proposedParentIds(withIncoming).length > 0) {
+            await assertReparentsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
 
           for (const p of proposals) {
@@ -3179,7 +3425,7 @@ export const plansService = {
       // reference a materialized card stores.
       const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
 
-      const { row, items, firstOnboarding, projectKey, touchedWorkItemIds } =
+      const { row, items, firstOnboarding, projectKey, touchedWorkItemIds, reparented } =
         await withWorkspaceContext(
           { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
           async (tx) => {
@@ -3211,7 +3457,7 @@ export const plansService = {
             // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
             // under the lock, before a single row is materialized.
             assertRepoPinsUnmoved(snapshotPins, proposals);
-            const touchedWorkItemIds = await materialize(
+            const { touchedWorkItemIds, reparented } = await materialize(
               proposals,
               fresh,
               ctx,
@@ -3292,6 +3538,7 @@ export const plansService = {
               firstOnboarding,
               projectKey: project?.identifier ?? null,
               touchedWorkItemIds,
+              reparented,
             };
           },
           // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
@@ -3312,6 +3559,38 @@ export const plansService = {
         await sendEvent('work-item/embedding.requested', {
           workspaceId: ctx.workspaceId,
           workItemId,
+        });
+      }
+
+      // STATUS DERIVATION, for the re-parents this approve performed (MOTIR-3859 ·
+      // `docs/decisions/status-derivation.md` §3a). A move changes TWO direct child
+      // sets in opposite directions — the parent left may now be finished, the one
+      // joined may need to come back — and `work-item/transitioned` fires on
+      // neither, which is the whole reason this event exists. `moveWorkItem` emits
+      // exactly this for exactly this edit; a re-parent through the plan door is
+      // the same edit and owes the same signal, or an approve would be invisible to
+      // every job in the system the way `move_to_parent` once was.
+      //
+      // POST-COMMIT and best-effort, like the embedding trigger above and for the
+      // same two reasons: a job must never run inside the write transaction, and a
+      // rolled-back approve must not announce a move that did not happen.
+      for (const move of reparented) {
+        const parentIds = [move.previousParentId, move.newParentId].filter(
+          (p): p is string => p !== null,
+        );
+        // At least one end is non-null by construction — `applyModify` records a
+        // move only when the two DIFFER — but a top-level-to-top-level move is not
+        // expressible, so the guard is about the type, not about a real case.
+        if (parentIds.length === 0) continue;
+        await sendEvent('work-item/child-set.changed', {
+          workspaceId: ctx.workspaceId,
+          parentIds,
+          workItemId: move.workItemId,
+          reason: 'reparented',
+          // The approve's own instant: the row has LEFT its old aggregate, so
+          // nothing it can read dates the change (MOTIR-2965, the same argument
+          // `moveWorkItem` makes).
+          occurredAt: new Date().toISOString(),
         });
       }
 

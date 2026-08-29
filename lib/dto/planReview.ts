@@ -52,6 +52,11 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
   'description',
   'explanation',
   'links',
+  /** Where the target SITS — a `modify`'s `patch.parentRef` (MOTIR-3859). The
+   *  approver has to SEE a re-parent: it is the most structural thing a plan can
+   *  say about a card, and the whole reason the move was routed through the
+   *  proposal door rather than applied directly. */
+  'parent',
 ] as const;
 
 export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];

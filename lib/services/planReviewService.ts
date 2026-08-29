@@ -75,10 +75,16 @@ function prosePreview(value: string | null | undefined): string | null {
   return flat.length > PROSE_PREVIEW_CHARS ? `${flat.slice(0, PROSE_PREVIEW_CHARS - 1)}…` : flat;
 }
 
-/** The OLD → NEW field changes a `modify` proposes (its diff overlay). */
+/** The OLD → NEW field changes a `modify` proposes (its diff overlay).
+ *
+ *  `nameParent` renders a parent id as the reader's own word for it — the
+ *  identifier where one is resolvable, `null` for the project root — so the
+ *  re-parent row reads `PROD-14 → PROD-9` rather than as two cuids (MOTIR-3859).
+ */
 function buildChanges(
   patch: PlanItemPatch | null,
   target: WorkItem | undefined,
+  nameParent: (id: string | null) => string | null,
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -150,6 +156,17 @@ function buildChanges(
       from: prosePreview(target?.explanationMd),
       to: prosePreview(patch.explanationMd),
     });
+  }
+  // WHERE THE CARD SITS (MOTIR-3859) — the SITS half of D3's pair, and the most
+  // structural thing a `modify` can now say. It is listed for the same reason the
+  // explanation is: routing a re-parent through the proposal door buys nothing at
+  // all if the surface the approver reads does not show the move. An explicit
+  // `null` renders as an empty NEW side, which is what "the project root" looks
+  // like in a diff cell.
+  if (patch.parentRef !== undefined) {
+    const from = nameParent(target?.parentId ?? null);
+    const to = nameParent(patch.parentRef ?? null);
+    if (from !== to) changes.push({ field: 'parent', from, to });
   }
   const added = patch.blockedByAdd?.length ?? 0;
   const removed = patch.blockedByRemove?.length ?? 0;
@@ -261,7 +278,14 @@ export const planReviewService = {
     const committedParentIds = plan.items
       .map((i) => i.parentRef)
       .filter((ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX));
-    const lookupIds = Array.from(new Set([...targetIds, ...committedParentIds]));
+    // …AND the parent a `modify` proposes to MOVE its target to (MOTIR-3859).
+    // It is a committed work item like any other parent — the append refuses a
+    // temp-ref there — so it rides the same batched read, and both the diff cell
+    // and the canvas placement below need its row.
+    const reparentIds = plan.items
+      .map((i) => (i.op === 'modify' ? (i.patch?.parentRef ?? null) : null))
+      .filter((ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX));
+    const lookupIds = Array.from(new Set([...targetIds, ...committedParentIds, ...reparentIds]));
     const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
     );
@@ -347,6 +371,17 @@ export const planReviewService = {
       return trail;
     };
 
+    /** A parent id as the reader's own word for it (MOTIR-3859): its identifier
+     *  when the row is resolvable, `null` for the project root — and, for a row
+     *  neither read returned (archived, hard-deleted), the id itself rather than
+     *  nothing, so the cell degrades to something checkable instead of claiming
+     *  the card moved to the root. */
+    const nameParent = (id: string | null): string | null => {
+      if (id === null) return null;
+      const row = targetById.get(id) ?? ancestorById.get(id);
+      return row?.identifier ?? id;
+    };
+
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
     // The project's WORKFLOW, so a target's status can carry its own identity —
@@ -422,16 +457,26 @@ export const planReviewService = {
     /**
      * Where this proposal SITS — one rule for all three ops (bug MOTIR-3191).
      *
-     * An `add` says so itself, in `parentRef`. A `modify` / `remove` cannot: it
-     * names a `workItemId` and no parent, because its parent is the live card's
-     * and a proposal may not move anything. So the placement of a proposal ABOUT
-     * an existing card is read off that card — which is the same answer approve
-     * would produce, since a `modify` leaves `parentId` exactly where it found it.
+     * An `add` says so itself, in `parentRef`. A `modify` says so too now — in
+     * `patch.parentRef`, the re-parent key (MOTIR-3859). A `remove` cannot, and a
+     * `modify` that does not touch the parent cannot either: its placement is the
+     * live card's, read off that card.
+     *
+     * ⚠️ THIS COMMENT USED TO SAY *"a proposal may not move anything"*, and that
+     * was true when it was written. It is the sentence MOTIR-3859 makes false, and
+     * the canvas is the surface where the difference has to show: a re-parent that
+     * drew the card in its OLD level would be the plan review showing the approver
+     * the opposite of what approving does. The `undefined` / `null` split is
+     * load-bearing here as everywhere in a sparse patch — absent means the parent
+     * is unchanged, an explicit `null` means the PROJECT ROOT.
      *
      * A materialized `add` has both; `parentRef` wins, and the two agree.
      */
     const parentNodeIdOf = (item: PlanItemDto): string | null => {
       if (item.parentRef) return resolveNodeRef(item.parentRef);
+      if (item.op === 'modify' && item.patch?.parentRef !== undefined) {
+        return item.patch.parentRef === null ? null : resolveNodeRef(item.patch.parentRef);
+      }
       const target = item.workItemId ? targetById.get(item.workItemId) : undefined;
       return target?.parentId ?? null;
     };
@@ -464,6 +509,9 @@ export const planReviewService = {
           ? null
           : item.parentRef
         : parentNodeId;
+      // `parentNodeIdOf` already prefers a `modify`'s `patch.parentRef`
+      // (MOTIR-3859), so the breadcrumb and the level follow the PROPOSED
+      // placement rather than the one the card is leaving.
       const committedParent = committedParentId
         ? (targetById.get(committedParentId) ?? ancestorById.get(committedParentId))
         : undefined;
@@ -521,7 +569,7 @@ export const planReviewService = {
         statusLabel: statusByKey.get(target?.status ?? '')?.label ?? null,
         statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
-        changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],
+        changes: item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [],
         // A RECENCY fact, not a second reading of `op` (Part XII §E).
         revised: revisedItemIds.has(item.id),
         stale: reasons.length > 0,

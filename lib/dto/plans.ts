@@ -273,6 +273,40 @@ export interface PlanItemPatch {
    * the `add` path's is, so the two paths cannot disagree about what a role means.
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
+  /**
+   * RE-PARENT the target (MOTIR-3859) — the `modify` mirror of the `add` path's
+   * {@link PlanItemDto.parentRef}, and the half of D3's `SITS or SHIPS` pair the
+   * patch never had.
+   *
+   * ⚠️ THE PAIR CAME APART BY ACCIDENT, not by decision. `agent-authored-plans.md`
+   * D3 draws the deepen line as *"a deepen may change what a card SAYS and who
+   * ACTS on it; it may not change where the card SITS or SHIPS"* — and SHIPS was
+   * then given to the patch twice (`targetRepo`, MOTIR-1884; `targetRepoRole`,
+   * MOTIR-1912) while SITS was given to it never. Nothing anywhere argued it
+   * should not be; the two halves were widened by different cards and only one of
+   * them ran. AMENDMENT 11 records the completion.
+   *
+   * Sparse like every key here: absent (`undefined`) leaves the parent untouched,
+   * an explicit `null` moves the target to the PROJECT ROOT (refused by the same
+   * `assertValidParent(null, kind)` arm that refuses a root-level subtask).
+   *
+   * ⚠️ A REAL work-item id ONLY — a `planItem:` temp-ref is REFUSED at the append
+   * (`validateProposal`), and that is a decision rather than an omission. Every
+   * guard this key owes — the kind-parent matrix, same-project tenancy, the
+   * no-cycle walk, the depth cap and the terminal-parent refusal — is a question
+   * about a LIVE row, and a proposal has none until approve. Admitting a temp-ref
+   * would mean a re-parent nothing could check until the DB trigger raised a raw
+   * SQLSTATE mid-materialize, which is exactly the shape this gate exists to
+   * prevent. A card that must land under a card the same plan is adding is
+   * expressible already: `add` it with that `parentRef` instead.
+   *
+   * Validated at the APPEND (`plansService.addProposals`) and again at approve
+   * (`validatePlanProposals`), through ONE pure function so the two cannot
+   * disagree; applied by `applyModify` with a `parentId` revision diff cell, the
+   * ancestor repo-set recompute on BOTH chains, and the `work-item/child-set.changed`
+   * event `moveWorkItem` emits for the same reason.
+   */
+  parentRef?: string | null;
   blockedByAdd?: string[];
   blockedByRemove?: string[];
 }

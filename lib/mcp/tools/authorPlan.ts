@@ -304,6 +304,19 @@ const patchSchema = z
       .nullable()
       .optional()
       .describe('RE-PIN the portable repo role. An explicit `null` unpins it.'),
+    parentRef: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card ' +
+          'this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. ' +
+          'Omit the key to leave the parent where it is. ⚠️ It must name a work item that ' +
+          'ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent ' +
+          'owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal ' +
+          'to hang new work under a FINISHED parent) is a question about a live row. To land a ' +
+          'card under one this plan is adding, `add` it with that `parentRef` instead.',
+      ),
     blockedByAdd: z
       .array(z.string())
       .optional()
@@ -855,6 +868,11 @@ function refsOfProposal(p: ProposalInput): string[] {
   return [
     ...(p.parentRef ? [p.parentRef] : []),
     ...(p.blockedByRefs ?? []),
+    // The RE-PARENT ref (MOTIR-3859) takes a key exactly like the other four
+    // sites — an agent that has just called `get_work_item { key: 'MOTIR-656' }`
+    // has no reason to believe the argument changed meaning three lines later,
+    // which is this function's whole argument.
+    ...(p.patch?.parentRef ? [p.patch.parentRef] : []),
     ...(p.patch?.blockedByAdd ?? []),
     ...(p.patch?.blockedByRemove ?? []),
   ];
@@ -916,6 +934,7 @@ async function resolveKeyRefs(
     patch: p.patch
       ? {
           ...p.patch,
+          ...(p.patch.parentRef ? { parentRef: swap(p.patch.parentRef) } : {}),
           ...(p.patch.blockedByAdd ? { blockedByAdd: p.patch.blockedByAdd.map(swap) } : {}),
           ...(p.patch.blockedByRemove
             ? { blockedByRemove: p.patch.blockedByRemove.map(swap) }

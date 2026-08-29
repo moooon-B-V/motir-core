@@ -71,6 +71,10 @@ function validate(
     liveById?: Map<string, LiveWorkItemState>;
     terminalStatusKeys?: Set<string>;
     planProjectId?: string;
+    /** The re-parent gate's ancestor chains (MOTIR-3859). Absent means every
+     *  proposed parent reads as a ROOT, which is the permissive answer and the
+     *  right default for every case that re-parents nothing. */
+    ancestorIdsById?: Map<string, readonly string[]>;
   } = {},
 ): void {
   validatePlanProposals({
@@ -78,6 +82,7 @@ function validate(
     liveById: opts.liveById ?? liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET })),
     terminalStatusKeys: opts.terminalStatusKeys ?? new Set(['done', 'cancelled']),
     planProjectId: opts.planProjectId ?? PLAN_PROJECT,
+    ancestorIdsById: opts.ancestorIdsById ?? new Map(),
   });
 }
 
@@ -512,6 +517,222 @@ describe('validatePlanProposals — done-work immutability', () => {
   it('does not gate an `add` on immutability (it targets nothing)', () => {
     expect(() =>
       validate([add('p1')], { terminalStatusKeys: new Set(['done', 'cancelled', 'todo']) }),
+    ).not.toThrow();
+  });
+});
+
+describe('validatePlanProposals — a `modify` RE-PARENTS its target (MOTIR-3859)', () => {
+  // AMENDMENT 11. The five guards a re-parent owes, each one on its own, written
+  // against the CONTRACT rather than against the implementation — the same
+  // discipline the kind-parent cases above follow.
+  const NEW_PARENT = 'wi_new_parent';
+
+  /** A `modify` of `REAL_TARGET` proposing `parentRef`. */
+  function reparent(ref: string | null, overrides: Partial<ProposalNode> = {}): ProposalNode {
+    return modify('m1', { patch: { parentRef: ref }, ...overrides });
+  }
+
+  it('accepts a legal move — a subtask from one story to another', () => {
+    expect(() =>
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'subtask' }),
+          live({ id: NEW_PARENT, kind: 'story' }),
+        ),
+      }),
+    ).not.toThrow();
+  });
+
+  it('leaves the parent alone when the patch OMITS the key — absent is not `null`', () => {
+    // The whole sparse contract in one case: a patch that touches something else
+    // must not be read as proposing a move to the root.
+    expect(() =>
+      validate([modify('m1', { patch: { blockedByAdd: [] } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, kind: 'subtask' })),
+      }),
+    ).not.toThrow();
+  });
+
+  it('an explicit `null` is a move to the ROOT, and the kind decides whether that is legal', () => {
+    expect(() =>
+      validate([reparent(null)], { liveById: liveMap(live({ id: REAL_TARGET, kind: 'task' })) }),
+    ).not.toThrow();
+
+    try {
+      validate([reparent(null)], { liveById: liveMap(live({ id: REAL_TARGET, kind: 'subtask' })) });
+      expect.unreachable('a subtask has no legal top-level placement');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+    }
+  });
+
+  it('refuses a KIND-ILLEGAL placement, through the same matrix every human move is gated on', () => {
+    try {
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'story' }),
+          live({ id: NEW_PARENT, kind: 'subtask' }),
+        ),
+      });
+      expect.unreachable('a story may not be parented to a subtask');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+      expect((err as PlanGrammarError).planItemId).toBe('m1');
+    }
+  });
+
+  it('refuses a parent in ANOTHER PROJECT — and says which question it is answering', () => {
+    try {
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'subtask' }),
+          live({ id: NEW_PARENT, kind: 'story', projectId: OTHER_PROJECT }),
+        ),
+      });
+      expect.unreachable('parentage is same-project by invariant');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+      expect((err as Error).message).toContain('DIFFERENT project');
+    }
+  });
+
+  it('refuses a move onto the target ITSELF', () => {
+    try {
+      validate([reparent(REAL_TARGET)], {
+        liveById: liveMap(live({ id: REAL_TARGET, kind: 'story' })),
+      });
+      expect.unreachable('a card may not be its own parent');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('cycle');
+      expect((err as Error).message).toContain('ITSELF');
+    }
+  });
+
+  it('refuses a move onto a DESCENDANT — read off the new parent ancestor chain', () => {
+    try {
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'story' }),
+          live({ id: NEW_PARENT, kind: 'task' }),
+        ),
+        // The proposed parent sits UNDER the target: moving the target beneath it
+        // closes a cycle.
+        ancestorIdsById: new Map([[NEW_PARENT, [REAL_TARGET, 'wi_root']]]),
+      });
+      expect.unreachable('the move would create a cycle');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('cycle');
+      expect((err as Error).message).toContain('DESCENDANT');
+    }
+  });
+
+  it('refuses a move past the DEPTH CAP, with the trigger own arithmetic', () => {
+    try {
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'subtask' }),
+          live({ id: NEW_PARENT, kind: 'bug' }),
+        ),
+        // The parent has three ancestors, so it sits at depth 4 and the moved row
+        // would land at 5 — `ancestor_depth + 1 > 4` in the trigger's terms.
+        ancestorIdsById: new Map([[NEW_PARENT, ['wi_a', 'wi_b', 'wi_c']]]),
+      });
+      expect.unreachable('the move exceeds the depth limit');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('parent_depth_limit');
+      expect((err as Error).message).toContain('depth 5');
+    }
+  });
+
+  it('ACCEPTS the deepest LEGAL move — the cap is a boundary, not an approximation', () => {
+    expect(() =>
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'subtask' }),
+          live({ id: NEW_PARENT, kind: 'bug' }),
+        ),
+        // Two ancestors → the parent is at depth 3 and the row lands at 4.
+        ancestorIdsById: new Map([[NEW_PARENT, ['wi_a', 'wi_b']]]),
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses a TERMINAL parent, naming its status', () => {
+    try {
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'subtask' }),
+          live({ id: NEW_PARENT, kind: 'story', status: 'done' }),
+        ),
+      });
+      expect.unreachable('a finished parent may not gain a new open child');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('parent_terminal');
+      expect((err as Error).message).toContain('"done"');
+    }
+  });
+
+  it('is keyed on the terminal CATEGORY — `cancelled` is a terminal parent too', () => {
+    expect(() =>
+      validate([reparent(NEW_PARENT)], {
+        liveById: liveMap(
+          live({ id: REAL_TARGET, kind: 'subtask' }),
+          live({ id: NEW_PARENT, kind: 'story', status: 'cancelled' }),
+        ),
+      }),
+    ).toThrow(PlanGrammarError);
+  });
+
+  it('refuses a `planItem:` temp-ref parent — a proposal is not a live row', () => {
+    try {
+      validate([add('p1'), modify('m1', { patch: { parentRef: `${TEMP_REF_PREFIX}p1` } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, kind: 'subtask' })),
+      });
+      expect.unreachable('a temp-ref parent is refused');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+    }
+  });
+
+  it('reports a parent that RESOLVES TO NOTHING as a dangling ref, not as a grammar violation', () => {
+    // The ordered gate's own discipline: a malformed plan fails with the MOST
+    // specific reason, and "this ref names nothing" is more specific than "this
+    // placement is illegal".
+    try {
+      validate([reparent('wi_ghost')], {
+        liveById: liveMap(live({ id: REAL_TARGET, kind: 'subtask' })),
+      });
+      expect.unreachable('a dangling parentRef is refused');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('dangling');
+      expect((err as Error).message).toContain('patch.parentRef');
+    }
+  });
+
+  it('leaves a target that resolves to nothing to materialize, exactly as step 4 does', () => {
+    expect(() =>
+      validate([reparent(NEW_PARENT, { workItemId: 'wi_ghost_target' })], {
+        liveById: liveMap(live({ id: NEW_PARENT, kind: 'story' })),
+      }),
+    ).not.toThrow();
+  });
+
+  it('does not read `patch.parentRef` on an op that is not a `modify`', () => {
+    // A `remove` carries no patch and an `add` places itself through `parentRef`.
+    // The guard is on the OP, so a stray patch on either must change nothing.
+    expect(() =>
+      validate([modify('r1', { op: 'remove', patch: { parentRef: 'wi_ghost' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET })),
+      }),
     ).not.toThrow();
   });
 });

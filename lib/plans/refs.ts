@@ -32,12 +32,19 @@ export function tempRefId(ref: string): string {
 // bought nothing at all: the same answer, from the same data, delivered days
 // later to a reviewer who did not write it and cannot fix it.
 //
-// ⚠️ FOUR CARRIERS, NOT TWO. An intra-plan edge travels on `blockedByRefs` when
+// ⚠️ FIVE CARRIERS, NOT TWO. An intra-plan edge travels on `blockedByRefs` when
 // the proposal is an `add` and on `patch.blockedByAdd` / `patch.blockedByRemove`
 // when it is a `modify` — and the artifact this card was written from is the
 // SECOND shape (`blockedByAdd: ['planItem:PLACEHOLDER']` on a `modify`). A check
 // that read only an `add`'s own fields would have shipped without refusing the
 // one plan it exists to refuse.
+//
+// ⚠️ AND `patch.parentRef` IS THE FIFTH (MOTIR-3859), listed here even though the
+// append refuses a temp-ref on it OUTRIGHT — a re-parent's guards are all
+// questions about a live row, so a proposal is not a legal parent for one. The
+// site is enumerated anyway because this function's job is to be TOTAL over a
+// proposal's ref carriers: a later card that admits a temp-ref there must not
+// also have to remember this file.
 //
 // PURE — no Prisma, no DB — so the service resolves the existing-id set and this
 // decides. That is what makes it unit-testable without a database and what lets
@@ -48,6 +55,7 @@ export function tempRefId(ref: string): string {
 export type PlanRefSite =
   | 'parentRef'
   | 'blockedByRefs'
+  | 'patch.parentRef'
   | 'patch.blockedByAdd'
   | 'patch.blockedByRemove';
 
@@ -57,7 +65,11 @@ export interface ProposalRefCarrier {
   label: string;
   parentRef?: string | null;
   blockedByRefs?: readonly string[] | null;
-  patch?: { blockedByAdd?: string[] | null; blockedByRemove?: string[] | null } | null;
+  patch?: {
+    parentRef?: string | null;
+    blockedByAdd?: string[] | null;
+    blockedByRemove?: string[] | null;
+  } | null;
 }
 
 /** Every temp-ref a proposal carries, with the field it was carried on. */
@@ -68,6 +80,7 @@ export function tempRefsOf(p: ProposalRefCarrier): Array<{ ref: string; where: P
   };
   take(p.parentRef, 'parentRef');
   for (const ref of p.blockedByRefs ?? []) take(ref, 'blockedByRefs');
+  take(p.patch?.parentRef, 'patch.parentRef');
   for (const ref of p.patch?.blockedByAdd ?? []) take(ref, 'patch.blockedByAdd');
   for (const ref of p.patch?.blockedByRemove ?? []) take(ref, 'patch.blockedByRemove');
   return out;
