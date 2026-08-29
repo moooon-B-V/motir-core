@@ -4002,23 +4002,17 @@ model Comment {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workItem        WorkItem                  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  author          User                      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  parent          Comment?                  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies         Comment[]                 @relation("CommentReplies")
-  mentions        CommentMention[]
-  // CI feedback (Subtask 7.10.6 / MOTIR-894): the check-run rows whose feedback
-  // comment THIS is. ⚠️ `@ignore`d with the far side (MOTIR-3863) — the column it
-  // reads is retired and out of the generated client, and Prisma requires both
-  // halves of a relation to be ignored together. The source of truth is
-  // `ciFeedbackFor` below (MOTIR-3770). Both are dropped by the CONTRACT phase.
-  githubCheckRuns GithubCheckRun[] @ignore
+  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem      WorkItem                  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author        User                      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parent        Comment?                  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       Comment[]                 @relation("CommentReplies")
+  mentions      CommentMention[]
   // The (change request, head commit, card) THIS comment is the CI feedback for
   // — MOTIR-3770. CASCADE, deliberately: deleting the comment must leave no
   // dangling id for the next delivery to edit, which is the property that keeps
   // a webhook retry loop from forming.
-  ciFeedbackFor   GithubCiFeedbackComment[]
+  ciFeedbackFor GithubCiFeedbackComment[]
 
   // The paged list read (newest-first cursor walk, 5.1.2) + the thread read.
   @@index([workItemId, createdAt])
@@ -5822,22 +5816,22 @@ model WorkItemDelivery {
 /// one. `conclusion` is the normalized `CiConclusion`
 /// (`success` | `failure` | `pending` | `neutral`) the `GitProvider` seam emits.
 /// The feedback COMMENT's identity is `GithubCiFeedbackComment`'s, not this
-/// table's — `feedback_comment_id` below is RETIRED and `@ignore`d, kept only so
-/// the column can be dropped in a later release (MOTIR-3863 → MOTIR-3803).
+/// table's. This table carried a scalar mirror of it until MOTIR-3803 dropped
+/// the column, completing the three-phase retirement MOTIR-3770 began.
 /// Provider-neutral: a GitLab pipeline (7.23)
 /// normalizes into the same shape. The work item's own `ciState` signal is
 /// derived from these rows and denormalized onto `WorkItem.ciState`.
 model GithubCheckRun {
-  id                String   @id @default(cuid())
+  id            String   @id @default(cuid())
   /// FK → GithubPullRequest.id (internal cuid) — the PR this check ran against.
-  pullRequestId     String   @map("pull_request_id")
+  pullRequestId String   @map("pull_request_id")
   /// The head commit SHA the check ran on (the payload's `head_sha`). Part of the
   /// idempotency key: a re-run against a NEW commit is a distinct row.
-  commitSha         String   @map("commit_sha")
+  commitSha     String   @map("commit_sha")
   /// The check's name / context (a `check_run.name`, a `check_suite` app slug, or
   /// a legacy commit-status `context`) — distinguishes concurrent checks on one
   /// commit so each keeps its own feedback.
-  checkName         String   @map("check_name")
+  checkName     String   @map("check_name")
   /// The CI RUN this check belongs to — GitHub's `check_suite.id` (one suite per
   /// workflow run), GitLab's pipeline id. Part of the idempotency key since
   /// MOTIR-3209: `cancel-in-progress` makes TWO runs at one commit ordinary, and
@@ -5853,46 +5847,13 @@ model GithubCheckRun {
   /// reports no run identity (a legacy commit-`status` event) — one degraded
   /// group that supersedes nothing and is superseded by nothing, i.e. exactly
   /// the behaviour those rows had before.
-  checkSuiteId      String   @default("") @map("check_suite_id")
+  checkSuiteId  String   @default("") @map("check_suite_id")
   /// Normalized `CiConclusion`: "success" | "failure" | "pending" | "neutral".
-  conclusion        String
-  /// ⚠️ RETIRED, AND DELIBERATELY STILL DECLARED. `@ignore` KEEPS IT OUT OF THE
-  /// GENERATED CLIENT WHILE THE COLUMN STAYS IN THE DATABASE — the SCHEMA-ONLY
-  /// phase (MOTIR-3863) of the three-phase drop
-  /// `docs/decisions/delivery-reader-migration.md` §6a specifies. **DO NOT delete
-  /// this field and DO NOT remove the attribute on its own**: the field and the
-  /// column must go in the SAME commit, and that commit is the CONTRACT phase's
-  /// (MOTIR-3803), which may only run once THIS build is on every machine.
-  ///
-  /// It was the feedback `Comment` posted for this check. SUPERSEDED AS THE
-  /// SOURCE OF TRUTH by `GithubCiFeedbackComment` (MOTIR-3770) — a scalar holds
-  /// ONE id, so a pull request delivering N cards commented on one of them — and
-  /// then retired outright by MOTIR-3863, which moved its last reader (the
-  /// deploy-window fallback in `changeRequestCiFeedback`) once the EXPAND was
-  /// verified on every machine (MOTIR-3818). Nothing reads it; nothing writes it.
-  ///
-  /// ⚠️ WHY `@ignore` RATHER THAN DELETION, MEASURED. A bare relation include —
-  /// `{ pullRequest: { include: { checkRuns: true } } }`, which is what
-  /// `workItemDeliveryRepository` and `githubPullRequestRepository` use — selects
-  /// every scalar THIS DECLARATION names, so the declaration is itself a reader
-  /// and the one no grep finds (MOTIR-3852). Deleting the field stops that read
-  /// and breaks the drift gate in the same edit: `prisma migrate diff
-  /// --from-schema prisma/schema.prisma --to-config-datasource --exit-code`
-  /// answers `[+] Added column feedback_comment_id` / `[+] Added foreign key`,
-  /// exit 2. With `@ignore` the same command answers `No difference detected`,
-  /// exit 0, and the emitted SQL for the bare include drops the column. What
-  /// `@ignore` does NOT protect is a future bare include over some OTHER retired
-  /// column — the attribute is per field, not a rule.
-  feedbackCommentId String?  @map("feedback_comment_id") @ignore
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  conclusion    String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  pullRequest     GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
-  /// `@ignore`d with the scalar it hangs on (MOTIR-3863). A relation left in the
-  /// client keeps the column reachable through `include: { feedbackComment: true }`,
-  /// which is precisely the reader this phase exists to remove. The FK and its
-  /// `onDelete: SetNull` are untouched in the database.
-  feedbackComment Comment?          @relation(fields: [feedbackCommentId], references: [id], onDelete: SetNull) @ignore
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
 
   @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])
@@ -5908,8 +5869,9 @@ model GithubCheckRun {
 /// nothing could store: WHICH CARD it was posted on. A pull request delivering N
 /// cards is N rows, one comment each, and that is the whole shape.
 ///
-/// It replaces `github_check_run.feedback_comment_id` as the source of truth. That
-/// column is a nullable scalar on a table whose grain is one row PER CHECK, so it
+/// It replaced `github_check_run.feedback_comment_id` as the source of truth, and
+/// MOTIR-3803 has since dropped that column. It was a nullable scalar on a table
+/// whose grain is one row PER CHECK, so it
 /// held one id replicated across every check row at the commit — which is one id
 /// however many cards the delivery reached, and a second delivered card therefore
 /// showed no CI verdict at all while its `ciState` said otherwise (MOTIR-3721
