@@ -29,6 +29,11 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    # Observed 2.7–12.7 min across four runs → 40 (~3.2x on the worst, run
+    # 33218107241). The spread is the point: CodeQL's extract-and-query time
+    # tracks the size of the codebase and has already quadrupled between runs
+    # on record, so this is sized on the slowest, not the median.
+    timeout-minutes: 40
     permissions:
       security-events: write
       contents: read

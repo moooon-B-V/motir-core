@@ -33,6 +33,11 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-ci-promote';
 const REPO_PROVIDER_ID = '881';
+/** A SECOND connected repository that never reports a check (MOTIR-3823) — the
+ *  `motir-meta` shape: no `.github/` at all, so no pull request in it can ever
+ *  carry a check row. Connected in every scenario and inert unless a test opens
+ *  a pull request in it. */
+const DOCS_REPO_PROVIDER_ID = '882';
 
 async function makeScenario(email: string) {
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
@@ -62,6 +67,13 @@ async function makeScenario(email: string) {
         defaultBranch: 'main',
         archived: false,
       },
+      {
+        providerRepoId: DOCS_REPO_PROVIDER_ID,
+        owner: 'moooon',
+        name: 'acme-docs',
+        defaultBranch: 'main',
+        archived: false,
+      },
     ],
   });
   return { user, workspace, project, ctx };
@@ -72,10 +84,15 @@ async function makeScenario(email: string) {
  *  does not — a session branch — the row is stored linked to nothing, which is
  *  exactly the shape `motir auto` produces. */
 async function openPr(headBranch: string, number: number) {
+  await openPrIn(REPO_PROVIDER_ID, headBranch, number);
+}
+
+/** The same delivery, in a NAMED repository — the two-repository cases need it. */
+async function openPrIn(repoProviderId: string, headBranch: string, number: number) {
   await githubWebhookService.handleEvent('pull_request', {
     action: 'opened',
     installation: { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } },
-    repository: { id: Number(REPO_PROVIDER_ID) },
+    repository: { id: Number(repoProviderId) },
     pull_request: {
       number,
       state: 'open',
@@ -733,5 +750,237 @@ describe('a card reaches In Review only when EVERY pull request delivering it is
     // fires. It must reach the same verdict.
     expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(false);
     expect(await statusOf(card.id)).toBe('implemented');
+  });
+});
+
+// ── A REPOSITORY THAT CANNOT REPORT A CHECK IS GREEN (MOTIR-3823) ────────────
+//
+// `derivePrCiState` answers `null` for a pull request with no check rows, and
+// `deliverySetIsGreen` read every `null` as "not passing" — so a card whose only
+// delivery sits in a repository with NO CI was permanently un-promotable. That is
+// every `targetRepo: motir-meta` card: those cards went `implemented → done` on
+// merge and never passed through In Review at all.
+//
+// Decided by Yue, 2026-08-28: a CI-less repository counts as GREEN. The whole
+// difficulty is that the NAIVE fix — read `null` as `passing` — is a worse,
+// silent regression: `null` is ALSO the state of every pull request for the first
+// seconds of its life, which is exactly when the arrival edge fires. So these
+// tests come in pairs, and the second of each pair is the one the naive fix
+// fails.
+
+/** THE EVIDENCE that `moooon/acme-docs` cannot report a check: a pull request of
+ *  its own that reached MERGE without ever recording one. It delivers no card.
+ *
+ *  This is the half of the discriminator that is evidence rather than the
+ *  absence of it — a merged pull request had its entire lifetime to produce a
+ *  check — and without it a newly-connected repository that HAS CI but has not
+ *  run it yet would read as CI-less and promote its first card early. */
+async function mergedSilentPr(number: number) {
+  const headRef = `docs/history-${number}`;
+  await openPrIn(DOCS_REPO_PROVIDER_ID, headRef, number);
+  await githubWebhookService.handleEvent('pull_request', {
+    action: 'closed',
+    installation: { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } },
+    repository: { id: Number(DOCS_REPO_PROVIDER_ID) },
+    pull_request: {
+      number,
+      state: 'closed',
+      merged: true,
+      // GitHub always carries this on a merged pull request, and the
+      // discriminator READS it: a row whose `created_at` postdates its own
+      // `merged_at` was written by the historical backfill, not watched, and is
+      // not evidence. Omitting it here would exercise a shape GitHub never sends.
+      merged_at: new Date().toISOString(),
+      title: `A docs change (${headRef})`,
+      head: { ref: headRef },
+      base: { ref: 'main' },
+      user: { id: 4242 },
+    },
+  });
+}
+
+/** A card whose ONLY delivery is a pull request in `moooon/acme-docs`.
+ *
+ *  Deliberately NOT `cardWithPr`: that helper asserts the card is at
+ *  `implemented` after the delivery, and here the arrival edge is expected to
+ *  promote it straight past that. The status is what each test asserts. */
+async function cardWithDocsPr(
+  s: Awaited<ReturnType<typeof makeScenario>>,
+  title: string,
+  number: number,
+) {
+  const item = await workItemsService.createWorkItem(
+    { projectId: s.project.id, kind: 'task', title },
+    s.ctx,
+  );
+  await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+  await linkPrByIdentifier({
+    identifier: item.identifier,
+    owner: 'moooon',
+    name: 'acme-docs',
+    number,
+    headRef: `subtask/${item.identifier}-docs`,
+    title: `A docs change (subtask/${item.identifier}-docs)`,
+  });
+  await openPrIn(DOCS_REPO_PROVIDER_ID, `subtask/${item.identifier}-docs`, number);
+  return item;
+}
+
+/** Record a check run in `moooon/acme`, so that repository has demonstrably
+ *  reported one — which is what makes a LATER silent pull request there mean
+ *  "not yet", never "no CI". Uses a pull request of its own so the card under
+ *  test keeps an empty check set. */
+async function repoHasReportedBefore(number: number) {
+  await openPr(`chore/unrelated-${number}`, number);
+  await ci({ conclusion: 'success', headSha: `sha-history-${number}`, prNumbers: [number] });
+}
+
+describe('a delivery in a repository that CANNOT report a check counts as green', () => {
+  it('promotes a card whose ONLY delivery is in a CI-less repository', async () => {
+    // The reproduction, reduced: a single-repository `motir-meta` card. Before
+    // MOTIR-3823 this sat at `implemented` for ever — nothing would ever report,
+    // so nothing would ever promote it.
+    const s = await makeScenario('cil-only@example.com');
+    await mergedSilentPr(60);
+
+    const card = await cardWithDocsPr(s, 'a corpus change', 61);
+
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a MIXED set — one passing delivery and one CI-less — promotes', async () => {
+    // The shape the defect was FOUND on (MOTIR-3780): motir-core#2429 green,
+    // motir-meta#334 silent for ever. One `null` was enough to withhold.
+    const s = await makeScenario('cil-mixed@example.com');
+    await mergedSilentPr(62);
+    const card = await cardWithPr(s, 'spans a code repo and a docs repo', 63);
+    await openPrIn(DOCS_REPO_PROVIDER_ID, 'subtask/ACME-1-docs', 64);
+    await alsoDelivers(s, card.id, 64);
+
+    expect(await statusOf(card.id)).toBe('implemented');
+    await ci({ conclusion: 'success', headSha: 'sha-code', prNumbers: [63] });
+
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a passing delivery plus a FAILING one still does not promote', async () => {
+    // The CI-less rule widens what counts as green; it must not weaken what
+    // counts as red. Asserted with the docs repo present so the widening is
+    // live in this scenario.
+    const s = await makeScenario('cil-red@example.com');
+    await mergedSilentPr(65);
+    const card = await cardWithPr(s, 'one repo is red', 66);
+    await openPr('subtask/ACME-1-second', 67);
+    await alsoDelivers(s, card.id, 67);
+
+    await ci({ conclusion: 'failure', headSha: 'sha-red', prNumbers: [67] });
+    await ci({ conclusion: 'success', headSha: 'sha-green', prNumbers: [66] });
+
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+});
+
+describe('a delivery that has simply NOT REPORTED YET is not green — the trap', () => {
+  it('does NOT promote a card whose repository CAN report but has not yet — the ARRIVAL edge', async () => {
+    // THE criterion the naive `null → passing` fix fails. `promoteIfCiAlreadyGreen`
+    // fires the instant a card reaches `implemented`, which a run reaches right
+    // after `gh pr create` — reliably before any check row exists. Reading that
+    // silence as a pass would announce essentially every card in the system
+    // reviewable before its build had spoken.
+    const s = await makeScenario('cil-notyet-arrival@example.com');
+    await repoHasReportedBefore(70);
+
+    const card = await cardWithPr(s, 'its build has not started', 71);
+
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(false);
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+
+  it('does NOT promote when a SIBLING delivery has not reported yet — the CI edge', async () => {
+    // The same question at the other edge. A green pull request WAKES the
+    // promotion; a sibling in a repository that can report and has not yet must
+    // still withhold it. Both edges ask one function of one set, and this is what
+    // asserts they agree rather than assuming it.
+    const s = await makeScenario('cil-notyet-ci@example.com');
+    await repoHasReportedBefore(72);
+    const card = await cardWithPr(s, 'a sibling is still silent', 73);
+    await openPr('subtask/ACME-1-second', 74);
+    await alsoDelivers(s, card.id, 74);
+
+    await ci({ conclusion: 'success', headSha: 'sha-first', prNumbers: [73] });
+
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+
+  it('a repository with NO history at all is not yet CI-less — absence of evidence holds', async () => {
+    // The safe-direction half, and the property that buys out the worse failure.
+    // An OPEN pull request and no check row is exactly what a newly-connected
+    // repository WITH CI looks like in the seconds before its first run reports,
+    // so an untested repository is read as ABLE to report and the card is HELD —
+    // today's behaviour, visible, and self-correcting.
+    const s = await makeScenario('cil-nohistory@example.com');
+
+    const card = await cardWithDocsPr(s, 'the docs repo’s first ever card', 75);
+
+    expect(await statusOf(card.id)).toBe('implemented');
+
+    // …and the repository's first MERGE without a check resolves it: the same
+    // card, re-asked, now promotes.
+    await mergedSilentPr(76);
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(true);
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a BACKFILLED merge is not evidence — a repository connected mid-life still holds', async () => {
+    // The hole the WATCHED clause closes, and it is the worst one available:
+    // `historicalPullRequestBackfillService` mirrors a repository's
+    // PRE-CONNECTION pull requests through the same upsert — merged, with no
+    // check rows, because Motir was not there to receive them. A repository
+    // connected mid-life therefore arrives carrying merged silent rows, and a
+    // rule reading "has a merged pull request with no checks" would call it
+    // CI-less on its first day and promote EVERY one of its cards to In Review
+    // before any build had spoken.
+    //
+    // The tell is on the row: a backfilled one was created long AFTER it merged,
+    // where a watched one was created by the `opened` delivery and predates its
+    // own merge. Built here by aging the row into that shape rather than by
+    // driving the sweep, which needs the GitHub API — the shape is the fact under
+    // test, and it is the exact shape that service produces.
+    const s = await makeScenario('cil-backfilled@example.com');
+    await mergedSilentPr(78);
+    await adminDb.githubPullRequest.updateMany({
+      where: { number: 78 },
+      data: {
+        mergedAt: new Date('2026-01-01T00:00:00.000Z'),
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+      },
+    });
+
+    const card = await cardWithDocsPr(s, 'a card in a mid-life repository', 79);
+
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(false);
+
+    // …and a merge Motir actually WATCHED, in the same repository, does resolve it.
+    await mergedSilentPr(80);
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx)).toBe(true);
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('a card with NO delivery at all is still not green — the empty set is untouched', async () => {
+    // The property MOTIR-3685 asserted and this card must not perturb: there is
+    // nothing to map, so the CI-less rule cannot reach it.
+    const s = await makeScenario('cil-empty@example.com');
+    await mergedSilentPr(77);
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'no pull request' },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+
+    expect(await promoteIfCiAlreadyGreen(item.id, s.ctx)).toBe(false);
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 });

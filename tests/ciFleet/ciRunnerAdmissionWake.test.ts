@@ -87,9 +87,19 @@ async function seedTenant(options: { withRunnerGroup?: boolean } = {}): Promise<
   };
 }
 
+/** The per-call `jobId` counter. `runId` and `runAttempt` are FIXED for the whole
+ *  file, so `@@unique([runId, runAttempt, jobId])` rests entirely on this one
+ *  column — and it used to rest on `randomInt(900)`, i.e. on a birthday draw over
+ *  900 values that collided at a low-single-digit rate per CI run and landed on
+ *  whichever pull request was unlucky (MOTIR-3845). A counter is unique BY
+ *  CONSTRUCTION, and it has the second property that matters: a failure here is
+ *  now reproducible instead of arriving once a fortnight on somebody's branch. */
+let jobSeq = 0;
+
 /** One intent, exactly as MOTIR-1920's webhook handler writes it. `queuedAtMs` is
  *  an offset from {@link QUEUED_AT}, so a caller states the queue ORDER rather
- *  than a clock reading. */
+ *  than a clock reading — and, per {@link jobSeq}, does not have to think about
+ *  the row's IDENTITY either. */
 async function seedIntent(
   fx: Fixture,
   overrides: {
@@ -99,6 +109,7 @@ async function seedIntent(
     jobId?: string;
   } = {},
 ) {
+  jobSeq += 1;
   return adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: fx.workspaceId,
@@ -107,7 +118,7 @@ async function seedIntent(
       installationId: '556677',
       runId: '8001',
       runAttempt: 1,
-      jobId: overrides.jobId ?? String(45000 + randomInt(900)),
+      jobId: overrides.jobId ?? String(45_000 + jobSeq),
       jobName: 'build',
       workflowName: 'CI',
       repoOwner: MOTIR_ORG,
@@ -177,6 +188,32 @@ afterEach(() => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
+});
+
+describe("the fixture's own key space", () => {
+  it('seeds twenty intents in one test without colliding on the unique index', async () => {
+    // MOTIR-3845. This asserts a property of {@link seedIntent}, not of the
+    // service — and it is the assertion that PROVES the fix rather than
+    // restating it. `@@unique([runId, runAttempt, jobId])` with two of the three
+    // columns hardcoded means the whole identity of a seeded row is `jobId`;
+    // under the old `randomInt(900)` draw, twenty rows collide with roughly 20%
+    // probability, so this test would have been red about one run in five. It is
+    // deterministic now because a counter cannot repeat.
+    const fx = await seedTenant();
+
+    const seeded = [];
+    for (let i = 0; i < 20; i += 1) seeded.push(await seedIntent(fx, { queuedAtMs: i * 1_000 }));
+
+    const rows = await adminDb.ciRunnerProvisioningIntent.findMany({
+      where: { workspaceId: fx.workspaceId },
+      select: { runId: true, runAttempt: true, jobId: true },
+    });
+    expect(rows).toHaveLength(20);
+    // `runId` / `runAttempt` are constants here, so distinct `jobId`s ARE
+    // distinct keys — which is exactly why the draw was load-bearing.
+    expect(new Set(rows.map((r) => `${r.runId}/${r.runAttempt}/${r.jobId}`)).size).toBe(20);
+    expect(new Set(seeded.map((intent) => intent.id)).size).toBe(20);
+  });
 });
 
 describe('a freed slot dispatches what was queued behind it', () => {

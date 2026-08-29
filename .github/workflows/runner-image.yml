@@ -55,6 +55,19 @@ jobs:
   runner-image:
     name: Build, assert, prove
     runs-on: ubuntu-latest
+    # Observed 1.7–5.4 min across ten runs of both callers → 20 (~3.7x on the
+    # worst, 5.38 min on ci.yml run 33218152057). The spread is BuildKit cache
+    # warmth, not load: the same job is 1.7 min with a warm layer cache and 5.4
+    # with a cold one, and both are healthy.
+    #
+    # ⚠️ MOTIR-3768's own card cited `1.3 min` here from ci.yml run
+    # 33167406878, where this job was SKIPPED by its path filter — so that
+    # figure measures nothing. The numbers above come from runs where it ran.
+    #
+    # This ceiling has to live HERE — `ci.yml`'s `runner-image` job calls this
+    # workflow with `uses:`, and GitHub does not accept `timeout-minutes` on a
+    # `uses:` job (MOTIR-3768).
+    timeout-minutes: 20
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     steps:

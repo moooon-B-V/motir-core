@@ -48,6 +48,10 @@ jobs:
   version:
     name: Resolve the version
     runs-on: ubuntu-latest
+    # Observed 0.05 min on run 30761169237 → 10 (the short-job floor). It runs
+    # one `jq` over `package.json` and writes an output; the floor is entirely
+    # what bounds it.
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
