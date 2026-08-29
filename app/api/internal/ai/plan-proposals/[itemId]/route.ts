@@ -7,6 +7,7 @@ import {
   NoPlanForJobError,
   PlanItemNotFoundError,
   PlanItemUnknownTargetRepoError,
+  PlanItemUnknownTargetRepoRoleError,
   PlanNotEditableError,
   PlanNotFoundError,
   PlanNotGeneratingError,
@@ -64,6 +65,7 @@ import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@
 //   PlanNotEditableError                  → 409 (the plan is `approved`/`declined`)
 //   UnresolvedPlanRefError                → 422 (a corrected ref names no proposal)
 //   PlanItemUnknownTargetRepoError        → 422 (a repo outside the project's set)
+//   PlanItemUnknownTargetRepoRoleError    → 422 (a role outside the shared vocabulary)
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ itemId: string }> },
@@ -131,6 +133,37 @@ export async function PATCH(
           estimateMinutes: typeof patch.estimateMinutes === 'number' ? patch.estimateMinutes : null,
         }
       : {}),
+    // ⚠️ `explanationMd` and `executor` (MOTIR-3865) — the two keys
+    // `UpdateProposalInput` has DECLARED all along and this parser never read, so
+    // the service accepted them and the transport never supplied them. The
+    // request succeeded, the response was a `200`, and the proposal kept the WHY
+    // it had — invisible from both ends, which is why it survived two doors.
+    //
+    // `explanationMd`: the runbook requires a re-scoped card's rationale to be
+    // rewritten and a `mode: 'correct'` pass is the turn most likely to re-scope
+    // one, so a correction that can change what a card SAYS and not why it EXISTS
+    // is the one shape this route must not have. `lib/mcp/tools/authorPlan.ts` —
+    // the door an EXTERNAL MCP agent uses — has parsed it since it shipped; this
+    // is the same capability for Motir's own hosted planner.
+    //
+    // `executor`: AMENDMENT 4 D3a (MOTIR-3089) put it in the deepen set for a
+    // reason that lands hardest HERE. This route IS the titles-first deepen seam,
+    // where a skeleton proposal gains its `type`; `plansService.materialize`
+    // writes `pf.executor ?? null` and never consults `defaultExecutorForType`,
+    // so a proposal typed on this turn materialized UNASSIGNABLE and nothing on
+    // the way there said so.
+    //
+    // Both read by PRESENCE, like every nullable key above them: absent leaves
+    // the proposal's value alone, an explicit `null` clears it. A non-string
+    // becomes `null`, which is the parser's shipped convention for `type` /
+    // `priority` beside them — this is a thin transport, and the merged values
+    // are re-validated by the service.
+    ...('explanationMd' in patch
+      ? { explanationMd: typeof patch.explanationMd === 'string' ? patch.explanationMd : null }
+      : {}),
+    ...('executor' in patch
+      ? { executor: typeof patch.executor === 'string' ? patch.executor : null }
+      : {}),
   };
 
   try {
@@ -162,7 +195,12 @@ export async function PATCH(
     if (
       err instanceof InvalidProposalError ||
       err instanceof UnresolvedPlanRefError ||
-      err instanceof PlanItemUnknownTargetRepoError
+      err instanceof PlanItemUnknownTargetRepoError ||
+      // The ROLE's refusal, beside the NAME's (MOTIR-3865) — the append route
+      // has mapped it since MOTIR-1912 and this one had nothing to map, because
+      // it carried no role. A correction that pins an unknown role must answer
+      // the same typed 422 the append does, not a 500.
+      err instanceof PlanItemUnknownTargetRepoRoleError
     ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
@@ -200,6 +238,24 @@ function correctionFrom(
       : {}),
     ...('targetRepo' in b
       ? { targetRepo: typeof b.targetRepo === 'string' ? b.targetRepo : null }
+      : {}),
+    // The ROLE half of the pin (MOTIR-3865) — structural, beside the name, and
+    // the one a correction could not reach at all. It matters most exactly where
+    // `targetRepo` cannot help: an ONBOARDING plan's repositories do not exist
+    // when it is generated, so it pins a ROLE and nothing else — and a correction
+    // that could re-pin only the NAME could not correct that plan's pin.
+    //
+    // Sparse like its neighbour: absent leaves the pin alone, an explicit `null`
+    // unpins. The VALUE is narrowed by `plansService.correctProposal` against the
+    // closed role vocabulary (the same `assertKnownRepoRole` the append and a
+    // `modify`'s patch run), so an unrecognised role is a typed 422 rather than a
+    // string smuggled into `proposedFields`.
+    ...('targetRepoRole' in b
+      ? {
+          targetRepoRole: (typeof b.targetRepoRole === 'string'
+            ? b.targetRepoRole
+            : null) as CorrectProposalInput['targetRepoRole'],
+        }
       : {}),
     // ⚠️ `modifyPatch`, NOT `patch` — and the rename is the bug fix, not a
     // preference. On THIS route `patch` has meant the CONTENT bag since the

@@ -1521,6 +1521,27 @@ card SITS or SHIPS_ — is preserved verbatim for the deepen turn. `UpdatePropos
 So `CorrectProposalInput` is a SEPARATE interface carrying `parentRef`, `blockedByRefs`,
 `targetRepo` and a `modify`'s `patch`, reached by a THIRD service method (`correctProposal`).
 
+> **⚠️ AMENDED 2026-08-29 (MOTIR-3865) — the structural set is FIVE, not four: `targetRepoRole`
+> joins it.** The omission was not a decision taken here; it is what a four-item list looks like when
+> the fifth member was never weighed. And it is the member an ONBOARDING plan actually carries: at
+> generation the project's repositories DO NOT EXIST, so a fresh plan pins a ROLE and no name (§5.4 ·
+> `PlanItemProposedFields.targetRepoRole`), and a correction reaching only the NAME could not correct
+> such a plan's pin at all. Validated against the closed role vocabulary rather than the project's
+> rows — the same check the append and a `modify`'s patch run — so it needs no repository to exist,
+> which is the property that makes it sayable this early. The reasoning above is unchanged: a
+> correction reaches where a proposal SHIPS, and a deepen still does not.
+>
+> **The same card closed the mirror hole on the CONTENT half.** `UpdateProposalInput` has declared
+> `explanationMd` (MOTIR-850) and `executor` (AMENDMENT 4 D3a) all along, and the INTERNAL transport —
+> `PATCH /api/internal/ai/plan-proposals/[itemId]`, the door Motir's own hosted planner reaches this
+> service through — read NEITHER off the request body, on either mode. The service accepted them and
+> the transport never supplied them, silently: a `200`, and the proposal keeps what it had. So an
+> external MCP client could rewrite a landed plan's rationale and the product's own agent could not.
+> The guard that ends the class is a DECLARED key constant (`UPDATE_PROPOSAL_KEYS` /
+> `CORRECT_PROPOSAL_KEYS` in `lib/dto/plans.ts`) that the interfaces are held to at compile time and
+> every transport is held to by test — so the next field added to either input fails in the pull
+> request that adds it rather than being found months later by a re-plan that quietly under-delivered.
+
 - **Rejected — widen `UpdateProposalInput`.** It would re-open structure on the deepen path as a
   side effect, which is exactly what D3 was protecting. Two inputs is what keeps both true at once.
 - **D3(c)'s objection is answered rather than overridden.** It rejected a mutable ref graph because
@@ -1571,7 +1592,9 @@ editable surface, because the caller is an agent that can act on being told wher
 ### What this does NOT change
 
 - **`update_plan_item` / `deepenProposal` / `updateProposal`** — untouched, and a vitest gate pins
-  that the deepen input still cannot reach `parentRef`, `blockedByRefs` or `targetRepo`.
+  that the deepen input still cannot reach `parentRef`, `blockedByRefs` or `targetRepo`. (MOTIR-3865
+  adds `targetRepoRole` to the CORRECTION's set and to no other; the deepen's exclusion is unchanged,
+  and the same gate covers it because it is one of the pins §5.4 pairs.)
 - **`CLI_TOKEN_GRANT`** — not widened. `correctProposal` asserts `ai:view_plan`, the same key the
   rest of the author writes assert, so a sandboxed run still cannot author or correct a plan.
 - **What approve materializes**, the resolver, and `PlanItem`'s `@@unique` / cascade shape.

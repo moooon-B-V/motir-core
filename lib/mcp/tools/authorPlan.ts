@@ -10,6 +10,8 @@ import type {
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
+  UpdateProposalKey,
+  CorrectProposalKey,
 } from '@/lib/dto/plans';
 import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -545,6 +547,16 @@ const updatePlanProposalInputSchema = {
       '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s ' +
         'connected repositories; `null` unpins it.',
     ),
+  targetRepoRole: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      '`add` only: re-pin the PORTABLE half of the pin — a ROLE of the project’s repository set, ' +
+        'validated against the closed role vocabulary rather than the project’s rows; `null` unpins ' +
+        'it. This is the pin an ONBOARDING plan actually carries, because its repositories do not ' +
+        'exist yet.',
+    ),
   patch: patchSchema
     .nullable()
     .optional()
@@ -568,6 +580,7 @@ interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
   parentRef?: string | null;
   blockedByRefs?: string[];
   targetRepo?: string | null;
+  targetRepoRole?: string | null;
   patch?: Record<string, unknown> | null;
 }
 
@@ -721,7 +734,7 @@ function summarizeCorrection(
   changed: readonly string[],
 ): string {
   const structural = changed.filter((f) =>
-    ['parentRef', 'blockedByRefs', 'targetRepo', 'patch'].includes(f),
+    ['parentRef', 'blockedByRefs', 'targetRepo', 'targetRepoRole', 'patch'].includes(f),
   );
   return [
     `Corrected proposal ${planItemId} on plan ${plan.id} — ${plan.status}, ` +
@@ -1009,7 +1022,7 @@ export async function runUpdatePlanItem(
     'executor',
     'storyPoints',
     'estimateMinutes',
-  ] as const;
+  ] as const satisfies readonly UpdateProposalKey[];
 
   const input: UpdateProposalInput = {};
   const changed: string[] = [];
@@ -1061,8 +1074,9 @@ export async function runUpdatePlanProposal(
     'parentRef',
     'blockedByRefs',
     'targetRepo',
+    'targetRepoRole',
     'patch',
-  ] as const;
+  ] as const satisfies readonly CorrectProposalKey[];
 
   const input: CorrectProposalInput = {};
   const changed: string[] = [];
@@ -1207,8 +1221,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
       description:
         'Correct a proposal you already appended — the repair for a mistake you can see but ' +
         `could not fix. Unlike \`${UPDATE_PLAN_ITEM_TOOL_NAME}\`, this reaches the STRUCTURAL ` +
-        'fields: `parentRef`, `blockedByRefs`, `targetRepo`, and a `modify` proposal’s `patch` ' +
-        '— which is where a mistyped dependency edge usually sits. Legal while the plan is ' +
+        'fields: `parentRef`, `blockedByRefs`, `targetRepo`, `targetRepoRole`, and a `modify` ' +
+        'proposal’s `patch` — which is where a mistyped dependency edge usually sits. Legal ' +
+        'while the plan is ' +
         '`generating` AND after you have closed it with `final: true`, while it is `planned` ' +
         'and waiting for a reviewer. It is REFUSED once the plan is `approved` (its proposals ' +
         'have become work items, so `update_work_item` is the door — the refusal says so) or ' +

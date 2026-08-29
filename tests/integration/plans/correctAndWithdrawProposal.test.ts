@@ -65,7 +65,7 @@ async function planWithTwoAdds(fx: WorkItemFixture) {
 const row = (id: string) => adminDb.planItem.findUniqueOrThrow({ where: { id } });
 
 describe('a correction reaches the columns the deepen turn excludes', () => {
-  it('changes parentRef, blockedByRefs and targetRepo on a `planned` plan', async () => {
+  it('changes parentRef, blockedByRefs, targetRepo and targetRepoRole on a `planned` plan', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await planWithTwoAdds(fx);
     await plansService.markPlanned(planId, fx.ctx);
@@ -76,6 +76,13 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
       {
         parentRef: `${TEMP_REF_PREFIX}${firstId}`,
         blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
+        // BOTH halves of the repo pin. The NAME's `null` is the unpin, which
+        // needs no repository domain to resolve; the ROLE (MOTIR-3865) is
+        // validated against the closed vocabulary, which needs none either —
+        // that is exactly what makes a role pinnable before any row exists, and
+        // why an ONBOARDING plan carries it and no name at all.
+        targetRepo: null,
+        targetRepoRole: 'api',
       },
       fx.ctx,
     );
@@ -83,6 +90,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
     const corrected = await row(secondId);
     expect(corrected.parentRef).toBe(`${TEMP_REF_PREFIX}${firstId}`);
     expect(corrected.blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${firstId}`]);
+    expect(corrected.proposedFields).toMatchObject({ targetRepo: null, targetRepoRole: 'api' });
   });
 
   it('works on a `generating` plan too — the act, not the status, is what is new', async () => {
@@ -165,7 +173,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
 });
 
 describe('the deepen turn’s contract is UNCHANGED — AMENDMENT 3 D3 still holds for a deepen', () => {
-  it('deepenProposal still cannot reach parentRef, blockedByRefs or targetRepo', async () => {
+  it('deepenProposal still cannot reach parentRef, blockedByRefs, targetRepo or targetRepoRole', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await planWithTwoAdds(fx);
 
@@ -180,6 +188,11 @@ describe('the deepen turn’s contract is UNCHANGED — AMENDMENT 3 D3 still hol
         parentRef: `${TEMP_REF_PREFIX}${firstId}`,
         blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
         targetRepo: 'motir-core',
+        // MOTIR-3865 gave the CORRECTION a `targetRepoRole`; the deepen's
+        // exclusion is unchanged, and both halves of the pin are asserted here
+        // because §5.4 pairs them — an exclusion that names one and not the
+        // other is the shape a later widening slips through.
+        targetRepoRole: 'api',
       } as never,
       fx.ctx,
     );
@@ -189,6 +202,7 @@ describe('the deepen turn’s contract is UNCHANGED — AMENDMENT 3 D3 still hol
     expect(after.parentRef).toBeNull();
     expect(after.blockedByRefs).toEqual([]);
     expect(after.proposedFields).not.toHaveProperty('targetRepo');
+    expect(after.proposedFields).not.toHaveProperty('targetRepoRole');
   });
 });
 
