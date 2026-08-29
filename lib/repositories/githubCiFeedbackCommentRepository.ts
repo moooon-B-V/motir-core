@@ -11,12 +11,12 @@ import { type GithubCiFeedbackComment, type Prisma } from '@/generated/prisma/cl
 // coordinate that key always implied and nothing could hold: which CARD it was
 // posted on.
 //
-// ⚠️ THIS SUPERSEDES `github_check_run.feedback_comment_id`, which is a scalar on
+// ⚠️ THIS SUPERSEDED `github_check_run.feedback_comment_id`, a scalar on
 // a table whose grain is one row PER CHECK. It held one id, replicated across
 // every check row at the commit, so a pull request delivering N cards commented on
-// exactly one of them while writing all N `ciState`s. That column is now RETIRED
-// (MOTIR-3863): nothing reads it, nothing writes it, and it is `@ignore`d out of
-// the generated client while it waits to be dropped. **This table is the only
+// exactly one of them while writing all N `ciState`s. That column is GONE:
+// MOTIR-3863 took it out of the generated client and MOTIR-3803 dropped it.
+// **This table is the only
 // record of a feedback comment's identity** — which is also the cost, and it is
 // the same one the cascade below describes: lose a row and the comment's identity
 // is gone, so the next conclusion posts a fresh one.

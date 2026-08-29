@@ -37,9 +37,8 @@ import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 // per-card coordinate is stored in `github_ci_feedback_comment`, one row per
 // `(pull request, head commit, work item)`, and that is now the ONLY place the
 // comment's identity lives: MOTIR-3863 took the superseded
-// `github_check_run.feedback_comment_id` mirror out of the generated client (the
-// SCHEMA-ONLY phase — the column is still in the database and is written by
-// nothing), so this file neither reads nor writes it
+// `github_check_run.feedback_comment_id` mirror out of the generated client and
+// MOTIR-3803 dropped the column, so this file neither reads nor writes it
 // (`docs/decisions/ci-feedback-comment-per-card.md`,
 // `docs/decisions/delivery-reader-migration.md` §6a). The rest of this note
 // is about the `(changeRequest, headSha)` half, which is unchanged. The
@@ -229,8 +228,8 @@ export async function applyCiStatusFeedback(
 
   // The FIRST delivered card. It is no longer "the card the comment lands on" —
   // the comment reaches EVERY delivered card since MOTIR-3770 — and since
-  // MOTIR-3863 it is no longer the card whose comment is mirrored into the legacy
-  // `github_check_run.feedback_comment_id` column either. It is now ONE thing: the
+  // MOTIR-3863 / MOTIR-3803 there is no legacy
+  // `github_check_run.feedback_comment_id` column to mirror it into. It is now ONE thing: the
   // card this result REPORTS in its scalar `workItemId` field, which callers and
   // tests read.
   const [firstDelivered] = resolved.deliveredWorkItemIds;
@@ -287,7 +286,7 @@ export async function applyCiStatusFeedback(
   // is empty and `every` is therefore vacuously TRUE — it was the only thing
   // stopping a redelivery reporting `noop`. A session pull request writes no
   // comment, so the column stayed null and the guard never fired for one. With the
-  // column gone from the client, that half has to be said out loud: an empty
+  // column dropped outright (MOTIR-3803), that half has to be said out loud: an empty
   // delivery set has commented on nothing and can never be a commented redelivery.
   if (
     resolved.existing &&
