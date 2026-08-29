@@ -17,18 +17,28 @@ import {
   UnknownDispatchRunCardError,
 } from '@/lib/dispatchRuns/errors';
 import type {
+  ActiveDispatchRunDto,
   DispatchRunAppendedDto,
   DispatchRunCardDto,
+  DispatchRunDetailDto,
   DispatchRunDto,
+  DispatchRunEventDto,
   DispatchRunOpenedDto,
 } from '@/lib/dto/dispatchRuns';
-import { toDispatchRunCardDto, toDispatchRunDto } from '@/lib/mappers/dispatchRunMappers';
+import {
+  toDispatchRunCardDto,
+  toDispatchRunDto,
+  toDispatchRunEventDto,
+} from '@/lib/mappers/dispatchRunMappers';
+import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
@@ -133,6 +143,12 @@ export interface CloseDispatchRunInput {
    * caller would otherwise re-implement, differently.
    */
   status?: 'succeeded' | 'failed' | 'cancelled' | 'timed_out' | undefined;
+}
+
+/** The project key a `MOTIR-<n>` identifier belongs to. */
+function projectKeyOf(identifier: string): string {
+  const dash = identifier.lastIndexOf('-');
+  return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
 /** The dispositions a leg can still leave at close. */
@@ -492,6 +508,158 @@ export const dispatchRunService = {
         if (!run) throw new DispatchRunNotFoundError(runId);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
         return toDispatchRunDto(run, seq);
+      },
+    );
+  },
+
+  /**
+   * THE RUN AS THE BROWSER READS IT — the header, its set, and what each leg
+   * SHIPPED (MOTIR-1793).
+   *
+   * ⚠️ THE DELIVERIES ARE JOINED HERE, and that is the whole reason this method
+   * exists beside {@link getRun}. The run record holds no pull-request and no CI
+   * column (ADR Q3), so the page's *did this ship / is it green* comes from
+   * `work_item_delivery` and `derivePrCiState` — the product's ONE CI derivation.
+   * Recomputing it here would be a second verdict that drifts from the pill a
+   * person reads on the same card.
+   *
+   * ONE batched read for the whole set, not one per leg: a sprint run's card set
+   * is not small, and a per-leg read would be an N+1 on the run view's only query.
+   */
+  async getRunDetail(runId: string, ctx: ServiceContext): Promise<DispatchRunDetailDto> {
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
+        if (!run) throw new DispatchRunNotFoundError(runId);
+        const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
+
+        const workItemIds = run.cards
+          .map((card) => card.workItemId)
+          .filter((id): id is string => id !== null);
+        const deliveries = await workItemDeliveryRepository.listByWorkItemsWithChecks(
+          workItemIds,
+          tx,
+        );
+        const byWorkItem = new Map<string, ReturnType<typeof toWorkItemDeliveryDto>[]>();
+        for (const row of deliveries) {
+          const list = byWorkItem.get(row.workItemId) ?? [];
+          list.push(toWorkItemDeliveryDto(row));
+          byWorkItem.set(row.workItemId, list);
+        }
+
+        const base = toDispatchRunDto(run, seq);
+        return {
+          ...base,
+          cards: base.cards.map((card) => ({
+            ...card,
+            // A leg whose card was deleted has no deliveries to join and never
+            // will — an empty array, never a missing key.
+            deliveries: card.workItemId ? (byWorkItem.get(card.workItemId) ?? []) : [],
+          })),
+        };
+      },
+    );
+  },
+
+  /**
+   * ONE CARD'S RUN HISTORY, newest first, cursor-paginated.
+   *
+   * ⚠️ "EVERY RUN THAT CARRIED A LEG FOR THIS CARD", not "every run that NAMED
+   * it" — which is the correct question now that a run covers a set. The sprint
+   * run that swept a card up is exactly the run its owner wants to find, and it
+   * never named the card at all.
+   *
+   * Newest-first is load-bearing rather than a default: the card page's run
+   * section reads the CURRENT run off the first row of the first page, which is
+   * why there is no second single-run endpoint to keep in step with this one.
+   */
+  async listRunsForWorkItemKey(
+    key: string,
+    page: { take: number; cursor?: string | undefined },
+    ctx: ServiceContext,
+  ): Promise<DispatchRunDto[]> {
+    const identifier = key.trim().toUpperCase();
+    const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
+    await projectAccessService.assertCanBrowse(project.id, ctx);
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const item = await workItemRepository.findByIdentifier(project.id, identifier, tx);
+        if (!item) throw new WorkItemNotFoundError(identifier);
+        const runs = await dispatchRunRepository.listByWorkItem(item.id, page, tx);
+        // The `seq` on a HISTORY row is not worth a read per run — the page
+        // renders a list, and a client that opens one asks for its detail.
+        return runs.map((run) => toDispatchRunDto(run, 0));
+      },
+    );
+  },
+
+  /**
+   * A PROJECT'S LIVE RUNS, in ONE request — the `/ready` strip's read.
+   *
+   * ⚠️ IT LOOKS LIKE A CONVENIENCE AND IS NOT. Two surfaces need the same
+   * question answered, and the alternative is each of them filtering a paginated
+   * history client-side and disagreeing about what *active* means. It is also
+   * the shape that keeps `/ready` to ONE request: a per-row endpoint is an N+1
+   * on the busiest surface in the product.
+   *
+   * Narrow by construction — each leg's key and disposition, nothing else.
+   */
+  async listActiveRunsForProject(
+    projectKey: string,
+    ctx: ServiceContext,
+  ): Promise<ActiveDispatchRunDto[]> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertCanBrowse(project.id, ctx);
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const runs = await dispatchRunRepository.listActiveByProject(project.id, tx);
+        return runs.map((run) => ({
+          id: run.id,
+          command: run.command,
+          origin: run.origin,
+          scopeLabel: run.scopeLabel,
+          startedAt: run.startedAt.toISOString(),
+          cards: run.cards.map((card) => ({
+            key: card.workItemKey,
+            disposition: card.disposition,
+          })),
+        }));
+      },
+    );
+  },
+
+  /**
+   * ONE PAGE of the stream, after `sinceSeq` — what the SSE route polls.
+   *
+   * It returns the run's STATUS beside the events on purpose: the stream's
+   * termination condition is *the run reached a terminal status*, and asking for
+   * that separately would open a window in which the last events arrive after
+   * the status says the run is over, so a client's final frames are lost.
+   */
+  async readStreamPage(
+    runId: string,
+    sinceSeq: number,
+    take: number,
+    ctx: ServiceContext,
+  ): Promise<{ events: DispatchRunEventDto[]; status: DispatchRunDto['status'] }> {
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const run = await dispatchRunRepository.findById(runId, tx);
+        if (!run) throw new DispatchRunNotFoundError(runId);
+        const events = await dispatchRunEventRepository.listSince(runId, sinceSeq, take, tx);
+        // ⚠️ THE EVENTS ARE READ AFTER THE STATUS, INSIDE ONE TRANSACTION. Read
+        // the other way round, an event appended between the two reads would be
+        // reported by a page whose status already said `running` — harmless — but
+        // a status read AFTER the events could say `succeeded` while events the
+        // same transaction had not yet seen were already committed, and the
+        // stream would close on top of them.
+        return { events: events.map(toDispatchRunEventDto), status: run.status };
       },
     );
   },

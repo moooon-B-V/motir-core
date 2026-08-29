@@ -99,6 +99,28 @@ export const workItemDeliveryRepository = {
    * completion evaluation drag every check row of every delivery for an answer it
    * never consults.
    */
+  /**
+   * The BATCHED form of {@link listByWorkItemWithChecks} — several cards' delivery
+   * sets WITH their check rows, in ONE query (MOTIR-1793).
+   *
+   * The run view needs *did each leg ship, and is it green* for a whole set at
+   * once, and a per-leg read would be an N+1 on that page's only query. It is
+   * separate from {@link listByWorkItems} for the reason the single-card pair is
+   * separate: the check rows are the expensive half, and the completion gate asks
+   * only *has it merged*.
+   */
+  async listByWorkItemsWithChecks(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemDeliveryWithChecks[]> {
+    if (workItemIds.length === 0) return [];
+    return tx.workItemDelivery.findMany({
+      where: { workItemId: { in: [...workItemIds] } },
+      include: WITH_CHECKS,
+      orderBy: [{ workItemId: 'asc' }, { createdAt: 'asc' }],
+    });
+  },
+
   async listByWorkItemWithChecks(
     workItemId: string,
     tx: Prisma.TransactionClient,

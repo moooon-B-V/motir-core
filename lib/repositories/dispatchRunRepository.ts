@@ -181,6 +181,26 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * A project's LIVE runs — the `/ready` strip's ONE read (MOTIR-1793).
+   *
+   * ⚠️ NOT paginated, and that is the decision rather than an omission. The
+   * population is bounded by how many runs one project has IN FLIGHT, which is a
+   * handful; the alternative — a per-card *"is there a live run?"* endpoint —
+   * is an N+1 acquired on the busiest surface in the product, and the kind that
+   * looks fine with three rows.
+   */
+  async listActiveByProject(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRunWithCards[]> {
+    return tx.dispatchRun.findMany({
+      where: { projectId, status: 'running' },
+      include: WITH_CARDS,
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /**
    * The SWEEP's CROSS-TENANT discovery read (MOTIR-1792): every run still
    * `running` past the cut-off, in ANY workspace, oldest first.
    *

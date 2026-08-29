@@ -1,3 +1,4 @@
+import type { WorkItemDeliveryDto } from '@/lib/dto/github';
 import type {
   DispatchCardDisposition,
   DispatchCommand,
@@ -129,4 +130,44 @@ export interface DispatchRunAppendedDto {
   seq: number;
   /** Every leg this batch moved, so a caller need not re-read the run. */
   cards: DispatchRunCardDto[];
+}
+
+/**
+ * One LEG with its card's DELIVERY SET joined on.
+ *
+ * ⚠️ THE DELIVERIES ARE JOINED, NEVER STORED. The run record holds no
+ * pull-request or CI column at all (ADR Q3), so this shape is where the two
+ * owners meet: the run says what it DID, `work_item_delivery` says what SHIPPED,
+ * and `derivePrCiState` — the one CI derivation in the product — says whether it
+ * is green. A second copy on the run row would be the first place the two could
+ * disagree, and a person would then have two screens with two answers to *did
+ * this ship*.
+ *
+ * Empty is the ordinary answer: a card the run skipped, or one whose agent has
+ * not pushed yet, has no delivery and never had one.
+ */
+export interface DispatchRunCardWithDeliveriesDto extends DispatchRunCardDto {
+  deliveries: WorkItemDeliveryDto[];
+}
+
+/** The run as the BROWSER reads it — the header, its set, and what each leg shipped. */
+export interface DispatchRunDetailDto extends Omit<DispatchRunDto, 'cards'> {
+  cards: DispatchRunCardWithDeliveriesDto[];
+}
+
+/**
+ * One LIVE run in a project, as `/ready`'s strip reads it.
+ *
+ * Deliberately NARROWER than the detail shape: the strip renders a per-row
+ * indicator over a list that can be long, so it needs each leg's KEY and
+ * DISPOSITION and nothing else. Sending the full detail for every live run would
+ * make the busiest surface in the product pay for a run view nobody opened.
+ */
+export interface ActiveDispatchRunDto {
+  id: string;
+  command: DispatchCommand;
+  origin: DispatchRunOrigin;
+  scopeLabel: string | null;
+  startedAt: string;
+  cards: Array<{ key: string | null; disposition: DispatchCardDisposition }>;
 }
