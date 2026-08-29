@@ -62,6 +62,8 @@ jobs:
   guard:
     name: Guard — tag version must equal the @motir/cli version
     runs-on: ubuntu-latest
+    # Observed 0.2–0.3 min across five runs → 10 (~37x, the short-job floor).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Compare the tag against packages/cli/package.json
@@ -141,6 +143,12 @@ jobs:
     # nothing, so there are no digests to read and no release to write about.
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    # NO run on record — it is gated `if: github.event_name == 'push'` and the
+    # five most recent runs of this workflow were dispatches, so it has been
+    # skipped in every one. No observed minutes to quote → 10 min, the
+    # short-job floor taken as a STATED FLOOR rather than a measurement. It
+    # checks out, rewrites one README table and pushes.
+    timeout-minutes: 10
     permissions:
       # The narrowest grant that can land a commit, and nothing else — no
       # `packages:` scope, so this job cannot touch the registry it reads. Scoped

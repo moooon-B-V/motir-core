@@ -50,6 +50,11 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # NO HEALTHY run on record — the single run (28624215359, 2026-07-02)
+    # FAILED after 1.2 min → 15, a STATED FLOOR rather than a measurement,
+    # sized like `release-brand.yml` from the structurally identical
+    # `release-cli.yml` npm publish (1.2–1.4 min observed).
+    timeout-minutes: 15
     env:
       PACKAGE: '@motir/design-system'
       PKG_DIR: packages/design-system
