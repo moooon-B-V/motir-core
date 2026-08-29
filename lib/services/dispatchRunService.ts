@@ -103,35 +103,19 @@ export const DISPATCH_RUN_LIST_DEFAULT_TAKE = 25;
 export const DISPATCH_RUN_LIST_MAX_TAKE = 100;
 
 /**
- * IS THIS RUN STILL GOING? — the live / past partition the runs index reads,
- * stated ONCE and TOTAL over `DispatchRunStatus`.
+ * ⚠️ THE LIVE / PAST PARTITION IS NOT DEFINED HERE — it is re-exported from
+ * `lib/runs/timeline.ts`, and moving it there was MOTIR-1796's doing rather
+ * than a tidy-up.
  *
- * ⚠️ `satisfies Record<DispatchRunStatus, boolean>` is the whole value of
- * writing it as a map rather than as `status === 'running'`. A new status is
- * then a compile error HERE, at the one place that decides which half of the
- * index a run falls into — and the alternative fails in the quietest possible
- * way, by sorting an unknown status into *past* and letting a live run vanish
- * from the surface built to watch it.
- *
- * `timed_out` is terminal on purpose: it is what the abandoned-run reap writes
- * for a run whose machine stopped reporting, so the run is over whatever the
- * process is doing.
+ * This service answers `?status=live|past` on the server; the run SECTION reads
+ * the same question in the BROWSER to decide whether to open a stream at all —
+ * and a service module cannot be imported by a client island, so a copy would
+ * have been the obvious move. Two copies of *is this run still going* is how one
+ * surface comes to believe a run has finished while another still shows it
+ * running, which is the exact class the run surfaces' totality maps exist to
+ * refuse. One definition, in a module with no server imports, read by both.
  */
-const RUN_IS_LIVE = {
-  running: true,
-  succeeded: false,
-  failed: false,
-  cancelled: false,
-  timed_out: false,
-} as const satisfies Record<DispatchRunStatus, boolean>;
-
-const statusesWhere = (live: boolean): DispatchRunStatus[] =>
-  (Object.keys(RUN_IS_LIVE) as DispatchRunStatus[]).filter((s) => RUN_IS_LIVE[s] === live);
-
-/** The statuses a run is still going in — what `?status=live` narrows to. */
-export const DISPATCH_RUN_LIVE_STATUSES = statusesWhere(true);
-/** The statuses a run has finished in — what `?status=past` narrows to. */
-export const DISPATCH_RUN_PAST_STATUSES = statusesWhere(false);
+export { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
 
 /** One card in the SET a run is opened with. */
 export interface OpenDispatchRunCardInput {

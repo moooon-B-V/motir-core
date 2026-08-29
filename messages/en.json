@@ -7177,5 +7177,63 @@
       "reorderConflict": "The list changed while you were moving that step. Reload and try again.",
       "generic": "Something went wrong. Please try again."
     }
+  },
+  "runs": {
+    "title": "Run",
+    "gloss": "what the agent did",
+    "empty": {
+      "title": "Nothing has run yet.",
+      "body": "Dispatch this work item with `motir next`, or its whole story with `motir run <KEY>`, and what the agent does will appear here."
+    },
+    "oneOfN": "This card is {position} of {total} in this run.",
+    "seeWholeRun": "See the whole run →",
+    "reconnecting": "Reconnecting — resuming from where the connection dropped. Nothing has been missed.",
+    "reportingOffline": "This run stopped reporting. The record is incomplete, not the run — check the Development section below for what actually shipped.",
+    "history": {
+      "title": "Recent runs",
+      "more": "Show more"
+    },
+    "step": {
+      "claimed": "Claimed",
+      "checkout": "Checkout ready",
+      "prompt": "Prompt issued",
+      "agent": "Agent running",
+      "exit": "Agent exited",
+      "delivery": "Pull request linked",
+      "settled": "Settled"
+    },
+    "disposition": {
+      "queued": "Queued",
+      "running": "Running",
+      "integrated": "Integrated",
+      "implemented": "Implemented",
+      "failed": "Failed",
+      "replanned": "Re-planned",
+      "skipped": "Skipped",
+      "not_reached": "Not reached"
+    },
+    "runStatus": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "timed_out": "Timed out"
+    },
+    "command": {
+      "next": "motir next",
+      "run": "motir run",
+      "run_scope": "motir run <scope>",
+      "batch": "motir batch",
+      "auto": "motir auto"
+    },
+    "skipReason": {
+      "needsPlanning": "Skipped — needs planning.",
+      "needsHuman": "Skipped — needs a human.",
+      "integratedDep": "Skipped — ready only via an integrated dependency (not on main).",
+      "claimRefused": "Skipped — claimed by somebody else, or no longer claimable.",
+      "replanSubmitted": "Refused by its agent — a re-plan is waiting for you in Motir.",
+      "checkoutUnavailable": "Skipped — its repository could not be cloned.",
+      "blockedInScope": "Skipped — its blockers inside this scope did not land."
+    }
   }
 }
