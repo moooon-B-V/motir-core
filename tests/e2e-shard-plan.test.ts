@@ -169,7 +169,12 @@ describe('E2E bulk-leg shard plan (MOTIR-2617)', () => {
     it('returns null for anything that is not a bulk leg', () => {
       // This is what leaves the a11y / at-scale / billing lanes seeing every
       // file: they set no E2E_SHARD, so the config adds no testMatch at all.
-      for (const id of ['', 'a11y-1', 'board-at-scale', 'bulk-6']) {
+      // The out-of-range sentinel has to stay one PAST the last leg: it was
+      // `bulk-6` while there were five, and MOTIR-3913's 5→8 bump made that a
+      // real leg — so this case started asserting that a live leg matches
+      // nothing. Bump it with the leg count, or derive it, but never leave it
+      // naming a leg that exists.
+      for (const id of ['', 'a11y-1', 'board-at-scale', `bulk-${BULK_LEG_IDS.length + 1}`]) {
         expect(legTestMatch(id), id).toBeNull();
       }
     });
