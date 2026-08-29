@@ -580,22 +580,46 @@ jobs:
           include-hidden-files: true
 
   test:
-    # Sharded matrix (MOTIR-1705): ~235 test files split across 3 runners,
-    # each with its own Postgres service container and per-worker DB isolation
-    # (MOTIR-754). Wall clock goes from the slowest file in the batch (~8–10 min)
-    # to the slowest shard (~2–3 min). Coverage runs separately in the `coverage`
-    # job below to avoid cross-shard merge complexity.
+    # Sharded matrix (MOTIR-1705, re-sized by MOTIR-3902): ~1360 test files
+    # split across 8 runners, each with its own Postgres service container and
+    # per-worker DB isolation (MOTIR-754). Coverage runs separately in the
+    # `coverage` job below to avoid cross-shard merge complexity.
+    #
+    # ⚠️ WHY THE SHARD COUNT IS THE ONLY LEVER THIS LANE HAS. Parallelism INSIDE
+    # a leg is pinned to `TEST_DB_WORKERS` = `min(availableParallelism(), 8)`
+    # (tests/helpers/parallelDb.ts), and `availableParallelism()` on
+    # `ubuntu-latest` is 4 — so a leg gets 4 workers no matter what this file
+    # says. Measured on run 33244655199: 86% of that 4-worker capacity was
+    # already busy (4804s of worker-CPU against 1400s of wall), the slowest
+    # single file was 86s against a mean of 8.7s, and the three legs ran within
+    # 19% of each other. There is no idle capacity, no long pole and no
+    # imbalance left to recover inside a leg; more legs is what remains.
+    #
+    # Sized at 8 rather than 4 because the runners are free: every job on run
+    # 33245258081 started within 0.1 min of being created, so a leg added here
+    # is a leg that runs immediately rather than one that queues behind the
+    # others. The trade is per-leg fixed cost — checkout + Postgres + install +
+    # `migrate deploy` is ~75s — which at 8 legs adds ~6 runner-minutes to a
+    # ~74-runner-minute lane while cutting its WALL clock from ~24 min to ~10.
     name: Vitest (${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
-    # Observed 20.1–24.9 min across three shards and four green runs → 75
-    # (~3x the slowest ordinary shard). ⚠️ THE MULTIPLE IS NOT THE BINDING
+    # Observed 20.1–24.9 min per leg across three shards and four green runs
+    # AT THE OLD 3-SHARD MEMBERSHIP; at 8 the same work per leg is ~10 min.
+    # The ceiling STAYS AT 75 anyway, and deliberately, because the number was
+    # never derived from the membership. ⚠️ THE MULTIPLE IS NOT THE BINDING
     # CONSTRAINT HERE — the outlier is. `Vitest (2/3)` ran 47.5 minutes on run
     # 32959226187 and PASSED, with every CPU-bound phase the same or faster
     # than the 19-minute run before it and the entire delta inside test
     # execution: an environment effect, never root-caused, and explicitly not
-    # this job's to fix. 75 clears that run by 1.6x, so it would still have
+    # this job's to fix. Nothing about splitting the files eight ways rules that
+    # effect out — it is the runner, not the batch — so the floor it sets
+    # survives the re-size, and `tests/ci-job-timeouts.test.ts` still pins this
+    # ceiling above it. 75 clears that run by 1.6x, so it would still have
     # passed. 45 — the number `e2e` uses — would have FAILED it, which is the
-    # reason this ceiling is not simply copied from the lane next door.
+    # reason this ceiling is not simply copied from the lane next door. It is
+    # now ~7.5x an ordinary leg, which is loose; a ceiling bounds a hang and is
+    # not a performance target, and buying tightness here would cost the one
+    # green run on record that it has to clear.
     timeout-minutes: 75
     needs: changes
     # Skip the integration suite when the diff touches only documentation,
@@ -609,8 +633,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-        total: [3]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        total: [8]
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
