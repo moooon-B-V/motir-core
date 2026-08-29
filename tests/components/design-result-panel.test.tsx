@@ -72,8 +72,12 @@ describe('nothing published yet', () => {
 
     expect(screen.getByText('No design result published yet')).toBeTruthy();
     // It says where a result comes from, so nobody hunts for an upload control.
-    expect(screen.getByText(/runs CI/)).toBeTruthy();
-    expect(screen.getByText(/Nothing to upload/)).toBeTruthy();
+    // ⚠️ It must name the AGENT'S publish, and it must not name CI (MOTIR-3819):
+    // the lane MOTIR-3797 deleted is what the old copy described, and a reader
+    // told to wait for a pull request to run CI waits for ever.
+    expect(screen.getByText(/publish_design_result/)).toBeTruthy();
+    expect(screen.getByText(/the call was not made/)).toBeTruthy();
+    expect(screen.queryByText(/runs CI/)).toBeNull();
     // Not an error surface: no retry, no warning.
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
@@ -81,7 +85,10 @@ describe('nothing published yet', () => {
   it('tells a NON-design card the same thing in its own words', () => {
     render(<DesignResultPanel evidence={null} isDesignCard={false} />);
     expect(screen.getByText('No design result published yet')).toBeTruthy();
-    expect(screen.queryByText(/Nothing to upload/)).toBeNull();
+    // The shorter arm: same claim, no tool name and no three-file detail.
+    expect(screen.getByText(/the agent working this card publishes it/)).toBeTruthy();
+    expect(screen.queryByText(/publish_design_result/)).toBeNull();
+    expect(screen.queryByText(/runs CI/)).toBeNull();
   });
 });
 
