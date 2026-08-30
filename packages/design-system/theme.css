@@ -554,74 +554,88 @@
    overrides `--el-*`, never `--color-*`, so reading `--el-*` here is what keeps
    the glass orthogonal to the palette. The gradient is what the frosted panels
    blur — without it, the blur is invisible. */
-[data-style='glassmorphism'] body {
-  background-image:
-    radial-gradient(
-      85% 80% at 6% -12%,
-      color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-      transparent 62%
-    ),
-    radial-gradient(
-      80% 75% at 110% 4%,
-      color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      95% 90% at 50% 120%,
-      color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
-      transparent 62%
-    ),
-    radial-gradient(
-      60% 60% at 85% 95%,
-      color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-      transparent 60%
-    );
-  background-attachment: fixed;
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  body {
+    background-image:
+      radial-gradient(
+        85% 80% at 6% -12%,
+        color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+        transparent 62%
+      ),
+      radial-gradient(
+        80% 75% at 110% 4%,
+        color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        95% 90% at 50% 120%,
+        color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
+        transparent 62%
+      ),
+      radial-gradient(
+        60% 60% at 85% 95%,
+        color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+        transparent 60%
+      );
+    background-attachment: fixed;
+  }
 }
 
 /* Frosted container surfaces — cards & popovers float as translucent sheets. */
-[data-style='glassmorphism'] [data-surface='card'],
-[data-style='glassmorphism'] [data-surface='popover'] {
-  /* The translucent fill lets the vibrant canvas through; the linear sheen is
-     the light raking across the glass (top-left → fading), the inset RIM is the
-     lit glass edge, and the soft drop makes the sheet FLOAT. White light is
-     palette-agnostic; the colour still comes only from the palette-derived
-     fill/border, so the axes stay disjoint. */
-  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
-  background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
-  border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-  box-shadow:
-    inset 0 1px 0 0 var(--glass-rim),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 8px 32px -8px rgba(15, 15, 15, 0.18);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'] {
+    /* The translucent fill lets the vibrant canvas through; the linear sheen is
+       the light raking across the glass (top-left → fading), the inset RIM is the
+       lit glass edge, and the soft drop makes the sheet FLOAT. White light is
+       palette-agnostic; the colour still comes only from the palette-derived
+       fill/border, so the axes stay disjoint. */
+    background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
+    background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
+    border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+    box-shadow:
+      inset 0 1px 0 0 var(--glass-rim),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 8px 32px -8px rgba(15, 15, 15, 0.18);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
 }
 
 /* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
-[data-style='glassmorphism'] [data-surface='modal'] {
-  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
-  background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
-  border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-  box-shadow:
-    inset 0 1px 0 0 var(--glass-rim),
-    0 28px 70px -16px rgba(15, 15, 15, 0.34);
-  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
+    background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
+    border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+    box-shadow:
+      inset 0 1px 0 0 var(--glass-rim),
+      0 28px 70px -16px rgba(15, 15, 15, 0.34);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+  }
 }
 
 /* The sidebar rail — frosted chrome over the canvas. */
-[data-style='glassmorphism'] [data-surface='sidebar'] {
-  background-color: color-mix(in srgb, var(--el-sidebar-bg) var(--glass-chrome-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: color-mix(
+      in srgb,
+      var(--el-sidebar-bg) var(--glass-chrome-alpha),
+      transparent
+    );
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
 }
 
 /* Form controls — a translucent fill so inputs read as glass too. */
-[data-style='glassmorphism'] [data-surface='input'] {
-  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
 }
 
 /* The MODAL / command-palette BACKDROP — the most important glass surface, since
@@ -629,10 +643,12 @@
    light, palette-derived veil + a page BLUR, so the whole page behind frosts and
    the (also-frosted) modal panel refracts it — the proper glass-modal look.
    Overrides the primitives' `bg-black/40` utility. Palette-derived (no hue). */
-[data-style='glassmorphism'] [data-surface='overlay'] {
-  background-color: color-mix(in srgb, var(--el-page-bg) 24%, transparent);
-  -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
-  backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='overlay'] {
+    background-color: color-mix(in srgb, var(--el-page-bg) 24%, transparent);
+    -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -711,8 +727,10 @@
    descendant rule, not a bare token block, so the disjoint-axis test (which
    inspects token blocks) does not treat it as one — and it sets no colour
    anyway, so the two axes stay disjoint regardless. */
-[data-style='neo-brutalism'] .border {
-  border-width: 2px;
+@scope ([data-style='neo-brutalism']) to ([data-style]) {
+  .border {
+    border-width: 2px;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -795,12 +813,14 @@
    so it adapts to the active palette and sits BEHIND content (text never
    renders on it), keeping AA intact. Dark-first — on the dark theme this reads
    as a Tron grid over the near-black canvas. */
-[data-style='cybercore-y2k'] body {
-  background-image:
-    linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
-  background-position: center top;
+@scope ([data-style='cybercore-y2k']) to ([data-style]) {
+  body {
+    background-image:
+      linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: center top;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -897,31 +917,33 @@
    `--el-*`, never `--color-*`, which is what keeps the aurora orthogonal to the
    palette. background-size > 100% gives the gradient room to drift; the whole
    field eases back and forth over `--aurora-drift-duration`. */
-[data-style='aurora'] body {
-  background-image:
-    radial-gradient(
-      58% 75% at 12% 0%,
-      color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      54% 70% at 92% 8%,
-      color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
-      transparent 58%
-    ),
-    radial-gradient(
-      68% 82% at 62% 104%,
-      color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
-      transparent 62%
-    ),
-    radial-gradient(
-      48% 64% at 34% 58%,
-      color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
-      transparent 55%
-    );
-  background-size: 180% 180%;
-  background-attachment: fixed;
-  animation: aurora-drift var(--aurora-drift-duration) ease-in-out infinite alternate;
+@scope ([data-style='aurora']) to ([data-style]) {
+  body {
+    background-image:
+      radial-gradient(
+        58% 75% at 12% 0%,
+        color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        54% 70% at 92% 8%,
+        color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
+        transparent 58%
+      ),
+      radial-gradient(
+        68% 82% at 62% 104%,
+        color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
+        transparent 62%
+      ),
+      radial-gradient(
+        48% 64% at 34% 58%,
+        color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
+        transparent 55%
+      );
+    background-size: 180% 180%;
+    background-attachment: fixed;
+    animation: aurora-drift var(--aurora-drift-duration) ease-in-out infinite alternate;
+  }
 }
 
 @keyframes aurora-drift {
@@ -944,8 +966,10 @@
 /* Respect a reduced-motion preference — the aurora settles to a still gradient
    (the identity holds; only the drift stops). */
 @media (prefers-reduced-motion: reduce) {
-  [data-style='aurora'] body {
-    animation: none;
+  @scope ([data-style='aurora']) to ([data-style]) {
+    body {
+      animation: none;
+    }
   }
 }
 
@@ -955,43 +979,49 @@
    rather than lifted by a hard shadow. The sheen sits on background-image over
    the opaque background-color, so it never pulls the surface far enough from its
    base tone to threaten contrast. */
-[data-style='aurora'] [data-surface='card'],
-[data-style='aurora'] [data-surface='popover'] {
-  background-color: var(--el-surface);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
-    transparent 42%
-  );
-  box-shadow:
-    var(--shadow-card),
-    0 0 26px -8px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
-    0 0 40px -14px color-mix(in srgb, var(--el-link) var(--aurora-glow), transparent);
+@scope ([data-style='aurora']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'] {
+    background-color: var(--el-surface);
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
+      transparent 42%
+    );
+    box-shadow:
+      var(--shadow-card),
+      0 0 26px -8px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+      0 0 40px -14px color-mix(in srgb, var(--el-link) var(--aurora-glow), transparent);
+  }
 }
 
 /* Modal panel — opaque, with a deeper glow so the dialog separates cleanly from
    the drifting canvas behind it (and body text stays on the solid surface). */
-[data-style='aurora'] [data-surface='modal'] {
-  background-color: var(--el-surface);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
-    transparent 38%
-  );
-  box-shadow:
-    var(--shadow-modal),
-    0 0 60px -16px color-mix(in srgb, var(--el-accent) var(--aurora-glow-strong), transparent);
+@scope ([data-style='aurora']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: var(--el-surface);
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
+      transparent 38%
+    );
+    box-shadow:
+      var(--shadow-modal),
+      0 0 60px -16px color-mix(in srgb, var(--el-accent) var(--aurora-glow-strong), transparent);
+  }
 }
 
 /* The sidebar rail — opaque chrome carrying the faint aurora sheen so it reads as
    part of the lit surface family, not a flat slab. */
-[data-style='aurora'] [data-surface='sidebar'] {
-  background-color: var(--el-sidebar-bg);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--el-accent) var(--aurora-sheen), transparent),
-    transparent 30%
-  );
+@scope ([data-style='aurora']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-sidebar-bg);
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-accent) var(--aurora-sheen), transparent),
+      transparent 30%
+    );
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1086,24 +1116,26 @@
    rule test passes: a palette swap re-tints the atmosphere, a style swap leaves
    hues alone. This is what makes the table/list/board pages (no card surfaces of
    their own) read as immersive too. */
-[data-style='3d-immersive'] body {
-  background-image:
-    radial-gradient(
-      130% 85% at 50% -15%,
-      color-mix(in srgb, var(--el-accent) 9%, transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      95% 75% at 108% 112%,
-      color-mix(in srgb, var(--el-link) 8%, transparent),
-      transparent 55%
-    ),
-    radial-gradient(
-      150% 130% at 50% 42%,
-      transparent 52%,
-      color-mix(in srgb, var(--el-text) 8%, transparent)
-    );
-  background-attachment: fixed;
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  body {
+    background-image:
+      radial-gradient(
+        130% 85% at 50% -15%,
+        color-mix(in srgb, var(--el-accent) 9%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        95% 75% at 108% 112%,
+        color-mix(in srgb, var(--el-link) 8%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        150% 130% at 50% 42%,
+        transparent 52%,
+        color-mix(in srgb, var(--el-text) 8%, transparent)
+      );
+    background-attachment: fixed;
+  }
 }
 
 /* EVERY PANEL FLOATS — systematic depth across the WHOLE app, not just the
@@ -1118,11 +1150,15 @@
    Per-surface exceptions (the board column's clip-safe shadow, modals) override
    below by source order. Modals carry their own deeper shadow via the modal
    radius (next rule). */
-[data-style='3d-immersive'] .rounded-\(--radius-card\) {
-  box-shadow: var(--shadow-card);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  .rounded-\(--radius-card\) {
+    box-shadow: var(--shadow-card);
+  }
 }
-[data-style='3d-immersive'] .rounded-\(--radius-modal\) {
-  box-shadow: var(--shadow-modal);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  .rounded-\(--radius-modal\) {
+    box-shadow: var(--shadow-modal);
+  }
 }
 
 /* 3D / Immersive — the POINTER-PARALLAX TILT (the standard "3D card" effect,
@@ -1147,10 +1183,12 @@
      never establishes a transform stacking context that could reposition a
      non-portaled fixed/absolute descendant. On leave the engine drops the
      attribute and the transform eases back to none over 400ms. */
-  [data-style='3d-immersive'] [data-tilt] {
-    transition:
-      transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 260ms ease-out;
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-tilt] {
+      transition:
+        transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 260ms ease-out;
+    }
   }
   /* While the pointer is over the tile the engine sets data-tilt-active='1':
      tip it toward the cursor (the per-tile --tilt-rx/ry the engine writes),
@@ -1159,14 +1197,16 @@
      establish a 3D context (`preserve-3d`) so the card's slots can sit on
      separate translateZ planes and PARALLAX (a flat-plane tilt without this is
      the "halfway / flat-3D mix" tell). `position: relative` anchors the glare. */
-  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] {
-    transform: perspective(var(--tilt-perspective, 900px)) rotateX(var(--tilt-rx, 0deg))
-      rotateY(var(--tilt-ry, 0deg));
-    transform-style: preserve-3d;
-    transition:
-      transform 80ms linear,
-      box-shadow 260ms ease-out;
-    box-shadow: var(--shadow-elevated);
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-tilt][data-tilt-active='1'] {
+      transform: perspective(var(--tilt-perspective, 900px)) rotateX(var(--tilt-rx, 0deg))
+        rotateY(var(--tilt-ry, 0deg));
+      transform-style: preserve-3d;
+      transition:
+        transform 80ms linear,
+        box-shadow 260ms ease-out;
+      box-shadow: var(--shadow-elevated);
+    }
   }
 
   /* DEPTH PLANES — the card's slots lift onto different translateZ planes so
@@ -1175,13 +1215,17 @@
      content never renders skewed). Only while actively tilting, so a resting
      card is perfectly flat. This is the standard layered-parallax technique
      (vanilla-tilt / Atropos): perspective + preserve-3d + per-layer translateZ. */
-  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] [data-tilt-layer='front'] {
-    transform: translateZ(42px);
-    transition: transform 80ms linear;
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-tilt][data-tilt-active='1'] [data-tilt-layer='front'] {
+      transform: translateZ(42px);
+      transition: transform 80ms linear;
+    }
   }
-  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] [data-tilt-layer='back'] {
-    transform: translateZ(14px);
-    transition: transform 80ms linear;
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-tilt][data-tilt-active='1'] [data-tilt-layer='back'] {
+      transform: translateZ(14px);
+      transition: transform 80ms linear;
+    }
   }
 
   /* GLARE — a cursor-tracked specular sweep across the face (the light catching
@@ -1189,33 +1233,39 @@
      hue → passes the material-rule test; a palette swap re-tints the sheen). It
      rides a high translateZ so it reads as light on the front glass, fades in
      only while active, and never eats pointer events. */
-  [data-style='3d-immersive'] [data-tilt]::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(
-      circle at var(--tilt-glare-x, 50%) var(--tilt-glare-y, 50%),
-      color-mix(in srgb, var(--el-page-bg) 65%, transparent),
-      transparent 55%
-    );
-    opacity: 0;
-    transition: opacity 200ms ease-out;
-    pointer-events: none;
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-tilt]::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        circle at var(--tilt-glare-x, 50%) var(--tilt-glare-y, 50%),
+        color-mix(in srgb, var(--el-page-bg) 65%, transparent),
+        transparent 55%
+      );
+      opacity: 0;
+      transition: opacity 200ms ease-out;
+      pointer-events: none;
+    }
   }
-  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1']::after {
-    opacity: 0.45;
-    /* Just above the card FACE but BELOW the popped header/footer planes, so it
-       lights the surface without washing the floating title. */
-    transform: translateZ(2px);
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-tilt][data-tilt-active='1']::after {
+      opacity: 0.45;
+      /* Just above the card FACE but BELOW the popped header/footer planes, so it
+         lights the surface without washing the floating title. */
+      transform: translateZ(2px);
+    }
   }
 }
 
 /* `position: relative` anchors the glare ::after to each tile. Static (outside
    the motion gate) so the anchor is stable; the glare itself only shows while
    tilting (above). */
-[data-style='3d-immersive'] [data-tilt] {
-  position: relative;
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-tilt] {
+    position: relative;
+  }
 }
 
 /* ── 3D / Immersive — BOARD COLUMNS ─────────────────────────────────────────
@@ -1226,33 +1276,37 @@
    clip/occlusion-safe float shadow (small horizontal bleed, modest drop), and
    the scroll row widens its gap + adds bottom room so the shadow shows. Result:
    each column floats as its own distinct card. */
-[data-style='3d-immersive'] [data-board-col-panel] {
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
-    0 1px 3px rgba(15, 15, 15, 0.08),
-    0 8px 18px -8px rgba(15, 15, 15, 0.22);
-  /* The column is `h-[calc(100dvh - 10.5rem - var(--shell-bottom-clearance))]` —
-     sized to fill the board area. In the `overflow-x-auto` row that
-     exactly-filling height means the column's rounded BOTTOM corner + its drop
-     shadow sit at the overflow-clip boundary and get sheared flat (the reported
-     "sharp bottom corner"). Trim the height by a further 2.5rem so the rounded
-     corner + shadow clear the clip and the column reads as a fully-rounded
-     floating card. Also clip the column's OWN children to its radius so a flush
-     inner surface can't square a corner — the board cards pop on hover but the
-     DragOverlay clone is portaled, so nothing 3D is lost.
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-board-col-panel] {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
+      0 1px 3px rgba(15, 15, 15, 0.08),
+      0 8px 18px -8px rgba(15, 15, 15, 0.22);
+    /* The column is `h-[calc(100dvh - 10.5rem - var(--shell-bottom-clearance))]` —
+       sized to fill the board area. In the `overflow-x-auto` row that
+       exactly-filling height means the column's rounded BOTTOM corner + its drop
+       shadow sit at the overflow-clip boundary and get sheared flat (the reported
+       "sharp bottom corner"). Trim the height by a further 2.5rem so the rounded
+       corner + shadow clear the clip and the column reads as a fully-rounded
+       floating card. Also clip the column's OWN children to its radius so a flush
+       inner surface can't square a corner — the board cards pop on hover but the
+       DragOverlay clone is portaled, so nothing 3D is lost.
 
-     ⚠️ This tracks BoardColumn's height and must keep spending the same
-     `--shell-bottom-clearance` the shell sets (MOTIR-2763), not a flat number:
-     a stylesheet cannot read the `showPlanWithAi` prop, so the custom property
-     is the only way this stays conditional on the orb actually mounting. The
-     13rem below is 10.5rem of chrome + this style's own 2.5rem trim. */
-  height: calc(100dvh - 13rem - var(--shell-bottom-clearance, 1.5rem));
-  overflow: hidden;
+       ⚠️ This tracks BoardColumn's height and must keep spending the same
+       `--shell-bottom-clearance` the shell sets (MOTIR-2763), not a flat number:
+       a stylesheet cannot read the `showPlanWithAi` prop, so the custom property
+       is the only way this stays conditional on the orb actually mounting. The
+       13rem below is 10.5rem of chrome + this style's own 2.5rem trim. */
+    height: calc(100dvh - 13rem - var(--shell-bottom-clearance, 1.5rem));
+    overflow: hidden;
+  }
 }
-[data-style='3d-immersive'] [data-board-scroll] {
-  gap: 1.5rem;
-  padding-bottom: 2.25rem;
-  padding-top: 0.25rem;
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-board-scroll] {
+    gap: 1.5rem;
+    padding-bottom: 2.25rem;
+    padding-top: 0.25rem;
+  }
 }
 
 /* ── 3D / Immersive — CONTROL DEPTH: every control sits on a named plane ────
@@ -1317,7 +1371,7 @@
    The `.justify-center` limb is the square icon-button shape: a centred control
    on the control radius is a key (the 3-dots trigger, the fullscreen toggle,
    every close ×). A row is never centred — it is `w-full` and `text-left`. */
-[data-style='3d-immersive']
+@scope ([data-style='3d-immersive']) to ([data-style]) {
   :where(
     .rounded-\(--radius-btn\),
     button.rounded-\(--radius-input\),
@@ -1333,27 +1387,34 @@
       [data-depth='flat']
     )
   ) {
-  box-shadow:
-    0 3px 0 0 var(--el-border-strong),
-    0 5px 10px -3px rgba(15, 15, 15, 0.18);
-  transition:
-    transform 90ms ease-out,
-    box-shadow 90ms ease-out,
-    background-color var(--transition-duration);
+    box-shadow:
+      0 3px 0 0 var(--el-border-strong),
+      0 5px 10px -3px rgba(15, 15, 15, 0.18);
+    transition:
+      transform 90ms ease-out,
+      box-shadow 90ms ease-out,
+      background-color var(--transition-duration);
+  }
 }
-[data-style='3d-immersive'] [data-variant='primary'] {
-  box-shadow:
-    0 4px 0 0 var(--el-accent-pressed),
-    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-variant='primary'] {
+    box-shadow:
+      0 4px 0 0 var(--el-accent-pressed),
+      0 7px 12px -3px rgba(15, 15, 15, 0.32);
+  }
 }
-[data-style='3d-immersive'] [data-variant='danger'] {
-  box-shadow:
-    0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
-    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-variant='danger'] {
+    box-shadow:
+      0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+      0 7px 12px -3px rgba(15, 15, 15, 0.32);
+  }
 }
 /* Ghost — the deliberately-flat quiet button; no thickness. */
-[data-style='3d-immersive'] [data-variant='ghost'] {
-  box-shadow: none;
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-variant='ghost'] {
+    box-shadow: none;
+  }
 }
 
 /* THE FLAT SET — rows, chips and switches, which §4 keeps on their parent's
@@ -1361,7 +1422,7 @@
    (0,1,0) wherever the two overlap (a centred control inside an open menu, a
    `data-depth='flat'` icon button). A menu row raised inside an already-floating
    popover reads as debris, not depth — the overlay is the thing that floats. */
-[data-style='3d-immersive']
+@scope ([data-style='3d-immersive']) to ([data-style]) {
   :is(
     [role='menuitem'],
     [role='option'],
@@ -1370,50 +1431,57 @@
     [role='switch'],
     [data-depth='flat']
   ),
-[data-style='3d-immersive']
-  :is([data-surface='popover'], [data-menu-surface])
-  :is(button, a).rounded-\(--radius-control\),
-[data-style='3d-immersive'] :is(button, a).w-full.rounded-\(--radius-control\) {
-  box-shadow: none;
+  :is([data-surface='popover'], [data-menu-surface]) :is(button, a).rounded-\(--radius-control\),
+  :is(button, a).w-full.rounded-\(--radius-control\) {
+    box-shadow: none;
+  }
 }
 
 /* THE PRESS — the raised set drops by its thickness and the base edge
    compresses, like a real key. Overrides the base `active:scale`. */
-[data-style='3d-immersive']
+@scope ([data-style='3d-immersive']) to ([data-style]) {
   :where(
-    .rounded-\(--radius-btn\),
-    button.rounded-\(--radius-input\),
-    :is(button, a).rounded-\(--radius-control\).justify-center,
-    [data-depth='key']
-  ):active:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow:
-    0 1px 0 0 var(--el-border-strong),
-    0 2px 4px rgba(15, 15, 15, 0.14);
+      .rounded-\(--radius-btn\),
+      button.rounded-\(--radius-input\),
+      :is(button, a).rounded-\(--radius-control\).justify-center,
+      [data-depth='key']
+    ):active:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow:
+      0 1px 0 0 var(--el-border-strong),
+      0 2px 4px rgba(15, 15, 15, 0.14);
+  }
 }
-[data-style='3d-immersive'] [data-variant='primary']:active:not(:disabled) {
-  box-shadow:
-    0 1px 0 0 var(--el-accent-pressed),
-    0 2px 5px rgba(15, 15, 15, 0.22);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-variant='primary']:active:not(:disabled) {
+    box-shadow:
+      0 1px 0 0 var(--el-accent-pressed),
+      0 2px 5px rgba(15, 15, 15, 0.22);
+  }
 }
-[data-style='3d-immersive'] [data-variant='danger']:active:not(:disabled) {
-  box-shadow:
-    0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
-    0 2px 5px rgba(15, 15, 15, 0.22);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-variant='danger']:active:not(:disabled) {
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+      0 2px 5px rgba(15, 15, 15, 0.22);
+  }
 }
-[data-style='3d-immersive'] [data-variant='ghost']:active:not(:disabled) {
-  box-shadow: none;
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  [data-variant='ghost']:active:not(:disabled) {
+    box-shadow: none;
+  }
 }
 
 /* THE QUIET PRESS — a control with no resting thickness still has to answer the
    pointer, or the style reads as flat wherever it is not a key: menu rows, list
    rows, nav links, inline affordances, the ghost button. One pixel of travel is
    the whole treatment; it is what separates "quiet" from "inert". */
-[data-style='3d-immersive']
+@scope ([data-style='3d-immersive']) to ([data-style]) {
   :where(:is(button, a).rounded-\(--radius-control\), [data-variant='ghost']):active:not(
-    :disabled
-  ) {
-  transform: translateY(1px);
+      :disabled
+    ) {
+    transform: translateY(1px);
+  }
 }
 
 /* THE RECESSED SET — text fields are pressed INTO the surface, not raised off
@@ -1424,16 +1492,17 @@
    not a copy of it. `[data-surface='input']` is the Input primitive's shell;
    the bare element selectors catch the hand-rolled fields. Checkbox and radio
    are excluded: they are chips, not wells. */
-[data-style='3d-immersive']
+@scope ([data-style='3d-immersive']) to ([data-style]) {
   :where(
     [data-surface='input'],
     input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
     textarea,
     select
   ) {
-  box-shadow:
-    inset 0 2px 6px -2px rgba(15, 15, 15, 0.26),
-    inset 0 1px 2px 0 rgba(15, 15, 15, 0.05);
+    box-shadow:
+      inset 0 2px 6px -2px rgba(15, 15, 15, 0.26),
+      inset 0 1px 2px 0 rgba(15, 15, 15, 0.05);
+  }
 }
 
 /* Hero controls paint their own shadow in an INLINE style, which beats every
@@ -1452,18 +1521,20 @@
    override every shape role. A descendant rule is neither, which is where the
    immersive background (which reads `--el-*` for the same reason) already
    lives. Custom properties inherit, so every control below `body` sees these. */
-[data-style='3d-immersive'] body {
-  --plan-hero-shadow:
-    0 4px 0 0 var(--el-accent-pressed),
-    inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
-    0 9px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
-    0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
-  --plan-orb-shadow:
-    0 5px 0 0 var(--el-accent-pressed),
-    inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
-    0 12px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
-    0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  body {
+    --plan-hero-shadow:
+      0 4px 0 0 var(--el-accent-pressed),
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+      0 9px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+      0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+    --plan-orb-shadow:
+      0 5px 0 0 var(--el-accent-pressed),
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+      0 12px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+      0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+  }
 }
 
 /* ── 3D / Immersive — DROPDOWNS / POPOVERS / MENUS unfold in 3D ──────────────
@@ -1489,22 +1560,28 @@
    rule above would otherwise flatten any `shadow-(--shadow-elevated)` surface to
    --shadow-card). Global + static so menus, tooltips, drag-overlays all keep the
    right depth. */
-[data-style='3d-immersive'] .shadow-\(--shadow-elevated\) {
-  box-shadow: var(--shadow-elevated);
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  .shadow-\(--shadow-elevated\) {
+    box-shadow: var(--shadow-elevated);
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   /* The 3D UNFOLD is scoped to actual MENU surfaces (the Popover primitive +
      the `data-menu-surface` hook on Combobox / MultiSelect / BoardSwitcher
      menus) — NOT every elevated surface, so a drag-overlay or toast doesn't
      unexpectedly fold open. */
-  [data-style='3d-immersive'] [data-surface='popover'],
-  [data-style='3d-immersive'] [data-menu-surface] {
-    transform-origin: top center;
-    animation: immersive-menu-open 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-surface='popover'],
+    [data-menu-surface] {
+      transform-origin: top center;
+      animation: immersive-menu-open 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
   }
   /* A Radix popover that flips ABOVE its trigger folds from the bottom edge. */
-  [data-style='3d-immersive'] [data-surface='popover'][data-side='top'] {
-    transform-origin: bottom center;
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-surface='popover'][data-side='top'] {
+      transform-origin: bottom center;
+    }
   }
 }
 
@@ -1591,52 +1668,62 @@
    dividers `.border-b` / `.border-t` (table rows, section rules) — the latter
    scoped INSIDE `[data-surface]` panels to bound the count to real surfaces (and
    their rows are virtualised, so only ~viewport-many overlays ever render). */
-[data-style='hand-drawn-indie'] .border {
-  border-width: 2px;
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  .border {
+    border-width: 2px;
+  }
 }
-[data-style='hand-drawn-indie'] .border:not(.fixed):not(.absolute):not(.sticky) {
-  position: relative;
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  .border:not(.fixed):not(.absolute):not(.sticky) {
+    position: relative;
+  }
 }
-[data-style='hand-drawn-indie'] .border::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  pointer-events: none;
-  border: 2px solid var(--el-border-strong);
-  border-radius: inherit;
-  filter: url(#hd-rough);
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  .border::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    border: 2px solid var(--el-border-strong);
+    border-radius: inherit;
+    filter: url(#hd-rough);
+  }
 }
 
 /* Internal grid dividers — make the inner rules as rough as the frame. Scoped
    inside framed surfaces; `:not(.border)` so a full-box element isn't handled
    twice; `:not(:last-child)` mirrors the common `last:border-b-0` strip so the
    final row gets no phantom line. */
-[data-style='hand-drawn-indie']
-  [data-surface]
-  :is(.border-b, .border-t):not(.border):not(.fixed):not(.absolute):not(.sticky) {
-  position: relative;
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface] :is(.border-b, .border-t):not(.border):not(.fixed):not(.absolute):not(.sticky) {
+    position: relative;
+  }
 }
-[data-style='hand-drawn-indie'] [data-surface] .border-b:not(.border)::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 0;
-  pointer-events: none;
-  border-bottom: 2px solid var(--el-border-strong);
-  filter: url(#hd-rough);
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface] .border-b:not(.border)::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 0;
+    pointer-events: none;
+    border-bottom: 2px solid var(--el-border-strong);
+    filter: url(#hd-rough);
+  }
 }
-[data-style='hand-drawn-indie'] [data-surface] .border-t:not(.border)::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -1px;
-  height: 0;
-  pointer-events: none;
-  border-top: 2px solid var(--el-border-strong);
-  filter: url(#hd-rough);
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface] .border-t:not(.border)::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -1px;
+    height: 0;
+    pointer-events: none;
+    border-top: 2px solid var(--el-border-strong);
+    filter: url(#hd-rough);
+  }
 }
 /* Suppress the overlay only where the REAL divider is removed: the last row of a
    fully-rendered list strips its border via `last:border-b-0`. (We can't use
@@ -1644,8 +1731,10 @@
    own `role="rowgroup"`, so it is itself a `:last-child` and would be wrongly
    skipped, which left the work-item table header's divider straight.) Same
    specificity as the draw rule, placed after, so it wins on the real last row. */
-[data-style='hand-drawn-indie'] [data-surface] .last\:border-b-0:last-child::after {
-  content: none;
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface] .last\:border-b-0:last-child::after {
+    content: none;
+  }
 }
 
 /* The APP SHELL FRAME — the sidebar rail's right edge + the top bar's bottom edge
@@ -1659,31 +1748,36 @@
    ONLY to a STATIC host (the rail) — never the STICKY header, which is already a
    containing block (overriding it would break the sticky), mirroring the `.border`
    rule's guard. */
-[data-style='hand-drawn-indie']
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
   :is([data-surface='sidebar'], [data-surface='header']):not(.fixed):not(.absolute):not(.sticky) {
-  position: relative;
+    position: relative;
+  }
 }
-[data-style='hand-drawn-indie'] [data-surface='sidebar']::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: -1px;
-  width: 0;
-  pointer-events: none;
-  border-right: 2px solid var(--el-border-strong);
-  filter: url(#hd-rough);
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface='sidebar']::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -1px;
+    width: 0;
+    pointer-events: none;
+    border-right: 2px solid var(--el-border-strong);
+    filter: url(#hd-rough);
+  }
 }
-[data-style='hand-drawn-indie'] [data-surface='header']::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 0;
-  pointer-events: none;
-  border-bottom: 2px solid var(--el-border-strong);
-  filter: url(#hd-rough);
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface='header']::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 0;
+    pointer-events: none;
+    border-bottom: 2px solid var(--el-border-strong);
+    filter: url(#hd-rough);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1795,8 +1889,10 @@
    panels look MOULDED OUT OF the same material rather than placed on top. Both
    the canvas and the surfaces below share `var(--el-surface)`, which is the whole
    neumorphic illusion. Palette-derived (no hue of its own). */
-[data-style='neumorphism'] body {
-  background-color: var(--el-surface);
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  body {
+    background-color: var(--el-surface);
+  }
 }
 
 /* Raised container surfaces — cards & popovers swell OUT of the field on a paired
@@ -1806,45 +1902,53 @@
    from hue. The faint hairline is kept as the accessibility fallback so structure
    doesn't depend on the shadow alone. Opaque `--el-surface` keeps text on the
    palette's AA-tuned surface. */
-[data-style='neumorphism'] [data-surface='card'],
-[data-style='neumorphism'] [data-surface='popover'] {
-  background-color: var(--el-surface);
-  border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
-  box-shadow:
-    var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
-    calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) var(--neu-blur) var(--neu-light);
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+    box-shadow:
+      var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+      calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) var(--neu-blur) var(--neu-light);
+  }
 }
 
 /* Modal panel — the same raised mould, a touch deeper so the dialog separates
    from the field behind it (body text stays on the opaque surface). */
-[data-style='neumorphism'] [data-surface='modal'] {
-  background-color: var(--el-surface);
-  border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
-  box-shadow:
-    calc(var(--neu-distance) + 2px) calc(var(--neu-distance) + 2px) calc(var(--neu-blur) + 8px)
-      var(--neu-shadow),
-    calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) calc(var(--neu-blur) + 4px)
-      var(--neu-light);
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+    box-shadow:
+      calc(var(--neu-distance) + 2px) calc(var(--neu-distance) + 2px) calc(var(--neu-blur) + 8px)
+        var(--neu-shadow),
+      calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) calc(var(--neu-blur) + 4px)
+        var(--neu-light);
+  }
 }
 
 /* The sidebar rail — moulded from the same field as the chrome, gently raised so
    it reads as part of the one continuous surface. */
-[data-style='neumorphism'] [data-surface='sidebar'] {
-  background-color: var(--el-surface);
-  box-shadow:
-    var(--neu-distance) 0 var(--neu-blur) var(--neu-shadow),
-    calc(-1 * var(--neu-distance)) 0 var(--neu-blur) var(--neu-light);
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-surface);
+    box-shadow:
+      var(--neu-distance) 0 var(--neu-blur) var(--neu-shadow),
+      calc(-1 * var(--neu-distance)) 0 var(--neu-blur) var(--neu-light);
+  }
 }
 
 /* Form controls — the inverse mould: a CONCAVE INSET well pressed INTO the field
    (the soft-UI input look), the paired shadow flipped to `inset`. */
-[data-style='neumorphism'] [data-surface='input'] {
-  background-color: var(--el-surface);
-  border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
-  box-shadow:
-    inset var(--neu-distance-sm) var(--neu-distance-sm) var(--neu-blur-sm) var(--neu-shadow),
-    inset calc(-1 * var(--neu-distance-sm)) calc(-1 * var(--neu-distance-sm)) var(--neu-blur-sm)
-      var(--neu-light);
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+    box-shadow:
+      inset var(--neu-distance-sm) var(--neu-distance-sm) var(--neu-blur-sm) var(--neu-shadow),
+      inset calc(-1 * var(--neu-distance-sm)) calc(-1 * var(--neu-distance-sm)) var(--neu-blur-sm)
+        var(--neu-light);
+  }
 }
 
 /* Accessibility fallback — when a user asks for more contrast (or forced colours),
@@ -1852,23 +1956,27 @@
    moulded surface and flatten the paired shadow to a single readable lift.
    Palette-derived (var(--el-border)); no hue. */
 @media (prefers-contrast: more) {
-  [data-style='neumorphism'] [data-surface='card'],
-  [data-style='neumorphism'] [data-surface='popover'],
-  [data-style='neumorphism'] [data-surface='modal'],
-  [data-style='neumorphism'] [data-surface='input'],
-  [data-style='neumorphism'] [data-surface='sidebar'] {
-    border-color: var(--el-border-strong);
-    box-shadow: var(--shadow-card);
+  @scope ([data-style='neumorphism']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'],
+    [data-surface='sidebar'] {
+      border-color: var(--el-border-strong);
+      box-shadow: var(--shadow-card);
+    }
   }
 }
 @media (forced-colors: active) {
-  [data-style='neumorphism'] [data-surface='card'],
-  [data-style='neumorphism'] [data-surface='popover'],
-  [data-style='neumorphism'] [data-surface='modal'],
-  [data-style='neumorphism'] [data-surface='input'],
-  [data-style='neumorphism'] [data-surface='sidebar'] {
-    border-color: var(--el-border-strong);
-    box-shadow: none;
+  @scope ([data-style='neumorphism']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'],
+    [data-surface='sidebar'] {
+      border-color: var(--el-border-strong);
+      box-shadow: none;
+    }
   }
 }
 
@@ -1972,27 +2080,29 @@
    axis overrides `--el-*`, never `--color-*`, which keeps the horizon orthogonal
    to the palette. Painted as the body's own background (always behind content),
    the proven 3D/Immersive atmosphere approach. */
-[data-style='retrofuturism'] body {
-  background-image:
-    linear-gradient(
-      180deg,
-      transparent 54%,
-      color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 60.5%,
-      color-mix(in srgb, var(--el-accent) var(--retro-horizon), transparent) 62.5%,
-      transparent 69%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
-      transparent 46%
-    ),
-    linear-gradient(
-      0deg,
-      color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
-      transparent 42%
-    );
-  background-size: 100% 100%;
-  background-attachment: fixed;
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  body {
+    background-image:
+      linear-gradient(
+        180deg,
+        transparent 54%,
+        color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 60.5%,
+        color-mix(in srgb, var(--el-accent) var(--retro-horizon), transparent) 62.5%,
+        transparent 69%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
+        transparent 46%
+      ),
+      linear-gradient(
+        0deg,
+        color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
+        transparent 42%
+      );
+    background-size: 100% 100%;
+    background-attachment: fixed;
+  }
 }
 
 /* The Outrun GRID FLOOR — a receding neon grid below the horizon. A separate
@@ -2003,31 +2113,33 @@
    their own); the mask uses the achromatic `black` keyword (no hex). The grid is
    STATIC depth — like 3D/Immersive's atmosphere it carries the identity, so it is
    not motion-gated (there is no animation to suppress). */
-[data-style='retrofuturism'] body::after {
-  content: '';
-  position: fixed;
-  left: -30%;
-  right: -30%;
-  bottom: 0;
-  height: 42vh;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      color-mix(in srgb, var(--el-highlight) var(--retro-grid), transparent) 0 2px,
-      transparent 2px var(--retro-grid-size)
-    ),
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 2px,
-      transparent 2px var(--retro-grid-size)
-    );
-  background-size: var(--retro-grid-size) var(--retro-grid-size);
-  transform: perspective(300px) rotateX(75deg);
-  transform-origin: bottom center;
-  -webkit-mask-image: linear-gradient(to top, black 2%, transparent 80%);
-  mask-image: linear-gradient(to top, black 2%, transparent 80%);
-  pointer-events: none;
-  z-index: -1;
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  body::after {
+    content: '';
+    position: fixed;
+    left: -30%;
+    right: -30%;
+    bottom: 0;
+    height: 42vh;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        color-mix(in srgb, var(--el-highlight) var(--retro-grid), transparent) 0 2px,
+        transparent 2px var(--retro-grid-size)
+      ),
+      repeating-linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 2px,
+        transparent 2px var(--retro-grid-size)
+      );
+    background-size: var(--retro-grid-size) var(--retro-grid-size);
+    transform: perspective(300px) rotateX(75deg);
+    transform-origin: bottom center;
+    -webkit-mask-image: linear-gradient(to top, black 2%, transparent 80%);
+    mask-image: linear-gradient(to top, black 2%, transparent 80%);
+    pointer-events: none;
+    z-index: -1;
+  }
 }
 
 /* Chrome container surfaces — OPAQUE (text AA is preserved against the base
@@ -2039,73 +2151,79 @@
    so they never pull a surface far from its base tone; the inset top/bottom lines
    are the lit chrome rim. Applied to EVERY panel via the global card-radius
    utility (the 3D/Immersive coverage approach), not just the <Card> primitive. */
-[data-style='retrofuturism'] [data-surface='card'],
-[data-style='retrofuturism'] [data-surface='popover'],
-[data-style='retrofuturism'] .rounded-\(--radius-card\) {
-  background-color: var(--el-surface);
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 36%,
-      color-mix(in srgb, white var(--retro-spec), transparent) 49%,
-      transparent 62%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
-      transparent 16%,
-      transparent 78%,
-      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
-    );
-  box-shadow:
-    var(--shadow-card),
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
-    0 0 28px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'],
+  .rounded-\(--radius-card\) {
+    background-color: var(--el-surface);
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 36%,
+        color-mix(in srgb, white var(--retro-spec), transparent) 49%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+        transparent 16%,
+        transparent 78%,
+        color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+      );
+    box-shadow:
+      var(--shadow-card),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
+      0 0 28px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+  }
 }
 
 /* Modal panel — the same chrome, with a deeper palette glow so the dialog
    separates cleanly from the grid behind it (and body text stays on the solid
    surface). Overrides the card-radius rule above for the modal radius. */
-[data-style='retrofuturism'] [data-surface='modal'] {
-  background-color: var(--el-surface);
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 34%,
-      color-mix(in srgb, white var(--retro-spec), transparent) 49%,
-      transparent 64%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
-      transparent 14%,
-      transparent 80%,
-      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
-    );
-  box-shadow:
-    var(--shadow-modal),
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    0 0 56px -14px color-mix(in srgb, var(--el-highlight) var(--retro-glow-strong), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: var(--el-surface);
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 34%,
+        color-mix(in srgb, white var(--retro-spec), transparent) 49%,
+        transparent 64%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+        transparent 14%,
+        transparent 80%,
+        color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+      );
+    box-shadow:
+      var(--shadow-modal),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+      0 0 56px -14px color-mix(in srgb, var(--el-highlight) var(--retro-glow-strong), transparent);
+  }
 }
 
 /* The sidebar rail — opaque chrome with a quieter specular + bevel so it reads as
    part of the polished-metal family, not a flat slab. */
-[data-style='retrofuturism'] [data-surface='sidebar'] {
-  background-color: var(--el-sidebar-bg);
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 40%,
-      color-mix(in srgb, white var(--retro-sheen), transparent) 50%,
-      transparent 60%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-sheen), transparent),
-      transparent 24%,
-      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
-    );
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-sidebar-bg);
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 40%,
+        color-mix(in srgb, white var(--retro-sheen), transparent) 50%,
+        transparent 60%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-sheen), transparent),
+        transparent 24%,
+        color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+      );
+  }
 }
 
 /* Text inputs (a TYPING field) — a RECESSED chrome well: the bevel inverts (a
@@ -2113,14 +2231,16 @@
    metal. Clickable controls (dropdown / select / picker triggers + buttons) get
    the RAISED chrome below instead — matching the CTA — so a typing field stays
    recessed while everything you click reads as a raised chrome control. */
-[data-style='retrofuturism'] [data-surface='input'] {
-  background-color: var(--el-page-bg);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, black var(--retro-sheen), transparent) 0%,
-    transparent 34%
-  );
-  box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: var(--el-page-bg);
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, black var(--retro-sheen), transparent) 0%,
+      transparent 34%
+    );
+    box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+  }
 }
 
 /* ── EVERY clickable control reads as RETRO CHROME (7.3.40) ──────────────────
@@ -2151,46 +2271,50 @@
 /* FILLED CTAs — accent (primary) keeps its hue under a diagonal specular glint +
    a vertical metallic sweep + a palette glow. Keyed on the fill class so it
    covers the `Button` primitive AND `buttonVariants()` anchors alike. */
-[data-style='retrofuturism'] .rounded-\(--radius-btn\).bg-\(--el-accent\) {
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 38%,
-      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
-      transparent 62%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-spec), var(--el-accent)) 0%,
-      var(--el-accent) 46%,
-      color-mix(in srgb, black var(--retro-bevel-shade), var(--el-accent)) 100%
-    );
-  box-shadow:
-    var(--shadow-subtle),
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    0 0 22px -6px color-mix(in srgb, var(--el-accent) var(--retro-glow-strong), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  .rounded-\(--radius-btn\).bg-\(--el-accent\) {
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 38%,
+        color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-spec), var(--el-accent)) 0%,
+        var(--el-accent) 46%,
+        color-mix(in srgb, black var(--retro-bevel-shade), var(--el-accent)) 100%
+      );
+    box-shadow:
+      var(--shadow-subtle),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+      0 0 22px -6px color-mix(in srgb, var(--el-accent) var(--retro-glow-strong), transparent);
+  }
 }
 
 /* Danger CTAs — the same machined sweep, in the danger hue (so a destructive
    button reads as red chrome, not a flat red, matching the accent CTA). */
-[data-style='retrofuturism'] .rounded-\(--radius-btn\).bg-\(--el-danger\) {
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 38%,
-      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
-      transparent 62%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-spec), var(--el-danger)) 0%,
-      var(--el-danger) 46%,
-      color-mix(in srgb, black var(--retro-bevel-shade), var(--el-danger)) 100%
-    );
-  box-shadow:
-    var(--shadow-subtle),
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    0 0 22px -6px color-mix(in srgb, var(--el-danger) var(--retro-glow-strong), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  .rounded-\(--radius-btn\).bg-\(--el-danger\) {
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 38%,
+        color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-spec), var(--el-danger)) 0%,
+        var(--el-danger) 46%,
+        color-mix(in srgb, black var(--retro-bevel-shade), var(--el-danger)) 100%
+      );
+    box-shadow:
+      var(--shadow-subtle),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+      0 0 22px -6px color-mix(in srgb, var(--el-danger) var(--retro-glow-strong), transparent);
+  }
 }
 
 /* NEUTRAL STEEL chrome — every OTHER clickable control: bordered buttons + links
@@ -2199,67 +2323,74 @@
    `:not([role='group'])` excludes the segmented TRACK (its own rule below); the
    FILLED CTAs are excluded automatically (they carry a fill class, not `.border`).
    The gunmetal base is set here because secondary controls ship `bg-transparent`. */
-[data-style='retrofuturism'] .rounded-\(--radius-btn\).border:not([role='group']),
-[data-style='retrofuturism'] button.rounded-\(--radius-input\) {
-  background-color: color-mix(in srgb, black 24%, var(--el-surface));
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 36%,
-      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
-      transparent 64%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
-      transparent 42%,
-      transparent 60%,
-      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
-    );
-  box-shadow:
-    var(--shadow-subtle),
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
-    0 0 18px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  .rounded-\(--radius-btn\).border:not([role='group']),
+  button.rounded-\(--radius-input\) {
+    background-color: color-mix(in srgb, black 24%, var(--el-surface));
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 36%,
+        color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+        transparent 64%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+        transparent 42%,
+        transparent 60%,
+        color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+      );
+    box-shadow:
+      var(--shadow-subtle),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
+      0 0 18px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+  }
 }
 
 /* SEGMENTED control (the board "Group by" switch + every other `Segmented` use):
    the classic metal segmented control — a RECESSED gunmetal TRACK (the
    `[role='group']` wrapper) with the ACTIVE segment (`aria-pressed='true'`) raised
    out of it as a chrome chip. Inactive segments stay transparent on the track. */
-[data-style='retrofuturism'] [role='group'].rounded-\(--radius-btn\) {
-  background-color: color-mix(in srgb, black 15%, var(--el-surface));
-  box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [role='group'].rounded-\(--radius-btn\) {
+    background-color: color-mix(in srgb, black 15%, var(--el-surface));
+    box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+  }
 }
-[data-style='retrofuturism'] [role='group'] [aria-pressed='true'] {
-  background-color: color-mix(in srgb, black 24%, var(--el-surface));
-  background-image:
-    linear-gradient(
-      158deg,
-      transparent 36%,
-      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
-      transparent 64%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
-      transparent 42%,
-      transparent 60%,
-      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
-    );
-  box-shadow:
-    var(--shadow-subtle),
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent);
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [role='group'] [aria-pressed='true'] {
+    background-color: color-mix(in srgb, black 24%, var(--el-surface));
+    background-image:
+      linear-gradient(
+        158deg,
+        transparent 36%,
+        color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+        transparent 64%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+        transparent 42%,
+        transparent 60%,
+        color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+      );
+    box-shadow:
+      var(--shadow-subtle),
+      inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, black 24%, transparent);
+  }
 }
 
 /* Hover — brighten the steel a touch (the controls' own `hover:bg-*` utilities
    are out-specified by the rules above, so restore a clear hover signal). */
-[data-style='retrofuturism']
+@scope ([data-style='retrofuturism']) to ([data-style]) {
   .rounded-\(--radius-btn\).border:not([role='group']):hover:not(:disabled),
-[data-style='retrofuturism'] button.rounded-\(--radius-input\):hover:not(:disabled),
-[data-style='retrofuturism'] [role='group'] [aria-pressed='false']:hover:not(:disabled) {
-  background-color: color-mix(in srgb, black 14%, var(--el-surface));
+  button.rounded-\(--radius-input\):hover:not(:disabled),
+  [role='group'] [aria-pressed='false']:hover:not(:disabled) {
+    background-color: color-mix(in srgb, black 14%, var(--el-surface));
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

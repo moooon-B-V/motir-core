@@ -53,16 +53,29 @@ import type { TypeId } from '../../theme/typography';
  *     base entry too.
  *   • TYPE (`type`) — ISOLATED, same mechanism plus a base `[data-type='motir']`
  *     block. That axis ships no descendant rules, so the tokens are all of it.
- *   • SHAPE / MATERIAL (`styleId`) — **NOT ISOLATED, and this is open.** The
- *     style axis ships ~69 descendant rules (`[data-style='X'] [data-surface=…]`,
- *     `[data-style='X'] body`, …) and a descendant combinator does not stop at a
- *     nested `data-style`. Under an active `glassmorphism` only 1 of 11 scoped
- *     style vignettes wears its own material; under `aurora`, 3 of 11. The
- *     shape TOKENS still scope correctly for a non-base style — it is the
- *     material rules that cross. MOTIR-3947 owns the fix and the mechanism
- *     choice (selector barrier vs an isolated render tree); do not add a
- *     `[data-style='warm-editorial']` base block as a partial remedy, because it
- *     makes a token assertion pass on a tile that still paints as the ancestor.
+ *   • SHAPE (`styleId`, the token block) — ISOLATED. A `[data-style]` block sets
+ *     plain custom properties on the wrapper and they inherit down the subtree.
+ *   • MATERIAL (`styleId`, the descendant layer) — ISOLATED by the SCOPING
+ *     LIMIT, since MOTIR-3997. The layer used to ship as descendant rules
+ *     (`[data-style='X'] [data-surface=…]`, `[data-style='X'] body`, …), and a
+ *     descendant combinator does not stop at a nested `data-style`: under an
+ *     active `glassmorphism` only 1 of 11 scoped tiles wore its own material,
+ *     under `aurora` 2 of 11, 64 of 121 over the full matrix. All 69 rules now
+ *     ship as `@scope ([data-style='X']) to ([data-style]) { … }`, where
+ *     `to (…)` is a scoping LIMIT — THIS component's `data-style` wrapper is
+ *     what an ancestor style's scope stops at, so "the nearest `[data-style]`
+ *     ancestor wins" is structural rather than a per-rule opt-out. The full
+ *     matrix measures 121 / 121. See
+ *     `docs/decisions/scoped-preview-isolation.md` for the measurement, the two
+ *     rejected candidates and what the mechanism costs.
+ *     Two things that follow, and neither is a claim about who consumes this
+ *     component today: do NOT add a `[data-style='warm-editorial']` base block
+ *     as a remedy — the base ships no material layer, and such a block only
+ *     makes a resolved-TOKEN assertion pass on a tile that still paints as the
+ *     ancestor. And the mechanism is structural, not automatic: a material rule
+ *     authored as a plain descendant crosses the boundary exactly as these did,
+ *     which is what `tests/theme/styleRegistry.test.ts`'s 69-rule ratchet
+ *     exists to catch.
  */
 
 export interface StyleVignetteProps {

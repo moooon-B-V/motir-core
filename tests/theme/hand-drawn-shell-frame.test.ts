@@ -18,13 +18,32 @@ const GLOBALS_CSS = read('app/globals.css') + read('packages/design-system/theme
 const TOPNAV = read('app/(authed)/_components/TopNav.tsx');
 const SIDEBAR = read('components/ui/Sidebar.tsx');
 
+// ⚠️ MOTIR-3997 MOVED THE ANCHOR. These rules used to read
+// `[data-style='hand-drawn-indie'] [data-surface='sidebar']::after`; the style
+// axis's material layer now ships scope-anchored, so the style is named in an
+// `@scope` PRELUDE and the rule inside it carries only the rest of the selector:
+//
+//   @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+//     [data-surface='sidebar']::after { … }
+//   }
+//
+// (`to (…)` is a scoping LIMIT, so a nested `[data-style]` — a scoped
+// StyleVignette tile — stops the layer at the boundary. See
+// docs/decisions/scoped-preview-isolation.md.) The old pattern matches NONE of
+// the rewritten rules, so this file failed loudly rather than silently, which is
+// how it should be: the assertions below are about the rules' BODIES, and a
+// finder that quietly matched nothing would have left them asserting over an
+// empty population.
+const scopedAfterRule = (surface: string) =>
+  new RegExp(
+    `@scope \\(\\[data-style='hand-drawn-indie'\\]\\) to \\(\\[data-style\\]\\)\\s*\\{` +
+      `\\s*\\[data-surface='${surface}'\\]::after\\s*\\{([^}]*)\\}`,
+  );
+
 describe('Hand-Drawn style — app shell frame (MOTIR-1315)', () => {
   it('roughens the sidebar rail right edge and the top-bar bottom edge via #hd-rough', () => {
     for (const surface of ['sidebar', 'header']) {
-      const re = new RegExp(
-        `\\[data-style='hand-drawn-indie'\\]\\s*\\[data-surface='${surface}'\\]::after\\s*\\{([^}]*)\\}`,
-      );
-      const m = GLOBALS_CSS.match(re);
+      const m = GLOBALS_CSS.match(scopedAfterRule(surface));
       expect(m, `missing hand-drawn ::after rule for [data-surface='${surface}']`).not.toBeNull();
       const body = m![1];
       // Warped by the shared roughen filter.
@@ -36,14 +55,10 @@ describe('Hand-Drawn style — app shell frame (MOTIR-1315)', () => {
   });
 
   it('draws a single directional edge per host (rail = right, header = bottom)', () => {
-    const rail = GLOBALS_CSS.match(
-      /\[data-style='hand-drawn-indie'\]\s*\[data-surface='sidebar'\]::after\s*\{([^}]*)\}/,
-    )![1];
+    const rail = GLOBALS_CSS.match(scopedAfterRule('sidebar'))![1];
     expect(rail).toContain('border-right');
 
-    const header = GLOBALS_CSS.match(
-      /\[data-style='hand-drawn-indie'\]\s*\[data-surface='header'\]::after\s*\{([^}]*)\}/,
-    )![1];
+    const header = GLOBALS_CSS.match(scopedAfterRule('header'))![1];
     expect(header).toContain('border-bottom');
   });
 
