@@ -369,9 +369,17 @@ file rather than assumed:
   shared change, and the new member must be opt-in exactly as `searchable` / `locatable` /
   `fullScreenable` are. An onboarding canvas that grew a flowing edge would be a regression.
 
-**That is a build dependency, not a note.** It is carved as its own work item rather than folded
-into the run modal's, which is already at the estimation gate's ceiling — the design gives that card
-more than it was sized for, and the honest answer to that is a split, never a bigger number.
+**That is a build dependency, not a note, and it has a KEY: MOTIR-3972** — `PlanningCanvas` learns
+the animated variant, and [the run modal](motir:cmteb0tj2001ohvn82ijisqz7) is `blocked_by` it. It is
+carved rather than folded into the modal's own card, which is already at the estimation gate's
+ceiling: the design gives that card more than it was sized for, and the honest answer to that is a
+split, never a bigger number.
+
+**The split also says who owns WHICH decision.** MOTIR-3972 makes the variant available and correct
+— the flowing dash, its own arrowhead marker, the reduced-motion rule, and the opt-in default that
+keeps every other consumer byte-identical. It chooses no policy. **This asset and the run modal
+choose the POLICY**: which edges carry it (running → blocked, and only those), and when nothing
+does (a queued node, a finished run).
 
 #### The SET arrives in three shapes, and the pane is TOTAL over all three
 

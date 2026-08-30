@@ -3050,8 +3050,8 @@
             <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
             <div>
               <p style="margin: 0; font-weight: 600">
-                This needs a capability <span class="mono">PlanningCanvas</span> does not have
-                today.
+                This needs a capability <span class="mono">PlanningCanvas</span> does not have today
+                — <span class="mono">MOTIR-3972</span> adds it.
               </p>
               <p style="margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--el-text-secondary)">
                 <span class="mono">CanvasEdge.variant</span> is a closed union —
@@ -3062,7 +3062,12 @@
                 <span class="mono">&lt;path&gt;</span>: that file keeps its arrowhead markers in a
                 separate <span class="mono">&lt;svg&gt;</span> precisely so the edge path count
                 stays equal to the edge count, and a second element per edge would break the guard
-                that asserts it. Five files compose this foundation.
+                that asserts it. Five files compose this foundation, so the variant is opt-in and
+                every other consumer must render byte-identically.
+                <strong
+                  >MOTIR-3972 makes the variant available; this surface chooses which edges carry
+                  it.</strong
+                >
               </p>
             </div>
           </div>
