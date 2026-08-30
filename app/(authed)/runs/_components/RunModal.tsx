@@ -7,6 +7,7 @@ import { CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
+import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import type { DispatchRunDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
@@ -260,9 +261,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
               <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
                 {t('paneLog')}
               </h2>
-              <p className="p-(--spacing-card-padding) text-xs text-(--el-text-secondary)">
-                {t('logComingSoon')}
-              </p>
+              <RunLogPane run={run} selectedWorkItemId={selectedWorkItemId} />
             </section>
           </div>
         </>

@@ -7266,7 +7266,6 @@
     "paneSet": "工作项集合",
     "paneSetCount": "工作项集合 — {count} 个",
     "paneLog": "代理输出",
-    "logComingSoon": "运行期间，代理的输出会显示在这里。",
     "tookNoneBody": "这次运行没有取到任何工作项，未认领、也未做任何改动。",
     "stopReason": {
       "drained": "就绪队列已取空",
@@ -7277,6 +7276,23 @@
       "replanned": "代理拒绝了它的工作项并提交了重新规划 — 正在 Motir 中等你处理",
       "gated": "在两个工作项之间停止 — 刚完成的那个还不能作为下一个的基础",
       "abandoned": "这台机器停止了上报"
+    },
+    "logCount": "{count, plural, other {# 行}}",
+    "logTruncated": "{count, plural, other {更早的 # 行未显示}}",
+    "logResumeFollow": "跟随",
+    "logSilence": {
+      "neverSent": {
+        "title": "没有发送任何内容",
+        "body": "这次运行没有上报日志正文。加上 --report-log 即可发送。"
+      },
+      "waiting": {
+        "title": "正在等待代理",
+        "body": "运行正在进行，但还没有任何输出。"
+      },
+      "expired": {
+        "title": "已超过保留期",
+        "body": "日志正文会在运行 30 天后删除，这次的已被删除。"
+      }
     }
   }
 }

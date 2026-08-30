@@ -7270,7 +7270,6 @@
     "paneSet": "The set",
     "paneSetCount": "The set — {count} work items",
     "paneLog": "Agent output",
-    "logComingSoon": "The agent’s output appears here while the run is going.",
     "tookNoneBody": "This run took no work items. Nothing was claimed and nothing was changed.",
     "stopReason": {
       "drained": "the ready set is drained",
@@ -7281,6 +7280,23 @@
       "replanned": "an agent refused its work item and submitted a re-plan — waiting for you in Motir",
       "gated": "stopped between work items — the one just finished is not ready to build on",
       "abandoned": "the machine stopped reporting"
+    },
+    "logCount": "{count, plural, =0 {No lines} one {# line} other {# lines}}",
+    "logTruncated": "{count, plural, one {# earlier line not shown} other {# earlier lines not shown}}",
+    "logResumeFollow": "Follow",
+    "logSilence": {
+      "neverSent": {
+        "title": "Nothing was sent",
+        "body": "This run did not report log bodies. Pass --report-log to send them."
+      },
+      "waiting": {
+        "title": "Waiting for the agent",
+        "body": "The run is live and has not printed anything yet."
+      },
+      "expired": {
+        "title": "Past the retention window",
+        "body": "Log bodies are deleted 30 days after a run. This one’s have been."
+      }
     }
   }
 }

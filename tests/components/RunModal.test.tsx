@@ -16,6 +16,13 @@ import type { DispatchRunCardDto, DispatchRunDto } from '@/lib/dto/dispatchRuns'
 // fetches its own levels, and this file is about the MODAL — the canvas
 // composition has its own assertions in `RunCanvasPane.test.tsx`, which drives
 // `loadLevel` directly rather than through a layout happy-dom cannot do.
+// The LOG PANE opens its own stream (MOTIR-3962) and is asserted in
+// `RunLogPane.test.tsx`. Stubbed here so the modal's own stream discipline is
+// what these tests measure.
+vi.mock('@/app/(authed)/runs/_components/RunLogPane', () => ({
+  RunLogPane: () => <div data-testid="stub-log-pane" />,
+}));
+
 vi.mock('@/app/(authed)/runs/_components/RunCanvasPane', () => ({
   RunCanvasPane: ({ onSelectWorkItem }: { onSelectWorkItem: (id: string) => void }) => (
     <button type="button" data-testid="stub-node" onClick={() => onSelectWorkItem('wi_1')}>
