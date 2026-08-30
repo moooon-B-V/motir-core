@@ -789,3 +789,159 @@ describe('dispatchRunEventRepository', () => {
     expect(after[1]!.body).toBe('recent private output');
   });
 });
+
+// ── THE CURSOR ARMS (Story MOTIR-1789 · MOTIR-1798) ─────────────────────────
+// The story gate measured these three reads at 0% and 83% BRANCH coverage: every
+// one is `...(cursor ? { cursor, skip: 1 } : {})`, and only the no-cursor arm had
+// ever run. A paging bug lives exactly there — `skip: 1` is what stops a cursor
+// page from repeating the row it was anchored on — so the arm that was never
+// taken is the one worth taking.
+
+describe('the cursor arms — the half of each paged read that had never run', () => {
+  it('a work item’s legs page by cursor, and the anchor row is not repeated', async () => {
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    const { dispatchRunCardRepository } =
+      await import('@/lib/repositories/dispatchRunCardRepository');
+    const f = await seedFixture();
+    const runIds: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const run = await bound(f.workspaceId, (tx) =>
+        dispatchRunRepository.create(
+          {
+            workspace: { connect: { id: f.workspaceId } },
+            project: { connect: { id: f.projectId } },
+            command: 'run',
+          },
+          tx,
+        ),
+      );
+      runIds.push(run.id);
+      await bound(f.workspaceId, (tx) =>
+        dispatchRunCardRepository.create(
+          {
+            workspace: { connect: { id: f.workspaceId } },
+            dispatchRun: { connect: { id: run.id } },
+            workItem: { connect: { id: f.childAId } },
+            workItemKey: 'PROD-2',
+            position: 0,
+          },
+          tx,
+        ),
+      );
+    }
+
+    const first = await bound(f.workspaceId, (tx) =>
+      dispatchRunCardRepository.listByWorkItem(f.childAId, { take: 2 }, tx),
+    );
+    expect(first).toHaveLength(2);
+
+    const next = await bound(f.workspaceId, (tx) =>
+      dispatchRunCardRepository.listByWorkItem(f.childAId, { take: 2, cursor: first[1]!.id }, tx),
+    );
+    // ⚠️ `skip: 1` is the whole point of the arm: the anchor row must NOT come
+    // back, or a reader paging a history sees one leg twice.
+    expect(next.map((c) => c.id)).not.toContain(first[1]!.id);
+    expect(first.concat(next)).toHaveLength(3);
+  });
+
+  it('a project’s runs page by cursor, and the status narrowing applies to both arms', async () => {
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    const f = await seedFixture();
+    for (let i = 0; i < 3; i += 1) {
+      await bound(f.workspaceId, (tx) =>
+        dispatchRunRepository.create(
+          {
+            workspace: { connect: { id: f.workspaceId } },
+            project: { connect: { id: f.projectId } },
+            command: 'batch',
+          },
+          tx,
+        ),
+      );
+    }
+
+    const page1 = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByProject(f.projectId, { take: 2 }, tx),
+    );
+    expect(page1).toHaveLength(2);
+
+    const page2 = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByProject(
+        f.projectId,
+        { take: 2, cursor: page1[1]!.id, statuses: ['running'] },
+        tx,
+      ),
+    );
+    // The cursor arm AND the status arm together — the combination a live-filter
+    // page actually makes, and the one neither arm's own test reaches.
+    expect(page2.map((r) => r.id)).not.toContain(page1[1]!.id);
+    expect(page2.every((r) => r.status === 'running')).toBe(true);
+  });
+
+  it('a scope’s runs page by cursor too', async () => {
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    const f = await seedFixture();
+    for (let i = 0; i < 3; i += 1) {
+      await bound(f.workspaceId, (tx) =>
+        dispatchRunRepository.create(
+          {
+            workspace: { connect: { id: f.workspaceId } },
+            project: { connect: { id: f.projectId } },
+            command: 'run_scope',
+            scope: { connect: { id: f.storyId } },
+          },
+          tx,
+        ),
+      );
+    }
+
+    const first = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByScope(f.storyId, { take: 2 }, tx),
+    );
+    const next = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByScope(
+        f.storyId,
+        { take: 2, cursor: first[1]!.id, statuses: ['running'] },
+        tx,
+      ),
+    );
+    expect(next.map((r) => r.id)).not.toContain(first[1]!.id);
+  });
+
+  it('`findById` reads one leg back by its own id', async () => {
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    const { dispatchRunCardRepository } =
+      await import('@/lib/repositories/dispatchRunCardRepository');
+    const f = await seedFixture();
+    const run = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.create(
+        {
+          workspace: { connect: { id: f.workspaceId } },
+          project: { connect: { id: f.projectId } },
+          command: 'run',
+        },
+        tx,
+      ),
+    );
+    const leg = await bound(f.workspaceId, (tx) =>
+      dispatchRunCardRepository.create(
+        {
+          workspace: { connect: { id: f.workspaceId } },
+          dispatchRun: { connect: { id: run.id } },
+          workItem: { connect: { id: f.childBId } },
+          workItemKey: 'PROD-3',
+          position: 0,
+        },
+        tx,
+      ),
+    );
+
+    const found = await bound(f.workspaceId, (tx) =>
+      dispatchRunCardRepository.findById(leg.id, tx),
+    );
+    expect(found?.id).toBe(leg.id);
+    expect(
+      await bound(f.workspaceId, (tx) => dispatchRunCardRepository.findById('nope', tx)),
+    ).toBeNull();
+  });
+});
