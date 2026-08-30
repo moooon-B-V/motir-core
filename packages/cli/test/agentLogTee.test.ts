@@ -3,11 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAgentLogTee, createLegLogTee, LOG_CHUNK_BYTES } from '../src/agentLogTee.js';
-import {
-  createDispatchRunReporter,
-  nullDispatchRunReporter,
-  type DispatchRunEventInput,
-} from '../src/dispatchRunReporter.js';
+import { createDispatchRunReporter, nullDispatchRunReporter } from '../src/dispatchRunReporter.js';
+// ⚠️ FROM `client.js`, WHICH IS WHERE IT LIVES. The reporter only IMPORTS this
+// type; it never re-exported it, so the old path type-checked nowhere — and the
+// root `tsc` never sees this file, because `packages/cli` runs its OWN
+// typecheck. A green root run is not evidence about this code.
+import type { DispatchRunEventInput } from '../src/client.js';
 import { runAgent } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
 import { readFileSync } from 'node:fs';

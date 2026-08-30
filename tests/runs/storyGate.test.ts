@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -154,24 +153,35 @@ describe('⚠️ the log stream has a PRODUCER — the guard that would have cau
 });
 
 describe('the /api/v1 contract version moved for this story', () => {
-  it('is ahead of the value on the merge base', () => {
-    // The story added three ingest operations, which is an additive contract
-    // change under ADR §8 — so the number a client reads off
-    // `X-Motir-Api-Version` has to say so.
-    const base = execFileSync('git', ['show', 'origin/main:lib/api/v1/contractVersion.ts'], {
-      encoding: 'utf8',
-    });
-    const onMain = /V1_CONTRACT_VERSION = '([^']+)'/.exec(base)?.[1];
-    expect(onMain).toBeTruthy();
+  // ⚠️ A FLOOR, NOT A COMPARISON AGAINST `origin/main` — and the first draft of
+  // this guard was the comparison, which is wrong in two independent ways.
+  //
+  //   1. It shelled out to `git show origin/main:…`. CI checks the branch out
+  //      merged with `main` and keeps no `origin/main` remote-tracking ref, so
+  //      the call throws and the guard goes red on a healthy tree — which is
+  //      what it did.
+  //   2. Even with the ref present it DEFEATS ITSELF ON MERGE. The moment this
+  //      lands, `origin/main` carries 1.23.0 too, `ahead` is false, and the
+  //      guard is permanently red on `main` — a test that can only pass before
+  //      it is merged is not a guard, it is a countdown.
+  //
+  // The floor says the thing that stays true: the story's three ingest
+  // operations are an additive change under ADR §8, so the number a client
+  // reads off `X-Motir-Api-Version` had to move to at least this. A later story
+  // raises it further and this still passes; a revert that takes it back below
+  // 1.23.0 while the operations remain is the regression worth catching.
+  const FLOOR = [1, 23, 0] as const;
 
-    const parse = (v: string): number[] => v.split('.').map(Number);
-    const [aMaj, aMin, aPat] = parse(V1_CONTRACT_VERSION);
-    const [bMaj, bMin, bPat] = parse(onMain!);
-    const ahead =
-      aMaj! > bMaj! ||
-      (aMaj === bMaj && aMin! > bMin!) ||
-      (aMaj === bMaj && aMin === bMin && aPat! > bPat!);
-    expect(ahead).toBe(true);
+  it(`is at or above ${FLOOR.join('.')} — the value this story's operations required`, () => {
+    const parsed = V1_CONTRACT_VERSION.split('.').map(Number);
+    expect(parsed, `unreadable version ${V1_CONTRACT_VERSION}`).toHaveLength(3);
+    expect(parsed.some(Number.isNaN)).toBe(false);
+
+    const [maj, min, pat] = parsed as [number, number, number];
+    const [fMaj, fMin, fPat] = FLOOR;
+    const atOrAbove =
+      maj > fMaj || (maj === fMaj && min > fMin) || (maj === fMaj && min === fMin && pat >= fPat);
+    expect(atOrAbove, `${V1_CONTRACT_VERSION} is below the floor`).toBe(true);
   });
 
   it('the three ingest operations are in the emitted document', () => {
