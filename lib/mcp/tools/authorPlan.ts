@@ -7,6 +7,7 @@ import type {
   PlanDto,
   PlanItemProposedFields,
   PlanWithItemsDto,
+  PlanItemPatch,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -524,7 +525,12 @@ const updatePlanItemInputSchema = {
 
 const correctionRefField = z
   .string()
-  .describe('A real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan.');
+  .describe(
+    'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a ' +
+      'real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is ' +
+      'resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three ' +
+      'are interchangeable (MOTIR-3934).',
+  );
 
 const updatePlanProposalInputSchema = {
   ...updatePlanItemInputSchema,
@@ -540,10 +546,10 @@ const updatePlanProposalInputSchema = {
     .nullable()
     .optional()
     .describe(
-      '`add` only: re-parent the proposal. A real work-item id, or a `planItem:<id>` ref naming ' +
-        'another `add` on THIS plan; `null` makes it top-level. Re-validated by the same check ' +
-        'the append runs, so a ref naming nothing is refused here rather than at approve — and ' +
-        'a ref to the proposal ITSELF is refused too.',
+      '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or ' +
+        'a `planItem:<id>` ref naming another `add` on THIS plan; `null` makes it top-level. ' +
+        'Re-validated by the same checks the append runs, so a key or a ref naming nothing is ' +
+        'refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
     ),
   blockedByRefs: z
     .array(correctionRefField)
@@ -757,7 +763,8 @@ function summarizeCorrection(
       : 'No fields were sent, so nothing changed.',
     structural.length > 0
       ? `Structural fields (${structural.join(', ')}) were re-validated against this plan's own ` +
-        'proposals, so every `planItem:` ref you sent resolves.'
+        'proposals and against the workspace, so every ref you sent resolves — a `MOTIR-<n>` key ' +
+        "was stored as the work item's id, exactly as `add_plan_items` stores one."
       : '',
     '',
     plan.status === 'planned'
@@ -863,8 +870,25 @@ function isWorkItemKey(ref: string): boolean {
   return !isTempRef(ref) && WORK_ITEM_KEY_PATTERN.test(ref.trim());
 }
 
-/** Every ref one proposal carries, across all four sites. */
-function refsOfProposal(p: ProposalInput): string[] {
+/**
+ * The FIVE sites a ref can travel on — shared by BOTH authoring doors, because
+ * they write the same columns (MOTIR-3934).
+ *
+ * ⚠️ IT IS A SHAPE, NOT A UNION OF THE TWO INPUT TYPES, and that is the point.
+ * `ProposalInput` (the append) and `CorrectProposalInput` (the correction)
+ * declare these three members identically; naming the shape once is what makes
+ * "resolve the key" a property of the FIELD rather than of the door somebody
+ * happened to reach for. The defect this closes was exactly that asymmetry: one
+ * door honoured all three documented ref forms and the other honoured two.
+ */
+interface RefCarrierInput {
+  parentRef?: string | null;
+  blockedByRefs?: string[];
+  patch?: PlanItemPatch | null;
+}
+
+/** Every ref one proposal (or one correction) carries, across all five sites. */
+function refsOfCarrier(p: RefCarrierInput): string[] {
   return [
     ...(p.parentRef ? [p.parentRef] : []),
     ...(p.blockedByRefs ?? []),
@@ -876,6 +900,61 @@ function refsOfProposal(p: ProposalInput): string[] {
     ...(p.patch?.blockedByAdd ?? []),
     ...(p.patch?.blockedByRemove ?? []),
   ];
+}
+
+/**
+ * ONE batched resolution for a whole call: every KEY-form ref across every
+ * carrier, de-duplicated, through the same permission-scoped service every
+ * key-addressed tool uses — so the 404-not-403 cross-tenant contract holds
+ * unchanged. Returns the swap to apply per ref; a non-key ref (a cuid, a
+ * `planItem:` temp-ref) maps to itself.
+ */
+async function keyRefSwapper(
+  carriers: RefCarrierInput[],
+  ctx: ServiceContext,
+): Promise<(ref: string) => string> {
+  const keys = [...new Set(carriers.flatMap(refsOfCarrier).filter(isWorkItemKey))];
+  if (keys.length === 0) return (ref) => ref;
+
+  let ids: string[];
+  try {
+    ids = await resolveWorkItemIdsByKeys(keys, ctx);
+  } catch {
+    // A key that resolves to nothing is the SAME failure as a dangling id, and
+    // it is reported as one: one failure mode for "this ref names no work
+    // item", not two that a caller has to tell apart. The offending key is
+    // named; which of a batch's keys failed is recoverable from the message.
+    throw new PlanRefGraphError(
+      'dangling',
+      'incoming',
+      `A proposal's ref names no work item in this workspace. One of ${keys
+        .map((k) => `"${k}"`)
+        .join(', ')} could not be resolved — check the key, or pass the work item's id.`,
+    );
+  }
+
+  const byKey = new Map(keys.map((k, i) => [k, ids[i]!]));
+  return (ref) => byKey.get(ref) ?? ref;
+}
+
+/**
+ * Swap the KEY-form refs inside a `modify`'s patch, PRESERVING absence.
+ *
+ * A `null` patch (the correction door's "clear it") and an absent one are both
+ * returned untouched — the sparse contract is the caller's, not this
+ * function's.
+ */
+function swapPatchRefs(
+  patch: PlanItemPatch | null | undefined,
+  swap: (ref: string) => string,
+): PlanItemPatch | null | undefined {
+  if (!patch) return patch;
+  return {
+    ...patch,
+    ...(patch.parentRef ? { parentRef: swap(patch.parentRef) } : {}),
+    ...(patch.blockedByAdd ? { blockedByAdd: patch.blockedByAdd.map(swap) } : {}),
+    ...(patch.blockedByRemove ? { blockedByRemove: patch.blockedByRemove.map(swap) } : {}),
+  };
 }
 
 /**
@@ -905,43 +984,42 @@ async function resolveKeyRefs(
   proposals: ProposalInput[],
   ctx: ServiceContext,
 ): Promise<ProposalInput[]> {
-  const keys = [...new Set(proposals.flatMap(refsOfProposal).filter(isWorkItemKey))];
-  if (keys.length === 0) return proposals;
-
-  let ids: string[];
-  try {
-    ids = await resolveWorkItemIdsByKeys(keys, ctx);
-  } catch {
-    // A key that resolves to nothing is the SAME failure as a dangling id, and
-    // it is reported as one: one failure mode for "this ref names no work
-    // item", not two that a caller has to tell apart. The offending key is
-    // named; which of a batch's keys failed is recoverable from the message.
-    throw new PlanRefGraphError(
-      'dangling',
-      'incoming',
-      `A proposal's ref names no work item in this workspace. One of ${keys
-        .map((k) => `"${k}"`)
-        .join(', ')} could not be resolved — check the key, or pass the work item's id.`,
-    );
-  }
-
-  const byKey = new Map(keys.map((k, i) => [k, ids[i]!]));
-  const swap = (ref: string): string => byKey.get(ref) ?? ref;
+  const swap = await keyRefSwapper(proposals, ctx);
   return proposals.map((p) => ({
     ...p,
     parentRef: p.parentRef ? swap(p.parentRef) : p.parentRef,
     blockedByRefs: (p.blockedByRefs ?? []).map(swap),
-    patch: p.patch
-      ? {
-          ...p.patch,
-          ...(p.patch.parentRef ? { parentRef: swap(p.patch.parentRef) } : {}),
-          ...(p.patch.blockedByAdd ? { blockedByAdd: p.patch.blockedByAdd.map(swap) } : {}),
-          ...(p.patch.blockedByRemove
-            ? { blockedByRemove: p.patch.blockedByRemove.map(swap) }
-            : {}),
-        }
-      : p.patch,
+    patch: swapPatchRefs(p.patch, swap),
   }));
+}
+
+/**
+ * The SAME resolution, on the CORRECTION door (MOTIR-3934).
+ *
+ * ⚠️ WHY IT IS A SECOND FUNCTION AND NOT A SECOND CALLER OF THE ONE ABOVE. The
+ * two inputs differ in exactly one way that matters here, and it is the way that
+ * loses data: an append's `blockedByRefs` DEFAULTS to `[]`, so `?? []` is free,
+ * while a correction's `blockedByRefs` is SPARSE — `undefined` leaves the set
+ * alone and `[]` CLEARS it. Materialising the default would turn every
+ * correction of some other field into a silent edge wipe. So the swap is written
+ * against this input's own contract: absent stays absent, `null` stays `null`.
+ *
+ * Everything else is shared with the append — the same five sites, the same
+ * batched lookup, the same `dangling` refusal — which is the whole fix. The
+ * defect was one door resolving and the other storing the key verbatim, so a
+ * `MOTIR-<n>` written through the correction door reached approve as a string
+ * nothing could match.
+ */
+async function resolveCorrectionKeyRefs(
+  input: CorrectProposalInput,
+  ctx: ServiceContext,
+): Promise<CorrectProposalInput> {
+  const swap = await keyRefSwapper([input], ctx);
+  const resolved: CorrectProposalInput = { ...input };
+  if (input.parentRef) resolved.parentRef = swap(input.parentRef);
+  if (input.blockedByRefs !== undefined) resolved.blockedByRefs = input.blockedByRefs.map(swap);
+  if (input.patch) resolved.patch = swapPatchRefs(input.patch, swap) as PlanItemPatch;
+  return resolved;
 }
 
 export async function runAddPlanItems(
@@ -1105,7 +1183,14 @@ export async function runUpdatePlanProposal(
     changed.push(key);
   }
 
-  const plan = await plansService.correctProposal(args.planId, args.planItemId, input, ctx);
+  // KEY → ID, before the service sees them (MOTIR-3934) — the same rewrite
+  // `add_plan_items` applies, at the same layer, so the two doors cannot store
+  // different things in one column. A key that names nothing is refused HERE,
+  // where it is written, rather than at the approve button on a plan a reviewer
+  // has already read.
+  const resolved = await resolveCorrectionKeyRefs(input, ctx);
+
+  const plan = await plansService.correctProposal(args.planId, args.planItemId, resolved, ctx);
 
   return toolOk(
     summarizeCorrection(plan, args.planItemId, changed),
