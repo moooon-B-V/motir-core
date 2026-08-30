@@ -64,6 +64,7 @@ function recorder(): DispatchRunReporter & { events: DispatchRunEventInput[] } {
     async flush() {},
     async close() {},
     offline: false,
+    wantsLogBodies: false,
     runId: 'run_1',
   };
 }

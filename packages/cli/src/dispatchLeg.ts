@@ -10,6 +10,7 @@ import {
 import { execCommand, workReachedRemote, type CommandRunner } from './git.js';
 import type { DispatchPrompt, MotirClient } from './client.js';
 import type { ParsedAgentCommand } from './agentProfiles.js';
+import { createLegLogTee } from './agentLogTee.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the one implementation of
@@ -170,11 +171,18 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     disposition: 'running',
     data: { agent: agent.binary },
   });
+  // The producer for the `log` event kind (MOTIR-3961). `null` unless the
+  // operator passed `--report-log`, and then the spawn is unchanged.
+  const logTee = createLegLogTee(reporter, key);
   const result = await runAgentFn({
     command: agent,
     prompt: dispatch.prompt,
     cwd: primary.cwd,
+    ...(logTee ? { onOutput: logTee.write } : {}),
   });
+  // The tail, BEFORE the exit event, so the transcript a reader sees ends where
+  // the agent stopped rather than after the verdict that describes it.
+  logTee?.flush();
   reporter.event({
     kind: 'agent_exited',
     workItemKey: key,

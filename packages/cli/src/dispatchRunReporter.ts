@@ -90,6 +90,18 @@ export interface DispatchRunReporter {
   readonly offline: boolean;
   /** The run this reporter opened, or null when it never opened one. */
   readonly runId: string | null;
+  /**
+   * Whether the operator asked for log BODIES (`--report-log`).
+   *
+   * ⚠️ THIS IS NOT A SECOND PRIVACY CHECK, and it must never become one. The
+   * strip stays in {@link DispatchRunReporter.event} — one place, so a call
+   * site that forgot cannot leak. This flag answers a different question, for
+   * the PRODUCER side: is it worth CAPTURING the agent's output at all? With
+   * the opt-in off the answer is no, because every body captured would be
+   * stripped a moment later, so `agentLogTee` reads this to skip the work
+   * rather than to decide the policy.
+   */
+  readonly wantsLogBodies: boolean;
 }
 
 export interface DispatchRunReporterDeps {
@@ -125,6 +137,7 @@ export const nullDispatchRunReporter: DispatchRunReporter = {
   async close() {},
   offline: false,
   runId: null,
+  wantsLogBodies: false,
 };
 
 export function createDispatchRunReporter(deps: DispatchRunReporterDeps): DispatchRunReporter {
@@ -168,6 +181,10 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
     get runId() {
       return runId;
     },
+    // Read by the PRODUCER side (`agentLogTee`) to decide whether capturing the
+    // agent's output is worth doing. The strip below is still the only thing
+    // that decides whether a body LEAVES.
+    wantsLogBodies: deps.reportLogBodies === true,
 
     async open(input) {
       if (runId !== null) return;

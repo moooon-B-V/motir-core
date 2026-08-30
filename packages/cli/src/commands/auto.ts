@@ -1,5 +1,6 @@
 import { CliError, ContainerHasOpenChildrenError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
+import { createLegLogTee } from '../agentLogTee.js';
 import { parseKinds } from './read.js';
 import {
   claimAllowsDispatch,
@@ -960,11 +961,17 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     workItemKey: item.key,
     data: { agent: agent.parsed.binary },
   });
+  // The producer for the `log` event kind (MOTIR-3961). `null` unless the
+  // operator passed `--report-log`, and then the spawn is unchanged.
+  const logTee = createLegLogTee(reporter, item.key);
   const result = await runAgentFn({
     command: agent.parsed,
     prompt: dispatch.prompt,
     cwd: target.cwd,
+    ...(logTee ? { onOutput: logTee.write } : {}),
   });
+  // The tail, BEFORE the exit event — same ordering as `dispatchLeg`.
+  logTee?.flush();
   const durationMs = clock() - started;
   reporter.event({
     kind: 'agent_exited',

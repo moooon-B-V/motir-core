@@ -608,6 +608,7 @@ function recordingReporter(over: Partial<DispatchRunReporter> = {}): DispatchRun
       closed.push(reason);
     },
     offline: false,
+    wantsLogBodies: false,
     runId: 'run_1',
     ...over,
   };
