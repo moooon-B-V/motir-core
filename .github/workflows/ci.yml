@@ -1371,6 +1371,25 @@ jobs:
           fi
           echo "all four monitoring build-time secrets are present"
 
+      # ⚠️ SAME SHAPE, DIFFERENT DAMAGE (MOTIR-3948). An unset
+      # NEXT_SERVER_ACTIONS_ENCRYPTION_KEY does not degrade a report nobody
+      # reads — it re-salts every Server Action id on every release, so every
+      # browser tab older than this deploy gets a 404 on every write it
+      # attempts, silently, until someone reloads it. Nothing turns red for
+      # that either: the build succeeds, the release is healthy, and the only
+      # trace is a `Failed to find Server Action` line in the app log.
+      # So this release stops too, for the same reason and by the same rule.
+      - name: Assert the Server Action salt is pinned
+        env:
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then
+            echo "::error::Missing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — without it Next re-salts every Server Action id per build (MOTIR-3948), and every tab open across this release loses every write. Generate one with 'openssl rand -base64 32' and set it as a repository secret; it must never change afterwards."
+            exit 1
+          fi
+          echo "the Server Action salt is pinned"
+
       # ⚠️ THE BUILD ARGUMENTS ARE NOT OPTIONAL EXTRAS — they are the ONLY way
       # the browser half of monitoring gets configured, because `next build`
       # inlines a `NEXT_PUBLIC_*` value into the client bundle and a Fly runtime
@@ -1390,6 +1409,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
           flyctl deploy --local-only --app "$FLY_APP" \
@@ -1398,6 +1418,7 @@ jobs:
             --build-arg "SENTRY_ORG=$SENTRY_ORG" \
             --build-arg "SENTRY_PROJECT=$SENTRY_PROJECT" \
             --build-secret "SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN" \
+            --build-secret "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" \
             2>&1 | tee /tmp/fly-deploy.log
 
       # ⚠️ "CONFIGURED" IS NOT "RAN", AND THIS REPO HAS THE SCAR TO PROVE IT.
