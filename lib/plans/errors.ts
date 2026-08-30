@@ -502,7 +502,7 @@ export class NoPlanForWorkItemError extends Error {
   readonly code = 'NO_PLAN_FOR_WORK_ITEM' as const;
   constructor(readonly workItemKey: string) {
     super(
-      `No submitted plan is anchored to ${workItemKey}. Automatic approval acts only on the plan a run's own refused card produced; approve any other plan in Motir.`,
+      `No submitted plan is anchored to ${workItemKey}. Automatic approval acts only on the plan a run's own refused work item produced; approve any other plan in Motir.`,
     );
     this.name = 'NoPlanForWorkItemError';
   }

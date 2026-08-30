@@ -10,6 +10,7 @@ import {
   type UpdateIssueInput,
 } from '../[key]/edit/actions';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
+import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
 
 // The quick-view rail's EDIT chrome (MOTIR-2563), built to
 // design/work-items/quick-view.mock.html panels 7-9 + 12.
@@ -114,6 +115,10 @@ export function useQuickViewRailEdit(
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
+  // Only for the REJECTION message below — every other string on this rail is
+  // rendered by the components, and a refusal arrives already translated from
+  // the action.
+  const t = useTranslations('issueViews');
 
   const [overrides, setOverrides] = useState<Partial<QuickViewData>>({});
   const [ackUpdatedAt, setAckUpdatedAt] = useState<string | null>(null);
@@ -174,11 +179,22 @@ export function useQuickViewRailEdit(
       setOverrides((o) => ({ ...o, ...optimistic }));
       try {
         finish(key, await run(), optimistic);
+      } catch (err) {
+        // A REJECTION is the third outcome, and it used to fall through this
+        // block untouched (MOTIR-3948): `finish` never ran, so the optimistic
+        // value STAYED on the row with no message — a write the server refused,
+        // rendered exactly like one it took. The commonest cause is a tab older
+        // than the running build, whose Server Action ids no longer resolve.
+        //
+        // It routes through `finish`'s own refusal arm rather than a second
+        // rollback path: one place drops the optimistic keys, one place writes
+        // the row's message, and the two cannot drift.
+        finish(key, { ok: false, error: t(serverActionRejectionKey(err)) }, optimistic);
       } finally {
         setPending(null);
       }
     },
-    [finish],
+    [finish, t],
   );
 
   const commit = useCallback<QuickViewRailEdit['commit']>(

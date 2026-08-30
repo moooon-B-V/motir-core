@@ -86,7 +86,7 @@ describe('nothing published yet', () => {
     render(<DesignResultPanel evidence={null} isDesignCard={false} />);
     expect(screen.getByText('No design result published yet')).toBeTruthy();
     // The shorter arm: same claim, no tool name and no three-file detail.
-    expect(screen.getByText(/the agent working this card publishes it/)).toBeTruthy();
+    expect(screen.getByText(/the agent working this work item publishes it/)).toBeTruthy();
     expect(screen.queryByText(/publish_design_result/)).toBeNull();
     expect(screen.queryByText(/runs CI/)).toBeNull();
   });

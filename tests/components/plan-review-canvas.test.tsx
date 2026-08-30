@@ -847,7 +847,7 @@ describe('PlanReviewCanvas — the level survives APPROVE (bug MOTIR-3439)', () 
 // says why, or an empty-looking canvas reads as a failed load. The behaviour
 // shipped with MOTIR-3260; the sentence explaining it did not.
 describe('PlanReviewCanvas — the caption on an ENTIRELY proposed level (bug MOTIR-3453)', () => {
-  const CAPTION = "Nothing committed here yet — every card on this level is this plan's";
+  const CAPTION = "Nothing committed here yet — every item on this level is this plan's";
 
   beforeEach(() => {
     stubRoadmap();

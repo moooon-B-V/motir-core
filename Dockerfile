@@ -127,14 +127,42 @@ ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
     SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT
 
-# The token is mounted for THIS command only. `|| true` on the read is
+# ── the SERVER-ACTION SALT (MOTIR-3948) ─────────────────────────────────────
+# ⚠️ THIS ONE IS WHY AN OPEN TAB STOPS BEING ABLE TO WRITE AFTER A DEPLOY.
+# Next hashes every Server Action id with the build's `encryptionKey`
+# (`serverReferenceHashSalt`, `next/dist/build/webpack-config.js`), and generates
+# that key RANDOMLY PER BUILD unless `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is set
+# (`next/dist/build/index.js` → `encryption-utils-server.js`). So without a pinned
+# value every release re-salts every id: a browser holding the previous build's
+# JavaScript posts ids this build has never heard of, the server answers 404
+# `x-nextjs-action-not-found`, and every write from that tab fails until it is
+# reloaded. Measured on this repo: three builds of one commit, three different
+# ids for the same exported action.
+#
+# It is a BUILD-time value, not a runtime one — the salt is baked into the client
+# bundle and into `server-reference-manifest.json` — and the RUNTIME reads it back
+# out of that manifest (`encryption-utils.js`: `process.env.NEXT_SERVER_ACTIONS_
+# ENCRYPTION_KEY || serverActionsManifest.encryptionKey`). So there is deliberately
+# NO Fly runtime secret for it: a runtime value that disagreed with the baked one
+# would break decryption of every bound argument instead of fixing anything.
+#
+# It goes in as a build SECRET rather than an `ARG` for the reason the block above
+# states — it encrypts the arguments closed over by server actions, and a
+# `--build-arg` is recorded in the build's metadata. `ci.yml`'s deploy step is the
+# other half, and it REFUSES to release without it.
+#
+# Both secrets are mounted for THIS command only. `|| true` on each read is
 # deliberate: with no secret mounted the file does not exist, the variable stays
-# empty, `next.config.ts` disables source-map upload, and the build proceeds —
-# the self-host path again. Read `set -eu` as covering everything after it.
+# empty, and the build proceeds — source-map upload disabled, salt back to
+# per-build random. That is the self-host path, unchanged and unbroken by either.
+# Read `set -eu` as covering everything after it.
 RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
+    --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     set -eu; \
     SENTRY_AUTH_TOKEN="$(cat /run/secrets/SENTRY_AUTH_TOKEN 2>/dev/null || true)"; \
     export SENTRY_AUTH_TOKEN; \
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$(cat /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY 2>/dev/null || true)"; \
+    export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; \
     pnpm exec next build
 
 # ── the worker bundle (MOTIR-3421) ──────────────────────────────────────────
@@ -307,6 +335,37 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/release-migrate.mjs ./mig
 # failure in minutes and not diagnosing it at all.
 COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs ./worker/worker.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs.map ./worker/worker.mjs.map
+
+# ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
+# ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS
+# NOTHING NEEDED IT TO. Its `ARG`/`ENV` pair sits in `builder` (see the
+# monitoring block above), where `next build` reads it to name the Sentry release
+# and tag the source maps it uploads. A Docker `ENV` is scoped to its own stage,
+# and this stage copies artifacts rather than inheriting an environment — so
+# `process.env.MOTIR_RELEASE` in the SERVER process was `undefined`, and the
+# deployment had no way to say which commit it was running.
+#
+# `/api/health/release` is what needs it: the freshness check outside the
+# deployment compares this string against `main`'s head
+# (`scripts/deployFreshness.mjs`), and the whole design rests on the deployment
+# stating ONE honest fact about itself. Without this line the route answers 503
+# `unset` on every release and the check is permanently blind.
+#
+# ⚠️ IT MUST BE THE SAME VALUE THE BUILDER GOT — one `--build-arg` reaches every
+# stage that declares the `ARG`, which is why this re-declares rather than
+# re-deriving. `.git` is in `.dockerignore`, so there is no `git rev-parse`
+# fallback inside the image and a mismatch could not be detected here.
+#
+# ⚠️ AND IT SITS AFTER EVERY `COPY`, DELIBERATELY. An `ENV` that changes on every
+# commit invalidates every layer built after it; placed at the top of the stage
+# it would cost a full re-copy of the standalone bundle on each release for a
+# 40-character string.
+#
+# Empty default, like every other build argument here: a `docker build` with no
+# arguments still produces a working self-hosted image, one that honestly reports
+# that it cannot name its commit.
+ARG MOTIR_RELEASE=""
+ENV MOTIR_RELEASE=$MOTIR_RELEASE
 
 USER nextjs
 EXPOSE 8080

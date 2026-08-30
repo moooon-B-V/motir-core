@@ -35,13 +35,34 @@ import type { TypeId } from '../../theme/typography';
  * apply exactly as they do in the shipped app. NEVER a Tier-0 `--color-*` or a
  * raw `rounded-*`/`p-*`/`h-*` (the colour + shape token rules in CLAUDE.md).
  *
- * Nesting caveat: a SCOPED base entry (`warm-editorial` / `motir` palette /
- * `motir` type) has no globals.css override block, so when it is nested under a
- * NON-base `<html>` it inherits that ancestor's axis rather than resetting to
- * the base. In the real consumers this never bites — onboarding runs against the
- * default `<html>`, and the appearance preview uses LIVE mode (inherits the
- * active selection it is meant to show). Full nested-base isolation (a reset
- * block or an iframe) is a noted follow-up if a future consumer needs it.
+ * ⚠️ WHAT A SCOPED VIGNETTE IS AND IS NOT ISOLATED FROM (rewritten, MOTIR-3933).
+ * This paragraph used to describe the nested-base leak and then discharge it
+ * with "in the real consumers this never bites". That was a claim about the
+ * consumer set at the time of writing, recorded as though it were a property of
+ * the component — and it is what let a public page ship ten identical palette
+ * previews. The consumer set grew. Measured, not assumed:
+ *
+ *   • COLOUR (`palette`) — ISOLATED. The wrapper carries `data-appearance-scope`
+ *     alongside the axis attribute, which re-emits the Tier-3 `--el-*` layer
+ *     onto this element so it reads the `--color-*` this subtree overrides
+ *     rather than the ones `:root` declared. theme.css states that requirement
+ *     at the declaration site; this component did not honour it, and without it
+ *     a scoped palette changed nothing the vignette paints with. The base
+ *     `motir` entry now has its own block, and every per-palette dark block has
+ *     a descendant arm, so a scoped tile is correct in BOTH themes and for the
+ *     base entry too.
+ *   • TYPE (`type`) — ISOLATED, same mechanism plus a base `[data-type='motir']`
+ *     block. That axis ships no descendant rules, so the tokens are all of it.
+ *   • SHAPE / MATERIAL (`styleId`) — **NOT ISOLATED, and this is open.** The
+ *     style axis ships ~69 descendant rules (`[data-style='X'] [data-surface=…]`,
+ *     `[data-style='X'] body`, …) and a descendant combinator does not stop at a
+ *     nested `data-style`. Under an active `glassmorphism` only 1 of 11 scoped
+ *     style vignettes wears its own material; under `aurora`, 3 of 11. The
+ *     shape TOKENS still scope correctly for a non-base style — it is the
+ *     material rules that cross. MOTIR-3947 owns the fix and the mechanism
+ *     choice (selector barrier vs an isolated render tree); do not add a
+ *     `[data-style='warm-editorial']` base block as a partial remedy, because it
+ *     makes a token assertion pass on a tile that still paints as the ancestor.
  */
 
 export interface StyleVignetteProps {
@@ -100,6 +121,17 @@ export function StyleVignette({ styleId, palette, type, label, className }: Styl
   if (styleId) axisAttrs['data-style'] = styleId;
   if (palette) axisAttrs['data-palette'] = palette;
   if (type) axisAttrs['data-type'] = type;
+  // SCOPED mode only. `data-appearance-scope` re-emits the Tier-3 `--el-*`
+  // layer onto this element, which is what makes the axis attributes above
+  // actually change what the subtree paints with: `--el-*` reference
+  // `--color-*` and `var()` resolves at the DECLARING element, so without it a
+  // nested `data-palette` overrides Tier-0 that nothing here reads.
+  //
+  // ⚠️ NOT in LIVE mode. With no axis prop the vignette is meant to FOLLOW the
+  // global selection, and re-emitting the layer locally would pin the subtree
+  // to whatever `--color-*` resolved at mount — the exact opposite of what the
+  // appearance preview mounts it for.
+  if (Object.keys(axisAttrs).length > 0) axisAttrs['data-appearance-scope'] = '';
 
   return (
     <div

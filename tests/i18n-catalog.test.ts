@@ -160,6 +160,66 @@ describe('zh glossary (locked terms)', () => {
   });
 });
 
+// The product's noun for the thing a person plans and an agent works is a WORK
+// ITEM. "card" is authoring-voice shorthand for it and had leaked into fifteen
+// shipped `en` values and thirteen `zh` twins (MOTIR-3949) — so a reader met two
+// nouns for one object with nothing on screen saying they are the same thing.
+//
+// The word does THREE jobs here and only one of them is the defect, so this is a
+// keyed ALLOWLIST rather than a ban: a UI PANEL (a dashboard tile, the `Card`
+// primitive) and a PAYMENT CARD are both correct and must survive. The predicate
+// is the standalone WORD — `\bcards?\b` — which is what makes it cheap: it
+// already excludes every `discard` / `Discarded` / `discardCta` value (19 of
+// them in `en`) without an entry, because `discard` offers no left word
+// boundary. A new value using "card" for a work item therefore fails here, and a
+// new value about billing or a tile fails ONCE, with the fix being one reviewed
+// line naming which of the two senses it is.
+const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
+  en: {
+    'orgAdmin.seat.addSub': 'payment card — Stripe bills the seat to the card on file',
+    'orgAdmin.seat.pastDueNote': 'payment card — the seat-plan charge failed',
+    'billing.pastDue.banner': 'payment card — the AI-plan charge failed',
+    'onboarding.landing.heroHint': 'payment card — "no credit card"',
+    'platformAdmin.monitoring.subtitle': 'UI panel — the six monitoring tiles, each linking out',
+  },
+  zh: {
+    'platformAdmin.monitoring.subtitle':
+      'UI panel — 每张卡片 is a monitoring tile, not a work item',
+  },
+};
+
+describe('product noun (a work item is never called a "card")', () => {
+  it.each(['en', 'zh'] as const)(
+    '%s.json uses "card" only for a panel or a payment card',
+    (locale) => {
+      const entries = flattenEntries((locale === 'en' ? en : zh) as Record<string, unknown>);
+      const allow = CARD_SENSE_ALLOWLIST[locale];
+      const leaks = entries.filter(
+        ([path, value]) =>
+          (/\bcards?\b/i.test(value) || value.includes('卡片')) && !(path in allow),
+      );
+      expect(
+        leaks.map(([path]) => path),
+        `"card" is not the product noun — say work item / item (zh: 工作项) at: ` +
+          `${leaks.map(([p]) => p).join(', ')}. If a hit is a UI panel or a payment ` +
+          `card, add it to CARD_SENSE_ALLOWLIST.${locale} with the sense.`,
+      ).toEqual([]);
+    },
+  );
+
+  it.each(['en', 'zh'] as const)('%s allowlist has no stale entry', (locale) => {
+    const entries = new Map(flattenEntries((locale === 'en' ? en : zh) as Record<string, unknown>));
+    const stale = Object.keys(CARD_SENSE_ALLOWLIST[locale]).filter((path) => {
+      const value = entries.get(path);
+      return value === undefined || !(/\bcards?\b/i.test(value) || value.includes('卡片'));
+    });
+    expect(
+      stale,
+      `allowlisted keys that no longer say "card": ${stale.join(', ')} — drop them`,
+    ).toEqual([]);
+  });
+});
+
 // A key whose NAME contains a `.` is not a naming preference — it is an
 // UNRESOLVABLE key. next-intl reserves `.` for nesting, so it walks
 // `platformAdmin.users.log.action.user.suspend` as six segments and never finds

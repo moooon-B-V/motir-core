@@ -245,10 +245,10 @@
     "listPoints": "{n} 点",
     "listMinutes": "{n} 分钟",
     "listStale": "可能已过期",
-    "listBodyRewritten": "已重写——打开卡片查看",
+    "listBodyRewritten": "已重写——打开工作项查看",
     "listEmptyTitle": "没有提案",
     "listEmptyBody": "此计划生成结束但没有提出任何内容。批准它不会改变任何东西。",
-    "allProposedLevel": "此层级尚无已提交的工作项——这里的每一张卡片都来自本计划",
+    "allProposedLevel": "此层级尚无已提交的工作项——这里的每一项都来自本计划",
     "proposedCrumb": "新",
     "showChangesPast": "显示已变更内容",
     "actionError": "出了点问题，请重试。",
@@ -343,7 +343,7 @@
     "noAccessDescription": "此项目为私有。请联系项目管理员将你加入，或切换到你有权限访问的项目。",
     "backToProjects": "返回项目",
     "readOnlyHint": "你对此项目仅有只读访问权限",
-    "readOnlyBoardBanner": "只读访问——你可以查看此看板，但无法移动或编辑卡片。"
+    "readOnlyBoardBanner": "只读访问——你可以查看此看板，但无法移动或编辑工作项。"
   },
   "permissions": {
     "domain": {
@@ -1360,10 +1360,12 @@
     "quickViewFieldSaving": "保存中",
     "quickViewFieldSaved": "已保存",
     "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。",
+    "actionSkewError": "此页面已过期——请重新加载后再次修改。",
+    "actionTransportError": "更改未保存。请检查网络连接后重试。",
     "sprintUpdateFailed": "无法更新冲刺，请重试。",
     "quickViewMoreFields": "另有 {count} 个字段",
     "repositories": "代码仓库",
-    "repositoriesOptional": "可选 —— 并非每张卡片都会落在某个仓库里。",
+    "repositoriesOptional": "可选 —— 并非每个工作项都会落在某个仓库里。",
     "repositoryPrimary": "主仓库",
     "repositoriesMore": "还有 {count} 个",
     "repositoriesAllDelivered": "全部已交付。",
@@ -3111,7 +3113,7 @@
         "factTimesSeen": "出现次数",
         "factRecordedFrom": "记录自",
         "emptyTitle": "Motir 还没有在这里学到任何经验",
-        "emptyBody": "当一份计划被证明有误——缺少依赖、某张卡片大到一次运行无法完成——Motir 会记下这条纠正，并在之后应用到为本项目起草的每一份计划。这些纠正会出现在这里，附带发生了什么以及为什么，方便你阅读并决定保留哪些。",
+        "emptyBody": "当一份计划被证明有误——缺少依赖、某个工作项大到一次运行无法完成——Motir 会记下这条纠正，并在之后应用到为本项目起草的每一份计划。这些纠正会出现在这里，附带发生了什么以及为什么，方便你阅读并决定保留哪些。",
         "emptyRecording": "只有当计划确实被纠正时才会记录。可以在「AI 规划」设置中关闭记录。",
         "unavailableTitle": "Motir AI 当前不可用",
         "unavailableBody": "本页其余部分仍可正常使用。服务恢复后经验会重新出现。",
@@ -3354,7 +3356,7 @@
     "assignedTo": "负责人：{name}",
     "unassigned": "未分配",
     "boardLabel": "面板列",
-    "dndInstructions": "按空格键拿起卡片。拖动时，使用方向键移动卡片。再次按空格键放下，或按Esc取消。",
+    "dndInstructions": "按空格键拿起工作项。拖动时，使用方向键移动工作项。再次按空格键放下，或按Esc取消。",
     "announcementPickedUp": "已拿起 {key}。位于 {col} 列，第 {index} / {count} 个位置。",
     "announcementMoved": "{key} 已移动到 {col} 列，第 {index} / {count} 个位置。按空格键放下，按Esc取消。",
     "announcementDropped": "{key} 已放入 {col} 列。",
@@ -4769,7 +4771,7 @@
     "boardEmptyBody": "该项目还没有公开看板，请稍后再来。",
     "boardColumnEmpty": "暂无内容",
     "boardProjectionNote": "负责人、估算与内部评论已被公开投影隐藏——它们不会被读取，而非仅在页面上隐藏。",
-    "boardTruncatedNote": "正在显示最近的 {cap} 张卡片。这是更大看板的公开预览。",
+    "boardTruncatedNote": "正在显示最近的 {cap} 个工作项。这是更大看板的公开预览。",
     "workItemsTitle": "工作项",
     "workItemsSubtitle": "该项目公开工作项的只读视图。",
     "workItemsEmptyTitle": "暂无工作项",
@@ -6805,7 +6807,7 @@
   },
   "designResult": {
     "title": "设计结果",
-    "gloss": "— 这张卡片产出的内容",
+    "gloss": "— 这个工作项产出的内容",
     "note": "设计说明",
     "openInNewTab": "在新标签页打开",
     "frameTitle": "设计稿 — {path}",
@@ -6819,8 +6821,8 @@
     "publishedBy": "发布自",
     "empty": {
       "title": "尚未发布设计结果",
-      "body": "当负责这张卡片的智能体发布后，设计结果会出现在这里。没有其他机制会发布它。",
-      "bodyDesign": "当这张卡片的智能体调用publish_design_result发布后，设计结果会出现在这里：说明、页面设计稿和截图一次提交。没有其他机制会发布它，面板为空即表示这次调用没有发生。"
+      "body": "当负责这个工作项的智能体发布后，设计结果会出现在这里。没有其他机制会发布它。",
+      "bodyDesign": "当这个工作项的智能体调用publish_design_result发布后，设计结果会出现在这里：说明、页面设计稿和截图一次提交。没有其他机制会发布它，面板为空即表示这次调用没有发生。"
     },
     "frameLoading": "正在加载设计稿…"
   },
@@ -6895,13 +6897,13 @@
       "title": "平台总览",
       "subtitle": "一眼看清全部租户——Motir托管了多少组织、工作区、项目和用户，以及各租户最近发生了什么。只读；租户治理在治理工具中。",
       "pendingTitle": "租户数据尚未接入",
-      "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一张卡片交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
+      "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一个工作项交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
     },
     "users": {
       "breadcrumb": "平台·用户",
       "breadcrumbAria": "账号",
       "title": "查找账号",
-      "subtitle": "按邮箱地址或姓名搜索 Motir 托管的所有账号。打开一个账号属于跨租户读取，会记入审计日志。组织、工作区和项目暂时无法搜索——那属于跨租户读取层，由另一张卡片交付。",
+      "subtitle": "按邮箱地址或姓名搜索 Motir 托管的所有账号。打开一个账号属于跨租户读取，会记入审计日志。组织、工作区和项目暂时无法搜索——那属于跨租户读取层，由另一个工作项交付。",
       "searchLabel": "邮箱地址或姓名",
       "searchPlaceholder": "ada@example.com",
       "searchSubmit": "搜索",
@@ -7136,7 +7138,7 @@
     "sectionSubtitle": "本项工作的步骤",
     "progress": "已完成 {done}/{total}",
     "empty": "尚无步骤。",
-    "emptyHint": "把这张卡片的工作拆成可以逐条勾选的步骤，每条一个操作。",
+    "emptyHint": "把这个工作项拆成可以逐条勾选的步骤，每条一个操作。",
     "allDone": "所有步骤均已完成。",
     "addPlaceholder": "添加步骤…",
     "add": "添加步骤",

@@ -11,6 +11,59 @@ that distinction, which this release makes visible for the first time.
 
 ---
 
+## 0.4.0
+
+**`motir link` now brings the code down.** Linking a folder to a project used to
+record the link and stop; it now clones that project's repositories into the
+folder, so an agent has something to work in before it is dispatched. If you
+manage checkouts yourself, `motir link --no-clone` keeps the old behaviour.
+
+**A run can cover a whole story or sprint.** Where a run took one work item, it
+can now take a story or a sprint and drain every leaf under it — claimed
+atomically, so two runs cannot pick up overlapping halves of the same set, and
+delivered as one pull request and one CI run rather than one per card.
+
+**A work item that ships in more than one repository now runs as one job.** The
+agent gets a worktree per repository and opens a pull request in each, and the
+card does not complete until every one of them has merged.
+
+**You decide, per run, what a run may do to the plan.** A run that finds its card
+wrong can log a bug and propose a re-plan — and five new flags say whether it
+may: `--no-log-bug` / `--disable-log-bug`, `--no-replan` / `--disable-replan`,
+and `--auto-approve-replan` for an unattended `motir auto` that you trust to
+apply its own correction.
+
+**`--print-prompt` echoes each assembled prompt to stderr as it is sent**, so a
+live run can be audited without reconstructing what the agent was told.
+
+### What you may have to do
+
+- **A pull request now belongs to a card only by an EXPLICIT link.** Writing
+  `MOTIR-123` in a pull-request title used to be enough to move that card when
+  the pull request merged; that parse is retired. The CLI links the pull requests
+  it opens, so an ordinary `motir run` is unaffected — but **if you have scripts
+  or habits that rely on the title alone, the card will no longer move.**
+- **A card reaches In Review only when its CI is green.** A merged pull request
+  with a red pipeline leaves the card at the new `implemented` status instead of
+  advancing it. Nothing you pass changes this; it is worth knowing before you
+  wonder why a card stopped one step short.
+- **If you mint tokens by hand, approving a plan is now its own permission**
+  (`ai:decide_plan`, split out of `ai:view_plan`), and archiving a work item
+  needs two keys rather than one. Existing tokens keep the authority they had.
+
+### Also in this release
+
+- The sandbox image installs `claude` from the `stable` dist-tag, after a
+  published version shipped no x64 platform package.
+- The release lane writes its own digest table instead of asking a person to
+  retype it.
+
+**Nothing was removed.** Twenty-three commands before this release, twenty-three
+after; seven flags added and none taken away. If you script against `motir`,
+every invocation you have written still runs.
+
+---
+
 ## 0.3.0
 
 **A refused command now names a PERMISSION, not a scope.** Motir retired the six
