@@ -359,7 +359,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'uploadWorkItemAttachment',
     summary: 'Attach a file to a work item',
     description:
-      'Upload a file and attach it to the work item, as `multipart/form-data` with a single `file` part. This is the GENERAL door: it carries no artifact kind and belongs to no lifecycle, so any deliverable a card produces — a research findings document, a review’s notes — can reach the card that commissioned it. A DESIGN asset does not use this endpoint; it has its own publisher, whose result renders in the Design result panel. ⚠️ Two size limits apply and the SMALLER one is not this API’s: the organization’s plan sets a per-file entitlement (10 MB, or 100 MB on a paid plan) and is what returns 413, while a direct upload is separately capped at roughly 4.5 MB by the serving platform and is refused before the request reaches Motir.',
+      'Upload a file and attach it to the work item, as `multipart/form-data` with a single `file` part. This is the GENERAL door: it carries no artifact kind and belongs to no lifecycle, so any deliverable a work item produces — a research findings document, a review’s notes — can reach the item that commissioned it. A DESIGN asset does not use this endpoint; it has its own publisher, whose result renders in the Design result panel. ⚠️ Two size limits apply and the SMALLER one is not this API’s: the organization’s plan sets a per-file entitlement (10 MB, or 100 MB on a paid plan) and is what returns 413, while a direct upload is separately capped at roughly 4.5 MB by the serving platform and is refused before the request reaches Motir.',
     permission: 'work_item:edit',
     parameters: [keyParameter],
     requestBody: {

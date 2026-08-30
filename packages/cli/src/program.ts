@@ -253,7 +253,7 @@ export function buildProgram(): Command {
     )
     .option(
       '--disable-replan',
-      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
     )
     // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
     // on instinct gets what they meant instead of `unknown option`; hiding it is
@@ -306,7 +306,7 @@ export function buildProgram(): Command {
     )
     .option(
       '--disable-replan',
-      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
     )
     // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
     // on instinct gets what they meant instead of `unknown option`; hiding it is
@@ -380,7 +380,7 @@ export function buildProgram(): Command {
     )
     .option(
       '--disable-replan',
-      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
     )
     // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
     // on instinct gets what they meant instead of `unknown option`; hiding it is
@@ -436,7 +436,7 @@ export function buildProgram(): Command {
     )
     .option(
       '--disable-replan',
-      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
     )
     // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
     // on instinct gets what they meant instead of `unknown option`; hiding it is

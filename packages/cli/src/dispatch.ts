@@ -335,7 +335,7 @@ export function cwdReasonLabel(target: DispatchTarget): string {
       // cannot run outside a git repository. This label now names the ONE case
       // that legitimately reaches it — a repository that does not exist anywhere
       // yet, whose creation is the dispatched card's own work.
-      return `workspace root — "${target.targetRepo ?? ''}" does not exist yet; this card creates it`;
+      return `workspace root — "${target.targetRepo ?? ''}" does not exist yet; this work item creates it`;
     case 'unpinned_root':
       return 'workspace root — the item pins no repo';
   }
@@ -394,10 +394,10 @@ export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | nul
   for (const s of shapes) {
     lines.push(
       `Advisory:   ${dispatch.key}'s acceptance criterion ${s.criterionIndex} says "${s.phrase}" —`,
-      "            state that exists only after this card's own PR has merged.",
+      "            state that exists only after this work item's own PR has merged.",
       '            This is NOT a blocker — the dispatch proceeds. Your boundary ends at',
       '            PR opened, so that criterion and everything below it belongs to a',
-      '            follow-on card. Build what is above the line and report the split.',
+      '            follow-on work item. Build what is above the line and report the split.',
     );
   }
   // The REPO-STRADDLE advisory (MOTIR-2177). The operator is the one who knows
@@ -409,12 +409,12 @@ export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | nul
       `Advisory:   ${dispatch.key}'s acceptance criterion ${s.criterionIndex} names ${s.path},`,
       `            which lives in ${s.repo}${
         s.reason === 'contradiction'
-          ? " — not this card's pinned repo."
-          : ', and this card pins no repo while its criteria name more than one.'
+          ? " — not this work item's pinned repo."
+          : ', and this item pins no repo while its criteria name more than one.'
       }`,
       '            This is NOT a blocker — the dispatch proceeds. One subtask, one repo,',
       '            one PR: check the other repo before branching. If that half is already',
-      '            merged, or this is a boundary-contract card, proceed; otherwise surface',
+      '            merged, or this is a boundary-contract item, proceed; otherwise surface',
       "            the split rather than dropping the other repo's criteria.",
     );
   }
@@ -425,9 +425,9 @@ export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | nul
     lines.push(
       `Advisory:   ${dispatch.key}'s body names ${s.path}, which ${s.pullRequest} already`,
       `            changed (merged ${s.mergedAt}).`,
-      '            This is NOT a blocker — the dispatch proceeds. But this card may already',
-      "            be built: read that pull request against the card's acceptance criteria.",
-      '            If it delivers them, close the card with the merge as the evidence instead',
+      '            This is NOT a blocker — the dispatch proceeds. But this work item may already',
+      "            be built: read that pull request against the item's acceptance criteria.",
+      '            If it delivers them, close the item with the merge as the evidence instead',
       '            of rebuilding it. If the two merely share a file, proceed.',
     );
   }
@@ -482,7 +482,7 @@ function deliveryLabel(state: string | null): string | null {
     case 'unestablished':
       return 'NOT ESTABLISHED — this repository does not exist yet, so there is nothing to open a pull request against';
     case 'excluded':
-      return 'excluded — the project is deliberately code-less here; it does not hold this card';
+      return 'excluded — the project is deliberately code-less here; it does not hold this work item';
     default:
       return state;
   }
@@ -509,7 +509,7 @@ export function renderResumeNotice(dispatch: DispatchPrompt): string | null {
   const remaining = repos.filter((r) => r.delivery !== 'delivered').map((r) => r.name);
   if (delivered.length === 0 || remaining.length === 0) return null;
   return [
-    `Resume:     ${dispatch.key} is PARTIALLY DELIVERED — this is not a fresh card.`,
+    `Resume:     ${dispatch.key} is PARTIALLY DELIVERED — this is not a fresh work item.`,
     `            already delivered: ${delivered.join(', ')}`,
     `            still outstanding: ${remaining.join(', ')}`,
     '            Do not re-open a pull request in a repository that has already merged.',
@@ -596,7 +596,7 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
       return [
         `${key}: agent finished — integrated on "${dispatch.sessionBranch}" in ${repos.length}`,
         `repositories: ${repos.map((r) => r.name).join(', ')}.`,
-        'CI decides when each becomes reviewable: the card moves to In Review on its own',
+        'CI decides when each becomes reviewable: the item moves to In Review on its own',
         'when the checks go green.',
         `Next: review + merge the session PR in EACH of them, then`,
         `\`motir done --session ${dispatch.sessionBranch}\`.`,
@@ -605,7 +605,7 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
     }
     return [
       `${key}: agent finished — integrated on "${dispatch.sessionBranch}" (now Implemented).`,
-      'CI decides when it becomes reviewable: the card moves to In Review on its own',
+      'CI decides when it becomes reviewable: the item moves to In Review on its own',
       'when the checks on that branch go green.',
       `Next: review + merge the session PR, then \`motir done --session ${dispatch.sessionBranch}\`.`,
     ].join('\n');
@@ -629,12 +629,12 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
       lines.push(
         '',
         `⚠ ${blocked.map((r) => r.name).join(', ')} cannot be delivered yet: the repository does`,
-        '  not exist. Establish it on the project before this card can complete.',
+        '  not exist. Establish it on the project before this work item can complete.',
       );
     }
     lines.push(
       '',
-      'CI decides when it becomes reviewable: the card moves to In Review on its own',
+      'CI decides when it becomes reviewable: the item moves to In Review on its own',
       'when the checks go green.',
       `Next: review + merge every one of them. ${key} completes only when EVERY`,
       "repository's pull request has merged — a single merge leaves it held.",
@@ -643,7 +643,7 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
   }
   return [
     `${key}: agent finished — its pull request is open (now Implemented).`,
-    'CI decides when it becomes reviewable: the card moves to In Review on its own',
+    'CI decides when it becomes reviewable: the item moves to In Review on its own',
     'when the checks on that pull request go green.',
     `Next: review + merge the PR, then \`motir done ${key}\`.`,
   ].join('\n');
@@ -665,7 +665,7 @@ export function renderNothingPushed(key: string, dispatch: DispatchPrompt): stri
       : `no branch naming ${key} is on the remote`;
   return [
     `${key}: agent exited 0, but ${where}.`,
-    'The card stays In Progress: Implemented means the code is PUSHED, and this run',
+    'The work item stays In Progress: Implemented means the code is PUSHED, and this run',
     'cannot claim that. Nothing was reverted — check the worktree for uncommitted or',
     'unpushed work.',
     `It is excluded from the next \`motir next\` in this session; re-run it with \`motir run ${key}\`.`,
@@ -716,13 +716,13 @@ export function renderClaimRefusal(claim: WorkItemClaim): string {
     const holder = claim.assignee?.name ?? claim.transitionedBy?.name ?? null;
     return [
       `${claim.key}: already claimed${holder ? ` by ${holder}` : ' by somebody else'} — not dispatching.`,
-      `${where} Two agents on one card is the failure this refusal exists to prevent;`,
+      `${where} Two agents on one work item is the failure this refusal exists to prevent;`,
       'nothing was changed. Take it over by hand if you know the other run is dead.',
     ].join('\n');
   }
   return [
     `${claim.key}: not claimable — not dispatching.`,
-    `${where} A run claims from the TO-DO category only, so a card that is under`,
+    `${where} A run claims from the TO-DO category only, so a work item that is under`,
     'review, being re-planned, or finished is not work an agent may be started on.',
     'Nothing was changed.',
   ].join('\n');
@@ -813,10 +813,10 @@ export async function agentSubmittedReplan(
  */
 export function renderReplanSubmitted(key: string): string {
   return [
-    `${key}: the agent refused the card and submitted a re-plan — this is a correct outcome, not a failure.`,
-    'The card is left in Planning exactly where the agent put it: nothing was recorded as',
+    `${key}: the agent refused the work item and submitted a re-plan — this is a correct outcome, not a failure.`,
+    'The work item is left in Planning exactly where the agent put it: nothing was recorded as',
     'implemented, no session branch was claimed, and no status was moved by this run.',
-    'The plan is waiting for a human in Motir. Review it, then re-run the card if it survives.',
+    'The plan is waiting for a human in Motir. Review it, then re-run the item if it survives.',
   ].join('\n');
 }
 
@@ -898,7 +898,7 @@ export function autoOnlyFlagError(command: 'run' | 'next' | 'batch'): {
   const why =
     command === 'batch'
       ? 'A batch freezes its ready set before the first agent starts and never re-reads it, so ' +
-        'cards a newly-approved plan creates would be approved and then never dispatched.'
+        'work items a newly-approved plan creates would be approved and then never dispatched.'
       : `\`motir ${command}\` dispatches ONE item and exits, so there is no continuation for an ` +
         'approval to feed.';
   return {

@@ -339,7 +339,7 @@ describe('motir run <container> — the happy path', () => {
     expect(callsTo('claim_scope')).toHaveLength(1);
     expect(callsTo('claim_scope')[0]?.args).toEqual({ kind: 'work_item', key: 'PROD-1' });
     expect(harness.stderr).toContain('Claimed PROD-1 "The story"');
-    expect(harness.stderr).toContain('Every card above now reads In Progress');
+    expect(harness.stderr).toContain('Every work item above now reads In Progress');
   });
 
   it('NEVER sends the container’s own key to dispatchPrompt', async () => {
