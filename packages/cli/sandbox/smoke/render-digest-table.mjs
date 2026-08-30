@@ -669,10 +669,38 @@ export async function main(argv, io) {
   return 0;
 }
 
-// Only when executed, never when imported by the unit tests.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  const { readdir, readFile, writeFile, appendFile } = await import('node:fs/promises');
-  const io = {
+/**
+ * The REAL `io` the script runs with — exported so a test can drive it.
+ *
+ * ⚠️ `setOutput` writes SYNCHRONOUSLY, and that is the whole point of this
+ * function existing (Bug MOTIR-3989). It used to be
+ * `void appendFile(...)` from `node:fs/promises` — unawaited, fire-and-forget —
+ * immediately before `process.exit` below. **`process.exit` does not flush
+ * pending asynchronous I/O**, so the write raced the exit and lost: three
+ * consecutive runs of this script at `origin/main` exited 0 with
+ * `$GITHUB_OUTPUT` still zero bytes.
+ *
+ * What that cost: `release-sandbox.yml`'s `Commit it on main` step is gated on
+ * `steps.render.outputs.changed == 'true'`, so the gate read an empty string and
+ * the step was SKIPPED — silently, with the job and the whole run green and the
+ * log line above it saying the section had been inserted. `cli-v0.4.0` published
+ * nine images and recorded none of their digests.
+ *
+ * So the contract this function owes its caller is stronger than "the bytes
+ * arrive eventually": **when `setOutput` RETURNS, the bytes are on disk**, because
+ * the very next thing that happens may be `process.exit`. `appendFileSync` is
+ * what makes that true by construction. `test/sandboxDigestTable.test.ts` asserts
+ * it with no `await` between the call and the read, which is the only shape that
+ * can fail against the old implementation.
+ *
+ * The exit mechanism below is deliberately UNCHANGED. Switching to
+ * `process.exitCode` + return would also have worked, and would additionally
+ * cover any OTHER unawaited write — but there is no other: `writeFile` is
+ * awaited at its call site. It would trade a closed race for a new way to hang
+ * if anything ever leaves a handle open, which is a worse deal on a release lane.
+ */
+export function nodeIo({ readdir, readFile, writeFile, appendFileSync }) {
+  return {
     readdir: (dir) => readdir(dir),
     readFile: (path) => readFile(path, 'utf8'),
     writeFile: (path, content) => writeFile(path, content, 'utf8'),
@@ -686,10 +714,17 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       // and reads it the way every other step does. Absent outside Actions, so a
       // developer running this in a shell is unaffected.
       if (process.env.GITHUB_OUTPUT) {
-        void appendFile(process.env.GITHUB_OUTPUT, `${name}=${value}\n`, 'utf8');
+        appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`, 'utf8');
       }
     },
   };
+}
+
+// Only when executed, never when imported by the unit tests.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  const { readdir, readFile, writeFile } = await import('node:fs/promises');
+  const { appendFileSync } = await import('node:fs');
+  const io = nodeIo({ readdir, readFile, writeFile, appendFileSync });
   main(process.argv.slice(2), io).then(
     (code) => process.exit(code),
     (err) => {
