@@ -3043,6 +3043,121 @@
 /* `motir` needs no block — it is the Tier-3 base above. Each later palette
    ADDS its [data-palette='<id>'] override here (light + dark companion). */
 
+/* ── The `motir` BASE palette, re-asserted for a SCOPED subtree (MOTIR-3933) ──
+   `motir` is the Tier-0 default, so it historically had NO block: the base
+   values simply were the palette. That is correct for `<html>` and wrong for a
+   NESTED scope, which inherits its ancestor's palette and has nothing to
+   override it with — a `motir` preview under a `graphite` document rendered as
+   graphite. Every other palette re-asserts, so the base must too.
+
+   ⚠️ SCOPED BY `[data-appearance-scope]`, DELIBERATELY. `<html>` never carries
+   that attribute, so this block matches only a nested preview and the ROOT
+   cascade is byte-identical to before. It also keeps the block from reading as
+   a palette OVERRIDE: several `tests/theme/*` guards DERIVE "which palettes
+   override this token" from the stylesheet, and a bare `[data-palette='motir']`
+   block silently enrolled the BASE palette in bars written for overrides. It is
+   not an override — it is a scope reset — and the selector now says so.
+
+   These values are COPIES, and the duplication is guarded rather than trusted:
+   `test/paletteScopeIsolation.test.tsx` asserts each declaration here equals
+   the value the base layer declares for that token, so a change to `@theme`
+   that is not mirrored here fails rather than drifts. The token SET is the
+   union of what any `[data-palette]` block overrides — a new palette that
+   overrides a token absent here fails the same test. */
+[data-appearance-scope][data-palette='motir'] {
+  --color-accent: #ff64c8;
+  --color-accent-green: #1aae39;
+  --color-accent-orange: #dd5b00;
+  --color-accent-teal: #2a9d99;
+  --color-background: #ffffff;
+  --color-border: #e5e3df;
+  --color-canvas: #ecebe7;
+  --color-charcoal: #37352f;
+  --color-destructive: #e03131;
+  --color-destructive-foreground: #ffffff;
+  --color-foreground: #1a1a1a;
+  --color-hairline: #e5e3df;
+  --color-hairline-soft: #ede9e4;
+  --color-hairline-strong: #c8c4be;
+  --color-info: #0075de;
+  --color-ink: #1a1a1a;
+  --color-link: #0070d2;
+  --color-link-pressed: #005bab;
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #787671;
+  --color-primary: #5645d4;
+  --color-primary-fill: #5645d4;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #4534b3;
+  --color-slate: #5d5b54;
+  --color-steel: #787671;
+  --color-stone: #a4a097;
+  --color-success: #1aae39;
+  --color-surface: #f6f5f4;
+  --color-surface-soft: #fafaf9;
+  --color-tint-lavender: #e6e0f5;
+  --color-tint-mint: #d9f3e1;
+  --color-tint-peach: #ffe8d4;
+  --color-tint-rose: #fde0ec;
+  --color-tint-sky: #dcecfa;
+  --color-tint-yellow: #fef7d6;
+  --color-warning: #dd5b00;
+  --el-priority-high: var(--color-warning);
+  --el-sidebar-item-bg-hover: #eeede9;
+  --el-status-blocked: var(--color-warning);
+  --el-status-cancelled: var(--color-steel);
+  --el-status-implemented: var(--color-accent);
+  --el-status-in-review: var(--color-primary);
+  --el-status-planning: var(--color-accent-teal);
+}
+
+/* The base palette's DARK arm — only the tokens the global dark block
+   overrides; the rest keep the light block's values above. Two selectors for
+   the same reason every other palette now has two: the compound one for
+   `<html>`, the descendant one for a nested scope. */
+[data-theme='dark'] [data-appearance-scope][data-palette='motir'],
+[data-appearance-scope][data-palette='motir'][data-theme='dark'] {
+  --color-background: #0f0f0f;
+  --color-border: #2a2a2a;
+  --color-canvas: #0e0e0e;
+  --color-charcoal: #e5e5e5;
+  --color-foreground: #f3f4f6;
+  --color-hairline: #2a2a2a;
+  --color-hairline-soft: #1f1f1f;
+  --color-hairline-strong: #3a3a3a;
+  --color-ink: #f3f4f6;
+  --color-link: #58a6ff;
+  --color-link-pressed: #79b8ff;
+  --color-muted: #1a1a1a;
+  --color-muted-foreground: #a4a097;
+  --color-primary: #7b6ce5;
+  --color-primary-fill: #6c5cdd;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #5645d4;
+  --color-slate: #a4a097;
+  --color-steel: #787671;
+  --color-stone: #5d5b54;
+  --color-surface: #1a1a1a;
+  --color-surface-soft: #161616;
+  --color-tint-lavender: #2a253a;
+  --color-tint-mint: #1a2f25;
+  --color-tint-peach: #3a2a1a;
+  --color-tint-rose: #3a1f2a;
+  --color-tint-sky: #1a2a3a;
+  --color-tint-yellow: #3a341a;
+  --el-sidebar-item-bg-hover: #222222;
+}
+
+/* The `motir` BASE type pairing, re-asserted (MOTIR-3933) — same reason as
+   the base palette above. The type axis carries no descendant rules, so these
+   three role tokens are the whole of it. */
+[data-appearance-scope][data-type='motir'] {
+  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-sans:
+    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: var(--font-serif-source, Georgia), serif;
+}
+
 /* ── Palette: Cobalt (data-palette="cobalt") — Subtask 7.3.49 ───────────────
    A cool, calm, trustworthy INSTITUTIONAL-BLUE re-skin: slate-cool surfaces, a
    confident cobalt primary/accent, a cool cyan highlight, cooled pastel tints.
@@ -3146,6 +3261,7 @@
 /* Cobalt — dark companion. A cool navy canvas (not the base near-black);
    brightened cobalt/link hues so they read AS text on the dark surface, and a
    darker accent fill so white labels still clear AA. */
+[data-theme='dark'] [data-palette='cobalt'],
 [data-palette='cobalt'][data-theme='dark'] {
   --color-background: #0b111d; /* deep cool navy canvas */
   --color-foreground: #e7edf6;
@@ -3344,6 +3460,7 @@
    inverts to near-WHITE ink (Vercel's dark white-button), the accent blue
    brightens so it reads AS text on the dark canvas, and semantic/type hues
    brighten to clear AA on near-black. */
+[data-theme='dark'] [data-palette='graphite'],
 [data-palette='graphite'][data-theme='dark'] {
   --color-background: #0c0d0f; /* stark cool near-black canvas */
   --color-foreground: #edeef0;
@@ -3519,6 +3636,7 @@
 /* Evergreen — dark companion. Bright emerald on a deep-forest canvas
    (Supabase-style: the bright accent FILL carries DARK label text). Mirrors the
    Tier-1 dark flip for the cooled neutrals. */
+[data-theme='dark'] [data-palette='evergreen'],
 [data-palette='evergreen'][data-theme='dark'] {
   --color-primary: #3ddc97;
   --color-primary-foreground: #06140d; /* dark ink on the bright emerald fill */
@@ -3611,6 +3729,15 @@
   /* Sans headlines — re-point the editorial serif role at the sans stack. */
   --font-serif:
     var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-sans:
+    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 [data-type='motir-mono'] {
@@ -3621,6 +3748,13 @@
      already is mono. ONLY --font-* tokens (the disjointness guard). */
   --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
   --font-sans: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 /* ── Palette: Spectrum (data-palette="spectrum") — Subtask 7.3.52 ───────────
@@ -3725,6 +3859,7 @@
 /* Spectrum — dark companion. A deep cool-violet canvas (not the base
    near-black); brightened violet/pink/link hues so they read AS text on the
    dark surface, and a darker accent fill so white labels still clear AA. */
+[data-theme='dark'] [data-palette='spectrum'],
 [data-palette='spectrum'][data-theme='dark'] {
   --color-background: #14111f; /* deep cool-violet canvas */
   --color-foreground: #ece9f6;
@@ -3893,6 +4028,7 @@
    canvas (#0B0E11) + "Shark" cards (#1E2329); the gold brightens to #FCD535 and
    the CTA fill carries dark labels; semantics are Binance's real buy-green
    #0ECB81 / sell-red #F6465D. */
+[data-theme='dark'] [data-palette='amber'],
 [data-palette='amber'][data-theme='dark'] {
   --color-background: #0b0e11; /* Binance deepest trading-floor black */
   --color-foreground: #eaecef;
@@ -4048,6 +4184,7 @@
 /* Sienna — dark companion. Mistral is light-dominant (few dark tokens: Mistral
    Black #1f1f1f); a warm near-black canvas built from it, the flame brightened
    to read as text, the fill a bright flame with dark-ink labels. */
+[data-theme='dark'] [data-palette='sienna'],
 [data-palette='sienna'][data-theme='dark'] {
   --color-background: #15120d; /* warm near-black canvas (from Mistral Black) */
   --color-foreground: #f5efe2;
@@ -4191,6 +4328,7 @@
 /* Garnet — dark companion. Pinterest's Cod-Gray near-black canvas; the red
    brightens to read as text, the CTA fill stays the deep Pushpin red carrying
    WHITE labels, semantics brighten to clear AA. */
+[data-theme='dark'] [data-palette='garnet'],
 [data-palette='garnet'][data-theme='dark'] {
   --color-background: #0e0e0e; /* Cod-Gray near-black canvas */
   --color-foreground: #efefef;
@@ -4364,6 +4502,7 @@
    #090909 / gray-900 #1a1b1e); the Sunglow yellow brightens to read as text and
    the fill keeps dark Stratos labels; blue/green/red brighten one ramp step to
    clear AA on the dark canvas. All values are documented Mirotone steps. */
+[data-theme='dark'] [data-palette='citrine'],
 [data-palette='citrine'][data-theme='dark'] {
   --color-background: #090909; /* Miro black */
   --color-foreground: #f6f7f9; /* gray-50 */
@@ -4527,6 +4666,7 @@
    1/2/3); the bubblegum pink brightens to read as text, the fill is a bright
    candy pink with dark labels, and the rainbow tints become deep candy washes.
    All values are documented Radix dark steps. */
+[data-theme='dark'] [data-palette='candy'],
 [data-palette='candy'][data-theme='dark'] {
   --color-background: #191117; /* Radix Pink dark-1 — pink-tinted black */
   --color-foreground: #eeeef0; /* Mauve dark-12 */
@@ -4600,6 +4740,13 @@
      disjointness guard): no colour (--el / --color) or shape token. */
   --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 [data-type='editorial'] {
@@ -4611,6 +4758,15 @@
      size tweak. ONLY --font-* role tokens here (the disjointness guard): no
      colour (--el/--color) or shape (--radius/--spacing/--shadow) token. */
   --font-serif: var(--font-editorial-source), 'Fraunces', Georgia, serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-sans:
+    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 [data-type='mono-technical'] {
