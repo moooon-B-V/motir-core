@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { PALETTE_IDS } from '@/lib/theme/palettes';
 import { TYPE_IDS } from '@/lib/theme/typography';
 import {
+  declaredIn,
   loadTokenLayer,
   resolveTokenInScope,
   type ElementAttributes,
   type ScopeChain,
+  type ThemeContext,
 } from './paletteCascade';
 
 /*
@@ -200,5 +202,59 @@ describe('the completeness rules the two axes need — and why they differ', () 
     const base = per.get('motir');
     expect(base, 'the base palette must declare a block of its own').toBeDefined();
     expect([...union].filter((t) => !base?.has(t)).sort()).toEqual([]);
+  });
+
+  /*
+   * ⚠️ MOTIR-3954 — the VALUE half, which was CLAIMED and not written.
+   *
+   * The base palette's scope block is a hand-kept COPY: every declaration in it
+   * restates what the Tier-0 `@theme` / Tier-3 base layer already says, so a
+   * nested `motir` tile can reach those values without inheriting its
+   * ancestor's. `theme.css` told its next reader the duplication was guarded —
+   * "asserts each declaration here equals the value the base layer declares for
+   * that token, so a change to `@theme` that is not mirrored here fails rather
+   * than drifts" — and named a file that does not exist. The test above is the
+   * one that does exist, and it checks the token SET only: a copy carrying a
+   * STALE value passes it, which is the whole failure mode the sentence
+   * promised was covered.
+   *
+   * It was found by writing a second copy on that promise. The block is
+   * currently drift-free, so this costs nothing to add and would have cost a
+   * silent divergence to keep omitting — the same shape as the card that found
+   * it (a bar everyone believed applied to the base palette, which by
+   * construction skipped it).
+   */
+  it('every value the base palette block copies still equals the base layer’s', () => {
+    const drifted: string[] = [];
+    let compared = 0;
+    for (const theme of ['light', 'dark'] as const) {
+      const selectors =
+        theme === 'dark'
+          ? [
+              "[data-theme='dark'] [data-appearance-scope][data-palette='motir']:not([data-theme])",
+              "[data-appearance-scope][data-palette='motir'][data-theme='dark']",
+            ]
+          : ["[data-appearance-scope][data-palette='motir']"];
+      const block = rules.find((rule) =>
+        rule.selectors.some((selector) => selectors.includes(selector.trim())),
+      );
+      expect(block, `the base palette must declare a ${theme} block`).toBeDefined();
+      // What the layer says with NO palette block in play: a context whose
+      // palette matches nothing resolves the Tier-0 + Tier-3 + global-dark
+      // cascade and no `[data-palette]` rule — which is exactly what `<html>`
+      // gets, and therefore what the copy must equal.
+      const layer = declaredIn(rules, { palette: ' none', theme } as ThemeContext);
+      for (const [token, value] of Object.entries(block?.declarations ?? {})) {
+        compared += 1;
+        const declared = layer[token];
+        if (declared === undefined) drifted.push(`${theme} ${token}: absent from the base layer`);
+        else if (declared.trim() !== value.trim()) {
+          drifted.push(`${theme} ${token}: copy "${value.trim()}" vs base "${declared.trim()}"`);
+        }
+      }
+    }
+    expect(drifted).toEqual([]);
+    // Guards the guard: a selector that stopped matching would compare nothing.
+    expect(compared).toBeGreaterThanOrEqual(70);
   });
 });

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { LABEL_TINTS } from '@/lib/labels/labelTint';
-import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
+import { isMeasuredStep, loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
 import { contrast, deltaE2000, mixSrgb } from './colorMetrics';
 
 // MOTIR-2085 — the OTHER four differentiating families, each at the floor its own
@@ -157,6 +157,28 @@ const MIN_DELTA_E_CHIP_ESCALATION = 5.5;
 
 /** WCAG 1.4.11's 3:1, the bar `docs/palettes/*.md` state for icon/UI hues. */
 const MIN_UI_CONTRAST = 3;
+
+/**
+ * The surfaces a priority glyph sits on — MOTIR-3954 added `--el-page-bg`, for
+ * the same reason and with the same cost as `statusHueSeparation.test.ts`'s.
+ */
+const UI_BACKDROPS = ['--el-card', '--el-surface', '--el-page-bg'] as const;
+
+/**
+ * Priority steps that are BELOW the bar on purpose, keyed
+ * `<palette>/<theme> <token>`, each with its reason. Asserted exactly in BOTH
+ * directions, so a stale entry is as red as a new failure.
+ *
+ * ⚠️ MOTIR-3954 widened the sweep below to include the BASE palette, whose ramp
+ * lives in the Tier-3 block and therefore rode the "overrides only" derivation
+ * out of every bar. Only `lowest` comes back sub-bar, which is the step the
+ * sweep's own comment already exempts by name — so the widening costs two
+ * entries and buys the ONE palette a default install renders.
+ */
+const KNOWN_SUB_BAR: Record<string, string> = {
+  'motir/light --el-priority-lowest': 'rides --color-stone, the documented decorative step',
+  'motir/dark --el-priority-lowest': 'rides --color-stone, the documented decorative step',
+};
 
 /** WCAG AA for normal text — what a chip's own label must clear on its tint. */
 const MIN_TEXT_CONTRAST = 4.5;
@@ -430,22 +452,29 @@ describe('tint backgrounds carry their own text at AA', () => {
 });
 
 describe('the priority ramp is a GLYPH ramp', () => {
-  it(`keeps every OVERRIDDEN priority step past ${MIN_UI_CONTRAST}:1 on card and surface`, () => {
+  it(`keeps every OVERRIDDEN priority step AND the BASE ramp past ${MIN_UI_CONTRAST}:1`, () => {
     // Same shape as the status suite's override sweep, and NOT swept across the
-    // whole ramp for the same reason: `--el-priority-lowest` rides
+    // whole ramp of the nine for the same reason: `--el-priority-lowest` rides
     // `--color-stone`, the documented "faint labels (decorative, sub-AA)" step,
     // and sits in the low 2s by design in most palettes. A step a palette moves
     // ON PURPOSE, though, has to clear the icon/UI bar. Derived from the
     // stylesheet, so a future palette override is dragged in automatically.
+    //
+    // ⚠️ MOTIR-3954 — and it shared the status sweep's hole exactly, because it
+    // shares its derivation: "declared in a `[data-palette]` block" is a
+    // description of the nine, and the BASE palette declares none. Population is
+    // now overrides ∪ base, with the deliberate exemptions named rather than
+    // implied by a rule about overrides.
     const failures: string[] = [];
     let checked = 0;
+    let baseChecked = 0;
     for (const ctx of CONTEXTS) {
-      const block = paletteBlock(ctx.palette, ctx.theme);
       for (const token of PRIORITY_TOKENS) {
-        if (!(token in block)) continue; // rides its --color-* source; not an override
+        if (!isMeasuredStep(paletteBlock, DEFAULT_PALETTE_ID, ctx, token)) continue;
         checked += 1;
+        if (ctx.palette === DEFAULT_PALETTE_ID) baseChecked += 1;
         const hue = hueOf(ctx, token);
-        for (const backdrop of ['--el-card', '--el-surface'] as const) {
+        for (const backdrop of UI_BACKDROPS) {
           const ratio = contrast(hue, hueOf(ctx, backdrop));
           if (ratio < MIN_UI_CONTRAST) {
             failures.push(
@@ -455,10 +484,19 @@ describe('the priority ramp is a GLYPH ramp', () => {
         }
       }
     }
-    expect(failures).toEqual([]);
-    // Guards the guard: cobalt's + graphite's `high`, each in both themes
-    // (MOTIR-2085, MOTIR-2094).
-    expect(checked).toBeGreaterThanOrEqual(4);
+    const stepOf = (failure: string) => failure.slice(0, failure.indexOf(' on '));
+    expect(failures.filter((failure) => !(stepOf(failure) in KNOWN_SUB_BAR))).toEqual([]);
+    const failing = new Set(failures.map(stepOf));
+    expect(
+      Object.keys(KNOWN_SUB_BAR)
+        .filter((step) => !failing.has(step))
+        .sort(),
+    ).toEqual([]);
+    // Guards the guard, against a FIXED count: the base contributes its whole
+    // ramp in both themes.
+    expect(baseChecked).toBe(THEMES.length * PRIORITY_TOKENS.length);
+    // Cobalt's + graphite's `high`, each in both themes (MOTIR-2085, MOTIR-2094).
+    expect(checked - baseChecked).toBeGreaterThanOrEqual(4);
   });
 
   it('keeps highest and high APART, with headroom, in every palette that took an amber step', () => {
