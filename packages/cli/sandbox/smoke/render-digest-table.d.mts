@@ -130,3 +130,18 @@ export declare function resolveRecorded(
   io: RenderDigestTableIo,
 ): Promise<Record<string, string> | null>;
 export declare function main(argv: string[], io: RenderDigestTableIo): Promise<0 | 1 | 2>;
+
+/**
+ * The REAL `io` the script executes with, exported so a test can drive the one
+ * seam every other test replaces with a double (Bug MOTIR-3989).
+ *
+ * `setOutput` is SYNCHRONOUS by contract: when it returns, the bytes are in
+ * `$GITHUB_OUTPUT`. The caller's next statement may be `process.exit`, which does
+ * not flush pending async I/O.
+ */
+export declare function nodeIo(fs: {
+  readdir: (dir: string) => Promise<string[]>;
+  readFile: (path: string, encoding: 'utf8') => Promise<string>;
+  writeFile: (path: string, content: string, encoding: 'utf8') => Promise<void>;
+  appendFileSync: (path: string, content: string, encoding: 'utf8') => void;
+}): RenderDigestTableIo;

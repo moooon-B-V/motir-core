@@ -183,6 +183,37 @@ jobs:
             --readme packages/cli/sandbox/README.md \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --write
+      # ⚠️ THE GATE MUST AGREE WITH THE DIFF (Bug MOTIR-3989).
+      #
+      # The step below is CONDITIONAL, and a condition that reads false skips it
+      # silently, leaving this job and the whole run GREEN. That is exactly how
+      # `cli-v0.4.0` published nine images and recorded none of their digests:
+      # the render wrote the file and reported `inserted the cli-v0.4.0
+      # section`, its `changed` output never reached `$GITHUB_OUTPUT` (an
+      # unawaited `appendFile` racing `process.exit`), and the commit was
+      # skipped with nothing anywhere saying so.
+      #
+      # The race itself is fixed in `render-digest-table.mjs`, which now writes
+      # that output synchronously. This step is the BACKSTOP for the class: any
+      # future reason the gate disagrees with the working tree fails the lane
+      # instead of quietly not recording a release. It is deliberately
+      # unconditional — a guard behind an `if:` is the thing being guarded
+      # against.
+      - name: The commit gate agrees with the working tree
+        env:
+          CHANGED: ${{ steps.render.outputs.changed }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- packages/cli/sandbox/README.md; then
+            on_disk=unchanged
+          else
+            on_disk=modified
+          fi
+          echo "render output changed='${CHANGED:-<empty>}' · working tree: ${on_disk}"
+          if [ "$on_disk" = 'modified' ] && [ "${CHANGED:-}" != 'true' ]; then
+            echo "::error::The digest table was RENDERED (the README differs from HEAD) but the commit gate reads '${CHANGED:-<empty>}', so the commit step will be skipped and this release would record no digests. See Bug MOTIR-3989."
+            exit 1
+          fi
       - name: Commit it on main
         if: ${{ steps.render.outputs.changed == 'true' }}
         env:

@@ -1,9 +1,11 @@
 import { createServer, type Server } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { AddressInfo } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 // A zero-dependency release-lane script, deliberately `.mjs` — it runs on a bare
 // runner with no install and no build step. Its typed contract lives beside it in
 // `render-digest-table.d.mts`.
@@ -20,6 +22,7 @@ import {
   resolveDigestRows,
   resolveNames,
   updateReadme,
+  nodeIo,
 } from '../sandbox/smoke/render-digest-table.mjs';
 
 // The digest-table writer (MOTIR-2699), driven against a REAL registry — the same
@@ -337,13 +340,25 @@ describe('the rendered markdown', () => {
 });
 
 describe('reading the file it edits', () => {
+  // ⚠️ These read the SHIPPED README, so anything asserted about WHICH version is
+  // newest breaks on every release — and breaks INVISIBLY, because the release
+  // lane commits that file with `GITHUB_TOKEN`, whose pushes trigger no workflow
+  // (Bug MOTIR-3989). The next unrelated pull request inherits the red. So they
+  // assert the file's SHAPE and derive the versions from the file itself.
   it('finds every release section the shipped README already carries, newest first', () => {
-    expect(parseSections(README).map((section) => section.version)).toEqual([
-      '0.3.0',
-      '0.2.0',
-      '0.1.1',
-      '0.1.0',
-    ]);
+    const versions = parseSections(README).map((section) => section.version);
+    expect(versions.length).toBeGreaterThanOrEqual(4);
+    expect(versions.every((v) => /^\d+\.\d+\.\d+$/.test(v))).toBe(true);
+    // Newest first: strictly descending by semver, with no duplicates.
+    const rank = (v: string) => v.split('.').map(Number);
+    const descending = versions.every((v, i) => {
+      if (i === 0) return true;
+      const [a, b] = [rank(versions[i - 1]!), rank(v)];
+      return (
+        a[0]! > b[0]! || (a[0] === b[0] && (a[1]! > b[1]! || (a[1] === b[1] && a[2]! > b[2]!)))
+      );
+    });
+    expect(descending).toBe(true);
   });
 
   it('knows which of them carries the frame a demotion needs', () => {
@@ -351,8 +366,15 @@ describe('reading the file it edits', () => {
     // once, when the next release displaces it. The older hand-written ones are
     // read and never edited, which is this file's own rule about past releases.
     const sections = parseSections(README);
-    expect(sections[0]).toMatchObject({ version: '0.3.0', marked: true });
-    expect(sections.slice(1).every((section) => !section.marked)).toBe(true);
+    // The CURRENT section must carry the frame — it is the one the next release
+    // demotes. The marked sections form a PREFIX and grow by one per release:
+    // every machine-written section keeps its markers after being demoted, and
+    // only the hand-written history below them has none. (This used to assert
+    // that exactly one section was marked, which was true only while exactly one
+    // release had ever been written by the lane.)
+    expect(sections[0]?.marked).toBe(true);
+    const marks = sections.map((section) => section.marked);
+    expect(marks.slice(marks.lastIndexOf(true) + 1).every((m) => !m)).toBe(true);
   });
 
   it('reads a section as ending at the next heading, not swallowing the ones after it', () => {
@@ -364,48 +386,63 @@ describe('reading the file it edits', () => {
     expect(lines[oldest?.end ?? 0]).toBe('### Public, and asserted to be (MOTIR-2010)');
   });
 
-  it('parses the digest rows of the shipped cli-v0.3.0 table', () => {
+  it('parses the digest rows of the shipped CURRENT release table', () => {
     const [current] = parseSections(README);
     const text = README.split('\n').slice(current?.start, current?.end).join('\n');
     const rows = parseRows(text);
+    // Nine: the agent-less base plus every profile. The COUNT is the invariant;
+    // the digests themselves belong to whichever release is current.
     expect(rows).toHaveLength(9);
-    expect(rows[0]).toEqual({
-      name: 'base',
-      tag: 'ghcr.io/moooon-b-v/motir-sandbox:base',
-      digest: 'sha256:f44c37d71abc267789ac8835d88846b50bd63c498d6729af25062c77035d6cfa',
-    });
+    expect(rows[0]?.name).toBe('base');
+    expect(rows[0]?.tag).toBe('ghcr.io/moooon-b-v/motir-sandbox:base');
+    expect(rows.every((row) => /^sha256:[0-9a-f]{64}$/.test(row.digest))).toBe(true);
   });
 });
 
 describe('placing the section in the file', () => {
+  // The version to INSERT must be strictly newer than whatever the shipped
+  // README currently carries, or the insert under test is not an insert. Derived
+  // rather than typed, for the every-release reason above.
+  const shippedNewest = parseSections(README)[0]?.version ?? '0.0.0';
+  const NEXT = (() => {
+    const [maj, min] = shippedNewest.split('.').map(Number);
+    return `${maj}.${(min ?? 0) + 1}.0`;
+  })();
+
   const section = (version: string, sha: string) =>
     renderSection({
       image: 'ghcr.io/moooon-b-v/motir-sandbox',
       version,
       runUrl: 'https://github.com/moooon-B-V/motir-core/actions/runs/999',
       rows: [{ name: 'base', tag: 'ghcr.io/moooon-b-v/motir-sandbox:base', digest: digest(sha) }],
-      novelty: { checked: true, problems: [], against: '0.3.0' },
+      novelty: { checked: true, problems: [], against: shippedNewest },
     });
 
   it('prepends the new release and DEMOTES the one it displaces', () => {
-    const update = updateReadme(README, { version: '0.4.0', section: section('0.4.0', 'a') });
+    const update = updateReadme(README, { version: NEXT, section: section(NEXT, 'a') });
     expect(update.action).toBe('inserted');
     expect(update.changed).toBe(true);
     const content = update.content as string;
     // The new section is above the old one, and the old one now reads as history.
-    expect(content.indexOf('cli-v0.4.0')).toBeLessThan(content.indexOf('### Release `cli-v0.3.0`'));
-    expect(content).toContain('**was** the current release until `cli-v0.4.0`');
+    expect(content.indexOf(`cli-v${NEXT}`)).toBeLessThan(
+      content.indexOf(`### Release \`cli-v${shippedNewest}\``),
+    );
+    expect(content).toContain(`**was** the current release until \`cli-v${NEXT}\``);
     // …and exactly one section still claims to be current.
     expect(content.match(/this is the current release/g)).toHaveLength(1);
-    // The displaced section keeps its own rows and its own prose untouched.
-    expect(content).toContain('The release whose 403 hint names a PERMISSION');
-    expect(content).toContain(
-      'sha256:9d7222cb3700a96effe39c1f0cc7074df79138ee795b396bafb4bef1d4395f7e',
-    );
+    // The displaced section keeps its OWN rows — read from the shipped file
+    // rather than typed, so this survives every release.
+    const [shippedCurrent] = parseSections(README);
+    const shippedText = README.split('\n')
+      .slice(shippedCurrent?.start, shippedCurrent?.end)
+      .join('\n');
+    const displacedRows = parseRows(shippedText);
+    expect(displacedRows).toHaveLength(9);
+    for (const row of displacedRows) expect(content).toContain(row.digest);
   });
 
   it('leaves the older, unmarked sections completely alone', () => {
-    const update = updateReadme(README, { version: '0.4.0', section: section('0.4.0', 'a') });
+    const update = updateReadme(README, { version: NEXT, section: section(NEXT, 'a') });
     for (const version of ['0.2.0', '0.1.1', '0.1.0']) {
       const before = README.slice(README.indexOf(`### Release \`cli-v${version}\``));
       const after = (update.content as string).slice(
@@ -454,7 +491,7 @@ describe('placing the section in the file', () => {
     // section that still calls itself current is the defect this lane removes. So
     // an unframed predecessor is a loud failure naming its own fix.
     const unframed = README.replace('<!-- sandbox-digests:currency start -->', '');
-    const update = updateReadme(unframed, { version: '0.4.0', section: section('0.4.0', 'a') });
+    const update = updateReadme(unframed, { version: NEXT, section: section(NEXT, 'a') });
     expect(update.content).toBeUndefined();
     expect(update.error).toContain('cannot be demoted');
     expect(update.error).toContain('add the currency markers');
@@ -471,12 +508,12 @@ describe('placing the section in the file', () => {
   it('demotes only between the markers, leaving the rest of the section byte-identical', () => {
     const [current] = parseSections(README);
     const text = README.split('\n').slice(current?.start, current?.end).join('\n');
-    const demoted = demoteSection(text, '0.3.0', '0.4.0') as string;
-    expect(demoted).toContain('**was** the current release until `cli-v0.4.0`');
+    const demoted = demoteSection(text, shippedNewest, NEXT) as string;
+    expect(demoted).toContain(`**was** the current release until \`cli-v${NEXT}\``);
     expect(demoted).not.toContain('this is the current release');
-    // Everything outside the frame survives, including the editorial sentence no
-    // lane could have written.
-    expect(demoted).toContain('The release whose 403 hint names a PERMISSION');
+    // Everything OUTSIDE the frame survives byte for byte — which is the whole
+    // claim, and it holds whether the displaced section was hand-written or
+    // generated.
     expect(demoted.slice(demoted.indexOf('**Read from the registry'))).toBe(
       text.slice(text.indexOf('**Read from the registry')),
     );
@@ -659,5 +696,60 @@ describe('the published names', () => {
 
   it('takes an explicit --names list, which is how a human re-records one release', async () => {
     expect(await resolveNames(['--names', 'base,claude'], io({}))).toEqual(['base', 'claude']);
+  });
+});
+
+// ── The one seam every other test in this file replaces with a double ────────
+//
+// Bug MOTIR-3989. Each suite above builds its own `io` whose `setOutput` writes
+// into a plain object, so the REAL `setOutput` — the only one the release lane
+// ever runs — was executed by nothing. It wrote `$GITHUB_OUTPUT` with an
+// unawaited `void appendFile(...)` from `node:fs/promises`, immediately before
+// `process.exit`, which does not flush pending async I/O. Three consecutive runs
+// of the real script at `origin/main` exited 0 with the file still zero bytes;
+// `release-sandbox.yml`'s `Commit it on main` step, gated on that output, was
+// skipped with the whole run green, and `cli-v0.4.0` recorded none of its nine
+// published digests.
+//
+// ⚠️ THE ABSENCE OF AN `await` BELOW IS THE ASSERTION. Reading the file after
+// awaiting anything would pass against the old implementation too — the promise
+// resolves eventually, just not before the process is gone. What the lane needs
+// is that the bytes are on disk when `setOutput` RETURNS, so that is what is
+// asserted, synchronously, exactly as `process.exit` observes it.
+describe('nodeIo — the real io the release lane runs with', () => {
+  const fs = { readdir, readFile, writeFile, appendFileSync };
+  let outputPath: string;
+  let previous: string | undefined;
+
+  beforeEach(() => {
+    outputPath = join(mkdtempSync(join(tmpdir(), 'motir-gho-')), 'github-output');
+    writeFileSync(outputPath, '', 'utf8');
+    previous = process.env.GITHUB_OUTPUT;
+    process.env.GITHUB_OUTPUT = outputPath;
+  });
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.GITHUB_OUTPUT;
+    else process.env.GITHUB_OUTPUT = previous;
+  });
+
+  it('has WRITTEN the output by the time setOutput returns — no await', () => {
+    nodeIo(fs).setOutput('changed', 'true');
+    // Deliberately no `await` and no tick: this is the instant `process.exit`
+    // would fire in the real entry point.
+    expect(readFileSync(outputPath, 'utf8')).toBe('changed=true\n');
+  });
+
+  it('appends rather than replacing, so two outputs both survive', () => {
+    const io = nodeIo(fs);
+    io.setOutput('changed', 'true');
+    io.setOutput('version', '0.4.0');
+    expect(readFileSync(outputPath, 'utf8')).toBe('changed=true\nversion=0.4.0\n');
+  });
+
+  it('is a no-op outside Actions, where the variable is unset', () => {
+    delete process.env.GITHUB_OUTPUT;
+    expect(() => nodeIo(fs).setOutput('changed', 'true')).not.toThrow();
+    expect(readFileSync(outputPath, 'utf8')).toBe('');
   });
 });
