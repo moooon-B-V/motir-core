@@ -1,16 +1,5 @@
 # Changelog — `@motir/cli`
 
-Notable changes to the `motir` command-line tool, newest first. Written for
-someone who INSTALLS it: what changed for you, and what you might have to do
-about it.
-
-The version here is the CLI's own. It is not the Motir server's release number
-and not the API contract version — see
-[§ When your server is older](../../docs/cli.md#when-your-server-is-older) for
-that distinction, which this release makes visible for the first time.
-
----
-
 ## 0.4.0
 
 **`motir link` now brings the code down.** Linking a folder to a project used to
@@ -170,3 +159,21 @@ First public release: the `motir` command set — `login` / `auth`, `link`,
 / `open`), single dispatch (`next` / `run` / `done`), the loop (`auto` /
 `batch`), and `plan`. Published to npm with provenance, alongside the BYOK
 sandbox images that carry the same binary by construction.
+
+---
+
+Notable changes to the `motir` command-line tool, newest first. Written for
+someone who INSTALLS it: what changed for you, and what you might have to do
+about it.
+
+The version here is the CLI's own. It is not the Motir server's release number
+and not the API contract version — see
+[§ When your server is older](../../docs/cli.md#when-your-server-is-older) for
+that distinction, which the 0.4.0 release makes visible for the first time.
+
+Historical entries are hand-written prose. From the next release, the release
+lane generates each entry with Changesets, appending a `### Major Changes` /
+`### Minor Changes` / `### Patch Changes` bullet list under the same
+`## <version>` heading, newest first, directly under this file's title. The two
+shapes coexist under one heading level — prose for the record so far, generated
+bullets from here on.
