@@ -3115,7 +3115,7 @@
    overrides; the rest keep the light block's values above. Two selectors for
    the same reason every other palette now has two: the compound one for
    `<html>`, the descendant one for a nested scope. */
-[data-theme='dark'] [data-appearance-scope][data-palette='motir'],
+[data-theme='dark'] [data-appearance-scope][data-palette='motir']:not([data-theme]),
 [data-appearance-scope][data-palette='motir'][data-theme='dark'] {
   --color-background: #0f0f0f;
   --color-border: #2a2a2a;
@@ -3261,7 +3261,7 @@
 /* Cobalt — dark companion. A cool navy canvas (not the base near-black);
    brightened cobalt/link hues so they read AS text on the dark surface, and a
    darker accent fill so white labels still clear AA. */
-[data-theme='dark'] [data-palette='cobalt'],
+[data-theme='dark'] [data-palette='cobalt']:not([data-theme]),
 [data-palette='cobalt'][data-theme='dark'] {
   --color-background: #0b111d; /* deep cool navy canvas */
   --color-foreground: #e7edf6;
@@ -3460,7 +3460,7 @@
    inverts to near-WHITE ink (Vercel's dark white-button), the accent blue
    brightens so it reads AS text on the dark canvas, and semantic/type hues
    brighten to clear AA on near-black. */
-[data-theme='dark'] [data-palette='graphite'],
+[data-theme='dark'] [data-palette='graphite']:not([data-theme]),
 [data-palette='graphite'][data-theme='dark'] {
   --color-background: #0c0d0f; /* stark cool near-black canvas */
   --color-foreground: #edeef0;
@@ -3636,7 +3636,7 @@
 /* Evergreen — dark companion. Bright emerald on a deep-forest canvas
    (Supabase-style: the bright accent FILL carries DARK label text). Mirrors the
    Tier-1 dark flip for the cooled neutrals. */
-[data-theme='dark'] [data-palette='evergreen'],
+[data-theme='dark'] [data-palette='evergreen']:not([data-theme]),
 [data-palette='evergreen'][data-theme='dark'] {
   --color-primary: #3ddc97;
   --color-primary-foreground: #06140d; /* dark ink on the bright emerald fill */
@@ -3859,7 +3859,7 @@
 /* Spectrum — dark companion. A deep cool-violet canvas (not the base
    near-black); brightened violet/pink/link hues so they read AS text on the
    dark surface, and a darker accent fill so white labels still clear AA. */
-[data-theme='dark'] [data-palette='spectrum'],
+[data-theme='dark'] [data-palette='spectrum']:not([data-theme]),
 [data-palette='spectrum'][data-theme='dark'] {
   --color-background: #14111f; /* deep cool-violet canvas */
   --color-foreground: #ece9f6;
@@ -4028,7 +4028,7 @@
    canvas (#0B0E11) + "Shark" cards (#1E2329); the gold brightens to #FCD535 and
    the CTA fill carries dark labels; semantics are Binance's real buy-green
    #0ECB81 / sell-red #F6465D. */
-[data-theme='dark'] [data-palette='amber'],
+[data-theme='dark'] [data-palette='amber']:not([data-theme]),
 [data-palette='amber'][data-theme='dark'] {
   --color-background: #0b0e11; /* Binance deepest trading-floor black */
   --color-foreground: #eaecef;
@@ -4184,7 +4184,7 @@
 /* Sienna — dark companion. Mistral is light-dominant (few dark tokens: Mistral
    Black #1f1f1f); a warm near-black canvas built from it, the flame brightened
    to read as text, the fill a bright flame with dark-ink labels. */
-[data-theme='dark'] [data-palette='sienna'],
+[data-theme='dark'] [data-palette='sienna']:not([data-theme]),
 [data-palette='sienna'][data-theme='dark'] {
   --color-background: #15120d; /* warm near-black canvas (from Mistral Black) */
   --color-foreground: #f5efe2;
@@ -4328,7 +4328,7 @@
 /* Garnet — dark companion. Pinterest's Cod-Gray near-black canvas; the red
    brightens to read as text, the CTA fill stays the deep Pushpin red carrying
    WHITE labels, semantics brighten to clear AA. */
-[data-theme='dark'] [data-palette='garnet'],
+[data-theme='dark'] [data-palette='garnet']:not([data-theme]),
 [data-palette='garnet'][data-theme='dark'] {
   --color-background: #0e0e0e; /* Cod-Gray near-black canvas */
   --color-foreground: #efefef;
@@ -4502,7 +4502,7 @@
    #090909 / gray-900 #1a1b1e); the Sunglow yellow brightens to read as text and
    the fill keeps dark Stratos labels; blue/green/red brighten one ramp step to
    clear AA on the dark canvas. All values are documented Mirotone steps. */
-[data-theme='dark'] [data-palette='citrine'],
+[data-theme='dark'] [data-palette='citrine']:not([data-theme]),
 [data-palette='citrine'][data-theme='dark'] {
   --color-background: #090909; /* Miro black */
   --color-foreground: #f6f7f9; /* gray-50 */
@@ -4666,7 +4666,7 @@
    1/2/3); the bubblegum pink brightens to read as text, the fill is a bright
    candy pink with dark labels, and the rainbow tints become deep candy washes.
    All values are documented Radix dark steps. */
-[data-theme='dark'] [data-palette='candy'],
+[data-theme='dark'] [data-palette='candy']:not([data-theme]),
 [data-palette='candy'][data-theme='dark'] {
   --color-background: #191117; /* Radix Pink dark-1 — pink-tinted black */
   --color-foreground: #eeeef0; /* Mauve dark-12 */
