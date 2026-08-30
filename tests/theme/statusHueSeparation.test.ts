@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 import { statusElVar } from '@/lib/workflows/statusColor';
-import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
+import { isMeasuredStep, loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
 import { contrast, deltaE2000, flattenColorMix, lab } from './colorMetrics';
 
 // MOTIR-2073 — the status ramp must be PERCEPTIBLY separated, not merely unequal.
@@ -48,16 +48,58 @@ const MIN_DELTA_E = 10;
  * 3:1 of WCAG 1.4.11, and the bar `docs/palettes/*.md` state for icon/UI hues.
  *
  * Applied to every step a palette OVERRIDES directly — MOTIR-2073's Graphite
- * hue and the eight MOTIR-2075 added across five palettes. It is deliberately
- * NOT swept across the whole ramp: `--el-status-todo`
- * (`--color-stone`) and, in a few palettes, `--el-status-done` sit in the low
- * 2s by design — `stone` is the documented "faint labels (decorative, sub-AA)"
- * step, the dots are `aria-hidden` and always rendered beside the status LABEL,
- * and two of the three consumers ring them with `border-(--el-border)`. So they
- * are decoration, not a graphical object required to understand the content,
- * and re-tuning ten palettes' neutral step is not this card's business.
+ * hue and the eight MOTIR-2075 added across five palettes — AND, since
+ * MOTIR-3954, to every step of the BASE palette. It is deliberately NOT swept
+ * across the whole ramp of the other nine: `--el-status-todo` (`--color-stone`)
+ * and, in a few palettes, `--el-status-done` sit in the low 2s by design —
+ * `stone` is the documented "faint labels (decorative, sub-AA)" step, the dots
+ * are `aria-hidden` and always rendered beside the status LABEL, and two of the
+ * three consumers ring them with `border-(--el-border)`. So they are decoration,
+ * not a graphical object required to understand the content, and re-tuning ten
+ * palettes' neutral step is not this suite's business.
  */
 const MIN_UI_CONTRAST = 3;
+
+/**
+ * The surfaces a status dot sits on — MOTIR-3954 added `--el-page-bg`.
+ *
+ * `--el-card` is the row/card fill under most dots and `--el-surface` the
+ * sectioned backdrop the card sits in (MOTIR-2075's named pairing); the third is
+ * the bare page, where the board's column headers and the item page's own status
+ * control render with no card under them. It resolves to the same value as
+ * `--el-card` in all ten palettes today, so it costs one comparison and catches
+ * the palette that later moves one and not the other.
+ */
+const BACKDROPS = ['--el-card', '--el-surface', '--el-page-bg'] as const;
+
+/**
+ * Steps that are BELOW the bar on purpose, keyed `<palette>/<theme> <token>`,
+ * each with the reason it is not a defect. Asserted EXACTLY in both directions,
+ * the house idiom `KNOWN_TOO_CLOSE` uses above: an entry that stops failing
+ * turns this suite red until it is deleted, and a step that starts failing is
+ * red whether or not something else already is.
+ *
+ * ⚠️ Every entry is the BASE palette, and that is the point of MOTIR-3954 rather
+ * than an accident: the nine override blocks are swept for the steps they
+ * declare, so a palette that overrides a step has already accepted the bar for
+ * it. The base declares the whole ramp, decoration included, so widening the
+ * sweep to reach it necessarily reaches the two neutrals the bar was never
+ * written for — and naming them here is what makes that carve-out READABLE.
+ * It used to be structural: the base had no `[data-palette]` block, so all eight
+ * of its inks were skipped by a rule about overrides, and nothing said so.
+ */
+const KNOWN_SUB_BAR: Record<string, string> = {
+  // `--color-stone`, the documented "faint labels (decorative, sub-AA)" step —
+  // the exemption the MIN_UI_CONTRAST doc above already states, now spelled out
+  // where the sweep can check it. 2.61:1 light, 2.82:1 dark.
+  'motir/light --el-status-todo': 'rides --color-stone, the documented decorative step',
+  'motir/dark --el-status-todo': 'rides --color-stone, the documented decorative step',
+  // `--color-success` (#1aae39) at 2.93:1 on --el-card — a REAL miss, found by
+  // this widening and NOT fixed here. `done` rides a Tier-0 semantic that also
+  // paints success surfaces and their text, so moving it is a ten-palette
+  // decision rather than this card's one-token step. Filed as MOTIR-3991.
+  'motir/light --el-status-done': 'rides --color-success; sub-bar at 2.93:1 — see MOTIR-3991',
+};
 
 /**
  * Status pairs that resolve too close to tell apart, per palette x theme.
@@ -150,23 +192,32 @@ describe('status hue separation — every palette keeps the six statuses apart',
     }
   });
 
-  it(`keeps every OVERRIDDEN step past ${MIN_UI_CONTRAST}:1 on the surfaces the dot sits on`, () => {
+  it(`keeps every OVERRIDDEN step AND the BASE ramp past ${MIN_UI_CONTRAST}:1 on the surfaces the dot sits on`, () => {
     // Generalised from Graphite-only by MOTIR-2075, which added eight more
     // overrides across five palettes. The set is DERIVED from the stylesheet
     // rather than listed here, so a palette that gains a status override in
     // future is dragged into this bar automatically instead of being covered
     // only if someone remembered to extend a literal list.
+    //
+    // ⚠️ MOTIR-3954 — and the derivation is exactly what left a hole. "Derived
+    // from the stylesheet" meant "declared in a `[data-palette]` block", and the
+    // BASE palette has none: its ramp is the Tier-3 block every other palette is
+    // measured against. So the one palette whose values a default install
+    // actually renders was the one palette this bar could not see, and
+    // `--el-status-implemented` sat at 2.66:1 on `--el-card` under it. The
+    // population is now overrides ∪ base (`isMeasuredStep`), with the steps that
+    // are sub-bar ON PURPOSE named in `KNOWN_SUB_BAR` rather than skipped by a
+    // rule that never meant to skip them.
     const failures: string[] = [];
     let checked = 0;
+    let baseChecked = 0;
     for (const ctx of CONTEXTS) {
-      const block = paletteBlock(ctx.palette, ctx.theme);
       for (const token of STATUS_TOKENS) {
-        if (!(token in block)) continue; // rides its --color-* source; not an override
+        if (!isMeasuredStep(paletteBlock, DEFAULT_PALETTE_ID, ctx, token)) continue;
         checked += 1;
+        if (ctx.palette === DEFAULT_PALETTE_ID) baseChecked += 1;
         const hue = hueOf(ctx, token);
-        // `--el-card` is the row/card fill under most dots; `--el-surface` is
-        // the sectioned backdrop the card sits in — the AC's named pairing.
-        for (const backdrop of ['--el-card', '--el-surface'] as const) {
+        for (const backdrop of BACKDROPS) {
           const ratio = contrast(hue, hueOf(ctx, backdrop));
           if (ratio < MIN_UI_CONTRAST) {
             failures.push(
@@ -176,10 +227,25 @@ describe('status hue separation — every palette keeps the six statuses apart',
         }
       }
     }
-    expect(failures).toEqual([]);
-    // Guards the guard: a `paletteBlock` that returned nothing would make the
-    // sweep above vacuous. Graphite (1 token x 2 themes) + MOTIR-2075's five.
-    expect(checked).toBeGreaterThanOrEqual(14);
+    // Forward direction, with the ratios: anything failing that is not a named
+    // carve-out. Reported per SURFACE so the message says which one gave way.
+    const stepOf = (failure: string) => failure.slice(0, failure.indexOf(' on '));
+    expect(failures.filter((failure) => !(stepOf(failure) in KNOWN_SUB_BAR))).toEqual([]);
+    // Reverse direction: a carve-out that no longer describes anything. Without
+    // this the map rots into a silent pass the moment a step is fixed.
+    const failing = new Set(failures.map(stepOf));
+    expect(
+      Object.keys(KNOWN_SUB_BAR)
+        .filter((step) => !failing.has(step))
+        .sort(),
+    ).toEqual([]);
+    // Guards the guard, against a FIXED count rather than a ratio: the base
+    // contributes its whole ramp in both themes, so a `isMeasuredStep` that
+    // stopped admitting it would fail here rather than pass vacuously.
+    expect(baseChecked).toBe(THEMES.length * STATUS_TOKENS.length);
+    // And the override half is still swept — Graphite (1 token x 2 themes) +
+    // MOTIR-2075's five.
+    expect(checked - baseChecked).toBeGreaterThanOrEqual(14);
   });
 
   it('declares every status override in BOTH themes of its palette (the cascade trap)', () => {
