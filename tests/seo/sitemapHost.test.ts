@@ -41,8 +41,13 @@ describe('app/sitemap.ts is scoped to the host that serves it', () => {
     expect(entries.length).toBeGreaterThan(0);
     const origins = [...new Set(entries.map((e) => new URL(e.url).origin))];
     expect(origins).toEqual([APP]);
-    // and the public origin appears nowhere in it
-    expect(entries.some((e) => e.url.startsWith(PUBLIC_SITE))).toBe(false);
+    // …and the public HOST appears nowhere in it. Compared as a parsed host
+    // rather than a string prefix: `js/incomplete-url-substring-sanitization`
+    // is a HIGH CodeQL alert on the substring form even in a test, and the host
+    // is the stricter claim anyway — a prefix test would also pass a URL that
+    // merely mentioned the origin in a path or query.
+    const hosts = entries.map((e) => new URL(e.url).host);
+    expect(hosts).not.toContain(new URL(PUBLIC_SITE).host);
   });
 
   it('still covers the whole surface — the host swap did not drop entries', async () => {
