@@ -8986,109 +8986,28 @@
         <h2 class="sheetTitle">Both themes — and why this board carries no token of its own</h2>
         <p class="note">
           The stylesheet above is <b>Tailwind&rsquo;s real output</b> for this document over
-          <code>@motir/design-system/theme.css</code>, so every <code>--el-*</code> on this board resolves from the
-          shipped layers: declared on <code>:root</code> and re-declared under <code>[data-theme='dark']</code>, never
-          only inside one of them. <b>Flip <code>&lt;html data-theme="dark"&gt;</code> and the whole board flips</b> —
-          verified in Chromium at 1200 px, on the toggle, the list body and the node cards. That is the property
-          &sect;3e exists to protect: <b>a mock that declares its own token names is how <code>--el-accent-soft</code>
-          reached production</b>, and this asset declares none.
+          <code>@motir/design-system/theme.css</code>, so every <code>--el-*</code> on this board
+          resolves from the shipped layers: declared on <code>:root</code> and re-declared under
+          <code>[data-theme='dark']</code>, never only inside one of them.
+          <b>Flip <code>&lt;html data-theme="dark"&gt;</code> and the whole board flips</b> —
+          verified in Chromium at 1200 px, on the toggle, the list body and the node cards. That is
+          the property &sect;3e exists to protect:
+          <b
+            >a mock that declares its own token names is how <code>--el-accent-soft</code> reached
+            production</b
+          >, and this asset declares none.
         </p>
         <p class="note">
           <b>No NESTED dark scope is drawn, and that is deliberate.</b> The dark-parity guard
-          (<code>tests/design-dark-parity.test.ts</code>) renders with happy-dom, which does not resolve
-          <code>var()</code>, so a nested <code>[data-theme="dark"]</code> element passes only when the asset
-          re-declares <code>--el-page-bg</code> with a CONCRETE value — which is exactly the local-token declaration
-          this Part is here to argue against. The guard&rsquo;s own escape hatch (<i>&ldquo;put
-          <code>data-appearance-scope</code> on the element if the asset embeds
-          <code>packages/design-system/theme.css</code>&rdquo;</i>) does not hold under that engine. Recorded as a
-          planning flag rather than worked around.
+          (<code>tests/design-dark-parity.test.ts</code>) renders with happy-dom, which does not
+          resolve <code>var()</code>, so a nested <code>[data-theme="dark"]</code> element passes
+          only when the asset re-declares <code>--el-page-bg</code> with a CONCRETE value — which is
+          exactly the local-token declaration this Part is here to argue against. The guard&rsquo;s
+          own escape hatch (<i
+            >&ldquo;put <code>data-appearance-scope</code> on the element if the asset embeds
+            <code>packages/design-system/theme.css</code>&rdquo;</i
+          >) does not hold under that engine. Recorded as a planning flag rather than worked around.
         </p>
-      </section>
-                  <section class="mb-4 last:mb-0">
-                    <h3
-                      class="mb-1.5 flex items-center gap-2 px-(--spacing-control-x) text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
-                    >
-                      Updates<span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                        >1</span
-                      >
-                    </h3>
-                    <ul class="flex flex-col">
-                      <li
-                        class="relative grid grid-cols-[1.125rem_1fr_auto] items-start gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color)"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-book-open text-(--el-type-story) mt-0.5 h-4 w-4"
-                          aria-hidden="true"
-                        >
-                          <path d="M12 7v14"></path>
-                          <path
-                            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                          ></path>
-                        </svg>
-                        <div class="min-w-0">
-                          <div class="flex items-baseline gap-2">
-                            <span
-                              class="shrink-0 font-mono text-xs font-semibold text-(--el-text-secondary)"
-                              >PSH-6</span
-                            ><button
-                              type="button"
-                              aria-label="Open Invoice templates + branding"
-                              class="truncate text-left text-sm font-semibold text-(--el-text) after:absolute after:inset-0 hover:underline focus-visible:outline-none"
-                            >
-                              Invoice templates + branding
-                            </button>
-                          </div>
-                          <div
-                            class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)"
-                          >
-                            <span>story</span><span>under Billing overhaul</span>
-                          </div>
-                          <dl class="mt-1.5 grid gap-0.5 text-xs">
-                            <div class="grid grid-cols-[6rem_1fr] items-baseline gap-2">
-                              <dt
-                                class="truncate font-medium tracking-wide text-(--el-text-secondary) uppercase"
-                              >
-                                Title
-                              </dt>
-                              <dd class="min-w-0">
-                                <span class="text-(--el-text-secondary) line-through"
-                                  >Invoice templates</span
-                                ><span class="px-1.5 text-(--el-text-secondary)" aria-hidden="true"
-                                  >→</span
-                                ><span class="font-semibold text-(--el-text-strong)"
-                                  >Invoice templates + branding</span
-                                >
-                              </dd>
-                            </div>
-                          </dl>
-                        </div>
-                        <div class="flex shrink-0 items-center gap-2">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent"
-                            >To Do</span
-                          ><span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent"
-                            >change</span
-                          >
-                        </div>
-                      </li>
-                    </ul>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <section class="sheet">
