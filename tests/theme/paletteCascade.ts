@@ -40,7 +40,12 @@ interface Rule {
 
 const CUSTOM_PROPERTY = /(--[\w-]+)\s*:\s*([^;]+)/g;
 /** A root-level simple selector the token layer is allowed to use. */
-const ROOT_SIMPLE = /^(?::root|html|\[[\w-]+(?:=(?:'[^']*'|"[^"]*"))?\])+$/;
+// `:not([attr])` is accepted so the token layer can say "inherit the ancestor's
+// theme only when this element does not declare one" — the condition the
+// descendant palette arms need (MOTIR-3933). Only the NEGATED-attribute form is
+// recognised; anything richer is still treated as component-scoped.
+const ROOT_SIMPLE = /^(?::root|html|\[[\w-]+(?:=(?:'[^']*'|"[^"]*"))?\]|:not\(\[[\w-]+\]\))+$/;
+const NOT_ATTR = /:not\(\[([\w-]+)\]\)/g;
 const ATTR_CONDITION = /\[([\w-]+)(?:=['"]([^'"]*)['"])?\]/g;
 
 function parseDeclarations(body: string): Record<string, string> {
@@ -250,11 +255,51 @@ function matchesElement(selector: string, attributes: ElementAttributes, isRoot:
   const trimmed = selector.trim();
   if (!ROOT_SIMPLE.test(trimmed)) return false; // combinator / class → component-scoped
   if (ROOT_ONLY.test(trimmed) && !isRoot) return false;
-  for (const [, attribute, value] of trimmed.matchAll(ATTR_CONDITION)) {
+  for (const [, negated] of trimmed.matchAll(NOT_ATTR)) {
+    if (negated === undefined) return false;
+    if (attributes[negated] !== undefined) return false; // the element DOES declare it
+  }
+  // Strip the negations before reading the positive conditions, so the attribute
+  // inside a `:not()` is not also required to be present.
+  for (const [, attribute, value] of trimmed.replace(NOT_ATTR, '').matchAll(ATTR_CONDITION)) {
     if (attribute === undefined) return false;
     const present = attributes[attribute];
     if (present === undefined) return false; // `[attr]` and `[attr='v']` both need it
     if (value !== undefined && present !== value) return false;
+  }
+  return true;
+}
+
+/**
+ * Does a DESCENDANT selector (`A B`, and only whitespace combinators) match the
+ * element at `level`? The last compound must match the element itself; each
+ * earlier compound must match some ANCESTOR, in order.
+ *
+ * ⚠️ Added by MOTIR-3933, and only on the scope-chain path. The token layer
+ * grew descendant arms — `[data-theme='dark'] [data-palette='cobalt']` — so a
+ * NESTED preview can match a rule whose compound form needs both attributes on
+ * one element. `matchesElement` returns false for anything with a combinator
+ * ("component-scoped"), which was right while every token rule was a single
+ * compound and would now silently skip exactly the arms that make a scoped
+ * preview correct. `matchesContext` (the ROOT path the other guards use) is
+ * deliberately untouched: a root element has no ancestors, so a descendant
+ * selector cannot match it and the old answer is still the right one.
+ */
+function matchesDescendant(selector: string, chain: ScopeChain, level: number): boolean {
+  const compounds = selector.trim().split(/\s+/).filter(Boolean);
+  if (compounds.length < 2) return false;
+  const last = compounds[compounds.length - 1];
+  if (last === undefined || !matchesElement(last, chain[level] ?? {}, level === 0)) return false;
+  // Walk the ancestors outward, consuming the remaining compounds right to left.
+  let ancestor = level - 1;
+  for (let i = compounds.length - 2; i >= 0; i -= 1) {
+    const compound = compounds[i];
+    if (compound === undefined) return false;
+    while (ancestor >= 0 && !matchesElement(compound, chain[ancestor] ?? {}, ancestor === 0)) {
+      ancestor -= 1;
+    }
+    if (ancestor < 0) return false;
+    ancestor -= 1;
   }
   return true;
 }
@@ -265,7 +310,11 @@ function declarationsAtLevel(rules: Rule[], chain: ScopeChain, level: number) {
   const applicable = rules
     .flatMap((rule) =>
       rule.selectors
-        .filter((selector) => matchesElement(selector, attributes, level === 0))
+        .filter(
+          (selector) =>
+            matchesElement(selector, attributes, level === 0) ||
+            matchesDescendant(selector, chain, level),
+        )
         .map((selector) => ({ rule, specificity: specificity(selector) })),
     )
     .sort((a, b) => {
