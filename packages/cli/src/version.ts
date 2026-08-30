@@ -3,4 +3,4 @@
 // a check). Used for `--version` and for the `motir-cli/<version>` harness stamp
 // a dispatch reports, which is how a Motir tenant tells agent work from human
 // work.
-export const CLI_VERSION = '0.3.0';
+export const CLI_VERSION = '0.4.0';

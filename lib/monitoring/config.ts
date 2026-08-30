@@ -86,9 +86,14 @@ export function clientSentryDsn(): string | undefined {
  * `.dockerignore`, so the SDK's own `git rev-parse HEAD` fallback finds nothing
  * inside the image. Without this argument a release is simply never named.
  *
- * Used only by `next.config.ts`; the SDKs read the value back out of
+ * Read by `next.config.ts` — the SDKs then read the value back out of
  * `process.env._sentryRelease`, which `withSentryConfig` writes into Next's
- * `env` config from this same string.
+ * `env` config from this same string — and, since MOTIR-3760, by
+ * `/api/health/release`, which is how a monitor OUTSIDE the deployment learns
+ * which commit is running and compares it against `main`. That second reader is
+ * why the `Dockerfile`'s RUNNER stage now declares the argument as well as the
+ * builder: the builder's `ENV` is scoped to its own stage, so until then this
+ * accessor returned `undefined` in the running server.
  */
 export function monitoringRelease(): string | undefined {
   return nonEmpty(process.env['MOTIR_RELEASE']);

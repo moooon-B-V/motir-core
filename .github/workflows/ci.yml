@@ -49,6 +49,54 @@ on:
 # and still carries every commit before it. The only thing that changes is that
 # the RUNNING one is allowed to finish.
 #
+# ── ⚠️ WHAT A MERGE ACTUALLY COSTS NOW — RE-MEASURED 2026-08-30 (MOTIR-3760) ──
+#
+# The 79-minute run quoted above is 2026-08-19 and is no longer the shape of this
+# lane; leaving it as the only number here is how the next reader measures
+# against a stale narrative. Nine consecutive SUCCESSFUL push-to-`main` runs,
+# 2026-08-29/30, created → `Deploy to Fly` complete:
+#
+#   33307649462 21.2 · 33270573757 22.1 · 33285015926 23.0 · 33271383815 27.1
+#   33250609131 34.0 · 33282807240 34.1 · 33248423068 34.4 · 33272081857 42.4
+#   33285023182 45.2                                        (minutes)
+#
+# Median ~34, worst 45.2. On the fastest of them the gate took 14.5 minutes and
+# the release itself 6.75. The 12-leg Vitest lane and the E2E build reuse
+# (MOTIR-3902 / 3912 / 3913 / 3928 / 3950, all merged in the preceding 24 hours)
+# are what moved it.
+#
+# ⚠️ AND `deploy`'s `needs` LIST IS NOT A SECOND RUN OF THE PULL REQUEST'S
+# MATRIX. That reading is intuitive and it is wrong in the two places that decide
+# the answer:
+#
+#   • `e2e-at-scale` does NOT run on an ordinary pull request at all — its `if:`
+#     takes `github.event_name == 'push'` OR an `e2e-at-scale` LABEL, so for most
+#     pull requests the push-to-`main` run is the FIRST and ONLY execution of the
+#     four at-scale legs. Dropping it from `needs` would not remove a duplicate;
+#     it would remove the check.
+#   • `protect-main`'s `strict_required_status_checks_policy` is `false`, so a
+#     pull request merges while BEHIND `main` and its green describes a merge base
+#     that has moved. The push-to-`main` run is this repository's only
+#     verification of the merged SUM — the `both-green-main-red` class
+#     (MOTIR-2003) is what it defends against, and MOTIR-3106 records what
+#     happened the last time that run stopped finishing.
+#
+# So the duplication is real for `lint` / `typecheck` / `build` / `test` /
+# `coverage` / `e2e` and NOT for the release path as a whole, and narrowing
+# `needs` trades a defence rather than a repetition. MOTIR-3760 weighed a merge
+# queue against it and did not take that either — a queue moves the same ~20
+# minutes from AFTER the merge to BEFORE it and adds a second full run per pull
+# request, so it is a correctness improvement rather than a latency one. The
+# decision, with the numbers and both rejections, is
+# `docs/decisions/ci-minutes-allowance.md` §J.5.
+#
+# ⚠️ WHAT DID CHANGE IS THAT THE WAIT IS NOW VISIBLE. The 2026-08-28 incident
+# cost three hours of production running a retired job engine, and its real cost
+# was that no signal anywhere said so. `.github/workflows/deploy-freshness.yml`
+# compares the deployed commit against `main`'s head every half hour from OUTSIDE
+# the deployment and is red past 90 minutes. Read it before concluding that a
+# merge has shipped.
+#
 # The expression is deliberately the one `acceptance-video.yml` already carries
 # — that lane reached the same conclusion for its own reason (a blanket cancel
 # destroys the per-merge baseline that tells you WHICH merge broke it), and one

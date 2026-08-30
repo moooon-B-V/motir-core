@@ -103,7 +103,22 @@ async function shoot(fileUrl, width, height, scale) {
     colorScheme: 'light',
   });
   await page.goto(fileUrl, { waitUntil: 'networkidle' });
-  const buffer = await page.screenshot({ fullPage: true });
+  // ⚠️ `animations: 'disabled'` is what makes this export REPRODUCIBLE, and it
+  // stopped being optional the day the tree gained its first animated asset
+  // (`design/runs/run-modal.mock.html`, MOTIR-3893 — the running edge flows).
+  // Playwright's default is `allow`, so a CSS animation is captured at whatever
+  // frame the screenshot happens to land on: two renders of an UNCHANGED file
+  // produce different bytes at identical dimensions, which this script reports
+  // for ever as DIMS. That verdict means "the committed export came from a
+  // different environment" — so the one signal that separates YOUR DIFF from a
+  // render-environment change would have been permanently stuck on the wrong
+  // answer, for every asset, as soon as one asset moved.
+  //
+  // `disabled` fast-forwards CSS animations and transitions to their end state
+  // and pins them there, so the frame is a function of the markup alone. It is a
+  // NO-OP for every asset that does not animate, which is why this does not
+  // re-baseline the rest of the tree.
+  const buffer = await page.screenshot({ fullPage: true, animations: 'disabled' });
   await page.close();
   return buffer;
 }
