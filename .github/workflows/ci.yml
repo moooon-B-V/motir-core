@@ -571,6 +571,10 @@ jobs:
       # Share the production build with the e2e job so each matrix leg's
       # webServer boots from the pre-built .next/ instead of building
       # independently (MOTIR-1706).
+      # ⚠️ `include-hidden-files: true` below was already REQUIRED for the blob
+      # upload's reason (MOTIR-1706) and is now load-bearing for a second one:
+      # MOTIR-3928 makes the E2E legs SERVE this artifact instead of rebuilding on
+      # top of it, so a dot-file dropped here would become a file no leg has.
       - name: Upload .next/ build artifact
         uses: actions/upload-artifact@v7
         with:
