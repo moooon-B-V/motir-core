@@ -167,3 +167,70 @@ describe('the public contract document', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+// MOTIR-3885 — the CONSUMER's side of the contract.
+//
+// Everything above asks whether the document is well-formed and whether it
+// matches the routes. This asks the only question `motir-marketing` cares
+// about: can a page be rendered from what is declared? A contract that is
+// internally consistent and missing the project's name is consistent and
+// useless.
+//
+// ⚠️ It names the fields rather than deriving them, and that is deliberate: the
+// list IS the specification. Deriving it from the DTO would make the test agree
+// with whatever the DTO happens to say, which is the tautology this pair of
+// checks exists to break — the drift guard already holds the schema to the DTO,
+// so this one holds the schema to the RENDERER.
+describe('the subject document carries what a public page needs to render', () => {
+  const doc = emitPublicOpenApiDocument() as JsonObject;
+
+  const subjectSchema = () => {
+    const paths = doc['paths'] as JsonObject;
+    const get = (paths['/api/public/p/{identifier}'] as JsonObject)['get'] as JsonObject;
+    const content = ((get['responses'] as JsonObject)['200'] as JsonObject)[
+      'content'
+    ] as JsonObject;
+    return (content['application/json'] as JsonObject)['schema'] as JsonObject;
+  };
+
+  it('declares the identity, the hero and the stat strip', () => {
+    const properties = Object.keys(subjectSchema()['properties'] as JsonObject);
+    for (const field of [
+      'name',
+      'identifier',
+      'workspaceName',
+      'publicOverviewMd',
+      'publicTagline',
+      'publicTags',
+      'stats',
+      'links',
+    ]) {
+      expect(properties, `a renderer cannot draw the page without \`${field}\``).toContain(field);
+    }
+  });
+
+  it('declares the five stats the strip shows, through a NAMED component', () => {
+    // Named, not inlined: the same shape appears wherever a project summary
+    // does, and a consumer generating types wants one `PublicProjectStats`
+    // rather than an anonymous object per operation.
+    const schemas = (doc['components'] as JsonObject)['schemas'] as JsonObject;
+    const stats = schemas['PublicProjectStats'] as JsonObject;
+    expect(Object.keys(stats['properties'] as JsonObject).sort()).toEqual([
+      'inProgress',
+      'planned',
+      'publicRequests',
+      'shipped',
+      'upvotes',
+    ]);
+  });
+
+  it('does NOT declare an internal field — the public projection is what crosses', () => {
+    // The public DTOs physically lack assignees, estimates and story points, and
+    // the document must not imply otherwise: a consumer that reads a field it
+    // was promised and never receives is a bug report against the wrong repo.
+    const serialized = JSON.stringify(doc);
+    for (const forbidden of ['assignee', 'estimateMinutes', 'storyPoints']) {
+      expect(serialized, `the public document names \`${forbidden}\``).not.toContain(forbidden);
+    }
+  });
+});

@@ -223,6 +223,36 @@ describe('the delivery', () => {
     expect(new URL(mail?.data?.unsubscribeUrl ?? '').origin).toBe('https://app.motir.co');
   });
 
+  // MOTIR-3885 — the property the two cases above imply and neither states.
+  it('puts NO localhost anywhere in a delivered mail, with the public origin unset', async () => {
+    // The failure this exists to prevent is specific: `resolveBaseUrlTrimmed()`
+    // falls back to `http://localhost:3000` when `MOTIR_BASE_URL` is unset, and
+    // a link in an inbox is the one URL this application cannot take back. A
+    // deployed environment always sets it — so what is asserted here is that
+    // with it SET and the public origin unset (exactly the deployed state
+    // today), nothing localhost-shaped survives into the payload, including
+    // anywhere the two cases above do not look.
+    vi.stubEnv('MOTIR_BASE_URL', 'https://app.motir.co');
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', undefined);
+
+    const fx = await publicFixture();
+    const row = await follower(fx, { lastDigestAt: new Date('2026-08-17T09:00:00.000Z') });
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Shipped this week' });
+    await ship(fx, item.id, '2026-08-20T10:00:00.000Z');
+
+    await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: `${row.id}:2026-W35`,
+      now: MONDAY,
+    });
+
+    const serialized = JSON.stringify(emails()[0] ?? {});
+    expect(serialized).not.toContain('localhost');
+    expect(serialized).not.toContain('127.0.0.1');
+    expect(serialized).toContain('https://app.motir.co');
+  });
+
   it('sends NOTHING for a week with nothing shipped — and still moves the window', async () => {
     const fx = await publicFixture();
     const row = await follower(fx, { lastDigestAt: new Date('2026-08-17T09:00:00.000Z') });

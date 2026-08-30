@@ -1260,6 +1260,14 @@ export default defineConfig({
         // `docs/decisions/public-surface-hosts.md` AMENDMENT 1 for the three
         // grounds. MEASURED FIRST at 100/100/100 each, then pinned at the 90
         // floor below, per this block's own rule.
+        // Story MOTIR-3876 · Subtask MOTIR-3885 — the ORIGIN SEAM this story
+        // widened: `publicSiteOrigin()` and the description the public metadata
+        // and the JSON-LD are both built from, plus the sitemap re-based on the
+        // application origin. `urls.ts` shipped at 45% statements / 25% branches
+        // with `derivePublicDescription` untested at all; MEASURED at
+        // 100/100/100 after 3885's cases, then pinned at the floor below.
+        'lib/publicProjects/urls.ts',
+        'app/sitemap.ts',
         // Story MOTIR-3876 · Subtask MOTIR-3726 — `/robots.txt` and the policy
         // behind it. MEASURED at 100/100/100 on `tests/seo/robots.test.ts`;
         // the DERIVED half of that guard walks the signed-in route groups and
@@ -2294,6 +2302,10 @@ export default defineConfig({
         'app/api/openapi/v1.json/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-3876 · Subtasks MOTIR-3945 + MOTIR-3946 — the public read
         // contract (see the `include` note above; each measured at 100/100/100).
+        // Story MOTIR-3876 · Subtask MOTIR-3885 — the origin seam (measured
+        // 100/100/100 each; see the `include` note above).
+        'lib/publicProjects/urls.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/sitemap.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-3876 · Subtask MOTIR-3726 — robots (measured 100/100/100).
         'lib/robotsPolicy.ts': { branches: 90, functions: 90, lines: 90 },
         'app/robots.ts': { branches: 90, functions: 90, lines: 90 },
