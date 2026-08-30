@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
-import { PlanRefGraphError } from '@/lib/plans/errors';
+import { PlanGrammarError, PlanRefGraphError } from '@/lib/plans/errors';
+import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -228,6 +229,38 @@ describe('a CORRECTION cannot move a `planned` plan out of approvable (2026-08-2
     await expect(
       plansService.correctProposal(plan.id, second, { patch: { blockedByAdd: [a.id] } }, fx.ctx),
     ).rejects.toBeInstanceOf(PlanRefGraphError);
+  });
+
+  it('refuses a re-parent the kind-parent matrix forbids — the gate is the whole gate, not just the refs', async () => {
+    // The correction door used to run only `assertTempRefsResolvable`, so a
+    // `planItem:` parentRef pointing at a proposal of the WRONG KIND resolved
+    // cleanly and was stored. `ALLOWED_CHILD_TYPES` does not let a task hold a
+    // task, so approve would have refused the plan the reviewer was handed.
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-parent' }, fx.ctx);
+    const firstBatch = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'One', kind: 'task' } }],
+      fx.ctx,
+    );
+    const secondBatch = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Two', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    await expect(
+      plansService.correctProposal(
+        plan.id,
+        secondBatch.items.at(-1)!.id,
+        { parentRef: `${TEMP_REF_PREFIX}${firstBatch.items[0]!.id}` },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(PlanGrammarError);
+
+    // …and the plan is still exactly as approvable as it was.
+    expect(await plansService.checkApprovability(plan.id, fx.ctx)).toEqual([]);
   });
 
   it('DOES NOT LOCK THE AUTHOR OUT of repairing a plan that is ALREADY unapprovable', async () => {
