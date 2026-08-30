@@ -334,6 +334,45 @@ two overlays and two `ESC` handlers, which is the collision above made worse rat
 **Selecting a node is what the log pane filters to.** The selection lives in the modal and is passed
 to both panes, so neither owns the other's state.
 
+#### ⚠️ THE RUNNING EDGE — the run TRAVELS along it (Yue, 2026-08-30)
+
+**This is why the pane is a graph rather than a table.** A table can say _this one is running_. Only
+the graph can say **what becomes reachable when it lands**, and on a run that is the question a
+person actually has — the order is not arbitrary, it is the dependency edges, and watching a run is
+watching the frontier move along them.
+
+**Every edge FROM the running work item TO one it BLOCKS flows**, in the running tone this area
+already owns (`--el-status-in-progress`). The canvas already draws the arrow blocker → blocked, so
+the motion travels the way the work does and needs no second direction cue.
+
+**Only `running` flows.** A queued node's edges are dependencies, not travel; a finished run has
+nothing in motion, so it reads as a still graph — which is the correct picture of a run that has
+stopped. Nothing else on the surface animates.
+
+**⚠️ REDUCED MOTION IS REQUIRED, NOT A COURTESY.** This surface is left open for an hour at a time,
+and a looping animation with no still state is a vestibular hazard and an attention sink. Under
+`prefers-reduced-motion: reduce` the edge keeps its WEIGHT and its HUE — it still reads as the live
+one — and stops travelling. Drawn beside the moving face in panel 2, not described.
+
+**⚠️ AND IT NEEDS A CAPABILITY THE FOUNDATION DOES NOT HAVE.** Verified on `origin/main`:
+`CanvasEdge.variant` in `components/planning/PlanningCanvas.tsx` is a closed union — `firm` ·
+`pending` · `cross` — and the CONSUMER supplies edges while the FOUNDATION renders them, so a run
+pane cannot animate an edge it does not draw. Two constraints on that change, both read from the
+file rather than assumed:
+
+- **The animation must ride the SAME `<path>`.** That component keeps its arrowhead markers in a
+  separate `<svg>` on purpose, so that _"the canvas-edges `<path>` count stays = the edge count"_ —
+  a second element per edge breaks the guard asserting it. An animated `stroke-dashoffset` on the
+  existing path satisfies both.
+- **FIVE files compose this foundation** — `ProjectRoadmapCanvas`, `PlanningWorkspaceHost`,
+  `PlanningWorkspaceSkeleton`, `DiscoveryOnboarding`, `StationNode` — so widening the union is a
+  shared change, and the new member must be opt-in exactly as `searchable` / `locatable` /
+  `fullScreenable` are. An onboarding canvas that grew a flowing edge would be a regression.
+
+**That is a build dependency, not a note.** It is carved as its own work item rather than folded
+into the run modal's, which is already at the estimation gate's ceiling — the design gives that card
+more than it was sized for, and the honest answer to that is a split, never a bigger number.
+
 #### The SET arrives in three shapes, and the pane is TOTAL over all three
 
 A claimed scope (panel 1), a frozen batch snapshot (panel 2), and a **single work item** (panel 3) —
