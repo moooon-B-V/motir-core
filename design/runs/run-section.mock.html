@@ -12,7 +12,7 @@
 
       ⚠️ IT USED TO GATE MOTIR-1797, THE /ready RUN STRIP, AND THAT CARD IS
       ARCHIVED. The strip drew a ready row whose item has a live run, and that
-      row cannot occur: /ready lists only `todo` leaves, and claiming a card
+      row cannot occur: /ready lists only `todo` leaves, and claiming a work item
       flips it to in_progress before the first agent starts. The runs index
       replaced it. See design-notes.md § WHAT THIS AREA DREW ONCE.
 
@@ -28,8 +28,8 @@
       `packages/design-system/theme.css` by script, so this file cannot drift
       from the shipped layer. Nothing invents a colour or a radius.
 
-      ⚠️ IT DOES NOT REDRAW THE PULL REQUEST. The card's pull requests and their
-      CI state are the DEVELOPMENT section's, one card up the same stack, drawn
+      ⚠️ IT DOES NOT REDRAW THE PULL REQUEST. The work item's pull requests and their
+      CI state are the DEVELOPMENT section's, one work item up the same stack, drawn
       at `design/work-items/delivery-set.mock.html`. Panel 11 draws the two
       adjacent so the relationship is legible; panels 1–8 draw the run alone.
 
@@ -859,7 +859,7 @@
       }
       /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
          its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
-         surface is a left-column section card and has no rail, so a single
+         surface is a left-column section work item and has no rail, so a single
          child would otherwise land in the 18rem track and render at a width the
          product never uses. */
       .panelBody {
@@ -867,7 +867,7 @@
       }
       /* The left column's real width: the item page is a `1fr 18rem` grid with a
          24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
-         section card below is drawn at that width, which is what makes the
+         section work item below is drawn at that width, which is what makes the
          overflow panels (13–14) measurements rather than illustrations. */
       .secCard,
       .panelBody > .grid {
@@ -945,7 +945,7 @@
       }
 
       /* ── The asset's OWN elements ─────────────────────────────────────── */
-      /* A section card, `ContentSectionCard` markup-for-markup. */
+      /* A section work item, `ContentSectionCard` markup-for-markup. */
       .secCard {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -1562,7 +1562,7 @@
         font-family: var(--font-mono, monospace);
       }
 
-      /* the "one of N" line — the single most useful sentence on this card */
+      /* the "one of N" line — the single most useful sentence on this work item */
       .setLine {
         display: flex;
         align-items: center;
@@ -1869,11 +1869,11 @@
       <div class="sheetHead">
         <h1>The RUN SECTION on a work item</h1>
         <p>
-          MOTIR-1789 · MOTIR-1795. A person who dispatches one card wants to know one thing: is it
-          working, and where did it end up. Today Motir answers with a status pill that says
+          MOTIR-1789 · MOTIR-1795. A person who dispatches one work item wants to know one thing: is
+          it working, and where did it end up. Today Motir answers with a status pill that says
           <em>In&nbsp;Progress</em> while the account of what actually happened scrolls past in a
           terminal on one machine and disappears when the window closes. This section is that
-          account, on the card.
+          account, on the work item.
         </p>
         <p>
           <strong>It COMPOSES the shipped page.</strong> The section is
@@ -1883,10 +1883,11 @@
           a new primitive, a new colour or a new radius.
         </p>
         <p>
-          <strong>It does NOT redraw the pull request.</strong> The card’s pull requests and their
-          CI state are the <em>Development</em> section’s, one card up the same stack, drawn at
-          <span class="font-mono">design/work-items/delivery-set.mock.html</span>. The run section
-          shows the RUN; the delivery section shows the DELIVERY. Panel&nbsp;11 draws them adjacent.
+          <strong>It does NOT redraw the pull request.</strong> The work item’s pull requests and
+          their CI state are the <em>Development</em> section’s, one work item up the same stack,
+          drawn at <span class="font-mono">design/work-items/delivery-set.mock.html</span>. The run
+          section shows the RUN; the delivery section shows the DELIVERY. Panel&nbsp;11 draws them
+          adjacent.
         </p>
         <p>
           <strong>Every state is drawn, and two of them are the reason the list matters.</strong>
@@ -1910,23 +1911,22 @@
           it goes <strong>directly BEFORE Development</strong>, at the head of the late stack.
           <strong>CAUSAL ORDER is the argument, not merely adjacency</strong>: the run is what
           PRODUCES the pull request. A reader scanning down reads
-          <em>an agent worked this card</em> and then <em>and here is what it shipped</em> — the
-          order the events actually happened in, and the order the run's own timeline ends in (<em
-            >pull request linked</em
-          >
+          <em>an agent worked this work item</em> and then <em>and here is what it shipped</em> —
+          the order the events actually happened in, and the order the run's own timeline ends in
+          (<em>pull request linked</em>
           is its second-to-last row). Reversed, the page shows the artefact before the act that made
           it.
           <strong>It arrives with the late stack’s ONE settle, not on its own.</strong>
           The page settles TWICE — once when the first content replaces the frame, once when the
           late stack fills — and a sixth independent boundary would make it settle three times for a
-          region that sits below the fold at arrival. Its pending face is the late stack’s own card
-          chrome plus row-shaped pulse bars, exactly as Development’s is.
+          region that sits below the fold at arrival. Its pending face is the late stack’s own work
+          item chrome plus row-shaped pulse bars, exactly as Development’s is.
         </p>
         <div class="stage">
           <div class="grid gap-2">
             <div class="regionBox is-new">
               <span class="flex items-center justify-between gap-2"
-                ><span>Run — this card’s live run, and its recent runs</span
+                ><span>Run — this work item’s live run, and its recent runs</span
                 ><span class="font-mono" style="font-size: 11px">AFTER the page — NEW</span></span
               >
             </div>
@@ -1972,13 +1972,13 @@
       <section class="panel">
         <h2 class="panelTitle"><span class="panelNum">1</span>RUNNING — the live timeline.</h2>
         <p class="panelNote">
-          One row per CARD-SCOPED event the decision closes, in <span class="font-mono">seq</span>
+          One row per ITEM-SCOPED event the decision closes, in <span class="font-mono">seq</span>
           order — never by timestamp, because two events written in the same millisecond have no
           order at all under a clock. Rows that have not happened are drawn as EMPTY rings rather
           than omitted, so the timeline does not resize as it fills. The
-          <strong>“4 of 11” line is the single most useful sentence on this card</strong>: it is how
-          a person learns their card was swept up by a story run, and it exists because a run covers
-          a SET.
+          <strong>“4 of 11” line is the single most useful sentence on this work item</strong>: it
+          is how a person learns their work item was swept up by a story run, and it exists because
+          a run covers a SET.
         </p>
         <div class="stage">
           <div class="secCard">
@@ -1995,9 +1995,9 @@
               <p class="setLine">
                 <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bot" /></svg>
                 <span
-                  >This card is <strong>4 of 11</strong> in a run of
+                  >This work item is <strong>4 of 11</strong> in a run of
                   <span class="mono">MOTIR-1789</span>.
-                  <a href="/runs/run_7f2c">See the whole run →</a></span
+                  <a href="/runs?run=run_7f2c">See the whole run →</a></span
                 >
               </p>
               <ul class="tl">
@@ -2099,11 +2099,11 @@
           <span class="panelNum">2</span>SUCCEEDED — and the log console is <em>not</em> here.
         </h2>
         <p class="panelNote">
-          A single-card run, finished. The console renders in its <strong>not-sent</strong> face
-          because this run was started without <span class="font-mono">--report-log</span> — which
-          is the default, and the one a reader is most likely to meet. It says what stayed on the
-          machine rather than showing an empty box, because an empty box reads as a failure to
-          record.
+          A single-work item run, finished. The console renders in its
+          <strong>not-sent</strong> face because this run was started without
+          <span class="font-mono">--report-log</span> — which is the default, and the one a reader
+          is most likely to meet. It says what stayed on the machine rather than showing an empty
+          box, because an empty box reads as a failure to record.
         </p>
         <div class="stage">
           <div class="secCard">
@@ -2193,7 +2193,8 @@
           <span class="panelNum">3</span>RE-PLANNED — neither a success nor a failure.
         </h2>
         <p class="panelNote">
-          The agent read the card, found its premise false, reverted, submitted a plan and exited
+          The agent read the work item, found its premise false, reverted, submitted a plan and
+          exited
           <strong>0</strong>. Nothing was built and nothing was broken. It takes the
           <span class="font-mono">--el-tint-lavender</span> tone the product already uses for
           <em>Planning</em>, so it reads as <em>a decision was made</em> rather than as green or red
@@ -2244,7 +2245,7 @@
                   <span class="tlLabel">
                     Re-plan submitted
                     <span class="tlDetail"
-                      >the card moved to Planning; a plan is waiting for you</span
+                      >the work item moved to Planning; a plan is waiting for you</span
                     >
                   </span>
                   <span class="tlWhen">11:52:20</span>
@@ -2253,7 +2254,7 @@
               <p class="setLine">
                 <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bot" /></svg>
                 <span
-                  >The agent submitted a plan rather than building this card.
+                  >The agent submitted a plan rather than building this work item.
                   <a href="/plans/pl_91c4">Review the plan →</a></span
                 >
               </p>
@@ -2273,7 +2274,7 @@
       <section class="panel">
         <h2 class="panelTitle"><span class="panelNum">4</span>FAILED.</h2>
         <p class="panelNote">
-          The agent exited non-zero. The card stays In&nbsp;Progress and nothing was reverted —
+          The agent exited non-zero. The work item stays In&nbsp;Progress and nothing was reverted —
           which the body says in words, because “failed” alone leads a reader to assume the work was
           rolled back. The exit code is shown because it is the one fact a person can act on.
         </p>
@@ -2388,7 +2389,7 @@
                     </li>
                   </ul>
                   <p class="panelNote" style="margin: 12px 0 0">
-                    Nothing was reverted; the card is where the run left it.
+                    Nothing was reverted; the work item is where the run left it.
                   </p>
                 </div>
               </div>
@@ -2452,7 +2453,7 @@
           run that opened and then went quiet.
           <strong>It must not read as a failed run</strong> — the work may have shipped perfectly —
           so the pill is neutral-warning, the notice says which of the two facts is unknown, and the
-          timeline keeps the rows it did receive rather than showing an empty card.
+          timeline keeps the rows it did receive rather than showing an empty work item.
         </p>
         <div class="stage">
           <div class="secCard">
@@ -2473,8 +2474,8 @@
                 <span class="body"
                   ><strong>This run stopped reporting to Motir.</strong>
                   <span
-                    >The run itself was unaffected — the agent kept working and your cards still
-                    moved. What is missing is the record, not the work. Check the Development
+                    >The run itself was unaffected — the agent kept working and your work items
+                    still moved. What is missing is the record, not the work. Check the Development
                     section for what shipped.</span
                   ></span
                 >
@@ -2619,10 +2620,11 @@
           error.
         </h2>
         <p class="panelNote">
-          A card that has never been dispatched. The section still renders — its absence would be a
-          third thing for a reader to interpret — but it is quiet: a muted glyph, one sentence of
-          fact, and the command that would change it. No red, no warning tone, no “no data” framing.
-          The copy button is the same one <span class="font-mono">/ready</span> already ships.
+          A work item that has never been dispatched. The section still renders — its absence would
+          be a third thing for a reader to interpret — but it is quiet: a muted glyph, one sentence
+          of fact, and the command that would change it. No red, no warning tone, no “no data”
+          framing. The copy button is the same one <span class="font-mono">/ready</span> already
+          ships.
         </p>
         <div class="stage">
           <div class="secCard">
@@ -2637,8 +2639,8 @@
                 </span>
                 <h3>No runs yet</h3>
                 <p>
-                  Nothing has been dispatched for this card. When an agent works it, what it did
-                  shows up here.
+                  Nothing has been dispatched for this work item. When an agent works it, what it
+                  did shows up here.
                 </p>
                 <p style="margin-top: 12px">
                   <span class="mono" style="font-size: 12px">motir run PROD-42</span>
@@ -2654,8 +2656,8 @@
           <span class="panelNum">9</span>RECENT RUNS — designed for twenty, not three.
         </h2>
         <p class="panelNote">
-          A card worked by <span class="font-mono">motir auto</span> every night accumulates a run
-          per night for as long as the project lives, so the list is
+          A work item worked by <span class="font-mono">motir auto</span> every night accumulates a
+          run per night for as long as the project lives, so the list is
           <strong>cursor-paged and capped at five</strong> with an explicit “Show more”. Newest
           first, which is load-bearing rather than a default: the item page reads the CURRENT run
           off the first row, which is why there is no separate “current run” read to keep in step.
@@ -2724,8 +2726,8 @@
             </div>
           </div>
           <p class="caption">
-            A SKIPPED row is a real row: the run owned this card and decided not to work it, which
-            is a fact about the card that exists nowhere else.
+            A SKIPPED row is a real row: the run owned this work item and decided not to work it,
+            which is a fact about the work item that exists nowhere else.
           </p>
         </div>
       </section>
@@ -2739,9 +2741,9 @@
           Only ever present when the run was started with
           <span class="font-mono">--report-log</span>. It is a
           <strong>collapsed region inside the section</strong>, never an always-expanded wall of
-          text beside the work item’s own content: the item page is where a person reads the CARD,
-          and a live log is the loudest thing on any page it appears on. Open, it is capped at a
-          scroll region and follows the tail; the footer states the retention window, because that
+          text beside the work item’s own content: the item page is where a person reads the WORK
+          ITEM, and a live log is the loudest thing on any page it appears on. Open, it is capped at
+          a scroll region and follows the tail; the footer states the retention window, because that
           is the promise the flag is half of.
         </p>
         <div class="stage">
