@@ -280,10 +280,16 @@ export function PalettePicker({
     label: PALETTE_REGISTRY[id].name,
     // The dot's colour is HARDCODED (the palette's light-theme signature primary
     // — its `--color-primary-fill` in globals.css), NOT a `data-palette`-scoped
-    // `--el-accent`. A scoped `--el-accent` resolves under the ACTIVE theme/style,
-    // so the dot would shift with dark mode (and a base palette nested under a
-    // non-base `<html>` inherits the wrong accent — the StyleVignette nested-base
-    // caveat). A fixed swatch always shows the palette's own identity hue. The
+    // `--el-accent`. The reason is THEME-INDEPENDENCE, and it is the whole of
+    // the reason: a scoped `--el-accent` resolves under the ACTIVE theme, so the
+    // dot would shift in dark mode, while this row is an identity legend — each
+    // swatch must read as the palette's own hue whatever the page is wearing.
+    // (This comment used to cite the StyleVignette nested-base caveat as a
+    // second reason. That leak is closed on both axes — palette by
+    // MOTIR-3933's `data-appearance-scope` re-emission, material by
+    // MOTIR-3997's `@scope … to ([data-style])` limit — so a nested scope now
+    // resolves its own tokens. The citation is retired; the swatch stays
+    // hardcoded on the theme-independence reason alone.) The
     // `Record<PaletteId, …>` keeps it total — a new palette won't typecheck until
     // its swatch is added.
     leading: (

@@ -118,8 +118,9 @@ describe('runtime contract in globals.css', () => {
     // only shape/feel tokens, never a `--color-*` / `--el-*` colour token (the
     // independent data-palette axis) NOR a `--font-*` role token (the
     // independent data-type axis, 7.3.53 — type used to live here and moved out).
-    // Descendant-scoped material rules (`[data-style='id'] [data-surface] { … }`)
-    // are NOT token blocks and are checked separately below.
+    // Scope-anchored material rules (`@scope ([data-style='id']) to
+    // ([data-style]) { [data-surface] { … } }`, MOTIR-3997) are NOT token
+    // blocks and are checked separately below.
     // Strip CSS comments first so a comment that merely MENTIONS a token (e.g.
     // "sets no --font-* token") can't be mistaken for a real declaration.
     const css = GLOBALS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -162,23 +163,85 @@ describe('surface-material layer in globals.css (the 7.3.35 contract extension)'
   // A SURFACE-MATERIAL style (glassmorphism, and later cybercore / aurora / …)
   // may own its surface — translucency, a gradient canvas, frosted
   // backdrop-blur, light borders — that the shape-only token block cannot
-  // express. It does so via STYLE-SCOPED component rules
-  // `[data-style='id'] <selector> { … }` (distinct from the bare token block,
-  // which stays colour-free above). To keep the style axis disjoint from the
-  // palette axis, that material MUST be PALETTE-DERIVED: every colour comes from
-  // `color-mix()` / `var(--color-*|--el-*)` over the ACTIVE palette — NEVER a
-  // raw hue. So a palette swap re-tints the glass; a style swap leaves hues be.
+  // express. It does so via STYLE-SCOPED component rules (distinct from the
+  // bare token block, which stays colour-free above). To keep the style axis
+  // disjoint from the palette axis, that material MUST be PALETTE-DERIVED:
+  // every colour comes from `color-mix()` / `var(--color-*|--el-*)` over the
+  // ACTIVE palette — NEVER a raw hue. So a palette swap re-tints the glass; a
+  // style swap leaves hues be.
 
-  // Descendant-scoped style rules: `[data-style='id'] <selector> { … }` — the
-  // `[^{};]+` after the attribute is the descendant selector, which excludes
-  // the bare token block (`[data-style='id'] {` has nothing before its brace).
-  const materialRe = /\[data-style='[^']+'\]\s+[^{};]+\{([^}]*)\}/g;
+  // ⚠️ MOTIR-3997 MOVED THE ANCHOR, so this finder reads the @scope PRELUDE.
+  // The material layer used to ship as descendant rules
+  // (`[data-style='id'] <selector> { … }`), found here by the text regex
+  // `/\[data-style='[^']+'\]\s+[^{};]+\{/`. A descendant combinator does not
+  // stop at a nested `data-style`, so every one of them matched straight
+  // through a scoped `StyleVignette` tile; they now ship as
+  //
+  //   @scope ([data-style='id']) to ([data-style]) { <selector> { … } }
+  //
+  // where `to (…)` is a scoping LIMIT — the nearest `[data-style]` descendant
+  // and its subtree leave the scope. See
+  // docs/decisions/scoped-preview-isolation.md. The old regex matches NONE of
+  // the rewritten rules, which is why the parser had to land in the same
+  // commit as the rewrite.
+  const SCOPE_OPEN = /@scope\s*\(\[data-style='([^']+)'\]\)\s*to\s*\(\[data-style\]\)\s*\{/g;
+
+  /**
+   * Every scope-anchored material rule in the token layer, as
+   * `{ style, selector, body }`.
+   *
+   * Hand-scanned rather than regexed end-to-end: a `@scope` block nests one
+   * rule inside it, so the population needs brace MATCHING — a `([^}]*)` body
+   * would stop at the inner rule's own closing brace and silently under-count.
+   * Comments are stripped first so a comment mentioning a hex or a `}` cannot
+   * be read as a declaration (the token-block check above strips them for the
+   * same reason).
+   */
+  function scopedMaterialRules(source: string): { style: string; body: string }[] {
+    const css = source.replace(/\/\*[\s\S]*?\*\//g, '');
+    const out: { style: string; body: string }[] = [];
+    SCOPE_OPEN.lastIndex = 0;
+    let open: RegExpExecArray | null;
+    while ((open = SCOPE_OPEN.exec(css)) !== null) {
+      // Walk to the `@scope` block's matching close brace.
+      let depth = 1;
+      let i = open.index + open[0].length;
+      for (; i < css.length && depth > 0; i += 1) {
+        if (css[i] === '{') depth += 1;
+        else if (css[i] === '}') depth -= 1;
+      }
+      const inner = css.slice(open.index + open[0].length, i - 1);
+      // The block holds exactly one rule: `<selector> { <declarations> }`.
+      const brace = inner.indexOf('{');
+      if (brace === -1) continue;
+      out.push({
+        style: open[1] ?? '',
+        body: inner.slice(brace + 1, inner.lastIndexOf('}')),
+      });
+      SCOPE_OPEN.lastIndex = i;
+    }
+    return out;
+  }
+
+  const MATERIAL_RULES = scopedMaterialRules(GLOBALS_CSS);
+
+  it('anchors every material rule in a `@scope … to ([data-style])` block (69 at MOTIR-3997)', () => {
+    // A RATCHET, and the number is the point. A material rule authored as a
+    // plain descendant in future is not merely unscoped — it is invisible to
+    // the finder above, so the palette-derivation assertion below would stop
+    // seeing it while staying green. The floor is what turns "uncounted" into
+    // a failure. Raise it when the layer legitimately grows; never lower it
+    // without saying which rule left the scope and why.
+    expect(MATERIAL_RULES.length).toBeGreaterThanOrEqual(69);
+    for (const rule of MATERIAL_RULES) {
+      expect(isStyleId(rule.style)).toBe(true);
+    }
+  });
 
   it('derives every material colour from the active palette — color-mix/var, never a raw hue', () => {
-    let match: RegExpExecArray | null;
     let materialRulesChecked = 0;
-    while ((match = materialRe.exec(GLOBALS_CSS)) !== null) {
-      const body = match[1] ?? '';
+    for (const rule of MATERIAL_RULES) {
+      const body = rule.body;
       // Only assert on rules that actually paint a colour-bearing surface.
       if (!/(?:background|background-color|background-image|border-color|color)\s*:/.test(body)) {
         continue;
@@ -194,7 +257,11 @@ describe('surface-material layer in globals.css (the 7.3.35 contract extension)'
       expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     }
     // Glassmorphism ships the canvas + frosted card/popover/modal/sidebar/input
-    // material rules; guard that the matcher actually found them.
+    // material rules; guard that the matcher actually found them. This is a
+    // PROPER SUBSET of MATERIAL_RULES — 32 of the 69 at MOTIR-3997 paint a
+    // colour-bearing property at all, the rest carrying only shadow, radius,
+    // transform or transition — so the 69 ratchet lives on the population above
+    // and this floor stays where it was.
     expect(materialRulesChecked).toBeGreaterThanOrEqual(4);
   });
 });
