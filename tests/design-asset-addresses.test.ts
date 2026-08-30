@@ -368,6 +368,68 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //    addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of
   //    them in the assets, so those rows are gone too.)
 
+  // ── Forward-looking: the RUN VIEW (Story MOTIR-1789 · MOTIR-3895) ─────────
+  //    `design/runs/` (MOTIR-1795) draws two surfaces that LINK to a run's own
+  //    page, and that page does not exist yet: `app/(authed)/` holds no `runs`
+  //    segment at all. MOTIR-3895 builds `/runs/[id]` and — per the pattern
+  //    above — is the card that deletes these rows in the commit that adds the
+  //    route, which `expired()` below enforces.
+  //
+  //    The link is the whole point of both surfaces rather than decoration: a
+  //    ready-row strip that named a run without reaching it, and a card that
+  //    said "4 of 11" without letting the reader see the other ten, would each
+  //    be drawing the half of the answer that is already on the page.
+  {
+    file: 'design/runs/design-notes.md',
+    address: '/runs/[id]',
+    why: 'Forward-looking: the run view MOTIR-3895 builds. Named in the surface table as the third surface of this area, whose asset is MOTIR-3893’s.',
+  },
+  {
+    file: 'design/runs/run-section.mock.html',
+    address: '/runs/run_7f2c',
+    why: 'Forward-looking: the "4 of 11 — see the whole run" link-out, which is the single most useful sentence on the run section. MOTIR-3895 builds the route.',
+  },
+  // ── Forward-looking: the two run PAGES (MOTIR-3893's asset) ──────────────
+  //    The design draws the surfaces; MOTIR-3895 builds `/runs/[id]` and
+  //    MOTIR-3923 builds `/runs` and its rail row. Each of these four rows
+  //    DELETES ITSELF when its route lands — the `carries no KNOWN entry that
+  //    has stopped applying` check above is what turns a stale exemption into a
+  //    red build rather than a quiet one.
+  {
+    file: 'design/runs/run-view.mock.html',
+    address: '/runs',
+    why: 'Forward-looking: the breadcrumb BACK to the index, drawn on the run view because this page is reached from three places and only one of them gets you to the others. MOTIR-3923 builds the route. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
+  },
+  {
+    file: 'design/runs/run-view.mock.html',
+    address: '/runs/[id]',
+    why: 'Forward-looking: the surface this asset IS — named in its own header comment. MOTIR-3895 builds the route. DELETE THIS ROW when `app/(authed)/runs/[id]/page.tsx` lands.',
+  },
+  {
+    file: 'design/runs/runs-index.mock.html',
+    address: '/runs',
+    why: 'Forward-looking: the surface this asset IS, and the rail row that reaches it. MOTIR-3923 builds both. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
+  },
+  {
+    file: 'design/runs/runs-index.mock.html',
+    address: '/runs/[id]',
+    why: 'Forward-looking: every row of the index links to one run. MOTIR-3895 builds the route. DELETE THIS ROW when `app/(authed)/runs/[id]/page.tsx` lands.',
+  },
+
+  {
+    file: 'design/runs/design-notes.md',
+    address: '/runs',
+    why: 'Forward-looking: the RUNS INDEX, named in the surface table as the surface that makes a run findable at all. MOTIR-3893 draws it, MOTIR-3923 builds the route and its primary-nav row. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
+  },
+
+  //    ⚠️ TWO ROWS FOR `design/runs/ready-strip.mock.html` STOOD HERE AND ARE
+  //    GONE WITH THE ASSET (MOTIR-3914). The strip drew a live-run indicator on
+  //    a `/ready` row; that row cannot occur, because `/ready` lists only `todo`
+  //    leaves and claiming a card flips it to `in_progress` before the first
+  //    agent starts. The `carries no KNOWN entry that has stopped applying`
+  //    check above is what caught them the moment the file was deleted — which
+  //    is the whole reason these rows carry a deletion condition in their `why`.
+
   // ── Forward-looking: the Roles & permissions settings page (MOTIR-2263) ───
   //    The asset (MOTIR-2259, #1889) draws a settings page that does not exist
   //    yet: `app/(authed)/settings/project/` holds `members`, `board`,
@@ -955,6 +1017,29 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/brand/design-notes.md',
     path: 'app/icon1.png',
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
+  },
+
+  // ── Forward-looking: the DISPATCH RUN decision record (MOTIR-1790) ────────
+  //    Exactly the shape the note below records, one story later, and the same
+  //    two rows for the same reason: `design/runs/` (MOTIR-1795) cites the ADR
+  //    it is built to, the ADR is MOTIR-1790's deliverable, and the two reach
+  //    `main` through DIFFERENT pull requests — the design ships alone because
+  //    it is a STOPPER that needs sign-off before its dependents build on it,
+  //    while the record rides the story's parent branch.
+  //
+  //    ⚠️ THESE TWO ROWS DELETE THEMSELVES when the parent pull request brings
+  //    `docs/decisions/dispatch-run-record.md` into the tree. `carries no
+  //    KNOWN_PATHS entry that has stopped applying` below is what turns that
+  //    into a red build rather than a stale exemption — nobody has to remember.
+  {
+    file: 'design/runs/design-notes.md',
+    path: 'docs/decisions/dispatch-run-record.md',
+    why: "Forward-looking: the notes' *Where each behaviour came from* table cites the decision this area is built to. MOTIR-1790's deliverable, on Story MOTIR-1789's parent branch; this design ships alone as a stopper. DELETE THIS ROW when the parent pull request merges.",
+  },
+  {
+    file: 'design/runs/run-section.mock.html',
+    path: 'docs/decisions/dispatch-run-record.md',
+    why: "Forward-looking: the mock's own header block names the decision record it builds to, exactly as `design/work-items/todo-list.mock.html` named its own. Same story, same parent branch, same self-deleting reason. DELETE THIS ROW when the parent pull request merges.",
   },
 
   // (The two FORWARD-LOOKING rows for `docs/decisions/work-item-todo-list.md`

@@ -281,6 +281,16 @@ export const workItemLinkRepository = {
    * for a readiness verdict), this returns the edge ENDPOINTS: `blockedId` (the
    * `fromId`) and `blockerId` (the `toId`). ONE query; empty `itemIds` → `[]`.
    * Read-only → `db` singleton.
+   *
+   * ARCHIVED blockers are EXCLUDED (`toItem.archivedAt IS NULL`; MOTIR-1328) — the
+   * same rule as {@link findBlockerStates} and {@link findBlockerStatesForItems},
+   * so what the canvas DRAWS agrees with what readiness COMPUTES: a stale edge to
+   * a soft-removed item is not an arrow, not a cross-flag and not a ghost anchor,
+   * exactly as it is not an open blocker (bug MOTIR-3927). Without it the roadmap
+   * level read contradicted itself in one frame — `findProjectTreeLevel` drops the
+   * archived row from the level, and this read then handed it straight back as an
+   * OFF-level blocker, named by `findRoadmapBlockerStubs`, while `getReadiness` on
+   * the very same card answered `ready: true` with no open blockers.
    */
   async findBlockedByEdges(
     itemIds: string[],
@@ -288,7 +298,7 @@ export const workItemLinkRepository = {
   ): Promise<Array<{ blockedId: string; blockerId: string }>> {
     if (itemIds.length === 0) return [];
     const rows = await (tx ?? db).workItemLink.findMany({
-      where: { fromId: { in: itemIds }, kind: 'is_blocked_by' },
+      where: { fromId: { in: itemIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: { fromId: true, toId: true },
     });
     return rows.map((r) => ({ blockedId: r.fromId, blockerId: r.toId }));
