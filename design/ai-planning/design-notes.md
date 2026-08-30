@@ -20,6 +20,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | The timeline's **CONTENT events**            | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
 | The **FIFTH plan status** on every surface   | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
 | **Revising a plan under review**             | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
+| **The plan detail, refined**                 | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -1850,8 +1851,14 @@ result is a MOMENT_). The pane header therefore holds the switcher alone.
 
 **Per element:** the shipped full-screen button's shell — `--el-surface` fill, `--el-border`,
 `--radius-btn`, `--height-control`, `--shadow-card` — widened for a label, because this control has
-no icon a reader could guess. Resting ink `--el-text-secondary`; ACTIVE takes `--el-accent-soft` fill,
-`--el-accent` border and `--el-accent` ink; DISABLED is the same shell at reduced opacity. A real
+no icon a reader could guess. Resting ink `--el-text-secondary`; ~~ACTIVE takes `--el-accent-soft` fill~~
+**⚠️ CORRECTED (Part XIII §3e, MOTIR-4017): `--el-accent-soft` IS DEFINED NOWHERE.** It was a LOCAL
+variable in this Part's own mock (`plan-canvas-arrival.mock.html:36`, `#f4f2fd` — a hex that appears in
+neither `theme.css` nor `globals.css`), transcribed into the `--el-*` namespace here and then built
+faithfully at `ProjectRoadmapCanvas.tsx:1087`. The declaration is dropped as invalid, so the pressed
+toggle rendered with **no background at all** — measured `rgba(0, 0, 0, 0)`. **The ACTIVE fill is
+`--el-tint-lavender`**, with `--el-accent` border and `--el-accent-on-surface` ink; DISABLED is the same
+shell at reduced opacity. A real
 `<button>` carrying `aria-pressed`. **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` /
 `h-*`.**
 
@@ -1900,9 +1907,13 @@ same question, in the pane that already has the better one.
   `title` and accessible description _"No proposed changes on this level"_. An ON state would dim
   every card and ring none — a screen that says nothing, which is worse than a control that says why
   it cannot help.
-- **A level that is ENTIRELY the plan's**: enabled, and ON simply rings everything with nothing to
-  dim. Correct and harmless, not special-cased, and the count reading `4 of 4` is the honest thing to
-  say about it.
+- **A level that is ENTIRELY the plan's**: ~~enabled, and ON simply rings everything with nothing to
+  dim. Correct and harmless, not special-cased~~ — **⚠️ REVERSED by Part XIII §3d (MOTIR-4017): DISABLED,
+  with its own reason (`planReview.showChangesAll`).** _Harmless_ was a property of a state the reader
+  CHOSE. Once the emphasis is ARMED ON ARRIVAL the same state arrives unasked — every card ringed, none
+  dimmed — and a ring that is on everything teaches the reader, at the moment they land, that the ring
+  means nothing. That is this bullet's own argument for the empty case, applied to its mirror. The count
+  reading `4 of 4` is still the honest thing to say about the level, and the level CAPTION says it.
 
 ### §L7 · A DECIDED plan — the control SURVIVES, in the past tense
 
@@ -1925,6 +1936,12 @@ of most of the screen at once, **the transition is dropped entirely under
 
 **The canvas by default; the LIST when the plan's proposals sit under MORE THAN ONE distinct
 parent.**
+
+> **⚠️ WIDENED, not replaced, by Part XIII §6 (MOTIR-4017).** This arm is kept verbatim and TWO are
+> added ahead of it: an arrival level whose untruncated total exceeds `TREE_LEVEL_MAX_TAKE`, and an
+> arrival level of more than **12** nodes. Part XIII §6 also MEASURES that `ARRIVAL_MIN_SCALE = 0.80`
+> is unreachable on this surface at three of four viewports — the rail leaves the canvas 782px wide at
+> 1440×900 against a 1000px world box — which is why its predicate is a node COUNT and not a scale.
 
 - **What counts as a container:** a distinct `parentNodeId`, whether that parent is committed or
   itself proposed. **`null` — a root proposal — counts as ONE container, the top level**, so a plan of
@@ -2658,3 +2675,785 @@ worth repeating outside it:
 - **No diff view of a proposal's before / after.** The reviewer sees the plan as it now stands, marked
   where it moved. A per-proposal diff is a real surface and a different card; nothing here depends on
   it.
+
+---
+
+# Part XIII — The plan DETAIL, refined: the proposed title, the fold, the changes lit on arrival, the locate walk, the search box's own words, the derived default, a clickable row, and the rail's decision (MOTIR-4017 / Story MOTIR-4016)
+
+**Its OWN asset**: `design/ai-planning/plan-detail-refined.mock.html` + `plan-detail-refined.png`, plus this
+section. Parts VIII, IX and XII stay exactly as drawn; where this Part changes something one of them
+decided, it says so HERE and does not re-export their assets (_A design result is a MOMENT_, above).
+
+**Eight refinements to `/plans/[id]`, drawn as ONE board because they all move the same chrome**: the
+review model's title, the pane's height, the canvas's top-right cluster, its bottom-left cluster, the
+list body's rows, the read modal's corner, and the rail's decision. Each is small; taken separately by
+eight cards they would be eight different answers to the same four files.
+
+## 0. Drawn against SHIPPED reality — what was RENDERED first, and what the render settled
+
+**Every number in this Part is measured in Chromium against the running app at `origin/main` @
+`f9b9443e7`**, on a seeded tenant (`tests/e2e/_helpers/plans-shapes-seed.ts` shape TWO — a plan with two
+`add`s and one `modify` carrying `patch.title`, under one committed epic), at 1440×900, 1366×768,
+1280×800 and 1920×1080, with the Plan-with-AI orb mounted (`--shell-bottom-clearance: 6rem`). The
+harness is reproduced inline in §14 rather than cited, because it is deleted before this asset lands.
+
+**Four things the render settled that reading the source could not, and two of them contradict this
+card's own premises:**
+
+| what was rendered                                             | what it settled                                                                                                                                                                                                         |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the pane at four viewports                                    | the chrome above the canvas box is **133 px**, not the 136 px the box subtracts — and the box subtracts `--shell-bottom-clearance` a SECOND time on top of that. **The page does NOT scroll at any of the four** (§2)   |
+| the Show-changes toggle with `aria-pressed="true"`            | `backgroundColor: rgba(0, 0, 0, 0)`. The pressed control has **no fill at all** — the token it names does not exist (§3e)                                                                                               |
+| six crowded levels × four viewports (24 arrival scales)       | the arrival scale on THIS canvas is capped at **0.686** at 1440×900 by the canvas's WIDTH before the level's height is considered, so `ARRIVAL_MIN_SCALE = 0.80` **is not reachable here at all** (§6)                  |
+| the rail with a long generated title and a nine-turn timeline | Approve's bottom sits at **1037 px** in the rail's scroll space against a visible bottom of 676 (1366×768) / 800 (1440×900) / **980 (1920×1080)** — the decision is below the fold **even on a 1920×1080 display** (§8) |
+
+**⚠️ TWO CARD PREMISES ARE FALSIFIED BY THE MEASUREMENT, and both are amended on the record rather than
+quietly built around** (`run.md` — _a falsified premise is REPORTED, never silently re-scoped_):
+
+1. **"at 1366×768 … the page SCROLLS."** It does not. `document.documentElement.scrollHeight ===
+innerHeight` at all four viewports. What the shipped shape actually does at 1366×768 is bind its
+   `min-h-[34rem]` floor (544) above its own computed height (536) and eat **8 px of the shell's own
+   clearance band**, leaving a **91 px dead band** under the graph. The defect is real, its size is
+   what was measured, and its NAME was wrong.
+2. **"how many nodes can a level hold and still arrive at or above the floor?"** — that number does not
+   exist for this surface. §6 measures why and states the predicate the measurement DOES support.
+
+Planning bug filed under `MOTIR-1465`; this card's §6 and §2 criteria are amended with the evidence.
+
+## 1. §1 · The PROPOSED title — the node shows what the plan is ASKING for
+
+### The defect, read and rendered on `origin/main` @ `f9b9443e7`
+
+`planReviewService.getPlanReview` builds every item's `title` as
+
+```ts
+title: item.op === 'add' ? (proposed?.title ?? 'Untitled item') : (target?.title ?? 'Unavailable item'),
+```
+
+so a `modify` carrying `patch.title` reports the title of the card it is about to RENAME. Three lines
+earlier the same function's `buildChanges` files that rename as a `title` change row with `from` and
+`to`. **The surface therefore names the card by what it is called, and separately and much more
+quietly by what it will be called.** Rendered: the canvas node's headline reads `Invoice templates`
+while a ~10 px inline overlay under it reads `Title Invoice te… → Invoice template s…`, both ends
+truncated past reading.
+
+### The decision
+
+**The review model reports the title the plan PROPOSES.** `title` becomes
+`patch.title ?? target.title` for a `modify`, and is unchanged for `add` (the proposed title, which is
+the only one there is) and for `remove` (the target's, which is the only one there is).
+
+| surface                | shows                                                                        | why                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the canvas NODE        | the **proposed title ALONE**                                                 | the node is a SIGNAL (Part VIII §3). It is `NODE_W`×`NODE_H` = 280×124 with a fixed height, so a second title line has nowhere to go, and the `change` badge already says THAT it changes |
+| the node's inline diff | **unchanged** — it keeps spelling `old → new`                                | it is the node's own overlay and this Part does not redraw the node treatments (Part I §3 panel B). What changes is which end of it the HEADLINE agrees with                              |
+| the LIST row headline  | the **proposed title**, and its `TITLE` change line still spells `old → new` | Part VIII §3 already split these: the list is where a change is SPELLED. Neither becomes redundant — the headline says what the card will BE, the change line says what it is leaving     |
+| the list row's key     | **unchanged** — the committed `identifier`                                   | the pair is what makes a rename legible: a real key beside the name it is about to take                                                                                                   |
+
+**The constraint Part VIII settled and this must not re-litigate: the node is a SIGNAL and the list is
+where a change is SPELLED.** This Part changes only which title the signal carries; it adds no second
+place a change is spelled and takes none away.
+
+**Rejected:** the node showing `old → new` in its headline (two names in a 280 px box, and the reviewer
+is deciding about one of them); and dropping the list's `TITLE` change line as redundant (it is the only
+place the outgoing name survives, and a rename is exactly the change a reviewer wants to read in full).
+
+**⚠️ ONE DELIBERATE DEVIATION FROM THE SHIPPED MARKUP, and it is a defect the guard found.** The
+node's inline diff overlay (`data-testid="diff-line"`) paints its field label and its struck old value
+in `--el-text-muted`, on a card whose fill is `--el-surface`. `tests/design-ink-contrast.test.ts` fails
+that pair — **4.12–4.34:1, below AA, at `text-xs`** — and it is right: the asset draws the overlay in
+`--el-text-secondary` (6.18–6.80:1 on all four surfaces, both themes) rather than reproducing an
+inaccessible pair. **This is a SHIPPED defect, not one this story introduces**, it survives every card
+in MOTIR-4016 (§1 leaves the overlay otherwise untouched), and it is filed as its own bug rather than
+left as this paragraph.
+
+**⚠️ The quick view is a THIRD surface and it is NOT this Part's.** A `modify` node's **View** opens
+`WorkItemQuickView` — the committed work item, which correctly shows the committed title, because that
+modal reads the work item and not the proposal. Naming it so nobody widens §1 into it.
+
+## 2. §2 · The pane FILLS THE FOLD — the chrome budget, MEASURED
+
+### The budget
+
+The chrome above `app/(authed)/plans/[id]/page.tsx`'s canvas box, measured (not summed) in Chromium at
+all four viewports — the numbers are identical at every one:
+
+| term                                                                                                      | px                            |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| the top nav — `h-14` plus its 1 px bottom hairline                                                        | 57                            |
+| the shell's `pt-6` (`app/(authed)/layout.tsx`)                                                            | 24                            |
+| this page's `<header>` — a `size-(--height-control)` back-link beside a `text-xl` h1 whose line box is 28 | **36** (= `--height-control`) |
+| the page stack's `gap-4`                                                                                  | 16                            |
+| **total**                                                                                                 | **133**                       |
+
+**⚠️ ONE OF THOSE FOUR TERMS IS NOT A CONSTANT, and that is why this spec reads a token instead of
+baking a number.** The header's height is `--height-control`, which every `[data-style]` axis
+redefines: **34 px** (`swiss-minimal-flat`, `cybercore-y2k`) · **36** (default, `neo-brutalism`) ·
+**38** (`glassmorphism`, `aurora`, `hand-drawn-indie`, `neumorphism`) · **40** (`soft-playful`,
+`3d-immersive`). A flat `8.3125rem` would be wrong by up to 4 px on seven of the nine styles. The
+roadmap's own 10 rem is safe from this because its header is an `h1` + subtitle stack, which no style
+axis moves; **this page's is not, and the difference is worth a sentence because the two look like the
+same fix.**
+
+### What ships today, MEASURED
+
+The box is `h-[calc(100dvh_-_8.5rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-[34rem]`. With the
+orb mounted that subtracts **136 + 96 = 232 px** for a chrome that costs **133**.
+
+| viewport (window) | chrome | box today | box bottom | dead band below | `min-h` binds?      | page scrolls |
+| ----------------- | ------ | --------- | ---------- | --------------- | ------------------- | ------------ |
+| 1440×900          | 133    | 668       | 801        | **99**          | no (668 > 544)      | **no**       |
+| 1366×768          | 133    | **544**   | 677        | **91**          | **YES** — 536 → 544 | **no**       |
+| 1280×800          | 133    | 568       | 701        | **99**          | no                  | **no**       |
+| 1920×1080         | 133    | 848       | 981        | **99**          | no                  | **no**       |
+
+**At 1366×768 the floor exceeds the box's own `calc`**, so the pane is 8 px taller than the height it
+computes and spends 8 px of the shell's clearance band. **It does not make the page scroll** — the
+shell's `pb-(--shell-bottom-clearance)` absorbs it — which is the card's claim corrected in §0.
+
+### THE SPEC — the pane TAKES the band, and READS the term that moves
+
+```css
+/* the chrome above, each term named: nav + hairline, the shell's pt-6, this page's gap-4,
+   and the header — which is one control tall and therefore style-dependent */
+height: calc(100dvh - (3.5rem + 1px) - 1.5rem - 1rem - var(--height-control));
+margin-bottom: calc(-1 * var(--shell-bottom-clearance, 1.5rem));
+min-height: 34rem; /* kept, and it stops binding at every viewport measured */
+```
+
+| viewport  | box today | box proposed | gain    | dead band after |
+| --------- | --------- | ------------ | ------- | --------------- |
+| 1440×900  | 668       | **767**      | **+99** | 0               |
+| 1366×768  | 544       | **635**      | **+91** | 0               |
+| 1280×800  | 568       | **667**      | **+99** | 0               |
+| 1920×1080 | 848       | **947**      | **+99** | 0               |
+
+The canvas VIEWPORT the arrival scale is computed against is the box minus its 1 px border, the 44 px
+pane header (`h-11`, Part VIII §2) and one more border, and minus the rail's `22rem` in width:
+
+| viewport  | canvas viewport today | canvas viewport proposed |
+| --------- | --------------------- | ------------------------ |
+| 1440×900  | 782×622               | **782×721**              |
+| 1366×768  | 708×498               | **708×589**              |
+| 1280×800  | 622×522               | **622×621**              |
+| 1920×1080 | 1262×802              | **1262×901**             |
+
+### The ORB — and the answer here is NOT the roadmap's
+
+The roadmap declares `--canvas-fold-inset` on the box that spends the band, so
+`ProjectRoadmapCanvas`'s bottom-RIGHT control lifts clear of the orb. **This pane must not do that, and
+the reason is the two-column grid.** `PlanningWorkspace` is `grid-cols-[1fr_22rem]`, so the box's
+bottom-right 352 px belong to the **RAIL**, not to the canvas. Measured at 1440×900: the orb is
+`fixed right-5 bottom-5`, 56 px square, at **x 1364–1420, y 824–880**; the rail spans **x 1055–1407**;
+the canvas column ends at **x 1055**. The orb is over the rail and **309 px clear of the canvas**.
+
+- **The canvas gets NO inset.** This pane does NOT declare `--canvas-fold-inset`, so
+  `ProjectRoadmapCanvas`'s Reset-layout control stays exactly where it is — and the other three
+  consumers, which inherit nothing, are untouched. A code card that copies the roadmap's line here
+  lifts a control that has nothing to clear.
+- **The RAIL gets the inset, and it is §8's pinned footer that carries it** — see §8. The rail is not a
+  shared component, so it reads the shell's own `--shell-bottom-clearance` directly rather than through
+  the canvas's indirection. Measured: with the band spent, the rail's bottom is the window's bottom, and
+  the orb covers its bottom **76 px**; a footer reserving `var(--shell-bottom-clearance)` puts the lowest
+  control's bottom at **798** against the orb's top of **824** — 26 px clear.
+
+## 3. §3 · The changes are LIT ON ARRIVAL
+
+`ProjectRoadmapCanvas.tsx:386` holds `showChanges` at `useState(false)`, on a surface whose entire
+subject is what the plan changes. **The emphasis arrives ARMED.**
+
+### (a) It re-arms on every LEVEL CHANGE, including a drill
+
+The state already resets on every level change, alongside `selectedId` / `highlightId` — deliberately,
+so a stale emphasis never survives a drill. **This changes the reset's TARGET from `false` to `true`;
+it does not add a reset.** So a reader who turns the emphasis off and then drills arrives armed again.
+
+**Why that, and not "remember off":** the reset is per LEVEL and a drill is a new question about a new
+set of cards. A mode remembered across drills makes the page's own subject invisible on every level
+after one click, and the reader has no way to know that is why. This is the exact shape Part IX §L4
+settled one tier down — _a selection is a momentary act; the toggle is a mode, and a mode should
+survive one_ — read here at the level boundary rather than the selection boundary.
+
+### (b) The armed state announces itself with its own treatment, and adds NO extra affordance
+
+The control keeps the pressed treatment (§3e) and its label stays the VERB — _Show changes_. A pressed
+button carrying an action is read as _this is on; press to turn it off_, and `aria-pressed` says the
+same thing to a screen reader without anything being drawn. **No tooltip, no first-run hint, no dismiss
+×.** Any of those would be chrome that exists only on a first arrival, and nothing on this surface could
+then decide when it should stop appearing.
+
+### (c) A DECIDED plan arrives armed too
+
+Part IX §L7 kept the control after the decision, in the past tense (_Show what changed_). It arrives
+armed for the same reason it survives: _"what did this plan change?"_ is a better question after approve
+than before it, and the decided pane exists to be a RECORD (Part VI). One rule, two labels.
+
+### (d) ⚠️ A level that is ENTIRELY the plan's — DISABLED. **This REVERSES Part IX §L6's second bullet**
+
+Part IX §L6 decided: a level with NO proposals disables the control (_"an ON state would dim every card
+and ring none — a screen that says nothing"_), and a level that is entirely the plan's stays **enabled**,
+where _"ON simply rings everything with nothing to dim. Correct and harmless."_
+
+**Harmless is a property of a state the reader CHOSE.** Arming it automatically makes the same state
+arrive unasked — a screen where every card is ringed and none is dimmed — and a ring that is on
+everything teaches the reader, at the moment they arrive, that the ring means nothing. That is the
+identical argument §L6 used for the empty case, and it applies to its mirror the moment the control is
+armed rather than pressed.
+
+**So the two degenerate levels take the SAME disposition and DIFFERENT reasons:**
+
+| level                      | control      | reason (its `title` + accessible description)                                      |
+| -------------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| no proposals on this level | **disabled** | `roadmap.canvas.showChangesNone` — _No proposed changes on this level_ (unchanged) |
+| every card is the plan's   | **disabled** | **new** — `planReview.showChangesAll` — _Every item on this level is this plan's_  |
+
+The level CAPTION already says the second one (`planReview.allProposedLevel`, Part IX §1.4), so the
+control and the caption agree instead of one of them contradicting the screen. **The reason string is the
+CONSUMER's**, exactly as `emptyLabel` is: the foundation does not know it is showing a plan.
+
+**This is recorded here and Part IX's asset is not re-exported** — the correction belongs in the notes
+precisely because the asset it corrects is frozen (the area rule at the top of this file).
+
+### (e) ⚠️ THE ACTIVE FILL — `--el-accent-soft` DOES NOT EXIST, and here is exactly how it got there
+
+**Measured**: with `aria-pressed="true"`, `getComputedStyle(toggle).backgroundColor` is
+**`rgba(0, 0, 0, 0)`**. The pressed control has no background. Its border and ink are correct
+(`rgb(86, 69, 212)` — `--el-accent`), so it renders as an outlined ghost beside a search input that has
+a solid fill, and nothing anywhere is red.
+
+**The chain, and it is worth writing down because the mechanism will produce the next one:**
+
+1. `plan-canvas-arrival.mock.html:36` declares a LOCAL `--accent-soft: #f4f2fd` — a hex that appears
+   **nowhere** in `packages/design-system/theme.css` or `app/globals.css` (`git grep f4f2fd` → 0).
+2. Part IX §L1 (`design-notes.md:1853`) wrote that up as _"ACTIVE takes `--el-accent-soft` fill"_ — a
+   local mock variable transcribed into the `--el-*` namespace, where it reads exactly like a token.
+3. `ProjectRoadmapCanvas.tsx:1087` built it faithfully: `bg-(--el-accent-soft)`.
+4. `git grep -- '--el-accent-soft *:'` returns **zero definitions**, in either theme, on any style axis.
+
+Tailwind emits `background-color: var(--el-accent-soft)`, an unresolved custom property is invalid at
+computed-value time, and the declaration is simply dropped. No build error, no lint, no test. **A mock
+that declares its own token names lets a name that exists only in the mock reach production as though it
+were a design-system token** — which is why this asset declares none (§14).
+
+**THE DECISION — the ACTIVE fill is `--el-tint-lavender`, and it is defined everywhere:**
+
+| slot   | token                    | verified                                                                         |
+| ------ | ------------------------ | -------------------------------------------------------------------------------- |
+| fill   | `--el-tint-lavender`     | `theme.css` — light `#e6e0f5`, dark `#2a253a`, redefined by every `data-palette` |
+| border | `--el-accent`            | `theme.css:2425` (`var(--color-primary-fill)`) — unchanged from Part IX          |
+| ink    | `--el-accent-on-surface` | `theme.css:2427` / `:2953` — unchanged from Part IX                              |
+
+**Why this pair and not another, in three lines that are all checkable:**
+
+- **It is the shipped ACTIVE-CONTROL pairing.** `components/ui/Sidebar.tsx:151` gives the active
+  navigation destination `bg-(--el-tint-lavender) text-(--el-accent-on-surface)`. This is that treatment,
+  on a control that is active for the same reason.
+- **Its contrast is ASSERTED, not hoped for.** `theme.css`'s own comment above `--el-accent-on-surface`
+  says the 82 % mix was sized against exactly this pair: _"The binding constraint is
+  `--el-tint-lavender` — the accent family's own tint … 82 % … 4.68:1"_, and `inkContrastLint`'s accent
+  arm recomputes it over every palette × theme. **This Part introduces no new pair to measure.**
+- **It is SOLID**, which is what the card asked for: the neighbouring full-screen and locate controls
+  carry an opaque `--el-surface` fill, and `--el-tint-lavender` is an opaque fill too. The pressed state
+  stops being the only control in the cluster you can see the canvas through.
+
+**The one collision, named rather than left to be found:** `PlanItemNode.tsx:96` gives a PROPOSED node
+`border-dashed border-(--el-accent) bg-(--el-tint-lavender)`. The toggle is chrome in the canvas's
+top-right cluster, not a card on the board; it is 36 px tall, carries an `Eye` glyph and a text label,
+and has a SOLID accent border where the node's is dashed. **Reading the two as the same object requires
+ignoring the position, the size, the glyph, the label and the border style.** Recorded because Part VI
+§3 established that a non-collision on this surface is stated explicitly rather than assumed.
+
+**AND Part IX §L1's sentence is CORRECTED in the same pull request** (§13) — a Part that names a second
+undefined token repeats the defect this section exists to close.
+
+## 4. §4 · The LOCATE walk
+
+`PlanReviewCanvas` passes no `locatable` at all, and `locateActionable` (`ProjectRoadmapCanvas.tsx:877`)
+targets `here` / `ready` nodes, which a proposal never is. The control is doubly out of reach.
+
+### The decision — the locate control walks the EMPHASIS set
+
+**When `emphasis` is supplied, the locate targets are `emphasis.ids` restricted to the level in view;
+otherwise the `here` → `ready` ladder is unchanged.** One prop, not two: the emphasis and the locate
+control are the same set of nodes seen twice — ringed, and walked — and a second `locate` set would be a
+second answer to _which cards are the plan's_ that could drift from the first. `WorkItemRoadmap` and the
+Children panel are byte-unchanged, because neither passes `emphasis`.
+
+| question                          | answer                                                                                                                                                                                                                                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the ORDER**                     | **LAYOUT order** — the order `deterministicLayout` places them in, left-to-right then down. Not `op` order (which jumps around the board between three groups) and not the plan's append order (which is invisible on screen). The reader is walking a picture; the walk moves the way the eye does   |
+| **the `n / m` hint**              | unchanged in form — `${i + 1} / ${m}`, shown only after the first press and only while `m > 1`. **`m` is the plan's cards ON THIS LEVEL**, never the plan's total                                                                                                                                     |
+| **why `m` is not the plan total** | the walk cannot reach an off-level card, and a hint that counts past where the control can go is a promise it does not keep. **The off-level total is already said, once, by the Show-changes control's `3 of 11`** (Part IX §L5) — two counts, two scopes, and neither is the other's rounding error |
+| **wrapping**                      | unchanged — past the last it returns to the first, as the ready-node cycle does today                                                                                                                                                                                                                 |
+| **selection**                     | unchanged — locate centres AND selects, at `LOCATE_ZOOM`, so the located card's View / Open surface                                                                                                                                                                                                   |
+| **DISABLED, and when**            | a level the plan does not reach — the same condition that disables Show changes, carrying **the same string** (`roadmap.canvas.showChangesNone`). One reason, said once; §L6 already decided the wording and this does not invent a second                                                            |
+
+**⚠️ On an ALL-PROPOSALS level locate is ENABLED where Show changes is DISABLED (§3d), and the
+difference is not an inconsistency.** Ringing every card says nothing, because a ring means _this one and
+not that one_. Walking every card says something, because a walk means _this one, now this one_. The two
+controls fail on opposite degeneracies, and drawing them as one rule would break the useful half.
+
+## 5. §5 · The search box says what it SEARCHES
+
+The input's `aria-label` and `placeholder` are both `t('search')` on the `roadmap.canvas` namespace,
+whose English is **"Search the roadmap"** (`messages/en.json:5707`). **Rendered on `/plans/[id]`: the
+box on a plan-review page offers to search the roadmap.**
+
+### The decision — `searchLabel` is the CONSUMER's word, and turning search on REQUIRES saying it
+
+`ProjectRoadmapCanvas` gains `searchLabel`, used for both the `aria-label` and the `placeholder` exactly
+as `t('search')` is today. **It is not optional with a roadmap-shaped default**, because a default is
+how the wrong sentence got onto four surfaces from one: the prop is required whenever `searchable` is
+set, expressed in the component's own props type so a consumer cannot turn search on without saying what
+it searches. **This is the ONE change in this story that sweeps all four consumers** — the story's
+boundary names it as the exception, and this is why.
+
+| mount                                                           | searchable?                   | label + placeholder | en                      | zh         | namespace                |
+| --------------------------------------------------------------- | ----------------------------- | ------------------- | ----------------------- | ---------- | ------------------------ |
+| `PlanReviewCanvas` — `/plans/[id]`                              | yes                           | changes             | **Search this plan**    | 搜索本计划 | `planReview.searchLabel` |
+| `PlanChangeCanvas` — the re-plan conversation                   | yes                           | changes             | **Search this project** | 搜索本项目 | `planChange.searchLabel` |
+| `OnboardingCanvas` — `searchable={!!projectKey}`                | yes, when pinned              | changes             | **Search this project** | 搜索本项目 | `onboarding.searchLabel` |
+| `WorkItemRoadmap` — `/roadmap` (`RoadmapView`)                  | yes                           | **UNCHANGED**       | Search the roadmap      | 搜索路线图 | `roadmap.canvas.search`  |
+| `WorkItemRoadmap` — the item page Children panel (`ChildPanel`) | **no** — `searchable={false}` | **none is owed**    | —                       | —          | —                        |
+
+**Why the plan review says _plan_ and the plan-change canvas says _project_.** The review canvas draws
+ONE plan's proposals on the levels they land in, and the page is a plan; the change canvas draws the
+PROJECT with a pending proposal layered onto it (`PlanChangeCanvas`'s own header comment), and a reader
+searching there is searching the tree. Onboarding is the same tree, being built.
+
+**`roadmap.canvas.search` stays exactly where it is and keeps its wording** — it is the roadmap's
+sentence and the roadmap is the one mount it was ever true of. The other three are new keys in their own
+namespaces, which is the same line the opt-in props draw: **the foundation renders the string, the
+consumer owns it** (Part IX §5).
+
+**The fifth mount needs no string and that is a decision, not an omission.** `ChildPanel` passes
+`searchable={false}` on purpose (_"a `/` overlay inside an embedded panel is a page-level key grab"_).
+Recorded so nobody adds a sixth string for it.
+
+## 6. §6 · The DERIVED default — and the floor this surface CANNOT reach
+
+⚠️ **This §'s output is a PREDICATE, and it is the one thing on this card the code children may not
+decide for themselves.**
+
+### What ships, and the half it is blind to
+
+`defaultPlanView` is `planContainerCount(items) > 1 ? 'list' : 'canvas'` (Part IX §3). It sees a plan
+SPREAD across containers and is blind to a plan CROWDED inside one — which looks identical to the reader
+and is worse, because the cards are somewhere on the level rather than honestly absent.
+
+### The arrival scale, MEASURED — 24 points, and a closed form that reproduces all of them
+
+`arrivalView` is `fitView` with a floor. For a level of `N` sibling nodes with no intra-level
+dependency edges — the shape a plan-review level takes — `deterministicLayout` drops them into a
+**3-column grid**: `NODE_W`/`NODE_H` = 280×124, `GAP_X` 80, `GAP_Y` 72, `COLS` 3, `ORIGIN` 40. So
+
+```
+bw = (min(N, 3) - 1) * 360 + 280        // 1000 for every N >= 3
+bh = (ceil(N / 3) - 1) * 196 + 124
+scale = clamp(min((W - 96) / bw, (H - 96) / bh), MIN_SCALE = 0.3, MAX_SCALE = 2)   // padding 48 each side
+```
+
+Measured in Chromium against the shipped box, six levels × four viewports. The closed form reproduces
+**every one of the 24** to the fourth decimal:
+
+| N (level total) | 1280×800 (622×522) | 1366×768 (708×498) | 1440×900 (782×622) | 1920×1080 (1262×802) |
+| --------------- | ------------------ | ------------------ | ------------------ | -------------------- |
+| 6               | 0.526              | 0.612              | 0.686              | 1.166                |
+| 12              | 0.526              | 0.5646             | 0.686              | 0.9916               |
+| 18              | 0.3859             | 0.3641             | 0.4764             | 0.6395               |
+| 24              | **0.300**          | **0.300**          | 0.3516             | 0.4719               |
+| 30              | **0.300**          | **0.300**          | **0.300**          | 0.3739               |
+| 42              | **0.300**          | **0.300**          | **0.300**          | **0.300**            |
+
+Bold is `MIN_SCALE`. At 0.30 a node card is **84 px wide** (measured) and its title renders at 4.2 px.
+
+### ⚠️ THE FLOOR IS NOT REACHABLE ON THIS SURFACE, and the card's question therefore has no answer
+
+`ARRIVAL_MIN_SCALE = 0.80` was derived for the ROADMAP, whose canvas is the full content width. **This
+canvas is the `1fr` of a `grid-cols-[1fr_22rem]`**, so the rail takes 352 px of it: 782 px wide at
+1440×900, 708 at 1366×768, **622 at 1280×800**.
+
+**The width term alone caps the arrival scale, before the level's height is considered at all:**
+
+| viewport  | canvas W | width term `(W − 96)/1000` | ≥ 0.80? |
+| --------- | -------- | -------------------------- | ------- |
+| 1280×800  | 622      | **0.526**                  | no      |
+| 1366×768  | 708      | **0.612**                  | no      |
+| 1440×900  | 782      | **0.686**                  | no      |
+| 1920×1080 | 1262     | 1.166                      | yes     |
+
+So **at three of the four viewports NO level of three or more nodes can arrive at or above the floor**,
+whatever this story does — the measured `0.686` at 1440×900 with SIX nodes is already the ceiling.
+Asking "how many nodes can a level hold and still arrive at or above the floor?" answers **two** at
+1440×900, which would send every plan to the list. **That is the card's premise falsified, and the
+predicate below is derived from what the measurement does support.**
+
+### THE PREDICATE — the arrival level's TOTAL node count, and the number is 12
+
+**A level arrives as well as this canvas can arrive when it is no more than FOUR ROWS — 12 nodes.**
+
+Derivation, using the canvas viewports §2 produces:
+
+| viewport  | canvas vp after §2 | width term | 4 rows (`bh` 712) | 5 rows (`bh` 908) | at the ceiling up to                                |
+| --------- | ------------------ | ---------- | ----------------- | ----------------- | --------------------------------------------------- |
+| 1280×800  | 622×621            | 0.526      | 0.737             | 0.578             | 5 rows                                              |
+| 1366×768  | 708×589            | **0.612**  | **0.692**         | 0.543             | **4 rows**                                          |
+| 1440×900  | 782×721            | 0.686      | 0.878             | 0.688             | 5 rows                                              |
+| 1920×1080 | 1262×901           | 1.166      | 1.130             | 0.886             | 3 rows (and 5 rows is still 0.886, above the FLOOR) |
+
+- **12 is the largest count that is still at the canvas's own ceiling at the tightest viewport**
+  (1366×768), and it is at or above the ceiling at 1280×800 and 1440×900 too.
+- **At 1920×1080 the rule costs nothing**: 12 nodes arrive at 1.130, and even 15 arrive at 0.886 — both
+  far above the 0.80 floor, so the one viewport where the floor IS reachable never hits the predicate.
+- **Above 12 the fall is steep and measured**: 18 nodes arrive at 0.364 at 1366×768; 30 nodes are
+  clamped to `MIN_SCALE` at three of the four viewports; 42 at all four.
+
+### The SECOND arm — a level past `TREE_LEVEL_MAX_TAKE`
+
+`workItemsService` caps every level read at **`TREE_LEVEL_MAX_TAKE = 200`** rows under a **key-ASCENDING**
+sort, so overflow discards the **HIGHEST keys** — the most recently created cards
+(`WorkItemNode.tsx:583`, MOTIR-3490). **A `modify` or `remove` targets a committed work item, and the
+most recently created cards are exactly the ones a plan is most likely to be about**, so on a level of
+more than 200 the plan's own target can be truncated away entirely: the canvas draws 200 cards, rings
+none of them, and the reviewer sees a plan whose subject is not on the screen.
+
+**So: an arrival level whose UNTRUNCATED total exceeds `TREE_LEVEL_MAX_TAKE` opens in the LIST,
+unconditionally** — before the node-count arm is even consulted. This raises no cap and changes nothing
+about what a level contains; `mergePlanLevel`, the take and the "Show all" ceiling are untouched.
+
+### TOTAL, not the plan's SHARE — and why
+
+The predicate reads **the arrival level's total node count** — its committed children ⊕ the plan's own
+proposals under that parent — **not the number of cards the plan proposes.** The arrival scale is a
+function of how many nodes the level DRAWS; a plan of three cards under a container of two hundred
+committed siblings is the exact case this § exists for, and its share is three. Reading the share would
+answer a different question and would be blind to the only one that matters.
+
+### What the code card needs, and what it must not do
+
+```
+defaultPlanView(review) =
+  review.arrivalLevelTotal > TREE_LEVEL_MAX_TAKE ? 'list'      // the truncation arm
+  : review.arrivalLevelSize > 12                 ? 'list'      // the legibility arm
+  : planContainerCount(review.items) > 1         ? 'list'      // Part IX §3, unchanged
+  : 'canvas'
+```
+
+- **`arrivalLevelSize` / `arrivalLevelTotal` reach the client on `PlanReviewDto`** — the size of the
+  level `arrivalLevel(items)` picks, and its untruncated total. The service already resolves that
+  parent; nothing new is read.
+- **`planContainerCount` keeps its single implementation** (`lib/planning/planShape.ts`). This adds a
+  term, it does not fork the question.
+- **Every property Part IX §3 fixed survives**: the default writes a CLEAN url; it is a SEED read once
+  at mount, so a `generating` plan crossing a threshold under the 2.5 s poll never moves the reader
+  between views.
+- **12 is this Part's number and the code card does not re-derive it**, exactly as `ARRIVAL_MIN_SCALE`
+  is the roadmap design's number and `canvasGeometry.ts` does not re-derive that one.
+
+### ⚠️ The assumption in the closed form, stated with its direction of error
+
+The grid formula is the EDGELESS layout. A level whose nodes carry intra-level `blocked_by` edges is
+laid out as a layered left-to-right flow instead, which can be wider and shorter. **The predicate is
+about the level's SIZE and must be computable before the canvas has drawn anything** — the card requires
+that, and a layout-aware predicate would need the layout it is choosing whether to show. The grid is the
+shape a plan-review level takes in the overwhelming majority of cases (committed siblings under one
+container rarely all block one another), and where it is wrong it is wrong in the direction of showing
+the LIST for a level the canvas could have held — which costs a click on the switcher, not a reader
+staring at 84 px cards.
+
+## 7. §7 · A LIST ROW opens its proposal — and the modal gets ONE close
+
+`PlanProposalList.tsx`'s `ProposalRow` is an inert `<li>`: no handler, no role, no key binding.
+`ProposalQuickView` is built and shipped and `PlanReviewCanvas.tsx:381` is its only mount — **the list
+is the one body of the two that can say what a card contains, and the only one that cannot open it.**
+
+### The row's activation — ONE control per row, and the `<dl>` stays valid
+
+**The row's TITLE becomes a `<button type="button">` with a stretched hit area**; the `<li>` is
+`relative`, the button carries `after:absolute after:inset-0`, and the ring is drawn on the ROW via
+`focus-within`. Four things fall out of that and each was a constraint:
+
+| constraint                                                                    | how this satisfies it                                                                                                                                                              |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **it may not become a row of BUTTONS** (the shipped listbox-rows a11y lesson) | exactly ONE interactive element per row, one tab stop. The chips and the change lines are not controls and do not become any                                                       |
+| **the change lines are a `<dl>`**                                             | `<button>` takes phrasing content only, and a `<dl>` is flow — so the `<dl>` stays a SIBLING of the button inside the `<li>`, and the stretched `::after` still makes it clickable |
+| **it must be keyboard-reachable**                                             | a real `<button>`: Tab reaches it, Enter and Space activate it, `Escape` closes the modal and focus returns to it (the shipped `Modal`'s own focus return)                         |
+| **the whole row should be the hit area**                                      | the `::after` overlay, which is what lets the row read as one target without wrapping content the button may not contain                                                           |
+
+**The shipped grammar this follows:** `ChildList`'s row is an `<li>` holding ONE full-row interactive
+element that wraps the glyph, key, title and chips (`RelationshipPeekLink`). This is that shape with a
+`<button>` where the `<a>` is — **because a proposal has no page and therefore no `href`**, which is the
+one place the two rows must differ.
+
+| state        | treatment                                                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **rest**     | today's row, unchanged                                                                                                                  |
+| **hover**    | `--el-surface` row fill + the title underlined — `ChildList`'s own `group-hover:underline`, verbatim                                    |
+| **focus**    | `ring-2 ring-(--focus-ring-color)` on the ROW, via `focus-within`, so the ring frames the whole target rather than the title's text box |
+| **pressed**  | `--el-surface-soft` row fill                                                                                                            |
+| **disabled** | there is none — every proposal has a body to read, including a `remove`                                                                 |
+
+**The accessible name.** The button's own text is the title; it carries
+`aria-label` = `planReview.rowOpenAria` → **`Open {name}`**, where `{name}` is
+`<identifier> · <title>` for a `modify` / `remove` and **`New · <title>`** for an `add` — the same
+`New` the node's crumb and the quick view's head already use (`planReview.proposedCrumb` / `newItem`),
+so a card with no key is named the way this surface already names it. The visible title is contained in
+the accessible name (WCAG 2.5.3).
+
+**It opens the SAME modal the canvas's View pill opens** — `ProposalQuickView`, one mount lifted to the
+island so both bodies use it. The list does not gain a second read view.
+
+### ⚠️ The DOUBLE CLOSE — MEASURED, and the convention is FOLLOWED
+
+Rendered, on a proposal opened from the canvas at 1440×900 — the dialog contains **two buttons whose
+accessible name is `Close`**:
+
+| control                             | rect                 | source                                         |
+| ----------------------------------- | -------------------- | ---------------------------------------------- |
+| the header's `QuickViewCloseButton` | x 1107, y 124, 36×36 | `ProposalQuickView.tsx:85`                     |
+| the base `Modal`'s corner ×         | x 1147, y 98, 24×24  | `Modal.tsx:188`, rendered because `!hideClose` |
+
+Two × glyphs 40 px apart horizontally and 26 px apart vertically, diagonally adjacent in one corner —
+**and two identically-named controls in one dialog, which is the a11y half of the same defect.**
+
+**`ProposalQuickView` passes `hideClose` and keeps its header button.** That is what its siblings do —
+`IssueQuickView`, `WorkItemQuickView` and `AttachmentPreview` all pass `hideClose` — and the header
+button is the one the quick-view family's own chrome (`QuickViewSurface`) is built around. **Departing
+from the convention here would need a reason this surface does not have**, and the reason to follow it
+is that a reader who has closed one quick view has closed all of them.
+
+## 8. §8 · The rail LANDS ON ITS DECISION
+
+`PlanReviewRail.tsx:163` is ONE `overflow-y-auto` column — status, title, summary, meta, timeline,
+composer, then Approve and Decline at the very bottom of it, held there by `mt-auto`.
+
+### What that costs, MEASURED, with a long generated title and a nine-turn timeline
+
+| viewport  | rail visible | rail scroll height | Approve's bottom (scroll space) | below the fold by |
+| --------- | ------------ | ------------------ | ------------------------------- | ----------------- |
+| 1366×768  | 542          | 1011               | 1037                            | **361 px**        |
+| 1280×800  | 566          | 1011               | 1037                            | **337 px**        |
+| 1440×900  | 666          | 1011               | 1037                            | **237 px**        |
+| 1920×1080 | 846          | 1011               | 1037                            | **57 px**         |
+
+**On a 1920×1080 display, with nine timeline turns, Approve is still below the fold.** At 1366×768 the
+rail shows the title and the history and nothing else — no Approve, no Decline, no composer, no hint.
+**The page a reviewer arrived at to make a decision shows no decision, and nothing scrolls to it.**
+
+The mirror case is visible too: on a SHORT plan `mt-auto` bottom-anchors the block, so the rail renders
+its content, a large void, and then the decision. Both are the same missing rule — nothing owns where
+the decision SITS.
+
+### THE SPEC — the rail becomes a scroll region plus a pinned footer
+
+```
+<aside>                      flex column, min-h-0, NOT itself a scroller
+  <div class="flex-1 min-h-0 overflow-y-auto">   the TRANSCRIPT
+     status · title · summary · meta · HISTORY · staleness · the revise composer
+  </div>
+  <footer>                   pinned, shrink-0, --el-surface, border-t --el-border
+     the error line · the outcome line · Approve · Decline · the one hint
+  </footer>
+</aside>
+```
+
+| decision                                 | answer                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **a top border, or a shadow?**           | **a top hairline (`--el-border`), no shadow.** The footer's fill is `--el-surface` — the rail's own — so a hairline is the whole separation needed. A shadow implies the footer floats over a different surface, which it does not, and this tree spends shadow on cards and popovers                                                                                                                                   |
+| **does the composer come with it?**      | **NO — it stays at the END of the transcript.** A pinned footer must have a bounded height and a composer grows with its draft. And the reader still meets it immediately before the verbs, because the transcript opens at its bottom (below)                                                                                                                                                                          |
+| **is Part XII §A honoured?**             | **Yes, in the reading it made.** §A put the composer _"INSIDE the decision block, above the two verbs"_ — an ORDER and an adjacency, and both survive: composer last in the transcript, verbs directly beneath it in the footer. What changes is scroll behaviour, not sequence                                                                                                                                         |
+| **where does the transcript open?**      | **at its LATEST turn** — scrolled to the bottom on MOUNT, and again when a revision lands (the one event that appends a turn while the reader is on the page). Not a general stick-to-bottom: nothing else appends under a reader's eyes                                                                                                                                                                                |
+| **1366×768, where the rail is shortest** | after §2 the rail is **635 − 2 = 633 px** (from 542). The footer is **152 px** — Approve 40, gap 8, Decline 40, gap 8, hint 16, padding 20/20 — leaving **481 px of transcript**, against 1011 px of content. It scrolls, which is correct, and the decision is on screen the whole time                                                                                                                                |
+| **the ORB**                              | the footer reserves it: `padding-bottom: calc(var(--spacing-control-y) + var(--shell-bottom-clearance, 1.5rem))`. Measured at 1440×900 the orb's top is **824** and the rail's bottom becomes **900**, so without this the orb covers the bottom **76 px** — the Decline button. With it the lowest control's bottom is **798**, clear by 26 px. It reads the SHELL's property directly, not `--canvas-fold-inset` (§2) |
+
+### The footer per `PlanStatus` member — all five, because a state set is run whole
+
+| status       | the footer holds                                                                                                                                | the transcript                  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `generating` | Approve (disabled) · **Discard this plan** (`secondary`) · `discardHint`                                                                        | no composer — nothing to revise |
+| `planned`    | Approve (`approveCta`, live) · Decline (`ghost`) · `approveHint`, or `approveHintStale` / `approveHintRevising` when either holds               | the composer, when `onRevise`   |
+| `stale`      | Approve (live — a stale plan may still be approved) · Decline (live) · the `plan-stale-outcome` line **above** the hint, then `staleReviewHint` | the composer                    |
+| `approved`   | **`DecidedOutcome`** — no gate. The footer keeps its border and padding so the rail's shape does not change under the reader                    | the record                      |
+| `declined`   | **`DecidedOutcome`** — same                                                                                                                     | the record                      |
+
+**`DecidedOutcome` moves into the footer rather than being exempted from it**: it is the ANSWER to the
+question the gate asks, it belongs where the gate was, and a rail whose bottom band appears and
+disappears with the plan's status is a layout that moves for no reason the reader can see. **Nothing
+about who may decide changes** — `ai:decide_plan` gates approve and discard exactly as today.
+
+## 9. §9 · Copy — every string these panels introduce or change
+
+Both catalogues are owed in the same pull request (the `zh` parity gate).
+
+| key              | namespace        | en                                      | zh                         | introduced by |
+| ---------------- | ---------------- | --------------------------------------- | -------------------------- | ------------- |
+| `searchLabel`    | `planReview`     | Search this plan                        | 搜索本计划                 | §5            |
+| `searchLabel`    | `planChange`     | Search this project                     | 搜索本项目                 | §5            |
+| `searchLabel`    | `onboarding`     | Search this project                     | 搜索本项目                 | §5            |
+| `search`         | `roadmap.canvas` | Search the roadmap — **UNCHANGED**      | 搜索路线图 — UNCHANGED     | §5            |
+| `showChangesAll` | `planReview`     | Every item on this level is this plan's | 此层级的每一项都来自本计划 | §3d           |
+| `rowOpenAria`    | `planReview`     | Open {name}                             | 打开 {name}                | §7            |
+
+**No new string for the locate control** (§4 reuses `roadmap.canvas.showChangesNone`, `locateCurrent` /
+`locateNextReady` / `locateReady` / `locateNothing` and `showChangesCount` unchanged), **none for the
+pinned footer** (§8 moves shipped controls and reuses every shipped hint), and **none for the proposed
+title** (§1 changes which value a shipped field carries).
+
+Full non-`en`/`zh` locale parity follows the project's batch locale cadence rather than a per-feature
+`translate` card — six strings, the same justified deviation MOTIR-3833 recorded.
+
+## 10. §10 · a11y
+
+- **The list row** is a real `<button>` — one per row, one tab stop, Enter and Space, and the focus ring
+  drawn on the ROW so it frames the target rather than the title's text box. Its accessible name is
+  `Open {name}` and contains the visible title (WCAG 2.5.3). The chips stay non-interactive text; the
+  change lines stay a `<dl>` and are reachable as content, not as controls.
+- **The quick view has ONE close** (§7), which also removes two identically-named controls from one
+  dialog. Focus returns to the row's button on `Escape` — the shipped `Modal`'s own behaviour, which is
+  why the row is a button and not a `div` with a handler.
+- **The locate control's label at each state** is the shipped set, unchanged: enabled it reads
+  `locateNextReady` while cycling and `locateReady` for one target; disabled it carries the reason as
+  `title` and as its accessible description, and the reason on this surface is the level one
+  (`showChangesNone`), not `locateNothing` — one sentence per situation.
+- **The emphasis armed at arrival is announced, not inferred.** The toggle is a real `<button>` carrying
+  `aria-pressed="true"` from first paint, so a screen-reader user is told the mode is on **without
+  anybody having pressed anything** — which is precisely the case a visual pressed treatment cannot
+  cover. Disabled, it carries its reason as `aria-description` (§3d). **The emphasis is never colour
+  alone**: a ringed node carries its own `op` badge, which is TEXT, and the dim is a second non-hue
+  channel (Part IX §L8, unchanged).
+- **The pinned footer is inside the rail's own `<aside aria-label>` landmark**, after the scrolling
+  region, so the reading order is transcript → decision — the order the page is about. It is not a
+  `role="contentinfo"`: that is the page's footer landmark and there is one per document.
+- **Motion**: unchanged from Part IX §L8 — the emphasis transition is dropped entirely under
+  `prefers-reduced-motion: reduce`, which matters more now that it fires on arrival.
+
+## 11. §11 · GIVES / TAKES — swept over the story SUBTREE
+
+**TAKES** (elements, structures and premises):
+
+- **Part IX §3's default rule — a PREMISE, WIDENED not replaced** (§6). The container-count arm is kept
+  verbatim; two arms are added ahead of it. Part IX's asset is not re-exported.
+- **⚠️ Part IX §L6's second bullet — a PREMISE, REVERSED** (§3d): the all-proposals level was _enabled,
+  and harmless_; armed on arrival it is DISABLED with its own reason. Recorded here, asset frozen.
+- **⚠️ Part IX §L1's `--el-accent-soft` sentence — an ELEMENT, CORRECTED** (§3e). The token does not
+  exist; the fill is `--el-tint-lavender`. Corrected in the notes in this same pull request (the corrections table below).
+- **Part IX §L1's placement, §L2's set, §L3's ring + `opacity-35` dim, §L4's selection rule, §L5's
+  off-level count, §L7's decided tense, §L8's a11y and motion — ELEMENTS and PREMISES, all unchanged.**
+- **Part VIII §2's 44 px pane header and its `Segmented` switcher — a STRUCTURE, composed** (§2's
+  viewport arithmetic subtracts it; nothing about it changes).
+- **Part VIII §3's row grammar and its SIGNAL-vs-SPELLED split — a PREMISE §1 honours** and §7 extends
+  with one control.
+- **Part VI's _the decided pane holds a RECORD_ — a PREMISE, EXTENDED twice**: to the armed emphasis
+  (§3c) and to the footer, which keeps its band on a decided plan (§8).
+- **Part XII §A's _the composer sits inside the decision block, above the two verbs_ — a STRUCTURE,
+  PRESERVED in reading order and changed in scroll behaviour** (§8).
+- **Part V §3's quick view — an ELEMENT, reused verbatim** and given one close (§7).
+- **`design/roadmap/design-notes.md`'s full-fold section and `ARRIVAL_MIN_SCALE = 0.80` — a STRUCTURE
+  and a NUMBER, both cited; §2 follows the pattern with a different inset answer and §6 measures why the
+  number cannot bind here.**
+- **`ChildList`'s row — an ELEMENT**, whose one-interactive-element-per-row shape §7 copies.
+- **`components/ui/Sidebar.tsx`'s active-destination treatment — an ELEMENT**, which §3e reuses as the
+  toggle's ACTIVE fill.
+
+**GIVES** — every card in this story's subtree, and every one of these is written onto that card's
+acceptance criteria in this same pass:
+
+| card                                                    | takes                                                                                                                                                                                        |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4018** — a `modify` shows the title it proposes | **§1 whole**: the model change, the node's disposition, the list headline + change line, the untouched key, and the quick-view carve-out                                                     |
+| **MOTIR-4019** — the pane fills the fold                | **§2 whole**: the measured budget, the `--height-control` term, the `calc`, the negative margin, the per-viewport table, and **the NO-`--canvas-fold-inset` decision**                       |
+| **MOTIR-4020** — lit on arrival + the locate walk       | **§3 and §4 whole**, including **§3d's reversal of Part IX §L6** and **§3e's `--el-tint-lavender` fill and the correction of Part IX §L1**                                                   |
+| **MOTIR-4021** — the search box names its canvas        | **§5 whole**: the required-with-`searchable` prop, the four mounts by name, the fifth that needs none, and the six strings                                                                   |
+| **MOTIR-4022** — a list row opens its proposal          | **§7 whole**: the stretched-button shape, the `<dl>` constraint, the five states, the accessible name, and **`hideClose`**                                                                   |
+| **MOTIR-4023** — the rail lands on its decision         | **§8 whole**: the two-region rail, the footer's contents and border, the composer's place, the mount-time scroll, the measured 1366×768 budget, **the orb inset**, and the five-status table |
+| **MOTIR-4024** — the derived list default               | **§6 whole**: the measured table, **the number 12**, the truncation arm, TOTAL-not-share, the two new `PlanReviewDto` fields, and the closed form with its stated assumption                 |
+| **MOTIR-4025** — the story vitest gate                  | the arithmetic to pin (§6's closed form and the 12), §1's model seam, and §3d/§4's two degenerate levels — the cases a coverage percentage cannot see                                        |
+| **MOTIR-4026** — the acceptance E2E + video             | the eight steps of the story's verification recipe, with §2's and §8's numbers as the assertions and §6's crowded level as the fixture                                                       |
+
+## ⚠️ Corrections this Part makes to earlier Parts (all in the notes; no asset is re-exported)
+
+| Part       | sentence                                                              | correction                                                                             |
+| ---------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **IX §L1** | _"ACTIVE takes `--el-accent-soft` fill"_                              | the token does not exist. The ACTIVE fill is **`--el-tint-lavender`** (§3e)            |
+| **IX §L6** | an all-proposals level is _"enabled, and ON simply rings everything"_ | **DISABLED**, with its own reason, once the control is ARMED rather than pressed (§3d) |
+| **IX §3**  | _"the LIST when the proposals sit under more than one container"_     | **kept, and widened** by two arms ahead of it (§6)                                     |
+
+## 12. §12 · Access path
+
+**Unchanged, and this Part adds no entrance.** `/plans/[id]` is reached exactly as Part I §5 draws it —
+the **Plans** primary left-nav entry, then a row on the tabbed list (Part VII). Panel 0 of the asset
+draws that door at real size, with the row that leads here, because a design that does not draw its
+entrance leaves the reader to find it.
+
+**Two doors this Part changes the STATE of rather than adding:** the canvas's Show-changes toggle now
+arrives pressed, and the list row becomes a door onto the quick view that the canvas's **View** pill
+already was. Neither is a new route, a new nav affordance or a new modal.
+
+## 13. §13 · What Part XIII does NOT draw
+
+The canvas engine and its node treatments; the three `op` languages; the drill / breadcrumb / zoom /
+full-screen mechanics; `WorkItemNode`, `PlanItemNode` and the inline diff overlay; the List ↔ Canvas
+switcher itself (Part VIII); the establish band and `approvePlan` / `materialize`; the plan timeline's
+content events (Part X); the revision flow (Part XII); `WorkItemQuickView` (§1); the `/plans` index
+(Part VII); what a LEVEL CONTAINS — `mergePlanLevel`, `TREE_LEVEL_MAX_TAKE` and the "Show all" ceiling
+are read by §6 and changed by nothing; and any change to who may decide a plan.
+
+## How this asset was produced (reproduced here, because the harness is deleted)
+
+The mock's stylesheet IS Tailwind's real output for this document, and its markup is composed in the
+app's own utility classes against the dumped markup of the shipped components. **No token is declared
+locally** — the defect in §3e is what that rule exists to prevent.
+
+```js
+// .scratch4017/input.css  →  postcss  →  inlined verbatim into the mock's <style>
+//   @import 'tailwindcss' source(none);
+//   @source '../design/ai-planning/plan-detail-refined.mock.html';
+//   @import '@motir/design-system/theme.css';
+postcss([require('@tailwindcss/postcss')]).process(css, { from: inputPath });
+```
+
+```ts
+// a throwaway Playwright spec under tests/e2e/, deleted before the commit, driven against
+// `next build && next start` on a private Postgres, seeded with the SHIPPED fixture:
+//   seedPlanShapes(email)  — tests/e2e/_helpers/plans-shapes-seed.ts, shape TWO
+// per viewport: page.goto(`/plans/${planId}`) then getBoundingClientRect() +
+//   getComputedStyle() on the real elements; the arrival scale read off
+//   new DOMMatrixReadOnly(getComputedStyle('[data-testid="canvas-world"]').transform).a
+// the crowded levels: N committed stories under one epic + a two-proposal plan, N in
+//   {4, 10, 16, 22, 28, 40}, measured at all four viewports — the 24 points in §6
+// the long rail: the SHIPPED rail with its <h2> text replaced and eight timeline rows
+//   cloned, so the measurement is the real component under longer content
+```
+
+**The both-themes check was run in Chromium, not inferred**: the board rendered at
+`<html data-theme="dark">` with the toggle, the list body and the node cards reading correctly — the
+dark `--el-tint-lavender` (`#2a253a`) fill and `--el-accent-on-surface` ink both resolve from the
+shipped layers. No nested dark scope is committed, for the reason panel 9 records.
+
+Measurement at `deviceScaleFactor: 1`; the PNG is re-exported with the shipped
+`node scripts/render-design-mock.mjs design/ai-planning/plan-detail-refined.mock.html`, **after**
+`prettier --write` on the mock.
+
+## ⚠️ Planning flags — surfaced by this pass, owned by no card in MOTIR-4016
+
+1. **`ARRIVAL_MIN_SCALE` is a ROADMAP number applied to a canvas the roadmap does not own.** §6 measures
+   that it is unreachable on the plan detail at three of four viewports, and `OnboardingCanvas` /
+   `PlanChangeCanvas` mount the same component in the same two-pane shell — so the same is true of them
+   and nothing says so. Whether the floor should be per-mount, or whether `deterministicLayout`'s fixed
+   `COLS = 3` should respond to the viewport (the roadmap's own flag 1, still open), is a decision
+   nobody has made. Outside this story's boundary.
+2. **`min-h-[34rem]` is untouched and still binds on a short window.** §2 stops it binding at 1366×768,
+   but a shorter window still meets a floor taller than its own `calc`, on a shell that promises not to
+   scroll. Same open question the roadmap recorded, now on a second surface.
+3. **A mock that declares LOCAL token names can put a non-existent `--el-*` into production** (§3e), and
+   the four earlier `design/ai-planning/*.mock.html` assets all do it. Nothing checks that an `--el-*`
+   named in a design note resolves in `theme.css`. That check is a guard-lane test, not a design card.
+4. **The node's inline diff overlay fails AA on `main`** — `--el-text-muted` at `text-xs` on
+   `--el-surface`, 4.12–4.34:1 (§1). Filed as a bug; outside this story's boundary, which leaves the
+   node treatments as drawn.
+5. **The dark-parity guard's `data-appearance-scope` escape hatch does not hold under happy-dom.**
+   `tests/design-dark-parity.test.ts` renders with an engine that does not resolve `var()`, so an asset
+   embedding the real `theme.css` still reads `--el-page-bg` as unset on a nested dark scope — and the
+   only way to pass is the concrete-hex re-declaration §3e argues against. This asset therefore draws no
+   nested dark scope (panel 9 says so). Whether that guard should render in Chromium, as the ink guard's
+   own scan does, is a decision nobody has made.
