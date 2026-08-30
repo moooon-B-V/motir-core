@@ -55,6 +55,13 @@ loadEnv();
 //
 // The role's throwaway password is provisioned in `globalSetup`; see
 // `tests/e2e/_helpers/appRoleServer.ts` for why it is not a deployed credential.
+/**
+ * Set by `.github/actions/e2e-setup` once a usable `.next` is in place — either
+ * downloaded from the `build` job's `next-build` artifact or compiled by the
+ * action itself. See the `command` note on the app webServer below (MOTIR-3928).
+ */
+const REUSE_PREBUILT_NEXT = process.env['E2E_REUSE_BUILD'] === '1';
+
 const APP_ROLE_SERVER = process.env['E2E_APP_ROLE'] === '1';
 const OWNER_DATABASE_URL = process.env['DATABASE_URL'] ?? '';
 function appRoleDatabaseUrl(raw: string): string {
@@ -266,13 +273,38 @@ export default defineConfig({
       // Secure-cookie / `/api/_test` 404 / 'file'-email guards meant for a REAL
       // deploy — E2E_PROD_HARNESS=1 (below) re-relaxes ONLY those test seams,
       // exactly as the sibling E2E_* flags already do (see lib/e2eProdHarness.ts).
-      // ⚠️ `pnpm build:worker` rides along here on purpose. The lane runs the
-      // Postgres engine's worker as a third process (see
-      // tests/e2e/_helpers/job-worker-process.ts), and it runs the SHIPPED
-      // BUNDLE — the same artifact the Dockerfile stages — so the lane exercises
-      // the packaging and not just the source. Building it in this command keeps
-      // the flow identical locally and in CI, exactly as `prisma generate` does.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
+      // ⚠️ `pnpm build:worker` rides along here on purpose, and it rides along in
+      // BOTH branches below. The lane runs the Postgres engine's worker as a
+      // third process (see tests/e2e/_helpers/job-worker-process.ts), and it runs
+      // the SHIPPED BUNDLE — the same artifact the Dockerfile stages — so the
+      // lane exercises the packaging and not just the source. It is NOT part of
+      // the `next-build` artifact (that is `.next` only), so nothing upstream can
+      // supply it; building it here keeps the flow identical locally and in CI,
+      // exactly as `prisma generate` does.
+      //
+      // ⚠️ `next build` RUNS ONLY WHEN NOTHING UPSTREAM ALREADY BUILT (MOTIR-3928).
+      // It used to run unconditionally, which meant every CI leg compiled the app
+      // from scratch on top of a `.next` it had just downloaded — measured at
+      // 128–189s per leg on run 33260551040, of which 110s was `Running
+      // TypeScript`, duplicating the dedicated `TypeScript` job eight to ten times
+      // a run. `.github/actions/e2e-setup` is what puts a `.next` in place (by
+      // artifact or by building), and it is what sets `E2E_REUSE_BUILD=1` to say
+      // so — the flag is set by the step that made the claim true, rather than
+      // inferred here from a `.next` directory that might be anyone's leftovers.
+      //
+      // The two paths, and what selects between them:
+      //   • CI  — `e2e-setup` ran, flag set, no build. The suite still runs
+      //           against a PRODUCTION `next start`; MOTIR-1679's requirement is
+      //           about what SERVES the tests, not about who compiled it.
+      //   • local — flag unset, full build, exactly as before. A fresh worktree's
+      //           `pnpm test:e2e` still needs no manual step, and a stale local
+      //           `.next` can never be silently served.
+      command: [
+        'pnpm exec prisma generate',
+        ...(REUSE_PREBUILT_NEXT ? [] : ['pnpm exec next build']),
+        'pnpm run build:worker',
+        `pnpm exec next start --port ${PORT}`,
+      ].join(' && '),
       url: BASE_URL,
       // Reuse a running dev server locally for fast iteration — but NEVER when a
       // custom origin was requested (a worktree run), since the only server that

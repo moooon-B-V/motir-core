@@ -218,12 +218,21 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
   // /settings/workspace/jobs*, and a run an operator cannot see is not a migrated
   // job as far as this story is concerned.
   await gotoSystemTab(page);
-  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true })).toHaveCount(1);
+  // ⚠️ THE OPERATOR SEEING THE RUN IS THE CLAIM — the row COUNT is not, and
+  // asserting it is what took this spec down on `main` at `b8a433e00`
+  // (`Expected: 1  Received: 2`, run 33258667040, failed on the retry too).
+  // The ledger read above already anticipates a second row for this function
+  // and pins THIS run by `eventId` rather than assuming the table holds one;
+  // this assertion did not get the same treatment, so a scheduler that ticked
+  // twice — or one row that carries a retry attempt — reads as a regression.
+  // And the retry cannot clear it: the extra row is COMMITTED, so attempt two
+  // re-reads the same two rows (MOTIR-3929).
+  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true }).first()).toBeVisible();
 
   // Filtered, which is the other half of the recipe's sentence.
   await page.getByRole('link', { name: 'Succeeded' }).click();
   await page.waitForURL(/status=succeeded/);
-  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true })).toHaveCount(1);
+  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true }).first()).toBeVisible();
 
   // ⚠️ AND THE WORKSPACE TAB DOES NOT SHOW IT — recorded rather than left to
   // surprise the next reader. This is not a regression this story introduces: a

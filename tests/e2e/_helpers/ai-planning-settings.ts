@@ -56,3 +56,53 @@ export async function openAiPlanningSettings(page: Page): Promise<void> {
   await page.waitForURL('**/settings/project/ai-planning');
   await expectSettledVisible(aiPlanningPanel(page));
 }
+
+// ── The SAVE, and the toast it raises (MOTIR-3929) ──────────────────────────
+//
+// MOTIR-3692 settled the panel at ARRIVAL and stopped there. The save happens
+// later, after the panel has been edited and — in `cloud-lesson-recording` —
+// after a `reload()` and a second `openAiPlanningSettings`, so it gets its own
+// roll of the same dice. Both specs reached for the raw test id and both went
+// red on `main` at `b8a433e00`:
+//
+//     Error: locator.click: Error: strict mode violation:
+//     getByTestId('ai-planning-save') resolved to 2 elements:
+//       1) <button … data-testid="ai-planning-save"> aka getByRole('button', { name: 'Save changes' })
+//       2) <button disabled … data-testid="ai-planning-save"> aka getByTestId('ai-planning-save').nth(1)
+//
+// ⚠️ THE SECOND BUTTON IS NOT A SECOND BUTTON A PERSON COULD PRESS. The trace
+// (run 33258667040, `playwright-report-billing`) puts copy 1 under `MAIN#main`
+// and copy 2 inside `<div hidden id="S:0">` — React's SSR STREAMING STAGING
+// block, which holds a resolved Suspense boundary until a script relocates it.
+// It is pristine (hence `disabled`) and invisible, and `getByTestId` counts it
+// anyway, because Playwright resolves a locator BEFORE filtering on visibility.
+//
+// So the repair is the one `settle.ts` already names — *"`getByRole` does not
+// need it: the accessibility tree excludes the hidden copy"* — and the settle is
+// kept ON TOP of it, because the two duplicate shapes are different defects:
+// the role locator answers the hidden staging copy, `expectSettledVisible`
+// answers the transient VISIBLE double subtree of MOTIR-3692. Either alone
+// leaves one of the two open.
+
+/** The panel's Save button. A ROLE locator on purpose — see above. */
+export const aiPlanningSaveButton = (page: Page): Locator =>
+  page.getByRole('button', { name: 'Save changes' });
+
+/**
+ * The toast a successful save raises.
+ *
+ * `exact` is load-bearing, and it is MOTIR-1512's fix, not a style choice: Radix
+ * Toast renders a screen-reader announcer that CONCATENATES the live toasts —
+ * `<span role="status" aria-live="assertive">Notification AI planning settings
+ * savedCadence up…</span>` — so a non-exact `getByText` matches the title AND
+ * the announcement the moment a second toast stacks, and trips strict mode. The
+ * title node holds the string alone; the announcer never does.
+ */
+export const aiPlanningSavedToast = (page: Page): Locator =>
+  page.getByText('AI planning settings saved', { exact: true });
+
+/** Press Save on a SETTLED panel. */
+export async function clickAiPlanningSave(page: Page): Promise<void> {
+  await expectSettledVisible(aiPlanningSaveButton(page));
+  await aiPlanningSaveButton(page).click();
+}

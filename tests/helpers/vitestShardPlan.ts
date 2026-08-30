@@ -52,8 +52,42 @@ import { STRUCTURAL_GUARD_SPECS } from './structuralGuardLane';
 // rather than the sharded suite — a guard that rode on a leg would be a guard
 // this plan could assign away, and the plan is what it exists to check.
 
-/** The legs, in matrix order. */
-export const VITEST_LEG_IDS = ['1', '2', '3', '4', '5', '6', '7', '8'] as const;
+/**
+ * The legs, in matrix order.
+ *
+ * ⚠️ THE COUNT IS A DIAL, AND IT IS THE ONLY ONE THIS LANE HAS (MOTIR-3950).
+ * Parallelism inside a leg is pinned to `TEST_DB_WORKERS` = `min(availableParallelism(), 8)`
+ * and `availableParallelism()` on `ubuntu-latest` is 4, so a leg gets 4 workers
+ * whatever this file says. Turning this number is what changes the lane.
+ *
+ * Two things move WITH it and are guarded rather than remembered:
+ * `ci.yml`'s `test` matrix (same ids) and that job's `--shard=<leg>/N`
+ * denominator. `tests/vitest-shard-plan.test.ts` asserts both, which matters
+ * because a stale denominator does not fail — `CostBalancedSequencer` declines
+ * a shard count it does not recognise and falls back to Vitest's own sha1
+ * slice, correctly and invisibly, undoing the whole plan while staying green.
+ *
+ * 8 → 12 on measured numbers, not hope: at 8 legs the lane ran 9.4–10.8 min with
+ * a 1.15x spread (run 33271194884), and the packer's model was within 2% of
+ * actual on an undegraded runner (2529s predicted vs 2466s, run 33263282834).
+ * Per-leg worker time ~1700s ⇒ ~1133s at twelve ⇒ ~8.3 min a leg. The brake is
+ * the ~160s of fixed cost per leg (75s setup + ~85s coverage post-run), which is
+ * why this stops at 12 rather than going further.
+ */
+export const VITEST_LEG_IDS = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+] as const;
 
 export type VitestLegId = (typeof VITEST_LEG_IDS)[number];
 

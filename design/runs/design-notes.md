@@ -15,8 +15,8 @@ machine and is gone when the window closes. These surfaces are that account, in 
 | Surface                            | Asset                                           | What it settles                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The run SECTION on a work item** | **`run-section.mock.html`** + `run-section.png` | The card's own run: its live timeline over the CARD-SCOPED event vocabulary, the "one of N" link-out when the run covers a set, this card's recent runs as a paged list, and the collapsed log console. Every terminal state, including the two that get improvised when undrawn — **re-planned** and **reporting-offline**. **Also carries this area's TONE TABLE** (panel 12), which every other run surface consumes. MOTIR-1795 (design). Gates MOTIR-1796. |
-| **The run VIEW** (`/runs/[id]`)    | _MOTIR-3893's — not in this folder yet_         | The whole SET a scoped or batch run works: every card's disposition, the skips and their reasons, and the run's own states. It **consumes this folder's tone table** rather than defining a second one, and adds its own row to this table when it lands.                                                                                                                                                                                                       |
-| **The RUNS INDEX** (`/runs`)       | _MOTIR-3893's — not in this folder yet_         | Every run the project has made, current and past, with its own primary-nav entry. It is the surface that makes a run FINDABLE at all, and it is what replaced the `/ready` strip this area used to draw (below). Same design card as the run view, same tone table.                                                                                                                                                                                             |
+| **The RUNS INDEX** (`/runs`)       | **`runs-index.mock.html`** + `runs-index.png`   | Every run the project has made, current and past, and **the rail row that reaches it**. The surface that makes a run FINDABLE at all — it is what replaced the `/ready` strip this area used to draw (below). MOTIR-3893 (design). Gates MOTIR-3923.                                                                                                                                                                                                            |
+| **The run VIEW** (`/runs/[id]`)    | **`run-view.mock.html`** + `run-view.png`       | The whole SET a scoped or batch run works: all three set shapes, every card's disposition, the skips with their reasons, and the run's own states and stop reason. CONSUMES this folder's tone table rather than defining a second one. MOTIR-3893 (design). Gates MOTIR-3895.                                                                                                                                                                                  |
 
 ### ⚠️ WHAT THIS AREA DREW ONCE AND WILL NOT DRAW AGAIN — the `/ready` run STRIP
 
@@ -58,9 +58,11 @@ product acquires two answers to one question.
 
 ## What it composes
 
-| Host                                                                           | Composed how                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design/work-items/` + `app/(authed)/items/[key]/_components/LateSections.tsx` | The run section is a **new row in the item page's tier table** (below). It is `ContentSectionCard`'s header grammar over `Card`, in the LATE STACK. The host's layout, header, rail and navigation are cited, never re-specified. |
+| Host                                                                           | Composed how                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design/work-items/` + `app/(authed)/items/[key]/_components/LateSections.tsx` | The run section is a **new row in the item page's tier table** (below). It is `ContentSectionCard`'s header grammar over `Card`, in the LATE STACK. The host's layout, header, rail and navigation are cited, never re-specified.                     |
+| `app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx`           | Both PAGES compose that file's shipped table grammar — a rounded, bordered, horizontally scrollable wrapper over a plain table, secondary ink in the head and body ink in the cells. Copied, not re-invented; the run tables are not a new component. |
+| `design/shell/` + `app/(authed)/_components/SidebarNav.tsx`                    | The rail is drawn ONLY so the access path is visible rather than described. Its rows are the shipped sidebar's shape and the entry follows that file's own convention; nothing about the rail itself is re-specified here.                            |
 
 ---
 
@@ -137,6 +139,137 @@ still live_; it is a transport state, not a run state, and it is never shown for
 
 ---
 
+## The ACCESS PATH — `/runs` is a primary rail entry, directly after Ready
+
+**The verdict, and the reading that settled it.** An earlier revision of the run-view card
+pre-judged this as _"the expectation is no primary-nav entry"_. That expectation was wrong, and it
+was wrong for a reason worth keeping: it was made while a `/ready` strip still existed to be the
+door, and when the strip turned out to be undrawable the run view was left with no general
+entrance at all.
+
+Read against `design/shell/design-notes.md` and the shipped convention in
+`app/(authed)/_components/SidebarNav.tsx`: **every top-level project view is a primary entry** —
+Home · Dashboard · Issues · Ready · Boards · Roadmap · Plans · Backlog · Triage · Reports — and each
+carries a source comment naming the design section that grounded it (Roadmap's says its own entry is
+_"drawn beside the other project nav surfaces; NOT a Board↔Roadmap toggle"_). A runs index is a peer
+of those, so it takes the same first-class row.
+
+**Position: directly after Ready.** _Ready is where you dispatch; Runs is where you watch._ The two
+are one action apart, and putting Runs at the end of the rail would separate them by six rows for no
+reason a reader could reconstruct.
+
+**Glyph: `Waypoints`** — a path through ordered nodes, which is exactly what a run over a SET is, and
+it is unused in the rail. Ruled out, each because it is already taken and a second meaning for one
+glyph is worse than a less obvious first: `CirclePlay` (Ready), `Zap` (the epic issue type),
+`Activity` (Code health), `History` (Resume onboarding).
+
+**⚠️ The row must be REGISTERED as well as rendered.** `lib/settings/projectNavAccess.ts` carries one
+row per nav href with a permission requirement and an evidence sentence, and its own header records
+that `canOfferNavDestination` answers **FALSE for an href it does not carry** — so an omission does
+not fail loudly, it drops the row from the rail. A page that ships, renders and passes its tests can
+still be invisible. The requirement is **`browse-only`**, because the read's own gate is
+`projectAccessService.assertCanBrowse`: a run history is project data, and whoever may see the
+project may see what ran in it — the same answer the two sibling run reads already carry in the
+permission inventory.
+
+---
+
+## The two PAGES, and what each settles
+
+### `/runs` — the index
+
+**Two headed sections, not a switch and not one undivided list.** A person arrives asking one of
+exactly two questions — _what is happening right now_ or _what happened_ — and the two are read
+differently: the first is watched, the second is searched. Two sections answer both without a click
+and without hiding either. Live runs are few by construction (bounded by how many agents are
+running), so the top section is short and the page does not fight itself. **When one side is empty it
+says so in a line rather than disappearing**: a section that vanishes makes a reader wonder whether
+it failed.
+
+**The row** carries the command, the scope, the agent + model, when it started, elapsed-or-duration,
+the status pill, and the **leg summary** — _"9 of 11 implemented, 1 skipped, 1 not reached"_ — which
+is the run's outcome in one cell. **The stop reason is deliberately NOT in the table**: it is one
+sentence and it belongs on the run, where there is room to say it in words.
+
+**Two rows a list of records has to survive, drawn in panel 4.** A run that took **no cards** (a real
+outcome — a scoped run whose members were all skipped) and a run whose **scope work item was
+deleted** (the row survives it; the record stores the scope LABEL beside the id precisely so a run
+stays readable after its subject is gone). Neither is styled as a problem.
+
+**The wait and the failure are separate faces** (panel 5). _We could not load this_ and _nothing has
+run_ are opposite facts and must never share one. The frame is **an in-page `<Suspense>`, never a
+`loading.tsx`** — a route-level boundary here would sit above `/runs/[id]`, flush the response head,
+and turn that page's 404 into a 200.
+
+### `/runs/[id]` — the run view
+
+**The SET arrives in three shapes and the page is TOTAL over all three** (panels 1–3): a claimed
+scope, a frozen batch snapshot, and a single card. The single card is drawn as **the same table with
+one row** rather than as a different page — a set of one is the degenerate case of the same object,
+and the moment it gets its own layout the two drift and the singular case becomes the one nobody
+maintains.
+
+**The In-Progress-from-t=0 consequence is drawn as copy on the page**, not left to the terminal. It
+is the one property of this design a person must be TOLD rather than discover: every card in a
+claimed scope reads _In Progress_ on the board from the moment of the claim, while only one is worked
+at a time.
+
+**Every word of the vocabulary is the shipped one**, and the notes name the source so a later reader
+
+**⚠️ AND ONE NUMBER IN THAT VOCABULARY IS NOT WHAT THE CLI FILE SAYS.**
+`batchPlan.ts`'s `SKIP_LABEL` is `Record<SnapshotSkipReason, string>` and carries **six** reasons, so
+anything counting from that file gets six — and the batch panel is right to draw six, because a
+snapshot cannot produce more. **The RECORD's `DispatchSkipReason` has SEVEN**: the schema says
+outright that it is _"the union of `SkipRecord.reason` and `SnapshotSkipReason`"_, and the extra
+member is **`blocked_in_scope`**, which only a CLAIMED SCOPE can produce (the claim takes every
+member in the to-do category, `blocked` included, which is not the same as being allowed to build one
+out of order — so such a card is _skipped and NAMED, never forced_). It is drawn in the claimed-scope
+panel, where it can occur, rather than in the batch panel, where it cannot.
+
+**This was found by the CODE, not by re-reading the asset** — MOTIR-1796's
+`satisfies Record<DispatchSkipReason, string>` failed to compile on six, which is the whole argument
+for writing these maps as `satisfies` rather than as a `switch` with a default. Every "six" in this
+story's prose came from reading the batch file, and a surface total over six of seven renders the
+seventh as nothing.
+can check rather than trust: the stop reasons and their sentences from `packages/cli/src/autoLoop.ts`
+and `packages/cli/src/batchPlan.ts` (`STOP_LABEL`), the six skip reasons and their sentences from
+`batchPlan.ts` (`SKIP_LABEL`), the claimed-scope split and the In-Progress warning from
+`packages/cli/src/scopedRun.ts` (`renderClaimedScope`). Two skip groups carry the extra line the
+terminal prints, because the reader's next question is the same in a browser as in a shell.
+
+**The DELIVERY is a REFERENCE, never a second drawing.** Repository, pull-request number, CI state —
+three facts, read from the shipped delivery set. The full treatment is
+`design/work-items/delivery-set.mock.html`'s, and a second CI verdict on one product is how two
+screens start disagreeing about whether a card is green.
+
+**The doors in are three, and none of them is `/ready`**: the index (the general one, and the only
+one that works without already holding something), the container whose scope the run names, and the
+work item's run section. The view draws the way BACK to the index, because it is reached from three
+places and only one of them gets you to the others.
+
+---
+
+## At scale — two different growth curves, two different answers
+
+| surface      | what grows                                                     | drawn against | the decision                                                                                  |
+| ------------ | -------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `/runs`      | **unbounded, forever** — run headers are append-only           | **25 a page** | **PAGE.** Cursor, not offset, so a run opened mid-read cannot shift a row across the boundary |
+| `/runs/[id]` | bounded by the SCOPE — a sprint run claims tens, not thousands | **40 rows**   | **PAGE past 40**, keeping the run's own stored order                                          |
+
+**The index grows and never shrinks**, because the retention sweep clears event BODIES after 30 days
+and removes no rows: a project running `motir auto` nightly accumulates a run per night for as long
+as it lives. A load-everything read there is not a shortcut, it is a page that gets slower every day.
+**Paging rather than virtualization** because the live section is short by construction and the past
+section is what grows, so there is one growing list with a natural stopping point — a reader looking
+for last week's run pages, they do not scroll. The order is `startedAt DESC, id DESC`, **total**
+because the id breaks the tie.
+
+**The run view's set is bounded by its scope** and a reader wants the whole ordered list rather than
+a scrolling window, so it pages past 40 and never virtualizes. Neither surface issues an unbounded
+read: the set is fetched with the run, and the events stream separately.
+
+---
+
 ## THE TONE VOCABULARY
 
 **Defined once, here, and consumed by every run surface in the product.** The run view
@@ -207,6 +340,28 @@ coherently.
 | **skipped — this card's leg** | panel 9                 | A run owned this card and decided not to work it. **A skipped row is a real row**, always carrying its reason.            |
 | queued (in a run)             | panel 12 (tone)         | Only meaningful where a run owns a card it has not reached.                                                               |
 
+**The two PAGES have their own states, and the overlap is smaller than it looks** — the section is a
+panel about ONE card, so most of its states are about that card's leg; a page is about a RUN, so most
+of its states are about the run and the list.
+
+| State                              | `runs-index.mock.html` | `run-view.mock.html` | Note                                                                                             |
+| ---------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
+| nothing has run at all             | panel 3                | —                    | Muted glyph, one sentence, the command that changes it. **Never an error face.**                 |
+| one side of the partition empty    | panel 2                | —                    | The live section states the fact and keeps its shape rather than disappearing.                   |
+| a live run                         | panel 1                | panel 1              | The index shows one row; the view shows the whole set around it.                                 |
+| a run with NO cards                | panel 4                | panel 6              | A real outcome, in the neutral tone — never an error.                                            |
+| a run whose SCOPE item was deleted | panel 4                | —                    | The row survives it: the record stores the scope LABEL beside the id.                            |
+| a LEG whose work item was deleted  | —                      | panel 8              | The leg keeps its key, disposition and duration; only the link is absent.                        |
+| loading                            | panel 5                | —                    | An in-page `<Suspense>`, **never a `loading.tsx`** — see the index section above.                |
+| a failed read                      | panel 5                | —                    | Says what failed and offers the retry; must not share a face with the empty state.               |
+| queued — claimed, nothing started  | —                      | panel 6              | The moment a person is most likely to press Ctrl-C, so it must be readable at t=0.               |
+| finished, once per stop reason     | —                      | panel 7              | `halted` and `drained` are opposite news. **`replanned` is a SUCCESS** — the agent was right.    |
+| interrupted                        | —                      | panel 7              | Cancelled tone: a decision, not a fault.                                                         |
+| timed out                          | —                      | panel 7              | Written by the server's reap, never by a client. Warning, not danger: _unknown_ is not _failed_. |
+| **reporting-offline**              | —                      | panel 8              | The record is incomplete, not the run. Points at each card's Development section.                |
+| stream-reconnecting                | —                      | panel 8              | A TRANSPORT state: the notice sits above the table and the run's pill keeps saying _Running_.    |
+| at scale                           | panel 6                | panel 9              | 25 rows a page · 40 rows before the set pages. See _At scale_ above.                             |
+
 ---
 
 ## The log console
@@ -236,21 +391,25 @@ switch that exfiltrates somebody else's laptop is the exact shape the decision r
 
 **Primitives composed** (nothing hand-rolled that a primitive owns):
 
-| Primitive                     | Used for                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------- |
-| `ContentSectionCard` + `Card` | the section's chrome, header row and body padding — the late stack's own grammar |
-| `Pill`                        | every run-status chip                                                            |
-| `Button` (ghost, `sm`)        | "Show more" on the recent-runs list                                              |
+| Primitive                              | Used for                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `ContentSectionCard` + `Card`          | the section's chrome, header row and body padding — the late stack's own grammar |
+| `Pill`                                 | every run-status chip                                                            |
+| `Button` (ghost, `sm`)                 | "Show more" on the recent-runs list                                              |
+| the shipped `TableShell` / `Th` / `Td` | both pages' tables — the jobs dashboard's grammar, composed rather than rebuilt  |
+| the shipped `Sidebar` row              | the rail entry in the index's access-path panel                                  |
 
 **Shape tokens** — every surface's own box, nothing raw:
 
-| Element                      | Tokens                                                             |
-| ---------------------------- | ------------------------------------------------------------------ |
-| the section card             | `--radius-card` · `--spacing-card-padding` · `--shadow-card`       |
-| every run-status pill        | `--radius-badge` · `--spacing-chip-x` / `--spacing-chip-y`         |
-| the log console              | `--radius-control` · `--spacing-control-x` / `--spacing-control-y` |
-| the "Show more" button       | `--radius-btn` · `--height-btn-sm` · `--spacing-btn-x-sm`          |
-| the timeline / list dividers | `--el-border-soft`                                                 |
+| Element                      | Tokens                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| the section card             | `--radius-card` · `--spacing-card-padding` · `--shadow-card`             |
+| every run-status pill        | `--radius-badge` · `--spacing-chip-x` / `--spacing-chip-y`               |
+| the log console              | `--radius-control` · `--spacing-control-x` / `--spacing-control-y`       |
+| a table cell (both pages)    | `--spacing-control-x` / `--spacing-control-y`, on `--radius-card` chrome |
+| a rail row                   | `--radius-control` · `--spacing-control-x` / `--spacing-control-y`       |
+| the "Show more" button       | `--radius-btn` · `--height-btn-sm` · `--spacing-btn-x-sm`                |
+| the timeline / list dividers | `--el-border-soft`                                                       |
 
 **Ink**: body text is `--el-text`; every secondary line is **`--el-text-secondary`**, which clears AA
 on all four surfaces in both themes. `--el-text-muted` is used **nowhere** in this area — it fails AA
@@ -261,18 +420,25 @@ head sit on `--el-surface-soft`. `--el-text-faint` is used nowhere at all.
 
 ## Where each behaviour came from
 
-| Behaviour drawn here                                                       | Decided by                                                                                           |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| the CARD-SCOPED event vocabulary the timeline renders                      | `docs/decisions/dispatch-run-record.md` **Q2** (MOTIR-1790)                                          |
-| the disposition vocabulary the tone table covers                           | the same decision's `DispatchCardDisposition` and `DispatchStopReason`                               |
-| a run covers a SET, so a card can be "4 of 11"                             | the same decision's **Q1**                                                                           |
-| the pull request and CI are NOT the run's                                  | the same decision's **Q3**, boundary 1                                                               |
-| the log console, its opt-in, and the 30-day retention                      | the same decision's **Q4**                                                                           |
-| reporting is best-effort, hence _reporting-offline_ as a first-class state | MOTIR-1794 (the CLI reporter) — the emissions this visualises                                        |
-| ordering by `seq`, hence a resumable stream and the reconnecting notice    | MOTIR-1791 (`@@unique([dispatchRunId, seq])`) and MOTIR-1793 (the `?since=` cursor)                  |
-| SSE rather than a WebSocket, and the terminal `done` frame that closes it  | MOTIR-1793's stream route, which mirrors the shipped plan-generation stream                          |
-| the run history is "every run that carried a leg for this card"            | MOTIR-1793's read                                                                                    |
-| the late stack's ONE settle                                                | `design/work-items/design-notes.md` § _The item page at ARRIVAL_ (MOTIR-3432, amended by MOTIR-3465) |
+| Behaviour drawn here                                                       | Decided by                                                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| the CARD-SCOPED event vocabulary the timeline renders                      | `docs/decisions/dispatch-run-record.md` **Q2** (MOTIR-1790)                                             |
+| the disposition vocabulary the tone table covers                           | the same decision's `DispatchCardDisposition` and `DispatchStopReason`                                  |
+| a run covers a SET, so a card can be "4 of 11"                             | the same decision's **Q1**                                                                              |
+| the pull request and CI are NOT the run's                                  | the same decision's **Q3**, boundary 1                                                                  |
+| the log console, its opt-in, and the 30-day retention                      | the same decision's **Q4**                                                                              |
+| reporting is best-effort, hence _reporting-offline_ as a first-class state | MOTIR-1794 (the CLI reporter) — the emissions this visualises                                           |
+| ordering by `seq`, hence a resumable stream and the reconnecting notice    | MOTIR-1791 (`@@unique([dispatchRunId, seq])`) and MOTIR-1793 (the `?since=` cursor)                     |
+| SSE rather than a WebSocket, and the terminal `done` frame that closes it  | MOTIR-1793's stream route, which mirrors the shipped plan-generation stream                             |
+| the three SET shapes, and that a single card is the degenerate case of one | `packages/cli/src/scopedRun.ts` (`renderClaimedScope`) and `packages/cli/src/batchPlan.ts` (`Snapshot`) |
+| every stop reason and its sentence                                         | `packages/cli/src/autoLoop.ts` + `packages/cli/src/batchPlan.ts` (`STOP_LABEL`)                         |
+| the six skip reasons and their sentences                                   | `packages/cli/src/batchPlan.ts` (`SKIP_LABEL`)                                                          |
+| the In-Progress-from-t=0 warning, in the words the terminal prints         | `packages/cli/src/scopedRun.ts`                                                                         |
+| the rail convention every top-level view follows                           | `app/(authed)/_components/SidebarNav.tsx` + `design/shell/design-notes.md`                              |
+| the nav row's registration, and that omitting it hides the page silently   | `lib/settings/projectNavAccess.ts` and its own header                                                   |
+| the table grammar the two pages compose                                    | `app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx` (`TableShell` / `Th` / `Td`)       |
+| the run history is "every run that carried a leg for this card"            | MOTIR-1793's read                                                                                       |
+| the late stack's ONE settle                                                | `design/work-items/design-notes.md` § _The item page at ARRIVAL_ (MOTIR-3432, amended by MOTIR-3465)    |
 
 ---
 

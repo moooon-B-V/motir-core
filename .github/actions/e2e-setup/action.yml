@@ -79,6 +79,21 @@ runs:
       if: inputs.next-build == 'build'
       shell: bash
       run: pnpm build
+    # MOTIR-3928 — tell the Playwright webServer that a usable `.next` is already
+    # here, so it starts the server instead of compiling one on top of it.
+    #
+    # ⚠️ THE FLAG IS SET BY THE STEP THAT MADE THE CLAIM TRUE, which is the whole
+    # point: both branches above end with a production `.next` in place (one
+    # downloaded, one compiled), so this is the only place that can say so
+    # honestly. The alternative — having playwright.config.ts sniff for a `.next`
+    # directory — would also match a developer's stale local build and serve it
+    # silently, which is a worse failure than the one being fixed.
+    #
+    # Local runs never come through this action, so they never see the flag and
+    # keep building exactly as before.
+    - name: Signal that `.next` is prebuilt
+      shell: bash
+      run: echo "E2E_REUSE_BUILD=1" >> "$GITHUB_ENV"
     # Cache the Playwright browser binary across runs (and the matrix legs).
     # Every leg re-pays `playwright install` otherwise — pure fixed overhead
     # that sharding multiplies by the leg count. Keyed on the lockfile so a

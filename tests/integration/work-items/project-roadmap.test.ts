@@ -237,6 +237,49 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
     ]);
   });
 
+  // ── An ARCHIVED blocker is a STALE edge, and the roadmap must not draw it
+  // (bug MOTIR-3927) ────────────────────────────────────────────────────────
+  //
+  // `findProjectTreeLevel` excludes archived rows from the level, so an archived
+  // blocker is by construction never ON it. Until MOTIR-3927 the EDGE read did
+  // not exclude them, so the level dropped the row as a node and then anchored a
+  // named red "blocked elsewhere" ghost to it — the canvas both hiding the card
+  // and shouting about it, while `getReadiness` on the very same card answered
+  // `ready: true, openBlockers: []` (readiness goes through
+  // `findBlockerStatesForItems`, which has carried the MOTIR-1328 rule all along).
+  // The two cases below are the two faces of that: a blocker archived in ANOTHER
+  // container, and one archived on THIS level.
+
+  it('an ARCHIVED off-level blocker yields NO edge and NO naming stub (MOTIR-3927)', async () => {
+    const fx = await makeFixture();
+    const f = await buildForest(fx);
+    await link(fx, f.A2.id, f.B1.id); // A2 (Story A) blocked_by B1 (Story B)
+    // …and then B1 is ARCHIVED. This is the case directly above, minus a live
+    // blocker: the edge is stale, so there is nothing to draw and nothing to name.
+    await adminDb.workItem.update({ where: { id: f.B1.id }, data: { archivedAt: new Date() } });
+
+    const lvl = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
+    expect(lvl.edges).toEqual([]);
+    expect(lvl.offLevelBlockers).toEqual([]);
+    // A2 is still drawn, and is NOT flagged by an edge to a soft-removed row.
+    expect(lvl.nodes.map((n) => n.identifier)).toEqual(['PROD-3', 'PROD-4']);
+  });
+
+  it('an ARCHIVED SAME-LEVEL blocker does not leave the level and return as an anchor (MOTIR-3927)', async () => {
+    const fx = await makeFixture();
+    const f = await buildForest(fx);
+    await link(fx, f.A2.id, f.A1.id); // A2 blocked_by A1, both under Story A
+    await adminDb.workItem.update({ where: { id: f.A1.id }, data: { archivedAt: new Date() } });
+
+    const lvl = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
+    // A1 is correctly gone from the level — and must not reappear beside its own
+    // former position as a ghost anchor, which is exactly what the missing
+    // predicate did.
+    expect(lvl.nodes.map((n) => n.identifier)).toEqual(['PROD-4']);
+    expect(lvl.edges).toEqual([]);
+    expect(lvl.offLevelBlockers).toEqual([]);
+  });
+
   it('a level with no blocked_by links → no edges', async () => {
     const fx = await makeFixture();
     const f = await buildForest(fx);

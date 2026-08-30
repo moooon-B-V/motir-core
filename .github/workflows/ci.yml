@@ -571,6 +571,10 @@ jobs:
       # Share the production build with the e2e job so each matrix leg's
       # webServer boots from the pre-built .next/ instead of building
       # independently (MOTIR-1706).
+      # ⚠️ `include-hidden-files: true` below was already REQUIRED for the blob
+      # upload's reason (MOTIR-1706) and is now load-bearing for a second one:
+      # MOTIR-3928 makes the E2E legs SERVE this artifact instead of rebuilding on
+      # top of it, so a dot-file dropped here would become a file no leg has.
       - name: Upload .next/ build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -581,7 +585,8 @@ jobs:
 
   test:
     # Sharded matrix (MOTIR-1705, re-sized by MOTIR-3902, membership by MEASURED
-    # COST since MOTIR-3912): ~1360 test files split across 8 runners, each with
+    # COST since MOTIR-3912, twelve legs since MOTIR-3950): ~1360 test files
+    # split across 12 runners, each with
     # its own Postgres service container and per-worker DB isolation
     # (MOTIR-754). Coverage runs separately in the `coverage` job below to avoid
     # cross-shard merge complexity.
@@ -622,7 +627,7 @@ jobs:
     # others. The trade is per-leg fixed cost — checkout + Postgres + install +
     # `migrate deploy` is ~75s — which at 8 legs adds ~6 runner-minutes to a
     # ~74-runner-minute lane while cutting its WALL clock from ~24 min to ~10.
-    name: Vitest (${{ matrix.leg }}/8)
+    name: Vitest (${{ matrix.leg }}/12)
     runs-on: ubuntu-latest
     # Observed 20.1–24.9 min per leg across three shards and four green runs
     # AT THE OLD 3-SHARD MEMBERSHIP; at 8 the same work per leg is ~10 min.
@@ -654,7 +659,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        leg: ['1', '2', '3', '4', '5', '6', '7', '8']
+        leg: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
@@ -724,7 +729,7 @@ jobs:
       # `coverage` job's `merge-multiple: true` download flattens eight identical
       # names into one directory, seven blobs overwrite each other, and the >=90%
       # gate measures a single leg while every check stays green.
-      - run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/8 --reporter=default --reporter=blob --coverage
+      - run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --reporter=default --reporter=blob --coverage
       # Share this leg's blob report with the `coverage` merge job.
       # `include-hidden-files: true` is REQUIRED: the blob reporter writes to
       # .vitest-reports/ (a dot-directory), and upload-artifact EXCLUDES hidden
@@ -1366,6 +1371,25 @@ jobs:
           fi
           echo "all four monitoring build-time secrets are present"
 
+      # ⚠️ SAME SHAPE, DIFFERENT DAMAGE (MOTIR-3948). An unset
+      # NEXT_SERVER_ACTIONS_ENCRYPTION_KEY does not degrade a report nobody
+      # reads — it re-salts every Server Action id on every release, so every
+      # browser tab older than this deploy gets a 404 on every write it
+      # attempts, silently, until someone reloads it. Nothing turns red for
+      # that either: the build succeeds, the release is healthy, and the only
+      # trace is a `Failed to find Server Action` line in the app log.
+      # So this release stops too, for the same reason and by the same rule.
+      - name: Assert the Server Action salt is pinned
+        env:
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then
+            echo "::error::Missing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — without it Next re-salts every Server Action id per build (MOTIR-3948), and every tab open across this release loses every write. Generate one with 'openssl rand -base64 32' and set it as a repository secret; it must never change afterwards."
+            exit 1
+          fi
+          echo "the Server Action salt is pinned"
+
       # ⚠️ THE BUILD ARGUMENTS ARE NOT OPTIONAL EXTRAS — they are the ONLY way
       # the browser half of monitoring gets configured, because `next build`
       # inlines a `NEXT_PUBLIC_*` value into the client bundle and a Fly runtime
@@ -1385,6 +1409,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
           flyctl deploy --local-only --app "$FLY_APP" \
@@ -1393,6 +1418,7 @@ jobs:
             --build-arg "SENTRY_ORG=$SENTRY_ORG" \
             --build-arg "SENTRY_PROJECT=$SENTRY_PROJECT" \
             --build-secret "SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN" \
+            --build-secret "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" \
             2>&1 | tee /tmp/fly-deploy.log
 
       # ⚠️ "CONFIGURED" IS NOT "RAN", AND THIS REPO HAS THE SCAR TO PROVE IT.
@@ -1512,7 +1538,7 @@ jobs:
   # run (PR #1766, `design/MOTIR-1811-ai-callout-menu`):
   #
   #   • A skipped MATRIX job reports ONE check run under the RAW, un-interpolated
-  #     name — literally `Vitest (${{ matrix.leg }}/8)`, not `Vitest (1/8)`.
+  #     name — literally `Vitest (${{ matrix.leg }}/12)`, not `Vitest (1/12)`.
   #     Requiring the leg names would leave those contexts
   #     permanently absent on every `seed/` / `design/` / `docs/` PR — the very
   #     prefixes that exist to skip those jobs — and wedge them unmergeably.

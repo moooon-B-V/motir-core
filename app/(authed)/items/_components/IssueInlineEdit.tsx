@@ -19,8 +19,10 @@ import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import {
   changeStatusAction,
   updateIssueAction,
+  type IssueActionResult,
   type UpdateIssueInput,
 } from '../[key]/edit/actions';
+import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
 import {
   StatusValue,
   AssigneeValue,
@@ -247,11 +249,22 @@ function useUpdateField(row: IssueRowData) {
     handlers: { onConfirm: (updatedAt: string) => void; onFail: () => void },
   ) {
     startTransition(async () => {
-      const res = await updateIssueAction({
-        id: row.id,
-        expectedUpdatedAt: ledger ? ledger.latest(row) : row.updatedAt,
-        ...patch,
-      });
+      let res: IssueActionResult;
+      try {
+        res = await updateIssueAction({
+          id: row.id,
+          expectedUpdatedAt: ledger ? ledger.latest(row) : row.updatedAt,
+          ...patch,
+        });
+      } catch (err) {
+        // The action REJECTED — no result to read, so neither arm below runs
+        // and the optimistic override would otherwise stand for a write that
+        // never landed (MOTIR-3948). Drop it and say why, the same two
+        // dispositions the rail uses.
+        handlers.onFail();
+        toast({ variant: 'error', title: t(serverActionRejectionKey(err)) });
+        return;
+      }
       if (res.ok) {
         ledger?.acknowledge(row.id, res.updatedAt);
         handlers.onConfirm(res.updatedAt);
@@ -338,7 +351,17 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
     if (toStatusKey === statusKey) return;
     const token = status.begin(toStatusKey);
     startTransition(async () => {
-      const res = await changeStatusAction({ id: row.id, toStatusKey });
+      let res: IssueActionResult;
+      try {
+        res = await changeStatusAction({ id: row.id, toStatusKey });
+      } catch (err) {
+        // Same third outcome as `useUpdateField`'s (MOTIR-3948): a rejected
+        // action reaches neither arm, so the row kept the status it had
+        // optimistically painted for a transition the server never made.
+        status.fail(token);
+        toast({ variant: 'error', title: t(serverActionRejectionKey(err)) });
+        return;
+      }
       if (res.ok) {
         // A status change bumps the row's `updatedAt` even though it submits
         // no token itself — later token-carrying edits on this row need it.

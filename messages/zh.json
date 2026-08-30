@@ -1360,6 +1360,8 @@
     "quickViewFieldSaving": "保存中",
     "quickViewFieldSaved": "已保存",
     "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。",
+    "actionSkewError": "此页面已过期——请重新加载后再次修改。",
+    "actionTransportError": "更改未保存。请检查网络连接后重试。",
     "sprintUpdateFailed": "无法更新冲刺，请重试。",
     "quickViewMoreFields": "另有 {count} 个字段",
     "repositories": "代码仓库",
