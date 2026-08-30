@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import robots from '../../app/robots';
 import {
@@ -7,7 +6,6 @@ import {
   buildRobots,
   disallowedPaths,
 } from '../../lib/robotsPolicy';
-import { topLevelSegments } from '../helpers/twoFactorGuardSweeps';
 
 // MOTIR-3726 — `app.motir.co/robots.txt` returned 404 (Next's HTML not-found
 // page, measured with a Googlebot UA) while the sitemap, JSON-LD, canonicals
@@ -17,9 +15,6 @@ import { topLevelSegments } from '../helpers/twoFactorGuardSweeps';
 // WAS MEANT TO HELP, so this file guards the ALLOW at least as hard as the
 // deny. A robots.txt that over-blocks produces no error, no red check and no
 // symptom until traffic disappears weeks later.
-
-const APP = join(process.cwd(), 'app');
-const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)', '(planning)'] as const;
 
 describe('robots policy', () => {
   it('serves a body with the sitemap and host of the resolved origin', () => {
@@ -71,16 +66,17 @@ describe('robots policy', () => {
     for (const segment of AUTH_SEGMENTS) expect(denied).toContain(`/${segment}`);
   });
 
-  it('disallows every signed-in segment the filesystem serves — derived, not remembered', () => {
-    // The measurement `proxy-matcher.test.ts` exists because a hand-kept list
-    // drifted: sixteen segments, three listed. The same guard, one surface over.
-    const served = new Set<string>();
-    for (const group of SIGNED_IN_GROUPS) {
-      for (const segment of topLevelSegments(APP, group)) served.add(segment);
-    }
-    const authored = new Set<string>(SIGNED_IN_SEGMENTS);
-    expect([...served].sort().filter((s) => !authored.has(s))).toEqual([]);
-    expect([...authored].sort().filter((s) => !served.has(s))).toEqual([]);
+  it('publishes every authored signed-in segment as a Disallow — nothing is declared and dropped', () => {
+    // The list is compared to the FILESYSTEM in
+    // `tests/seo/robots-signed-in-coverage.test.ts`, which walks the signed-in
+    // route groups and therefore lives in the structural-guard lane. This half
+    // is the other end of the same promise, and the reason that guard's textual
+    // reading is worth anything: a segment in `SIGNED_IN_SEGMENTS` reaches the
+    // served body.
+    const denied = disallowedPaths();
+    for (const segment of SIGNED_IN_SEGMENTS) expect(denied).toContain(`/${segment}`);
+    const body = JSON.stringify(buildRobots('https://example.test'));
+    for (const segment of SIGNED_IN_SEGMENTS) expect(body).toContain(`/${segment}`);
   });
 
   // ── the one deliberate NON-entry ─────────────────────────────────────────
