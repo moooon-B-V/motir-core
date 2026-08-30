@@ -31,3 +31,24 @@ contributions.
 - Keep PRs focused; run lint, typecheck, and the relevant tests locally before
   pushing. CI runs the full suite and a coverage gate.
 - Sign the CLA when prompted — a PR can't be merged until the CLA check is green.
+
+## Changesets
+
+The three published workspace packages — `@motir/cli`, `@motir/brand` and
+`@motir/design-system` — record their release decisions with
+[Changesets](https://github.com/changesets/changesets). A pull request that
+changes a published package's behaviour or public surface owes a changeset:
+
+- Run `pnpm changeset` and describe the change, choosing a major / minor / patch
+  bump for each affected package. The generated `.changeset/*.md` file is both
+  the release note and the version decision, reviewed like code — it is what the
+  release lane turns into the next version.
+- **A change that does not reach a published package** (a root-app-only,
+  docs-only or CI-only change) needs no changeset.
+- **A change that touches a package but has no user-visible effect** (an
+  internal refactor, a test, a build tweak) takes an empty changeset:
+  `pnpm changeset --empty`, which records "no version bump" explicitly instead
+  of leaving the release lane to guess.
+- **A new package under `packages/*` is an explicit decision, not an accident of
+  the workspace glob.** When you add one, decide whether it is published — if it
+  is not, list it under `ignore` in `.changeset/config.json`.

@@ -40,7 +40,9 @@
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
     "prepare": "husky",
     "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build",
-    "build:worker": "node scripts/build-worker.mjs"
+    "build:worker": "node scripts/build-worker.mjs",
+    "changeset": "changeset",
+    "changeset:version": "changeset version"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -107,6 +109,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@changesets/cli": "^3.0.1",
     "@playwright/test": "^1.60.0",
     "@seriousme/openapi-schema-validator": "^2.9.0",
     "@tailwindcss/postcss": "^4",
