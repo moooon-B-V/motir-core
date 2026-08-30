@@ -336,6 +336,37 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/release-migrate.mjs ./mig
 COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs ./worker/worker.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs.map ./worker/worker.mjs.map
 
+# ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
+# ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS
+# NOTHING NEEDED IT TO. Its `ARG`/`ENV` pair sits in `builder` (see the
+# monitoring block above), where `next build` reads it to name the Sentry release
+# and tag the source maps it uploads. A Docker `ENV` is scoped to its own stage,
+# and this stage copies artifacts rather than inheriting an environment — so
+# `process.env.MOTIR_RELEASE` in the SERVER process was `undefined`, and the
+# deployment had no way to say which commit it was running.
+#
+# `/api/health/release` is what needs it: the freshness check outside the
+# deployment compares this string against `main`'s head
+# (`scripts/deployFreshness.mjs`), and the whole design rests on the deployment
+# stating ONE honest fact about itself. Without this line the route answers 503
+# `unset` on every release and the check is permanently blind.
+#
+# ⚠️ IT MUST BE THE SAME VALUE THE BUILDER GOT — one `--build-arg` reaches every
+# stage that declares the `ARG`, which is why this re-declares rather than
+# re-deriving. `.git` is in `.dockerignore`, so there is no `git rev-parse`
+# fallback inside the image and a mismatch could not be detected here.
+#
+# ⚠️ AND IT SITS AFTER EVERY `COPY`, DELIBERATELY. An `ENV` that changes on every
+# commit invalidates every layer built after it; placed at the top of the stage
+# it would cost a full re-copy of the standalone bundle on each release for a
+# 40-character string.
+#
+# Empty default, like every other build argument here: a `docker build` with no
+# arguments still produces a working self-hosted image, one that honestly reports
+# that it cannot name its commit.
+ARG MOTIR_RELEASE=""
+ENV MOTIR_RELEASE=$MOTIR_RELEASE
+
 USER nextjs
 EXPOSE 8080
 CMD ["node", "server.js"]

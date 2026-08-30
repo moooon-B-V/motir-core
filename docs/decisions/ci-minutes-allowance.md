@@ -1053,6 +1053,8 @@ back door."_ Option (b) is not a §J amendment; it is a dismantling of the guard
 run and a merge queue were both weighed and are **not taken** — they address release LATENCY,
 and the measured complaint was contention, which is now zero. Re-open either if `main`'s
 created→deployed time becomes the binding problem; neither needs this section changed.
+**⚠️ That trigger FIRED on 2026-08-28 and both were re-opened — see §J.5, which
+re-measured them and rejected each for a reason this paragraph did not have.**
 
 > **⚠️ One criterion this pass could not satisfy as written, recorded rather than quietly
 > dropped.** MOTIR-3149 asked for the created→first-job delay across _"at least 5 push-to-`main`
@@ -1064,6 +1066,112 @@ created→deployed time becomes the binding problem; neither needs this section 
 > measurement is the sound one** and it answers the question more directly: nothing waiting for a
 > runner means no run can be starved of one, which is a statement about the mechanism rather
 > than a sample of the symptom.
+
+##### §J.5 — THE TRIGGER FIRED, 2026-08-30 (MOTIR-3760). Both options RE-OPENED, RE-MEASURED, and neither TAKEN — for reasons that are not §J.4's
+
+§J.4 closed by naming the condition that would re-open a deploy-only `main` run
+and a merge queue: _"if `main`'s created→deployed time becomes the binding
+problem."_ On 2026-08-28 it did. `6dafd2ee8` — the story retiring the Inngest
+engine — merged at 07:44:30Z; the last Fly release was 08:47:04Z, reusing an
+image built at 07:51; and at 11:00Z the running `/app/worker/worker.mjs` still
+contained 278 references to an engine that no longer exists anywhere in
+`origin/main`. `system.daily-health-check` dead-lettered at 09:04:46Z against
+that code. This section is the re-open, and it records a different verdict on
+each option than §J.4 reached, arrived at from measurement rather than from the
+same reasoning repeated.
+
+**FIRST, THE NUMBER, because the one the card was filed on is already stale.**
+Nine consecutive successful push-to-`main` runs, 2026-08-29/30, created →
+`Deploy to Fly` complete:
+
+| run         | merge → released |
+| ----------- | ---------------- |
+| 33307649462 | 21.2 min         |
+| 33270573757 | 22.1 min         |
+| 33285015926 | 23.0 min         |
+| 33271383815 | 27.1 min         |
+| 33250609131 | 34.0 min         |
+| 33282807240 | 34.1 min         |
+| 33248423068 | 34.4 min         |
+| 33272081857 | 42.4 min         |
+| 33285023182 | 45.2 min         |
+
+Median ~34, worst 45.2 — against the 35-to-79 the workflow header quoted from
+2026-08-19. On the fastest run the gate took 14.5 minutes and the release itself
+6.75; the binding chain is the 12 Vitest legs (12.9 min) then `coverage`
+(1.4 min), with the at-scale legs 13 seconds behind them. MOTIR-3902 / 3912 /
+3913 / 3928 / 3950 — all merged in the 24 hours before this measurement — are
+what moved it, and none of them was about deploy latency.
+
+**§J.4's (c), a deploy-only `main` run: REJECTED, and on evidence the card that
+proposed it did not have.** The premise is that `deploy`'s
+`needs: [lint, typecheck, build, test, coverage, e2e, e2e-at-scale]` re-runs on
+the merge commit what the pull request already ran. Read the workflow: it does
+not.
+
+1. **`e2e-at-scale` never ran on the pull request.** Its `if:` is
+   `needs.changes.outputs.app == 'true' && (github.event_name == 'push' ||
+contains(github.event.pull_request.labels.*.name, 'e2e-at-scale'))`, shipped by
+   MOTIR-3148 so that the four at-scale legs bill to `main` rather than to every
+   pull request. For an unlabelled pull request — the overwhelming majority — the
+   push-to-`main` run is the **first and only** execution of `board-at-scale`,
+   `collab-at-scale`, `reporting-at-scale` and `billing-cloud`. Dropping it from
+   `needs` removes a check rather than a repetition, and MOTIR-3692 and MOTIR-3929
+   are two occasions when that check caught something.
+2. **`strict_required_status_checks_policy` is `false`** (ruleset 17227448, since
+   2026-08-07), so a pull request merges while BEHIND `main` and its green
+   describes a merge base that has moved. The push-to-`main` run is this
+   repository's **only** verification of the merged SUM, which is the whole
+   `both-green-main-red` defence MOTIR-2003 was filed about and MOTIR-3106 nearly
+   lost.
+
+So the duplication is real for `lint` / `typecheck` / `build` / `test` /
+`coverage` / `e2e` and is NOT the whole of the release path. Narrowing `needs`
+buys at most the 1.4 minutes `coverage` adds after `test`, unless it also drops
+`e2e-at-scale` — at which point it is trading the trunk's only at-scale run and
+its only check of the sum for roughly fourteen minutes. Recorded as REJECTED, not
+as unexamined.
+
+**§J.4's (d), a merge queue: REJECTED for latency, and the reason INVERTS the
+usual framing.** A merge queue is the industry-standard answer to _"should the
+release re-verify what the merge gate verified?"_ and it is the correct answer to
+the correctness half — it tests the exact commit that will become `main`, which is
+precisely what point 2 above says nothing does today. But on this repository's
+numbers it does not reduce merge→deployed time; it **increases** it. The queue's
+run happens BEFORE the merge, so the wall clock from _"merge when ready"_ to
+_deployed_ becomes queue-run + release ≈ 20 + 7 minutes, against 14.5 + 6.75
+today. And the pull-request lane stays, so every change pays for a second full
+run rather than replacing one. A merge queue is a **correctness** improvement
+here, and should be re-opened as one — under the both-green-main-red heading,
+sized against the second run per change — never as a latency fix.
+
+**WHAT WAS TAKEN: §J.4's third option, with the detector that made it defensible.**
+The release keeps every gate, and the wait stops being invisible.
+`.github/workflows/deploy-freshness.yml` compares the commit the deployment
+reports (`GET /api/health/release`) against `main`'s head every thirty minutes,
+from OUTSIDE the deployment, and is red once the oldest undeployed commit passes
+90 minutes — twice the worst healthy run above, so an ordinary busy morning does
+not train anybody to ignore it.
+
+**The externality is the design, not a deployment detail.** A deployment cannot be
+the thing that reports it is behind: the state being reported on is the state of
+the reporter, so a release that never happened and a machine still serving an old
+image both answer _"fine"_. The deployment states ONE fact about itself and the
+comparison happens elsewhere — the same split, for the same reason, as the
+queue-depth reading in MOTIR-3764, where a wedged worker was taking down an alarm
+that was itself a job.
+
+**One thing the incident could not have reported even if somebody had looked.**
+`MOTIR_RELEASE` reached only the `builder` stage of the `Dockerfile`; a Docker
+`ENV` is scoped to its stage, and the runner stage copies artifacts rather than
+inheriting an environment. So `process.env.MOTIR_RELEASE` in the running server
+was `undefined` and the deployment had no way to name its own commit at all. The
+Sentry release assertion in the deploy job proves the BUILD was named, which is a
+different claim from the one anybody needed. Fixed here.
+
+**§J itself is untouched.** Nothing above routes a job anywhere, sets
+`MOTIR_RUNNER`, or changes what `motir-core` runs on — §J.4's three reasons and
+§O's guard are exactly as they were.
 
 #### §K — What SURVIVES the substrate change — verified against shipped code, not assumed
 

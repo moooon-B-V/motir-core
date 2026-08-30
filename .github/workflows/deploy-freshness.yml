@@ -1,0 +1,120 @@
+# Is PRODUCTION running the head of `main`? (MOTIR-3760)
+#
+# On 2026-08-28 `6dafd2ee8` — a story that retired an entire job engine — merged
+# at 07:44:30Z. The last Fly release was 08:47:04Z, reusing an image built at
+# 07:51. At 11:00Z the running `/app/worker/worker.mjs` still contained 278
+# references to that engine, none of which exist anywhere in `origin/main`, and
+# `system.daily-health-check` had dead-lettered against it at 09:04:46Z with a
+# message naming a system that had been deleted. Production ran code the
+# repository no longer had for over three hours.
+#
+# ⚠️ THE COST WAS THE SILENCE, NOT THE WAIT. Every dashboard was green
+# throughout, and every one of them was correct: the merge succeeded, CI was
+# green, the release that existed was healthy, the app answered 200. Nothing
+# anywhere was watching the one relationship that had broken — between the commit
+# `main` is at and the commit production is running. This lane is that reading.
+#
+# ⚠️ AND IT LIVES OUTSIDE THE DEPLOYMENT ON PURPOSE. A deployment cannot be the
+# thing that reports it is behind: the state being reported on is the state of
+# the reporter, so a release that never happened and a machine still serving an
+# old image both answer "fine". The deployment states ONE fact about itself —
+# which commit it was built from, at `/api/health/release` — and everything else
+# happens here. Same principle as the queue-depth reading in the sibling story
+# (MOTIR-3764): a wedged worker takes down an alarm that is itself a job.
+#
+# It is SCHEDULED rather than part of the pull-request lane, for the reason
+# `sandbox-staleness.yml` gives: the condition it reports is not caused by the PR
+# in front of it and cannot be fixed by that PR's author. A red X on someone
+# else's unrelated change is how a check gets muted, and a muted check is
+# indistinguishable from a passing one.
+#
+# The logic lives in `scripts/deployFreshness.mjs` (unit-tested in
+# `tests/scripts/assert-deploy-freshness.test.ts`, which also asserts this file's
+# wiring) — same arrangement as `scripts/machinePool.mjs` and the deploy job's
+# pool guard: a zero-dependency script a human can run from any shell, and a
+# workflow that is a thin caller. Reproduce a red run locally with
+#
+#   node scripts/assert-deploy-freshness.mjs
+#
+# which needs no credential and no Docker — only a full-depth checkout.
+
+name: Deploy freshness
+
+on:
+  schedule:
+    # Every 30 minutes. The unit the check reports in is MINUTES and its ceiling
+    # is 90, so a coarser cadence would round the verdict past the thing it
+    # measures; a finer one would spend runs to sharpen a number whose ceiling is
+    # ninety minutes wide. GitHub runs a schedule late under load, which this
+    # tolerates: the age is measured from the COMMIT, not from the last run.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_age_minutes:
+        description: 'Minutes an undeployed commit may sit before it fails (default 90)'
+        type: string
+        required: false
+
+# Nothing to cancel and nothing to race — but two overlapping runs would file two
+# identical reports, so let one finish.
+concurrency:
+  group: deploy-freshness
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    name: Is production running the head of main?
+    runs-on: ubuntu-latest
+    # NO healthy run on record — this lane does not exist yet on `main`, and its
+    # first runs cannot be measured before it does. Its mechanical cost is a
+    # checkout plus one dependency-free node script making a single HTTP request,
+    # so the ceiling is the 10-minute short-job FLOOR the workflow-ceiling block
+    # in `ci.yml` states, taken as a stated floor rather than as a measurement.
+    # Re-derive it from `gh api .../actions/runs/<id>/jobs` once this lane has a
+    # week of runs, per the same block.
+    timeout-minutes: 10
+    steps:
+      # ⚠️ fetch-depth: 0 is load-bearing. The default shallow checkout cannot
+      # resolve the deployed commit and cannot walk `<deployed>..HEAD`; both come
+      # back empty, which is byte-identical to "up to date". The script refuses
+      # to answer in that case rather than reporting freshness it never
+      # established — but a check that can only ever say "could not tell" is not
+      # a check.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      # No install step: the script is dependency-free by design, for the same
+      # reason `scripts/assert-machine-pool.mjs` is — it has to be runnable from a
+      # bare shell by whoever is trying to work out whether a merge has shipped.
+      - name: Compare the deployed commit against main
+        # The dispatch input arrives as an ENV var rather than being interpolated
+        # into the script body: an expression inside `run:` is substituted before
+        # bash ever sees it, so a crafted value would be executed, not passed.
+        # Same discipline the rest of the lanes use.
+        env:
+          MAX_AGE_MINUTES: ${{ inputs.max_age_minutes }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          args=()
+          [ -n "${MAX_AGE_MINUTES:-}" ] && args+=(--max-age-minutes "$MAX_AGE_MINUTES")
+          report=$(node scripts/assert-deploy-freshness.mjs "${args[@]}" 2>&1)
+          code=$?
+          echo "$report"
+          # The verdict belongs in the run summary, not only the log: whoever
+          # opens a red scheduled run wants "behind by what, since when" on the
+          # first screen, without expanding a step.
+          {
+            echo '### Deploy freshness'
+            echo
+            echo '```'
+            echo "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
