@@ -132,8 +132,11 @@ describe('PlanningCanvas', () => {
     // …and every edge path points at an arrowhead marker.
     const edgePaths = screen.getByTestId('canvas-edges').querySelectorAll('path');
     edgePaths.forEach((p) => expect(p.getAttribute('marker-end')).toMatch(/^url\(#/));
-    // four markers defined (firm / pending / cross / emphasis)
-    expect(document.querySelectorAll('marker')).toHaveLength(4);
+    // ONE MARKER PER VARIANT, and the count is frozen on purpose: an edge that
+    // inherited another variant's arrowhead would still point the right way and
+    // be the one inconsistency in the set. Five since MOTIR-3972 added `running`
+    // (committed / pending / warning / emphasis / running).
+    expect(document.querySelectorAll('marker')).toHaveLength(5);
   });
 
   it('emphasises a selected node’s edges in the accent (so a dashed one still pops)', () => {
@@ -186,5 +189,95 @@ describe('PlanningCanvas', () => {
     expect(
       screen.queryByRole('button', { name: /add|edit|delete|link|connect|remove/i }),
     ).toBeNull();
+  });
+});
+
+// ── THE RUNNING EDGE (Story MOTIR-1789 · MOTIR-3972) ───────────────────────
+// The variant a run uses for the edge it is travelling along. Three properties
+// matter and each has its own assertion, because each fails differently:
+// the edge count invariant (a broken guard), the opt-in default (a regression
+// in four other surfaces), and the reduced-motion form (an accessibility cost).
+describe('the RUNNING edge variant', () => {
+  const paths = () =>
+    Array.from(
+      document.querySelector('[data-testid="canvas-edges"]')?.querySelectorAll('path') ?? [],
+    );
+
+  it('renders in the in-progress tone with its own arrowhead marker', () => {
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[{ from: 'a', to: 'b', variant: 'running' }]}
+        renderNode={renderNode}
+      />,
+    );
+    const p = paths()[0]!;
+    expect(p.getAttribute('class')).toContain('stroke-(--el-status-in-progress)');
+    expect(p.getAttribute('marker-end')).toContain('-running');
+  });
+
+  it('⚠️ adds NO element per edge — the path count still equals the edge count', () => {
+    // The invariant the arrowhead markers live in a separate <svg> to protect.
+    // An animation implemented as a second overlaid path would pass every other
+    // assertion here and silently break the guard that asserts this.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[
+          { from: 'a', to: 'b', variant: 'running' },
+          { from: 'b', to: 'c', variant: 'pending' },
+        ]}
+        renderNode={renderNode}
+      />,
+    );
+    expect(paths()).toHaveLength(2);
+  });
+
+  it('⚠️ is OPT-IN — a consumer that sends no running edge renders as before', () => {
+    // Four other surfaces compose this canvas. An onboarding canvas that grew a
+    // flowing edge would be a regression, so the default must be untouched.
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    for (const p of paths()) {
+      expect(p.getAttribute('class')).not.toContain('canvas-edge-running');
+      expect(p.getAttribute('marker-end')).not.toContain('-running');
+    }
+  });
+
+  it('carries the class the reduced-motion gate keys off, and no inline animation', () => {
+    // The dash and its travel live in `globals.css` behind
+    // `prefers-reduced-motion: no-preference`, so the STATIC form is the default.
+    // Asserting the hook rather than the frame: a computed animation is not
+    // observable in happy-dom, and the rule is what the gate actually reads.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[{ from: 'a', to: 'b', variant: 'running' }]}
+        renderNode={renderNode}
+      />,
+    );
+    const p = paths()[0]!;
+    expect(p.getAttribute('class')).toContain('canvas-edge-running');
+    expect(p.getAttribute('style') ?? '').not.toContain('animation');
+    expect(p.getAttribute('stroke-dasharray')).toBeNull();
+  });
+
+  it('outranks the selection emphasis, and yields to `cross`', () => {
+    // A run's live edge stays the live one while a reader clicks around; a plan
+    // that is WRONG still outranks a plan that is in motion.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[
+          { from: 'a', to: 'b', variant: 'running' },
+          { from: 'b', to: 'c', variant: 'cross' },
+        ]}
+        renderNode={renderNode}
+        selectedId="b"
+      />,
+    );
+    const [runningPath, crossPath] = paths();
+    expect(runningPath!.getAttribute('class')).toContain('stroke-(--el-status-in-progress)');
+    expect(runningPath!.getAttribute('class')).not.toContain('stroke-(--el-accent)');
+    expect(crossPath!.getAttribute('class')).toContain('stroke-(--el-warning)');
   });
 });
