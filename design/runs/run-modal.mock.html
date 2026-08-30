@@ -2177,6 +2177,15 @@
       .cvEdges {
         position: absolute;
         inset: 0;
+        /* ⚠️ `width`/`height` ARE REQUIRED, and `inset: 0` is not enough. An SVG
+           is a REPLACED element: with no width/height attribute it takes its
+           INTRINSIC size, and `inset: 0` does not stretch it the way it stretches
+           a div. Every edge SVG in this asset was resolving to 16x16 — so every
+           path drew at ~4x6px and NO EDGE HAS EVER BEEN VISIBLE here, including
+           the running one panel 2 is entirely about. Measured, not guessed: six
+           SVGs at `16x16`, and `543x315` / `461x208` with these two lines. */
+        width: 100%;
+        height: 100%;
         pointer-events: none;
       }
       .cvChrome {
@@ -2566,26 +2575,16 @@
                 <div class="mPane">
                   <div class="paneHead">The set — 11 work items</div>
                   <div class="cv">
-                    <svg
-                      class="cvEdges"
-                      viewBox="0 0 560 300"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                    >
+                    <svg class="cvEdges" aria-hidden="true">
                       <path
-                        d="M 196 60 C 223 60, 223 60, 250 60"
+                        d="M 204 74 L 250 74"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
                       />
+                      <path class="flow" d="M 345 127 L 345 168" fill="none" />
                       <path
-                        d="M 196 60 C 223 60, 223 150, 250 150"
-                        fill="none"
-                        stroke="var(--el-border-strong)"
-                        stroke-width="1.5"
-                      />
-                      <path
-                        d="M 440 60 C 345 60, 345 60, 250 60"
+                        d="M 204 173 C 227 173, 227 222, 250 222"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
@@ -2635,7 +2634,7 @@
                         >
                       </div>
                     </div>
-                    <div class="cvNode" style="left: 250px; top: 128px">
+                    <div class="cvNode" style="left: 250px; top: 170px">
                       <div class="cvHead">
                         <span class="cvTile" style="background: var(--el-type-subtask)">
                           <svg
@@ -2831,26 +2830,16 @@
                 <div class="mPane">
                   <div class="paneHead">The set — 11 work items</div>
                   <div class="cv">
-                    <svg
-                      class="cvEdges"
-                      viewBox="0 0 560 300"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                    >
+                    <svg class="cvEdges" aria-hidden="true">
                       <path
-                        d="M 196 60 C 223 60, 223 60, 250 60"
+                        d="M 204 74 L 250 74"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
                       />
+                      <path class="flow" d="M 345 127 L 345 168" fill="none" />
                       <path
-                        d="M 196 60 C 223 60, 223 150, 250 150"
-                        fill="none"
-                        stroke="var(--el-border-strong)"
-                        stroke-width="1.5"
-                      />
-                      <path
-                        d="M 440 60 C 345 60, 345 60, 250 60"
+                        d="M 204 173 C 227 173, 227 222, 250 222"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
@@ -2900,7 +2889,7 @@
                         >
                       </div>
                     </div>
-                    <div class="cvNode" style="left: 250px; top: 128px">
+                    <div class="cvNode" style="left: 250px; top: 170px">
                       <div class="cvHead">
                         <span class="cvTile" style="background: var(--el-type-subtask)">
                           <svg
@@ -3041,22 +3030,17 @@
                   border-radius: var(--radius-card);
                 "
               >
-                <svg
-                  class="cvEdges"
-                  viewBox="0 0 340 210"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
-                  <path class="flow" d="M 170 58 C 210 58, 210 140, 250 140" fill="none" />
-                  <path class="flow" d="M 170 58 C 210 58, 210 58, 250 58" fill="none" />
+                <svg class="cvEdges" aria-hidden="true">
+                  <path class="flow" d="M 167 105 C 205 105, 220 47, 258 47" fill="none" />
+                  <path class="flow" d="M 167 105 C 205 105, 220 163, 258 163" fill="none" />
                   <path
-                    d="M 40 140 C 80 140, 80 58, 120 58"
+                    d="M 335 82 L 335 128"
                     fill="none"
                     stroke="var(--el-border-strong)"
                     stroke-width="1.5"
                   />
                 </svg>
-                <div class="cvNode sel" style="left: 8px; top: 20px; width: 158px">
+                <div class="cvNode sel" style="left: 9px; top: 72px; width: 158px">
                   <div class="cvHead"><span class="cvKey">MOTIR-1792</span></div>
                   <div class="cvDisp">
                     <span class="runPill t-running"
@@ -3064,7 +3048,7 @@
                     >
                   </div>
                 </div>
-                <div class="cvNode" style="left: 182px; top: 20px; width: 150px">
+                <div class="cvNode" style="left: 260px; top: 14px; width: 150px">
                   <div class="cvHead"><span class="cvKey">MOTIR-1793</span></div>
                   <div class="cvDisp">
                     <span class="runPill t-queued"
@@ -3072,7 +3056,7 @@
                     >
                   </div>
                 </div>
-                <div class="cvNode" style="left: 182px; top: 118px; width: 150px">
+                <div class="cvNode" style="left: 260px; top: 130px; width: 150px">
                   <div class="cvHead"><span class="cvKey">MOTIR-1794</span></div>
                   <div class="cvDisp">
                     <span class="runPill t-queued"
@@ -3095,32 +3079,29 @@
                   border-radius: var(--radius-card);
                 "
               >
-                <svg
-                  class="cvEdges"
-                  viewBox="0 0 340 210"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
+                <svg class="cvEdges" aria-hidden="true">
                   <path
-                    d="M 170 58 C 210 58, 210 140, 250 140"
+                    d="M 167 105 C 205 105, 220 47, 258 47"
                     fill="none"
                     stroke="var(--el-status-in-progress)"
                     stroke-width="2"
+                    stroke-dasharray="5 7"
                   />
                   <path
-                    d="M 170 58 C 210 58, 210 58, 250 58"
+                    d="M 167 105 C 205 105, 220 163, 258 163"
                     fill="none"
                     stroke="var(--el-status-in-progress)"
                     stroke-width="2"
+                    stroke-dasharray="5 7"
                   />
                   <path
-                    d="M 40 140 C 80 140, 80 58, 120 58"
+                    d="M 335 82 L 335 128"
                     fill="none"
                     stroke="var(--el-border-strong)"
                     stroke-width="1.5"
                   />
                 </svg>
-                <div class="cvNode sel" style="left: 8px; top: 20px; width: 158px">
+                <div class="cvNode sel" style="left: 9px; top: 72px; width: 158px">
                   <div class="cvHead"><span class="cvKey">MOTIR-1792</span></div>
                   <div class="cvDisp">
                     <span class="runPill t-running"
@@ -3128,7 +3109,7 @@
                     >
                   </div>
                 </div>
-                <div class="cvNode" style="left: 182px; top: 20px; width: 150px">
+                <div class="cvNode" style="left: 260px; top: 14px; width: 150px">
                   <div class="cvHead"><span class="cvKey">MOTIR-1793</span></div>
                   <div class="cvDisp">
                     <span class="runPill t-queued"
@@ -3136,7 +3117,7 @@
                     >
                   </div>
                 </div>
-                <div class="cvNode" style="left: 182px; top: 118px; width: 150px">
+                <div class="cvNode" style="left: 260px; top: 130px; width: 150px">
                   <div class="cvHead"><span class="cvKey">MOTIR-1794</span></div>
                   <div class="cvDisp">
                     <span class="runPill t-queued"
@@ -3267,14 +3248,9 @@
                 <div class="mPane">
                   <div class="paneHead">The set — 6 taken, 3 skipped</div>
                   <div class="cv">
-                    <svg
-                      class="cvEdges"
-                      viewBox="0 0 560 300"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                    >
+                    <svg class="cvEdges" aria-hidden="true">
                       <path
-                        d="M 196 46 C 223 46, 223 46, 250 46"
+                        d="M 204 59 L 250 59"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
@@ -3756,14 +3732,9 @@
                 <div class="mPane">
                   <div class="paneHead">The set — 6 taken, 3 skipped</div>
                   <div class="cv">
-                    <svg
-                      class="cvEdges"
-                      viewBox="0 0 560 300"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                    >
+                    <svg class="cvEdges" aria-hidden="true">
                       <path
-                        d="M 196 46 C 223 46, 223 46, 250 46"
+                        d="M 204 59 L 250 59"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"

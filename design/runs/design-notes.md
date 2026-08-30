@@ -453,6 +453,23 @@ console that yanks you back to the bottom mid-read is the classic version of thi
 each line names its source member and the order is `seq` — the RUN's order, not arrival order. A very
 long line scrolls inside the console, never the page.
 
+⚠️ **AND THE EDGE ITSELF NEVER DREW, for as long as this area has existed (found 2026-08-30).**
+`.cvEdges` was `position: absolute; inset: 0` with no `width`/`height`. An SVG is a REPLACED element:
+with no width/height attribute it takes its INTRINSIC size, and `inset: 0` does not stretch it the
+way it stretches a div. **Every edge SVG in the asset was resolving to 16×16**, so every path drew at
+about 4×6px and no edge — the running one included — was ever visible. Measured, not guessed: six
+SVGs at `16x16`, and `543x315` / `461x208` once `width: 100%; height: 100%` was added.
+
+Two consequences worth keeping, because they are the reason it survived review:
+
+- **The path geometry had never been checked against the nodes**, since nothing was on screen to
+  check. Every `d` was authored blind and every one was wrong — endpoints landing inside the target
+  node, and one path that ran out of `MOTIR-1792`'s right edge and back into its own left edge. They
+  are now derived from MEASURED node boxes, not estimated.
+- **A `viewBox` + `preserveAspectRatio="none"` cannot be used here at all.** The nodes are positioned
+  in CSS px, so the SVG must map one user unit to one px; a viewBox stretches the paths to the
+  stage's real width while the nodes stay put. The viewBox is gone from all six.
+
 ⚠️ **The pane had no producer when it was drawn.** `DispatchEventKind.log` existed, the flag existed,
 the strip and the sweep and the help text existed — and nothing in `packages/cli/src` ever emitted a
 `log` event. MOTIR-3961 is the producer; without it this pane would have rendered its first silence
