@@ -43,12 +43,19 @@ CUSTOM PROPERTY is a fourth sense of the word, and it is the one a careless swee
 `--el-card-icon-fg`. Rewriting those produces a file that still parses, still has every panel, and
 renders **792 CSS px shorter** because no radius, shadow or padding resolves any more.
 
-**It is invisible to the obvious check.** A probe like `[A-Za-z_.\`]_card[A-Za-z_.\`]_`, written to
-list every occurrence with its surrounding token, cannot match `--radius-card`— the separator is a
-HYPHEN and the hyphen is not in the class. The accounting comes back clean while the asset is broken.
-**Mask every`--[a-z0-9-]_card[a-z0-9-]_`FIRST, and verify with a pattern that includes hyphens** —
-and then check the RENDER: a copy-only edit must reproduce the committed height exactly, which is
-what`EXACT / committed=2400x17114 / new=2400x17114` on this asset now says.
+**It is invisible to the obvious check.** The probe below, written to list every occurrence with its
+surrounding token, cannot match `--radius-card`: the separator is a HYPHEN and the hyphen is not in
+the character class. The accounting comes back clean while the asset is broken.
+
+```
+the probe that missed it     [A-Za-z_.`]*card[A-Za-z_.`]*
+what it cannot match         --radius-card   --el-card   --shadow-card
+mask these FIRST             --[a-z0-9-]*card[a-z0-9-]*
+```
+
+**Mask every CSS custom property first, and verify with a pattern that includes hyphens** — then
+check the RENDER. A copy-only edit must reproduce the committed height exactly, which is what
+`EXACT` with `committed=2400x17114` and `new=2400x17114` on this asset now says.
 
 ---
 
