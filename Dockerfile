@@ -127,14 +127,42 @@ ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
     SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT
 
-# The token is mounted for THIS command only. `|| true` on the read is
+# ── the SERVER-ACTION SALT (MOTIR-3948) ─────────────────────────────────────
+# ⚠️ THIS ONE IS WHY AN OPEN TAB STOPS BEING ABLE TO WRITE AFTER A DEPLOY.
+# Next hashes every Server Action id with the build's `encryptionKey`
+# (`serverReferenceHashSalt`, `next/dist/build/webpack-config.js`), and generates
+# that key RANDOMLY PER BUILD unless `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is set
+# (`next/dist/build/index.js` → `encryption-utils-server.js`). So without a pinned
+# value every release re-salts every id: a browser holding the previous build's
+# JavaScript posts ids this build has never heard of, the server answers 404
+# `x-nextjs-action-not-found`, and every write from that tab fails until it is
+# reloaded. Measured on this repo: three builds of one commit, three different
+# ids for the same exported action.
+#
+# It is a BUILD-time value, not a runtime one — the salt is baked into the client
+# bundle and into `server-reference-manifest.json` — and the RUNTIME reads it back
+# out of that manifest (`encryption-utils.js`: `process.env.NEXT_SERVER_ACTIONS_
+# ENCRYPTION_KEY || serverActionsManifest.encryptionKey`). So there is deliberately
+# NO Fly runtime secret for it: a runtime value that disagreed with the baked one
+# would break decryption of every bound argument instead of fixing anything.
+#
+# It goes in as a build SECRET rather than an `ARG` for the reason the block above
+# states — it encrypts the arguments closed over by server actions, and a
+# `--build-arg` is recorded in the build's metadata. `ci.yml`'s deploy step is the
+# other half, and it REFUSES to release without it.
+#
+# Both secrets are mounted for THIS command only. `|| true` on each read is
 # deliberate: with no secret mounted the file does not exist, the variable stays
-# empty, `next.config.ts` disables source-map upload, and the build proceeds —
-# the self-host path again. Read `set -eu` as covering everything after it.
+# empty, and the build proceeds — source-map upload disabled, salt back to
+# per-build random. That is the self-host path, unchanged and unbroken by either.
+# Read `set -eu` as covering everything after it.
 RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
+    --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     set -eu; \
     SENTRY_AUTH_TOKEN="$(cat /run/secrets/SENTRY_AUTH_TOKEN 2>/dev/null || true)"; \
     export SENTRY_AUTH_TOKEN; \
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$(cat /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY 2>/dev/null || true)"; \
+    export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; \
     pnpm exec next build
 
 # ── the worker bundle (MOTIR-3421) ──────────────────────────────────────────
