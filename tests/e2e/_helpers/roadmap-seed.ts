@@ -41,6 +41,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { waitForDerivedStatus } from './derivedStatus';
 
 // Satisfies the credential-strength rule (same shape as the other seeds').
 export const ROADMAP_SEED_PASSWORD = 'roadmap-view-e2e-pass-7';
@@ -103,28 +104,6 @@ async function moveToDone(id: string, ctx: ServiceContext): Promise<void> {
   await workItemsService.updateStatus(id, 'done', ctx);
 }
 
-/**
- * Wait for a DERIVED status to land (Story MOTIR-2888). A parent's status is
- * recomputed from its children by a background job, so the last service call in
- * a fixture is not the last WRITE the tree receives. Handing the browser a tree
- * that is still settling would make every assertion downstream of it a race —
- * so the seed blocks on the authoritative row, exactly as the specs' own
- * `expectDerivedStatus` does. Never a fixed sleep.
- */
-async function waitForDerivedStatus(id: string, status: string): Promise<void> {
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    const row = await db.workItem.findUniqueOrThrow({ where: { id }, select: { status: true } });
-    if (row.status === status) return;
-    if (Date.now() > deadline) {
-      throw new Error(
-        `seed: derived status "${status}" never landed on ${id} (saw "${row.status}")`,
-      );
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-}
-
 /** The main fixture: a populated roadmap with an in-progress (drillable) epic
  *  carrying the "you are here" marker + a progress meter, and a sibling epic.
  *
@@ -159,6 +138,15 @@ export async function seedRoadmap(
     ctx,
   );
   await moveToDone(doneChild.id, ctx);
+  // ⚠️ SETTLE THE EPIC BEFORE TOUCHING ITS CHILD SET AGAIN (MOTIR-3915). Shipping
+  // the only child completes the epic, and that is an ASYNC recompute. Adding the
+  // second child while it is still in flight lets the late job stamp the epic
+  // AFTER the newer child edit — at which point every recompute that would bring
+  // it back to `in_progress` declines as `stale_backward` (MOTIR-2965) and the
+  // epic stays `done` for good. The wait below then times out at 30s having
+  // watched a value that was never going to change. Waiting HERE is what makes
+  // the ordering deterministic; see `derivedStatus.ts` for the full mechanism.
+  await waitForDerivedStatus(activeEpic.id, 'done');
 
   // STARTED, not left at to-do: this is what makes the epic in-progress, and so
   // the root level's "you are here" frontier. Leaving it `todo` would put the
