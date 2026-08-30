@@ -225,10 +225,20 @@ describe('the whole story, composed — a plan authored, mistyped, corrected and
     ).structuredContent as unknown as { id: string };
     const id = (planId as unknown as { id: string }).id;
 
+    // ⚠️ KINDS CHOSEN SO THE CORRECTED TREE IS LEGAL (MOTIR-3936). The
+    // correction below re-parents 'Two' UNDER 'One', and since MOTIR-3936
+    // `correctProposal` re-runs the close's gate — so a correction that leaves
+    // the plan in a state approve would refuse is now REFUSED, and no `edited`
+    // row is written. `ALLOWED_CHILD_TYPES` lets a STORY hold a task and does
+    // not let a task hold a task, so this test wrote a re-parent approve was
+    // always going to reject; it survived only because nothing checked. This is
+    // the same care `tests/e2e/plan-proposal-correction.spec.ts` already takes,
+    // for the same reason — the assertion here is about the TIMELINE, and the
+    // correction is only its vehicle.
     const first = ids(
       await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
         planId: id,
-        proposals: [{ op: 'add', proposedFields: { title: 'One', kind: 'task' } }],
+        proposals: [{ op: 'add', proposedFields: { title: 'One', kind: 'story' } }],
       }),
     )[0]!;
     const second = ids(
