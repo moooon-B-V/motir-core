@@ -2278,6 +2278,107 @@
         color: var(--el-text-secondary);
         max-width: 30ch;
       }
+
+      /* ── what the run PRODUCED (MOTIR-3982) ── pinned above the log ── */
+      .findStrip {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .findRow {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.4375rem var(--spacing-card-padding);
+        font-size: 0.75rem;
+        color: var(--el-text);
+      }
+      .findRow + .findRow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      /* The ASK — the only row that carries an accent rule and an action. */
+      .findRow.ask {
+        box-shadow: inset 3px 0 0 var(--el-status-planning);
+      }
+      .findRow.gone {
+        color: var(--el-text-secondary);
+      }
+      .findKind {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-pill);
+        transform: translateY(-1px);
+      }
+      .findKind.plan {
+        background: var(--el-status-planning);
+      }
+      .findKind.bug {
+        background: var(--el-type-bug);
+      }
+      .findTxt {
+        min-width: 0;
+        flex: 1;
+      }
+      .findGo {
+        flex: none;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+      }
+      .findSub {
+        padding: 0 var(--spacing-card-padding) 0.4375rem calc(var(--spacing-card-padding) + 1rem);
+        font-size: 0.6875rem;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+      }
+      /* The WORK ITEM's own status — deliberately NOT a run tone. The run's
+         dispositions and a work item's statuses are two vocabularies, and one
+         pill shape for both is how a reader starts reading them as one. */
+      .wiPill {
+        display: inline-block;
+        margin-left: 0.375rem;
+        padding: 0.0625rem 0.375rem;
+        border-radius: var(--radius-pill);
+        font-size: 0.625rem;
+        font-weight: 600;
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+      }
+      .wiPill.st-done {
+        border-color: var(--el-status-done);
+        color: var(--el-status-done);
+      }
+      .wiPill.st-declined {
+        border-color: var(--el-status-cancelled);
+        color: var(--el-status-cancelled);
+      }
+      .wiPill.st-archived {
+        background: var(--el-archived-pill-bg);
+        color: var(--el-archived-pill-text);
+        border-color: transparent;
+      }
+      /* The node's INDEX into the strip — a count, never the copy. */
+      .nodeFind {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: auto;
+        padding: 0 0.25rem;
+        border-radius: var(--radius-pill);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        font-size: 0.625rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .nodeFind .findKind {
+        width: 5px;
+        height: 5px;
+        transform: none;
+      }
     </style>
   </head>
   <body>
@@ -3899,6 +4000,374 @@
               missing route rather than as a defect.
             </p>
           </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">9</span>WHAT THE RUN PRODUCED — where it lives, and the ABSENT case
+          drawn first.
+        </h2>
+        <p class="panelNote">
+          <strong>Most runs produce neither, so the absent case is the DEFAULT case</strong> and it
+          is drawn first on purpose. A region that is present and empty on every ordinary run trains
+          a reader to skip exactly the place the rare, important thing appears. So there is no
+          region: the log pane simply starts at the log, with no heading, no rule and no
+          <em>“no findings”</em> box.
+        </p>
+        <p class="panelNote">
+          <strong
+            >It is PINNED ABOVE THE LOG, in the right pane — not a band under the header.</strong
+          >
+          A band spanning both panes would push the canvas down on every run to serve the few that
+          have anything to say. The right pane is already the run’s NARRATIVE column — what the run
+          said and printed — and a strip there collapses to nothing without moving anything else.
+        </p>
+        <p class="panelNote">
+          <strong>And a marker rides the NODE.</strong> The decision made both events CARD-scoped
+          (<span class="mono">run-findings-protocol.md</span> Q5), so the record knows which leg
+          produced each one. The strip answers <em>what did this run produce</em>; the node answers
+          <em>which work item produced it</em>. Same fact at two zooms, and neither invents an
+          attribution the record does not hold.
+        </p>
+        <div class="stage">
+          <div
+            style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem"
+          >
+            <div
+              class="mPane"
+              style="
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                height: 232px;
+                overflow: hidden;
+              "
+            >
+              <div class="paneHead">Log — the ordinary run</div>
+              <div class="logBody">
+                <div class="logLine">
+                  <span class="logT">14:02:11</span><span class="logSrc">MOTIR-1791</span
+                  ><span class="logTxt">claimed · todo → in_progress</span>
+                </div>
+                <div class="logLine">
+                  <span class="logT">14:02:14</span><span class="logSrc">MOTIR-1791</span
+                  ><span class="logTxt">checkout ready · motir-core</span>
+                </div>
+                <div class="logLine">
+                  <span class="logT">14:09:52</span><span class="logSrc">MOTIR-1791</span
+                  ><span class="logTxt">agent exited 0</span>
+                </div>
+                <div class="logLine">
+                  <span class="logT">14:10:03</span><span class="logSrc">MOTIR-1791</span
+                  ><span class="logTxt">PR #2471 opened · CI pending</span>
+                </div>
+              </div>
+              <div class="logFoot">Nothing above the log. The run produced only code.</div>
+            </div>
+            <div
+              class="mPane"
+              style="
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                height: 232px;
+                overflow: hidden;
+              "
+            >
+              <div class="paneHead">Log — the run that produced something</div>
+              <div class="findStrip">
+                <div class="findRow ask">
+                  <span class="findKind plan" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                    proposals, waiting for you.</span
+                  >
+                  <span class="findGo">Review →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind bug" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Bug filed</strong> · <span class="mono">MOTIR-3991</span> — Prisma
+                    generate fails on a fresh clone</span
+                  >
+                </div>
+              </div>
+              <div class="logBody">
+                <div class="logLine">
+                  <span class="logT">14:02:11</span><span class="logSrc">MOTIR-1793</span
+                  ><span class="logTxt">claimed · todo → in_progress</span>
+                </div>
+                <div class="logLine">
+                  <span class="logT">14:06:40</span><span class="logSrc">MOTIR-1793</span
+                  ><span class="logTxt">refused — re-plan submitted</span>
+                </div>
+              </div>
+              <div class="logFoot">The strip is pinned; the log scrolls under it.</div>
+            </div>
+          </div>
+          <div style="margin-top: 0.75rem">
+            <div
+              class="cv"
+              style="
+                height: 130px;
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+              "
+            >
+              <div class="cvNode" style="left: 22px; top: 26px">
+                <div class="cvHead">
+                  <span class="mono" style="font-size: 0.6875rem">MOTIR-1791</span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--el-text)">The ingest route</div>
+              </div>
+              <div class="cvNode" style="left: 246px; top: 26px">
+                <div class="cvHead">
+                  <span class="mono" style="font-size: 0.6875rem">MOTIR-1793</span>
+                  <span class="nodeFind" title="This work item produced a plan and a bug"
+                    ><span class="findKind plan" aria-hidden="true"></span
+                    ><span class="findKind bug" aria-hidden="true"></span>2</span
+                  >
+                </div>
+                <div style="font-size: 0.75rem; color: var(--el-text)">The run modal</div>
+              </div>
+              <p
+                style="
+                  position: absolute;
+                  left: 470px;
+                  top: 30px;
+                  margin: 0;
+                  width: 210px;
+                  font-size: 0.6875rem;
+                  color: var(--el-text-secondary);
+                "
+              >
+                The node says WHICH work item produced them, and how many. It never repeats the
+                strip’s copy — it is an index into it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">10</span>THE PLAN, in its two states — an ASK and a piece of NEWS,
+          and they must not look alike.
+        </h2>
+        <p class="panelNote">
+          <strong>Submitted and waiting is the common case</strong> — auto-approval is opt-in and
+          <span class="mono">auto</span>-only — and it is an ASK: nothing moves until a person
+          decides. <strong>Approved by this run is NEWS</strong>: it already happened, and the thing
+          it changed is the reader’s own tree. Somebody scanning a finished run at 09:00 must be
+          able to tell those apart without reading a word of them, so the ask carries the accent
+          rule and the only action affordance on the strip, and the news does not.
+        </p>
+        <p class="panelNote">
+          <strong>⚠️ NAMED PLAN BY PLAN, never a count.</strong> Not a preference — the terminal
+          already settled it, in the comment above the block that prints this:
+          <em
+            >“A count would tell an operator that their tree moved without telling them where.”</em
+          >
+          The surface prints the same shape the terminal does: the plan, the work item it was
+          approved FOR, and how many proposals it materialized.
+        </p>
+        <p class="panelNote">
+          <strong>A re-plan is a CORRECT OUTCOME, not a failure</strong> —
+          <span class="mono">renderReplanSubmitted</span>’s own first line says so, and a surface
+          that rendered it in a failure tone would teach people to distrust the most useful thing
+          the loop does. It reuses this area’s <span class="mono">replanned</span> tone, which is
+          deliberately neither green nor red. No new tone is defined here.
+        </p>
+        <div class="stage">
+          <div
+            class="findStrip"
+            style="border: 1px solid var(--el-border); border-radius: var(--radius-card)"
+          >
+            <div class="findRow ask">
+              <span class="findKind plan" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                proposals, waiting for you.
+                <span class="dim"
+                  >The work item is in Planning; this run recorded nothing implemented for it.</span
+                ></span
+              >
+              <span class="findGo">Review →</span>
+            </div>
+          </div>
+          <div
+            class="findStrip"
+            style="
+              margin-top: 0.75rem;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+            "
+          >
+            <div class="findRow">
+              <span class="findKind plan" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Plans approved by this run</strong>
+                <span class="dim">— your tree changed while you were away.</span></span
+              >
+            </div>
+            <div class="findSub">
+              <div>
+                <span class="mono">pln_8c41</span> — approved for
+                <span class="mono">MOTIR-1793</span>, 6 proposals materialized
+              </div>
+              <div>
+                <span class="mono">pln_a077</span> — approved for
+                <span class="mono">MOTIR-1801</span>, 2 proposals materialized
+              </div>
+              <div class="dim">Each work item that was re-planned is held out of THIS run.</div>
+            </div>
+          </div>
+          <p class="panelNote" style="margin-top: 0.75rem">
+            Both rows say <em>work item</em>. ⚠️
+            <span class="mono">renderReplanSubmitted</span> still says
+            <em>“refused the card”</em> in the TERMINAL; that string is
+            <span class="mono">MOTIR-3949</span>’s to fix and is not re-fixed here — but the surface
+            does not copy it.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">11</span>THE BUG — one, several from one run, and one that has
+          since been closed.
+        </h2>
+        <p class="panelNote">
+          A filed bug is <strong>purely additive</strong>: it blocks nothing, claims no scope and
+          did not end the run (<span class="mono">run-findings-protocol.md</span> Q3). The row says
+          so by what it does NOT carry — no status transition, no blocking language, no call to act.
+          It is a link and a title.
+        </p>
+        <p class="panelNote">
+          <strong>Several from one run stay separate rows.</strong> Collapsing them to
+          <em>“3 bugs”</em> loses the only thing a reader wants — which three — and repeats the
+          count mistake the approved-plans block already refuses.
+        </p>
+        <p class="panelNote">
+          <strong>A closed or archived bug still renders.</strong> The run found a real defect;
+          somebody later triaged it. That is history the record exists to keep, so the row stays and
+          the state rides it as a pill. It is never dropped, because a dropped row says the run
+          found nothing.
+        </p>
+        <div class="stage">
+          <div
+            class="findStrip"
+            style="border: 1px solid var(--el-border); border-radius: var(--radius-card)"
+          >
+            <div class="findRow">
+              <span class="findKind bug" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Bug filed</strong> · <span class="mono">MOTIR-3991</span> — Prisma generate
+                fails on a fresh clone</span
+              >
+            </div>
+            <div class="findRow">
+              <span class="findKind bug" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Bug filed</strong> · <span class="mono">MOTIR-3992</span> — the CI watcher
+                reports green on a cancelled run</span
+              >
+            </div>
+            <div class="findRow">
+              <span class="findKind bug" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Bug filed</strong> · <span class="mono">MOTIR-3993</span> — seed drops the
+                workspace row <span class="wiPill st-done">Done</span></span
+              >
+            </div>
+            <div class="findRow">
+              <span class="findKind bug" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Bug filed</strong> · <span class="mono">MOTIR-3994</span> — duplicate of
+                the retry-loop bug <span class="wiPill st-archived">Archived</span></span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">12</span>EVERY STATE THE RECORD CAN BE IN — including the three
+          that get improvised.
+        </h2>
+        <p class="panelNote">
+          <strong>A DECLINED plan is the most informative row on the page, not an error.</strong>
+          The run said <em>I submitted this</em> and that stayed true; a person then said no. The
+          row keeps the run’s own event wording and carries the plan’s CURRENT status beside it — it
+          is never re-worded into a failure, and it is never hidden.
+        </p>
+        <p class="panelNote">
+          <strong>A target that is gone renders from the RECORD ALONE.</strong> Deleted, or not
+          visible to this reader: the pointer resolves to nothing and the row is drawn from the
+          event’s own <span class="mono">data</span> — the key and title it recorded — with no link.
+          ⚠️ It must not be dropped and must not become an empty state; both would tell the reader
+          the run found nothing when it did. Same posture
+          <span class="mono">dispatch_run_card.workItemKey</span> already takes for a deleted work
+          item.
+        </p>
+        <p class="panelNote">
+          <strong
+            >Reporting-offline says the record is INCOMPLETE, not that the run produced
+            nothing.</strong
+          >
+          This is the honest-gap case, and it is the one place the strip appears with no findings in
+          it: silence and <em>“the machine stopped reporting”</em> are different answers, and only
+          one of them means there was nothing to say.
+        </p>
+        <div class="stage">
+          <div
+            class="findStrip"
+            style="border: 1px solid var(--el-border); border-radius: var(--radius-card)"
+          >
+            <div class="findRow">
+              <span class="findKind plan" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                proposals <span class="wiPill st-declined">Declined</span></span
+              >
+              <span class="findGo">Open →</span>
+            </div>
+            <div class="findRow gone">
+              <span class="findKind bug" aria-hidden="true"></span>
+              <span class="findTxt"
+                ><strong>Bug filed</strong> · <span class="mono">MOTIR-3995</span> — the roadmap
+                root miscounts <span class="dim">· no longer available</span></span
+              >
+            </div>
+          </div>
+          <div
+            class="findStrip"
+            style="
+              margin-top: 0.75rem;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+            "
+          >
+            <div class="findRow">
+              <span class="runPill t-offline"
+                ><span class="dot" aria-hidden="true"></span>Reporting offline</span
+              >
+              <span class="findTxt"
+                >The machine stopped reporting at 14:31. Anything this run produced after that is
+                not recorded here.</span
+              >
+            </div>
+          </div>
+          <p class="panelNote" style="margin-top: 0.75rem">
+            <strong>What the surface may PROMISE, quoting the decision:</strong>
+            <em
+              >“The run modal may state, for any run and without a
+              <span class="mono">--report-log</span> opt-in, that this run filed these bugs and
+              submitted these plans, each as a link to the live row.”</em
+            >
+            Both events are LIFECYCLE, so none of this sits behind the log-body opt-in — and the
+            strip never summarises a plan’s contents or a bug’s body, because the record carries a
+            pointer and a title and nothing else.
+          </p>
         </div>
       </section>
     </div>
