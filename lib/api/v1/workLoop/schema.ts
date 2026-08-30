@@ -1575,6 +1575,21 @@ export const dispatchSkipReasonSchema = z.enum([
 ]);
 
 /** The ordered stream's vocabulary — six RUN-scoped, thirteen CARD-scoped. */
+/**
+ * The event kinds a CLIENT may REPORT — deliberately NOT every member of
+ * `DispatchEventKind`.
+ *
+ * ⚠️ `bug_filed` and `plan_submitted` are ABSENT ON PURPOSE (MOTIR-3981,
+ * `run-findings-protocol.md` Q5). Those two are written server-side, by the
+ * service that files the bug or produces the plan, because the ids exist only
+ * there. Accepting them here would let any client with a run token FORGE a
+ * finding — assert that a run produced a bug it never produced — and the whole
+ * value of the record is that it says what actually happened. The schema is the
+ * enforcement: `.strict()` plus this list refuses the kind outright.
+ *
+ * So this list grows when the CLI learns to report something new, and NOT when
+ * the enum does. A member added to the schema does not belong here by default.
+ */
 export const dispatchEventKindSchema = z.enum([
   'run_opened',
   'scope_claimed',

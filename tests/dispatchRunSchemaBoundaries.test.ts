@@ -220,7 +220,7 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
     ]);
   });
 
-  it('DispatchEventKind — six run-scoped, thirteen card-scoped', () => {
+  it('DispatchEventKind — six run-scoped, fifteen card-scoped', () => {
     const kinds = Object.keys(DispatchEventKind);
     expect(kinds).toEqual([
       'run_opened',
@@ -242,7 +242,12 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       'ci_gave_up',
       'card_settled',
       'log',
+      // What the run PRODUCED beyond code (MOTIR-3981). CARD-scoped, and the
+      // only two the CLI never emits — the SERVICE that files the bug or
+      // produces the plan appends them, because the ids exist only there.
+      'bug_filed',
+      'plan_submitted',
     ]);
-    expect(kinds).toHaveLength(19);
+    expect(kinds).toHaveLength(21);
   });
 });

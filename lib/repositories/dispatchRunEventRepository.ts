@@ -89,6 +89,32 @@ export const dispatchRunEventRepository = {
    * How many events a run holds — the ingest cap's own read (ADR Q4: a run stops
    * accepting events at 5 000 and records that it did).
    */
+  /**
+   * Has this run already recorded THIS finding? (MOTIR-3981.)
+   *
+   * ⚠️ THE IDEMPOTENCY GUARD, and it is needed because one finding is reachable
+   * from more than one seam: a bug filed with its `relates_to` in the create
+   * call and a bug linked afterwards arrive by different paths, and a plan can
+   * reach `planned` again after a revision. One finding must be one row.
+   *
+   * Matched on the id INSIDE `data` rather than on a column, because the
+   * identity is the thing found and it differs per kind — `workItemId` for a
+   * bug, `planId` for a plan. Both are written by `recordFinding`, so the path
+   * is not a guess about somebody else's payload.
+   */
+  async findFindingOnRun(
+    dispatchRunId: string,
+    kind: 'bug_filed' | 'plan_submitted',
+    findingId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    const path = kind === 'bug_filed' ? ['workItemId'] : ['planId'];
+    return tx.dispatchRunEvent.findFirst({
+      where: { dispatchRunId, kind, data: { path, equals: findingId } },
+      select: { id: true },
+    });
+  },
+
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.dispatchRunEvent.count({ where: { dispatchRunId } });
   },

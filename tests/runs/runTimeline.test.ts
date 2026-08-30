@@ -84,6 +84,14 @@ describe('the maps say what the design says', () => {
     expect(EVENT_STEP.agent_exited).toBe('exit');
     expect(EVENT_STEP.delivery_linked).toBe('delivery');
     expect(EVENT_STEP.card_settled).toBe('settled');
+
+    // The FINDINGS are the exception to "every card-scoped event advances a
+    // step" (MOTIR-3981): they are card-scoped, because the record knows which
+    // leg produced them, but they are what the run OBSERVED and wrote down
+    // rather than a stage its leg passed through. A bug filed mid-agent must
+    // not move the leg off `agent`.
+    expect(EVENT_STEP.bug_filed).toBeNull();
+    expect(EVENT_STEP.plan_submitted).toBeNull();
   });
 
   it('a CI observation advances no step — the delivery set owns that verdict', () => {

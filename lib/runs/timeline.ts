@@ -45,6 +45,9 @@ export type CardStep = (typeof CARD_STEPS)[number];
  *     reader that something happened TO THIS CARD when it did not.
  *   · **`log`**, which is the opt-in body and belongs in the console rather
  *     than in the step list.
+ *   · **the FINDINGS** (`bug_filed`, `plan_submitted`, MOTIR-3981) — CARD-scoped,
+ *     but what the run OBSERVED and wrote down rather than a stage its leg
+ *     passed through. The run modal draws them in their own strip.
  *
  * A future kind added to the schema fails this file's `satisfies` and must be
  * given an answer — including, legitimately, `null`.
@@ -75,6 +78,13 @@ export const EVENT_STEP = {
   ci_gave_up: null,
   card_settled: 'settled',
   log: null,
+  // What the run PRODUCED beyond code (MOTIR-3981). They advance no step for
+  // the same reason `ci_verdict` does not: a finding is something the run
+  // OBSERVED and wrote down, not a stage its leg passed through. A bug filed
+  // mid-agent must not move the leg off `agent`, and a plan submitted is
+  // reported by `leg_verdict` — which owns the step — a moment later.
+  bug_filed: null,
+  plan_submitted: null,
 } as const satisfies Record<DispatchEventKind, CardStep | null>;
 
 /**

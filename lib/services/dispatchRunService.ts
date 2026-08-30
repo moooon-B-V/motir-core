@@ -456,6 +456,103 @@ export const dispatchRunService = {
   },
 
   /**
+   * RECORD A FINDING — what a run produced that is not code (MOTIR-3981,
+   * `run-findings-protocol.md` Q5): a bug it filed, or a plan it submitted.
+   *
+   * ⚠️ THE SERVER WRITES THESE, AND IT IS THE ONLY THING THAT CAN. Every other
+   * `DispatchEventKind` member is emitted by the run's own reporter as it does
+   * the thing; these two are appended by the SERVICE that performs the write,
+   * because the ids exist only there. The CLI cannot report them — both come
+   * back on the dispatched agent's stdout, which the loop streams to the
+   * terminal and never captures (`plansService.approvePlanForWorkItem`'s
+   * comment says so about the plan id exactly). Scraping that output, or a
+   * second read whose answer the caller then supplies, are the two mechanisms
+   * `run-findings-protocol.md` Q2 rejected when it chose a card-addressed
+   * approve over a plan-addressed one.
+   *
+   * ⚠️ BEST-EFFORT, AND NEVER LOAD-BEARING. It runs in its OWN transaction, so
+   * the caller's write is already committed when this is reached, and every
+   * failure is swallowed: a bug that was filed stays filed even if the run it
+   * belonged to closed a millisecond earlier, and a plan that reached `planned`
+   * stays there even if this append throws. Reporting is an OBSERVATION of the
+   * run, so it may never change what the run DID.
+   *
+   * ⚠️ NO OPEN LEG MEANS NO EVENT, and that is the correct record rather than a
+   * miss — see {@link dispatchRunCardRepository.findOpenLegForWorkItem}.
+   *
+   * The `seq` allocation is the same read-then-write `appendEvents` uses and
+   * carries the same caveat: `@@unique([dispatchRunId, seq])` is what makes a
+   * collision a failed insert rather than a silently reordered stream, and a
+   * failed insert here is swallowed like any other.
+   */
+  async recordFinding(
+    input: {
+      /**
+       * The work item whose OPEN LEG this finding belongs to — the one the
+       * agent was working, NOT the bug or plan itself. A bug is a brand-new row
+       * that no run ever claimed; what ties it to a run is the work item it
+       * points at.
+       */
+      anchorWorkItemId: string;
+      kind: Extract<DispatchEventKind, 'bug_filed' | 'plan_submitted'>;
+      /**
+       * The identity of the thing found — the bug's id, or the plan's. Used to
+       * make the append IDEMPOTENT: the same finding can be reached twice (a
+       * `relates_to` link created after the bug, a plan whose revision is
+       * re-submitted), and one finding must not become two rows.
+       */
+      findingId: string;
+      data: Prisma.InputJsonValue;
+    },
+    ctx: ServiceContext,
+  ): Promise<{ recorded: boolean }> {
+    try {
+      return await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        async (tx) => {
+          const leg = await dispatchRunCardRepository.findOpenLegForWorkItem(
+            input.anchorWorkItemId,
+            tx,
+          );
+          if (!leg) return { recorded: false };
+
+          const already = await dispatchRunEventRepository.findFindingOnRun(
+            leg.dispatchRunId,
+            input.kind,
+            input.findingId,
+            tx,
+          );
+          if (already) return { recorded: false };
+
+          const existing = await dispatchRunEventRepository.countByRun(leg.dispatchRunId, tx);
+          if (existing >= DISPATCH_RUN_EVENT_LIMIT) return { recorded: false };
+
+          const seq = ((await dispatchRunEventRepository.maxSeq(leg.dispatchRunId, tx)) ?? 0) + 1;
+          await dispatchRunEventRepository.createMany(
+            [
+              {
+                workspaceId: ctx.workspaceId,
+                dispatchRunId: leg.dispatchRunId,
+                dispatchRunCardId: leg.id,
+                seq,
+                kind: input.kind,
+                data: input.data,
+              },
+            ],
+            tx,
+          );
+          return { recorded: true };
+        },
+      );
+    } catch {
+      // Swallowed on purpose — see the best-effort note above. There is no
+      // caller that could act on this, and every caller has already committed
+      // the write this describes.
+      return { recorded: false };
+    }
+  },
+
+  /**
    * CLOSE the run: its terminal status, its stop reason, and every leg that is
    * still unsettled.
    *

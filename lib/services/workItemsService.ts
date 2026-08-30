@@ -24,6 +24,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { componentRepository } from '@/lib/repositories/componentRepository';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { estimationService } from '@/lib/services/estimationService';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
@@ -950,6 +951,54 @@ async function latchCiGreen(
   }
 }
 
+/**
+ * The work items a newly-filed bug POINTS AT, in the order Q3 gives them
+ * (MOTIR-3981, `run-findings-protocol.md` Q3/Q5).
+ *
+ * A `relates_to` target first — Q3 calls that link "the discovery trace", and
+ * it names the work item the agent was actually working. The parent second, for
+ * Q3's other arm: where the in-flight work item has no parent, the bug is
+ * parented under the in-flight work item ITSELF, and then the parent is the
+ * anchor.
+ */
+function candidateFindingAnchors(input: CreateWorkItemInput): string[] {
+  const related = (input.links ?? [])
+    .filter((l) => l.relationship === 'relates_to')
+    .map((l) => l.targetId);
+  return [...related, ...(input.parentId != null ? [input.parentId] : [])];
+}
+
+/**
+ * Record a filed bug on the first candidate anchor that has an OPEN LEG.
+ *
+ * Every arm returns quietly. No candidate, no open leg on any of them, or a
+ * finding this run already holds — all of them are the ordinary case, which is
+ * a bug that belongs to no run. Most bugs do not.
+ */
+async function recordBugFiledFinding(
+  bug: WorkItemDto,
+  anchorIds: readonly string[],
+  ctx: ServiceContext,
+): Promise<void> {
+  for (const anchorWorkItemId of anchorIds) {
+    const { recorded } = await dispatchRunService.recordFinding(
+      {
+        anchorWorkItemId,
+        kind: 'bug_filed',
+        findingId: bug.id,
+        // The POINTER, plus the one label a surface needs for a row it has not
+        // fetched or may no longer be able to fetch. Never the description — a
+        // finding's copy is a live row that gets re-titled and triaged, and a
+        // record that froze it would show a reader something no longer true
+        // while claiming, by being a log, that it is.
+        data: { key: bug.identifier, workItemId: bug.id, title: bug.title },
+      },
+      ctx,
+    );
+    if (recorded) return;
+  }
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1484,6 +1533,30 @@ export const workItemsService = {
       workspaceId,
       workItemId: dto.id,
     });
+
+    // WHAT THE RUN PRODUCED (MOTIR-3981, `run-findings-protocol.md` Q5). A bug
+    // filed while a dispatched agent's leg is open is a FINDING of that run,
+    // and this is the only place the connection can be made: the agent files
+    // over MCP and the key comes back on stdout the loop never captures, so the
+    // CLI cannot report it. The service that performs the write records it.
+    //
+    // ⚠️ THE ANCHOR IS WHAT THE BUG POINTS AT, NOT THE BUG. A bug is a
+    // brand-new row that no run ever claimed, so it has no leg of its own. What
+    // ties it to a run is Q3's own rule: it is parented under the in-flight
+    // work item's PARENT and `relates_to` the in-flight work item — "the parent
+    // says where the bug LIVES, the link says where it was FOUND". So the
+    // discovery trace is the anchor, and the parent is the fallback for Q3's
+    // other arm (a work item with no parent takes the bug itself).
+    //
+    // Post-commit and best-effort, like the two sends above and for one more
+    // reason on top: filing a bug is deliberately ADDITIVE (Q3 — it blocks
+    // nothing, moves no status and does not end the run), so an append that
+    // fails must not be able to undo it. `recordFinding` swallows its own
+    // failures and is idempotent, which is what lets `linkWorkItems` reach the
+    // same finding later without writing it twice.
+    if (dto.kind === 'bug') {
+      await recordBugFiledFinding(dto, candidateFindingAnchors(input), ctx);
+    }
 
     return dto;
   },
@@ -3900,7 +3973,7 @@ export const workItemsService = {
    * is bookkeeping, not a separate user action.
    */
   async linkWorkItems(input: LinkWorkItemsInput, ctx: ServiceContext): Promise<WorkItemLinkDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const result = await withWorkspaceContext(ctx, async (tx) => {
       const fromItem = await workItemRepository.findById(input.fromId, tx);
       if (!fromItem) throw new WorkItemNotFoundError(input.fromId);
       const toItem = await workItemRepository.findById(input.toId, tx);
@@ -3940,8 +4013,25 @@ export const workItemsService = {
       /* istanbul ignore next -- the non-idempotent branch never returns null (the
          forward create throws on a duplicate rather than returning null) */
       if (!link) throw new WorkItemLinkNotFoundError(input.fromId);
-      return toWorkItemLinkDto(link);
+      return { dto: toWorkItemLinkDto(link), fromItem, toItem };
     });
+
+    // WHAT THE RUN PRODUCED (MOTIR-3981) — the AFTER-THE-FACT half. An agent
+    // that files its bug and then links it lands here rather than in
+    // `createWorkItem`, and Q3's `relates_to` is exactly the edge that names
+    // the work item it was found on. Either direction of the reciprocal pair
+    // counts: the bug may be the FROM or the TO.
+    //
+    // Post-commit and best-effort like the create path, and idempotent with it
+    // — a bug created WITH its link and then linked again records one finding,
+    // not two.
+    if (result.fromItem.kind === 'bug' && input.kind === 'relates_to') {
+      await recordBugFiledFinding(toWorkItemDto(result.fromItem), [result.toItem.id], ctx);
+    } else if (result.toItem.kind === 'bug' && input.kind === 'relates_to') {
+      await recordBugFiledFinding(toWorkItemDto(result.toItem), [result.fromItem.id], ctx);
+    }
+
+    return result.dto;
   },
 
   /**

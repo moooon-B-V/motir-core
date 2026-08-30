@@ -8453,5 +8453,17 @@ enum DispatchEventKind {
   /// The opt-in log body.
   log
 
+  // ── What the run PRODUCED, beyond code (MOTIR-3981) ──────────────────────
+  /// A `kind: 'bug'` work item was created while this leg was open.
+  /// ⚠️ CARD-scoped, and — with `plan_submitted` — one of only two members the
+  /// CLI reporter never emits: the id exists only server-side, so the SERVICE
+  /// that performs the write appends it
+  /// (`run-findings-protocol.md` Q5, `dispatch-run-record.md` AMENDMENT 1).
+  bug_filed
+  /// A plan-change job produced a plan while this leg was open — the plan a
+  /// person must still decide on, as distinct from the RUN-scoped
+  /// `plan_approved` a run decided for itself.
+  plan_submitted
+
   @@map("dispatch_event_kind")
 }

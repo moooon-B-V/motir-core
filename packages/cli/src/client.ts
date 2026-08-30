@@ -869,7 +869,14 @@ export type DispatchEventKind =
   | 'ci_fix_attempt'
   | 'ci_gave_up'
   | 'card_settled'
-  | 'log';
+  | 'log'
+  // ⚠️ SERVER-WRITTEN, NEVER REPORTED BY THIS CLIENT (MOTIR-3981,
+  // `run-findings-protocol.md` Q5). They are here so a reader of a run can be
+  // TYPED over the whole enum; the v1 ingest deliberately refuses them, because
+  // the ids exist only server-side and accepting them would let a client forge a
+  // finding. Nothing in this package may emit one.
+  | 'bug_filed'
+  | 'plan_submitted';
 
 export interface DispatchRunOpened {
   runId: string;
@@ -887,9 +894,22 @@ export interface DispatchRunAppended {
   seq: number;
 }
 
+/**
+ * The kinds this CLI may REPORT — every member of {@link DispatchEventKind}
+ * except the two the server writes.
+ *
+ * ⚠️ THE EXCLUSION IS THE POINT (MOTIR-3981, `run-findings-protocol.md` Q5).
+ * `bug_filed` and `plan_submitted` carry ids that exist only server-side, and
+ * the v1 ingest refuses them so a client cannot assert a finding a run never
+ * produced. Deriving this by EXCLUSION rather than re-listing nineteen strings
+ * means a member added to the enum is reportable by default and the two that
+ * are not stay named in one place.
+ */
+export type ReportableEventKind = Exclude<DispatchEventKind, 'bug_filed' | 'plan_submitted'>;
+
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */
 export interface DispatchRunEventInput {
-  kind: DispatchEventKind;
+  kind: ReportableEventKind;
   workItemKey?: string;
   data?: unknown;
   body?: string;

@@ -100,6 +100,32 @@ export const dispatchRunCardRepository = {
   },
 
   /**
+   * The leg that is OPEN for this work item right now — the one a finding
+   * written this instant belongs to (MOTIR-3981,
+   * `run-findings-protocol.md` Q5).
+   *
+   * ⚠️ OPEN means `ended_at IS NULL` on a leg whose RUN is still running, and
+   * both halves are load-bearing. A leg alone can sit unsettled forever on a
+   * run that was reaped; a run alone says nothing about whether THIS work item
+   * is still in flight on it. Newest first, so a work item that somehow has two
+   * resolves to the one that started last.
+   *
+   * Returning null is an ORDINARY answer, not an error: a bug filed in the app,
+   * a plan submitted from the project-wide panel and every write by somebody
+   * who is not running anything all land here, and none of them belongs to a
+   * run.
+   */
+  async findOpenLegForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRunCard | null> {
+    return tx.dispatchRunCard.findFirst({
+      where: { workItemId, endedAt: null, dispatchRun: { status: 'running' } },
+      orderBy: [{ startedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /**
    * Advance one leg. `tx` required — a write.
    *
    * ⚠️ THE `skip_reason` CHECK CONSTRAINT IS THE ARBITER, NOT THIS METHOD. The
