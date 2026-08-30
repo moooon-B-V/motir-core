@@ -4088,6 +4088,7 @@
                     ><strong>Bug filed</strong> · <span class="mono">MOTIR-3991</span> — Prisma
                     generate fails on a fresh clone</span
                   >
+                  <span class="findGo">Open →</span>
                 </div>
               </div>
               <div class="logBody">
@@ -4158,7 +4159,13 @@
           decides. <strong>Approved by this run is NEWS</strong>: it already happened, and the thing
           it changed is the reader’s own tree. Somebody scanning a finished run at 09:00 must be
           able to tell those apart without reading a word of them, so the ask carries the accent
-          rule and the only action affordance on the strip, and the news does not.
+          rule and says it is waiting for them, and the news does not.
+        </p>
+        <p class="panelNote">
+          ⚠️ <strong>The discriminator is the RULE, not the presence of an action.</strong> Every
+          finding on the strip opens — a bug included (panel 11) — because a finding a reader cannot
+          reach is a notification rather than a finding. An earlier draft made the ask the only row
+          with a way in, which distinguished the two by making the others useless.
         </p>
         <p class="panelNote">
           <strong>⚠️ NAMED PLAN BY PLAN, never a count.</strong> Not a preference — the terminal
@@ -4238,8 +4245,15 @@
         <p class="panelNote">
           A filed bug is <strong>purely additive</strong>: it blocks nothing, claims no scope and
           did not end the run (<span class="mono">run-findings-protocol.md</span> Q3). The row says
-          so by what it does NOT carry — no status transition, no blocking language, no call to act.
-          It is a link and a title.
+          so by what it does NOT carry — no status transition, no blocking language, nothing asking
+          the reader to decide.
+        </p>
+        <p class="panelNote">
+          <strong>⚠️ ADDITIVE IS NOT UNREACHABLE — every finding OPENS.</strong> A bug the run found
+          and a reader cannot get to is a notification, not a finding, and the one thing they will
+          want next is the bug itself. So each row carries <em>Open →</em>, exactly as the plan rows
+          do. What separates an ASK from a piece of NEWS is the accent rule and the copy, never the
+          absence of a way in (panel 10).
         </p>
         <p class="panelNote">
           <strong>Several from one run stay separate rows.</strong> Collapsing them to
@@ -4263,6 +4277,7 @@
                 ><strong>Bug filed</strong> · <span class="mono">MOTIR-3991</span> — Prisma generate
                 fails on a fresh clone</span
               >
+              <span class="findGo">Open →</span>
             </div>
             <div class="findRow">
               <span class="findKind bug" aria-hidden="true"></span>
@@ -4270,6 +4285,7 @@
                 ><strong>Bug filed</strong> · <span class="mono">MOTIR-3992</span> — the CI watcher
                 reports green on a cancelled run</span
               >
+              <span class="findGo">Open →</span>
             </div>
             <div class="findRow">
               <span class="findKind bug" aria-hidden="true"></span>
@@ -4277,6 +4293,7 @@
                 ><strong>Bug filed</strong> · <span class="mono">MOTIR-3993</span> — seed drops the
                 workspace row <span class="wiPill st-done">Done</span></span
               >
+              <span class="findGo">Open →</span>
             </div>
             <div class="findRow">
               <span class="findKind bug" aria-hidden="true"></span>
@@ -4284,6 +4301,7 @@
                 ><strong>Bug filed</strong> · <span class="mono">MOTIR-3994</span> — duplicate of
                 the retry-loop bug <span class="wiPill st-archived">Archived</span></span
               >
+              <span class="findGo">Open →</span>
             </div>
           </div>
         </div>

@@ -499,10 +499,15 @@ them means there was nothing to say.
 They are the same object and completely different news, and if they look alike the more urgent one
 is the one that gets missed.
 
-|                          | what it is                                           | how it reads                                                                           |
-| ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **submitted, waiting**   | an ASK — nothing moves until a person decides        | the accent rule in `--el-status-planning`, and the only action affordance on the strip |
-| **approved by this run** | NEWS — it already happened, to the reader's own tree | no rule, no action; a named list under one heading                                     |
+|                          | what it is                                           | how it reads                                                                        |
+| ------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **submitted, waiting**   | an ASK — nothing moves until a person decides        | the accent rule in `--el-status-planning`, and copy that says it is waiting for you |
+| **approved by this run** | NEWS — it already happened, to the reader's own tree | no rule, no waiting language; a named list under one heading                        |
+
+⚠️ **THE DISCRIMINATOR IS THE RULE, NOT THE PRESENCE OF AN ACTION.** Every finding on the strip
+OPENS — a bug included. An earlier draft of this section made the ask the only row with a way in,
+which distinguished the two by making the other rows useless: a finding a reader cannot reach is a
+notification, not a finding.
 
 Submitted-and-waiting is the COMMON case: auto-approval is opt-in and `auto`-only. Approved-by-this-run
 is the one thing a run decides while nobody is watching, so it says so in the terminal's own words —
@@ -521,7 +526,12 @@ teach people to distrust the most useful thing the loop does. It reuses this are
 ### The BUG — additive, never collapsed, never dropped
 
 A filed bug blocks nothing, claims no scope and did not end the run (Q3). The row says so by what it
-does NOT carry: no status transition, no blocking language, no call to act. It is a link and a title.
+does NOT carry: no status transition, no blocking language, nothing asking the reader to decide.
+
+**⚠️ ADDITIVE IS NOT UNREACHABLE.** The row carries `Open →` like every other finding, and the
+target needs nothing new to reach: `bug_filed.data` already holds the `key`
+(`run-findings-protocol.md` Q5). The ONE row that does not open is the one whose target is GONE
+(below) — silent about it, rather than offering a link into nothing.
 
 **Several from one run stay separate rows.** _"3 bugs"_ loses the only thing a reader wants — which
 three — and repeats the count mistake the approved-plans block already refuses.
@@ -677,7 +687,7 @@ of its states are about the run and the list.
 | **produced NEITHER** — the default | —                      | panel 9               | **No region at all.** The log pane starts at the log. Drawn first, because it is most runs.      |
 | a plan SUBMITTED, waiting          | —                      | panel 10              | An ASK: the accent rule and the strip's only action. `replanned` tone — a success, not a fault.  |
 | plans APPROVED by this run         | —                      | panel 10              | NEWS, named plan by plan. **Never a count** — `autoLoop.ts` settled that and the surface obeys.  |
-| a bug FILED — one, or several      | —                      | panel 11              | Separate rows always. Additive: no status moved, nothing blocked, the run did not end.           |
+| a bug FILED — one, or several      | —                      | panel 11              | Separate rows always, each with `Open →`. Additive ≠ unreachable: nothing moved, but you can go. |
 | a bug since CLOSED or ARCHIVED     | —                      | panel 11              | Still renders, with the WORK ITEM's own status pill — not a run tone.                            |
 | a plan since DECLINED              | —                      | panel 12              | The run's wording is kept and the plan's current status rides beside it. Never hidden.           |
 | a finding whose TARGET is gone     | —                      | panel 12              | Drawn from the event's `data` alone, unlinked. **Never dropped, never an empty state.**          |
