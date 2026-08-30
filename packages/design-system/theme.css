@@ -2533,7 +2533,25 @@
      nobody renders — the base layer IS how the browser reaches these values. */
   --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
   --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
-  --el-status-done: var(--color-success); /* green — resolved */
+  /* green — RESOLVED (MOTIR-3991). The bare --color-success (#1aae39) was
+     2.93:1 on --el-card and 2.69:1 on --el-surface in the BASE palette's LIGHT
+     theme — under 1.4.11's 3:1 for a graphical object, and the one palette x
+     theme in which this token missed the bar. --color-success is NOT free to
+     move: the same Tier-0 hue paints --el-success-surface's companion ink, the
+     success toast/notice family and the chart-success step, each held to its
+     own AA bar that pulls opposite to a dot's 3:1 — so the ramp takes one step
+     of the palette's own emphasis ink instead of re-tuning the source. 85% of
+     --color-success toward --color-charcoal gives #1e9c38, 3.58 / 3.29 / 3.58
+     on card / surface / page-bg. --color-charcoal flips with the theme
+     (#37352f light, #e5e5e5 dark), so the same expression DARKENS on white and
+     LIGHTENS on near-black — dark goes 7.29 / 6.62 / 7.29:1. Both inputs stay
+     palette-tuned, so the nine palettes that ride this base value re-skin it as
+     before and each keeps its own --color-success; ΔE2000 to the nearest
+     sibling stays >= 11.3 in all ten palettes x both themes. Why the base and
+     not a [data-palette='motir'] block: same as --el-status-implemented above —
+     <html> carries no data-appearance-scope, so the base layer IS how the
+     browser reaches these values. */
+  --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
   --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
   --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
 

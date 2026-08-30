@@ -39,11 +39,17 @@ function mappingOf(token: string): string | null {
 }
 
 describe('status element tokens', () => {
+  // The statuses that map a Tier-3 `--el-*` token STRAIGHT onto one Tier-0
+  // `--color-*` source. `--el-status-planning` and `--el-status-implemented`
+  // were never in this set (a computed step and a later addition);
+  // `--el-status-done` LEFT it in MOTIR-3991 — it is now
+  // `color-mix(var(--color-success) 85%, var(--color-charcoal))`, a step of the
+  // ink rather than the source, and its contrast/ΔE contract lives in
+  // `statusHueSeparation.test.ts`.
   const EXPECTED: Record<string, string> = {
     '--el-status-todo': '--color-stone',
     '--el-status-in-progress': '--color-info',
     '--el-status-in-review': '--color-primary',
-    '--el-status-done': '--color-success',
     '--el-status-blocked': '--color-warning',
     '--el-status-cancelled': '--color-steel',
   };

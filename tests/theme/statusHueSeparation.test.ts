@@ -94,11 +94,6 @@ const KNOWN_SUB_BAR: Record<string, string> = {
   // where the sweep can check it. 2.61:1 light, 2.82:1 dark.
   'motir/light --el-status-todo': 'rides --color-stone, the documented decorative step',
   'motir/dark --el-status-todo': 'rides --color-stone, the documented decorative step',
-  // `--color-success` (#1aae39) at 2.93:1 on --el-card — a REAL miss, found by
-  // this widening and NOT fixed here. `done` rides a Tier-0 semantic that also
-  // paints success surfaces and their text, so moving it is a ten-palette
-  // decision rather than this card's one-token step. Filed as MOTIR-3991.
-  'motir/light --el-status-done': 'rides --color-success; sub-bar at 2.93:1 — see MOTIR-3991',
 };
 
 /**

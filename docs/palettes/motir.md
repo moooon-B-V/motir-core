@@ -46,3 +46,26 @@ shape/feel token like `--radius-*` / `--spacing-*` / `--shadow-*`) in its own
 `[data-palette='<id>'][data-theme='dark']` companion wherever it diverges from
 the base dark flip. That disjointness — colour here, shape on the `data-style`
 axis — is what makes "style × palette" a product of two independent choices.
+
+## The status ramp — why `done` takes its own step
+
+`--el-status-done` rides `--color-success` (`#1aae39`) — but the bare source was
+**2.93:1** on `--el-card` and **2.69:1** on `--el-surface` in the light theme,
+under the 3:1 icon/UI bar `statusHueSeparation.test.ts` holds the base palette
+to since MOTIR-3954. `--color-success` is NOT free to move: the same Tier-0 hue
+paints `--el-success-surface`'s companion ink, the success toast/notice family
+and the chart-success step, each at its own AA bar that pulls opposite to a
+dot's 3:1. So the ramp takes one step of the palette's own emphasis ink instead
+of re-tuning the source — **`color-mix(in srgb, var(--color-success) 85%,
+var(--color-charcoal))`**, which resolves to `#1e9c38`. Contrast **3.58 / 3.29 /
+3.58** on card / surface / page-bg in light and **7.29 / 6.62 / 7.29** in dark,
+past the bar both ways; ΔE2000 to the nearest sibling stays **11.3+** across all
+ten palettes × both themes.
+
+`--el-status-implemented` carries the same shape for the same reason (MOTIR-3954):
+its `--color-accent` source was 2.66:1, so it steps 75% toward `--color-charcoal`.
+
+Because Motir is the base palette, these steps live in the Tier-3 `:root` block
+rather than a `[data-palette='motir']` override — `<html>` carries no
+`data-appearance-scope`, so the base layer IS how the browser reaches them, and
+a root palette block would be a second cascade nobody renders.
