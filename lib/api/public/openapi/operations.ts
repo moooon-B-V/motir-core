@@ -3,8 +3,20 @@ import type { PublicOperation } from '@/lib/api/public/openapi/operation';
 import {
   projectCategoriesSchema,
   projectSquarePageSchema,
+  publicChangelogPageSchema,
+  publicDuplicateMatchesSchema,
   publicErrorSchema,
+  publicErrorWithMessageSchema,
+  publicFollowBodySchema,
+  publicFollowStateSchema,
   publicProjectOverviewSchema,
+  publicRequestBodySchema,
+  publicRequestResultSchema,
+  publicRoadmapColumnPageSchema,
+  publicSubscribeBodySchema,
+  publicTreeLevelSchema,
+  publicWorkItemPageSchema,
+  twoFactorRequiredSchema,
 } from '@/lib/api/public/openapi/schemas';
 
 // The public read surface's OPERATION REGISTRY (MOTIR-3946).
@@ -13,13 +25,28 @@ import {
 // the declarations live beside the thing they describe and exactly one value
 // knows the whole set.
 //
-// ⚠️ THREE OPERATIONS, and that is the SPINE rather than the contract. They were
-// chosen to exercise the pipeline over the three parameter shapes the surface
-// has — a path parameter, a query collection and a bare list — so that the
-// remaining eight (MOTIR-3990) are the same act repeated rather than a new
-// problem. `tests/api/public/contract-coverage.test.ts` is MOTIR-3990's, and it
-// is what will stop this list falling behind a route added later; until it
-// lands, this file is a snapshot and the card says so.
+// ⚠️ TOTAL SINCE MOTIR-3990: every method exported by every route under
+// `app/api/public/` is declared here, and `tests/api/public/contract-coverage.test.ts`
+// walks the filesystem and fails on one that is not. That guard is what makes
+// this a contract rather than a snapshot — a route added in six months cannot
+// ship undocumented, and nobody has to remember this file exists.
+//
+// ⚠️ FOUR OF THE TWELVE REQUIRE A SESSION, and they are marked. `follow`
+// (POST/DELETE) answers 401 itself; `requests` (POST) and its `duplicates`
+// pre-check go through `requireCompliantSession`, which answers 401 for no
+// session and 403 for a held one. The same guard checks that flag against each
+// route's own source, because a count taken by grepping `getSession` was wrong
+// three times before it was derived (see AMENDMENT 1 §G).
+
+const projectIdParam = {
+  name: 'projectId',
+  in: 'path',
+  required: true,
+  description:
+    'The GLOBAL project id — NOT the `ACME` key. The two write paths address a public project ' +
+    'by id; every read above addresses it by key.',
+  schema: z.string(),
+} as const;
 
 const identifierParam = {
   name: 'identifier',
@@ -117,5 +144,357 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     parameters: [],
     response: projectCategoriesSchema,
     errors: [],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/tree',
+    operationId: 'getPublicProjectTreeLevel',
+    summary: 'One level of the public work-item tree',
+    description:
+      "The lazy hierarchy read: the project's roots, or one parent's direct children on expand. " +
+      'OFFSET-paged, not cursor-paged — a client tracks the loaded count and asks for the next ' +
+      'offset. A private epic reports `hasChildren: false` and carries `childrenHidden`; its ' +
+      'descendants are excluded server-side and never cross the wire.',
+    parameters: [
+      identifierParam,
+      {
+        name: 'parentId',
+        in: 'query',
+        required: false,
+        description: "One parent's children. Omit for the project roots.",
+        schema: z.string(),
+      },
+      {
+        name: 'offset',
+        in: 'query',
+        required: false,
+        description: "The level's paging offset. A non-positive or unparseable value reads as 0.",
+        schema: z.number().int(),
+      },
+    ],
+    response: publicTreeLevelSchema,
+    errors: [
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/items',
+    operationId: 'listPublicProjectWorkItems',
+    summary: "A page of a public project's work items",
+    description:
+      'The flat, cursor-paged list behind the Work items tab. Anonymous; a session, when present, ' +
+      'only widens visibility for a member.',
+    parameters: [
+      identifierParam,
+      {
+        name: 'cursor',
+        in: 'query',
+        required: false,
+        description: 'The `nextCursor` of a previous page.',
+        schema: z.string(),
+      },
+    ],
+    response: publicWorkItemPageSchema,
+    errors: [
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/roadmap',
+    operationId: 'getPublicProjectRoadmapColumn',
+    summary: 'The next page of ONE roadmap column',
+    description:
+      'The per-column "load more". Both parameters are REQUIRED and refused separately: an ' +
+      'unknown bucket is `INVALID_ROADMAP_BUCKET`, a missing cursor is `MISSING_ROADMAP_CURSOR`, ' +
+      'and a malformed one is refused by the decoder — a pager that silently restarted at the ' +
+      'top would be far harder to notice than an error.',
+    parameters: [
+      identifierParam,
+      {
+        name: 'bucket',
+        in: 'query',
+        required: true,
+        description: 'Which column: `submitted`, `planned`, `in_progress` or `done`.',
+        schema: z.enum(['submitted', 'planned', 'in_progress', 'done']),
+      },
+      {
+        name: 'cursor',
+        in: 'query',
+        required: true,
+        description: "That column's `nextCursor` from the previous page.",
+        schema: z.string(),
+      },
+    ],
+    response: publicRoadmapColumnPageSchema,
+    errors: [
+      {
+        status: 400,
+        description: 'An unknown bucket, a missing cursor, or a malformed one.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/changelog',
+    operationId: 'listPublicProjectChangelog',
+    summary: 'A page of what the project has shipped',
+    description:
+      'Work items that entered a done-category status, newest first, dated by that transition. ' +
+      'Cursor-paged on `(shippedAt, key)` — a timestamp alone is not a total order, so a page ' +
+      'boundary landing on a tie would skip or repeat an entry.',
+    parameters: [
+      identifierParam,
+      {
+        name: 'cursor',
+        in: 'query',
+        required: false,
+        description: 'The `nextCursor` of a previous page.',
+        schema: z.string(),
+      },
+    ],
+    response: publicChangelogPageSchema,
+    errors: [
+      {
+        status: 400,
+        description: 'A malformed cursor.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'POST',
+    path: '/api/public/p/{identifier}/subscribe',
+    operationId: 'subscribeToPublicProject',
+    summary: 'Subscribe an EMAIL address to the project digest',
+    description:
+      'The account-free tier, and the one write on this surface a signed-out visitor can perform ' +
+      '— requiring sign-in here would delete the tier a launch funnel exists for.\n\n' +
+      '⚠️ **The answer is 202 with NO body whatever happened** — already subscribed, newly ' +
+      'subscribed, or unconfirmed and re-sent. Varying it would turn this into an oracle for ' +
+      '"does this address follow this project", which an endpoint accepting arbitrary addresses ' +
+      'must not be. The declared failures are about the REQUEST, never about the row.\n\n' +
+      "Rate-limited on BOTH the caller's IP and the submitted address, because an accepted " +
+      'request sends mail to an address the caller chose.',
+    parameters: [identifierParam],
+    requestBody: {
+      description: 'The address to subscribe.',
+      schema: publicSubscribeBodySchema,
+      required: true,
+    },
+    successStatus: 202,
+    response: null,
+    errors: [
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 409,
+        description: 'This deployment has no transactional-email backend, so there is no digest.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 422,
+        description: 'The address is not one.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 429,
+        description: 'The per-IP or per-address budget is exhausted.',
+        schema: publicErrorWithMessageSchema,
+      },
+    ],
+  },
+  {
+    method: 'POST',
+    path: '/api/public/p/{identifier}/follow',
+    operationId: 'followPublicProject',
+    summary: 'Follow the project, or change the digest opt-in',
+    description:
+      'The ACCOUNT tier. IDEMPOTENT: a double-click or a retry answers the resulting STATE ' +
+      'rather than a conflict, and a bodiless POST is the plain "follow".\n\n' +
+      '⚠️ **Session required.** Following is a relationship between an account and a project, so ' +
+      'a signed-out caller has nothing to create and gets 401. The session cookie is host-only ' +
+      "on the application's origin, so a cross-origin consumer cannot invoke this at all.",
+    parameters: [identifierParam],
+    requestBody: {
+      description: 'Optional. Omit to follow; send `digestOptIn` to set the digest preference.',
+      schema: publicFollowBodySchema,
+      required: false,
+    },
+    sessionRequired: true,
+    response: publicFollowStateSchema,
+    errors: [
+      {
+        status: 401,
+        description: 'No session. `UNAUTHENTICATED`.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 429,
+        description: 'The per-IP budget is exhausted.',
+        schema: publicErrorWithMessageSchema,
+      },
+    ],
+  },
+  {
+    method: 'DELETE',
+    path: '/api/public/p/{identifier}/follow',
+    operationId: 'unfollowPublicProject',
+    summary: 'Unfollow the project',
+    description:
+      'The other half of the toggle, idempotent on the same terms: unfollowing something you do ' +
+      'not follow answers the resulting state. **Session required**, for the same reason the ' +
+      'POST is.',
+    parameters: [identifierParam],
+    sessionRequired: true,
+    response: publicFollowStateSchema,
+    errors: [
+      {
+        status: 401,
+        description: 'No session. `UNAUTHENTICATED`.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 429,
+        description: 'The per-IP budget is exhausted.',
+        schema: publicErrorWithMessageSchema,
+      },
+    ],
+  },
+  {
+    method: 'POST',
+    path: '/api/public/projects/{projectId}/requests',
+    operationId: 'submitPublicRequest',
+    summary: 'Submit a request into a public project',
+    description:
+      'The cross-account intake: any signed-in account submits a bug report or feature request ' +
+      "into a PUBLIC project's triage. The request is born in the `triage` state and is EXCLUDED " +
+      'from every normal read until an admin promotes it, so it does not appear in the items, ' +
+      'tree or changelog reads above.\n\n' +
+      '⚠️ **Session required**, and addressed by the GLOBAL project id rather than the key: a ' +
+      'public project is written to by id (`docs/decisions/public-api-conventions.md` §2.2). ' +
+      'Rate-limited per IP before the session is even read, and again per account inside.',
+    parameters: [projectIdParam],
+    requestBody: {
+      description: 'The request to file.',
+      schema: publicRequestBodySchema,
+      required: true,
+    },
+    sessionRequired: true,
+    successStatus: 201,
+    response: publicRequestResultSchema,
+    errors: [
+      {
+        status: 400,
+        description: 'The body is not JSON, or `kind` / `title` is missing or not a string.',
+        schema: publicErrorWithMessageSchema,
+      },
+      {
+        status: 401,
+        description: 'No session. `UNAUTHENTICATED`.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 403,
+        description:
+          'The account is held by a two-factor requirement it has not satisfied. `enrolAt` is ' +
+          'where a browser client sends the person to resolve it.',
+        schema: twoFactorRequiredSchema,
+      },
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this id.',
+        schema: publicErrorWithMessageSchema,
+      },
+      {
+        status: 409,
+        description: "The project's intake is unavailable.",
+        schema: publicErrorWithMessageSchema,
+      },
+      {
+        status: 422,
+        description: 'An unsupported `kind`, a blank or over-long title, or an over-long body.',
+        schema: publicErrorWithMessageSchema,
+      },
+      {
+        status: 429,
+        description: 'The per-IP or per-account budget is exhausted.',
+        schema: publicErrorWithMessageSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/projects/{projectId}/requests/duplicates',
+    operationId: 'findPublicRequestDuplicates',
+    summary: 'Existing requests that match a draft title',
+    description:
+      'The pre-check the submit form calls as somebody types, so the UI can offer "upvote this ' +
+      'instead" before a duplicate is created. Deterministic title matching, bounded, no AI. A ' +
+      'blank title returns no candidates rather than everything.\n\n' +
+      '⚠️ **Session required** — the same gate as the submit it precedes, so the pre-check cannot ' +
+      'be used to read a project the submit would refuse.',
+    parameters: [
+      projectIdParam,
+      {
+        name: 'title',
+        in: 'query',
+        required: false,
+        description: 'The draft title. Blank or absent returns an empty candidate list.',
+        schema: z.string(),
+      },
+    ],
+    sessionRequired: true,
+    response: publicDuplicateMatchesSchema,
+    errors: [
+      {
+        status: 401,
+        description: 'No session. `UNAUTHENTICATED`.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 403,
+        description: 'The account is held by an unsatisfied two-factor requirement.',
+        schema: twoFactorRequiredSchema,
+      },
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this id.',
+        schema: publicErrorWithMessageSchema,
+      },
+    ],
   },
 ];

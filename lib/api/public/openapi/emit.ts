@@ -15,11 +15,22 @@ import type { PublicOperation, PublicParameter } from '@/lib/api/public/openapi/
 // and does not describe this surface (`docs/decisions/public-surface-hosts.md`
 // AMENDMENT 1).
 //
-// ⚠️ NO SECURITY SCHEME, and its absence is a STATEMENT. OpenAPI reads a
-// document with no `security` as "no authentication required", which is the
-// truth here: every operation is anonymous. Declaring an empty scheme, or
-// copying v1's bearer scheme and marking each operation `security: []`, would
-// describe a credential this surface has no concept of.
+// ⚠️ NO SECURITY SCHEME — and the reason is sharper than "everything here is
+// anonymous", which MOTIR-3990 measured to be FALSE. Four of the twelve
+// operations require the application's own browser session (`follow` POST and
+// DELETE, `requests` POST, and its `duplicates` pre-check). A security scheme
+// describes a credential the READER OF THIS DOCUMENT can present, and there is
+// none: the session cookie is host-only on the application's origin
+// (`docs/decisions/public-surface-hosts.md` §4), so a consumer on another origin
+// cannot send it — those four are simply not callable from there. Declaring a
+// cookie scheme would advertise a door that does not open, and copying v1's
+// bearer scheme would advertise one that does not exist at all.
+//
+// So the gatedness is declared where a consumer actually meets it: the 401 is a
+// documented response, and `sessionRequired` marks the operation. What makes
+// that honest rather than remembered is that
+// `tests/api/public/contract-coverage.test.ts` derives the same fact from each
+// route's SOURCE and fails when the two disagree.
 
 type JsonObject = Record<string, unknown>;
 
@@ -107,13 +118,20 @@ function parameterObject(parameter: PublicParameter, components: Components): Js
 }
 
 function responsesFor(operation: PublicOperation, components: Components): JsonObject {
+  const status = String(operation.successStatus ?? 200);
   const responses: JsonObject = {
-    '200': {
-      description: 'The requested resource.',
-      content: {
-        'application/json': { schema: convert(operation.response, 'output', components) },
-      },
-    },
+    // A 202 with no body is DECLARED as one: `content` is omitted rather than
+    // given an empty schema, which is how OpenAPI says "there is no body" and
+    // how a generator learns not to parse one.
+    [status]:
+      operation.response === null
+        ? { description: successDescription(operation) }
+        : {
+            description: successDescription(operation),
+            content: {
+              'application/json': { schema: convert(operation.response, 'output', components) },
+            },
+          },
   };
   for (const error of operation.errors) {
     responses[String(error.status)] = {
@@ -124,6 +142,24 @@ function responsesFor(operation: PublicOperation, components: Components): JsonO
   return responses;
 }
 
+/** What the success status MEANS on this operation, not a generic label. */
+function successDescription(operation: PublicOperation): string {
+  if (operation.response === null) return 'Accepted. There is deliberately no body — see above.';
+  return operation.successStatus === 201 ? 'Created.' : 'The requested resource.';
+}
+
+function requestBodyObject(operation: PublicOperation, components: Components): JsonObject {
+  const body = operation.requestBody;
+  if (body === undefined) return {};
+  return {
+    requestBody: {
+      description: body.description,
+      required: body.required,
+      content: { 'application/json': { schema: convert(body.schema, 'input', components) } },
+    },
+  };
+}
+
 function operationObject(operation: PublicOperation, components: Components): JsonObject {
   return {
     operationId: operation.operationId,
@@ -132,6 +168,7 @@ function operationObject(operation: PublicOperation, components: Components): Js
     ...(operation.parameters.length > 0
       ? { parameters: operation.parameters.map((p) => parameterObject(p, components)) }
       : {}),
+    ...requestBodyObject(operation, components),
     responses: responsesFor(operation, components),
   };
 }

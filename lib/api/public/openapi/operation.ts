@@ -7,8 +7,10 @@ import type { z } from 'zod/v4';
 // wrapper asserts one on every request — and its response body is a union over
 // v1's `ListEnvelope` / `RankedListEnvelope`. Neither transfers:
 //
-//   * these routes are ANONYMOUS by design, so there is no permission to
-//     declare and inventing one would document a gate that does not exist;
+//   * these routes carry no PERMISSION KEY. The eight anonymous ones have
+//     nothing to declare; the four session-required ones (MOTIR-3990) are gated
+//     on having an account at all, not on a permission — so inventing a key
+//     would document a gate that does not exist;
 //   * they return their DTO RAW, with no envelope, and `{ code }` on an error.
 //
 // What IS reused is everything that can be: the declaration DISCIPLINE (paths,
@@ -42,7 +44,15 @@ export interface PublicErrorResponse {
   schema: z.ZodType;
 }
 
-/** One published operation on the anonymous public read surface. */
+/** A request body, for the four operations that take one. */
+export interface PublicRequestBody {
+  description: string;
+  schema: z.ZodType;
+  /** `false` for `POST …/follow`, whose bodiless form is the plain "follow". */
+  required: boolean;
+}
+
+/** One published operation on the public surface. */
 export interface PublicOperation {
   method: 'GET' | 'POST' | 'DELETE';
   /** The full served path template, in OpenAPI form. */
@@ -52,8 +62,44 @@ export interface PublicOperation {
   summary: string;
   description: string;
   parameters: readonly PublicParameter[];
-  /** The 200 body. */
-  response: z.ZodType;
+  /**
+   * The success status. Omitted means 200 — the answer for every read.
+   *
+   * It is declared rather than assumed because two operations here are not 200
+   * and a consumer that treats "not 200" as failure breaks on both: a submitted
+   * request answers **201**, and an email subscribe answers **202 with no body
+   * at all** (MOTIR-3990).
+   */
+  successStatus?: number;
+  /**
+   * The success body, or `null` for a status that carries none.
+   *
+   * `null` is a DECLARATION, not an omission: `POST …/subscribe` answers 202
+   * empty whatever happened — already subscribed, newly subscribed,
+   * unconfirmed-and-resent — because varying the answer would turn it into an
+   * oracle for "does this address follow this project".
+   */
+  response: z.ZodType | null;
+  /** The request body, for the writes. */
+  requestBody?: PublicRequestBody;
+  /**
+   * Whether the operation REQUIRES the application's own browser session.
+   *
+   * ⚠️ FOUR OF THE TWELVE DO, and MOTIR-3946's first reading of this surface
+   * said one — it counted `getSession()` and missed the two routes gated
+   * through `requireCompliantSession`. The flag exists so the count is a
+   * declared property a guard can check against the routes' own source
+   * (`tests/api/public/contract-coverage.test.ts`) rather than a sentence in a
+   * comment that was wrong three times.
+   *
+   * A session-required operation is NOT callable by a cross-origin consumer:
+   * the session cookie is host-only on the application's origin
+   * (`docs/decisions/public-surface-hosts.md` §4), so `motir.co` can read the
+   * anonymous eight and cannot invoke these four. That is why the document
+   * declares no security SCHEME — there is no credential a consumer of this
+   * document can present — and declares the 401 instead.
+   */
+  sessionRequired?: boolean;
   /** Declared failures, in status order. */
   errors: readonly PublicErrorResponse[];
 }

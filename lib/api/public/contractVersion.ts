@@ -29,8 +29,28 @@
  * ⚠️ **BUMP IT WHEN THE CONTRACT GROWS.** A consumer reads this number to learn
  * what the contract offers; an additive change that leaves it alone makes it
  * lie about the one thing it exists to report.
+ *
+ * ⚠️ AND IT IS A SERIALIZED RESOURCE, the way `V1_CONTRACT_VERSION` is: every
+ * in-flight additive pull request claims the next MINOR. Read this file on
+ * `origin/main` before merging and renumber if a sibling has taken it — which
+ * is why each entry below names the OPERATIONS it added rather than a position.
+ *
+ * - `1.0.0` — MOTIR-3946: the contract's spine and the three reads a public
+ *   renderer needs first (`getPublicProject`, `listPublicProjects`,
+ *   `listPublicCategories`), with the document, the deprecation policy and the
+ *   drift guard.
+ * - `1.1.0` — MOTIR-3990 brings it to TOTALITY: the nine remaining operations —
+ *   `getPublicProjectTreeLevel`, `listPublicProjectWorkItems`,
+ *   `getPublicProjectRoadmapColumn`, `listPublicProjectChangelog`,
+ *   `subscribeToPublicProject`, `followPublicProject`, `unfollowPublicProject`,
+ *   `submitPublicRequest`, `findPublicRequestDuplicates` — plus the coverage
+ *   guard that fails on a route with no declaration. Additive under §D's first
+ *   clause: nine new operations, no declared shape changed, nothing on the wire
+ *   moved. Four of them REQUIRE the application's session and say so, which is
+ *   a correction to what 1.0.0's document implied rather than a change to any
+ *   route (see AMENDMENT 1 §G).
  */
-export const PUBLIC_CONTRACT_VERSION = '1.0.0';
+export const PUBLIC_CONTRACT_VERSION = '1.1.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;

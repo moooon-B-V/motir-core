@@ -88,13 +88,13 @@ arrangement rather than a side effect of it.
 
 Read on `origin/main`, 2026-08-29:
 
-| reading                                           | value                                                 |
-| ------------------------------------------------- | ----------------------------------------------------- |
-| `getSession()` calls under `app/(public)/explore` | **0 files, 0 calls**                                  |
-| … under `app/(public)/docs`                       | **0 files, 0 calls**                                  |
-| … under `app/(public)/legal`                      | **0 files, 0 calls**                                  |
-| … under `app/(public)/p`                          | **11 files, 13 calls** (of 12 files in the directory) |
-| `app/api/public/*` routes                         | **10**, of which **exactly one** is session-gated     |
+| reading                                           | value                                                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getSession()` calls under `app/(public)/explore` | **0 files, 0 calls**                                                                                                                                    |
+| … under `app/(public)/docs`                       | **0 files, 0 calls**                                                                                                                                    |
+| … under `app/(public)/legal`                      | **0 files, 0 calls**                                                                                                                                    |
+| … under `app/(public)/p`                          | **11 files, 13 calls** (of 12 files in the directory)                                                                                                   |
+| `app/api/public/*` routes                         | **10**, of which **exactly one** is session-gated ⚠️ WRONG — see [AMENDMENT 1 §G](#g--a-third-wrong-reading-of-this-surface-corrected-and-then-derived) |
 
 The gated one is `p/[identifier]/follow` (POST/DELETE, 401) — an account
 relationship, which should require a session. `explore/route.ts` and
@@ -490,3 +490,50 @@ documented route is called for real with only its service mocked, and its
 response is parsed through the `.strict()` schema the document publishes. A
 field added to a DTO and returned undeclared fails on the pull request that adds
 it, naming the field.
+
+### §G — A THIRD wrong reading of this surface, corrected and then DERIVED
+
+§3's measurement table says `app/api/public/*` is **10 routes, of which exactly
+one is session-gated**. Both halves are wrong, and this record has now been
+wrong about this surface three times in three different ways — so the fix is not
+a fourth count. It is a guard.
+
+**Measured on the merged branch, 2026-08-30, by walking the tree:**
+
+| reading                                         | value                                                                                                                    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| route FILES under `app/api/public/`             | **11** (the tenth was MOTIR-3945's subject route; the eleventh is `requests/duplicates`, which the earlier count missed) |
+| exported operations                             | **12** — `follow` exports POST **and** DELETE                                                                            |
+| operations that REFUSE a caller with no session | **4**                                                                                                                    |
+| operations callable anonymously                 | **8**                                                                                                                    |
+
+The four gated ones are `POST` and `DELETE …/p/{identifier}/follow`,
+`POST …/projects/{projectId}/requests`, and
+`GET …/projects/{projectId}/requests/duplicates`.
+
+**Why the earlier reading missed the last two.** It counted calls to
+`getSession`. Those two routes gate through `requireCompliantSession`, a
+different helper — and one that answers **401 for no session and 403 for an
+account held by an unsatisfied two-factor requirement**. Counting one door finds
+one door. (The two readings before that counted the string `getSession` and
+matched the COMMENTS saying the call is deliberately absent, which is recorded
+at §3.)
+
+**What actually distinguishes them** is not which helper a route calls but
+whether it REFUSES an anonymous caller: six routes call `getSession` and use the
+result as `?? null` for viewer-awareness, which is not a gate.
+
+**So it is derived now, not counted.** Each operation declares
+`sessionRequired`, and `tests/api/public/contract-coverage.test.ts` walks the
+route tree, reads the refusal out of each route's source, compares it to the
+declaration, and pins the totals at four and eight. A fifth gate — or a gate
+removed — is a decision somebody states, not a change nobody notices.
+
+**What it changes about the decision: nothing, and that is worth stating.** §4's
+conclusion holds _because_ of the cookie, not despite these four: the session
+cookie is host-only on `app.motir.co`, so a `motir.co` consumer cannot send it
+and cannot invoke those four operations at all. What `motir-marketing` consumes
+is the anonymous eight. What it does change is the DOCUMENT — the public
+contract declares the 401 on each of the four rather than implying a uniformly
+anonymous surface (MOTIR-3990), and declares no security scheme for the precise
+reason that there is no credential its reader can present.

@@ -103,14 +103,55 @@ describe('the public contract document', () => {
     expect(emitted.sort()).toEqual(PUBLIC_OPERATIONS.map(publicOperationKey).sort());
   });
 
-  it('gives every operation an operationId, a summary and a 200', () => {
+  it('gives every operation an operationId, a summary and its DECLARED success status', () => {
+    // Not "a 200": two operations here are deliberately not 200 — a submitted
+    // request answers 201 and an email subscribe answers 202 with no body — and
+    // a test that demanded 200 would have forced the document to lie about
+    // both (MOTIR-3990).
     const paths = doc['paths'] as JsonObject;
-    for (const item of Object.values(paths)) {
-      for (const op of Object.values(item as JsonObject)) {
-        const o = op as JsonObject;
-        expect(o['operationId']).toBeTruthy();
-        expect(o['summary']).toBeTruthy();
-        expect((o['responses'] as JsonObject)['200']).toBeTruthy();
+    for (const operation of PUBLIC_OPERATIONS) {
+      const item = paths[operation.path] as JsonObject;
+      const o = item[operation.method.toLowerCase()] as JsonObject;
+      expect(o['operationId']).toBeTruthy();
+      expect(o['summary']).toBeTruthy();
+      const success = (o['responses'] as JsonObject)[String(operation.successStatus ?? 200)];
+      expect(success, `${publicOperationKey(operation)} has no success response`).toBeTruthy();
+      // A body-less success declares NO `content`, which is how OpenAPI says
+      // "there is nothing to parse" — an empty schema would say the opposite.
+      expect((success as JsonObject)['content'] === undefined).toBe(operation.response === null);
+    }
+  });
+
+  it('declares a 401 on EVERY session-required operation, and on no other', () => {
+    // The gatedness is the part a consumer meets first, and this surface's
+    // session count was wrong three times before it was derived. The document
+    // and the declarations agree here; `contract-coverage.test.ts` is what makes
+    // the declarations agree with the ROUTES.
+    const paths = doc['paths'] as JsonObject;
+    for (const operation of PUBLIC_OPERATIONS) {
+      const item = paths[operation.path] as JsonObject;
+      const responses = (item[operation.method.toLowerCase()] as JsonObject)[
+        'responses'
+      ] as JsonObject;
+      expect(
+        responses['401'] !== undefined,
+        `${publicOperationKey(operation)} declares 401: ${responses['401'] !== undefined}, sessionRequired: ${operation.sessionRequired === true}`,
+      ).toBe(operation.sessionRequired === true);
+    }
+  });
+
+  it('declares a request body on every operation that takes one, and marks the optional one optional', () => {
+    const paths = doc['paths'] as JsonObject;
+    for (const operation of PUBLIC_OPERATIONS) {
+      const o = (paths[operation.path] as JsonObject)[operation.method.toLowerCase()] as JsonObject;
+      const declared = o['requestBody'] as JsonObject | undefined;
+      expect(declared !== undefined, publicOperationKey(operation)).toBe(
+        operation.requestBody !== undefined,
+      );
+      if (operation.requestBody !== undefined && declared !== undefined) {
+        // `POST …/follow` takes no body in its plain form; declaring it required
+        // would document a 400 the route does not return.
+        expect(declared['required']).toBe(operation.requestBody.required);
       }
     }
   });
