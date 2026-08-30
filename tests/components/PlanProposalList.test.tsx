@@ -171,7 +171,7 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
     );
 
     expect(screen.getByText('Description')).toBeTruthy();
-    expect(screen.getByText('rewritten — open the card to read it')).toBeTruthy();
+    expect(screen.getByText('rewritten — open the item to read it')).toBeTruthy();
     expect(screen.queryByText(/a completely new body/)).toBeNull();
   });
 

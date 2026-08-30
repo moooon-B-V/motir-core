@@ -39,13 +39,13 @@ export class IllegalBoardMoveError extends Error {
  * The drop target column maps NO workflow status (or maps only statuses that no
  * longer exist in the project's workflow), so the move has no status to resolve
  * to. Distinct from an illegal transition: there is simply nothing to move the
- * card INTO. → 422.
+ * work item INTO. → 422.
  */
 export class UnmappedColumnTargetError extends Error {
   readonly code = 'UNMAPPED_COLUMN_TARGET' as const;
   readonly columnId: string;
   constructor(columnId: string) {
-    super(`Board column ${columnId} maps no workflow status — nothing to move the card into.`);
+    super(`Board column ${columnId} maps no workflow status — nothing to move the work item into.`);
     this.name = 'UnmappedColumnTargetError';
     this.columnId = columnId;
   }
