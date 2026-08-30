@@ -66,7 +66,21 @@ const builderStage = dockerfile.slice(
  * — an `indexOf` that stops finding its needle returns `-1`, which is less than
  * everything.
  */
-const NEXT_BUILD_COMMAND = /^\s*pnpm exec next build\s*$/m;
+/**
+ * ⚠️ THE ANCHOR TOLERATES A LEADING ENV ASSIGNMENT, and the comment above
+ * predicted why: it matches the COMMAND rather than the instruction precisely so
+ * it does not go vacuous "next time it grows a flag". MOTIR-1789 gave the command
+ * `NODE_OPTIONS=--max-old-space-size=…`, because `next build` compiles and then
+ * type-checks and node's ~4.1GB default does not hold both.
+ *
+ * Every property these assertions are about survives that prefix: it is still
+ * `next build` and not the migrating `build` script, still after the placeholder
+ * ENV block, still before the standalone check. So the prefix is ADMITTED rather
+ * than the anchor loosened — the line must still END with the command, so
+ * `RUN pnpm build` cannot satisfy it, and a needle that stops being found still
+ * returns -1.
+ */
+const NEXT_BUILD_COMMAND = /^\s*(?:[A-Z_][A-Z0-9_]*=\S+\s+)*pnpm exec next build\s*$/m;
 
 /** The offset of {@link NEXT_BUILD_COMMAND} in `text`, asserted to be present. */
 function nextBuildIndex(text: string): number {
