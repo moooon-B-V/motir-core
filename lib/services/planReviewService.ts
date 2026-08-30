@@ -583,10 +583,25 @@ export const planReviewService = {
         // but an approved one now names the card it became, which is what lets a
         // reader answer *what did I just say yes to?* on the surface that asked.
         identifier: target?.identifier ?? null,
+        // THE TITLE THE PROPOSAL IS ASKING FOR (MOTIR-4018, Part XIII §1).
+        //
+        // A `modify` carrying `patch.title` reports THAT, not the name the card
+        // is about to stop being called. `buildChanges` eleven lines up already
+        // knew — it emits `{ field: 'title', from: target, to: patch.title }` —
+        // so the same response was carrying the proposed title in one field and
+        // refusing it in the other.
+        //
+        // The fix is at the PRODUCER, once: every consumer reads this field and
+        // none of them should have to learn about `patch` (the shape MOTIR-3191
+        // established one axis over, for the same model getting a `modify`'s
+        // PLACEMENT wrong). The patch is SPARSE, so `?? target?.title` is
+        // load-bearing: an absent `title` means the name is unchanged.
         title:
           item.op === 'add'
             ? (proposed?.title ?? 'Untitled item')
-            : (target?.title ?? 'Unavailable item'),
+            : ((item.op === 'modify' ? item.patch?.title : undefined) ??
+              target?.title ??
+              'Unavailable item'),
         kind: item.op === 'add' ? (proposed?.kind ?? 'task') : (target?.kind ?? 'task'),
         // The add's editable proposed values (the inline edit form seeds from
         // these); null for modify/remove — only an `add` is editable (7.21.6).

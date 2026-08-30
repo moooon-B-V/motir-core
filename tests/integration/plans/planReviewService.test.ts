@@ -144,6 +144,70 @@ describe('planReviewService.getPlanReview', () => {
     expect(review.decidedByName).toBeNull();
   });
 
+  // ── THE TITLE A PROPOSAL IS ASKING FOR (MOTIR-4018, design Part XIII §1) ──
+  //
+  // The model used to report the TARGET's live title for every non-`add` op, so
+  // a plan renaming a card drew the node, its crumb, its search text and the list
+  // row's headline under the name the card is about to stop being called — while
+  // the same response carried the proposed one three lines away as a `changes`
+  // row. All four ops are asserted together, because the defect is not "a modify
+  // is wrong" but "the field means two different things depending on the op".
+  it('reports a MODIFY’s `patch.title`, and leaves add / remove / an untitled patch exactly as they were (MOTIR-4018)', async () => {
+    const fx = await makeWorkItemFixture();
+    const renamed = await seedItem(fx, 'Invoice templates');
+    const rescoped = await seedItem(fx, 'Dunning emails', 'low');
+    const archived = await seedItem(fx, 'Legacy CSV export');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'Usage metering', kind: 'story' } },
+        // (1) a modify that RENAMES
+        { op: 'modify', workItemId: renamed.id, patch: { title: 'Invoice templates + branding' } },
+        // (2) a modify whose patch carries NO title — the sparse-patch case, and
+        //     the one a naive `patch.title` read would report as undefined.
+        { op: 'modify', workItemId: rescoped.id, patch: { priority: 'high' } },
+        // (3) a remove, which has no proposed title and never did
+        { op: 'remove', workItemId: archived.id },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const byTarget = (id: string) => review.items.find((i) => i.nodeId === id)!;
+
+    expect(review.items.find((i) => i.op === 'add')!.title).toBe('Usage metering');
+    expect(byTarget(renamed.id).title).toBe('Invoice templates + branding');
+    expect(byTarget(rescoped.id).title).toBe('Dunning emails');
+    expect(byTarget(archived.id).title).toBe('Legacy CSV export');
+  });
+
+  it('keeps BOTH sides of the rename in `changes` — the diff is untouched by MOTIR-4018', async () => {
+    // The node is a SIGNAL and the list is where a change is SPELLED (Part VIII
+    // §3). So `title` says what the card will BE and the diff says what it is
+    // leaving; a card that reported the proposed title in both would have taken
+    // the outgoing name off the one surface that shows it.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Invoice templates');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { title: 'Invoice templates + branding' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const item = (await planReviewService.getPlanReview(plan.id, fx.ctx)).items[0]!;
+    expect(item.changes.find((c) => c.field === 'title')).toEqual({
+      field: 'title',
+      from: 'Invoice templates',
+      to: 'Invoice templates + branding',
+    });
+    expect(item.identifier).toBe(target.identifier); // still anchored to the real key
+  });
+
   it('surfaces a leaf-sizing re-scope in the change preview so the approver SEES it (MOTIR-1532)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'Resized card');

@@ -334,3 +334,44 @@ describe('the field LABEL, not the wire name (MOTIR-3242)', () => {
     expect(screen.queryByText(/planReview\.field_/)).toBeNull();
   });
 });
+
+// ── THE HEADLINE IS THE PROPOSED TITLE (MOTIR-4018, design Part XIII §1) ──────
+//
+// The producer now reports the title the proposal is ASKING for, so the row's
+// headline names the card as the plan leaves it. What must NOT follow is the
+// change line losing the outgoing name: Part VIII §3 split these deliberately —
+// the headline says what the card will BE, the `TITLE` line says what it is
+// leaving — and a row showing the new name twice would take the old one off the
+// only surface that spells it.
+describe('a renaming modify (MOTIR-4018)', () => {
+  const renaming = () =>
+    planReviewItem({
+      planItemId: 'm-rename',
+      op: 'modify',
+      identifier: 'MOTIR-812',
+      // As `getPlanReview` now emits it: the PROPOSED title.
+      title: 'Invoice templates + branding',
+      changes: [{ field: 'title', from: 'Invoice templates', to: 'Invoice templates + branding' }],
+    });
+
+  it('shows the PROPOSED title as the headline, beside the committed key', () => {
+    renderWithIntl(<PlanProposalList items={[renaming()]} decided={false} />);
+    // The proposed title appears TWICE on the row, and that is the design: once
+    // as the headline (what the card will BE) and once as the `to` side of the
+    // TITLE change line (what it is changing to). Take the first — the headline.
+    const headline = screen.getAllByText('Invoice templates + branding')[0]!;
+    expect(headline.className).toContain('text-sm');
+    const row = headline.closest('li') as HTMLElement;
+    expect(within(row).getByText('MOTIR-812')).toBeTruthy();
+  });
+
+  it('still spells `old → new` on the TITLE change line', () => {
+    renderWithIntl(<PlanProposalList items={[renaming()]} decided={false} />);
+    const row = screen
+      .getAllByText('Invoice templates + branding')[0]!
+      .closest('li') as HTMLElement;
+    // The OUTGOING name survives, exactly once, and on the line whose job it is.
+    const struck = within(row).getByText('Invoice templates');
+    expect(struck.className).toContain('line-through');
+  });
+});
