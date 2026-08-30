@@ -3157,7 +3157,7 @@ export const workItemRepository = {
     workspaceId: string,
     parentId: string | null,
     sort: IssueSort,
-    page: { take: number; offset: number },
+    page: { take: number; offset: number; ids?: readonly string[] | undefined },
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemTreeRow[]> {
@@ -3172,12 +3172,22 @@ export const workItemRepository = {
     // shown member is the committed unit. So sprint scope only rewrites the root
     // level's node selection; every other level is byte-for-byte the whole-project
     // read. `sprintId` null (or a non-root drill) ⇒ the normal parent predicate.
+    // ⚠️ AN EXPLICIT ID SET IS A LEVEL TOO (MOTIR-3895). A dispatch RUN's members
+    // are not one parent's children — `motir batch` and `motir auto` take
+    // whatever was ready, across parents — so the run surface asks for a level
+    // BY ID. It is the same level in every other respect: the same tenant gate,
+    // the same archived/triage exclusions, the same columns and the same
+    // `hasChildren` probe, so the canvas adapter downstream needs no second
+    // shape. It takes precedence over the parent arm because a caller supplying
+    // ids is naming the set outright.
     const parentPred =
-      sprintId != null && parentId === null
-        ? Prisma.sql`w."id" IN ${topInSprintMembersSql(projectId, workspaceId, sprintId)}`
-        : parentId === null
-          ? Prisma.sql`w."parentId" IS NULL`
-          : Prisma.sql`w."parentId" = ${parentId}`;
+      page.ids !== undefined
+        ? Prisma.sql`w."id" IN (${Prisma.join([...page.ids])})`
+        : sprintId != null && parentId === null
+          ? Prisma.sql`w."id" IN ${topInSprintMembersSql(projectId, workspaceId, sprintId)}`
+          : parentId === null
+            ? Prisma.sql`w."parentId" IS NULL`
+            : Prisma.sql`w."parentId" = ${parentId}`;
 
     return client.$queryRaw<WorkItemTreeRow[]>`
       SELECT w."id",
@@ -3231,6 +3241,7 @@ export const workItemRepository = {
     parentId: string | null,
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
+    ids?: readonly string[] | undefined,
   ): Promise<number> {
     const client = tx ?? db;
     // The SAME level predicate `findProjectTreeLevel` builds, sprint arm included
@@ -3240,11 +3251,13 @@ export const workItemRepository = {
     // level could never show. Kept literally parallel to the read's `parentPred`
     // so the two cannot drift.
     const parentPred =
-      sprintId != null && parentId === null
-        ? Prisma.sql`w."id" IN ${topInSprintMembersSql(projectId, workspaceId, sprintId)}`
-        : parentId === null
-          ? Prisma.sql`w."parentId" IS NULL`
-          : Prisma.sql`w."parentId" = ${parentId}`;
+      ids !== undefined
+        ? Prisma.sql`w."id" IN (${Prisma.join([...ids])})`
+        : sprintId != null && parentId === null
+          ? Prisma.sql`w."id" IN ${topInSprintMembersSql(projectId, workspaceId, sprintId)}`
+          : parentId === null
+            ? Prisma.sql`w."parentId" IS NULL`
+            : Prisma.sql`w."parentId" = ${parentId}`;
     const rows = await client.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS "count"
         FROM "work_item" w

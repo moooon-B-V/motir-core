@@ -7188,7 +7188,7 @@
       "title": "Nothing has run yet.",
       "body": "Dispatch this work item with `motir next`, or its whole story with `motir run <KEY>`, and what the agent does will appear here."
     },
-    "oneOfN": "This card is {position} of {total} in this run.",
+    "oneOfN": "This work item is {position} of {total} in this run.",
     "seeWholeRun": "See the whole run →",
     "reconnecting": "Reconnecting — resuming from where the connection dropped. Nothing has been missed.",
     "reportingOffline": "This run stopped reporting. The record is incomplete, not the run — check the Development section below for what actually shipped.",
@@ -7225,7 +7225,7 @@
     "command": {
       "next": "motir next",
       "run": "motir run",
-      "run_scope": "motir run <scope>",
+      "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto"
     },
@@ -7263,6 +7263,24 @@
     "summaryNotReached": "{n} not reached",
     "summaryReplanned": "{n} re-planned",
     "loadMore": "Show older runs",
-    "loadingMore": "Loading…"
+    "loadingMore": "Loading…",
+    "modalTitle": "Run detail",
+    "modalLoading": "Loading this run…",
+    "modalReadFailed": "We couldn’t load this run. Close and try again.",
+    "paneSet": "The set",
+    "paneSetCount": "The set — {count} work items",
+    "paneLog": "Agent output",
+    "logComingSoon": "The agent’s output appears here while the run is going.",
+    "tookNoneBody": "This run took no work items. Nothing was claimed and nothing was changed.",
+    "stopReason": {
+      "drained": "the ready set is drained",
+      "completed": "the whole snapshot was attempted",
+      "max": "--max reached",
+      "halted": "halted on the first agent failure (--keep-going continues past one)",
+      "interrupted": "interrupted (Ctrl-C)",
+      "replanned": "an agent refused its work item and submitted a re-plan — waiting for you in Motir",
+      "gated": "stopped between work items — the one just finished is not ready to build on",
+      "abandoned": "the machine stopped reporting"
+    }
   }
 }

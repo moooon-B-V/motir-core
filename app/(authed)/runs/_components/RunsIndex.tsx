@@ -1,12 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CircleSlash, TriangleAlert } from 'lucide-react';
+import { RunModal } from '@/app/(authed)/runs/_components/RunModal';
+import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
-import { RUN_STATUS_TONE, type RunTone } from '@/lib/runs/timeline';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { formatRunInstant } from '@/lib/runs/runClock';
+import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
 
 // THE RUNS INDEX's list (Story MOTIR-1789 · MOTIR-3923).
 //
@@ -27,32 +32,6 @@ import { RUN_STATUS_TONE, type RunTone } from '@/lib/runs/timeline';
 // from last week does not scroll, they page." 25 a page, CURSOR not offset, so a
 // run opened mid-read cannot shift a row across the boundary.
 
-const TONE_CLASS = {
-  queued: 'bg-(--el-muted) text-(--el-text-strong)',
-  running: 'bg-(--el-tint-sky) text-(--el-text-strong)',
-  integrated: 'bg-(--el-tint-mint) text-(--el-text-strong)',
-  implemented: 'bg-(--el-tint-mint) text-(--el-text-strong)',
-  failed: 'bg-(--el-tint-rose) text-(--el-text-strong)',
-  replanned: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
-  skipped: 'bg-(--el-muted) text-(--el-text-strong)',
-  cancelled: 'bg-(--el-muted) text-(--el-text-strong)',
-  timedout: 'bg-(--el-tint-peach) text-(--el-text-strong)',
-  offline: 'bg-(--el-tint-peach) text-(--el-text-strong)',
-} as const satisfies Record<RunTone, string>;
-
-const DOT_CLASS = {
-  queued: 'bg-(--el-status-todo)',
-  running: 'bg-(--el-status-in-progress)',
-  integrated: 'bg-(--el-status-done)',
-  implemented: 'bg-(--el-status-done)',
-  failed: 'bg-(--el-danger)',
-  replanned: 'bg-(--el-status-planning)',
-  skipped: 'bg-(--el-text-tertiary)',
-  cancelled: 'bg-(--el-status-cancelled)',
-  timedout: 'bg-(--el-warning)',
-  offline: 'bg-(--el-text-tertiary)',
-} as const satisfies Record<RunTone, string>;
-
 /** How often the page re-reads itself while it holds a live run. */
 const POLL_MS = 5_000;
 
@@ -66,6 +45,12 @@ export interface RunsIndexProps {
 
 export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: RunsIndexProps) {
   const t = useTranslations('runs');
+  // ⚠️ THE OPEN RUN IS DERIVED FROM THE URL, not held beside it. Next syncs
+  // `useSearchParams` with `history.pushState`, so `shallowPush` is the ONLY
+  // writer and Back closes the modal for free — no second source of truth that
+  // a history move could leave disagreeing with the address bar.
+  const searchParams = useSearchParams();
+  const openRunId = searchParams.get('run');
   const [live, setLive] = useState(initialLive);
   const [past, setPast] = useState(initialPast);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -119,6 +104,21 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
     }
   }, [base, exhausted, loadingMore, pageSize, past]);
 
+  // OPEN / CLOSE. Both are `shallowPush`es (CLAUDE.md's discriminator): the
+  // modal's body is fetched client-side, so the server has nothing to answer and
+  // re-running this page would refetch two run lists to render something the
+  // browser already has. A PUSH, not a replace, so Back closes the modal — the
+  // behaviour a reader expects of a thing that opened over what they were
+  // looking at. The list stays MOUNTED behind it, which is the whole reason this
+  // is an overlay: closing returns to the same scroll position and the same
+  // current/past partition.
+  const onOpenRun = useCallback((id: string) => {
+    shallowPush(`/runs?run=${encodeURIComponent(id)}`);
+  }, []);
+  const onCloseRun = useCallback(() => {
+    shallowPush('/runs');
+  }, []);
+
   // Nothing at all has ever run — the ONE case that replaces both sections,
   // because two empty headings would be chrome around an absence.
   if (live?.length === 0 && past?.length === 0) {
@@ -127,12 +127,19 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
 
   return (
     <div className="flex flex-col gap-6">
-      <Section heading={t('sectionLive')} rows={live} emptyLine={t('noneRunning')} t={t} />
+      <Section
+        heading={t('sectionLive')}
+        rows={live}
+        emptyLine={t('noneRunning')}
+        t={t}
+        onOpen={onOpenRun}
+      />
       <Section
         heading={t('sectionPast')}
         rows={past}
         emptyLine={t('nonePast')}
         t={t}
+        onOpen={onOpenRun}
         footer={
           past && past.length > 0 && !exhausted ? (
             <div className="flex justify-center py-2">
@@ -148,6 +155,9 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
           ) : null
         }
       />
+      {openRunId !== null ? (
+        <RunModal key={openRunId} runId={openRunId} projectKey={projectKey} onClose={onCloseRun} />
+      ) : null}
     </div>
   );
 }
@@ -166,11 +176,13 @@ function Section({
   emptyLine,
   t,
   footer,
+  onOpen,
 }: {
   heading: string;
   rows: DispatchRunListItemDto[] | null;
   emptyLine: string;
   t: ReturnType<typeof useTranslations>;
+  onOpen: (id: string) => void;
   footer?: React.ReactNode;
 }) {
   return (
@@ -215,7 +227,7 @@ function Section({
             </thead>
             <tbody>
               {rows.map((run) => (
-                <RunRow key={run.id} run={run} t={t} />
+                <RunRow key={run.id} run={run} t={t} onOpen={onOpen} />
               ))}
             </tbody>
           </table>
@@ -240,9 +252,11 @@ function Section({
 function RunRow({
   run,
   t,
+  onOpen,
 }: {
   run: DispatchRunListItemDto;
   t: ReturnType<typeof useTranslations>;
+  onOpen: (id: string) => void;
 }) {
   const tone = RUN_STATUS_TONE[run.status];
   const agent = [run.agent, run.model].filter(Boolean).join(' · ');
@@ -250,7 +264,17 @@ function RunRow({
   return (
     <tr className="border-b border-(--el-border-soft) last:border-b-0">
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) font-mono text-xs whitespace-nowrap text-(--el-text)">
-        {run.command}
+        {/* ⚠️ A REAL BUTTON, not a click handler on the <tr>. It is what the
+            keyboard reaches, and it is what Radix returns focus TO when the
+            modal closes — the AC's "focus returns to the row that opened it"
+            is a property of there being a focusable element to return to. */}
+        <button
+          type="button"
+          onClick={() => onOpen(run.id)}
+          className="rounded-(--radius-control) text-(--el-accent-on-surface) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        >
+          {run.command}
+        </button>
       </td>
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-secondary)">
         {run.scopeLabel ?? t('scopeNone')}
@@ -262,12 +286,7 @@ function RunRow({
         <RunTime iso={run.startedAt} />
       </td>
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) whitespace-nowrap">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium ${TONE_CLASS[tone]}`}
-        >
-          <span className={`size-[7px] rounded-full ${DOT_CLASS[tone]}`} aria-hidden="true" />
-          {t(`runStatus.${run.status}`)}
-        </span>
+        <RunTonePill tone={tone}>{t(`runStatus.${run.status}`)}</RunTonePill>
       </td>
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary)">
         {summary}
@@ -312,14 +331,6 @@ function legSummary(run: DispatchRunListItemDto, t: ReturnType<typeof useTransla
  * Per-viewer local time is a real want and a separate one; it needs the shipped
  * locale seam, which is not this card's.
  */
-const RUN_TIME = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'UTC',
-});
-
 function RunTime({ iso }: { iso: string }) {
-  return <span>{`${RUN_TIME.format(new Date(iso))} UTC`}</span>;
+  return <span>{formatRunInstant(iso)}</span>;
 }

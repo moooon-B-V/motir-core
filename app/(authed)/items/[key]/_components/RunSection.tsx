@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Bot, CloudOff, TriangleAlert } from 'lucide-react';
+import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import type {
@@ -19,7 +20,6 @@ import {
   SKIP_REASON_KEY,
   isLiveRun,
   type CardStep,
-  type RunTone,
 } from '@/lib/runs/timeline';
 
 // THE RUN SECTION on a work item (Story MOTIR-1789 · MOTIR-1796) — what the
@@ -39,45 +39,6 @@ import {
 // Development section's, immediately BELOW this one in the stack, from the
 // shipped `deliveries[]`. A second CI verdict on one page is how a person ends
 // up with two answers to *is it green*.
-
-/** The area's tone table (`design-notes.md` § THE TONE VOCABULARY) as tokens. */
-const TONE_CLASS = {
-  queued: 'bg-(--el-muted) text-(--el-text-strong)',
-  running: 'bg-(--el-tint-sky) text-(--el-text-strong)',
-  integrated: 'bg-(--el-tint-mint) text-(--el-text-strong)',
-  implemented: 'bg-(--el-tint-mint) text-(--el-text-strong)',
-  failed: 'bg-(--el-tint-rose) text-(--el-text-strong)',
-  replanned: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
-  skipped: 'bg-(--el-muted) text-(--el-text-strong)',
-  cancelled: 'bg-(--el-muted) text-(--el-text-strong)',
-  timedout: 'bg-(--el-tint-peach) text-(--el-text-strong)',
-  offline: 'bg-(--el-tint-peach) text-(--el-text-strong)',
-} as const satisfies Record<RunTone, string>;
-
-/** The DOT's hue. The chip's ink is always `--el-text-strong` on its tint. */
-const DOT_CLASS = {
-  queued: 'bg-(--el-status-todo)',
-  running: 'bg-(--el-status-in-progress)',
-  integrated: 'bg-(--el-status-done)',
-  implemented: 'bg-(--el-status-done)',
-  failed: 'bg-(--el-danger)',
-  replanned: 'bg-(--el-status-planning)',
-  skipped: 'bg-(--el-text-tertiary)',
-  cancelled: 'bg-(--el-status-cancelled)',
-  timedout: 'bg-(--el-warning)',
-  offline: 'bg-(--el-text-tertiary)',
-} as const satisfies Record<RunTone, string>;
-
-function TonePill({ tone, children }: { tone: RunTone; children: React.ReactNode }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium ${TONE_CLASS[tone]}`}
-    >
-      <span className={`size-[7px] rounded-full ${DOT_CLASS[tone]}`} aria-hidden="true" />
-      {children}
-    </span>
-  );
-}
 
 export interface RunSectionProps {
   /** This card's runs, newest first. The FIRST row is the current run. */
@@ -229,8 +190,10 @@ export function RunSection({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <TonePill tone={legTone}>{t(`disposition.${leg?.disposition ?? 'queued'}`)}</TonePill>
-        {current ? <TonePill tone={runTone}>{t(`runStatus.${current.status}`)}</TonePill> : null}
+        <RunTonePill tone={legTone}>{t(`disposition.${leg?.disposition ?? 'queued'}`)}</RunTonePill>
+        {current ? (
+          <RunTonePill tone={runTone}>{t(`runStatus.${current.status}`)}</RunTonePill>
+        ) : null}
       </div>
 
       {leg?.disposition === 'skipped' && leg.skipReason ? (
@@ -298,7 +261,9 @@ export function RunSection({
               key={run.id}
               className="flex min-w-0 items-center gap-2 border-t border-(--el-border-soft) py-(--spacing-control-y) first:border-t-0"
             >
-              <TonePill tone={RUN_STATUS_TONE[run.status]}>{t(`runStatus.${run.status}`)}</TonePill>
+              <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
+                {t(`runStatus.${run.status}`)}
+              </RunTonePill>
               <Link
                 className="min-w-0 truncate text-(--el-link) underline"
                 href={`/runs/${run.id}`}

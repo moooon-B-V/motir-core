@@ -12,8 +12,16 @@ import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 // two SECTIONS rather than a switch, an empty section that STAYS, and a failed
 // read that never wears the empty state's face.
 
+// The URL is the modal's OPEN STATE (MOTIR-3895), so the index reads
+// `useSearchParams`. Mutable, so a test can assert the deep-link arm.
+let params = new URLSearchParams();
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => params,
+}));
+
 const fetchMock = vi.fn();
 beforeEach(() => {
+  params = new URLSearchParams();
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({ ok: true, json: async () => ({ runs: [] }) });
   vi.stubGlobal('fetch', fetchMock);

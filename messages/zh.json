@@ -7184,7 +7184,7 @@
       "title": "尚未运行过。",
       "body": "使用 `motir next` 派发此工作项，或使用 `motir run <KEY>` 派发整个故事，代理的操作将显示在这里。"
     },
-    "oneOfN": "此卡片是本次运行中的第 {position} 项，共 {total} 项。",
+    "oneOfN": "此工作项是本次运行中的第 {position} 项，共 {total} 项。",
     "seeWholeRun": "查看整个运行 →",
     "reconnecting": "正在重新连接 — 从连接中断处继续。没有遗漏任何内容。",
     "reportingOffline": "此运行已停止上报。不完整的是记录，而不是运行本身 — 请查看下方的开发部分了解实际交付内容。",
@@ -7221,7 +7221,7 @@
     "command": {
       "next": "motir next",
       "run": "motir run",
-      "run_scope": "motir run <scope>",
+      "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto"
     },
@@ -7259,6 +7259,24 @@
     "summaryNotReached": "未处理 {n} 项",
     "summaryReplanned": "重新规划 {n} 项",
     "loadMore": "显示更早的运行",
-    "loadingMore": "加载中…"
+    "loadingMore": "加载中…",
+    "modalTitle": "运行详情",
+    "modalLoading": "正在加载这次运行……",
+    "modalReadFailed": "无法加载这次运行。请关闭后重试。",
+    "paneSet": "工作项集合",
+    "paneSetCount": "工作项集合 — {count} 个",
+    "paneLog": "代理输出",
+    "logComingSoon": "运行期间，代理的输出会显示在这里。",
+    "tookNoneBody": "这次运行没有取到任何工作项，未认领、也未做任何改动。",
+    "stopReason": {
+      "drained": "就绪队列已取空",
+      "completed": "已尝试快照中的全部工作项",
+      "max": "已达到 --max 上限",
+      "halted": "在第一个代理失败时停止（--keep-going 可继续）",
+      "interrupted": "被中断（Ctrl-C）",
+      "replanned": "代理拒绝了它的工作项并提交了重新规划 — 正在 Motir 中等你处理",
+      "gated": "在两个工作项之间停止 — 刚完成的那个还不能作为下一个的基础",
+      "abandoned": "这台机器停止了上报"
+    }
   }
 }

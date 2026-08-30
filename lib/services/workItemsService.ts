@@ -3466,7 +3466,7 @@ export const workItemsService = {
     projectId: string,
     parentId: string | null,
     ctx: ServiceContext,
-    opts: { scope?: 'project' | 'sprint'; all?: boolean } = {},
+    opts: { scope?: 'project' | 'sprint'; all?: boolean; ids?: readonly string[] } = {},
   ): Promise<ProjectRoadmapDto> {
     const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
@@ -3485,6 +3485,17 @@ export const workItemsService = {
     // no-active-sprint state); this is not an error. The whole-project path
     // (scope absent or `'project'`) leaves `sprintId` null and is byte-for-byte
     // the shipped read.
+    // AN EXPLICIT ID SET (MOTIR-3895) — the dispatch RUN's members, which are not
+    // one parent's children. An EMPTY set short-circuits: `IN ()` is not valid
+    // SQL, and a run that took no work items is a real, drawn state rather than
+    // a query.
+    // Capped at the same ceiling `all=1` raises to — an id set is a level, and an
+    // unbounded one is the whole-tree round-trip wearing a different name.
+    const ids = opts.ids === undefined ? undefined : opts.ids.slice(0, ROADMAP_LEVEL_ALL_TAKE);
+    if (ids !== undefined && ids.length === 0) {
+      return { nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 };
+    }
+
     let sprintId: string | null = null;
     if (opts.scope === 'sprint') {
       const activeSprint = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
@@ -3517,6 +3528,7 @@ export const workItemsService = {
           {
             take,
             offset: 0,
+            ...(ids !== undefined ? { ids } : {}),
           },
           sprintId,
           tx,
@@ -3533,6 +3545,7 @@ export const workItemsService = {
           parentId,
           sprintId,
           tx,
+          ids,
         ),
       ),
     ]);
