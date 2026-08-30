@@ -11,11 +11,11 @@
 
       WHY IT EXISTS, and it is not "a list page for completeness". Every shipped
       door into a run starts from something the reader ALREADY HOLDS — a run id,
-      or a card they already know is in the set. So a run that finished last
+      or a work item they already know is in the set. So a run that finished last
       night could not be found at all, and a run happening now could not be
-      found unless you opened one of its cards. The obvious place for the door
+      found unless you opened one of its work items. The obvious place for the door
       was the dispatch surface, and that is the one place it cannot go:
-      dispatching a card is precisely what removes it from the ready list
+      dispatching a work item is precisely what removes it from the ready list
       (MOTIR-3914, which archived the `/ready` strip this replaced). The index
       is what makes the run VIEW reachable at all.
 
@@ -24,7 +24,7 @@
       (MOTIR-1795), whose own header records that its tokens were extracted from
       `packages/design-system/theme.css` by script. One token block, three
       surfaces — so a second surface in this area cannot drift from the first.
-      The run-status TONES are that card's table, reused and never redefined.
+      The run-status TONES are that work item's table, reused and never redefined.
 
       COMPOSES, DOES NOT REDRAW. The table is the shipped TableShell grammar
       from `app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx`
@@ -35,7 +35,7 @@
       WHAT IT SETTLES. The rail row that makes a run findable — its position,
       label and glyph (panel 0) · the row's content and the current/past
       partition (panels 1-2) · every state including the two edge rows a list of
-      records has to survive, a run with no cards and a run whose scope was
+      records has to survive, a run with no work items and a run whose scope was
       deleted (panels 3-4) · the wait and the failure (panel 5) · and the paging
       decision, since run headers are append-only and nothing deletes them
       (panel 6).
@@ -849,7 +849,7 @@
       }
       /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
          its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
-         surface is a left-column section card and has no rail, so a single
+         surface is a left-column section work item and has no rail, so a single
          child would otherwise land in the 18rem track and render at a width the
          product never uses. */
       .panelBody {
@@ -857,7 +857,7 @@
       }
       /* The left column's real width: the item page is a `1fr 18rem` grid with a
          24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
-         section card below is drawn at that width, which is what makes the
+         section work item below is drawn at that width, which is what makes the
          overflow panels (13–14) measurements rather than illustrations. */
       .secCard,
       .panelBody > .grid {
@@ -935,7 +935,7 @@
       }
 
       /* ── The asset's OWN elements ─────────────────────────────────────── */
-      /* A section card, `ContentSectionCard` markup-for-markup. */
+      /* A section work item, `ContentSectionCard` markup-for-markup. */
       .secCard {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -1552,7 +1552,7 @@
         font-family: var(--font-mono, monospace);
       }
 
-      /* the "one of N" line — the single most useful sentence on this card */
+      /* the "one of N" line — the single most useful sentence on this work item */
       .setLine {
         display: flex;
         align-items: center;
@@ -1787,7 +1787,7 @@
          PAGES. Everything below is composed from the same tokens as above —
          no new colour, no raw radius, no fixed control height.               */
 
-      /* A page header, not a section card: `/runs` and `/runs/[id]` own their
+      /* A page header, not a section work item: `/runs` and `/runs?run=&lt;id&gt;` own their
          own top of page, where the section composed into one.                */
       .pgHead {
         display: flex;
@@ -2069,12 +2069,13 @@
         <p>
           MOTIR-1789 · MOTIR-3893. Every run this project has made, current and past. It is the
           surface that makes a run FINDABLE — and until it exists, every door into a run starts from
-          something the reader already holds: an id, or a card they already know is in the set.
+          something the reader already holds: an id, or a work item they already know is in the set.
         </p>
         <p>
           <strong>It replaced a door that could not exist.</strong> The obvious place for this was
           an indicator on the dispatch queue, and that is the one place it cannot go — dispatching a
-          card is precisely what removes it from that list (<span class="font-mono">MOTIR-3914</span
+          work item is precisely what removes it from that list (<span class="font-mono"
+            >MOTIR-3914</span
           >). What looked like a smaller feature was a missing surface.
         </p>
         <p>
@@ -2281,7 +2282,7 @@
                   <th>Started</th>
                   <th class="num">Elapsed</th>
                   <th>Status</th>
-                  <th>Cards</th>
+                  <th>Work items</th>
                 </tr>
               </thead>
               <tbody>
@@ -2314,7 +2315,7 @@
                   <th>Started</th>
                   <th class="num">Duration</th>
                   <th>Status</th>
-                  <th>Cards</th>
+                  <th>Work items</th>
                 </tr>
               </thead>
               <tbody>
@@ -2409,7 +2410,7 @@
                   <th>Scope</th>
                   <th>Started</th>
                   <th>Status</th>
-                  <th>Cards</th>
+                  <th>Work items</th>
                 </tr>
               </thead>
               <tbody>
@@ -2463,9 +2464,9 @@
           <span class="panelNum">4</span>THE TWO ROWS A LIST OF RECORDS HAS TO SURVIVE.
         </h2>
         <p class="panelNote">
-          <strong>A run with NO cards</strong> — it claimed nothing, which is a real outcome and not
-          a failure: a scoped run whose members were all skipped, or a batch whose snapshot came
-          back empty. It reads <em>took no cards</em>, in the neutral tone.
+          <strong>A run with NO work items</strong> — it claimed nothing, which is a real outcome
+          and not a failure: a scoped run whose members were all skipped, or a batch whose snapshot
+          came back empty. It reads <em>took no work items</em>, in the neutral tone.
         </p>
         <p class="panelNote">
           <strong>A run whose SCOPE work item was DELETED</strong> — the row survives it. The run
@@ -2481,7 +2482,7 @@
                   <th>Scope</th>
                   <th>Started</th>
                   <th>Status</th>
-                  <th>Cards</th>
+                  <th>Work items</th>
                 </tr>
               </thead>
               <tbody>
@@ -2494,7 +2495,7 @@
                       ><span class="dot" aria-hidden="true"></span>Succeeded</span
                     >
                   </td>
-                  <td class="dim">Took no cards</td>
+                  <td class="dim">Took no work items</td>
                 </tr>
                 <tr class="is-link">
                   <td class="mono nw">motir run</td>
@@ -2526,8 +2527,9 @@
           settle. The frame keeps the table’s geometry so nothing shifts when the rows arrive, and
           it is
           <strong>an in-page boundary, never a <span class="font-mono">loading.tsx</span></strong
-          >: a route-level boundary here would sit above <span class="font-mono">/runs/[id]</span>,
-          flush the response head and turn that page’s 404 into a 200.
+          >: a route-level boundary here would sit above
+          <span class="font-mono">/runs?run=&lt;id&gt;</span>, flush the response head and turn that
+          page’s 404 into a 200.
         </p>
         <p class="panelNote">
           A failed read says what failed and offers the retry. It does not empty the page, because

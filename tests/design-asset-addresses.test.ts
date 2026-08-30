@@ -386,8 +386,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   },
   {
     file: 'design/runs/run-section.mock.html',
-    address: '/runs/run_7f2c',
-    why: 'Forward-looking: the "4 of 11 — see the whole run" link-out, which is the single most useful sentence on the run section. MOTIR-3895 builds the route.',
+    address: '/runs',
+    why: 'Forward-looking: the "4 of 11 — see the whole run" link-out, which is the single most useful sentence on the run section. It named `/runs/run_7f2c` until MOTIR-3893’s rework made the run view an OVERLAY on the index rather than a route, so the link is now the deep link `/runs?run=<id>` and the address it strips to is `/runs`. MOTIR-3923 builds the route. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
   },
   // ── Forward-looking: the two run PAGES (MOTIR-3893's asset) ──────────────
   //    The design draws the surfaces; MOTIR-3895 builds `/runs/[id]` and
@@ -396,24 +396,19 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //    has stopped applying` check above is what turns a stale exemption into a
   //    red build rather than a quiet one.
   {
-    file: 'design/runs/run-view.mock.html',
+    file: 'design/runs/run-modal.mock.html',
     address: '/runs',
-    why: 'Forward-looking: the breadcrumb BACK to the index, drawn on the run view because this page is reached from three places and only one of them gets you to the others. MOTIR-3923 builds the route. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
+    why: 'Forward-looking: the surface the modal opens OVER, named in its own header and in its deep link `/runs?run=<id>`. MOTIR-3923 builds the route. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
   },
   {
-    file: 'design/runs/run-view.mock.html',
+    file: 'design/runs/run-modal.mock.html',
     address: '/runs/[id]',
-    why: 'Forward-looking: the surface this asset IS — named in its own header comment. MOTIR-3895 builds the route. DELETE THIS ROW when `app/(authed)/runs/[id]/page.tsx` lands.',
+    why: 'The route this asset says does NOT exist — cited only to record the withdrawal ("There is no /runs/[id] — the deep link is /runs?run=<id>"). It is the one address here that must NEVER resolve, so this row is PERMANENT and carries no delete-me instruction: if `app/(authed)/runs/[id]/page.tsx` ever lands, the asset is wrong rather than the row.',
   },
   {
     file: 'design/runs/runs-index.mock.html',
     address: '/runs',
     why: 'Forward-looking: the surface this asset IS, and the rail row that reaches it. MOTIR-3923 builds both. DELETE THIS ROW when `app/(authed)/runs/page.tsx` lands.',
-  },
-  {
-    file: 'design/runs/runs-index.mock.html',
-    address: '/runs/[id]',
-    why: 'Forward-looking: every row of the index links to one run. MOTIR-3895 builds the route. DELETE THIS ROW when `app/(authed)/runs/[id]/page.tsx` lands.',
   },
 
   {
@@ -854,6 +849,33 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── SAMPLE AGENT OUTPUT, not a citation (Story MOTIR-1789 · MOTIR-3893) ──
+  //  The run modal's LOG pane draws what a coding agent actually prints, and an
+  //  agent prints file paths — so the console's sample lines look exactly like
+  //  citations to this guard, which cannot tell a drawn transcript from a
+  //  reference. They are not paths the asset is telling the next agent to
+  //  mirror; they are the CONTENT of the thing being drawn.
+  //
+  //  All three are files THIS STORY builds, and they exist today on the
+  //  unmerged `parent/MOTIR-1789-agent-runs` branch — the design branch is cut
+  //  from `main`, which is why they do not resolve here. Each row DELETES
+  //  ITSELF when the parent lands; `carries no KNOWN_PATHS entry that has
+  //  stopped applying` is what turns a stale one red rather than quiet.
+  {
+    file: 'design/runs/run-modal.mock.html',
+    path: 'lib/services/dispatchRunService.ts',
+    why: 'Sample agent output in the log pane, not a citation. Built by MOTIR-1792, on the parent branch. DELETE THIS ROW when the parent PR merges.',
+  },
+  {
+    file: 'design/runs/run-modal.mock.html',
+    path: 'app/api/v1/dispatch-runs/route.ts',
+    why: 'Sample agent output in the log pane, not a citation. Built by MOTIR-1792, on the parent branch. DELETE THIS ROW when the parent PR merges.',
+  },
+  {
+    file: 'design/runs/run-modal.mock.html',
+    path: 'tests/dispatchRunProjectHistory.test.ts',
+    why: 'Sample agent output in the log pane, not a citation. Built by MOTIR-3922, on the parent branch. DELETE THIS ROW when the parent PR merges.',
+  },
   // ── A source path a design asset RECORDED, which the app has since moved ──
   // The `KNOWN` table's point-in-time rows, one axis over: the same MOTIR-2534
   // route move renamed the DIRECTORY, so an asset citing the pane's `page.tsx`
