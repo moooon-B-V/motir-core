@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import { plansService } from '@/lib/services/plansService';
 import { TOOL_PERMISSIONS, CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { isBillableTool } from '@/lib/mcp/rateLimitGate';
 import { permissionDenial, PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
@@ -331,5 +332,370 @@ describe('the deepen tool is untouched', () => {
     expect(props).not.toContain('blockedByRefs');
     expect(props).not.toContain('targetRepo');
     expect(props).not.toContain('patch');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A ref written as a `MOTIR-<n>` KEY, on the CORRECTION door (MOTIR-3934)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('update_plan_proposal — a ref written as a `MOTIR-<n>` KEY (MOTIR-3934)', () => {
+  // The defect this closes: `add_plan_items` resolves a key at every one of the
+  // five ref sites (MOTIR-3576 / MOTIR-3859) and the CORRECTION door resolved at
+  // none of them. It stored the raw `"MOTIR-3884"`, which nothing downstream can
+  // match — the projection reported the plan invalid, and approve refused with
+  // `INVALID_PLAN_REF_GRAPH · dangling`, in front of a reviewer, on a plan
+  // somebody had already read. That is exactly the moment MOTIR-3533's
+  // append-time refusal exists to move the error away from.
+  //
+  // The tool's own schema advertises three accepted forms — a key, a real id and
+  // a `planItem:` ref. One door honoured all three; the other honoured two and
+  // silently corrupted the third.
+
+  /** The structural columns a plan actually stored, past the service. */
+  async function stored(planItemId: string) {
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: planItemId } });
+    return {
+      parentRef: row.parentRef,
+      blockedByRefs: row.blockedByRefs,
+      patch: row.patch as {
+        parentRef?: string;
+        blockedByAdd?: string[];
+        blockedByRemove?: string[];
+      } | null,
+    };
+  }
+
+  /** A `generating` plan, opened through the transport. */
+  async function openPlan(client: Client, fx: WorkItemFixture): Promise<string> {
+    const created = await call(client, CREATE_PLAN_TOOL_NAME, {
+      projectKey: fx.projectIdentifier,
+      title: 'A plan whose refs are written as keys',
+      plannedWithHarness: 'Claude Code',
+      plannedWithModel: 'claude-opus-5',
+    });
+    return (created.structuredContent as unknown as { id: string }).id;
+  }
+
+  const idsOf = (r: CallToolResult): string[] =>
+    (r.structuredContent as unknown as { planItemIds: string[] }).planItemIds;
+
+  it('⚠️ THE FIXTURE: the SAME edge through BOTH doors stores the SAME value', async () => {
+    // The measurement the card was filed from, as a test: four `modify`
+    // proposals in one plan, three appended and one corrected. Three stored the
+    // work item's id; the corrected one stored the key verbatim.
+    const fx = await makeWorkItemFixture();
+    const viaAppend = await createTestWorkItem(fx, { kind: 'task', title: 'Corrected by append' });
+    const viaCorrection = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Corrected by the correction door',
+    });
+    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        { op: 'modify', workItemId: viaAppend.id, patch: { blockedByAdd: [blocker.identifier] } },
+        { op: 'modify', workItemId: viaCorrection.id, patch: { priority: 'low' } },
+      ],
+    });
+    const [appendedId, correctedId] = idsOf(appended);
+
+    const corrected = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: correctedId,
+      patch: { blockedByAdd: [blocker.identifier] },
+    });
+    expect(corrected.isError).toBeFalsy();
+
+    // The whole bug in one assertion: the two doors write the same field, so the
+    // stored value cannot depend on which one the author reached for.
+    expect((await stored(correctedId!)).patch?.blockedByAdd).toEqual([blocker.id]);
+    expect((await stored(correctedId!)).patch?.blockedByAdd).toEqual(
+      (await stored(appendedId!)).patch?.blockedByAdd,
+    );
+  });
+
+  it('resolves a key in `patch.blockedByRemove` — the field the defect was FOUND on', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The target' });
+    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { priority: 'low' } }],
+    });
+    const modifyId = idsOf(appended)[0]!;
+
+    const corrected = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: modifyId,
+      patch: { blockedByRemove: [blocker.identifier] },
+    });
+    expect(corrected.isError).toBeFalsy();
+    expect((await stored(modifyId)).patch?.blockedByRemove).toEqual([blocker.id]);
+  });
+
+  it('resolves a key in `patch.parentRef` — the RE-PARENT site', async () => {
+    const fx = await makeWorkItemFixture();
+    const home = await createTestWorkItem(fx, { kind: 'story', title: 'Where it is' });
+    const destination = await createTestWorkItem(fx, { kind: 'story', title: 'Where it belongs' });
+    const card = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'The card',
+      parentId: home.id,
+    });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: card.id, patch: { priority: 'low' } }],
+    });
+    const modifyId = idsOf(appended)[0]!;
+
+    const corrected = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: modifyId,
+      patch: { parentRef: destination.identifier },
+    });
+    expect(corrected.isError).toBeFalsy();
+    expect((await stored(modifyId)).patch?.parentRef).toBe(destination.id);
+  });
+
+  it('resolves keys in the TOP-LEVEL `parentRef` and `blockedByRefs` of an `add`', async () => {
+    // The card's third criterion: the same normalisation on every field the
+    // correction door reaches, not only the one the bug was found on.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'add', proposedFields: { title: 'Its subtask', kind: 'subtask' } }],
+    });
+    const addId = idsOf(appended)[0]!;
+
+    const corrected = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: addId,
+      parentRef: story.identifier,
+      blockedByRefs: [blocker.identifier],
+    });
+    expect(corrected.isError).toBeFalsy();
+
+    const row = await stored(addId);
+    expect(row.parentRef).toBe(story.id);
+    expect(row.blockedByRefs).toEqual([blocker.id]);
+  });
+
+  it('is case-INSENSITIVE, and leaves an ID and a `planItem:` temp-ref UNTOUCHED', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const client = await connectClient(fx.ctx);
+    const { planId, firstId, secondId } = await planWithTwoAdds(client, fx);
+
+    const lowercased = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: secondId,
+      parentRef: story.identifier.toLowerCase(),
+      blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
+    });
+    expect(lowercased.isError).toBeFalsy();
+
+    const row = await stored(secondId);
+    expect(row.parentRef).toBe(story.id);
+    // A cuid has no dash and a temp-ref is excluded outright, so the
+    // discriminator misclassifies neither.
+    expect(row.blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${firstId}`]);
+
+    const byId = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: secondId,
+      parentRef: story.id,
+    });
+    expect(byId.isError).toBeFalsy();
+    expect((await stored(secondId)).parentRef).toBe(story.id);
+  });
+
+  it('⚠️ REFUSES a key that names no work item — at the CORRECTION call, not at approve', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const { planId, secondId } = await planWithTwoAdds(client, fx);
+    const before = await stored(secondId);
+
+    const refused = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: secondId,
+      parentRef: `${fx.projectIdentifier}-999999`,
+    });
+
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toContain('999999');
+    // A refusal leaves the proposal byte-identical.
+    expect(await stored(secondId)).toEqual(before);
+
+    // ⚠️ THE SAME TYPED ERROR `add_plan_items` RAISES — asserted by driving the
+    // same dangling key through the OTHER door and comparing, rather than
+    // against a literal, so the two cannot drift into two failure modes a
+    // caller has to tell apart.
+    const appendRefused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Hangs off nothing', kind: 'task' },
+          parentRef: `${fx.projectIdentifier}-999999`,
+        },
+      ],
+    });
+    expect(appendRefused.isError).toBe(true);
+    expect(textOf(refused)).toBe(textOf(appendRefused));
+  });
+
+  it('REFUSES a dangling key in a `modify` patch too, and writes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The target' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { priority: 'low' } }],
+    });
+    const modifyId = idsOf(appended)[0]!;
+
+    const refused = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: modifyId,
+      patch: { blockedByRemove: [`${fx.projectIdentifier}-999999`] },
+    });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toContain('999999');
+    expect((await stored(modifyId)).patch).toEqual({ priority: 'low' });
+
+    // Same door-to-door equality as above, on the patch site this bug was found
+    // on rather than on the top-level one.
+    const appendRefused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { blockedByRemove: [`${fx.projectIdentifier}-999999`] },
+        },
+      ],
+    });
+    expect(appendRefused.isError).toBe(true);
+    expect(textOf(refused)).toBe(textOf(appendRefused));
+  });
+
+  it('a removal naming an edge that does NOT exist stays a no-op, not an error', async () => {
+    // A defensive sweep must not be punished: the ref RESOLVES (the work item is
+    // real), there simply is no such edge on the target. It removes nothing and
+    // approve succeeds.
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The target' });
+    const neverABlocker = await createTestWorkItem(fx, { kind: 'task', title: 'Not a blocker' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { priority: 'low' } }],
+    });
+    const modifyId = idsOf(appended)[0]!;
+
+    const corrected = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: modifyId,
+      patch: { blockedByRemove: [neverABlocker.identifier] },
+    });
+    expect(corrected.isError).toBeFalsy();
+    expect((await stored(modifyId)).patch?.blockedByRemove).toEqual([neverABlocker.id]);
+
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
+  });
+
+  it('⚠️ THE REGRESSION THIS CARD IS: a corrected key-form plan CLOSES and APPROVES', async () => {
+    // End to end, the shape the card measured. A `modify` whose edge removal was
+    // written through the CORRECTION door with a key: it used to close to
+    // `planned` and then fail at the approve button with `dangling`.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
+    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    const dependent = await createTestWorkItem(fx, { kind: 'task', title: 'The dependent' });
+    await createTestWorkItem(fx, { kind: 'task', title: 'Unused' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    // The edge exists on the live tree, so the removal has something to remove.
+    await adminDb.workItemLink.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        fromId: dependent.id,
+        toId: blocker.id,
+        kind: 'is_blocked_by',
+        createdById: fx.ownerId,
+      },
+    });
+
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        { op: 'add', proposedFields: { title: 'A new subtask', kind: 'subtask' } },
+        { op: 'modify', workItemId: dependent.id, patch: { priority: 'low' } },
+      ],
+    });
+    const [addId, modifyId] = idsOf(appended);
+
+    // BOTH doors' worth of correction, all in the key form.
+    await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: addId,
+      parentRef: story.identifier,
+      blockedByRefs: [blocker.identifier],
+    });
+    await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: modifyId,
+      patch: { blockedByRemove: [blocker.identifier] },
+    });
+
+    const closed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [],
+      final: true,
+    });
+    expect(closed.isError).toBeFalsy();
+
+    const approved = await plansService.approvePlan(planId, fx.ctx);
+    expect(approved.status).toBe('approved');
+
+    // The `add` materialized under the right parent, blocked by the right item.
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { projectId: fx.projectId, title: 'A new subtask' },
+    });
+    expect(created.parentId).toBe(story.id);
+    expect(
+      await adminDb.workItemLink.count({
+        where: { fromId: created.id, toId: blocker.id, kind: 'is_blocked_by' },
+      }),
+    ).toBe(1);
+
+    // And the removal actually landed — the edge the correction named is gone.
+    expect(
+      await adminDb.workItemLink.count({
+        where: { fromId: dependent.id, toId: blocker.id, kind: 'is_blocked_by' },
+      }),
+    ).toBe(0);
   });
 });
