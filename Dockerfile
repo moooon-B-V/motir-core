@@ -163,7 +163,24 @@ RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
     export SENTRY_AUTH_TOKEN; \
     NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$(cat /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY 2>/dev/null || true)"; \
     export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; \
-    pnpm exec next build
+    NODE_OPTIONS=--max-old-space-size=6144 pnpm exec next build
+
+# ⚠️ THE HEAP CEILING ABOVE MUST TRACK `package.json`'s `build` SCRIPT, and the
+# reason it is repeated rather than inherited is this line: the image runs
+# `next build` DIRECTLY, so the ceiling set inside that script never reaches it.
+#
+# `next build` compiles and then runs TypeScript in a build worker, and node 22's
+# default old-space (~4.1GB) does not hold both — the compile succeeds, the check
+# starts, and the worker dies with SIGABRT naming nothing. It is not one bad
+# type: measured on one box, `tsc --noEmit --extendedDiagnostics` reported 5.36GB
+# on `main` against 5.54GB with MOTIR-1789 on top, a 3.4% delta. The tree had
+# grown to the edge and a story crossed it.
+#
+# ⚠️ AND THIS IMAGE IS NOT BUILT ON A PULL REQUEST. `Deploy to Fly` is
+# `main`-push only, so the branch that raises the ceiling everywhere else goes
+# green with this path never exercised, and the OOM lands on the DEPLOY instead —
+# after the pull request merged clean. That gap is why the value is duplicated
+# here deliberately rather than left for whoever next reads a red deploy.
 
 # ── the worker bundle (MOTIR-3421) ──────────────────────────────────────────
 # The `worker` process group in fly.toml runs the Postgres job engine's claim
