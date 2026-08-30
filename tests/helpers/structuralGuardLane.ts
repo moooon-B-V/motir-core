@@ -140,6 +140,20 @@ export const STRUCTURAL_GUARD_SPECS = [
   // nothing from `lib/` or `app/`, so it carries no coverage into the merged
   // report.
   'tests/jobs/inngest-retired.test.ts',
+  // ── tests/seo/ — the robots signed-in coverage guard (MOTIR-3726/3946) ────
+  // It walks `app/(authed)`, `app/(onboarding)` and `app/(planning)` through
+  // `topLevelSegments`, recursing into every nested route group and asking each
+  // directory whether it serves a page — the same sweep the four 2FA guards use,
+  // and the same cost profile. It was found by THIS FILE'S OWN membership test
+  // on the pull request that added it, which is the mechanism working: the guard
+  // shipped in the sharded run and was named here before it could time out on
+  // somebody else's branch.
+  //
+  // ⚠️ It reads `lib/robotsPolicy.ts` as SOURCE rather than importing it, for
+  // the lane's purity rule below — which is also why it is a file of its own:
+  // the rest of `tests/seo/robots.test.ts` tests the policy by calling it, and
+  // belongs where its coverage is counted.
+  'tests/seo/robots-signed-in-coverage.test.ts',
   // ── the Vitest leg plan's guard (MOTIR-3912) ──────────────────────────────
   // Here for a reason none of the entries above share, and the strongest reason
   // on the list: it guards the SPLIT of the sharded suite. Left in that suite it

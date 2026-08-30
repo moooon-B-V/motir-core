@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { projectTagsService } from '@/lib/services/projectTagsService';
-import { publicSiteOrigin, publicProjectUrl } from '@/lib/publicProjects/urls';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { publicProjectPath } from '@/lib/publicProjects/urls';
 
 // The sitemap (Story 6.12 · Subtask 6.12.4 + Story 6.13 · Subtask 6.13.6) — lists
 // every PUBLIC project's URL (`/p/<identifier>` + its tabs) AND the project
@@ -31,7 +32,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     publicProjectsService.listPublicForSitemap(),
     projectTagsService.listCategories(),
   ]);
-  const origin = publicSiteOrigin();
+  // ⚠️ THE APPLICATION'S OWN ORIGIN, NOT THE PUBLIC SITE'S (MOTIR-3881).
+  //
+  // A sitemap is HOST-SCOPED: the file at `<host>/sitemap.xml` describes what
+  // `<host>` serves. Listing another host's URLs is a cross-submission, which
+  // search engines only honour from a property verified for both — and it would
+  // be wrong here in the ordinary case anyway, because this application is what
+  // is actually serving these pages until MOTIR-3951 deletes them.
+  //
+  // So this deliberately reads `resolveBaseUrlTrimmed()` rather than
+  // `publicSiteOrigin()`. The moment `MOTIR_PUBLIC_SITE_URL` is set — between
+  // motir.co rendering these pages and this repository deleting them — the two
+  // diverge, and a sitemap built from the public origin would advertise
+  // `motir.co` URLs from `app.motir.co`'s own sitemap file. `motir.co` publishes
+  // its own sitemap for what IT serves (`docs/decisions/public-surface-hosts.md`
+  // §6), and the two never describe each other.
+  const origin = resolveBaseUrlTrimmed();
 
   const entries: MetadataRoute.Sitemap = [
     { url: origin, changeFrequency: 'weekly', priority: 0.5 },
@@ -51,7 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const project of projects) {
-    const base = publicProjectUrl(project.identifier);
+    const base = `${origin}${publicProjectPath(project.identifier)}`;
     entries.push({
       url: base,
       lastModified: project.updatedAt,

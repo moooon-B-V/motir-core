@@ -16,8 +16,9 @@
   genuine gap rather than a clause to re-read.
 - **Filed by:** MOTIR-2518's Vercel sweep (2026-08-15), which found the plan
   answering this question twice in opposite directions.
-- **Supersedes / superseded by:** nothing. It is the first record in this
-  directory about a repository other than `motir-core`.
+- **Supersedes / superseded by:** **AMENDED 2026-08-29 by
+  `public-surface-hosts.md`** — see AMENDMENT 1 at the foot of this file. It is
+  the first record in this directory about a repository other than `motir-core`.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `application-hosting.md` / `production-service-stack.md`): a decision record is
@@ -418,3 +419,52 @@ otherwise, and each is reproducible.
 | The deploy job's shape — gates, trigger, `--local-only`, the non-cancelling concurrency group                                                         | `motir-core/.github/workflows/ci.yml`, the `deploy` job                                                                |
 | A `CNAME` may not coexist with other records at the same name                                                                                         | RFC 1034 §3.6.2                                                                                                        |
 | The marketing site is no longer motir-core's `app/page.tsx`; the hero forwards cross-origin via a pre-auth draft API                                  | Story 8.3's 2026-06-30 re-plan; MOTIR-1458                                                                             |
+
+---
+
+## AMENDMENT 1 — the question widened from _where does the site run_ to _which host answers for each public surface_ (MOTIR-3879, 2026-08-29)
+
+`docs/decisions/public-surface-hosts.md` is the successor record. This
+amendment says which of the answers above still stand, so a reader who arrives
+here first is not misled by a record that is right about what it was asked.
+
+### What STANDS, unchanged
+
+- **Q1 — the marketing site runs on Fly, as a second app `motir-marketing` in
+  org `moooon`, region `iad`.** True, and now more load-bearing than when it was
+  written: that application serves the WHOLE public surface, not one page.
+- **Q3 — GitHub Actions in `motir-marketing` deploys it**, mirroring
+  motir-core's `ci.yml`. Unchanged.
+- **Q4 — no new subprocessor row.** Unchanged, and for the same reason: Fly.io
+  is already row 1 with its transfer basis closed.
+- **§3's warnings about the apex record set** — the single `v=spf1`, the DKIM
+  key, the shared `_dmarc`, the Search Console verification `TXT`. These are
+  _more_ important now, not less: the successor record's arrangement means the
+  apex **does not move at all**, so any future edit to that zone is even less
+  likely to be reviewed with this table in front of it.
+
+### What is SUPERSEDED
+
+- **Q2's framing.** This record answered _"who owns the apex and what does it
+  point at"_ for a site that was about to be provisioned. The apex now points at
+  `motir-marketing` and **stays there** — the successor record decides that
+  every public surface moves TO that application rather than the hostname moving
+  anywhere. The `A` / `AAAA` targets in §3 are therefore a record of a state that
+  is no longer expected to change, rather than a provisioning instruction.
+- **§2's rejected alternative D — _"serve `motir.co` from `motir-core`
+  itself"_.** The reasoning given here (it re-couples marketing deploys to
+  application deploys) still holds, and the successor record rejects the same
+  option again on a _stronger_ ground it could not have known: `motir-core` is
+  GPL-3.0 and must not carry moooon B.V.'s marketing material or legal
+  documents. **The conclusion is unchanged; the argument is now the open-core
+  one.**
+- **§8's boundary list.** It named what this record did not decide. It did not
+  name — because nobody had asked — which repository owns `/explore`, `/docs`,
+  `/legal` and `/p/*`, all of which already existed in `motir-core` when this
+  was written. That is the gap the successor record fills.
+
+### What this amendment does NOT do
+
+It does not re-open Q1, Q3 or Q4, and it changes no cited reading. The
+measurements in the 2026-08-27 ground-truth table were correct on the day and
+are left exactly as they were.
