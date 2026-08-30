@@ -81,6 +81,7 @@ export function PlanChangeCanvas({
   emptyRoot,
 }: PlanChangeCanvasProps) {
   const t = useTranslations('roadmap.canvas');
+  const tWorkspace = useTranslations('planningWorkspace');
   const { registerItems, onView, quickView } = useWorkItemQuickView();
 
   // Levels cached so re-drilling doesn't re-hit the API; a mutable ref, so a new
@@ -198,6 +199,10 @@ export function PlanChangeCanvas({
         initialTrail={initialTrail}
         onView={onView}
         searchable
+        // This canvas draws the PROJECT with a pending proposal layered onto it,
+        // so a reader searching here is searching the tree (MOTIR-4021, Part XIII
+        // §5). The namespace is this feature's own, `planningWorkspace`.
+        searchLabel={tWorkspace('searchLabel')}
         fullScreenable
         locatable
         rootLabel={t('breadcrumbRoot')}

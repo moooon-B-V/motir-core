@@ -133,6 +133,14 @@ export interface WorkItemRoadmapProps {
    * `fullScreenable`, which is the bounded panel's only escape.
    */
   searchable?: boolean;
+  /**
+   * What the search box SEARCHES (MOTIR-4021, design Part XIII §5). Defaults to
+   * the roadmap's own sentence, `roadmap.canvas.search` — which is correct here
+   * and here only, because this consumer IS the roadmap. The foundation now
+   * REQUIRES the label whenever search is on, so the default lives at the mount
+   * that owns the word rather than inside the shared canvas.
+   */
+  searchLabel?: string;
   locatable?: boolean;
   fullScreenable?: boolean;
   /** Replace the ROOT level's empty state. Passed straight through to the canvas
@@ -167,6 +175,7 @@ export function WorkItemRoadmap({
   subtreeRootId = null,
   rootLabel,
   searchable = true,
+  searchLabel,
   locatable = true,
   fullScreenable = true,
   emptyRoot,
@@ -425,7 +434,13 @@ export function WorkItemRoadmap({
         onResetPositions={onResetPositions}
         onSelect={handleSelect}
         onView={handleView}
-        searchable={searchable}
+        // The searchable pair travels TOGETHER or not at all: the canvas's props
+        // make `searchLabel` required exactly when `searchable` is true, and this
+        // mount's `searchable` is a runtime boolean, so the pair is spread rather
+        // than passed as two independent props.
+        {...(searchable
+          ? { searchable: true as const, searchLabel: searchLabel ?? t('search') }
+          : { searchable: false as const })}
         fullScreenable={fullScreenable}
         locatable={locatable}
         emptyRoot={emptyRoot}

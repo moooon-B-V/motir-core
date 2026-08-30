@@ -60,7 +60,7 @@ export interface RoadmapLevel {
   deps: ProjectCanvasDep[];
 }
 
-export interface ProjectRoadmapCanvasProps {
+interface ProjectRoadmapCanvasBaseProps {
   /** Fetch one level's nodes + edges (roots when `parentId` is null; else the
    *  parent's children). The consumer owns the I/O; memoize it. */
   loadLevel: (parentId: string | null) => Promise<RoadmapLevel>;
@@ -83,8 +83,7 @@ export interface ProjectRoadmapCanvasProps {
    *  quick-view peek, the onboarding consumer opens the tier doc. View (open detail)
    *  is DISTINCT from select (highlight) and from "Open" (drill into children). */
   onView?: (id: string) => void;
-  /** Show the search-to-locate overlay (`/` shortcut) — locates within the level. */
-  searchable?: boolean;
+
   /** Show the EXPAND-to-full-screen control (MOTIR-1420). The roadmap consumer opts
    *  in so a viewer can use the whole display for a large tree; onboarding does not.
    *  Takes the canvas full-viewport (via the Fullscreen API, with a fixed overlay as
@@ -304,6 +303,29 @@ export interface ProjectRoadmapCanvasProps {
   levelCaption?: ReactNode;
 }
 
+/**
+ * SEARCH — opt-in, and turning it on REQUIRES saying what it SEARCHES
+ * (MOTIR-4021, design Part XIII §5).
+ *
+ * The label is the CONSUMER's word, on both the `aria-label` and the
+ * placeholder. It is a REQUIRING PAIR rather than an optional prop with a
+ * default, and the difference is the whole card: this canvas has four searchable
+ * mounts and exactly ONE of them is the roadmap, so a default of
+ * `roadmap.canvas.search` is how *"Search the roadmap"* came to greet a reader on
+ * `/plans/[id]`, on the plan-change canvas and in onboarding. A default cannot be
+ * wrong loudly; a required field cannot be forgotten.
+ *
+ * The non-searchable arm forbids the label outright, so a mount that turns search
+ * OFF cannot carry a dead string (the item page's Children panel is that mount,
+ * deliberately — a `/` overlay inside an embedded panel is a page-level key grab).
+ */
+type ProjectRoadmapCanvasSearchProps =
+  | { searchable: true; searchLabel: string }
+  | { searchable?: false | undefined; searchLabel?: undefined };
+
+export type ProjectRoadmapCanvasProps = ProjectRoadmapCanvasBaseProps &
+  ProjectRoadmapCanvasSearchProps;
+
 // The suppression ref (below) is keyed by LEVEL; the root level has no id.
 const ROOT_LEVEL_KEY = '__root__';
 const levelKey = (id: string | null) => id ?? ROOT_LEVEL_KEY;
@@ -330,6 +352,7 @@ export function ProjectRoadmapCanvas({
   onSelect,
   onView,
   searchable = false,
+  searchLabel,
   fullScreenable = false,
   emphasis,
   locatable = false,
@@ -1057,8 +1080,11 @@ export function ProjectRoadmapCanvas({
               <Input
                 ref={searchRef}
                 type="search"
-                aria-label={t('search')}
-                placeholder={t('search')}
+                // The CONSUMER's word, on both axes (MOTIR-4021). The foundation
+                // has four searchable mounts and knows which surface it is on for
+                // exactly none of them.
+                aria-label={searchLabel}
+                placeholder={searchLabel}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}

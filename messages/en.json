@@ -297,7 +297,8 @@
     "event_revision_ended": "Revision landed",
     "listRevised": "Revised",
     "staleStatusOutcome": "Plan out of date — work it changes has since been finished.",
-    "staleReviewHint": "Approve is unavailable. Decline it, or wait in case the work reopens."
+    "staleReviewHint": "Approve is unavailable. Decline it, or wait in case the work reopens.",
+    "searchLabel": "Search this plan"
   },
   "planEdits": {
     "submitting": "Submitting…",
@@ -5602,7 +5603,8 @@
             "subtitle": "the roadmap continues here"
           }
         },
-        "loading": "Loading your roadmap…"
+        "loading": "Loading your roadmap…",
+        "searchLabel": "Search this project"
       },
       "validate": {
         "title": "One call before we plan",
@@ -6074,7 +6076,8 @@
       "roadmap": "Opened from the roadmap."
     },
     "footerRestingTitle": "Roadmap — as saved",
-    "footerRestingBody": "Nothing proposed. The conversation has changed nothing."
+    "footerRestingBody": "Nothing proposed. The conversation has changed nothing.",
+    "searchLabel": "Search this project"
   },
   "codeHealth": {
     "title": "Code health",

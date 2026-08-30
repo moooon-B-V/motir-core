@@ -255,7 +255,13 @@ export function OnboardingCanvas({
         onResetPositions={resetPositions}
         onSelect={onActivate}
         onView={onView}
-        searchable={!!projectKey}
+        // The pair travels together (MOTIR-4021, Part XIII §5): this mount's
+        // search is gated on having a project to search, and the canvas now
+        // requires the label exactly when search is on. This canvas draws the
+        // project tree being built, so its word is the project's.
+        {...(projectKey
+          ? { searchable: true as const, searchLabel: t('searchLabel') }
+          : { searchable: false as const })}
         rootLabel={t('title')}
         ariaLabel={t('title')}
       />

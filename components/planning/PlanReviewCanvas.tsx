@@ -349,6 +349,11 @@ export function PlanReviewCanvas({
         // they are is this consumer's to say.
         levelCaption={levelIsAllProposed ? tPlan('allProposedLevel') : undefined}
         searchable
+        // The page is a PLAN, so the search box says so (MOTIR-4021, Part XIII
+        // §5). It read `roadmap.canvas.search` — "Search the roadmap" — on a
+        // surface that is not the roadmap, because the foundation used to own
+        // the string. The consumer owns it now, exactly as it owns `emphasis`'s.
+        searchLabel={tPlan('searchLabel')}
         // SHOW CHANGES (MOTIR-3261) — the set is EVERY proposal's node id,
         // whatever its `op`, which is what the request's *added / updated /
         // archived* names. A `modify` / `remove` shares its node id with the
