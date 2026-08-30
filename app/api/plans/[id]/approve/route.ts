@@ -16,6 +16,13 @@ import {
   PlanTargetImmutableError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
+import {
+  CrossWorkspaceLinkError,
+  DuplicateLinkError,
+  SelfLinkError,
+  WorkItemLinkCycleError,
+  WorkspaceMismatchLinkError,
+} from '@/lib/workItems/linkErrors';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
@@ -146,6 +153,48 @@ export async function POST(
         { code: err.code, planItemId: err.planItemId, field: err.field, error: err.message },
         { status: 422 },
       );
+    }
+    // ── A REFUSAL RAISED BY A DATABASE TRIGGER (MOTIR-3936) ───────────────────
+    //
+    // `materialize` wires `is_blocked_by` edges, and four `work_item_link`
+    // triggers can reject one. `workItemLinkRepository` already translates their
+    // SQLSTATE-23514 markers into typed errors — so the refusal arrives here
+    // fully classified and, until this arm, fell straight through the rethrow
+    // below to a bare 500 with an empty body.
+    //
+    // ⚠️ THE THIRD TIME. The P2028 arm above and the
+    // `PrismaClientValidationError` arm below it EACH record that a missing arm
+    // "led to Approve being pressed three more times"; a `WI_LINK_CYCLE` from two
+    // `modify` patches writing opposite directions of one edge produced exactly
+    // that outcome again on 2026-08-30. The plan's OWN cycles are now refused at
+    // the CLOSE (`validateProposals.ts`'s edge-graph check), so what reaches this
+    // arm is tree-caused — a ring closed by an edge somebody committed while the
+    // plan waited — and the reviewer is told which two cards, from the ids the
+    // trigger message already interpolates.
+    if (err instanceof WorkItemLinkCycleError) {
+      return NextResponse.json(
+        {
+          code: err.code,
+          fromWorkItemId: err.attempted.fromId,
+          toWorkItemId: err.attempted.toId,
+          error: `${err.message} The plan would wire ${err.attempted.fromId} \`is_blocked_by\` ${err.attempted.toId}, and a chain of existing dependencies already leads back. The plan's author must drop one of the two edges — a reviewer cannot repair a proposal.`,
+        },
+        { status: 409 },
+      );
+    }
+    if (err instanceof SelfLinkError || err instanceof DuplicateLinkError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+    }
+    // 404 rather than 409, deliberately: `linkErrors.ts` records that naming the
+    // other workspace is the existence oracle every other surface refuses.
+    if (err instanceof CrossWorkspaceLinkError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    // An invariant violation, and it STAYS a 5xx (`linkErrors.ts`) — but as a
+    // CLASSIFIED one carrying its code, which is the property this card asserts:
+    // no approve failure reaches the caller as a bare 500 with an empty body.
+    if (err instanceof WorkspaceMismatchLinkError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 500 });
     }
     throw err;
   }

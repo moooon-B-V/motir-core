@@ -49,9 +49,12 @@ export interface ProposalNode {
   blockedByRefs: string[];
   /**
    * `add` only — the gate reads the two CLOSED-SET columns it can reject before
-   * a write: the proposed `kind` and the proposed `type` (MOTIR-3654).
+   * a write: the proposed `kind` and the proposed `type` (MOTIR-3654) — plus the
+   * proposed `title`, which it never JUDGES and only ever NAMES (MOTIR-3936): a
+   * proposal on a rejected cycle has no work-item key yet, so its title is the
+   * only identity a message can give a reader.
    */
-  proposedFields: { kind?: string | null; type?: string | null } | null;
+  proposedFields: { kind?: string | null; type?: string | null; title?: string | null } | null;
   /**
    * `modify` only — the gate reads the edge refs, and (MOTIR-3859) the
    * `parentRef` a re-parent travels on. `undefined` and `null` are DIFFERENT
@@ -68,6 +71,16 @@ export interface ProposalNode {
 /** A live work item the plan references (a real parent, or a modify/remove target). */
 export interface LiveWorkItemState {
   id: string;
+  /**
+   * The `<PREFIX>-<n>` key a person reads (MOTIR-3936). Carried so a refusal can
+   * NAME the work item it is about instead of only the proposal id that mentions
+   * it: a reviewer handed `Proposal cmte…'s patch.blockedByRemove names no work
+   * item` has no way to find the card, and the id is already in the row the gate
+   * reads.
+   */
+  key: string;
+  /** The work item's title — the other half of the identity above. */
+  title: string;
   kind: string;
   status: string;
   /**
@@ -116,6 +129,31 @@ export interface ValidatePlanProposalsInput {
    * empty would let a caller that forgot it pass a cycle silently.
    */
   ancestorIdsById: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The COMMITTED `is_blocked_by` edges the plan's own edges join onto
+   * (MOTIR-3936) — `{ blockedId, blockerId }`, the transitive closure downstream
+   * of every endpoint the plan writes, resolved by
+   * `plansService.runPersistGate`.
+   *
+   * It is what makes the cycle question answerable at all. A `modify`'s
+   * `patch.blockedByAdd` names work items that ALREADY EXIST, so two patches in
+   * one plan can close a cycle that the `planItem:` ref graph cannot see, and one
+   * patch can close a cycle through a chain of edges nobody proposed. Both are
+   * refused by `enforce_work_item_link_no_cycle` halfway through `materialize`,
+   * as a raw SQLSTATE — which is the failure this input exists to move forward to
+   * the close, where the author can still fix it.
+   *
+   * REQUIRED rather than optional, for the reason `ancestorIdsById` is: an
+   * optional set defaulting to empty would let a caller that forgot it pass a
+   * cycle silently.
+   */
+  existingBlockedByEdges: readonly BlockedByEdge[];
+}
+
+/** One committed `is_blocked_by` edge: `blockedId` is blocked BY `blockerId`. */
+export interface BlockedByEdge {
+  blockedId: string;
+  blockerId: string;
 }
 
 /** The proposed kind of an `add`, defaulted the way `materialize` defaults it. */
@@ -268,14 +306,15 @@ function assertRefsResolvable(
         throw new PlanRefGraphError(
           'dangling',
           item.id,
-          `Proposal ${item.id}'s ${where} "${ref}" names no \`add\` in this plan.`,
+          `${describeSubject(item, liveById)}'s ${where} "${ref}" names no \`add\` in this plan.`,
         );
       }
     } else if (!liveById.has(ref)) {
       throw new PlanRefGraphError(
         'dangling',
         item.id,
-        `Proposal ${item.id}'s ${where} "${ref}" names no work item in this workspace.`,
+        `${describeSubject(item, liveById)}'s ${where} "${ref}" names no work item in this workspace. ` +
+          `A ref names a work item's ID (a \`cm…\` cuid) or a \`${TEMP_REF_PREFIX}<id>\` proposal in this plan — never a \`<PREFIX>-<n>\` key.`,
       );
     }
   }
@@ -451,7 +490,7 @@ export function assertReparentLegal(
   // can be wrong with it is the kind — a subtask has no legal top-level
   // placement — and `assertValidParent` is the arm that says so.
   if (ref === null) {
-    assertParentKindLegal(item, null, target.kind);
+    assertParentKindLegal(item, null, target.kind, liveById);
     return;
   }
 
@@ -478,7 +517,7 @@ export function assertReparentLegal(
     throw new PlanGrammarError(
       'illegal_parent',
       item.id,
-      `Proposal ${item.id}'s patch.parentRef "${ref}" names a work item in a DIFFERENT project of this workspace. A work item's parent must live in the same project (a cross-project parent is refused by workItemsService and by the work_item parent-tenancy trigger).`,
+      `${describeSubject(item, liveById)}'s patch.parentRef "${ref}"${refSuffix(ref, liveById)} names a work item in a DIFFERENT project of this workspace. A work item's parent must live in the same project (a cross-project parent is refused by workItemsService and by the work_item parent-tenancy trigger).`,
     );
   }
 
@@ -490,14 +529,14 @@ export function assertReparentLegal(
     throw new PlanRefGraphError(
       'cycle',
       item.id,
-      `Proposal ${item.id} would re-parent work item ${target.id} under ITSELF.`,
+      `${describeSubject(item, liveById)} would re-parent work item ${describeNode(target.id, [], liveById)} under ITSELF.`,
     );
   }
   if (chain.includes(target.id)) {
     throw new PlanRefGraphError(
       'cycle',
       item.id,
-      `Proposal ${item.id} would re-parent work item ${target.id} under ${parent.id}, which is one of its own DESCENDANTS — the move would create a cycle.`,
+      `${describeSubject(item, liveById)} would re-parent work item ${describeNode(target.id, [], liveById)} under ${describeNode(parent.id, [], liveById)}, which is one of its own DESCENDANTS — the move would create a cycle.`,
     );
   }
 
@@ -510,7 +549,7 @@ export function assertReparentLegal(
     throw new PlanGrammarError(
       'parent_depth_limit',
       item.id,
-      `Proposal ${item.id} would place work item ${target.id} at depth ${resultingDepth}, past the limit of ${MAX_WORK_ITEM_DEPTH}.`,
+      `${describeSubject(item, liveById)} would place work item ${describeNode(target.id, [], liveById)} at depth ${resultingDepth}, past the limit of ${MAX_WORK_ITEM_DEPTH}.`,
     );
   }
 
@@ -523,7 +562,7 @@ export function assertReparentLegal(
       `Proposal ${item.id}'s patch.parentRef work item ${parent.id} has kind "${parent.kind}", which is not a valid issue type.`,
     );
   }
-  assertParentKindLegal(item, parent.kind, target.kind);
+  assertParentKindLegal(item, parent.kind, target.kind, liveById);
 
   // 5b. …and the parent is not FINISHED. See `PlanGrammarViolation`'s
   //     `parent_terminal` member for why this one is not cosmetic: the derived
@@ -533,7 +572,7 @@ export function assertReparentLegal(
     throw new PlanGrammarError(
       'parent_terminal',
       item.id,
-      `Proposal ${item.id} would re-parent work item ${target.id} under ${parent.id}, which is in the terminal status "${parent.status}". Completing work is derived from a container's CURRENT child set, so giving a finished parent a new open child re-opens it and every ancestor above it.`,
+      `${describeSubject(item, liveById)} would re-parent work item ${describeNode(target.id, [], liveById)} under ${describeNode(parent.id, [], liveById)}, which is in the terminal status "${parent.status}". Completing work is derived from a container's CURRENT child set, so giving a finished parent a new open child re-opens it and every ancestor above it.`,
     );
   }
 }
@@ -544,6 +583,7 @@ function assertParentKindLegal(
   item: ProposalNode,
   parentKind: IssueType | null,
   childKind: IssueType,
+  liveById: ValidatePlanProposalsInput['liveById'],
 ): void {
   try {
     assertValidParent(parentKind, childKind);
@@ -552,10 +592,230 @@ function assertParentKindLegal(
       throw new PlanGrammarError(
         'illegal_parent',
         item.id,
-        `Proposal ${item.id} is not a legal placement: ${err.message}`,
+        `${describeSubject(item, liveById)} is not a legal placement: ${err.message}`,
       );
     }
     throw err;
+  }
+}
+
+// ── NAMING THE WORK ITEM A REFUSAL IS ABOUT (MOTIR-3936) ─────────────────────
+//
+// Every message below used to identify its subject as `Proposal <cuid>`. That is
+// the right subject for the AUTHOR, who can look the proposal up, and the wrong
+// one for the REVIEWER, who is holding a tree of cards and has no surface that
+// takes a plan-item id. So a refusal now names the WORK ITEM too, wherever one is
+// resolvable — by key and title, in the reviewer's own vocabulary.
+//
+// APPENDED rather than substituted, deliberately: the proposal id is what the
+// author corrects through, so both identities ride on one message.
+
+/** `MOTIR-7 "Wire the gate"`, or `null` when the ref names no live work item. */
+function describeLive(
+  ref: string | null | undefined,
+  liveById: ValidatePlanProposalsInput['liveById'],
+): string | null {
+  if (!ref || isTempRef(ref)) return null;
+  const live = liveById.get(ref);
+  return live ? `${live.key} "${live.title}"` : null;
+}
+
+/**
+ * How a refusal names the proposal's own subject: the plan-item id always, plus
+ * the work item it targets when there is one. An `add` has no work item yet —
+ * that is what an `add` IS — so it degrades to the proposal id alone, which is
+ * also the only identity anybody could act on for it.
+ */
+function describeSubject(
+  item: ProposalNode,
+  liveById: ValidatePlanProposalsInput['liveById'],
+): string {
+  const live = describeLive(item.workItemId, liveById);
+  return live ? `Proposal ${item.id} (${live})` : `Proposal ${item.id}`;
+}
+
+/** The trailing ` (MOTIR-7 "…")` clause for a ref, or the empty string. */
+function refSuffix(ref: string, liveById: ValidatePlanProposalsInput['liveById']): string {
+  const live = describeLive(ref, liveById);
+  return live ? ` (${live})` : '';
+}
+
+// ── THE `blocked_by` EDGE GRAPH (MOTIR-3936) ─────────────────────────────────
+//
+// The checks above read the plan's `planItem:` REF graph — which proposal points
+// at which proposal. This one reads the EDGES the plan would WRITE, which is a
+// different graph and the one `enforce_work_item_link_no_cycle` judges:
+//
+//   * an `add`'s `blockedByRefs` — a new node blocked by a proposal or a card;
+//   * a `modify`'s `patch.blockedByAdd` — an EXISTING card blocked by another
+//     EXISTING card, carrying no temp-ref at all;
+//   * a `modify`'s `patch.blockedByRemove` — the same edge taken away;
+//   * every COMMITTED edge the chain runs through, which no proposal mentions.
+//
+// The second is why a per-proposal read cannot answer this. Two `modify` patches
+// in ONE batch are two halves of a single graph edit, and each half is legal on
+// its own: `MOTIR-3895 blocked_by MOTIR-3923` and `MOTIR-3923 blocked_by
+// MOTIR-3895` were appended, closed, and validated VALID by three separate
+// checks before approve raised `WI_LINK_CYCLE` from a BEFORE ROW trigger and the
+// route answered a bare 500 three times.
+//
+// The walk mirrors the trigger's recursive CTE exactly — follow `is_blocked_by`
+// from the new edge's far end and reject when the chain comes back — so the two
+// cannot disagree about what a cycle is. It runs at the CLOSE, where the plan is
+// still `generating` and the author can drop the edge.
+
+/** The graph node an `add` proposal contributes (it has no work-item id yet). */
+function addNodeId(proposalId: string): string {
+  return `${TEMP_REF_PREFIX}${proposalId}`;
+}
+
+/** The node a ref denotes: a temp-ref keeps its `planItem:` form, a real id its own. */
+function edgeNodeOf(ref: string): string {
+  return isTempRef(ref) ? addNodeId(tempRefId(ref)) : ref;
+}
+
+/**
+ * Build the `blocked_by` adjacency the plan would leave behind: every committed
+ * edge, MINUS the ones its `modify`s remove, PLUS the ones its `add`s and
+ * `modify`s write. Keyed blocked → blockers, which is the direction the trigger
+ * walks.
+ *
+ * Each proposed edge remembers WHICH proposal wrote it, so a cycle can be
+ * reported against the proposal a person would go and correct rather than
+ * against whichever node the walk happened to enter on.
+ */
+function buildBlockedByGraph(
+  items: readonly ProposalNode[],
+  existingBlockedByEdges: readonly BlockedByEdge[],
+): {
+  adjacency: Map<string, string[]>;
+  authorOf: Map<string, ProposalNode>;
+} {
+  const adjacency = new Map<string, string[]>();
+  const authorOf = new Map<string, ProposalNode>();
+  const edgeKey = (from: string, to: string): string => `${from}\u0000${to}`;
+
+  const add = (from: string, to: string, author: ProposalNode | null): void => {
+    // A self-edge is `WI_LINK_SELF`'s business and is already refused by
+    // `assertRefsSelfConsistent` for a proposal naming itself; dropping it here
+    // keeps the walk about CYCLES rather than re-reporting that one as one.
+    if (from === to) return;
+    const blockers = adjacency.get(from);
+    if (blockers) {
+      if (!blockers.includes(to)) blockers.push(to);
+    } else {
+      adjacency.set(from, [to]);
+    }
+    if (author && !authorOf.has(edgeKey(from, to))) authorOf.set(edgeKey(from, to), author);
+  };
+
+  // The edges the plan TAKES AWAY, resolved first so a plan that swaps an edge
+  // for its reverse is judged on the graph it actually leaves.
+  const removed = new Set<string>();
+  for (const item of items) {
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    for (const ref of item.patch?.blockedByRemove ?? []) {
+      removed.add(edgeKey(item.workItemId, edgeNodeOf(ref)));
+    }
+  }
+
+  for (const edge of existingBlockedByEdges) {
+    if (removed.has(edgeKey(edge.blockedId, edge.blockerId))) continue;
+    add(edge.blockedId, edge.blockerId, null);
+  }
+
+  for (const item of items) {
+    if (item.op === 'add') {
+      const from = addNodeId(item.id);
+      for (const ref of item.blockedByRefs) add(from, edgeNodeOf(ref), item);
+      continue;
+    }
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    for (const ref of item.patch?.blockedByAdd ?? []) {
+      add(item.workItemId, edgeNodeOf(ref), item);
+    }
+  }
+
+  return { adjacency, authorOf };
+}
+
+/** How a node reads in a message: a work item by key + title, else its ref. */
+function describeNode(
+  node: string,
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+): string {
+  const live = liveById.get(node);
+  if (live) return `${live.key} "${live.title}"`;
+  if (isTempRef(node)) {
+    const title = items.find((i) => i.id === tempRefId(node))?.proposedFields?.title;
+    return title ? `${node} "${title}"` : node;
+  }
+  return node;
+}
+
+/**
+ * Assert the `blocked_by` graph the plan would leave is ACYCLIC (MOTIR-3936).
+ *
+ * Reported against the PROPOSAL that closed the cycle — the one whose edge is on
+ * the ring and was written by this plan. A ring made entirely of committed edges
+ * is not this gate's business and cannot occur anyway: the trigger refused it at
+ * the time it would have been created.
+ */
+function assertBlockedByGraphAcyclic(
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+  existingBlockedByEdges: readonly BlockedByEdge[],
+): void {
+  const { adjacency, authorOf } = buildBlockedByGraph(items, existingBlockedByEdges);
+  if (adjacency.size === 0) return;
+
+  const WHITE = 0;
+  const GREY = 1;
+  const BLACK = 2;
+  const colour = new Map<string, number>();
+  const stack: string[] = [];
+
+  const report = (ring: readonly string[]): never => {
+    // The proposal to name is the author of an edge ON the ring — the plan's own
+    // contribution to it, and the one a correction removes.
+    let author: ProposalNode | null = null;
+    for (let i = 0; i < ring.length; i += 1) {
+      const found = authorOf.get(`${ring[i]}\u0000${ring[(i + 1) % ring.length]}`);
+      if (found) {
+        author = found;
+        break;
+      }
+    }
+    /* istanbul ignore next -- defensive: a ring with no proposed edge cannot exist (the trigger refused it when the committed edges were written) */
+    const subject = author ? describeSubject(author, liveById) : 'This plan';
+    const path = ring.map((n) => describeNode(n, items, liveById)).join(' blocked_by ');
+    throw new PlanRefGraphError(
+      'cycle',
+      /* istanbul ignore next -- defensive: see above */
+      author ? author.id : (items[0]?.id ?? 'unknown'),
+      `${subject} closes a dependency CYCLE: ${path} blocked_by ${describeNode(ring[0]!, items, liveById)}. ` +
+        `Every edge on that ring would exist once this plan is approved, and \`is_blocked_by\` may not come back to where it started ` +
+        `(the work_item_link no-cycle trigger raises WI_LINK_CYCLE for it mid-approve). Drop one of the edges.`,
+    );
+  };
+
+  const visit = (node: string): void => {
+    colour.set(node, GREY);
+    stack.push(node);
+    for (const blocker of adjacency.get(node) ?? []) {
+      const seen = colour.get(blocker) ?? WHITE;
+      if (seen === GREY) {
+        report(stack.slice(stack.indexOf(blocker)));
+      }
+      if (seen === WHITE) visit(blocker);
+    }
+    stack.pop();
+    colour.set(node, BLACK);
+  };
+
+  for (const node of adjacency.keys()) {
+    if ((colour.get(node) ?? WHITE) === WHITE) visit(node);
   }
 }
 
@@ -576,7 +836,14 @@ function assertParentKindLegal(
  * therefore cannot move earlier than the CLOSE.
  */
 export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
-  const { items, liveById, terminalStatusKeys, planProjectId, ancestorIdsById } = input;
+  const {
+    items,
+    liveById,
+    terminalStatusKeys,
+    planProjectId,
+    ancestorIdsById,
+    existingBlockedByEdges,
+  } = input;
 
   const adds = items.filter((i) => i.op === 'add');
   const addsById = new Map(adds.map((a) => [a.id, a]));
@@ -593,6 +860,14 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
       assertRefsResolvable(item, refs, liveById, addIds, where);
     }
   }
+
+  // 2b. The `blocked_by` EDGE graph the plan would leave behind — its own
+  //     proposed edges joined onto the committed ones (MOTIR-3936). Runs AFTER
+  //     resolution, because a walk over unresolvable refs would report a cycle
+  //     where the specific reason is a dangling ref, and BEFORE the grammar,
+  //     because a plan that cannot be wired is not a plan whose placements are
+  //     worth discussing.
+  assertBlockedByGraphAcyclic(items, liveById, existingBlockedByEdges);
 
   // 3. The kind-parent grammar — asked of `lib/issues/parentRules.ts`, the same
   //    matrix every human create/move is gated on. Independent of whatever the
@@ -612,7 +887,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
         throw new PlanGrammarError(
           'illegal_parent',
           item.id,
-          `Proposal ${item.id} is not a legal placement: ${err.message}`,
+          `${describeSubject(item, liveById)} is not a legal placement: ${err.message}`,
         );
       }
       throw err;
@@ -653,7 +928,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
       throw new PlanGrammarError(
         'illegal_parent',
         item.id,
-        `Proposal ${item.id}'s parentRef "${ref}" names a work item in a DIFFERENT project of this workspace. ` +
+        `${describeSubject(item, liveById)}'s parentRef "${ref}"${refSuffix(ref, liveById)} names a work item in a DIFFERENT project of this workspace. ` +
           `A work item's parent must live in the same project (a cross-project parent is refused by ` +
           `workItemsService and by the work_item parent-tenancy trigger). A cross-project ` +
           `blocked_by edge IS supported — if this is a dependency rather than a placement, move the ref to ` +
@@ -680,7 +955,13 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     if (!item.workItemId) continue;
     const target = liveById.get(item.workItemId);
     if (target && terminalStatusKeys.has(target.status)) {
-      throw new PlanTargetImmutableError(item.id, target.id, target.status);
+      throw new PlanTargetImmutableError(
+        item.id,
+        target.id,
+        target.status,
+        target.key,
+        target.title,
+      );
     }
   }
 }

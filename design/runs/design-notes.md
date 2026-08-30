@@ -459,10 +459,154 @@ console that yanks you back to the bottom mid-read is the classic version of thi
 each line names its source member and the order is `seq` — the RUN's order, not arrival order. A very
 long line scrolls inside the console, never the page.
 
+⚠️ **AND THE EDGE ITSELF NEVER DREW, for as long as this area has existed (found 2026-08-30).**
+`.cvEdges` was `position: absolute; inset: 0` with no `width`/`height`. An SVG is a REPLACED element:
+with no width/height attribute it takes its INTRINSIC size, and `inset: 0` does not stretch it the
+way it stretches a div. **Every edge SVG in the asset was resolving to 16×16**, so every path drew at
+about 4×6px and no edge — the running one included — was ever visible. Measured, not guessed: six
+SVGs at `16x16`, and `543x315` / `461x208` once `width: 100%; height: 100%` was added.
+
+⚠️ **AND THE ARROWHEADS WERE MISSING TOO** (Yue, 2026-08-30: _"without the arrow we don't know
+which card is blocked"_). This is not decoration: the whole claim of the running edge is that it
+points FROM what an agent is working TO what becomes reachable when it lands, and a plain line states
+a relationship without a direction. The notes had asserted the arrow all along — _"the arrow already
+points blocker → blocked"_ — while no `marker-end` existed anywhere in the asset. Every edge now
+carries one, mirroring `PlanningCanvas`'s shipped markers exactly (same `viewBox`, `refX`,
+`markerWidth` and `orient="auto-start-reverse"`), in their own `<svg>` for the same reason the
+component's are: marker refs are document-global, and a second element inside `.cvEdges` would break
+the path-count-equals-edge-count property its guard asserts.
+
+**The IMPLEMENTATION was already correct** — `PlanningCanvas` has had a `running` marker filled
+`--el-status-in-progress` since MOTIR-3972 and applies `markerEnd` to every edge. Only the design
+asset was missing them, which is the same class of gap as the invisible SVG above: the thing the
+notes claimed and the thing the file did had drifted apart, and nothing compared them.
+
+Three consequences worth keeping, because they are the reason it survived review:
+
+- **The path geometry had never been checked against the nodes**, since nothing was on screen to
+  check. Every `d` was authored blind and every one was wrong — endpoints landing inside the target
+  node, and one path that ran out of `MOTIR-1792`'s right edge and back into its own left edge. They
+  are now derived from MEASURED node boxes, not estimated.
+- **A `viewBox` + `preserveAspectRatio="none"` cannot be used here at all.** The nodes are positioned
+  in CSS px, so the SVG must map one user unit to one px; a viewBox stretches the paths to the
+  stage's real width while the nodes stay put. The viewBox is gone from all six.
+
 ⚠️ **The pane had no producer when it was drawn.** `DispatchEventKind.log` existed, the flag existed,
 the strip and the sweep and the help text existed — and nothing in `packages/cli/src` ever emitted a
 `log` event. MOTIR-3961 is the producer; without it this pane would have rendered its first silence
 for every run, for ever, and looked correct doing it.
+
+---
+
+## What the run PRODUCED — the bug it filed and the plan it submitted
+
+A run does two things that are not writing code, and they are the two most valuable things an
+unattended run produces: it refuses a work item and submits a plan, and it files a bug for a defect
+that was not its job to fix. `run-findings-protocol.md` Q1–Q4 gave it the right to do both.
+**Q5 (MOTIR-3980) is what makes them visible**, and this section draws what Q5 permits — no more.
+
+### WHERE it lives, and why not the two other places
+
+**Pinned above the LOG, in the right pane** (panel 9), with a marker on the node in the canvas.
+
+- **Not a band under the modal header.** A band spans both panes, so it pushes the canvas down on
+  every run in order to serve the few that have anything to say.
+- **Not only on the node.** The node answers _which work item produced it_; a reader arriving at a
+  finished run is asking _what did this run produce_, and should not have to hunt a canvas for the
+  answer.
+- **The right pane is already the run's NARRATIVE column** — what the run said and what it printed.
+  A strip there collapses to nothing without moving anything else on the screen.
+
+Both are drawn because Q5 made the events **CARD-scoped**, so the record genuinely knows which leg
+produced each finding. The strip and the node are the same fact at two zooms, and the node carries a
+COUNT, never the strip's copy — it is an index into the strip, not a second copy of it.
+
+### ⚠️ THE ABSENT CASE IS THE DEFAULT CASE, so it is drawn FIRST
+
+Most runs produce neither. **A run that produced neither grows no region at all**: no heading, no
+rule, no _"no findings"_ box — the log pane simply starts at the log. A region that is present and
+empty on every ordinary run teaches a reader to skip exactly the place where the rare, important
+thing eventually appears, which is worse than not having drawn it.
+
+The one exception is **reporting-offline**, which is the only state where the strip appears with no
+findings in it. _Silence_ and _the machine stopped reporting_ are different answers, and only one of
+them means there was nothing to say.
+
+### The PLAN in two states — an ASK and a piece of NEWS
+
+They are the same object and completely different news, and if they look alike the more urgent one
+is the one that gets missed.
+
+|                          | what it is                                           | how it reads                                                                        |
+| ------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **submitted, waiting**   | an ASK — nothing moves until a person decides        | the accent rule in `--el-status-planning`, and copy that says it is waiting for you |
+| **approved by this run** | NEWS — it already happened, to the reader's own tree | no rule, no waiting language; a named list under one heading                        |
+
+⚠️ **THE DISCRIMINATOR IS THE RULE, NOT THE PRESENCE OF AN ACTION.** Every finding on the strip
+OPENS — a bug included. An earlier draft of this section made the ask the only row with a way in,
+which distinguished the two by making the other rows useless: a finding a reader cannot reach is a
+notification, not a finding.
+
+Submitted-and-waiting is the COMMON case: auto-approval is opt-in and `auto`-only. Approved-by-this-run
+is the one thing a run decides while nobody is watching, so it says so in the terminal's own words —
+_"your tree changed while you were away."_
+
+**⚠️ NAMED PLAN BY PLAN, NEVER A COUNT.** Not a preference: `autoLoop.ts` already settled it, in the
+comment above the block that prints exactly this — _"A count would tell an operator that their tree
+moved without telling them where."_ The surface prints the terminal's shape: the plan, the work item
+it was approved FOR, and how many proposals it materialized.
+
+**A re-plan is a CORRECT OUTCOME, not a failure.** `renderReplanSubmitted`'s first line says so —
+_"this is a correct outcome, not a failure"_ — and a surface that rendered it in a failure tone would
+teach people to distrust the most useful thing the loop does. It reuses this area's existing
+`replanned` tone, deliberately neither green nor red. **No new tone is defined by this pass.**
+
+### The BUG — additive, never collapsed, never dropped
+
+A filed bug blocks nothing, claims no scope and did not end the run (Q3). The row says so by what it
+does NOT carry: no status transition, no blocking language, nothing asking the reader to decide.
+
+**⚠️ ADDITIVE IS NOT UNREACHABLE.** The row carries `Open →` like every other finding, and the
+target needs nothing new to reach: `bug_filed.data` already holds the `key`
+(`run-findings-protocol.md` Q5). The ONE row that does not open is the one whose target is GONE
+(below) — silent about it, rather than offering a link into nothing.
+
+**Several from one run stay separate rows.** _"3 bugs"_ loses the only thing a reader wants — which
+three — and repeats the count mistake the approved-plans block already refuses.
+
+**A closed or archived bug still renders.** The run found a real defect; somebody later triaged it,
+and that is history this record exists to keep.
+
+### ⚠️ A WORK ITEM'S STATUS IS NOT A RUN TONE — two vocabularies, two shapes
+
+The pills on these rows (`Done`, `Declined`, `Archived`) are the **work item's or plan's own status**,
+not a run disposition, and they are drawn as an outlined `wiPill` rather than the filled `runPill`
+this area's tone table owns. This is not decoration: giving both vocabularies one pill shape is how a
+reader starts reading a work item's `Done` as a statement about the RUN. The tone table above is
+unchanged and gains nothing.
+
+### Every state the record can be in
+
+- **A DECLINED plan** keeps the run's own event wording and carries the plan's CURRENT status beside
+  it. The run said _I submitted this_ and that stayed true; a person then said no. It is the most
+  informative row on the page — never re-worded into a failure, never hidden.
+- **A target that is GONE** — deleted, or not visible to this reader — renders from the event's own
+  `data`, the key and title it recorded, with no link. ⚠️ **It is never dropped and never becomes an
+  empty state**; both would tell the reader the run found nothing when it did. Same posture
+  `dispatch_run_card.workItemKey` already takes for a deleted work item.
+- **Reporting-offline** says the record is incomplete, not that the run produced nothing.
+
+### What the surface may PROMISE — quoted, because it is a privacy boundary
+
+> The run modal may state, for any run and without a `--report-log` opt-in, that this run filed these
+> bugs and submitted these plans, each as a link to the live row.
+>
+> — `run-findings-protocol.md` Q5
+
+Both events are LIFECYCLE, so none of this sits behind the log-body opt-in; Q5's privacy section is
+explicit that a BYOK-local run sends no additional byte to produce either. **The strip never
+summarises** a plan's contents or a bug's body: the record carries a pointer and a title, and a panel
+showing more than that would be a design specifying a privacy change.
 
 ---
 
@@ -561,23 +705,31 @@ coherently.
 panel about ONE work item, so most of its states are about that work item's leg; a page is about a RUN, so most
 of its states are about the run and the list.
 
-| State                              | `runs-index.mock.html` | `run-view.mock.html` | Note                                                                                             |
-| ---------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
-| nothing has run at all             | panel 3                | —                    | Muted glyph, one sentence, the command that changes it. **Never an error face.**                 |
-| one side of the partition empty    | panel 2                | —                    | The live section states the fact and keeps its shape rather than disappearing.                   |
-| a live run                         | panel 1                | panel 1              | The index shows one row; the view shows the whole set around it.                                 |
-| a run with NO work items           | panel 4                | panel 6              | A real outcome, in the neutral tone — never an error.                                            |
-| a run whose SCOPE item was deleted | panel 4                | —                    | The row survives it: the record stores the scope LABEL beside the id.                            |
-| a LEG whose work item was deleted  | —                      | panel 8              | The leg keeps its key, disposition and duration; only the link is absent.                        |
-| loading                            | panel 5                | —                    | An in-page `<Suspense>`, **never a `loading.tsx`** — see the index section above.                |
-| a failed read                      | panel 5                | —                    | Says what failed and offers the retry; must not share a face with the empty state.               |
-| queued — claimed, nothing started  | —                      | panel 6              | The moment a person is most likely to press Ctrl-C, so it must be readable at t=0.               |
-| finished, once per stop reason     | —                      | panel 7              | `halted` and `drained` are opposite news. **`replanned` is a SUCCESS** — the agent was right.    |
-| interrupted                        | —                      | panel 7              | Cancelled tone: a decision, not a fault.                                                         |
-| timed out                          | —                      | panel 7              | Written by the server's reap, never by a client. Warning, not danger: _unknown_ is not _failed_. |
-| **reporting-offline**              | —                      | panel 8              | The record is incomplete, not the run. Points at each work item's Development section.           |
-| stream-reconnecting                | —                      | panel 8              | A TRANSPORT state: the notice sits above the table and the run's pill keeps saying _Running_.    |
-| at scale                           | panel 6                | panel 9              | 25 rows a page · 40 rows before the set pages. See _At scale_ above.                             |
+| State                              | `runs-index.mock.html` | `run-modal.mock.html` | Note                                                                                             |
+| ---------------------------------- | ---------------------- | --------------------- | ------------------------------------------------------------------------------------------------ |
+| nothing has run at all             | panel 3                | —                     | Muted glyph, one sentence, the command that changes it. **Never an error face.**                 |
+| one side of the partition empty    | panel 2                | —                     | The live section states the fact and keeps its shape rather than disappearing.                   |
+| a live run                         | panel 1                | panel 1               | The index shows one row; the view shows the whole set around it.                                 |
+| a run with NO work items           | panel 4                | panel 6               | A real outcome, in the neutral tone — never an error.                                            |
+| a run whose SCOPE item was deleted | panel 4                | —                     | The row survives it: the record stores the scope LABEL beside the id.                            |
+| a LEG whose work item was deleted  | —                      | panel 8               | The leg keeps its key, disposition and duration; only the link is absent.                        |
+| loading                            | panel 5                | —                     | An in-page `<Suspense>`, **never a `loading.tsx`** — see the index section above.                |
+| a failed read                      | panel 5                | —                     | Says what failed and offers the retry; must not share a face with the empty state.               |
+| queued — claimed, nothing started  | —                      | panel 6               | The moment a person is most likely to press Ctrl-C, so it must be readable at t=0.               |
+| finished, once per stop reason     | —                      | panel 7               | `halted` and `drained` are opposite news. **`replanned` is a SUCCESS** — the agent was right.    |
+| interrupted                        | —                      | panel 7               | Cancelled tone: a decision, not a fault.                                                         |
+| timed out                          | —                      | panel 7               | Written by the server's reap, never by a client. Warning, not danger: _unknown_ is not _failed_. |
+| **reporting-offline**              | —                      | panel 8               | The record is incomplete, not the run. Points at each work item's Development section.           |
+| stream-reconnecting                | —                      | panel 8               | A TRANSPORT state: the notice sits above the table and the run's pill keeps saying _Running_.    |
+| at scale                           | panel 6                | panel 9               | 25 rows a page · 40 rows before the set pages. See _At scale_ above.                             |
+| **produced NEITHER** — the default | —                      | panel 9               | **No region at all.** The log pane starts at the log. Drawn first, because it is most runs.      |
+| a plan SUBMITTED, waiting          | —                      | panel 10              | An ASK: the accent rule and the strip's only action. `replanned` tone — a success, not a fault.  |
+| plans APPROVED by this run         | —                      | panel 10              | NEWS, named plan by plan. **Never a count** — `autoLoop.ts` settled that and the surface obeys.  |
+| a bug FILED — one, or several      | —                      | panel 11              | Separate rows always, each with `Open →`. Additive ≠ unreachable: nothing moved, but you can go. |
+| a bug since CLOSED or ARCHIVED     | —                      | panel 11              | Still renders, with the WORK ITEM's own status pill — not a run tone.                            |
+| a plan since DECLINED              | —                      | panel 12              | The run's wording is kept and the plan's current status rides beside it. Never hidden.           |
+| a finding whose TARGET is gone     | —                      | panel 12              | Drawn from the event's `data` alone, unlinked. **Never dropped, never an empty state.**          |
+| reporting-offline, with findings   | —                      | panel 12              | The only state where the strip appears carrying none: incomplete ≠ produced nothing.             |
 
 ---
 

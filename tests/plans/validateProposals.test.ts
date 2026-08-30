@@ -31,7 +31,16 @@ const PLAN_PROJECT = 'proj_plan';
 const OTHER_PROJECT = 'proj_other';
 
 function live(overrides: Partial<LiveWorkItemState> & { id: string }): LiveWorkItemState {
-  return { kind: 'story', status: 'todo', projectId: PLAN_PROJECT, ...overrides };
+  return {
+    kind: 'story',
+    status: 'todo',
+    projectId: PLAN_PROJECT,
+    // The identity a refusal NAMES (MOTIR-3936) — derived from the id so a case
+    // that does not care about it still produces a message a person could act on.
+    key: `MOTIR-${overrides.id}`,
+    title: `The ${overrides.id} card`,
+    ...overrides,
+  };
 }
 
 function liveMap(...items: LiveWorkItemState[]): Map<string, LiveWorkItemState> {
@@ -75,6 +84,10 @@ function validate(
      *  proposed parent reads as a ROOT, which is the permissive answer and the
      *  right default for every case that re-parents nothing. */
     ancestorIdsById?: Map<string, readonly string[]>;
+    /** The committed `is_blocked_by` edges the plan joins onto (MOTIR-3936).
+     *  Absent means the plan is the whole graph, which is the right default for
+     *  every case that proposes no edge. */
+    existingBlockedByEdges?: Array<{ blockedId: string; blockerId: string }>;
   } = {},
 ): void {
   validatePlanProposals({
@@ -83,6 +96,7 @@ function validate(
     terminalStatusKeys: opts.terminalStatusKeys ?? new Set(['done', 'cancelled']),
     planProjectId: opts.planProjectId ?? PLAN_PROJECT,
     ancestorIdsById: opts.ancestorIdsById ?? new Map(),
+    existingBlockedByEdges: opts.existingBlockedByEdges ?? [],
   });
 }
 
@@ -861,5 +875,171 @@ describe('collectReferencedWorkItemIds', () => {
 
   it('returns nothing for a plan of top-level adds', () => {
     expect(collectReferencedWorkItemIds([add('a1'), add('a2')])).toEqual([]);
+  });
+});
+
+// ── THE `blocked_by` EDGE GRAPH (MOTIR-3936) ──────────────────────────────────
+//
+// The cases above read the `planItem:` REF graph. These read the EDGES the plan
+// would WRITE — which is the graph `enforce_work_item_link_no_cycle` judges, and
+// the one that produced a bare 500 at approve on 2026-08-30 after three separate
+// checks called the plan valid.
+describe('validatePlanProposals — the blocked_by edge graph', () => {
+  const A = 'wi_a';
+  const B = 'wi_b';
+  const C = 'wi_c';
+  const threeLive = liveMap(live({ id: A }), live({ id: B }), live({ id: C }));
+
+  it('refuses TWO `modify` patches writing opposite directions of one edge — the 2026-08-30 fixture', () => {
+    // Neither patch is wrong on its own, neither names a `planItem:` ref, and no
+    // per-proposal read can see the pair. This is the shape the card exists for.
+    let thrown: unknown;
+    try {
+      validate(
+        [
+          modify('m1', { workItemId: A, patch: { blockedByAdd: [B] } }),
+          modify('m2', { workItemId: B, patch: { blockedByAdd: [A] } }),
+        ],
+        { liveById: threeLive },
+      );
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(PlanRefGraphError);
+    expect((thrown as PlanRefGraphError).reason).toBe('cycle');
+  });
+
+  it('names BOTH work items by key and title in the cycle message, not only a proposal id', () => {
+    expect(() =>
+      validate(
+        [
+          modify('m1', { workItemId: A, patch: { blockedByAdd: [B] } }),
+          modify('m2', { workItemId: B, patch: { blockedByAdd: [A] } }),
+        ],
+        { liveById: threeLive },
+      ),
+    ).toThrow(/MOTIR-wi_a "The wi_a card"[\s\S]*MOTIR-wi_b "The wi_b card"/);
+  });
+
+  it('refuses ONE proposed edge that closes a ring through COMMITTED edges', () => {
+    // B is already blocked by C, and C by A. Adding `A blocked_by B` closes it —
+    // invisible to every per-proposal read, and to any check over the plan alone.
+    expect(() =>
+      validate([modify('m1', { workItemId: A, patch: { blockedByAdd: [B] } })], {
+        liveById: threeLive,
+        existingBlockedByEdges: [
+          { blockedId: B, blockerId: C },
+          { blockedId: C, blockerId: A },
+        ],
+      }),
+    ).toThrow(PlanRefGraphError);
+  });
+
+  it('accepts the SAME edge when the plan REMOVES the link that would close the ring', () => {
+    // The plan is judged on the graph it LEAVES, so a swap is legal.
+    expect(() =>
+      validate(
+        [
+          modify('m1', { workItemId: A, patch: { blockedByAdd: [B] } }),
+          modify('m2', { workItemId: C, patch: { blockedByRemove: [A] } }),
+        ],
+        {
+          liveById: threeLive,
+          existingBlockedByEdges: [
+            { blockedId: B, blockerId: C },
+            { blockedId: C, blockerId: A },
+          ],
+        },
+      ),
+    ).not.toThrow();
+  });
+
+  it('refuses a cycle among the plan’s own `add`s, through their temp-refs', () => {
+    expect(() =>
+      validate([
+        add('a1', { blockedByRefs: [`${TEMP_REF_PREFIX}a2`] }),
+        add('a2', { blockedByRefs: [`${TEMP_REF_PREFIX}a1`] }),
+      ]),
+    ).toThrow(PlanRefGraphError);
+  });
+
+  it('names a PROPOSED card by its temp ref and title on the ring', () => {
+    expect(() =>
+      validate([
+        add('a1', {
+          blockedByRefs: [`${TEMP_REF_PREFIX}a2`],
+          proposedFields: { kind: 'task', title: 'The first half' },
+        }),
+        add('a2', {
+          blockedByRefs: [`${TEMP_REF_PREFIX}a1`],
+          proposedFields: { kind: 'task', title: 'The second half' },
+        }),
+      ]),
+    ).toThrow(/The first half[\s\S]*The second half/);
+  });
+
+  it('leaves a SELF edge to the self-link trigger rather than reporting it as a cycle', () => {
+    // `assertRefsSelfConsistent` catches a proposal naming ITSELF through a temp
+    // ref; a `modify` naming its own target is a different shape, and calling it
+    // a "cycle" would report the wrong reason for what `WI_LINK_SELF` refuses.
+    expect(() =>
+      validate([modify('m1', { workItemId: A, patch: { blockedByAdd: [A] } })], {
+        liveById: threeLive,
+      }),
+    ).not.toThrow();
+  });
+
+  it('collapses a proposed edge that DUPLICATES a committed one', () => {
+    // Re-proposing an edge that already exists is not a cycle and not a
+    // duplicate within the proposal — it is a no-op the graph already holds.
+    expect(() =>
+      validate([modify('m1', { workItemId: A, patch: { blockedByAdd: [B] } })], {
+        liveById: threeLive,
+        existingBlockedByEdges: [{ blockedId: A, blockerId: B }],
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts a DIAMOND — two paths to one blocker is not a cycle', () => {
+    expect(() =>
+      validate(
+        [
+          modify('m1', { workItemId: A, patch: { blockedByAdd: [B, C] } }),
+          modify('m2', { workItemId: B, patch: { blockedByAdd: [C] } }),
+        ],
+        { liveById: threeLive },
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts a plan that writes no edge at all, whatever the committed graph looks like', () => {
+    expect(() =>
+      validate([add('a1', { parentRef: REAL_PARENT })], {
+        existingBlockedByEdges: [{ blockedId: A, blockerId: B }],
+      }),
+    ).not.toThrow();
+  });
+
+  it('reports a DANGLING ref rather than a cycle when a ref resolves to nothing', () => {
+    // Ordering: resolution runs first, so the most specific reason wins.
+    let thrown: unknown;
+    try {
+      validate([modify('m1', { workItemId: A, patch: { blockedByAdd: ['wi_missing'] } })], {
+        liveById: threeLive,
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    expect((thrown as PlanRefGraphError).reason).toBe('dangling');
+  });
+
+  it('names the work item AND says a `MOTIR-<n>` key is not a ref — the 2026-08-29 fixture', () => {
+    // The correction door stored the literal string `MOTIR-3884`, which resolves
+    // to no id. The message a reviewer met named only a cuid.
+    expect(() =>
+      validate([modify('m1', { workItemId: A, patch: { blockedByRemove: ['MOTIR-3884'] } })], {
+        liveById: threeLive,
+      }),
+    ).toThrow(/MOTIR-wi_a "The wi_a card"[\s\S]*never a `<PREFIX>-<n>` key/);
   });
 });

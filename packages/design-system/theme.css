@@ -2510,14 +2510,28 @@
      asset carries the correction and the measurement. */
   /* pink — BUILT, waiting on checks (MOTIR-3003). The one saturated Tier-0 hue
      no other STATUS spends; sharing a hue across FAMILIES is this file's own
-     convention (--el-type-epic is also --color-accent). ΔE 33.2 / 26.2 from its
-     nearest neighbour in this palette.
+     convention (--el-type-epic is also --color-accent).
      ⚠️ FIVE palettes re-map --color-accent onto something a status already uses,
      so each carries its own override below — the same per-palette follow-up
      --el-status-planning needed in citrine and candy (MOTIR-2425). Measured by
      tests/theme/statusHueSeparation.test.ts, which now folds a color-mix rather
-     than throwing on one. */
-  --el-status-implemented: var(--color-accent);
+     than throwing on one.
+     ⚠️ STEPPED TOWARD THE INK (MOTIR-3954). The bare --color-accent was 2.66:1 on
+     --el-card and 2.44:1 on --el-surface in the BASE palette's LIGHT theme —
+     under 1.4.11's 3:1 for a graphical object, and the one palette x theme in
+     which this token missed the bar. A saturated pink at Radix-9 lightness has
+     nowhere to go on white, so the recipe takes one step of the palette's own
+     emphasis ink instead of a new hue: #cd58a2, 3.81 / 3.50 / 3.81 on
+     card / surface / page-bg. --color-charcoal flips with the theme (#37352f
+     light, #e5e5e5 dark), so the same expression DARKENS on white and LIGHTENS
+     on near-black — dark goes 7.22 -> 8.42:1. Both inputs stay palette-tuned, so
+     the four palettes that ride this base value (cobalt, evergreen, spectrum,
+     garnet) re-skin it as before and each GAINS contrast; ΔE2000 to the nearest
+     sibling stays >= 13.7 in all ten palettes x both themes (27.1 / 26.8 here).
+     Why the base and not a [data-palette='motir'] block: <html> carries no
+     data-appearance-scope, so a root palette block would be a second cascade
+     nobody renders — the base layer IS how the browser reaches these values. */
+  --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
   --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
   --el-status-done: var(--color-success); /* green — resolved */
   --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
@@ -3059,11 +3073,15 @@
    not an override — it is a scope reset — and the selector now says so.
 
    These values are COPIES, and the duplication is guarded rather than trusted:
-   `test/paletteScopeIsolation.test.tsx` asserts each declaration here equals
-   the value the base layer declares for that token, so a change to `@theme`
-   that is not mirrored here fails rather than drifts. The token SET is the
-   union of what any `[data-palette]` block overrides — a new palette that
-   overrides a token absent here fails the same test. */
+   `tests/theme/scopedPreviewIsolation.test.ts` asserts each declaration here
+   equals the value the base layer declares for that token, so a change to
+   `@theme` that is not mirrored here fails rather than drifts. The token SET is
+   the union of what any `[data-palette]` block overrides — a new palette that
+   overrides a token absent here fails the same test.
+   ⚠️ The path above was `test/paletteScopeIsolation.test.tsx` until MOTIR-3954,
+   which is a file that has never existed, and the VALUE assertion it promised
+   had never been written either — only the token-SET one had. Both are true
+   now. A citation to a guard is worth exactly as much as the guard. */
 [data-appearance-scope][data-palette='motir'] {
   --color-accent: #ff64c8;
   --color-accent-green: #1aae39;
@@ -3106,7 +3124,7 @@
   --el-sidebar-item-bg-hover: #eeede9;
   --el-status-blocked: var(--color-warning);
   --el-status-cancelled: var(--color-steel);
-  --el-status-implemented: var(--color-accent);
+  --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
   --el-status-in-review: var(--color-primary);
   --el-status-planning: var(--color-accent-teal);
 }

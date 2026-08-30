@@ -413,6 +413,30 @@ export type PlanGrammarViolation =
   | 'parent_terminal';
 
 /**
+ * Every {@link PlanGrammarViolation} member, ENUMERABLE AT RUNTIME (MOTIR-3936).
+ *
+ * The union above is the documented source; this record is what makes it
+ * countable, and the compiler enforces the two agree in BOTH directions — a
+ * missing key is an error and an extra one is too. That totality is the whole
+ * point: `tests/plans/approveRefusalClassification.test.ts` derives the refusal
+ * set from these arrays and fails until a newly added reason has been classified
+ * as plan-internal or tree-caused, so a new reason cannot default into the
+ * un-checked bucket.
+ */
+const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
+  illegal_parent: true,
+  unknown_kind: true,
+  unknown_type: true,
+  parent_depth_limit: true,
+  parent_terminal: true,
+};
+
+/** {@link PlanGrammarViolation}'s members as an array — see the record above. */
+export const PLAN_GRAMMAR_VIOLATIONS = Object.keys(
+  PLAN_GRAMMAR_VIOLATION_MEMBERS,
+) as PlanGrammarViolation[];
+
+/**
  * The proposal set does not satisfy the kind-parent grammar
  * (`lib/issues/parentRules.ts` — the SAME single-source matrix
  * `workItemsService` enforces), re-validated at persist independently of
@@ -444,6 +468,22 @@ export type PlanRefGraphViolation =
   | 'cycle';
 
 /**
+ * Every {@link PlanRefGraphViolation} member, ENUMERABLE AT RUNTIME — the twin of
+ * {@link PLAN_GRAMMAR_VIOLATIONS} above, and total in the same compiler-enforced
+ * way.
+ */
+const PLAN_REF_GRAPH_VIOLATION_MEMBERS: Record<PlanRefGraphViolation, true> = {
+  dangling: true,
+  duplicate: true,
+  cycle: true,
+};
+
+/** {@link PlanRefGraphViolation}'s members as an array — see the record above. */
+export const PLAN_REF_GRAPH_VIOLATIONS = Object.keys(
+  PLAN_REF_GRAPH_VIOLATION_MEMBERS,
+) as PlanRefGraphViolation[];
+
+/**
  * The plan's intra-plan ref graph is not materializable — a dangling ref, a
  * duplicate blocker, or a cycle. Raised BEFORE any write. → 400
  */
@@ -470,13 +510,21 @@ export class PlanRefGraphError extends Error {
  */
 export class PlanTargetImmutableError extends Error {
   readonly code = 'PLAN_TARGET_IMMUTABLE' as const;
+  /**
+   * `key` / `title` NAME the card (MOTIR-3936) — this refusal is TREE-CAUSED, so
+   * it is the one a reviewer meets most often and can do nothing about from a
+   * cuid. Optional because the in-transaction re-read raises the same class from
+   * a locked row, and a caller that has only the id still gets the old message.
+   */
   constructor(
     readonly planItemId: string,
     readonly workItemId: string,
     readonly status: string,
+    readonly key: string | null = null,
+    readonly title: string | null = null,
   ) {
     super(
-      `Work item ${workItemId} is in the terminal status "${status}" — completed work cannot be modified or removed by approving a plan.`,
+      `Work item ${key ? `${key} "${title ?? ''}"` : workItemId} is in the terminal status "${status}" — completed work cannot be modified or removed by approving a plan.`,
     );
     this.name = 'PlanTargetImmutableError';
   }
@@ -502,7 +550,7 @@ export class NoPlanForWorkItemError extends Error {
   readonly code = 'NO_PLAN_FOR_WORK_ITEM' as const;
   constructor(readonly workItemKey: string) {
     super(
-      `No submitted plan is anchored to ${workItemKey}. Automatic approval acts only on the plan a run's own refused card produced; approve any other plan in Motir.`,
+      `No submitted plan is anchored to ${workItemKey}. Automatic approval acts only on the plan a run's own refused work item produced; approve any other plan in Motir.`,
     );
     this.name = 'NoPlanForWorkItemError';
   }

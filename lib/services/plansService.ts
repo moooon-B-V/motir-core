@@ -542,19 +542,182 @@ async function runPersistGate(
         workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, t),
       );
   const liveById = new Map<string, LiveWorkItemState>(
-    rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status, projectId: r.projectId }]),
+    rows.map((r) => [
+      r.id,
+      {
+        id: r.id,
+        // The identity a REFUSAL names (MOTIR-3936). Already on the row this read
+        // returns, so naming the card costs nothing beyond carrying two columns.
+        key: r.identifier,
+        title: r.title,
+        kind: r.kind,
+        status: r.status,
+        projectId: r.projectId,
+      },
+    ]),
   );
   // The ANCESTOR CHAINS the re-parent gate needs (MOTIR-3859) — one batched
   // recursive read, and only when some `modify` actually proposes a new parent,
   // so a plan that re-parents nothing costs exactly what it cost before. Bound
   // the same way the row read above is, for the same reason.
   const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
+  // The COMMITTED `is_blocked_by` edges the plan's own edges join onto
+  // (MOTIR-3936) — skipped entirely when the plan writes no edge, so a plan that
+  // wires nothing costs exactly what it cost before.
+  const existingBlockedByEdges = await resolveBlockedByClosure(nodes, ctx, tx);
   validatePlanProposals({
     items: nodes,
     liveById,
     terminalStatusKeys,
     planProjectId,
     ancestorIdsById,
+    existingBlockedByEdges,
+  });
+}
+
+/**
+ * The transitive `is_blocked_by` closure DOWNSTREAM of every endpoint the plan's
+ * own edges touch (MOTIR-3936) — the committed half of the graph
+ * `assertBlockedByGraphAcyclic` walks.
+ *
+ * ⚠️ THE SAME WALK `enforce_work_item_link_no_cycle` DOES, taken breadth-first
+ * in one query per level instead of one recursive CTE. The trigger follows
+ * `is_blocked_by` forward from a new edge's far end and rejects when the chain
+ * returns to its near end; this collects exactly the edges that walk can reach,
+ * so the close and the trigger cannot disagree about what a cycle is. Seeded
+ * from BOTH ends of every proposed edge, because the plan may add several edges
+ * at once and the ring can run through any of them.
+ *
+ * Bounded at {@link BLOCKED_BY_CLOSURE_MAX_LEVELS} levels, well inside the
+ * trigger's own `lvl < 1000` cap: a dependency chain that deep is not a shape
+ * this product produces, and an unbounded walk on a pathological graph would
+ * hold the close open. Stopping early can only MISS a cycle — never invent one —
+ * and the trigger stays the backstop for the case it misses.
+ */
+const BLOCKED_BY_CLOSURE_MAX_LEVELS = 32;
+
+async function resolveBlockedByClosure(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<Array<{ blockedId: string; blockerId: string }>> {
+  const seeds = new Set<string>();
+  const addSeed = (ref: string | null | undefined): void => {
+    if (ref && !isTempRef(ref)) seeds.add(ref);
+  };
+  for (const node of nodes) {
+    if (node.op === 'add') {
+      for (const ref of node.blockedByRefs) addSeed(ref);
+      continue;
+    }
+    if (node.op !== 'modify' || !node.workItemId) continue;
+    const edges = [...(node.patch?.blockedByAdd ?? []), ...(node.patch?.blockedByRemove ?? [])];
+    if (edges.length === 0) continue;
+    addSeed(node.workItemId);
+    for (const ref of edges) addSeed(ref);
+  }
+  if (seeds.size === 0) return [];
+
+  const read = (ids: string[]): Promise<Array<{ blockedId: string; blockerId: string }>> =>
+    tx
+      ? workItemLinkRepository.findBlockedByEdges(ids, tx)
+      : withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+          workItemLinkRepository.findBlockedByEdges(ids, t),
+        );
+
+  const collected: Array<{ blockedId: string; blockerId: string }> = [];
+  const walked = new Set<string>();
+  let frontier = [...seeds];
+  for (let level = 0; level < BLOCKED_BY_CLOSURE_MAX_LEVELS && frontier.length > 0; level += 1) {
+    for (const id of frontier) walked.add(id);
+    const edges = await read(frontier);
+    collected.push(...edges);
+    frontier = [...new Set(edges.map((e) => e.blockerId))].filter((id) => !walked.has(id));
+  }
+  return collected;
+}
+
+// ── THE CORRECTION DOORS MAY NOT BREAK A PLAN (MOTIR-3936) ───────────────────
+//
+// `markPlanned` gates the CLOSE, which is what makes `planned` mean approvable.
+// AMENDMENT 8 then opened two doors onto a `planned` plan — `correctProposal`
+// and `withdrawProposal` — and neither re-asks the question the close answered.
+// So the invariant the close establishes survives exactly until the first
+// correction, which is how a plan reached a reviewer carrying a
+// `patch.blockedByRemove` naming no work item: the plan closed clean and the ref
+// was written afterwards.
+//
+// ⚠️ IT IS A "DO NOT MAKE IT WORSE" CHECK, NOT A "MUST BE PERFECT" ONE, and the
+// difference is the whole design. A plan that is ALREADY unapprovable — one
+// closed before this gate existed, or invalidated by the tree moving — is
+// precisely the plan somebody is reaching for a correction to REPAIR. Refusing
+// the repair because the plan is still broken mid-repair would lock the author
+// out of the only tool that fixes it, and a multi-edge correction is repaired
+// one call at a time by construction. So the gate compares BEFORE with AFTER and
+// refuses only a write that turns a passing plan into a failing one.
+
+/** Run the persist gate over a set and report the rejection, rather than throw. */
+async function persistGateVerdict(
+  items: PlanItem[],
+  ctx: ServiceContext,
+  terminalStatusKeys: ReadonlySet<string>,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<unknown | null> {
+  try {
+    await runPersistGate(items, ctx, terminalStatusKeys, planProjectId, tx);
+    return null;
+  } catch (err) {
+    if (
+      err instanceof PlanRefGraphError ||
+      err instanceof PlanGrammarError ||
+      err instanceof PlanTargetImmutableError
+    ) {
+      return err;
+    }
+    // Anything else is a real failure — a lost connection, a bug — and a gate
+    // that swallowed it would report "unchanged" for a plan it never checked.
+    throw err;
+  }
+}
+
+/**
+ * Assert a correction did not turn an approvable plan into one approve will
+ * refuse. Called INSIDE the correction's own transaction, after the write, so a
+ * refusal rolls the write back and the proposal is left exactly as it was.
+ *
+ * Both passes run with the project narrowing SUSPENDED, for the reason
+ * `assertProposalsPersistable` documents: the gate asks a WORKSPACE question,
+ * and a cross-project `blocked_by` is legal.
+ */
+async function assertCorrectionKeepsPlanApprovable(
+  before: PlanItem[],
+  after: PlanItem[],
+  ctx: ServiceContext,
+  terminalStatusKeys: ReadonlySet<string>,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const afterRejection = await persistGateVerdict(
+      after,
+      ctx,
+      terminalStatusKeys,
+      planProjectId,
+      tx,
+    );
+    if (!afterRejection) return;
+    const beforeRejection = await persistGateVerdict(
+      before,
+      ctx,
+      terminalStatusKeys,
+      planProjectId,
+      tx,
+    );
+    // The plan was already unapprovable — this write is (or is part of) the
+    // repair, and refusing it would leave nobody able to make one.
+    if (beforeRejection) return;
+    throw afterRejection;
   });
 }
 
@@ -1955,7 +2118,17 @@ async function assertReparentsLegalAtAppend(
     const referenced = collectReferencedWorkItemIds(nodes);
     const rows = await workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, tx);
     const liveById = new Map<string, LiveWorkItemState>(
-      rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status, projectId: r.projectId }]),
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          key: r.identifier,
+          title: r.title,
+          kind: r.kind,
+          status: r.status,
+          projectId: r.projectId,
+        },
+      ]),
     );
     const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
     for (const node of nodes) {
@@ -3053,6 +3226,15 @@ export const plansService = {
       }
     }
 
+    // The project's TERMINAL statuses, for the post-correction gate below.
+    // Resolved OUT HERE because `getTerminalStatusKeys` opens its own workspace
+    // context and Prisma cannot nest interactive transactions — the same reason
+    // `markPlanned` and `approvePlan` resolve it before their transactions open.
+    const correctionTerminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+      plan.projectId,
+      ctx.workspaceId,
+    );
+
     const { row, items } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
@@ -3175,6 +3357,21 @@ export const plansService = {
 
         await planItemRepository.update(planItemId, data, tx);
 
+        // ⚠️ THE CLOSE'S OWN GATE, RE-RUN ON THE CORRECTED PLAN (MOTIR-3936).
+        // `assertTempRefsResolvable` above is the APPEND's check and covers the
+        // `planItem:` half only; a ref naming a REAL work item — the half that
+        // needs a workspace read — was checked at the close and never again, so
+        // a correction could write one that resolves to nothing and the reviewer
+        // met it by pressing Approve. A throw here rolls this update back.
+        await assertCorrectionKeepsPlanApprovable(
+          all,
+          await planItemRepository.findByPlan(planId, tx),
+          ctx,
+          correctionTerminalStatusKeys,
+          plan.projectId,
+          tx,
+        );
+
         // The correction, on the plan's content trail (MOTIR-3535), in the same
         // transaction as the write it records.
         //
@@ -3234,6 +3431,13 @@ export const plansService = {
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
+    // The project's TERMINAL statuses, for the post-withdrawal gate below —
+    // resolved outside the transaction for the reason `markPlanned` states.
+    const withdrawTerminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+      plan.projectId,
+      ctx.workspaceId,
+    );
+
     const { row, items } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
@@ -3255,6 +3459,22 @@ export const plansService = {
         if (referrers.length > 0) throw new PlanProposalReferencedError(planItemId, referrers);
 
         await planItemRepository.deleteById(planItemId, tx);
+
+        // ⚠️ THE CLOSE'S OWN GATE, RE-RUN ON WHAT IS LEFT (MOTIR-3936). The
+        // referrer refusal above stops a `planItem:` ref being orphaned; it says
+        // nothing about the rest of the graph, and a withdrawal is a write to a
+        // `planned` plan exactly as a correction is. A throw rolls the delete
+        // back — and, as everywhere in this pair, a plan that was ALREADY
+        // unapprovable is left withdrawable, because a withdrawal is often the
+        // repair.
+        await assertCorrectionKeepsPlanApprovable(
+          all,
+          await planItemRepository.findByPlan(planId, tx),
+          ctx,
+          withdrawTerminalStatusKeys,
+          plan.projectId,
+          tx,
+        );
 
         // ⚠️ `planItemId` is NOT recorded on the revision: the row it names has
         // just been deleted, and `PlanRevision.planItemId` is a real relation, so

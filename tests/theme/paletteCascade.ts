@@ -211,6 +211,37 @@ export function loadTokenLayer(): {
   };
 }
 
+/**
+ * Is this (palette, theme, token) step MEASURED by the icon/UI contrast bars —
+ * MOTIR-3954.
+ *
+ * The status and priority sweeps used to answer this with a bare
+ * `token in paletteBlock(palette, theme)`: measure a step a palette OVERRIDES,
+ * skip one that rides its `--color-*` source. That is right about the ten
+ * OVERRIDE blocks and silently wrong about the eleventh case, because the BASE
+ * palette declares no `[data-palette='<base>']` block at all — its values live
+ * in the Tier-3 block above, which is the layer everything else is measured
+ * AGAINST. So every one of the base palette's status and priority inks rode its
+ * source, was skipped, and was never held to a bar it was itself the reference
+ * for. `--el-status-implemented` sat at 2.66:1 on `--el-card` for as long as the
+ * bar has existed and no guard could see it.
+ *
+ * The predicate is shared rather than written twice: both suites derive their
+ * population from the stylesheet the same way, and two copies of the base
+ * carve-out would be two things to keep in step. A step that is neither an
+ * override nor the base's own is still skipped, which is the part that was
+ * always correct.
+ */
+export function isMeasuredStep(
+  paletteBlock: (palette: string, theme: 'light' | 'dark') => Record<string, string>,
+  basePaletteId: string,
+  ctx: ThemeContext,
+  token: string,
+): boolean {
+  if (ctx.palette === basePaletteId) return true;
+  return token in paletteBlock(ctx.palette, ctx.theme);
+}
+
 /** Fully-resolved value of one `--el-*` token in one context. */
 export function resolveToken(
   rules: Rule[],
