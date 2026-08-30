@@ -28,6 +28,12 @@ import { appendEvents, closeRun, ingestContext, openRun } from './_helpers/agent
 
 const EMAIL = 'agent-runs-acceptance@example.com';
 
+/** Playwright's own origin — the one the RUNNER can reach. See `ingestContext`. */
+function origin(baseURL: string | undefined): string {
+  if (!baseURL) throw new Error('no Playwright baseURL — the ingest calls have nowhere to go');
+  return baseURL;
+}
+
 /** Give the SSE stream a moment of real work to deliver, without a bare sleep. */
 async function settle(api: APIRequestContext, runId: string, seq: number): Promise<void> {
   // AUTHORITATIVE, not a timeout: re-read the run through its own read route and
@@ -51,11 +57,12 @@ test('a run claims a story, and you can watch the whole set advance', async ({
   chapter,
   beat,
   acceptanceStory,
+  baseURL,
 }) => {
   acceptanceStory('MOTIR-1789');
 
   const seed = await seedScopedRun(EMAIL, 'RUNS');
-  const api = await ingestContext(seed.token);
+  const api = await ingestContext(seed.token, origin(baseURL));
 
   let runId = '';
   let seq = 0;
@@ -181,12 +188,12 @@ test('a run claims a story, and you can watch the whole set advance', async ({
   await api.dispose();
 });
 
-test('the log pane names the FLAG when a run reported no bodies', async ({ page }) => {
+test('the log pane names the FLAG when a run reported no bodies', async ({ page, baseURL }) => {
   // ⚠️ THE COMMON CASE IN PRODUCTION. Sending log bodies is opt-in and off by
   // default, so the pane most people meet is this one — and it has to read as
   // the operator's own choice rather than as something Motir failed to record.
   const seed = await seedScopedRun('agent-runs-quiet@example.com', 'QUIET');
-  const api = await ingestContext(seed.token);
+  const api = await ingestContext(seed.token, origin(baseURL));
 
   const runId = await openRun(api, {
     projectKey: seed.projectKey,
@@ -213,9 +220,10 @@ test('the log pane names the FLAG when a run reported no bodies', async ({ page 
 
 test('a deep link opens the modal already on that run, and no /runs/<id> route exists', async ({
   page,
+  baseURL,
 }) => {
   const seed = await seedScopedRun('agent-runs-deeplink@example.com', 'DEEP');
-  const api = await ingestContext(seed.token);
+  const api = await ingestContext(seed.token, origin(baseURL));
   const runId = await openRun(api, {
     projectKey: seed.projectKey,
     command: 'run_scope',

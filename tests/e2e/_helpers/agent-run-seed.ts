@@ -1,6 +1,5 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, request } from '@playwright/test';
-import { BASE_URL } from './cli-connect-seed';
 
 // DRIVING A RUN WITHOUT AN AGENT (Story MOTIR-1789 · MOTIR-1800).
 //
@@ -17,10 +16,26 @@ import { BASE_URL } from './cli-connect-seed';
 // would be racing a write that may not have landed, and the failure would look
 // like a rendering bug.
 
-/** A PAT-authenticated context that speaks `/api/v1`, exactly as the CLI does. */
-export async function ingestContext(token: string): Promise<APIRequestContext> {
+/**
+ * A PAT-authenticated context that speaks `/api/v1`, exactly as the CLI does.
+ *
+ * ⚠️ `baseURL` IS PLAYWRIGHT'S, PASSED IN BY THE SPEC — never the `BASE_URL`
+ * constant from `cli-connect-seed`. That constant falls back to
+ * `http://localhost:3000`, and the acceptance lane deliberately runs on a port
+ * of its own so it cannot collide with the main and billing lanes. Reading it
+ * here made every request in this file die as
+ * `apiRequestContext.post: connect ECONNREFUSED ::1:3000` — instantly and
+ * identically in every test, which reads like the server never started rather
+ * than like a spec pointed at the wrong door.
+ *
+ * `agent-authored-plan-seed.ts` carries the same warning for the MCP transport,
+ * where the same mistake surfaces as `TypeError: fetch failed`. The origin the
+ * RUNNER knows is Playwright's own `baseURL` — the value the browser is already
+ * pointed at — so the spec reads it from the fixtures and hands it over.
+ */
+export async function ingestContext(token: string, baseURL: string): Promise<APIRequestContext> {
   return request.newContext({
-    baseURL: BASE_URL,
+    baseURL,
     extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   });
 }
