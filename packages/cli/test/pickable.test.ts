@@ -122,7 +122,9 @@ describe('pickWarning — `motir run <key>` WARNS, it does not refuse', () => {
     expect(pickWarning({ status: 'todo', assigneeId: THEM }, ME)).toMatch(
       /assigned to someone else/,
     );
-    expect(pickWarning({ status: 'todo', assigneeId: THEM }, ME)).toMatch(/two agents on one card/);
+    expect(pickWarning({ status: 'todo', assigneeId: THEM }, ME)).toMatch(
+      /two agents on one work item/,
+    );
   });
 
   // MOTIR-3048 — the STATUS axis left this function. The claim endpoint refuses

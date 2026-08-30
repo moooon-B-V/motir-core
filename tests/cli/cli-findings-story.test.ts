@@ -189,7 +189,7 @@ describe('a run whose agent REFUSES the card', () => {
     const run = await ws.run(['auto', '--agent', agent.command, '--max', '5'], { env: agentEnv });
 
     expect(run.exitCode).toBe(0);
-    expect(run.stderr).toContain('refused its card and submitted a re-plan');
+    expect(run.stderr).toContain('refused its work item and submitted a re-plan');
     // The loop stopped: exactly one card was dispatched.
     expect(agent.invocations()).toHaveLength(1);
     expect(await statusOf(fx, second.item.identifier)).toBe('todo');

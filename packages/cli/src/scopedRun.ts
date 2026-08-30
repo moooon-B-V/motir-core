@@ -144,10 +144,10 @@ export function renderScopeRefusal(claim: ScopeClaim): string {
       const o = claim.offender;
       const holder = o?.assignee?.name ?? o?.transitionedBy?.name ?? null;
       return [
-        `${scope}: NOT claimed — a card in it is already held${holder ? ` by ${holder}` : ' by another run'}.`,
+        `${scope}: NOT claimed — a work item in it is already held${holder ? ` by ${holder}` : ' by another run'}.`,
         `  ${o?.key ?? 'a member'} — ${o?.title ?? ''} (at ${o?.status.key ?? 'an unknown status'})`,
         'Nothing was locked. Two runs on one story is the failure this refusal exists to',
-        'prevent; wait for the other run, or take the card over by hand if you know it is dead.',
+        'prevent; wait for the other run, or take the item over by hand if you know it is dead.',
       ].join('\n');
     }
     case 'mine':
@@ -158,9 +158,9 @@ export function renderScopeRefusal(claim: ScopeClaim): string {
     case 'not_claimable': {
       const o = claim.offender;
       return [
-        `${scope}: NOT claimed — a card in it is past the point a run may start it.`,
+        `${scope}: NOT claimed — a work item in it is past the point a run may start it.`,
         `  ${o?.key ?? 'a member'} — ${o?.title ?? ''} (at ${o?.status.key ?? 'an unknown status'})`,
-        'A run claims from the TO-DO category only, so a card that is implemented, under',
+        'A run claims from the TO-DO category only, so a work item that is implemented, under',
         'review, being re-planned or finished is not work an agent may be started on.',
         'Nothing was locked.',
       ].join('\n');
@@ -228,7 +228,7 @@ export function renderClaimedScope(
   const held = claim.members.filter((m) => m.key.toUpperCase() !== containerKey);
 
   blocks.push(
-    `Claimed ${scopeLabel(claim)} — ${held.length} card${held.length === 1 ? '' : 's'}, ` +
+    `Claimed ${scopeLabel(claim)} — ${held.length} work item${held.length === 1 ? '' : 's'}, ` +
       'all of them, or none.',
   );
 
@@ -258,7 +258,7 @@ export function renderClaimedScope(
 
   blocks.push(
     [
-      '⚠️ Every card above now reads In Progress, while only one is worked at a time.',
+      '⚠️ Every work item above now reads In Progress, while only one is worked at a time.',
       '   That is the claim, not a bug: "In Progress" here means THIS RUN OWNS IT.',
     ].join('\n'),
   );
@@ -440,7 +440,7 @@ export function renderOpenChildrenHold(
     `${containerKey}: NO pull request was opened — its child set grew while this run was working.`,
     ...openChildren.map((key) => `  ${key} — not implemented`),
     'A parent pull request is opened on the claim that everything under it is built, and these',
-    'cards were not in the set this run claimed. Nothing was reverted and nothing was lost: the',
+    'work items were not in the set this run claimed. Nothing was reverted and nothing was lost: the',
     'work IS pushed, and the branch is named below.',
     'Three ways forward — this run may not pick one for you:',
     `  • LAND them — \`motir run ${openChildren[0] ?? '<key>'}\` — then re-run ${containerKey} to open the pull request.`,
@@ -461,7 +461,7 @@ export function renderOpenChildrenHold(
 export function renderEmptyScope(label: string): string {
   return [
     `${label}: nothing is ready to start.`,
-    'Every card under it is either already in flight, finished, or waiting on work',
+    'Every work item under it is either already in flight, finished, or waiting on work',
     'outside it. Nothing was claimed and nothing was changed.',
   ].join('\n');
 }

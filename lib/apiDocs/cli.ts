@@ -281,7 +281,7 @@ export const CLI_STEPS: readonly CliStep[] = [
     blocks: [
       {
         kind: 'prose',
-        text: 'Read the card first. `motir show` gives you the whole thing — its fields, its readiness, its dependency edges and, for a story, its children in build order. That is where you notice the item assumes something that does not exist yet.',
+        text: 'Read the work item first. `motir show` gives you the whole thing — its fields, its readiness, its dependency edges and, for a story, its children in build order. That is where you notice the item assumes something that does not exist yet.',
       },
       {
         kind: 'code',
@@ -310,7 +310,7 @@ export const CLI_STEPS: readonly CliStep[] = [
         // exited; a reader who is not told that diagnoses it as a stuck run.
         kind: 'callout',
         tone: 'info',
-        text: 'A card the CLI dispatched lands at **Implemented**, not In Review: the code is committed, pushed and its pull request is open, and nothing has compiled it yet. **CI moves it to In Review** when the checks on that commit go green — server-side, minutes after your terminal has exited, with nothing to wait for locally. A red build leaves the card at Implemented with a comment naming the failed check; push a fix to the same branch and the card promotes itself. Merging closes it — and for a `motir auto` run, one merge closes **every** card that branch carries.',
+        text: 'A work item the CLI dispatched lands at **Implemented**, not In Review: the code is committed, pushed and its pull request is open, and nothing has compiled it yet. **CI moves it to In Review** when the checks on that commit go green — server-side, minutes after your terminal has exited, with nothing to wait for locally. A red build leaves the item at Implemented with a comment naming the failed check; push a fix to the same branch and the item promotes itself. Merging closes it — and for a `motir auto` run, one merge closes **every** item that branch carries.',
       },
     ],
   },

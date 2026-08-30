@@ -284,14 +284,14 @@ describe('renderClaimedScope', () => {
       [readyRow('PROD-2'), readyRow('PROD-3')],
     );
 
-    expect(out).toContain('Claimed PROD-1 "The story" — 2 cards, all of them, or none.');
+    expect(out).toContain('Claimed PROD-1 "The story" — 2 work items, all of them, or none.');
     expect(out).toContain('PROD-2');
     expect(out).toContain('PROD-3');
     // ⚠️ The container is a SCOPE, not work. It is claimed and it is not run.
     expect(out).not.toMatch(/^\s*PROD-1\s+/m);
     // The one consequence of this design a person has to be TOLD rather than
     // discover from a board full of in-progress cards.
-    expect(out).toContain('Every card above now reads In Progress');
+    expect(out).toContain('Every work item above now reads In Progress');
     expect(out).toContain('THIS RUN OWNS IT');
   });
 
@@ -350,7 +350,7 @@ describe('the DEFENSIVE arms — a server that answers with an outcome and no de
       }),
       [readyRow('PROD-2'), readyRow('PROD-3')],
     );
-    expect(out).toContain('Claimed The active sprint "Sprint 44" — 2 cards');
+    expect(out).toContain('Claimed The active sprint "Sprint 44" — 2 work items');
     expect(out).not.toContain('null');
   });
 });

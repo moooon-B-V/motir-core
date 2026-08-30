@@ -97,7 +97,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'In ONE transaction the row is locked, its status is re-checked against the TO-DO ' +
       'category, and — if it holds — the item is assigned to the caller AND moved to ' +
       '\u201cIn progress\u201d. The to-do category is `todo` AND `blocked`, so a deliberately ' +
-      'forced dispatch of a card whose dependencies are unmet still works. ' +
+      'forced dispatch of an item whose dependencies are unmet still works. ' +
       '\u26a0\ufe0f A refusal is a 200 with an `outcome`, not an error, because three of the ' +
       'four outcomes are ordinary: `claimed` (it is yours), `mine` (already yours \u2014 resume ' +
       'your own interrupted run), `taken` (somebody else holds it, and they are named), ' +
@@ -139,7 +139,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       '⚠️ ALL OR NOTHING: if ANY member is un-claimable the whole claim rolls back and ' +
       'NOTHING is written, because a partially-claimed scope is the one outcome with no good ' +
       'handling — you can neither finish it nor cleanly abandon it. ' +
-      '⚠️ EVERY CARD IN A CLAIMED SCOPE READS “In progress” FOR THE WHOLE ' +
+      '⚠️ EVERY WORK ITEM IN A CLAIMED SCOPE READS “In progress” FOR THE WHOLE ' +
       'RUN, while only one of them is being worked at a time. That is deliberate and it changes ' +
       'what the status MEANS: from “an agent is on this right now” to “this run ' +
       'owns it”. The board therefore shows the run’s FOOTPRINT rather than its cursor ' +
@@ -387,8 +387,8 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'APPROVE the plan a work item’s own re-plan produced, without a browser session — the ' +
       'entrance `motir auto --auto-approve-replan` drives. Its proposals become work items: an ' +
       '`add` creates, a `modify` applies to the same item, a `remove` archives. ⚠️ IT IS ' +
-      'ADDRESSED BY THE CARD, and that is the bound: the server resolves the plan from the ' +
-      'planning conversation ANCHORED at this key, so there is no way to name a plan the card ' +
+      'ADDRESSED BY THE WORK ITEM, and that is the bound: the server resolves the plan from the ' +
+      'planning conversation ANCHORED at this key, so there is no way to name a plan the item ' +
       'did not produce. Every other plan — a cadence plan, an onboarding generation, one ' +
       'submitted from the project-wide panel — is refused here and keeps the human decision it ' +
       'was written under. It calls the same service the in-app approve does, so the ' +

@@ -282,7 +282,7 @@ describe('a card read that FAILS', () => {
 
     expect(outcome.kind).toBe('fix_failed');
     expect(outcome.kind === 'fix_failed' && outcome.detail).toContain('ECONNRESET');
-    expect(lines.join('\n')).toContain('could not read the card');
+    expect(lines.join('\n')).toContain('could not read the work item');
   });
 
   it('a fixing failure with NO detail still says something', async () => {

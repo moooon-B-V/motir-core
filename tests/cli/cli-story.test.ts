@@ -1339,7 +1339,7 @@ describe('repo routing — where the agent actually runs', () => {
     expect(first.exitCode).toBe(0);
     // The label no longer claims the PROMPT creates the checkout — it does not;
     // its first command is `git worktree add`. It names the card instead.
-    expect(first.stderr).toContain('"motir-core" does not exist yet; this card creates it');
+    expect(first.stderr).toContain('"motir-core" does not exist yet; this work item creates it');
     expect(agent.invocations()[0]?.cwd).toBe(ws.root);
     expect(existsSync(ws.path('motir-core'))).toBe(true);
 
