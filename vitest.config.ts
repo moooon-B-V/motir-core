@@ -1280,6 +1280,35 @@ export default defineConfig({
         'lib/api/v1/openapi/emit.ts',
         'lib/api/v1/workItems/operations.ts',
         'app/api/openapi/v1.json/route.ts',
+        // Story MOTIR-3876 · Subtasks MOTIR-3945 + MOTIR-3946 — the PUBLIC read
+        // contract: its own version, its own registry, its own document, served
+        // beside v1's. A SECOND contract, not a second copy — see
+        // `docs/decisions/public-surface-hosts.md` AMENDMENT 1 for the three
+        // grounds. MEASURED FIRST at 100/100/100 each, then pinned at the 90
+        // floor below, per this block's own rule.
+        // Story MOTIR-3876 · Subtask MOTIR-3885 — the ORIGIN SEAM this story
+        // widened: `publicSiteOrigin()` and the description the public metadata
+        // and the JSON-LD are both built from, plus the sitemap re-based on the
+        // application origin. `urls.ts` shipped at 45% statements / 25% branches
+        // with `derivePublicDescription` untested at all; MEASURED at
+        // 100/100/100 after 3885's cases, then pinned at the floor below.
+        'lib/publicProjects/urls.ts',
+        'app/sitemap.ts',
+        // Story MOTIR-3876 · Subtask MOTIR-3726 — `/robots.txt` and the policy
+        // behind it. MEASURED at 100/100/100 on `tests/seo/robots.test.ts`;
+        // the DERIVED half of that guard walks the signed-in route groups and
+        // therefore runs in the structural-guard lane, which carries no
+        // coverage — so the numbers here come from the policy tests alone,
+        // which is where the calls are.
+        'lib/robotsPolicy.ts',
+        'app/robots.ts',
+        'lib/api/public/contractVersion.ts',
+        'lib/api/public/openapi/operation.ts',
+        'lib/api/public/openapi/schemas.ts',
+        'lib/api/public/openapi/operations.ts',
+        'lib/api/public/openapi/emit.ts',
+        'app/api/openapi/public.json/route.ts',
+        'app/api/public/p/[identifier]/route.ts',
         // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
         'lib/api/v1/identity/schema.ts',
         'lib/api/v1/planning/operations.ts',
@@ -2297,6 +2326,22 @@ export default defineConfig({
         'lib/api/v1/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/workItems/operations.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/openapi/v1.json/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3876 · Subtasks MOTIR-3945 + MOTIR-3946 — the public read
+        // contract (see the `include` note above; each measured at 100/100/100).
+        // Story MOTIR-3876 · Subtask MOTIR-3885 — the origin seam (measured
+        // 100/100/100 each; see the `include` note above).
+        'lib/publicProjects/urls.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/sitemap.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3876 · Subtask MOTIR-3726 — robots (measured 100/100/100).
+        'lib/robotsPolicy.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/robots.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/public/contractVersion.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/public/openapi/operation.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/public/openapi/schemas.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/public/openapi/operations.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/public/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/openapi/public.json/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/public/p/[identifier]/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
         'lib/api/v1/identity/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/planning/operations.ts': { branches: 90, functions: 90, lines: 90 },

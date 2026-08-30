@@ -866,7 +866,7 @@ describe('motir done', () => {
       await runCommand('PROD-7', { print: true });
 
       expect(harness.stderr).toContain('assigned to someone else');
-      expect(harness.stderr).toContain('two agents on one card');
+      expect(harness.stderr).toContain('two agents on one work item');
       // …and it still went ahead: the human asked for it.
       expect(toolNames()).toContain('dispatch_prompt');
     });

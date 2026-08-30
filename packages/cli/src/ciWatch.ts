@@ -162,7 +162,7 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
       const detail =
         lastReadError === null
           ? `CI never reported after ${polls} checks`
-          : `could not read the card after ${polls} attempts — ${lastReadError}`;
+          : `could not read the work item after ${polls} attempts — ${lastReadError}`;
       input.report(`${input.key}: ${detail}.`);
       return { kind: 'fix_failed', attempts: reds, detail };
     }

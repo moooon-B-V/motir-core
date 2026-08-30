@@ -426,7 +426,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--disable-replan',
         description:
-          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+          'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
       },
       {
         flags: '--no-log-bug',
@@ -491,7 +491,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--disable-replan',
         description:
-          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+          'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
       },
       {
         flags: '--no-log-bug',
@@ -593,7 +593,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--disable-replan',
         description:
-          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+          'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
       },
       {
         flags: '--no-log-bug',
@@ -665,7 +665,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--disable-replan',
         description:
-          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+          'Do not let the agent submit a re-plan for a wrong work item; it comments and stops.',
       },
       {
         flags: '--no-log-bug',

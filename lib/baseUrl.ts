@@ -1,6 +1,14 @@
 // The application's own absolute origin — and the ONE place its precedence
 // lives (MOTIR-2388; `docs/decisions/application-hosting.md` §4 / Q3).
 //
+// ⚠️ THIS MODULE ANSWERS ONE QUESTION: *where is the APPLICATION?* It used to
+// answer a second — *what origin do public canonicals, OpenGraph URLs and
+// sitemap entries use?* — because the two were the same host. They are not:
+// `docs/decisions/public-surface-hosts.md` puts the public surface on `motir.co`,
+// served by `motir-marketing`. That question moved to
+// `lib/publicProjects/urls.ts`'s `publicSiteOrigin()`, which reads its own
+// `MOTIR_PUBLIC_SITE_URL` and falls back HERE while it is unset (MOTIR-3881).
+//
 // Everything that builds an absolute URL pointing back AT this app resolves
 // through here: emailed links (invite, mention, watcher, saved-filter digest,
 // password reset), Better-Auth's `baseURL` and `trustedOrigins`, OAuth callback

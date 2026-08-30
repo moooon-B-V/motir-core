@@ -230,7 +230,7 @@ export class RepoSessions {
       if (cached === null || (cached === undefined && target.reason !== 'repo_checkout')) {
         info(
           `No session branch possible in ${target.cwd} (${target.targetRepo ?? 'unpinned'}).` +
-            ' This card carries more than one repository, so it ships as its own pull' +
+            ' This work item carries more than one repository, so it ships as its own pull' +
             ' requests in all of them rather than a lineage in some.',
         );
         return null;
@@ -1180,7 +1180,7 @@ function ensureRepoPullRequest(session: RepoSession, runId: string, run: Command
         // saying the close-out completes it. Rewritten in full at the end.
         body:
           `Opened by \`motir auto\` (run \`${runId}\`) at this repository's first implemented ` +
-          `card, so its checks run against the work as it lands rather than only at the end.\n\n` +
+          `work item, so its checks run against the work as it lands rather than only at the end.\n\n` +
           `Carried so far: ${session.keys.length > 0 ? session.keys.join(', ') : '—'}\n\n` +
           `_This body is rewritten with the full run when the loop finishes._`,
       },

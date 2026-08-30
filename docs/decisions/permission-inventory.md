@@ -605,6 +605,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/internal/billing/ai-included-seat`     | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/billing/scaled-tracker-state` | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/openapi/v1.json`                       | GET                   | — none —                                                          | —          | no-gate  | R32 |
+| `/api/openapi/public.json`                   | GET                   | — none —                                                          | —          | no-gate  | R32 |
 | `/api/resend/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
 
 ### `integration`
@@ -646,6 +647,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/public-requests/[id]/upvote`                     | POST   | workspace only                                                                    | `public_request:comment` | existing | R36 |
 | `/api/public/categories`                               | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
 | `/api/public/explore`                                  | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/p/[identifier]`                           | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/changelog`                 | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/follow`                    | POST   | session + `assertCanBrowsePublic`                                                 | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/follow`                    | DELETE | session + `assertCanBrowsePublic`                                                 | `public_request:submit`  | existing | R33 |

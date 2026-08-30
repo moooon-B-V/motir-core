@@ -270,7 +270,7 @@ const STOP_LABEL: Record<StopReason, string> = {
   max: '--max reached',
   halted: 'halted on the first agent failure (--keep-going continues past one)',
   interrupted: 'interrupted (Ctrl-C)',
-  replanned: 'an agent refused its card and submitted a re-plan — waiting for you in Motir',
+  replanned: 'an agent refused its work item and submitted a re-plan — waiting for you in Motir',
 };
 
 const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
@@ -483,7 +483,7 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
           (a) =>
             `  ${a.planId} — approved for ${a.key}, ${a.proposalCount} proposal${a.proposalCount === 1 ? '' : 's'} materialized`,
         ),
-        '  Each card that was re-planned is held out of THIS run; re-run to pick the new work up.',
+        '  Each item that was re-planned is held out of THIS run; re-run to pick the new work up.',
       ].join('\n'),
     );
   }
@@ -501,7 +501,7 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
           // — the approvals block above says what happened to it.
           const approved = summary.approvals.some((a) => a.key === r.key);
           return approved
-            ? `  ${r.key} — its plan was approved by this run (above); the card itself stays in Planning`
+            ? `  ${r.key} — its plan was approved by this run (above); the item itself stays in Planning`
             : `  ${r.key} — review the submitted plan in Motir, then re-run it`;
         }),
         '  Nothing was recorded for these: no branch, no pull request, no status moved by this run.',

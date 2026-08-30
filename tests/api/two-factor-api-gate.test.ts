@@ -54,6 +54,10 @@ const EXEMPT: { file: string; why: string }[] = [
     why: 'THE DEADLOCK, same reason — the trusted-device list is rendered by the same pane and cleared from it.',
   },
   {
+    file: 'app/api/public/p/[identifier]/route.ts',
+    why: 'The public project SUBJECT (MOTIR-3945) — anonymous-tolerant for the same reason as the four list reads beside it: an anonymous reader is the point of a public project page, and the session is read only to personalise (member visibility, `canManage`), never to authorise.',
+  },
+  {
     file: 'app/api/public/p/[identifier]/items/route.ts',
     why: 'Genuinely tolerates `session === null` (`session?.user.id ?? null`): an ANONYMOUS reader is the point of a public project page, and the session is read only to personalise, never to authorise.',
   },

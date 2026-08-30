@@ -389,7 +389,7 @@ export interface McpToolSummary {
 const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   attach_file: {
     summary:
-      'Put a file ON a work item — a research findings document, a review’s notes — so a reader sees the deliverable on the card instead of hunting for a pull request.',
+      'Put a file ON a work item — a research findings document, a review’s notes — so a reader sees the deliverable on the work item instead of hunting for a pull request.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '138c5dd702b3',
   },
@@ -415,7 +415,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   unlink_pull_request: {
     summary:
       'Undo ONE `link_pull_request` — remove the delivery recorded between a work item and a ' +
-      'pull request. A delivery is a row, so re-linking the right card ADDS rather than ' +
+      'pull request. A delivery is a row, so re-linking the right work item ADDS rather than ' +
       'corrects; this removes exactly the one pair you name and leaves every other delivery ' +
       'alone.',
     // Regenerated from a live `tools/list` handshake, never from the source.

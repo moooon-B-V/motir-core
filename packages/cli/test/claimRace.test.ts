@@ -222,7 +222,7 @@ describe('two concurrent `motir run` invocations at ONE card', () => {
     // The loser names the holder rather than reporting a bare "could not claim
     // it" — the discrimination this card exists to preserve.
     expect(stderr).toContain(`already claimed by ${NAMES[winner]}`);
-    expect(stderr).toContain('Two agents on one card');
+    expect(stderr).toContain('Two agents on one work item');
     expect(loser).not.toBe(winner);
 
     // A lost race is not a failed run: the loser exits cleanly, having changed

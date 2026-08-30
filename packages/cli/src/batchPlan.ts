@@ -229,7 +229,7 @@ const STOP_LABEL: Record<BatchStopReason, string> = {
   max: '--max reached',
   halted: 'halted on the first agent failure (--keep-going continues past one)',
   interrupted: 'interrupted (Ctrl-C)',
-  gated: 'stopped between cards — the card just finished is not ready to build on',
+  gated: 'stopped between items — the item just finished is not ready to build on',
 };
 
 const SKIP_LABEL: Record<SnapshotSkipReason, string> = {
@@ -425,7 +425,7 @@ export function renderReconcile(reconcile: BatchReconcile): string[] {
   if (reconcile.unavailable !== undefined) {
     return [
       [
-        'Where the dispatched cards ended up: COULD NOT BE READ.',
+        'Where the dispatched items ended up: COULD NOT BE READ.',
         `  ${reconcile.unavailable}`,
         '  The run itself is unaffected — everything above is what it observed.',
       ].join('\n'),

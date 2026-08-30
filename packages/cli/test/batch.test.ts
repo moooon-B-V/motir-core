@@ -1329,7 +1329,7 @@ describe('motir batch — the end-of-run reconcile (MOTIR-3197)', () => {
 
     expect(summary.reconcile).toEqual({ cards: [], unavailable: 'the server is unreachable' });
     const out = renderBatchSummary(summary as BatchSummary);
-    expect(out).toContain('Where the dispatched cards ended up: COULD NOT BE READ.');
+    expect(out).toContain('Where the dispatched items ended up: COULD NOT BE READ.');
     expect(out).toContain('the server is unreachable');
     // The run succeeded. A reporting read that could not run must not change
     // that — the read-back is an observation, never a gate.

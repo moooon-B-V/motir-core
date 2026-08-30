@@ -63,7 +63,7 @@ export interface ScopeRunOptions {
 export function refuseLeafOnlyFlag(opts: ScopeRunOptions): void {
   if (opts.print) {
     throw new CliError('`--print` needs one prompt; a scoped run has one per leaf.', {
-      hint: 'Print a single card with `motir run <leaf-key> --print`.',
+      hint: 'Print a single work item with `motir run <leaf-key> --print`.',
     });
   }
   if (opts.force) {
@@ -73,7 +73,7 @@ export function refuseLeafOnlyFlag(opts: ScopeRunOptions): void {
   }
   if (opts.kinds !== undefined) {
     throw new CliError('`--kinds` filters a ready-set PICK; a scoped run drains a claimed set.', {
-      hint: 'The claim is all-or-nothing over the whole scope, so a filtered run would hold cards it never worked.',
+      hint: 'The claim is all-or-nothing over the whole scope, so a filtered run would hold work items it never worked.',
     });
   }
 }

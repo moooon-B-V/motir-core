@@ -661,7 +661,7 @@ export function pickWarning(
   ownerId: string,
 ): string | null {
   if (item.assigneeId !== null && item.assigneeId !== ownerId) {
-    return 'assigned to someone else — dispatching it anyway will put two agents on one card.';
+    return 'assigned to someone else — dispatching it anyway will put two agents on one work item.';
   }
   return null;
 }

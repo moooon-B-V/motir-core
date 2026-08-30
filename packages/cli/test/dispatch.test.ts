@@ -289,7 +289,7 @@ describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)',
     const text = renderDispatchAdvisories(prompt({ advisories: [straddleAdvisory()] })) as string;
     expect(text).toContain('criterion 3 names motir-ai/src/services/codeRepoService.ts');
     expect(text).toContain('which lives in motir-ai');
-    expect(text).toContain("not this card's pinned repo");
+    expect(text).toContain("not this work item's pinned repo");
     expect(text).toContain('NOT a blocker');
     // The same regression the ordering variant guards: rendering a straddle
     // through the ORDERING branch would print `says "undefined"`.
@@ -302,7 +302,7 @@ describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)',
       prompt({ advisories: [straddleAdvisory({ reason: 'unpinnable' })] }),
     ) as string;
     expect(text).toContain('pins no repo while its criteria name more than one');
-    expect(text).not.toContain("not this card's pinned repo");
+    expect(text).not.toContain("not this work item's pinned repo");
   });
 
   it('renders BOTH shape members together — neither is swallowed by the other', () => {
@@ -431,7 +431,7 @@ describe('summary + outcome rendering', () => {
     // git repository. The label now names the one case that legitimately reaches
     // this outcome — a repository that does not exist ANYWHERE yet.
     expect(cwdReasonLabel(resolveDispatchTarget(ROOT, LINK, 'x', { exists: none }))).toContain(
-      'does not exist yet; this card creates it',
+      'does not exist yet; this work item creates it',
     );
     expect(cwdReasonLabel(resolveDispatchTarget(ROOT, LINK, null, { exists: none }))).toContain(
       'pins no repo',
@@ -674,7 +674,7 @@ describe('the delivery state on each repository line', () => {
     expect(text).toContain('NOT ESTABLISHED');
     expect(text).toContain('does not exist yet');
     expect(text).toContain('excluded');
-    expect(text).toContain('does not hold this card');
+    expect(text).toContain('does not hold this work item');
     expect(text).not.toContain('awaiting');
   });
 

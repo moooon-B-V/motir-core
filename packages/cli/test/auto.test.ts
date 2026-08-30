@@ -1651,7 +1651,7 @@ describe('landedWork — the partition that used to be `!== failed` (MOTIR-3018)
       stopReason: 'replanned',
     };
     const text = renderAutoSummary(summary);
-    expect(text).toContain('an agent refused its card and submitted a re-plan');
+    expect(text).toContain('an agent refused its work item and submitted a re-plan');
     expect(text).toContain('Re-planned');
     expect(text).toContain('PROD-2');
     // Not listed as delivered work, and not as a failure.
