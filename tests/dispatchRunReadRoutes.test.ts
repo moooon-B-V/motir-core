@@ -24,7 +24,7 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 
 const { GET: getRun } = await import('@/app/api/dispatch-runs/[id]/route');
 const { GET: getStream } = await import('@/app/api/dispatch-runs/[id]/stream/route');
-const { GET: getCardHistory } = await import('@/app/api/work-items/[key]/dispatch-runs/route');
+const { GET: getCardHistory } = await import('@/app/api/work-items/[id]/dispatch-runs/route');
 const { GET: getActive } = await import('@/app/api/projects/[key]/dispatch-runs/active/route');
 const { GET: getHistory } = await import('@/app/api/projects/[key]/dispatch-runs/route');
 const { dispatchRunService } = await import('@/lib/services/dispatchRunService');
@@ -278,7 +278,7 @@ describe('GET /api/dispatch-runs/[id]/stream', () => {
   });
 });
 
-describe('GET /api/work-items/[key]/dispatch-runs', () => {
+describe('GET /api/work-items/[id]/dispatch-runs', () => {
   it('returns every run that carried a LEG for the card — including one it is not the scope of', async () => {
     const [swept, other] = await seedCards(2);
     const scope = await workItemsService.createWorkItem(
@@ -302,7 +302,7 @@ describe('GET /api/work-items/[key]/dispatch-runs', () => {
     );
 
     const res = await getCardHistory(req(`/api/work-items/${swept}/dispatch-runs`), {
-      params: Promise.resolve({ key: swept! }),
+      params: Promise.resolve({ id: swept! }),
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { runs: Array<{ id: string; command: string }> };
@@ -325,7 +325,7 @@ describe('GET /api/work-items/[key]/dispatch-runs', () => {
     }
 
     const page1 = await getCardHistory(req(`/api/work-items/${a}/dispatch-runs?limit=2`), {
-      params: Promise.resolve({ key: a! }),
+      params: Promise.resolve({ id: a! }),
     });
     const body1 = (await page1.json()) as {
       runs: Array<{ id: string }>;
@@ -338,7 +338,7 @@ describe('GET /api/work-items/[key]/dispatch-runs', () => {
 
     const page2 = await getCardHistory(
       req(`/api/work-items/${a}/dispatch-runs?limit=2&cursor=${body1.nextCursor}`),
-      { params: Promise.resolve({ key: a! }) },
+      { params: Promise.resolve({ id: a! }) },
     );
     const body2 = (await page2.json()) as {
       runs: Array<{ id: string }>;
@@ -354,7 +354,7 @@ describe('GET /api/work-items/[key]/dispatch-runs', () => {
     workspaceCtx.current = { userId: other.ownerId, workspaceId: other.workspaceId };
 
     const res = await getCardHistory(req(`/api/work-items/${a}/dispatch-runs`), {
-      params: Promise.resolve({ key: a! }),
+      params: Promise.resolve({ id: a! }),
     });
     expect(res.status).toBe(404);
   });
