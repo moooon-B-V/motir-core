@@ -460,7 +460,22 @@ way it stretches a div. **Every edge SVG in the asset was resolving to 16×16**,
 about 4×6px and no edge — the running one included — was ever visible. Measured, not guessed: six
 SVGs at `16x16`, and `543x315` / `461x208` once `width: 100%; height: 100%` was added.
 
-Two consequences worth keeping, because they are the reason it survived review:
+⚠️ **AND THE ARROWHEADS WERE MISSING TOO** (Yue, 2026-08-30: _"without the arrow we don't know
+which card is blocked"_). This is not decoration: the whole claim of the running edge is that it
+points FROM what an agent is working TO what becomes reachable when it lands, and a plain line states
+a relationship without a direction. The notes had asserted the arrow all along — _"the arrow already
+points blocker → blocked"_ — while no `marker-end` existed anywhere in the asset. Every edge now
+carries one, mirroring `PlanningCanvas`'s shipped markers exactly (same `viewBox`, `refX`,
+`markerWidth` and `orient="auto-start-reverse"`), in their own `<svg>` for the same reason the
+component's are: marker refs are document-global, and a second element inside `.cvEdges` would break
+the path-count-equals-edge-count property its guard asserts.
+
+**The IMPLEMENTATION was already correct** — `PlanningCanvas` has had a `running` marker filled
+`--el-status-in-progress` since MOTIR-3972 and applies `markerEnd` to every edge. Only the design
+asset was missing them, which is the same class of gap as the invisible SVG above: the thing the
+notes claimed and the thing the file did had drifted apart, and nothing compared them.
+
+Three consequences worth keeping, because they are the reason it survived review:
 
 - **The path geometry had never been checked against the nodes**, since nothing was on screen to
   check. Every `d` was authored blind and every one was wrong — endpoints landing inside the target

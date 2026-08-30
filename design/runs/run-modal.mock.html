@@ -2392,6 +2392,41 @@
   </head>
   <body>
     <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <!-- ⚠️ ARROWHEADS, and they are not decoration: WITHOUT THE ARROW AN EDGE
+           DOES NOT SAY WHICH WORK ITEM IS BLOCKED (Yue, 2026-08-30). The whole
+           claim of the running edge is that it points FROM what an agent is
+           working TO what becomes reachable when it lands, and a plain line
+           states a relationship without a direction.
+
+           These mirror `PlanningCanvas`'s shipped markers exactly — same
+           viewBox, refX, size and `orient="auto-start-reverse"` — and they live
+           in a separate <svg> for the same reason the component's do: marker
+           refs are document-global, and a second element inside `.cvEdges` would
+           break the path-count-equals-edge-count property its guard asserts. -->
+      <defs>
+        <marker
+          id="arrow-run"
+          viewBox="0 0 10 10"
+          refX="8.5"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0L10 5L0 10z" fill="var(--el-status-in-progress)" />
+        </marker>
+        <marker
+          id="arrow-still"
+          viewBox="0 0 10 10"
+          refX="8.5"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0L10 5L0 10z" fill="var(--el-border-strong)" />
+        </marker>
+      </defs>
       <symbol
         id="i-bot"
         viewBox="0 0 24 24"
@@ -2581,13 +2616,20 @@
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
+                        marker-end="url(#arrow-still)"
                       />
-                      <path class="flow" d="M 345 127 L 345 168" fill="none" />
+                      <path
+                        class="flow"
+                        d="M 345 127 L 345 168"
+                        fill="none"
+                        marker-end="url(#arrow-run)"
+                      />
                       <path
                         d="M 204 173 C 227 173, 227 222, 250 222"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
+                        marker-end="url(#arrow-still)"
                       />
                     </svg>
                     <div class="cvNode" style="left: 14px; top: 22px">
@@ -2836,13 +2878,20 @@
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
+                        marker-end="url(#arrow-still)"
                       />
-                      <path class="flow" d="M 345 127 L 345 168" fill="none" />
+                      <path
+                        class="flow"
+                        d="M 345 127 L 345 168"
+                        fill="none"
+                        marker-end="url(#arrow-run)"
+                      />
                       <path
                         d="M 204 173 C 227 173, 227 222, 250 222"
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
+                        marker-end="url(#arrow-still)"
                       />
                     </svg>
                     <div class="cvNode" style="left: 14px; top: 22px">
@@ -3031,13 +3080,24 @@
                 "
               >
                 <svg class="cvEdges" aria-hidden="true">
-                  <path class="flow" d="M 167 105 C 205 105, 220 47, 258 47" fill="none" />
-                  <path class="flow" d="M 167 105 C 205 105, 220 163, 258 163" fill="none" />
+                  <path
+                    class="flow"
+                    d="M 167 105 C 205 105, 220 47, 258 47"
+                    fill="none"
+                    marker-end="url(#arrow-run)"
+                  />
+                  <path
+                    class="flow"
+                    d="M 167 105 C 205 105, 220 163, 258 163"
+                    fill="none"
+                    marker-end="url(#arrow-run)"
+                  />
                   <path
                     d="M 335 82 L 335 128"
                     fill="none"
                     stroke="var(--el-border-strong)"
                     stroke-width="1.5"
+                    marker-end="url(#arrow-still)"
                   />
                 </svg>
                 <div class="cvNode sel" style="left: 9px; top: 72px; width: 158px">
@@ -3086,6 +3146,7 @@
                     stroke="var(--el-status-in-progress)"
                     stroke-width="2"
                     stroke-dasharray="5 7"
+                    marker-end="url(#arrow-run)"
                   />
                   <path
                     d="M 167 105 C 205 105, 220 163, 258 163"
@@ -3093,12 +3154,14 @@
                     stroke="var(--el-status-in-progress)"
                     stroke-width="2"
                     stroke-dasharray="5 7"
+                    marker-end="url(#arrow-run)"
                   />
                   <path
                     d="M 335 82 L 335 128"
                     fill="none"
                     stroke="var(--el-border-strong)"
                     stroke-width="1.5"
+                    marker-end="url(#arrow-still)"
                   />
                 </svg>
                 <div class="cvNode sel" style="left: 9px; top: 72px; width: 158px">
@@ -3254,6 +3317,7 @@
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
+                        marker-end="url(#arrow-still)"
                       />
                     </svg>
                     <div class="cvNode" style="left: 14px; top: 14px">
@@ -3738,6 +3802,7 @@
                         fill="none"
                         stroke="var(--el-border-strong)"
                         stroke-width="1.5"
+                        marker-end="url(#arrow-still)"
                       />
                     </svg>
                     <div class="cvNode" style="left: 14px; top: 14px">
