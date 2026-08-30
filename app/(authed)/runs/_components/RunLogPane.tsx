@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDownToLine, CloudOff, Clock, Hourglass } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { drainSseFrames } from '@/lib/ai/sseFrames';
 import type { DispatchRunDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { isLiveRun } from '@/lib/runs/timeline';
@@ -44,6 +43,8 @@ const TAIL_SLACK = 24;
 
 export interface RunLogPaneProps {
   run: DispatchRunDto;
+  /** The run's event stream, held by the modal and shared with the findings strip. */
+  events: DispatchRunEventDto[];
   /**
    * The work item the modal has SELECTED, or null for the whole run. The
    * selection lives in the modal — this pane receives it and never owns it.
@@ -51,84 +52,22 @@ export interface RunLogPaneProps {
   selectedWorkItemId: string | null;
 }
 
-export function RunLogPane({ run, selectedWorkItemId }: RunLogPaneProps) {
+export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps) {
   const t = useTranslations('runs');
-  const [live, setLive] = useState<DispatchRunEventDto[]>([]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   // Following is the DEFAULT and is released by the reader, never by the code.
   const [following, setFollowing] = useState(true);
   const followingRef = useRef(true);
 
-  // ⚠️ ONE CODE PATH FOR BACKFILL AND LIVE, and the endpoint is the same.
-  // `?since=0` returns every line the run has stored and THEN tails; for a run
-  // already terminal the route emits its events, writes `done` and closes, so a
-  // finished run costs exactly one request that ends itself.
+  // ⚠️ THE CONNECTION IS THE MODAL'S, NOT THIS PANE'S (MOTIR-3983). It used to
+  // be here, and then the FINDINGS strip became a second reader of the same
+  // stream — two components each opening their own connection is a fan-out
+  // wearing a different name. The pane now receives the events and filters them.
   //
-  // ⚠️ THIS DIFFERS FROM THE CARD'S AC — flagged on MOTIR-3962 rather than done
-  // quietly. The AC asks for ZERO stream requests on a terminal run, which was
-  // written expecting the backfill to come from `GET /api/dispatch-runs/[id]`.
-  // That read returns the header and its LEGS and no events at all, so obeying
-  // the AC literally would leave a finished run — the common case for reading
-  // logs — permanently blank. What the rule protects is a HELD-OPEN connection
-  // for a run at rest, and that property holds: the `done` frame ends the loop
-  // and nothing reconnects.
-  const runId = run.id;
+  // `runIsLive` still decides one thing that is this pane's own: whether an
+  // empty console reads as WAITING or as one of the two silences.
   const runIsLive = isLiveRun(run.status);
-  const seqRef = useRef(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-
-    const pump = async (): Promise<void> => {
-      for (let attempt = 0; !cancelled; attempt += 1) {
-        try {
-          const res = await fetch(
-            `/api/dispatch-runs/${encodeURIComponent(runId)}/stream?since=${seqRef.current}`,
-            { headers: { Accept: 'text/event-stream' }, signal: controller.signal },
-          );
-          if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
-
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done || cancelled) break;
-            buffer += decoder.decode(value, { stream: true });
-            const { frames, rest } = drainSseFrames(buffer);
-            buffer = rest;
-            for (const { event, data } of frames) {
-              if (event === 'event') {
-                const ev = data as DispatchRunEventDto;
-                seqRef.current = ev.seq;
-                if (ev.kind !== 'log') continue;
-                // Deduped on `seq`, which is what makes a RECONNECT neither a
-                // replay nor a gap: `@@unique([dispatchRunId, seq])` guarantees
-                // the cursor addresses exactly one line.
-                setLive((prev) => (prev.some((p) => p.seq === ev.seq) ? prev : [...prev, ev]));
-              } else if (event === 'done') {
-                cancelled = true;
-                return;
-              }
-            }
-          }
-          if (cancelled) return;
-        } catch {
-          if (cancelled || controller.signal.aborted) return;
-        }
-        if (cancelled) return;
-        const backoff = Math.min(1_000 * 2 ** Math.min(attempt, 4), 15_000);
-        await new Promise((resolve) => setTimeout(resolve, backoff));
-      }
-    };
-
-    void pump();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [runId]);
+  const live = useMemo(() => events.filter((e) => e.kind === 'log'), [events]);
 
   /** Key → work-item id, so a line the leg produced can be matched to the selection. */
   const legByKey = useMemo(() => {

@@ -23,6 +23,12 @@ vi.mock('@/app/(authed)/runs/_components/RunLogPane', () => ({
   RunLogPane: () => <div data-testid="stub-log-pane" />,
 }));
 
+// The FINDINGS strip is asserted in `RunFindings.test.tsx`. Stubbed here so what
+// this file measures is the modal's own composition.
+vi.mock('@/app/(authed)/runs/_components/RunFindings', () => ({
+  RunFindings: () => <div data-testid="stub-findings" />,
+}));
+
 vi.mock('@/app/(authed)/runs/_components/RunCanvasPane', () => ({
   RunCanvasPane: ({ onSelectWorkItem }: { onSelectWorkItem: (id: string) => void }) => (
     <button type="button" data-testid="stub-node" onClick={() => onSelectWorkItem('wi_1')}>
@@ -83,40 +89,56 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
 
 /** Resolve the run read with a DTO, and let the load effect settle. */
 async function mountWith(dto: DispatchRunDto): Promise<void> {
-  fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => dto });
+  fetchMock.mockImplementation(async (url: string) =>
+    String(url).includes('/stream')
+      ? { ok: true, body: { getReader: () => ({ read: () => new Promise(() => {}) }) } }
+      : { ok: true, status: 200, json: async () => dto },
+  );
   render(<RunModal runId="run_a91f" projectKey="MOTIR" onClose={onClose} />);
   await act(async () => {});
 }
 
 /** Refuse the run read with an HTTP status, and let the load effect settle. */
 async function mountFailing(status: number): Promise<void> {
-  fetchMock.mockResolvedValue({ ok: false, status, json: async () => ({}) });
+  fetchMock.mockImplementation(async (url: string) =>
+    String(url).includes('/stream')
+      ? { ok: true, body: { getReader: () => ({ read: () => new Promise(() => {}) }) } }
+      : { ok: false, status, json: async () => ({}) },
+  );
   render(<RunModal runId="run_a91f" projectKey="MOTIR" onClose={onClose} />);
   await act(async () => {});
 }
 
-describe('⚠️ a TERMINAL run opens no stream — the connection is the cost', () => {
-  it('reads the run once and never reaches the stream endpoint', async () => {
+describe('⚠️ ONE stream for the whole modal — two readers, not two connections', () => {
+  // The log pane and the findings strip both read the run's events. Each owning
+  // its own connection is a fan-out wearing a different name, which is the
+  // defect the run surfaces' bounded-reads guard exists to catch — so the modal
+  // holds ONE and hands the events down.
+  it('opens exactly one stream, whatever the run’s status', async () => {
     await mountWith(run({ status: 'succeeded' }));
 
-    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
-    expect(urls).toEqual(['/api/dispatch-runs/run_a91f']);
-    expect(urls.some((u) => u.includes('/stream'))).toBe(false);
+    const streams = fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('/stream'));
+    expect(streams).toHaveLength(1);
   });
 
-  it('a RUNNING run does open one, resuming from the run’s own seq', async () => {
-    fetchMock.mockImplementation(async (url: string) => {
-      if (url.includes('/stream')) {
-        // Never resolves into a body — the assertion is about the REQUEST.
-        return { ok: true, body: { getReader: () => ({ read: () => new Promise(() => {}) }) } };
-      }
-      return { ok: true, status: 200, json: async () => run({ status: 'running', seq: 12 }) };
-    });
-    render(<RunModal runId="run_a91f" projectKey="MOTIR" onClose={onClose} />);
-    await act(async () => {});
+  it('resumes from seq 0, so the BACKFILL arrives and not just the tail', async () => {
+    await mountWith(run({ status: 'running', seq: 12 }));
 
     const stream = fetchMock.mock.calls.map((c) => String(c[0])).find((u) => u.includes('/stream'));
-    expect(stream).toBe('/api/dispatch-runs/run_a91f/stream?since=12');
+    // ⚠️ `since=0`, not the run's own `seq`. A finished run's lines are all
+    // BEFORE its seq, so resuming at the cursor would render an empty console
+    // for exactly the runs a person opens to read.
+    expect(stream).toBe('/api/dispatch-runs/run_a91f/stream?since=0');
+  });
+
+  it('reads the run itself once on open', async () => {
+    await mountWith(run());
+    const reads = fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => !u.includes('/stream'));
+    expect(reads).toEqual(['/api/dispatch-runs/run_a91f']);
   });
 });
 

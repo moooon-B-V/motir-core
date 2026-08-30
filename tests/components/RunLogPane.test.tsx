@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
-import type { DispatchRunCardDto, DispatchRunDto } from '@/lib/dto/dispatchRuns';
+import type {
+  DispatchRunCardDto,
+  DispatchRunDto,
+  DispatchRunEventDto,
+} from '@/lib/dto/dispatchRuns';
 
 // THE LOG PANE of the run modal (Story MOTIR-1789 · MOTIR-3962).
 //
@@ -13,22 +17,7 @@ import type { DispatchRunCardDto, DispatchRunDto } from '@/lib/dto/dispatchRuns'
 // that, or when the record simply aged out. Each is asserted separately, because
 // collapsing them is exactly the defect that would still look correct.
 
-const fetchMock = vi.fn();
-
-beforeEach(() => {
-  fetchMock.mockReset();
-  // Default: a stream that opens and never yields — the tests that care supply
-  // their own body.
-  fetchMock.mockResolvedValue({
-    ok: true,
-    body: { getReader: () => ({ read: () => new Promise(() => {}) }) },
-  });
-  vi.stubGlobal('fetch', fetchMock);
-});
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
+afterEach(cleanup);
 
 function leg(over: Partial<DispatchRunCardDto> = {}): DispatchRunCardDto {
   return {
@@ -69,20 +58,8 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
   };
 }
 
-/** An SSE body that yields these frames once, then ends. */
-function sse(frames: string[]): { getReader: () => { read: () => Promise<unknown> } } {
-  const chunks = frames.map((f) => new TextEncoder().encode(f));
-  let i = 0;
+function logEvent(seq: number, body: string, workItemKey?: string): DispatchRunEventDto {
   return {
-    getReader: () => ({
-      read: async () =>
-        i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined },
-    }),
-  };
-}
-
-function logFrame(seq: number, body: string, workItemKey?: string): string {
-  const ev = {
     id: `e${seq}`,
     seq,
     kind: 'log',
@@ -91,11 +68,14 @@ function logFrame(seq: number, body: string, workItemKey?: string): string {
     body,
     createdAt: '2026-08-30T14:02:00.000Z',
   };
-  return `event: event\ndata: ${JSON.stringify(ev)}\n\n`;
 }
 
-async function mount(dto: DispatchRunDto, selected: string | null = null): Promise<void> {
-  render(<RunLogPane run={dto} selectedWorkItemId={selected} />);
+async function mount(
+  dto: DispatchRunDto,
+  selected: string | null = null,
+  events: DispatchRunEventDto[] = [],
+): Promise<void> {
+  render(<RunLogPane run={dto} events={events} selectedWorkItemId={selected} />);
   await act(async () => {});
 }
 
@@ -131,42 +111,27 @@ describe('⚠️ THE THREE SILENCES are distinct, and none reads as an error', (
 
 describe('the lines — backfill and live through ONE path, in seq order', () => {
   it('renders what the stream backfills, and resumes from seq 0 to get it', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      body: sse([logFrame(1, 'first line'), logFrame(2, 'second line')]),
-    });
-    await mount(run());
+    await mount(run(), null, [logEvent(1, 'first line'), logEvent(2, 'second line')]);
 
     expect(screen.getByText('first line')).toBeTruthy();
     expect(screen.getByText('second line')).toBeTruthy();
-    // ⚠️ `since=0`, not the run's own `seq` — starting at the head is what makes
-    // the backfill arrive at all.
-    expect(String(fetchMock.mock.calls[0]![0])).toBe('/api/dispatch-runs/run_1/stream?since=0');
   });
 
   it('orders by SEQ, not by arrival', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      body: sse([logFrame(9, 'later'), logFrame(2, 'earlier')]),
-    });
-    await mount(run());
+    await mount(run(), null, [logEvent(9, 'later'), logEvent(2, 'earlier')]);
 
     const body = screen.getByTestId('run-log-body');
     expect(body.textContent!.indexOf('earlier')).toBeLessThan(body.textContent!.indexOf('later'));
   });
 
   it('a REPLAYED seq is one line, not two — the reconnect contract', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      body: sse([logFrame(1, 'only once'), logFrame(1, 'only once')]),
-    });
-    await mount(run());
+    await mount(run(), null, [logEvent(1, 'only once'), logEvent(1, 'only once')]);
 
     expect(screen.getAllByText('only once')).toHaveLength(1);
   });
 
   it('ignores every event kind that is not a log', async () => {
-    const other = `event: event\ndata: ${JSON.stringify({
+    const other: DispatchRunEventDto = {
       id: 'e1',
       seq: 1,
       kind: 'card_settled',
@@ -174,9 +139,8 @@ describe('the lines — backfill and live through ONE path, in seq order', () =>
       data: null,
       body: null,
       createdAt: '2026-08-30T14:02:00.000Z',
-    })}\n\n`;
-    fetchMock.mockResolvedValue({ ok: true, body: sse([other]) });
-    await mount(run());
+    };
+    await mount(run(), null, [other]);
 
     // No lines ⇒ still a silence, not an empty console.
     expect(screen.getByTestId('run-log-silence-neverSent')).toBeTruthy();
@@ -185,22 +149,20 @@ describe('the lines — backfill and live through ONE path, in seq order', () =>
 
 describe('the FILTER follows the modal’s selection', () => {
   it('unfiltered, every line names its source member', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      body: sse([logFrame(1, 'from a', 'MOTIR-1791'), logFrame(2, 'from b', 'MOTIR-1793')]),
-    });
-    await mount(run(), null);
+    await mount(run(), null, [
+      logEvent(1, 'from a', 'MOTIR-1791'),
+      logEvent(2, 'from b', 'MOTIR-1793'),
+    ]);
 
     expect(screen.getByText('MOTIR-1791')).toBeTruthy();
     expect(screen.getByText('MOTIR-1793')).toBeTruthy();
   });
 
   it('filtered to one work item, only its lines show and the label is dropped', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      body: sse([logFrame(1, 'from a', 'MOTIR-1791'), logFrame(2, 'from b', 'MOTIR-1793')]),
-    });
-    await mount(run(), 'wi_1');
+    await mount(run(), 'wi_1', [
+      logEvent(1, 'from a', 'MOTIR-1791'),
+      logEvent(2, 'from b', 'MOTIR-1793'),
+    ]);
 
     expect(screen.getByText('from a')).toBeTruthy();
     expect(screen.queryByText('from b')).toBeNull();
@@ -209,38 +171,32 @@ describe('the FILTER follows the modal’s selection', () => {
   });
 
   it('⚠️ a filter that SHRINKS the set does not crash the window', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      body: sse([logFrame(1, 'from a', 'MOTIR-1791'), logFrame(2, 'from b', 'MOTIR-1793')]),
-    });
-    const { rerender } = render(<RunLogPane run={run()} selectedWorkItemId={null} />);
+    const evs = [logEvent(1, 'from a', 'MOTIR-1791'), logEvent(2, 'from b', 'MOTIR-1793')];
+    const { rerender } = render(<RunLogPane run={run()} events={evs} selectedWorkItemId={null} />);
     await act(async () => {});
     expect(screen.getByText('from b')).toBeTruthy();
 
     // Two lines down to one — the shape a stale virtualized window crashes on.
-    rerender(<RunLogPane run={run()} selectedWorkItemId="wi_1" />);
+    rerender(<RunLogPane run={run()} events={evs} selectedWorkItemId="wi_1" />);
     await act(async () => {});
     expect(screen.getByText('from a')).toBeTruthy();
     expect(screen.queryByText('from b')).toBeNull();
   });
 
   it('a line whose leg has no work item is not attributed to any selection', async () => {
-    fetchMock.mockResolvedValue({ ok: true, body: sse([logFrame(1, 'orphan', 'MOTIR-9999')]) });
-    await mount(run(), 'wi_1');
+    await mount(run(), 'wi_1', [logEvent(1, 'orphan', 'MOTIR-9999')]);
     expect(screen.queryByText('orphan')).toBeNull();
   });
 });
 
 describe('⚠️ FOLLOWING releases on an upward scroll and is re-armed only by the control', () => {
   it('offers no control while it is still following', async () => {
-    fetchMock.mockResolvedValue({ ok: true, body: sse([logFrame(1, 'a line')]) });
-    await mount(run());
+    await mount(run(), null, [logEvent(1, 'a line')]);
     expect(screen.queryByRole('button', { name: 'Follow' })).toBeNull();
   });
 
   it('releases when the reader scrolls up, and the control comes back', async () => {
-    fetchMock.mockResolvedValue({ ok: true, body: sse([logFrame(1, 'a line')]) });
-    await mount(run());
+    await mount(run(), null, [logEvent(1, 'a line')]);
 
     const body = screen.getByTestId('run-log-body');
     // happy-dom has no layout, so the scroll geometry is set explicitly: a tall
@@ -254,8 +210,8 @@ describe('⚠️ FOLLOWING releases on an upward scroll and is re-armed only by 
   });
 
   it('⚠️ does NOT steal the scroll position once following has been released', async () => {
-    fetchMock.mockResolvedValue({ ok: true, body: sse([logFrame(1, 'a line')]) });
-    const { rerender } = render(<RunLogPane run={run()} selectedWorkItemId={null} />);
+    const evs = [logEvent(1, 'a line')];
+    const { rerender } = render(<RunLogPane run={run()} events={evs} selectedWorkItemId={null} />);
     await act(async () => {});
 
     const body = screen.getByTestId('run-log-body');
@@ -265,14 +221,13 @@ describe('⚠️ FOLLOWING releases on an upward scroll and is re-armed only by 
     fireEvent.scroll(body);
 
     // A re-render with new lines must leave the reader where they were.
-    rerender(<RunLogPane run={run({ seq: 2 })} selectedWorkItemId={null} />);
+    rerender(<RunLogPane run={run({ seq: 2 })} events={evs} selectedWorkItemId={null} />);
     await act(async () => {});
     expect(body.scrollTop).toBe(100);
   });
 
   it('the control resumes following and returns to the bottom', async () => {
-    fetchMock.mockResolvedValue({ ok: true, body: sse([logFrame(1, 'a line')]) });
-    await mount(run());
+    await mount(run(), null, [logEvent(1, 'a line')]);
 
     const body = screen.getByTestId('run-log-body');
     Object.defineProperty(body, 'scrollHeight', { value: 1000, configurable: true });

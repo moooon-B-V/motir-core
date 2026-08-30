@@ -7293,6 +7293,19 @@
         "title": "已超过保留期",
         "body": "日志正文会在运行 30 天后删除，这次的已被删除。"
       }
+    },
+    "findings": {
+      "label": "这次运行产出了什么",
+      "planSubmitted": "已提交计划",
+      "proposals": "{count, plural, other {# 条提案}}",
+      "waitingForYou": "正在等你处理。",
+      "review": "查看 →",
+      "plansApproved": "本次运行已批准的计划",
+      "treeChanged": "你不在时，你的树发生了变化。",
+      "approvedFor": "为 {key} 批准",
+      "materialized": "已落地 {count, plural, other {# 条提案}}",
+      "bugFiled": "已提交缺陷",
+      "open": "打开 →"
     }
   }
 }

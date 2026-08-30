@@ -7,11 +7,12 @@ import { CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
+import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
 import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
-import { drainSseFrames } from '@/lib/ai/sseFrames';
-import type { DispatchRunDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
+import { useRunEvents } from '@/app/(authed)/runs/_components/useRunEvents';
+import type { DispatchRunDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
-import { RUN_STATUS_TONE, isLiveRun } from '@/lib/runs/timeline';
+import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
 
 // THE RUN MODAL (MOTIR-3895 · `design/runs/design-notes.md` § The run MODAL) —
 // full screen OVER `/runs`, never a route.
@@ -47,23 +48,15 @@ type Load =
 export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
   const t = useTranslations('runs');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
-  const [reconnecting, setReconnecting] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  // ONE connection for the whole modal (MOTIR-3983): the findings strip and the
+  // log pane are two readers of the same stream, not two streams.
+  const { events, reconnecting } = useRunEvents(runId);
   // Bumped when the dispositions move, so the canvas refetches its CURRENT level
   // — the prop `ProjectRoadmapCanvas` exposes for exactly this.
   const [reloadKey, setReloadKey] = useState(0);
 
   const run = load.state === 'ready' ? load.run : null;
-
-  // ⚠️ THE ONE PREDICATE THAT DECIDES WHETHER A CONNECTION IS OPENED AT ALL.
-  // `isLiveRun` is `lib/runs/timeline.ts`'s — the same map the server answers
-  // `?status=live` from, not a second reading of "is it running". A run already
-  // in a terminal status opens NO stream.
-  const liveRunId = run && isLiveRun(run.status) ? run.id : null;
-
-  // The cursor a reconnect resumes from. A ref, not state: an effect that
-  // depended on it would tear the connection down once per event.
-  const seqRef = useRef(0);
 
   const fetchRun = useCallback(async (): Promise<void> => {
     try {
@@ -82,7 +75,6 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
         return;
       }
       const dto = (await res.json()) as DispatchRunDto;
-      seqRef.current = Math.max(seqRef.current, dto.seq);
       setLoad({ state: 'ready', run: dto });
       setReloadKey((k) => k + 1);
     } catch {
@@ -102,66 +94,18 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
     })();
   }, [fetchRun]);
 
-  // The live tail. Structurally the run SECTION's (MOTIR-1796) — the same
-  // resume-from-`seq` contract, the same backoff, the same "the server said
-  // done, do not reopen" arm. What differs is what an event means here: the
-  // modal does not render the stream, it re-reads the run when a leg may have
-  // moved, and the canvas follows through `reloadKey`.
+  // ⚠️ THE DISPOSITIONS FOLLOW THE SAME STREAM. This used to be a SECOND pump
+  // beside the log pane's — two connections to one endpoint, which is the
+  // fan-out the run surfaces' bounded-reads guard exists to catch. There is now
+  // one stream (`useRunEvents`), and this watches what arrives on it: an event
+  // that can have moved a leg triggers one re-read of the run, and the canvas
+  // follows through `reloadKey`.
+  const seenRef = useRef(0);
   useEffect(() => {
-    if (!liveRunId) return;
-    const controller = new AbortController();
-    let cancelled = false;
-
-    const pump = async (): Promise<void> => {
-      for (let attempt = 0; !cancelled; attempt += 1) {
-        try {
-          const res = await fetch(
-            `/api/dispatch-runs/${encodeURIComponent(liveRunId)}/stream?since=${seqRef.current}`,
-            { headers: { Accept: 'text/event-stream' }, signal: controller.signal },
-          );
-          if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
-          if (!cancelled) setReconnecting(false);
-
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done || cancelled) break;
-            buffer += decoder.decode(value, { stream: true });
-            const { frames, rest } = drainSseFrames(buffer);
-            buffer = rest;
-            for (const { event, data } of frames) {
-              if (event === 'event') {
-                const ev = data as DispatchRunEventDto;
-                seqRef.current = ev.seq;
-                if (DISPOSITION_EVENTS.has(ev.kind)) void fetchRun();
-              } else if (event === 'done') {
-                // TERMINAL. One last read so the header and the set settle on
-                // what actually happened, then never reopen.
-                cancelled = true;
-                void fetchRun();
-                return;
-              }
-            }
-          }
-          if (cancelled) return;
-        } catch {
-          if (cancelled || controller.signal.aborted) return;
-        }
-        if (cancelled) return;
-        setReconnecting(true);
-        const backoff = Math.min(1_000 * 2 ** Math.min(attempt, 4), 15_000);
-        await new Promise((resolve) => setTimeout(resolve, backoff));
-      }
-    };
-
-    void pump();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [liveRunId, fetchRun]);
+    const moved = events.some((e) => e.seq > seenRef.current && DISPOSITION_EVENTS.has(e.kind));
+    for (const e of events) seenRef.current = Math.max(seenRef.current, e.seq);
+    if (moved) void fetchRun();
+  }, [events, fetchRun]);
 
   // A run that is not there is not a state to sit in: close, and let the list say so.
   useEffect(() => {
@@ -261,7 +205,10 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
               <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
                 {t('paneLog')}
               </h2>
-              <RunLogPane run={run} selectedWorkItemId={selectedWorkItemId} />
+              {/* PINNED ABOVE THE LOG, and absent entirely when the run
+                  produced nothing — which is most runs. See `RunFindings`. */}
+              <RunFindings events={events} />
+              <RunLogPane run={run} events={events} selectedWorkItemId={selectedWorkItemId} />
             </section>
           </div>
         </>

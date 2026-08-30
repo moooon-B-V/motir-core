@@ -7297,6 +7297,19 @@
         "title": "Past the retention window",
         "body": "Log bodies are deleted 30 days after a run. This one’s have been."
       }
+    },
+    "findings": {
+      "label": "What this run produced",
+      "planSubmitted": "Plan submitted",
+      "proposals": "{count, plural, one {# proposal} other {# proposals}}",
+      "waitingForYou": "waiting for you.",
+      "review": "Review →",
+      "plansApproved": "Plans approved by this run",
+      "treeChanged": "your tree changed while you were away.",
+      "approvedFor": "approved for {key}",
+      "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
+      "bugFiled": "Bug filed",
+      "open": "Open →"
     }
   }
 }
