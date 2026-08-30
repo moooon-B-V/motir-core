@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveBaseUrl, resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { publicProjectPath, publicProjectUrl, publicSiteOrigin } from '@/lib/publicProjects/urls';
@@ -32,6 +34,82 @@ afterEach(() => {
 
 /** The forms a deployed or local environment actually presents. */
 const CONFIGURED = 'https://app.motir.co';
+
+// ── MOTIR-3881 — the PUBLIC SITE origin, split from the application origin ──
+//
+// The two questions this repository used to answer with one variable. The suite
+// above feeds `MOTIR_BASE_URL` to the absolute-link builders; this one asserts
+// which of them follows the PUBLIC variable and which stays on the application,
+// because after the split those are different hosts and the difference is
+// invisible while they happen to be equal.
+
+const PUBLIC_SITE = 'https://motir.co';
+
+describe('seam: the PUBLIC-SITE origin ← its own variable (MOTIR-3881)', () => {
+  it('a configured public origin moves the public-project URL off the application host', () => {
+    vi.stubEnv('MOTIR_BASE_URL', CONFIGURED);
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', PUBLIC_SITE);
+
+    const url = new URL(publicProjectUrl('MOTIR'));
+    expect(url.origin).toBe(PUBLIC_SITE);
+    expect(url.pathname).toBe('/p/MOTIR');
+    // …and the application accessor is untouched by it.
+    expect(resolveBaseUrlTrimmed()).toBe(CONFIGURED);
+  });
+
+  it('⚠️ UNSET resolves to the APPLICATION origin — the ordering guarantee, not a convenience', () => {
+    // This is the deployed state until `motir.co` renders these pages
+    // (MOTIR-3932 / MOTIR-3877). While it holds, every canonical and sitemap
+    // entry keeps naming the host that is actually serving the page. Setting the
+    // variable early would point them all at a host that does not serve them
+    // yet, and nothing would throw.
+    vi.stubEnv('MOTIR_BASE_URL', CONFIGURED);
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', undefined);
+
+    expect(publicSiteOrigin()).toBe(CONFIGURED);
+    expect(new URL(publicProjectUrl('MOTIR')).origin).toBe(CONFIGURED);
+  });
+
+  it("an EMPTY value counts as unset — a secret cleared to '' is a misconfiguration, not an origin", () => {
+    vi.stubEnv('MOTIR_BASE_URL', CONFIGURED);
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', '   ');
+
+    expect(publicSiteOrigin()).toBe(CONFIGURED);
+  });
+
+  it('a TRAILING SLASH on the public value does not produce a double slash', () => {
+    vi.stubEnv('MOTIR_BASE_URL', CONFIGURED);
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', `${PUBLIC_SITE}///`);
+
+    expect(publicProjectUrl('MOTIR')).toBe(`${PUBLIC_SITE}/p/MOTIR`);
+  });
+
+  it('with NEITHER set, a local checkout still builds an absolute URL', () => {
+    vi.stubEnv('MOTIR_BASE_URL', undefined);
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', undefined);
+
+    const url = new URL(publicProjectUrl('MOTIR'));
+    expect(url.origin).toBe('http://localhost:3000');
+  });
+
+  // ── the single-reader rule, as a tree grep ────────────────────────────────
+  it('exactly ONE module reads each origin variable', () => {
+    const roots = ['app', 'lib', 'components', 'packages'];
+    const readers = (name: string) =>
+      roots
+        .flatMap((root) => sourceFilesUnder(join(process.cwd(), root)))
+        .filter((file) =>
+          new RegExp(`process\\.env\\[.${name}.\\]`).test(readFileSync(file, 'utf8')),
+        )
+        .map((file) => relative(process.cwd(), file))
+        .sort();
+
+    // A second reader is a second answer to a question each module exists to
+    // answer once — the drift `lib/baseUrl.ts`'s own comment was written against.
+    expect(readers('MOTIR_BASE_URL')).toEqual(['lib/baseUrl.ts']);
+    expect(readers('MOTIR_PUBLIC_SITE_URL')).toEqual(['lib/publicProjects/urls.ts']);
+  });
+});
 
 describe('seam: the public-project canonical URL ← the app-URL accessor', () => {
   it('a configured origin yields an absolute, parseable canonical URL', () => {
@@ -171,3 +249,14 @@ describe('the two accessors differ by exactly one thing, and consumers pick deli
     expect(publicSiteOrigin()).toBe(resolveBaseUrlTrimmed());
   });
 });
+
+/** Every `.ts`/`.tsx` source file under `dir`, skipping build output. */
+function sourceFilesUnder(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === '.next' || entry === 'dist') continue;
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) sourceFilesUnder(p, out);
+    else if (/\.tsx?$/.test(entry)) out.push(p);
+  }
+  return out;
+}

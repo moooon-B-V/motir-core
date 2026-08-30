@@ -26,7 +26,11 @@ type Enqueued = {
   to?: string;
   template?: string;
   idempotencyKey?: string;
-  data?: { entries?: Array<{ identifier: string }>; unsubscribeUrl?: string };
+  data?: {
+    entries?: Array<{ identifier: string }>;
+    unsubscribeUrl?: string;
+    changelogUrl?: string;
+  };
   followId?: string;
   occurrenceKey?: string;
 };
@@ -148,6 +152,75 @@ describe('the delivery', () => {
 
     const after = await adminDb.publicFollow.findUniqueOrThrow({ where: { id: row.id } });
     expect(after.lastDigestAt).toEqual(MONDAY);
+  });
+
+  // ── MOTIR-3881 — the two origins, asserted on the RENDERED mail ───────────
+  //
+  // This one email carries links to BOTH hosts, and it is the only place in the
+  // product that does. `changelogUrl` points a reader at the PUBLIC SITE;
+  // `unsubscribeUrl` points at the APPLICATION, because unsubscribing is an act
+  // against this service and its token must keep resolving "if somebody finds
+  // this mail in two years" (`followTokens.ts`).
+  //
+  // While the two origins are equal — which is every environment today, since
+  // MOTIR_PUBLIC_SITE_URL is unset until motir.co renders these pages — the
+  // distinction is invisible and nothing would catch it being wrong. So the
+  // assertion configures them DIFFERENTLY, which is the only state in which the
+  // split can be observed at all.
+  //
+  // ⚠️ A link in an inbox is the one URL this application cannot take back: a
+  // wrong canonical is a bad day for a crawler, a wrong link in delivered mail
+  // is wrong for as long as the mail exists, read by a person who will not
+  // retry.
+  it('points the changelog link at the PUBLIC site and the unsubscribe link at the APPLICATION', async () => {
+    vi.stubEnv('MOTIR_BASE_URL', 'https://app.motir.co');
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', 'https://motir.co');
+
+    const fx = await publicFixture();
+    const row = await follower(fx, { lastDigestAt: new Date('2026-08-17T09:00:00.000Z') });
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Shipped this week' });
+    await ship(fx, item.id, '2026-08-20T10:00:00.000Z');
+
+    await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: `${row.id}:2026-W35`,
+      now: MONDAY,
+    });
+
+    const mail = emails()[0];
+    expect(new URL(mail?.data?.changelogUrl ?? '').origin).toBe('https://motir.co');
+    expect(new URL(mail?.data?.unsubscribeUrl ?? '').origin).toBe('https://app.motir.co');
+    // The unsubscribe token still resolves — the split moved an origin, not a
+    // contract.
+    const token = decodeURIComponent(
+      /token=([^&]+)/.exec(mail?.data?.unsubscribeUrl ?? '')?.[1] ?? '',
+    );
+    expect(verifyUnsubscribeToken(token)).toBe(row.id);
+  });
+
+  it('sends BOTH links to the application host while the public origin is unset — the deployed state today', async () => {
+    vi.stubEnv('MOTIR_BASE_URL', 'https://app.motir.co');
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', undefined);
+
+    const fx = await publicFixture();
+    const row = await follower(fx, { lastDigestAt: new Date('2026-08-17T09:00:00.000Z') });
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Shipped this week' });
+    await ship(fx, item.id, '2026-08-20T10:00:00.000Z');
+
+    await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: `${row.id}:2026-W35`,
+      now: MONDAY,
+    });
+
+    const mail = emails()[0];
+    // Not a degraded mode: this application still SERVES /p/* until MOTIR-3951
+    // deletes it, so the application host is the correct answer, and it stays
+    // correct afterwards because the redirects outlive the pages.
+    expect(new URL(mail?.data?.changelogUrl ?? '').origin).toBe('https://app.motir.co');
+    expect(new URL(mail?.data?.unsubscribeUrl ?? '').origin).toBe('https://app.motir.co');
   });
 
   it('sends NOTHING for a week with nothing shipped — and still moves the window', async () => {
