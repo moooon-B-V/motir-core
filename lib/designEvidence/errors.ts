@@ -48,8 +48,8 @@ export class DesignEvidenceNotALeafError extends DesignEvidenceError {
   constructor(kind: string, byKind = true) {
     super(
       byKind
-        ? `A design result attaches to the card that produced it, not to a ${kind}.`
-        : `A design result attaches to the card that produced it; this ${kind} has ` +
+        ? `A design result attaches to the work item that produced it, not to a ${kind}.`
+        : `A design result attaches to the work item that produced it; this ${kind} has ` +
             `children, so it is a container. Address the child that produced the assets.`,
     );
     this.name = 'DesignEvidenceNotALeafError';

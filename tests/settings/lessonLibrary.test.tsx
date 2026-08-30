@@ -82,7 +82,7 @@ describe('the axes — an empty one is NOT drawn', () => {
     renderWithIntl(
       <LessonRow lesson={lesson({ kinds: [], types: [], phases: [] })} href="/x" copy={copy} />,
     );
-    expect(screen.getByText('Applies to every card')).toBeTruthy();
+    expect(screen.getByText('Applies to every work item')).toBeTruthy();
     expect(screen.queryByText('kind')).toBeNull();
     expect(screen.queryByText('type')).toBeNull();
   });
@@ -91,11 +91,11 @@ describe('the axes — an empty one is NOT drawn', () => {
     const { container } = renderWithIntl(
       <>
         <AxisChip axis="kind" value="story" />
-        <EveryCardChip label="Applies to every card" />
+        <EveryCardChip label="Applies to every work item" />
       </>,
     );
     expect(container.textContent).toContain('kindstory');
-    expect(container.textContent).toContain('Applies to every card');
+    expect(container.textContent).toContain('Applies to every work item');
   });
 });
 
