@@ -187,6 +187,10 @@ CARD-scoped (`dispatchRunCardId` set):
 | `card_settled`    | the leg reached its terminal disposition                                                                                                |
 | `log`             | an opt-in log body (Q4)                                                                                                                 |
 
+> **⚠️ Twenty-one since MOTIR-3980.** `bug_filed` and `plan_submitted` join the
+> CARD-scoped half — see AMENDMENT 1, which also explains why they are the only two
+> members in this enum the CLI does not write.
+
 **Nineteen values, and the split is the point.** A RUN-scoped event is one the
 whole run owns; a CARD-scoped event hangs off a leg. The nullable
 `dispatchRunCardId` expresses both without a second table, and the surface reads
@@ -393,3 +397,42 @@ including that state in its state set.
 - The default-off log body means the first thing many operators see is a run with
   no tail. That is the accepted cost of the boundary, and it is why the surface
   states the reason rather than rendering an empty box.
+
+---
+
+## AMENDMENT 1 — a finding gets an EVENT, and the SERVER writes it (MOTIR-3980, 2026-08-30)
+
+`run-findings-protocol.md` **Q5** is the decision; this records what it changes here.
+Q2's vocabulary gains two CARD-scoped members and nothing else moves.
+
+| kind             | scope | emitted when                                                  | `data`                       |
+| ---------------- | ----- | ------------------------------------------------------------- | ---------------------------- |
+| `bug_filed`      | CARD  | a `kind: 'bug'` work item was created while this leg was open | `{ key, workItemId, title }` |
+| `plan_submitted` | CARD  | a plan-change job produced a plan while this leg was open     | `{ planId, proposalCount }`  |
+
+`plan_approved` is untouched, keeps its `ApprovalRecord` and stays RUN-scoped: it is
+a fact about the loop's own action, not about a leg's work.
+
+**These two are the only members of this enum a CLI reporter never emits.** Every
+other kind is written by the run's own writer as it does the thing; these two are
+appended by the SERVICE that performs the write — `create_work_item`'s and the
+plan-change job's — because the ids exist only there. The CLI cannot report them:
+they come back on the dispatched agent's stdout, which the loop streams to the
+terminal and never captures (`plansService.approvePlanForWorkItem`'s comment says
+so, about the plan id exactly). Q5 rejects both remedies — scraping that output, or
+a second read whose answer the caller then supplies — on the argument Q2 of the
+findings ADR already used to bound the approve entrance.
+
+So `DispatchRunReporter` does NOT grow two methods. **Q4's boundary is unmoved:**
+both events are lifecycle, both are written from rows the server already holds, and
+a BYOK-local run sends no additional byte to produce either. `body` stays null on
+both, and `--report-log` gates neither.
+
+The append is best-effort and never fails the write that triggered it, and no open
+leg means no event — a bug filed in the app or a plan submitted from the
+project-wide panel belongs to no run, and silence is the correct record.
+
+Q3's boundaries hold: the event is a POINTER plus the one label a not-yet-loaded
+row needs. The finding's copy stays the live row's, for the same reason the card's
+status stays the CLI's — a record that froze a title would keep showing it after
+triage rewrote it, while its immutability claimed it was current.
