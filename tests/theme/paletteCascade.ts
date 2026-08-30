@@ -15,7 +15,9 @@ import { join } from 'node:path';
 // The model deliberately does NOT understand descendant/child combinators or
 // class selectors: any rule carrying one is component-scoped (`[data-style='glass']
 // .card`), not part of the root token layer, and is skipped. That is also what
-// keeps the model honest — it can only "see" the layer it claims to check.
+// keeps the model honest — it can only "see" the layer it claims to check. The
+// STYLE axis's material layer lives in exactly that skipped tier, so its guard is
+// rendered rather than modelled: tests/e2e/style-material-isolation.spec.ts.
 
 /** The `data-*` axis state of the root element for one resolution context. */
 export interface ThemeContext {
