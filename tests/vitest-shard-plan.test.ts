@@ -41,7 +41,13 @@ describe('the Vitest leg plan divides the suite exactly once (MOTIR-3912)', () =
     // which is precisely the shape of the bug they exist to catch.
     const files = discoverTestFiles();
     expect(files.length).toBeGreaterThan(1000);
-    expect(VITEST_LEG_IDS.length).toBe(8);
+    // ⚠️ NOT pinned to a specific count. The leg count is a DIAL (MOTIR-3950),
+    // and a guard that hardcodes today's value turns a one-line change into a
+    // guard edit — which is how a check stops describing an invariant and starts
+    // describing a moment. What must hold is that there ARE legs and that
+    // `ci.yml` agrees with this list; the case below asserts the agreement.
+    expect(VITEST_LEG_IDS.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(VITEST_LEG_IDS).size, 'leg ids are unique').toBe(VITEST_LEG_IDS.length);
     expect(files.every((f) => f.startsWith('tests/'))).toBe(true);
     // `STRUCTURAL_GUARD_SPECS` is `as const`, so its `includes` only accepts a
     // member of the literal union — widen to a Set of strings to ask the
@@ -166,7 +172,6 @@ describe('the Vitest leg plan divides the suite exactly once (MOTIR-3912)', () =
     // `--shard` STAYS: it is what makes Vitest call the sequencer's `shard()`,
     // and what gives each leg a distinct `blob-<index>-<count>.json`. Removing
     // it is the change that silently collapses eight coverage blobs into one.
-    expect(CI_YML).toContain('--shard=${{ matrix.leg }}/8 ');
     expect(CI_YML, 'the leg count and the --shard denominator are one number').toContain(
       `--shard=\${{ matrix.leg }}/${VITEST_LEG_IDS.length} `,
     );
