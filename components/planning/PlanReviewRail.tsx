@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -149,6 +150,21 @@ export function PlanReviewRail({
   // local window between the click and the route answering. Both hold the gate,
   // for different durations, and neither is a substitute for the other.
   const revisionInFlight = review.revision !== null;
+
+  // ⚠️ THE TRANSCRIPT OPENS AT ITS LATEST TURN (MOTIR-4023, design Part XIII §8).
+  //
+  // On MOUNT, and again when a revision LANDS — the one event that appends a turn
+  // while the reader is on the page. Deliberately NOT a general stick-to-bottom:
+  // nothing else on this rail appends under a reader's eyes, and a region that
+  // yanks itself downward on every re-render is worse than one that does not
+  // move. `scrollTop` is set directly rather than through `scrollIntoView`, which
+  // would move the PAGE as well as the region.
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const revisionKey = review.revision?.heldBy ?? (revisionInFlight ? 'held' : 'none');
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [revisionKey]);
   const held = revisionInFlight || Boolean(revising);
   // The affordance is present only where a revision is POSSIBLE — which falls
   // out of the placement rather than needing a second predicate: a decided plan
@@ -160,10 +176,31 @@ export function PlanReviewRail({
   return (
     <aside
       aria-label={t('reviewRailAria')}
-      className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface) p-5"
+      className="flex h-full min-h-0 min-w-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
     >
-      <header className="flex min-w-0 flex-col gap-2">
-        {/* The status is an OVERLINE on its own line ABOVE the title (MOTIR-3074),
+      {/* THE TRANSCRIPT (MOTIR-4023, design Part XIII §8).
+
+          The rail used to be ONE scrolling column with the decision held at its
+          bottom by `mt-auto`, which reads right on a short plan and disappears on
+          a long one: measured with a long generated title and a nine-turn
+          timeline, the rail's scroll height is 1011px and Approve's bottom sits
+          at 1037 — 361px below the fold at 1366x768, and 57px below it even at
+          1920x1080. The page a reviewer arrived at to make a decision showed no
+          decision, and nothing scrolled to it.
+
+          So the scrolling stops here and the decision leaves it. The composer
+          stays at the END of this region rather than moving into the footer: a
+          pinned footer must have a bounded height and a composer grows with its
+          draft. Part XII §A's *inside the decision block, above the two verbs* was
+          an ORDER and an adjacency, and both survive — composer last in the
+          transcript, verbs directly beneath it. */}
+      <div
+        ref={transcriptRef}
+        data-testid="plan-review-transcript"
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5"
+      >
+        <header className="flex min-w-0 flex-col gap-2">
+          {/* The status is an OVERLINE on its own line ABOVE the title (MOTIR-3074),
             not a `shrink-0` pill beside it. Plan titles are GENERATED — long by
             default, and routinely carrying an unbreakable token (a SCREAMING_CASE
             constant, a repo name, a cuid) — so on a shared flex row the title wrapped
@@ -174,13 +211,13 @@ export function PlanReviewRail({
             and the state stays the FIRST thing read on the rail — which is what this
             pill is for ("did my plan go through?"). `self-start` keeps it at its own
             width: a flex COLUMN child would otherwise stretch to the full rail. */}
-        <span
-          data-testid="plan-status-pill"
-          className={`inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[review.status]}`}
-        >
-          {t(`status_${review.status}`)}
-        </span>
-        {/* The overflow guard, owed WHEREVER the pill sits. A flex/grid item's automatic
+          <span
+            data-testid="plan-status-pill"
+            className={`inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[review.status]}`}
+          >
+            {t(`status_${review.status}`)}
+          </span>
+          {/* The overflow guard, owed WHEREVER the pill sits. A flex/grid item's automatic
             minimum size is its longest unbreakable word, and the rail is a fixed `22rem`
             track, so a title carrying a cuid or a SCREAMING_CASE constant pushed the
             `<aside>` past it. Measured in chromium at the shipped 352px rail width, on the
@@ -191,63 +228,119 @@ export function PlanReviewRail({
             `min-w-0` floors the item independently. The overline placement makes neither
             redundant: a token wider than the FULL column still overflows without them
             (324px on a 60-character token, 0px with them). */}
-        <h2 className="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)">
-          {review.title ?? t('untitledPlan')}
-        </h2>
-        {review.summary ? (
-          <p className="text-sm text-(--el-text-secondary)">{review.summary}</p>
-        ) : null}
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)">
-          <span>{t('itemCount', { n: review.itemCount })}</span>
-          <ReviewAttribution review={review} t={t} />
-        </p>
-      </header>
-
-      {/* HISTORY timeline */}
-      <section className="flex flex-col gap-2">
-        <h3 className="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
-          {t('history')}
-        </h3>
-        <ol className="flex flex-col gap-2">
-          {review.history.map((ev) => (
-            <HistoryRow key={ev.id} ev={ev} t={t} />
-          ))}
-          {!decided ? (
-            <li className="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-              <span
-                className="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
-                aria-hidden
-              />
-              {t('awaitingReview')}
-            </li>
+          <h2 className="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)">
+            {review.title ?? t('untitledPlan')}
+          </h2>
+          {review.summary ? (
+            <p className="text-sm text-(--el-text-secondary)">{review.summary}</p>
           ) : null}
-        </ol>
-      </section>
-
-      {/* STALENESS summary */}
-      {review.stale ? (
-        <section
-          data-testid="stale-summary"
-          className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-yellow)/40 p-3"
-        >
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
-            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-            {t('staleSummary', { n: review.staleCount })}
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)">
+            <span>{t('itemCount', { n: review.itemCount })}</span>
+            <ReviewAttribution review={review} t={t} />
           </p>
-          <ul className="flex flex-col gap-1">
-            {staleItems.map((item) => (
-              <li key={item.planItemId} className="text-xs text-(--el-text-secondary)">
-                <span className="font-medium text-(--el-text)">{item.title}</span>
-                {' — '}
-                {item.staleReasons.map((r) => staleReasonLabel(r, t)).join(', ')}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        </header>
 
-      {/* The decision GATE (or the decided outcome). */}
-      <div className="mt-auto flex flex-col gap-2">
+        {/* HISTORY timeline */}
+        <section className="flex flex-col gap-2">
+          <h3 className="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
+            {t('history')}
+          </h3>
+          <ol className="flex flex-col gap-2">
+            {review.history.map((ev) => (
+              <HistoryRow key={ev.id} ev={ev} t={t} />
+            ))}
+            {!decided ? (
+              <li className="flex items-center gap-2 text-sm text-(--el-text-secondary)">
+                <span
+                  className="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
+                  aria-hidden
+                />
+                {t('awaitingReview')}
+              </li>
+            ) : null}
+          </ol>
+        </section>
+
+        {/* STALENESS summary */}
+        {review.stale ? (
+          <section
+            data-testid="stale-summary"
+            className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-yellow)/40 p-3"
+          >
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
+              <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+              {t('staleSummary', { n: review.staleCount })}
+            </p>
+            <ul className="flex flex-col gap-1">
+              {staleItems.map((item) => (
+                <li key={item.planItemId} className="text-xs text-(--el-text-secondary)">
+                  <span className="font-medium text-(--el-text)">{item.title}</span>
+                  {' — '}
+                  {item.staleReasons.map((r) => staleReasonLabel(r, t)).join(', ')}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {/* IN FLIGHT — not an alert: nothing failed, the planner is working.
+              `--el-tint-sky` is the one tint no plan STATUS spends, so the band
+              cannot be read as one. */}
+        {!decided && revisionInFlight ? (
+          <div
+            data-testid="plan-revision-running"
+            className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
+          >
+            <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin" aria-hidden="true" />
+            <span className="min-w-0 wrap-anywhere">
+              {review.revision?.heldBy
+                ? t('reviseRunningBy', { harness: review.revision.heldBy })
+                : t('reviseRunning')}
+            </span>
+          </div>
+        ) : null}
+        {canRevise ? (
+          <div className="flex flex-col gap-2 border-t border-(--el-border) pt-3">
+            {/* The shipped composer, with the `@` picker suppressed — it
+                  searches COMMITTED work items and a revision can only name
+                  PROPOSALS (Part XII §B). */}
+            <PlanChangeComposer
+              draft={reviseDraft}
+              onDraftChange={onReviseDraftChange ?? (() => {})}
+              targets={[]}
+              onAddTarget={() => {}}
+              onRemoveTarget={() => {}}
+              onSubmit={(text) => onRevise?.(text)}
+              placeholder={t('revisePlaceholder')}
+              disabled={held || busy}
+              mentions={false}
+            />
+            {/* Only while the field carries text: at rest the placeholder is
+                  the whole ask, and the one thing a reviewer needs to know the
+                  moment an instruction exists is that Send does not approve. */}
+            {reviseDraft.trim().length > 0 ? (
+              <p className="text-xs text-(--el-text-secondary)">{t('reviseNote')}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* THE PINNED FOOTER — the decision, and the room the orb needs.
+
+          `--el-surface` on `--el-surface`, so a top HAIRLINE is the whole
+          separation needed and there is no shadow: a shadow would imply the
+          footer floats over a different surface, which it does not.
+
+          ⚠️ THE BOTTOM PADDING IS THE ORB'S (Part XIII §2 and §8). With
+          MOTIR-4019 the pane spends the shell's clearance band, so the rail's
+          bottom becomes the window's bottom — and the floating Plan-with-AI orb
+          is `fixed right-5 bottom-5`, 56px square, which puts it over the rail's
+          last 76px. Measured at 1440x900: the orb's top is 824 and the rail's
+          bottom becomes 900, so without this the orb covers Decline. It reads the
+          SHELL's own property directly rather than `--canvas-fold-inset`, which
+          is the canvas's indirection for a SHARED component; this rail is not
+          one. */}
+      <div className="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]">
         {errorCode ? (
           <p role="alert" className="text-xs font-medium text-(--el-danger-on-surface)">
             {/* The REFUSAL that beats the optimistic hold gets its own sentence
@@ -262,46 +355,6 @@ export function PlanReviewRail({
           <DecidedOutcome review={review} t={t} codeOutcome={codeOutcome ?? null} />
         ) : (
           <>
-            {/* IN FLIGHT — not an alert: nothing failed, the planner is working.
-                `--el-tint-sky` is the one tint no plan STATUS spends, so the band
-                cannot be read as one. */}
-            {revisionInFlight ? (
-              <div
-                data-testid="plan-revision-running"
-                className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
-              >
-                <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin" aria-hidden="true" />
-                <span className="min-w-0 wrap-anywhere">
-                  {review.revision?.heldBy
-                    ? t('reviseRunningBy', { harness: review.revision.heldBy })
-                    : t('reviseRunning')}
-                </span>
-              </div>
-            ) : null}
-            {canRevise ? (
-              <div className="flex flex-col gap-2 border-t border-(--el-border) pt-3">
-                {/* The shipped composer, with the `@` picker suppressed — it
-                    searches COMMITTED work items and a revision can only name
-                    PROPOSALS (Part XII §B). */}
-                <PlanChangeComposer
-                  draft={reviseDraft}
-                  onDraftChange={onReviseDraftChange ?? (() => {})}
-                  targets={[]}
-                  onAddTarget={() => {}}
-                  onRemoveTarget={() => {}}
-                  onSubmit={(text) => onRevise?.(text)}
-                  placeholder={t('revisePlaceholder')}
-                  disabled={held || busy}
-                  mentions={false}
-                />
-                {/* Only while the field carries text: at rest the placeholder is
-                    the whole ask, and the one thing a reviewer needs to know the
-                    moment an instruction exists is that Send does not approve. */}
-                {reviseDraft.trim().length > 0 ? (
-                  <p className="text-xs text-(--el-text-secondary)">{t('reviseNote')}</p>
-                ) : null}
-              </div>
-            ) : null}
             <Button
               variant="primary"
               onClick={onApprove}
