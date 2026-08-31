@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
+import { isCloud } from '@/lib/billing/availability';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -98,6 +99,9 @@ export default async function ProjectMembersPage() {
         workspaceMembers={workspaceMembers}
         currentUserId={ctx.userId}
         canManage={canManage}
+        // Whether this BUILD publishes at all (MOTIR-4035). Read on the server,
+        // where `MOTIR_CLOUD` lives, and threaded to the client island.
+        publicAccessAvailable={isCloud()}
       />
 
       <CodeAccessDoorCard

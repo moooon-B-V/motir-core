@@ -18,6 +18,9 @@ import {
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
 import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
+import { PublicAccessUnavailableError } from '@/lib/projects/errors';
+import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
+import { runAsCloudBuild } from './helpers/cloudBuild';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
@@ -774,6 +777,67 @@ describe('setAccessLevel', () => {
     expect(count).toBe(0);
   });
 
+  // ── MOTIR-4035 — `public` is a CLOUD capability ────────────────────────────
+  //
+  // Vitest sets no `MOTIR_CLOUD`, so this whole file runs as a SELF-HOSTED
+  // build. That makes the off-cloud arm the default one, which is the right way
+  // round: it is the arm that has never existed.
+
+  it('refuses `public` on a self-hosted build — the ENFORCEMENT point, not the UI', async () => {
+    const { key, owner, ownerCtx } = await makeFixture('access-public-selfhost');
+    await expect(
+      projectMembersService.setAccessLevel({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        level: 'public',
+      }),
+    ).rejects.toBeInstanceOf(PublicAccessUnavailableError);
+  });
+
+  it('…and writes NOTHING — no level change, no madePublicAt stamp', async () => {
+    // A refusal that had already stamped `madePublicAt` would leave the project
+    // dated into the square's "Recent" rank for a publish that never happened.
+    const { key, owner, ownerCtx, project } = await makeFixture('access-public-nowrite');
+    await expect(
+      projectMembersService.setAccessLevel({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        level: 'public',
+      }),
+    ).rejects.toBeInstanceOf(PublicAccessUnavailableError);
+    const row = await adminDb.project.findUnique({ where: { id: project.id } });
+    expect(row?.accessLevel).not.toBe('public');
+    expect(row?.madePublicAt).toBeNull();
+  });
+
+  it('leaves open / limited / private alone — the gate is ONE level wide', async () => {
+    // `open` / `limited` / `private` are how a self-hosted team shares work
+    // inside its own workspace, which is what self-hosting is for.
+    const { key, owner, ownerCtx } = await makeFixture('access-selfhost-others');
+    for (const level of ['open', 'limited', 'private'] as const) {
+      const res = await projectMembersService.setAccessLevel({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        level,
+      });
+      expect(res.accessLevel).toBe(level);
+    }
+  });
+
+  it('maps the refusal to 400, not 500 and not 404', async () => {
+    // 400 rather than 404, and the difference is the SUBJECT: the public READ
+    // surface is absent and answers 404 (there is no door); this route is
+    // present and refuses ONE argument. A 404 here would tell a caller looking
+    // at the project that it does not exist.
+    const res = projectMemberErrorResponse(new PublicAccessUnavailableError());
+    expect(res).not.toBeNull();
+    expect(res?.status).toBe(400);
+    expect(((await res?.json()) as { code: string }).code).toBe('PUBLIC_ACCESS_UNAVAILABLE');
+  });
+
   it('rejects an invalid access level', async () => {
     const { key, owner, ownerCtx } = await makeFixture('access-bad');
     await expect(
@@ -852,6 +916,24 @@ describe('getAccess', () => {
     await expect(
       projectMembersService.getAccess({ key: 'NOPE', actorUserId: owner.id, ctx: ownerCtx }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+});
+
+describe('setAccessLevel on a CLOUD build (MOTIR-4035)', () => {
+  runAsCloudBuild();
+
+  it('accepts `public` and stamps madePublicAt on the transition INTO it', async () => {
+    const { key, owner, ownerCtx, project } = await makeFixture('access-public-cloud');
+    const res = await projectMembersService.setAccessLevel({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      level: 'public',
+    });
+    expect(res.accessLevel).toBe('public');
+    const row = await adminDb.project.findUnique({ where: { id: project.id } });
+    expect(row?.accessLevel).toBe('public');
+    expect(row?.madePublicAt).toBeInstanceOf(Date);
   });
 });
 

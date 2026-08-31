@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { isCloud, isCloudBilling } from '@/lib/billing/availability';
+import { stripSourceComments } from '../helpers/stripSourceComments';
 
 // MOTIR-4033 — TWO QUESTIONS, TWO FUNCTIONS, and the guard that keeps them apart.
 //
@@ -75,16 +76,19 @@ const SOURCE = new Map(
   SHIPPED_FILES.map((file) => [file, readFileSync(join(REPO_ROOT, file), 'utf8')] as const),
 );
 
-/**
- * Source with comments stripped. Three of these predicates' most careful
- * mentions are comments explaining why the file does NOT call them
- * (`lib/legal/reconsentGate.ts`, `lib/billing/entitlements.ts`,
- * `app/(authed)/settings/organization/_components/BillingCard.tsx`) — counting
- * prose as a call would report the opposite of what those files do.
- */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
+// Source with comments stripped. Three of these predicates' most careful
+// mentions are comments explaining why the file does NOT call them
+// (`lib/legal/reconsentGate.ts`, `lib/billing/entitlements.ts`,
+// `app/(authed)/settings/organization/_components/BillingCard.tsx`) — counting
+// prose as a call would report the opposite of what those files do.
+//
+// ⚠️ `stripSourceComments` rather than the one-liner the rest of this tree
+// inlines: that one removes BLOCK comments first, so a `//` line containing an
+// opening block-comment sequence starts a block that runs to the next closing
+// one and eats the code below it. This guard was the first thing to hit it —
+// see that module's header. (These lines are `//` and not a JSDoc block for the
+// same reason: a block comment cannot quote the sequences it is about.)
+const stripComments = stripSourceComments;
 
 const CODE = new Map([...SOURCE].map(([file, src]) => [file, stripComments(src)] as const));
 
@@ -129,6 +133,14 @@ describe('the cloud-build flag has exactly one reader', () => {
     expect(reads("const on = process.env['MOTIR_CLOUD'] === 'true';")).toBe(true);
     expect(reads("// it used to inline process.env['MOTIR_CLOUD'] === 'true'")).toBe(false);
     expect(reads("/** reads process.env['MOTIR_CLOUD'] */")).toBe(false);
+    // ⚠️ …and the ordering hazard itself: a `//` line carrying `/*` must not
+    // swallow the code beneath it. This assertion is the one that was FAILING
+    // silently — as a false negative, which is the direction a guard passes in.
+    expect(
+      reads(
+        "// the routes under `app/api/public/*` are gated\nconst on = process.env['MOTIR_CLOUD'];",
+      ),
+    ).toBe(true);
   });
 });
 
@@ -155,12 +167,34 @@ describe('the two predicates PARTITION their callers (ADR §6)', () => {
     expect(callersOf('isCloudBilling').length).toBeGreaterThanOrEqual(8);
   });
 
-  it('NO billing surface reaches for the generic predicate instead', () => {
-    // The converse direction, and the one a partition needs to be a partition:
-    // `isCloud()` answering a billing question re-conflates them just as surely,
-    // and reads as innocent because the newer name looks more general.
-    const crossed = callersOf('isCloud').filter((f) => BILLING_FILES.includes(f));
-    expect(crossed, `billing surfaces calling isCloud(): ${crossed.join(', ')}`).toEqual([]);
+  it('the PUBLIC-PROJECTS gate asks the cloud question, not the billing one', () => {
+    // The consumer MOTIR-4033 exists for, asserted by name rather than left to
+    // the allowlist's silence: the two arms above would both pass if nothing
+    // called `isCloud()` at all.
+    const cloudCallers = callersOf('isCloud');
+    expect(cloudCallers).toContain('lib/publicProjects/cloudGate.ts');
+    expect(cloudCallers).toContain('lib/services/projectMembersService.ts');
+    expect(BILLING_FILES).not.toContain('lib/publicProjects/cloudGate.ts');
+  });
+
+  // ⚠️ THE CONVERSE ARM WAS REMOVED, and it is worth saying why rather than
+  // leaving a one-directional rule looking like an oversight (MOTIR-4035).
+  //
+  // This suite first asserted the two predicates PARTITION their callers — no
+  // billing surface may call `isCloud()` either. That reads as symmetry and is
+  // wrong about what a FILE is. `app/(authed)/layout.tsx` is the application
+  // SHELL: it gates the billing menu row (`isCloudBilling()`) and the
+  // build-in-public header slot (`isCloud()`), and it is right on both counts.
+  // A file is not a surface; it can host several.
+  //
+  // What the ADR actually rules is one-directional — a non-billing QUESTION may
+  // not be answered with the billing predicate — and that is the arm above. The
+  // allowlist keeps its teeth because it is asserted EQUAL to the derived set,
+  // so a new `isCloudBilling()` caller still fails until somebody names the
+  // billing thing it gates.
+  it('the shell may ask BOTH questions — the case that retired the converse arm', () => {
+    expect(callersOf('isCloudBilling')).toContain('app/(authed)/layout.tsx');
+    expect(callersOf('isCloud')).toContain('app/(authed)/layout.tsx');
   });
 });
 

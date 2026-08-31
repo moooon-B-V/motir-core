@@ -14,7 +14,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
-import { isCloudBilling } from '@/lib/billing/availability';
+import { isCloud, isCloudBilling } from '@/lib/billing/availability';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -265,11 +265,20 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   //
   // The two are mutually exclusive by construction (a project is either public
   // or not), so the slot renders exactly ONE — never both, never empty.
+  //
+  // ⚠️ BOTH are additionally gated on `isCloud()` (MOTIR-4035). Build-in-public
+  // is a CLOUD capability: off-cloud `app/api/public/*` serves nothing, so the
+  // CTA would invite a publish that the service refuses, and the "Building in
+  // public" indicator would link a team to a reading surface that answers 404.
+  // The slot is then simply empty, which is the correct rendering of a
+  // capability this build does not have.
+  const publicProjectsAvailable = isCloud();
   const buildInPublicProjectKey =
-    canManage && activeProject && activeProject.accessLevel !== 'public'
+    publicProjectsAvailable && canManage && activeProject && activeProject.accessLevel !== 'public'
       ? activeProject.identifier
       : null;
-  const buildingInPublic = !!activeProject && activeProject.accessLevel === 'public';
+  const buildingInPublic =
+    publicProjectsAvailable && !!activeProject && activeProject.accessLevel === 'public';
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 

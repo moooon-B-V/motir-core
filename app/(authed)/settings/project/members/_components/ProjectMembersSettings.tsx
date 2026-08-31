@@ -94,6 +94,18 @@ export interface ProjectMembersSettingsProps {
   workspaceMembers: WorkspaceMemberDTO[];
   currentUserId: string;
   canManage: boolean;
+  /**
+   * Whether this BUILD can publish a project at all — `isCloud()`, read on the
+   * server page (MOTIR-4035). Threaded as a prop rather than read here because
+   * `MOTIR_CLOUD` is a server variable and this is a client island; the same
+   * reason `cloudBilling` reaches `TopNav` as a prop.
+   *
+   * False on a self-hosted build, where `app/api/public/*` serves nothing — so
+   * offering the level would offer to publish a project into a surface that
+   * does not exist. The service refuses it too (`PublicAccessUnavailableError`);
+   * this half is what stops a person meeting that refusal.
+   */
+  publicAccessAvailable: boolean;
 }
 
 export function ProjectMembersSettings({
@@ -106,12 +118,30 @@ export function ProjectMembersSettings({
   workspaceMembers,
   currentUserId,
   canManage,
+  publicAccessAvailable,
 }: ProjectMembersSettingsProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
   const router = useRouter();
 
   const [accessLevel, setAccessLevel] = useState<ProjectAccessLevel>(initialAccessLevel);
+
+  // The levels this build OFFERS (MOTIR-4035). `public` publishes to strangers
+  // and that surface is cloud-only, so off-cloud it is not on the control.
+  //
+  // ⚠️ It stays on the control when it is the CURRENT level, disabled. A radio
+  // group whose selected option is absent shows nothing selected, which reads as
+  // a broken control rather than as an unavailable capability — and a project
+  // can arrive at `public` on a self-hosted build (data restored from cloud, or
+  // set before this gate landed). Showing the true state and refusing to leave
+  // it OUT of the offered set is the honest pair.
+  const offeredLevels = useMemo(
+    () =>
+      ACCESS_LEVELS.filter(
+        (level) => level !== 'public' || publicAccessAvailable || accessLevel === 'public',
+      ),
+    [publicAccessAvailable, accessLevel],
+  );
   const [members, setMembers] = useState<ProjectMemberDTO[]>(initialMembers);
   const [accessPending, setAccessPending] = useState(false);
   const [pendingUserIds, setPendingUserIds] = useState<ReadonlySet<string>>(new Set());
@@ -147,6 +177,9 @@ export function ProjectMembersSettings({
   // the radio doesn't flip until then. Every other level applies immediately.
   function changeAccess(level: AccessLevel) {
     if (!canManage || level === accessLevel || accessPending) return;
+    // Off-cloud there is nothing to publish to (MOTIR-4035). The option is not
+    // rendered as selectable, so this is the belt to that brace.
+    if (level === 'public' && !publicAccessAvailable) return;
     if (level === 'public') {
       setBuildConfirmOpen(true);
       return;
@@ -400,7 +433,7 @@ export function ProjectMembersSettings({
           aria-label={t('access.levelGroupLabel')}
           className="flex flex-col gap-2"
         >
-          {ACCESS_LEVELS.map((level) => {
+          {offeredLevels.map((level) => {
             const Icon = ACCESS_ICON[level];
             const selected = accessLevel === level;
             return (
@@ -409,7 +442,9 @@ export function ProjectMembersSettings({
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                disabled={!canManage || accessPending}
+                disabled={
+                  !canManage || accessPending || (level === 'public' && !publicAccessAvailable)
+                }
                 onClick={() => changeAccess(level)}
                 className={`focus-visible:ring-(--focus-ring-color) flex items-center gap-3 rounded-(--radius-card) border p-(--spacing-card-padding) text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default ${
                   selected ? 'border-(--el-accent)' : 'border-(--el-border)'
