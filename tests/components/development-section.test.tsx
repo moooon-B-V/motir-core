@@ -7,8 +7,8 @@ import type { LinkedPullRequestDto } from '@/lib/dto/github';
 
 // Story 7.10 · MOTIR-1596 — the display side of the explicit item→PR link on the
 // shared Development body: a MANUALLY-linked row carries the quiet "linked
-// manually" provenance suffix, and the detail host (`manualLinkable`) extends the
-// auto-link caption with "— or linked by hand from here" (design Panel 5a).
+// manually" provenance suffix, and the detail host (`manualLinkable`) names the
+// in-panel "+ Link pull request" door that the peek does not expose (design Panel 5a).
 
 afterEach(cleanup);
 
@@ -40,13 +40,15 @@ describe('DevelopmentSectionBody — manual-link provenance (MOTIR-1596)', () =>
     expect(suffixes[0]!.closest('div')!.textContent).toContain('moooon/motir-gateway · #57');
   });
 
-  it('the detail host (manualLinkable) caption invites hand-linking; the peek does not', () => {
+  it('the detail host caption names its explicit link affordance; the peek names its own doors', () => {
     const { rerender } = render(
       <DevelopmentSectionBody pullRequests={[autoPr]} itemIdentifier="MOTIR-11" manualLinkable />,
     );
-    expect(screen.getByText(/or linked by hand from here/i)).toBeTruthy();
+    expect(document.body.textContent).toContain('+ Link pull request here');
+    expect(document.body.textContent).toContain('link_pull_request over the MCP');
 
     rerender(<DevelopmentSectionBody pullRequests={[autoPr]} itemIdentifier="MOTIR-11" />);
-    expect(screen.queryByText(/or linked by hand from here/i)).toBeNull();
+    expect(document.body.textContent).not.toContain('+ Link pull request here');
+    expect(document.body.textContent).toContain('motir auto session branch');
   });
 });
