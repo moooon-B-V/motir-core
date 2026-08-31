@@ -8,6 +8,14 @@ import { db } from '@/lib/db';
 import type { Prisma } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { runAsCloudBuild } from '../helpers/cloudBuild';
+
+// SEAM 5 loops over EVERY access level, `public` included — and publishing is a
+// cloud-only capability since Story MOTIR-3908, refused on the self-hosted build
+// a Vitest run is by default. The seam's claim is that a custom role grants the
+// same on every level, which is a claim about the level SET, so the arm to assert
+// it on is the build where all four exist (MOTIR-4037).
+runAsCloudBuild();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — custom project roles (Story MOTIR-2257 · Subtask MOTIR-2486)

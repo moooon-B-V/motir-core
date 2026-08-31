@@ -44,6 +44,19 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { NotProjectAdminError } from '@/lib/projects/errors';
 
+// ⚠️ MOVED TO THE CLOUD LANE (Story MOTIR-3908 · MOTIR-4038). This spec publishes a project through the shipped write path and then drives
+// the public overview editor — both halves of a CLOUD-only capability.
+// With `MOTIR_CLOUD` unset the publish path is refused and the shell's
+// build-in-public slot is not rendered, so this spec cannot reach the state it
+// asserts on. The MAIN lane sets no `MOTIR_CLOUD` and deliberately does not
+// (turning it on there activates the §4 entitlement caps and surfaces the
+// billing row, breaking unrelated specs), so the spec runs in
+// `playwright.cloud.config.ts`'s cloud-on lane — which is what the `cloud-`
+// prefix selects.
+//
+// ⚠️ THE COST: that lane is the `billing-cloud` leg of `e2e-at-scale` — push, or
+// a PR carrying the `e2e-at-scale` label. Recorded, not absorbed: MOTIR-4041.
+
 test.describe.configure({ timeout: 180_000 });
 
 test.beforeEach(async () => {

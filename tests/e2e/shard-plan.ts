@@ -480,7 +480,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'project-square-flow.spec.ts': 6.4,
   'projects-flow.spec.ts': 5.8,
   'provenance.spec.ts': 15.2,
-  'public-overview-edit.spec.ts': 8.0,
   // Story MOTIR-3908 · Subtask MOTIR-4038 — the self-host arm of the
   // public-projects gate. ⚠️ AN ESTIMATE, not a measurement: one sign-up, three
   // navigations and eight API requests, no second browser session and no
@@ -540,7 +539,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'style-material-isolation.spec.ts': 5.0,
   'supervision-pool-under-load.spec.ts': 4.7,
   'token-permissions.spec.ts': 4.4,
-  'top-bar-budget.spec.ts': 7.2,
   'triage-flow.spec.ts': 13.1,
   'passkeys.spec.ts': 7.7,
   'two-factor.spec.ts': 20.2,
