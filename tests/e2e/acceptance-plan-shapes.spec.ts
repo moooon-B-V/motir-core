@@ -178,9 +178,13 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
     );
     await beat();
 
+    // ⚠️ ARMED ON ARRIVAL (MOTIR-4020, design Part XIII §3). This leg used to
+    // press the control first; it now asserts the state a reader LANDS in, with
+    // no interaction at all, because that is the whole change. The click below
+    // therefore DISARMS — which is the other half of §3b's answer: the pressed
+    // treatment plus `aria-pressed` is the affordance, and a reader who did not
+    // arm it can still turn it off.
     await expect(showChanges(page)).toBeEnabled();
-    await expect(showChanges(page)).toHaveAttribute('aria-pressed', 'false');
-    await showChanges(page).click();
     await expect(showChanges(page)).toHaveAttribute('aria-pressed', 'true');
 
     // THE EMPHASIS SPANS TWO OPS: the two proposed stories AND the committed
@@ -200,7 +204,7 @@ test('Plan detail: the canvas lands where the plan is, Show changes marks what i
     }
     await beat();
 
-    // Press it again and BOTH go: the marks and the dimming.
+    // Press it ONCE and BOTH go: the marks and the dimming.
     await showChanges(page).click();
     await expect(showChanges(page)).toHaveAttribute('aria-pressed', 'false');
     for (const id of [...seed.two.addedNodeIds, seed.two.modified.id]) {

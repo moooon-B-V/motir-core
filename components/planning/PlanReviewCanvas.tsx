@@ -367,12 +367,28 @@ export function PlanReviewCanvas({
         //
         // The COPY comes from here rather than the foundation, which has no idea
         // it is showing a plan and cannot name what "the plan's changes" are.
+        // ARMED ON ARRIVAL (MOTIR-4020, Part XIII §3): the foundation derives the
+        // armed state per level now, so this consumer supplies only the words. A
+        // DECIDED plan arrives armed too, in the past tense — *"what did this plan
+        // change?"* is a better question after approve than before it, and the
+        // decided pane exists to be a RECORD (Part VI).
         emphasis={{
           ids: items.map((i) => i.nodeId),
           total: items.length,
           label: decided ? tPlan('showChangesPast') : t('showChanges'),
           emptyLabel: t('showChangesNone'),
+          // The other degenerate level — every card on it is this plan's — where
+          // ringing everything says nothing (§3d, reversing Part IX §L6).
+          allLabel: tPlan('showChangesAll'),
+          // The LOCATE control walks this same set (§4). Its shipped labels name
+          // a READY frontier, which a proposal never is.
+          locateLabel: tPlan('locateChange'),
         }}
+        // ⚠️ MOUNTED HERE FOR THE FIRST TIME (MOTIR-4020). The control was doubly
+        // out of reach on this surface: this consumer passed no `locatable`, and
+        // the ladder behind it targeted `here` / `ready` nodes. It now walks the
+        // emphasised set, so it has something to find.
+        locatable
         // The root crumb goes where the ROADMAP's does — `parentId = null`, the
         // project's top level — so it is labelled the way the roadmap labels it
         // (bug MOTIR-3152). It used to read "Plan" while navigating to the project

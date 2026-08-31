@@ -1114,7 +1114,14 @@ describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', ()
     render(
       <ProjectRoadmapCanvas
         loadLevel={() => Promise.resolve(wide)}
-        emphasis={{ ids: ['A', 'B', 'C'], total: 11, label: 'Show changes', emptyLabel: 'None' }}
+        emphasis={{
+          ids: ['A', 'B', 'C'],
+          total: 11,
+          label: 'Show changes',
+          emptyLabel: 'None',
+          allLabel: 'All',
+          locateLabel: 'Locate',
+        }}
       />,
     );
     await screen.findByText('a');
@@ -1127,7 +1134,14 @@ describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', ()
     render(
       <ProjectRoadmapCanvas
         loadLevel={() => Promise.resolve(wide)}
-        emphasis={{ ids: ['A', 'B', 'C'], total: 3, label: 'Show changes', emptyLabel: 'None' }}
+        emphasis={{
+          ids: ['A', 'B', 'C'],
+          total: 3,
+          label: 'Show changes',
+          emptyLabel: 'None',
+          allLabel: 'All',
+          locateLabel: 'Locate',
+        }}
       />,
     );
     await screen.findByText('a');
