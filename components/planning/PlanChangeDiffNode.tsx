@@ -42,7 +42,7 @@ const FRAME: Record<PlanChangeDiffState, string> = {
   // with the glyph, the word, the struck title and the rose wash — never colour
   // alone.
   remove:
-    'rounded-(--radius-card) outline-2 outline-dashed outline-(--el-danger) [&_[data-node-title]]:text-(--el-text-muted) [&_[data-node-title]]:line-through',
+    'rounded-(--radius-card) outline-2 outline-dashed outline-(--el-danger) [&_[data-node-title]]:text-(--el-text-secondary) [&_[data-node-title]]:line-through',
   locked: 'rounded-(--radius-card) ring-1 ring-(--el-border-strong)',
 };
 
