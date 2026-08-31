@@ -57,7 +57,7 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-(--el-page)">
+    <div className="flex h-dvh flex-col bg-(--el-page-bg)">
       {/* Brand bar — the entrance owns the whole viewport (the (onboarding) route
           group renders outside the app shell). No "Save & exit": nothing is saved
           here (no project/session exists until the user continues). */}
