@@ -449,10 +449,6 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
       itemCount: 0,
       stale: false,
       staleCount: 0,
-      // A small level, so the derived default is the CANVAS unless a case says
-      // otherwise (MOTIR-4024).
-      arrivalLevelSize: 1,
-      arrivalLevelTotal: 1,
     });
   });
 
@@ -472,10 +468,6 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
       itemCount: 3,
       stale: false,
       staleCount: 0,
-      // A small level, so the derived default is the CANVAS unless a case says
-      // otherwise (MOTIR-4024).
-      arrivalLevelSize: 1,
-      arrivalLevelTotal: 1,
     });
   });
 

@@ -72,7 +72,16 @@ async function isWithinFold(page: Page, selector: string): Promise<boolean> {
   }, selector);
 }
 
-test('the plan detail, refined — the story’s verification recipe', async ({ page, chapter }) => {
+test('the plan detail, refined — the story’s verification recipe', async ({
+  page,
+  chapter,
+  acceptanceStory,
+}) => {
+  // WHICH STORY THIS CLIP BELONGS TO. Without it the recording can never be
+  // published to the story, and `e2e-acceptance-lane-membership.test.ts` fails
+  // the unit lane rather than letting a receipt go nowhere. It is a FIXTURE, not
+  // a module import — the uploader reads the fixture, not the prose.
+  acceptanceStory('MOTIR-4016');
   const seed = await seedPlanShapes('acceptance-plan-detail-refined@example.com');
   await page.setViewportSize(VIEWPORT);
   await signIn(page, seed.email, PLANS_SHAPES_PASSWORD);

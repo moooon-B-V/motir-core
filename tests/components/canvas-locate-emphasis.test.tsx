@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import {

@@ -274,14 +274,25 @@ test('Plan detail: the two degenerate canvas levels — all proposals, and none'
   // neighbours", and it does not depend on knowing which committed ids to name.
   expect(await page.locator('[data-node-id]').count()).toBe(seed.one.subtaskTitles.length);
 
-  // Show changes still means something here: every card on the level is the
-  // plan's, so pressing it marks all of them and dims nothing.
-  await showChanges(page).click();
-  await expect(showChanges(page)).toHaveAttribute('aria-pressed', 'true');
+  // ⚠️ REVERSED by MOTIR-4020 (design Part XIII §3d), and the reversal is the
+  // point. This case used to press the control and assert that every card lit —
+  // Part IX §L6's *"correct and harmless"*. It was, of a state the reader CHOSE.
+  // Now the emphasis is ARMED ON ARRIVAL, so that same screen would arrive
+  // unasked: every card ringed, none dimmed, teaching the reader at the moment
+  // they land that the ring means nothing. So this level DISABLES the control,
+  // with its own reason — the mirror of degenerate 2 below, same disposition and
+  // opposite emptiness.
+  await expect(showChanges(page)).toBeDisabled();
+  await expect(showChanges(page)).toHaveAttribute(
+    'title',
+    "Every item on this level is this plan's",
+  );
   const levelNodes = page.locator('[data-node-id]');
   for (let i = 0; i < (await levelNodes.count()); i += 1) {
     const box = levelNodes.nth(i).locator('> div').first();
-    await expect(box).toHaveAttribute('data-emphasised', 'true');
+    // Nothing is ringed and nothing is dimmed: the screen says nothing, and now
+    // says so with a control that explains why rather than with a lit board.
+    await expect(box).not.toHaveAttribute('data-emphasised', 'true');
     await expect(box).not.toHaveClass(/opacity-35/);
   }
 
