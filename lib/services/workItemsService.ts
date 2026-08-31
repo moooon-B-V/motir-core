@@ -1,3 +1,4 @@
+import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
   Prisma,
   type WorkItem,
@@ -825,9 +826,14 @@ function roadmapDoneStatusKeys(statuses: WorkflowStatusDto[]): Set<string> {
 }
 
 /** Default + max children fetched per lazy tree level (Subtask 2.5.13). The
- * design pins 50 per node; the max caps a forged `?take`. */
+ * design pins 50 per node; the max caps a forged `?take`.
+ *
+ * ⚠️ `TREE_LEVEL_MAX_TAKE` MOVED to `lib/planning/levelCaps.ts` (MOTIR-4024) and
+ * is re-exported here so every existing reader is unchanged. It gained a second
+ * reader on the other side of the wire — the plan detail's derived default view,
+ * which runs in the client island — and a second copy of a cap is a number that
+ * drifts silently. */
 const TREE_LEVEL_PAGE_SIZE = 50;
-const TREE_LEVEL_MAX_TAKE = 200;
 /** The ceiling a roadmap level's "Show all" raises {@link TREE_LEVEL_MAX_TAKE} to
  *  (MOTIR-3490). Reached only when the reader has already been told the level is
  *  truncated and asked for the rest, so it trades one heavier read for the

@@ -2,6 +2,8 @@ import type { WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { fullestContainer } from '@/lib/planning/planShape';
+import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
@@ -706,6 +708,38 @@ export const planReviewService = {
 
     const staleCount = items.filter((i) => i.stale).length;
 
+    // ── HOW BIG IS THE LEVEL THE CANVAS ARRIVES AT (MOTIR-4024, Part XIII §6) ──
+    //
+    // The derived default view has to answer *can the canvas hold this plan's
+    // cards together?* BEFORE the canvas has drawn anything, and the answer is
+    // about the level's COMMITTED neighbourhood, which the plan's own items say
+    // nothing about. So it is read once, here, where the arrival container is
+    // already resolved — `fullestContainer` is the same function the arrival
+    // level itself reads, so the two cannot name different levels.
+    //
+    // A container that is ITSELF a proposal has no committed children, and the
+    // count comes back 0 without a special case: no work item carries that id.
+    const arrivalContainer = fullestContainer(items);
+    const arrivalParentId = arrivalContainer?.parentNodeId ?? null;
+    const arrivalLevelTotal =
+      (await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.countSiblingsInWorkspace(
+          plan.projectId,
+          arrivalParentId,
+          ctx.workspaceId,
+          tx,
+        ),
+      )) +
+      // The plan's own `add`s draw a node each and no committed row backs them.
+      // A `modify` / `remove` SHARES its node with the committed card it targets,
+      // so counting it again would double it.
+      items.filter((i) => i.op === 'add' && (i.parentNodeId ?? null) === arrivalParentId).length;
+    // What the canvas will actually DRAW: the level read is capped, so a level
+    // past the cap draws the cap, not its total. Both numbers are carried because
+    // the two arms of the rule read different ones — the legibility arm reads what
+    // is drawn, the truncation arm reads what was dropped.
+    const arrivalLevelSize = Math.min(arrivalLevelTotal, TREE_LEVEL_MAX_TAKE);
+
     return {
       id: plan.id,
       projectId: plan.projectId,
@@ -743,6 +777,8 @@ export const planReviewService = {
       items,
       stale: staleCount > 0,
       staleCount,
+      arrivalLevelSize,
+      arrivalLevelTotal,
     };
   },
 };

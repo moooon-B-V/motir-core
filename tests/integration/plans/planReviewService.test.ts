@@ -208,6 +208,102 @@ describe('planReviewService.getPlanReview', () => {
     expect(item.identifier).toBe(target.identifier); // still anchored to the real key
   });
 
+  // ── THE ARRIVAL LEVEL'S SIZE (MOTIR-4024, design Part XIII §6) ─────────────
+  //
+  // The client cannot compute it: `defaultPlanView` runs before the canvas has
+  // fetched anything, and the answer is about the level's COMMITTED
+  // neighbourhood, which the plan's own items say nothing about. All three
+  // container shapes are covered here because each resolves differently — and the
+  // proposal case is the one a naive implementation gets wrong by counting the
+  // children of an id no work item has.
+  it('counts the arrival level under a COMMITTED parent — its siblings PLUS the plan’s adds (MOTIR-4024)', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'Billing overhaul');
+    for (let i = 0; i < 4; i += 1) await seedChild(fx, 'story', `Committed ${i}`, epic.id);
+    const modified = await seedChild(fx, 'story', 'Invoice templates', epic.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Usage metering', kind: 'story' },
+          parentRef: epic.id,
+        },
+        { op: 'add', proposedFields: { title: 'Credit notes', kind: 'story' }, parentRef: epic.id },
+        // A `modify` SHARES its node with the committed card it targets, so it
+        // must NOT be counted again — the level draws five committed cards, not
+        // six, and this is the assertion that says so.
+        { op: 'modify', workItemId: modified.id, patch: { title: 'Invoice templates + branding' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.arrivalLevelSize).toBe(7); // 5 committed + 2 adds
+    expect(review.arrivalLevelTotal).toBe(7); // nothing truncated
+  });
+
+  it('counts ZERO committed siblings when the arrival container is itself a PROPOSAL', async () => {
+    // The shape an agent-authored skeleton produces almost every time: a story
+    // under a committed epic, with its subtasks hung off the story by intra-plan
+    // ref. The fullest container is then the PROPOSED story, and no work item
+    // carries that id — so the count is the plan's own adds and nothing else.
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'Marketplace payouts');
+    await seedChild(fx, 'story', 'A committed sibling', epic.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Reconciliation' }, fx.ctx);
+    const after = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Payout reconciliation', kind: 'story' },
+          parentRef: epic.id,
+        },
+      ],
+      fx.ctx,
+    );
+    const storyItemId = after.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      ['Reconcile rows', 'Backfill payouts', 'Alert on drift'].map((title) => ({
+        op: 'add' as const,
+        proposedFields: { title, kind: 'subtask' as const },
+        parentRef: `planItem:${storyItemId}`,
+      })),
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    // The proposed story holds three subtasks and is the fullest container.
+    expect(review.arrivalLevelSize).toBe(3);
+    expect(review.arrivalLevelTotal).toBe(3);
+  });
+
+  it('counts the project ROOT for a plan of pure roots', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedChild(fx, 'epic', 'A committed root epic');
+    await seedChild(fx, 'epic', 'Another root epic');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Roots' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A proposed root', kind: 'epic' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    // `parentId: null` scoped by project — the root level, not every project's.
+    expect(review.arrivalLevelSize).toBe(3);
+    expect(review.arrivalLevelTotal).toBe(3);
+  });
+
   it('surfaces a leaf-sizing re-scope in the change preview so the approver SEES it (MOTIR-1532)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'Resized card');

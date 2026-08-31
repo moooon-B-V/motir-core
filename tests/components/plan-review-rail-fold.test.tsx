@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanReviewRail } from '@/components/planning/PlanReviewRail';
-import type { PlanReviewDto, PlanStatusDto } from '@/lib/dto/planReview';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanStatusDto } from '@/lib/dto/plans';
 
 // THE RAIL LANDS ON ITS DECISION (MOTIR-4023, design Part XIII §8).
 //
@@ -45,6 +46,10 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     items: [],
     stale: false,
     staleCount: 0,
+    // A small level, so the derived default is the CANVAS unless a case says
+    // otherwise (MOTIR-4024).
+    arrivalLevelSize: 1,
+    arrivalLevelTotal: 1,
     revision: null,
     ...over,
   };

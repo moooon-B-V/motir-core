@@ -428,4 +428,33 @@ export interface PlanReviewDto {
   stale: boolean;
   /** How many items are stale (the summary count). */
   staleCount: number;
+
+  /**
+   * HOW MANY NODES THE ARRIVAL LEVEL DRAWS (MOTIR-4024, design Part XIII §6) —
+   * the committed siblings the level read will return, plus the plan's own
+   * proposals under that container.
+   *
+   * ⚠️ THE CLIENT CANNOT COMPUTE IT. `defaultPlanView` runs before the canvas has
+   * fetched anything, and the answer is about the level's COMMITTED
+   * neighbourhood, which the plan's own items say nothing about. So it is read
+   * once here, where the level's container is already resolved.
+   *
+   * Read by `defaultPlanView` (`lib/planning/planView.ts`) and by nothing else.
+   * It is the level's TOTAL, not the plan's share of it: the arrival SCALE is a
+   * function of how many nodes the canvas DRAWS, and a plan of three cards under
+   * a container of two hundred is exactly the case the rule exists for.
+   */
+  arrivalLevelSize: number;
+  /**
+   * The same level's UNTRUNCATED size — what it holds before
+   * `TREE_LEVEL_MAX_TAKE` caps the read (MOTIR-4024, Part XIII §6, second arm).
+   *
+   * The level read sorts key-ASCENDING and discards the HIGHEST keys, which are
+   * the most recently created cards — and a `modify` or `remove` targets a
+   * committed work item, so the cards a plan is most likely to be about are
+   * exactly the ones truncation drops. Past the cap the canvas can draw two
+   * hundred cards, ring none of them, and show a reviewer a plan whose subject is
+   * not on the screen.
+   */
+  arrivalLevelTotal: number;
 }
