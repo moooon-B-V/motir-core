@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, RotateCw } from 'lucide-react';
 
@@ -164,7 +164,7 @@ function ProposalRow({
 }: {
   item: PlanReviewItemDto;
   decided: boolean;
-  onOpen: (item: PlanReviewItemDto) => void;
+  onOpen: (item: PlanReviewItemDto, trigger: HTMLButtonElement) => void;
 }) {
   const t = useTranslations('planReview');
   const facts = [
@@ -225,7 +225,7 @@ function ProposalRow({
           <button
             type="button"
             aria-label={t('rowOpenAria', { name })}
-            onClick={() => onOpen(item)}
+            onClick={(event) => onOpen(item, event.currentTarget)}
             className={
               'truncate text-left text-sm font-semibold text-(--el-text) ' +
               'after:absolute after:inset-0 hover:underline focus-visible:outline-none' +
@@ -293,6 +293,24 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
   // open) and the canvas's peek state is a compound one — a proposal OR a
   // committed key — of which a list row can only ever be the first.
   const [peeked, setPeeked] = useState<PlanReviewItemDto | null>(null);
+  // ⚠️ FOCUS RETURN IS EXPLICIT HERE, and it is not redundant with the modal's own
+  // (MOTIR-4022). The dialog is mounted INSIDE this list, so closing it unmounts
+  // the dialog in the same commit that re-renders the rows — and the restore the
+  // shipped `Modal` performs on unmount lands before the row it should return to
+  // is settled, leaving focus on the body. Measured: a keyboard user who opened a
+  // row with Enter and pressed Escape was returned to nothing and had to Tab from
+  // the top of the page. Remembering the trigger and refocusing it after the close
+  // is one ref and closes that.
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const openPeek = useCallback((item: PlanReviewItemDto, trigger: HTMLButtonElement) => {
+    triggerRef.current = trigger;
+    setPeeked(item);
+  }, []);
+  const closePeek = useCallback(() => {
+    setPeeked(null);
+    // After the close has flushed, so the restore is not racing the unmount.
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
 
   if (items.length === 0) {
     return (
@@ -326,14 +344,14 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
                   key={item.planItemId}
                   item={item}
                   decided={decided}
-                  onOpen={setPeeked}
+                  onOpen={openPeek}
                 />
               ))}
             </ul>
           </section>
         );
       })}
-      <ProposalQuickView item={peeked} onClose={() => setPeeked(null)} />
+      <ProposalQuickView item={peeked} onClose={closePeek} />
     </div>
   );
 }
