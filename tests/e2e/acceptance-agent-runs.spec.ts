@@ -1,4 +1,3 @@
-import type { APIRequestContext } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { signIn } from './_helpers/shell-session';
 import { seedScopedRun, SCOPED_RUN_PASSWORD } from './_helpers/scoped-run-seed';
@@ -25,6 +24,27 @@ import { appendEvents, closeRun, ingestContext, openRun } from './_helpers/agent
 // `/runs/<id>` route; a spec that navigated to one would go red on a missing
 // path rather than on a defect, so this opens the modal from a row, asserts the
 // URL stayed on `/runs`, and asserts the list is unchanged after closing.
+//
+// ⚠️ THE APPEND'S OWN 200 IS THE AUTHORITATIVE SIGNAL — do NOT add a re-read
+// between an append and the assertion that follows it. An earlier draft had a
+// `settle()` that polled `GET /api/v1/dispatch-runs/{id}` until the cursor
+// advanced, on the reasoning that the UI cannot show what the record does not
+// hold. Both halves were wrong. That route DOES NOT EXIST: `/api/v1` carries
+// the three INGEST operations only (open, events, close) — `tests/runs/
+// storyGate.test.ts` asserts exactly those three — and the run is read back
+// through the session-authenticated `/api/dispatch-runs/[id]`, which a
+// PAT context cannot open anyway. So it 404'd forever and timed out.
+//
+// It was also redundant. `appendEvents` POSTs and asserts its 200 before
+// returning, and the server commits the batch before it answers — so by the
+// time the call resolves the record already holds the events. What the
+// assertions below wait on is the SSE push of a fact that is already committed,
+// which is exactly what an auto-retrying `toBeVisible` is for and is not the
+// race `CLAUDE.md` forbids (that one is asserting ahead of an in-flight write).
+//
+// A footnote worth keeping: the old helper returned `-1` for any non-200, so the
+// failure read `Expected: >= 3, Received: -1` and never said `404`. A poll that
+// swallows the status hides the one fact that explains it.
 
 const EMAIL = 'agent-runs-acceptance@example.com';
 
@@ -32,24 +52,6 @@ const EMAIL = 'agent-runs-acceptance@example.com';
 function origin(baseURL: string | undefined): string {
   if (!baseURL) throw new Error('no Playwright baseURL — the ingest calls have nowhere to go');
   return baseURL;
-}
-
-/** Give the SSE stream a moment of real work to deliver, without a bare sleep. */
-async function settle(api: APIRequestContext, runId: string, seq: number): Promise<void> {
-  // AUTHORITATIVE, not a timeout: re-read the run through its own read route and
-  // wait until the server agrees the cursor has advanced. The UI cannot show an
-  // event the record does not yet hold, so this is the earliest honest moment to
-  // assert on the page.
-  await expect
-    .poll(
-      async () => {
-        const res = await api.get(`/api/v1/dispatch-runs/${runId}`);
-        if (res.status() !== 200) return -1;
-        return ((await res.json()) as { seq: number }).seq;
-      },
-      { message: `run ${runId} reaches seq ${seq}` },
-    )
-    .toBeGreaterThanOrEqual(seq);
 }
 
 test('a run claims a story, and you can watch the whole set advance', async ({
@@ -65,7 +67,6 @@ test('a run claims a story, and you can watch the whole set advance', async ({
   const api = await ingestContext(seed.token, origin(baseURL));
 
   let runId = '';
-  let seq = 0;
 
   await chapter('a run claims a story', async () => {
     // The shape `motir run MOTIR-<id>` produces: the whole ready set claimed at
@@ -119,7 +120,7 @@ test('a run claims a story, and you can watch the whole set advance', async ({
   });
 
   await chapter('a work item goes live, and the log says what the agent is doing', async () => {
-    seq = await appendEvents(api, runId, [
+    await appendEvents(api, runId, [
       { kind: 'card_claimed', workItemKey: seed.first.identifier, disposition: 'running' },
       {
         kind: 'log',
@@ -132,7 +133,6 @@ test('a run claims a story, and you can watch the whole set advance', async ({
         body: 'pnpm vitest run tests/dispatchRunService.test.ts',
       },
     ]);
-    await settle(api, runId, seq);
 
     // ⚠️ SCOPED TO EACH PANE, and that is not tidiness. `Running` also appears
     // on the RUN's own status pill in the header, so an unscoped match would go
@@ -148,7 +148,7 @@ test('a run claims a story, and you can watch the whole set advance', async ({
   });
 
   await chapter('it finishes, and one was skipped — the canvas says why', async () => {
-    seq = await appendEvents(api, runId, [
+    await appendEvents(api, runId, [
       {
         kind: 'card_settled',
         workItemKey: seed.first.identifier,
@@ -156,7 +156,6 @@ test('a run claims a story, and you can watch the whole set advance', async ({
         exitCode: 0,
       },
     ]);
-    await settle(api, runId, seq);
 
     const canvas = page.getByRole('region', { name: 'The set' });
     await expect(canvas.getByText('Implemented').first()).toBeVisible();
