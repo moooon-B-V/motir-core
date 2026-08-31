@@ -181,8 +181,8 @@ query-driven `Combobox`), applied to GitLab projects:
   - **!128** Open + Pipeline running → `pill-sky` + `pill-peach`
   - **!131** Merged + Pipeline passed → `pill-mint` + `pill-mint`
   - **!119** Closed + Pipeline failed → `pill-rose` + `pill-rose`
-- Caption: "Linked automatically when a branch or merge request mentions
-  `MOTIR-1474`."
+- Caption: "Linked by `link_pull_request` over the MCP or a `motir auto` session
+  branch."
 
 ### Panel 4 — CONSISTENCY: two providers, one Development section
 

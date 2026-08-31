@@ -103,8 +103,9 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
     const section = screen.getByTestId('development-section');
     expect(section.textContent).toContain('Development');
     expect(section.textContent).toContain('No linked pull request');
-    // The quiet copy names the item's key.
-    expect(section.textContent).toContain('PROD-7');
+    // The quiet copy names the explicit UI and MCP doors.
+    expect(section.textContent).toContain('+ Link pull request');
+    expect(section.textContent).toContain('link_pull_request over the MCP');
   });
 
   it('renders pr-rows with the PR-state + CI-state pills, meta, and the external link-out (design Panel 3)', () => {
@@ -158,8 +159,8 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
     expect(out[0]!.getAttribute('href')).toBe('https://github.com/moooon/motir-core/pull/131');
     expect(out[0]!.getAttribute('target')).toBe('_blank');
     expect(out[0]!.getAttribute('rel')).toContain('noopener');
-    // The auto-link caption names the item's key.
-    expect(section.textContent).toContain('Linked automatically');
+    // The caption names the explicit MCP door instead of promising a text-derived link.
+    expect(section.textContent).toContain('Linked by link_pull_request over the MCP');
   });
 });
 
