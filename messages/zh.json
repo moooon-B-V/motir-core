@@ -7185,6 +7185,7 @@
   },
   "runs": {
     "title": "运行",
+    "searchLabel": "搜索本次运行",
     "gloss": "代理做了什么",
     "empty": {
       "title": "尚未运行过。",
