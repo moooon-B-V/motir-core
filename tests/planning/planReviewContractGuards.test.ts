@@ -64,11 +64,24 @@ describe('the rail’s footer is TOTAL over PlanStatus (MOTIR-4025)', () => {
 // `searchable` is true, so this cannot regress through an ordinary prop. What it
 // CAN regress through is a spread — `{...props}`, `{...(cond ? a : b)}` — which
 // satisfies the type from a variable the reader cannot see. Two of the five
-// mounts already spread, because their `searchable` is a runtime boolean.
+// mounts already spread (`OnboardingCanvas`, `WorkItemRoadmap`), because their
+// `searchable` is a runtime boolean.
+//
+// (That count said "five" while the census below pinned FOUR — it was written a
+// mount early. `RunCanvasPane` made it true on 2026-08-31; the spread count of
+// two was right all along and is now named rather than counted.)
 //
 // So this enumerates the call sites from the FILESYSTEM, the same technique the
-// settings route↔registry guard uses: a fifth surface that mounts the canvas is
-// covered the day it lands, with no number to keep up to date.
+// settings route↔registry guard uses: a surface that mounts the canvas is ruled
+// on the day it lands, whether or not anybody remembered this file existed.
+//
+// ⚠️ WHAT IS DERIVED AND WHAT IS NOT, because the two are one screen apart. The
+// RULE below sweeps the tree, so a new mount is covered automatically. The
+// CENSUS is a written list, so a new mount also has to be NAMED — deliberately:
+// it is what stops the sweep passing vacuously if the walk ever returns nothing,
+// and it makes joining this population a thing somebody states rather than a
+// thing that happens. Adding a mount is therefore TWO edits, and the second one
+// is this test going red.
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules') continue;
@@ -93,8 +106,17 @@ const mounts: Mount[] = [...walk(join(ROOT, 'components')), ...walk(join(ROOT, '
 
 describe('every searchable canvas mount says what it SEARCHES (MOTIR-4025)', () => {
   it('finds the mounts to rule on', () => {
-    // `PlanReviewCanvas`, `PlanChangeCanvas`, `OnboardingCanvas`, `WorkItemRoadmap`.
+    // `RunCanvasPane`, `PlanReviewCanvas`, `PlanChangeCanvas`, `OnboardingCanvas`,
+    // `WorkItemRoadmap`.
+    //
+    // ⚠️ `RunCanvasPane` joined on 2026-08-31 (MOTIR-4047) and is the FIFTH this
+    // header anticipated. It arrived the hard way, which is worth recording: the
+    // run canvas mounted `searchable` with NO label at all, and because
+    // MOTIR-4025 had just made the pair required, `main` stopped typechecking —
+    // so the mount was born failing the props type rather than this guard. The
+    // guard then caught it a second time, here, for not being STATED.
     expect(mounts.map((m) => m.file).sort()).toEqual([
+      'app/(authed)/runs/_components/RunCanvasPane.tsx',
       'components/onboarding/OnboardingCanvas.tsx',
       'components/planning/PlanChangeCanvas.tsx',
       'components/planning/PlanReviewCanvas.tsx',
@@ -108,7 +130,7 @@ describe('every searchable canvas mount says what it SEARCHES (MOTIR-4025)', () 
       .map((m) => `${m.file} mounts the canvas searchable and supplies no searchLabel`);
     expect(
       unpaired,
-      'The canvas has four searchable mounts and exactly ONE of them is the roadmap. ' +
+      'The canvas has five searchable mounts and exactly ONE of them is the roadmap. ' +
         'A default is how one sentence — "Search the roadmap" — came to greet a reader ' +
         'on /plans/[id], on the plan-change canvas and in onboarding (MOTIR-4021). The ' +
         'props type enforces the pair for an ordinary prop; this catches a SPREAD, ' +

@@ -83,11 +83,18 @@ describe('the roadmap keeps its own sentence', () => {
     expect(zh.roadmap.canvas.search.length).toBeGreaterThan(0);
   });
 
-  it('gives each of the three other mounts its own key, in BOTH catalogs', () => {
+  it('gives each of the four other mounts its own key, in BOTH catalogs', () => {
+    // ⚠️ `runs.searchLabel` joined on 2026-08-31 (MOTIR-4047). This assertion
+    // did NOT go red when the fourth mount landed — it only checks that the
+    // keys it lists exist — so it kept passing while describing three quarters
+    // of the population. Added here rather than left, because a guard that says
+    // "each of the N other mounts" and means "the N I remembered" is the shape
+    // it exists to prevent one layer up.
     for (const [enValue, zhValue] of [
       [en.planReview.searchLabel, zh.planReview.searchLabel],
       [en.planningWorkspace.searchLabel, zh.planningWorkspace.searchLabel],
       [en.onboarding.chat.canvas.searchLabel, zh.onboarding.chat.canvas.searchLabel],
+      [en.runs.searchLabel, zh.runs.searchLabel],
     ]) {
       expect(typeof enValue).toBe('string');
       expect(enValue.length).toBeGreaterThan(0);
@@ -95,6 +102,7 @@ describe('the roadmap keeps its own sentence', () => {
       expect(zhValue.length).toBeGreaterThan(0);
     }
     expect(en.planReview.searchLabel).toBe('Search this plan');
+    expect(en.runs.searchLabel).toBe('Search this run');
   });
 
   it('leaves the foundation with no reference to the roadmap’s key', () => {
