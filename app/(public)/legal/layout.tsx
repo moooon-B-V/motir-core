@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
-import { ExploreTopBar } from '@/app/(public)/explore/_components/ExploreTopBar';
-import { ExploreFooter } from '@/app/(public)/explore/_components/ExploreFooter';
+import { ExploreTopBar } from './_components/ExploreTopBar';
+import { ExploreFooter } from './_components/ExploreFooter';
 
 // The legal-document shell (Story 8.4 · Subtask MOTIR-1134).
 //

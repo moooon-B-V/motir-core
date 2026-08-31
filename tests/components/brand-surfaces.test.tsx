@@ -36,8 +36,7 @@ vi.mock('@/lib/auth/client', () => ({
 }));
 
 import AuthLayout from '@/app/(auth)/layout';
-import { ExploreTopBar } from '@/app/(public)/explore/_components/ExploreTopBar';
-import { PublicTopBar } from '@/app/(public)/_components/PublicTopBar';
+import { ExploreTopBar } from '@/app/(public)/legal/_components/ExploreTopBar';
 
 afterEach(() => {
   cleanup();
@@ -62,38 +61,6 @@ describe('ExploreTopBar — the tile + letter M becomes the mark (§7c)', () => 
     // it, so a label on the link would announce the brand twice.
     expect(home.getAttribute('aria-label')).toBeNull();
     expect(home.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
-  });
-});
-
-describe('PublicTopBar — the brand is the HOST, not the subject (§7d)', () => {
-  const base = { name: 'Motir', identifier: 'MOTIR', workspaceName: 'moooon' };
-
-  it("leaves the project's own initial tile alone", async () => {
-    // The tile renders `name.charAt(0)`. Overwriting it would delete project
-    // identity to gain brand, on the page whose whole job is the project.
-    const { container } = renderWithIntl(
-      await PublicTopBar({ ...base, name: 'Zephyr', user: null }),
-    );
-    expect(screen.getByText('Z')).toBeTruthy();
-    // Scoped to the brand link: this bar also renders the "Building in public"
-    // badge's icon, so an unscoped `svg path` would assert against a megaphone.
-    expect(container.querySelector('a[href="/"] svg path')!.getAttribute('d')).toBe(WAVE_BAND_PATH);
-  });
-
-  it('adds a quiet "on Motir" lockup that reads as one phrase', async () => {
-    const { container } = renderWithIntl(await PublicTopBar({ ...base, user: null }));
-    const home = container.querySelector('a[href="/"]')!;
-    expect(home.textContent).toBe('hostedOnPrefixbrand');
-    expect(home.querySelector('.brand-quiet')).not.toBeNull();
-    expect(home.getAttribute('aria-label')).toBeNull();
-  });
-
-  it('does not disturb the auth-aware slot it sits beside', async () => {
-    // Regression guard: the brand slot was added INTO the right cluster, so the
-    // CTAs `public-top-bar.test.tsx` pins must still be the only buttons there.
-    renderWithIntl(await PublicTopBar({ ...base, user: null }));
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Start free' })).toBeTruthy();
   });
 });
 
