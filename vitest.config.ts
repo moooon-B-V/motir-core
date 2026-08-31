@@ -1366,26 +1366,8 @@ export default defineConfig({
         'app/api/v1/projects/[projectKey]/plan-session/route.ts',
         'app/api/v1/projects/[projectKey]/plan-session/turns/route.ts',
         'app/api/v1/projects/[projectKey]/plan-session/submissions/route.ts',
-        // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
-        'lib/apiDocs/reference.ts',
-        // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
-        'lib/apiDocs/guide.ts',
-        // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the story gate. The docs
-        // SURFACE joins the map, not only the modules behind it: this is the
-        // page a third party reads to decide whether Motir is integrable, and
-        // its branches are the ones that decide what they see when something is
-        // wrong — a spec that would not build, a footer read that failed, a
-        // filter that matches nothing. Each is a way the published reference can
-        // be silently useless while every module beneath it is green.
-        'lib/apiDocs/sandbox.ts',
-        // Story MOTIR-2315 · Subtask MOTIR-2524 — the `/docs` INDEX and the
-        // shared surface list behind it. The index is the area's front door, so
-        // its branches decide what a first-time reader sees; `surfaces.ts` is
-        // read by BOTH renderers, so a defect there is wrong in two places at
-        // once. `pageMetadata.ts` is what stops a page inheriting another
-        // page's title — the defect MOTIR-2526 fixed, now under the gate.
-        'lib/apiDocs/surfaces.ts',
-        'lib/apiDocs/pageMetadata.ts',
+        // The API-doc rendering modules moved to motir-marketing in MOTIR-3951.
+        // The in-app door remains here and keeps its own coverage gate below.
         'app/**/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
@@ -2354,15 +2336,6 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
         'lib/api/v1/identity/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/planning/operations.ts': { branches: 90, functions: 90, lines: 90 },
-        // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
-        'lib/apiDocs/reference.ts': { branches: 90, functions: 90, lines: 90 },
-        // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
-        'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
-        // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
-        // Story MOTIR-2315 · Subtask MOTIR-2524 — the index and its shared list.
-        'lib/apiDocs/surfaces.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/apiDocs/pageMetadata.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/apiDocs/sandbox.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 8.12 · Subtask MOTIR-3612 — MEASURED on this branch, in these
         // numbers, before being pinned:
         //   PasskeyManager.tsx        97.56 / 92.10 / 100 / 100

@@ -46,20 +46,20 @@ test('the moved public surfaces 308 off the application host', async ({
   await resetDatabase();
 
   // ── Step 6 — each moved path 308s, path and query preserved ──────────────
-  await chapter('the moved paths redirect', async () => {
-    for (const [path, destination] of [
-      ['/', '/'],
-      ['/explore?rank=popular', '/explore?rank=popular'],
-      ['/explore/topic/design', '/explore/topic/design'],
-      ['/docs/api/getting-started', '/docs/api/getting-started'],
-      ['/legal/privacy', '/legal/privacy'],
-      ['/p/PROD', '/p/PROD'],
-    ] as const) {
+  for (const [label, path, destination] of [
+    ['the landing page redirects', '/', '/'],
+    ['the ranked explore view redirects', '/explore?rank=popular', '/explore?rank=popular'],
+    ['an explore topic redirects', '/explore/topic/design', '/explore/topic/design'],
+    ['the API guide redirects', '/docs/api/getting-started', '/docs/api/getting-started'],
+    ['a legal page redirects', '/legal/privacy', '/legal/privacy'],
+    ['a public project redirects', '/p/PROD', '/p/PROD'],
+  ] as const) {
+    await chapter(label, async () => {
       const res = await request.get(`${APP}${path}`, { maxRedirects: 0 });
       expect(res.status(), `${path} status`).toBe(308);
       expect(res.headers()['location'], `${path} location`).toBe(`${PUBLIC}${destination}`);
-    }
-  });
+    });
+  }
 
   // ── Step 7 — a signed-in journey is unaffected ────────────────────────────
   await chapter('signed-in surfaces do not redirect', async () => {
