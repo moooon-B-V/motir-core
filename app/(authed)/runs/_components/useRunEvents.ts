@@ -23,14 +23,36 @@ export interface RunEventStream {
   events: DispatchRunEventDto[];
   /** The connection dropped while the run is still going, and is backing off. */
   reconnecting: boolean;
+  /**
+   * The stream delivered its terminal `done` frame — the RUN ended.
+   *
+   * ⚠️ THIS USED TO BE SWALLOWED, and the bug it caused is the one thing this
+   * whole surface promises not to do. The route writes `done` and closes when
+   * the run reaches a terminal status, and the hook read that frame, set its
+   * own `cancelled` flag and returned — so the modal was never told. A person
+   * watching a live run saw it stop and the header went on saying `Running`,
+   * with no stop reason, until they reloaded the page.
+   *
+   * The card-scoped kinds cannot stand in for it: closing a run writes NO event
+   * row (`dispatchRunService.close` updates `status` and `stopReason` on the run
+   * itself), so `done` is the only signal that the run — as opposed to one of
+   * its legs — is over.
+   */
+  finished: boolean;
 }
 
 export function useRunEvents(runId: string): RunEventStream {
   const [events, setEvents] = useState<DispatchRunEventDto[]>([]);
   const [reconnecting, setReconnecting] = useState(false);
+  const [finished, setFinished] = useState(false);
   const seqRef = useRef(0);
 
   useEffect(() => {
+    // ⚠️ NO RESET HERE, deliberately. `RunModal` is KEYED ON `runId` at its mount
+    // site, so a different run REMOUNTS and `useState`'s initializer is the
+    // reset — the same one mechanism the modal's own load effect relies on.
+    // Resetting from inside this effect would be the cascading render
+    // `react-hooks/set-state-in-effect` forbids, and would buy nothing.
     const controller = new AbortController();
     let cancelled = false;
 
@@ -59,6 +81,9 @@ export function useRunEvents(runId: string): RunEventStream {
                 seqRef.current = ev.seq;
                 setEvents((prev) => (prev.some((p) => p.seq === ev.seq) ? prev : [...prev, ev]));
               } else if (event === 'done') {
+                // Say so BEFORE returning: this is the only notice the run
+                // itself ended, and the modal re-reads the run on it.
+                setFinished(true);
                 cancelled = true;
                 return;
               }
@@ -85,5 +110,5 @@ export function useRunEvents(runId: string): RunEventStream {
     };
   }, [runId]);
 
-  return { events, reconnecting };
+  return { events, reconnecting, finished };
 }

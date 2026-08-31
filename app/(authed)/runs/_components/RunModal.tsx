@@ -51,7 +51,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   // ONE connection for the whole modal (MOTIR-3983): the findings strip and the
   // log pane are two readers of the same stream, not two streams.
-  const { events, reconnecting } = useRunEvents(runId);
+  const { events, reconnecting, finished } = useRunEvents(runId);
   // Bumped when the dispositions move, so the canvas refetches its CURRENT level
   // — the prop `ProjectRoadmapCanvas` exposes for exactly this.
   const [reloadKey, setReloadKey] = useState(0);
@@ -106,6 +106,21 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
     for (const e of events) seenRef.current = Math.max(seenRef.current, e.seq);
     if (moved) void fetchRun();
   }, [events, fetchRun]);
+
+  // ⚠️ AND THE RUN'S OWN ENDING, which the disposition kinds above cannot carry.
+  // Closing a run writes no event row — `dispatchRunService.close` updates
+  // `status` and `stopReason` on the run itself — so the stream's terminal
+  // `done` frame is the only notice it is over. Without this re-read the header
+  // kept saying `Running`, with no stop reason, for as long as the modal stayed
+  // open: the one thing a live run surface must not do.
+  useEffect(() => {
+    if (!finished) return;
+    // Same shape as the load effect above — the async wrapper is what keeps the
+    // state update out of the effect BODY (`react-hooks/set-state-in-effect`).
+    void (async () => {
+      await fetchRun();
+    })();
+  }, [finished, fetchRun]);
 
   // A run that is not there is not a state to sit in: close, and let the list say so.
   useEffect(() => {

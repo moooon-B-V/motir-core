@@ -227,3 +227,48 @@ describe('the SELECTION is exposed, so the log pane can consume it', () => {
     expect(region.getAttribute('data-selected-work-item')).toBe('wi_1');
   });
 });
+
+describe("⚠️ the RUN's own ending — carried by `done`, not by any card event", () => {
+  // The bug this replaces: closing a run writes NO event row
+  // (`dispatchRunService.close` updates `status` and `stopReason` on the run
+  // itself), and the modal only re-read on the card-scoped kinds. The stream's
+  // terminal `done` frame was received and SWALLOWED by `useRunEvents`, so a
+  // person watching a live run saw it stop while the header went on saying
+  // `Running`, with no stop reason, until they reloaded. It is the one thing a
+  // live run surface must not do, and only the acceptance clip caught it.
+  it('re-reads the run on `done`, so the header stops saying it is running', async () => {
+    const running = run({ status: 'running', stopReason: null, endedAt: null });
+    let reads = 0;
+    let sent = false;
+    const frame = 'event: done\ndata: {"status":"succeeded","seq":12}\n\n';
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/stream')) {
+        return {
+          ok: true,
+          body: {
+            getReader: () => ({
+              read: async () =>
+                sent
+                  ? { done: true, value: undefined }
+                  : ((sent = true), { done: false, value: new TextEncoder().encode(frame) }),
+            }),
+          },
+        };
+      }
+      reads += 1;
+      // The FIRST read is the live run; the re-read is what sees it settled.
+      return { ok: true, status: 200, json: async () => (reads === 1 ? running : run()) };
+    });
+
+    render(<RunModal runId="run_a91f" projectKey="MOTIR" onClose={onClose} />);
+    await act(async () => {});
+    await act(async () => {});
+
+    // ⚠️ ASSERTED AS A SECOND READ, not merely as the final text: mounting with an
+    // already-finished run would show the same words while proving nothing about
+    // the frame. The count is what says the terminal frame did the work.
+    expect(reads).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('the ready set is drained')).toBeTruthy();
+  });
+});
