@@ -126,7 +126,7 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
   }, [postRunRoute, router, run]);
 
   return (
-    <div className="flex h-dvh flex-col bg-(--el-page)">
+    <div className="flex h-dvh flex-col bg-(--el-page-bg)">
       <BrandBar
         flowName={t('brandBar.flowName')}
         userInitial={userInitial}
