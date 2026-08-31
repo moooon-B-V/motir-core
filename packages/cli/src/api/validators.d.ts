@@ -27,11 +27,13 @@ export interface ValidateFunction {
 }
 
 /** Validators for each operation's 2xx response body, keyed by operationId. */
+export declare const operation_appendDispatchRunEvents: ValidateFunction;
 export declare const operation_appendPlanTurn: ValidateFunction;
 export declare const operation_approveWorkItemPlan: ValidateFunction;
 export declare const operation_archiveWorkItem: ValidateFunction;
 export declare const operation_claimScope: ValidateFunction;
 export declare const operation_claimWorkItem: ValidateFunction;
+export declare const operation_closeDispatchRun: ValidateFunction;
 export declare const operation_completeSession: ValidateFunction;
 export declare const operation_completeSprint: ValidateFunction;
 export declare const operation_countProjectWorkItems: ValidateFunction;
@@ -60,6 +62,7 @@ export declare const operation_listWorkItemTransitions: ValidateFunction;
 export declare const operation_listWorkspaces: ValidateFunction;
 export declare const operation_moveWorkItemsToBacklog: ValidateFunction;
 export declare const operation_moveWorkItemsToSprint: ValidateFunction;
+export declare const operation_openDispatchRun: ValidateFunction;
 export declare const operation_openPlanSession: ValidateFunction;
 export declare const operation_recordWorkItemIntegration: ValidateFunction;
 export declare const operation_reportWorkItemImplementation: ValidateFunction;

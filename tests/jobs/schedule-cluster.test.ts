@@ -132,7 +132,10 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     //
     // ⚠️ THE COUNT MOVES AS JOBS ARRIVE; THE SHAPE IS WHAT §21 PINS. Bumping this
     // number is the expected maintenance for a new `system.*` cron — what must
-    // NOT move is everything below it. 19 since
+    // NOT move is everything below it. 20 since
+    // `system.dispatch-run-sweep` (MOTIR-1792), which took `30 6 * * *` — a
+    // clustered minute at the TAIL of the nightly cascade, one hour after
+    // `system.job-run-reap`, so it opens no new wake-minute. It was 19 since
     // `system.supervision-sweep` (MOTIR-3830), which took `0,30 * * * *` — the
     // cluster's own minutes, costing no new wake, and chosen against the
     // 70-minute fleet reaper it exists to pre-empt rather than against how
@@ -149,7 +152,7 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // MERGE of the two resolved cleanly to a number that was wrong for both.
     // The count is derivable — `grep -c '^    cron:' lib/jobs/definitions/*.ts`
     // — so derive it rather than adding one to whatever the branch said.
-    expect(jobSchedules().length).toBe(19);
+    expect(jobSchedules().length).toBe(20);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

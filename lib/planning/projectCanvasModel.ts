@@ -77,8 +77,14 @@ export interface ProjectCanvasDep {
   from: string;
   to: string;
   /** `firm` = a settled dependency (solid); `pending` = not-yet-done (dashed);
-   *  `cross` = a story/parent-boundary crossing (the bad-plan flag). */
-  variant?: 'firm' | 'pending' | 'cross';
+   *  `cross` = a story/parent-boundary crossing (the bad-plan flag);
+   *  `running` = the edge a RUN is travelling along, from a work item an agent is
+   *  working to one it BLOCKS (MOTIR-3972 built it, MOTIR-3895 chooses it). It
+   *  flows, because on a run the edge is what says *what becomes reachable when
+   *  this lands*. ⚠️ `cross` still WINS over it below: an edge that leaves the
+   *  level is a plan problem, and hiding that under an animation would trade a
+   *  diagnosis for a decoration. */
+  variant?: 'firm' | 'pending' | 'cross' | 'running';
   /** `dependency` (default) = a real blocked-by edge → counts toward the
    *  dependency LEGEND. `flow` = a sequence/journey edge (the onboarding station
    *  serpentine) that is drawn but is NOT a blocked-by relationship, so it must
@@ -86,7 +92,7 @@ export interface ProjectCanvasDep {
   kind?: 'dependency' | 'flow';
 }
 
-export type CanvasEdgeVariant = 'firm' | 'pending' | 'cross';
+export type CanvasEdgeVariant = 'firm' | 'pending' | 'cross' | 'running';
 
 export interface CanvasLevelNode {
   node: ProjectCanvasNode;

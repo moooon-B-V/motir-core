@@ -7,6 +7,7 @@ import { attachmentsService } from '@/lib/services/attachmentsService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
@@ -56,6 +57,16 @@ export interface LateReads {
   canDecideAcceptance: boolean;
   designEvidence: Awaited<ReturnType<typeof designEvidenceService.getCurrentForWorkItem>>;
   isDesignCard: boolean;
+  /**
+   * This card's runs, newest first (MOTIR-1796). `null` on a failed read — the
+   * section renders its own state, per this module's containment rule.
+   *
+   * ⚠️ THE FIRST ROW IS THE CURRENT RUN, and that is load-bearing rather than a
+   * convenience: it is what lets the section decide whether to open a stream
+   * BEFORE it renders anything, so an item page for a card nobody is working
+   * opens no connection at all.
+   */
+  runs: Awaited<ReturnType<typeof dispatchRunService.listRunsForWorkItemKey>> | null;
 }
 
 export interface LateReadsInput {
@@ -69,7 +80,12 @@ export interface LateReadsInput {
   fullCtx: Parameters<typeof workItemsService.listLinkedPullRequests>[1];
   activityTab: ActivityTab;
   canEdit: boolean;
+  /** The card's `MOTIR-<n>`, which the run history is keyed by. */
+  itemIdentifier: string;
 }
+
+/** One page of a card's run history — the same default the route serves. */
+export const RUN_HISTORY_PAGE = 20;
 
 export function readLateSections(input: LateReadsInput): Promise<LateReads> {
   const { itemId, ctx, projectId, activityTab } = input;
@@ -88,6 +104,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       acceptanceEligibility,
       acceptanceEvidence,
       designEvidence,
+      runs,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -132,6 +149,17 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
         : null,
       showAcceptance ? acceptanceEvidenceService.getCurrentForStory(itemId, ctx) : null,
       designEvidenceService.getCurrentForWorkItem(itemId, ctx),
+      (async () => {
+        try {
+          return await dispatchRunService.listRunsForWorkItemKey(
+            input.itemIdentifier,
+            { take: RUN_HISTORY_PAGE },
+            ctx,
+          );
+        } catch {
+          return null;
+        }
+      })(),
     ]);
 
     return {
@@ -147,6 +175,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       canDecideAcceptance: input.canEdit && input.itemStatus === 'in_review',
       designEvidence,
       isDesignCard: input.itemType === 'design',
+      runs,
     };
   })();
 }

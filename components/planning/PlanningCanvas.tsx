@@ -56,8 +56,20 @@ export interface CanvasEdge {
    * the dependency-arrow audit forbids (warning-toned + a flag badge at the
    * midpoint, so a reviewer SEES the tangle). A correct plan is a TREE; a `cross`
    * edge means the plan is wrong (design `design/roadmap/*`, MOTIR-1009/1194).
+   *
+   * `running` = the dependency a RUN is currently travelling along: an edge FROM
+   * a work item an agent is working TO one it blocks. It flows, because on a run
+   * the edge is what says *what becomes reachable when this lands* — the question
+   * a static arrow cannot answer (MOTIR-3972; `design/runs/design-notes.md`
+   * § THE RUNNING EDGE).
+   *
+   * ⚠️ NAMED FOR THE STATE, NOT THE EFFECT, so a later surface with the same
+   * meaning reuses it instead of adding a second animated variant. And it is
+   * OPT-IN like every other capability here (`searchable`, `locatable`,
+   * `fullScreenable`): a consumer that never sends it renders exactly as before,
+   * which is what keeps the onboarding canvas from growing a flowing edge.
    */
-  variant?: 'firm' | 'pending' | 'cross';
+  variant?: 'firm' | 'pending' | 'cross' | 'running';
 }
 
 export interface PlanningCanvasProps {
@@ -388,7 +400,7 @@ export function PlanningCanvas({
             points blocker → blocked). MOTIR-1331. */}
         <svg className="absolute h-0 w-0" aria-hidden="true">
           <defs>
-            {(['committed', 'pending', 'warning', 'emphasis'] as const).map((kind) => (
+            {(['committed', 'pending', 'warning', 'emphasis', 'running'] as const).map((kind) => (
               <marker
                 key={kind}
                 id={`${mId}-${kind}`}
@@ -404,11 +416,13 @@ export function PlanningCanvas({
                   className={
                     kind === 'warning'
                       ? 'fill-(--el-warning)'
-                      : kind === 'emphasis'
-                        ? 'fill-(--el-accent)'
-                        : kind === 'pending'
-                          ? 'fill-(--el-canvas-edge-pending)'
-                          : 'fill-(--el-canvas-edge-committed)'
+                      : kind === 'running'
+                        ? 'fill-(--el-status-in-progress)'
+                        : kind === 'emphasis'
+                          ? 'fill-(--el-accent)'
+                          : kind === 'pending'
+                            ? 'fill-(--el-canvas-edge-pending)'
+                            : 'fill-(--el-canvas-edge-committed)'
                   }
                 />
               </marker>
@@ -428,18 +442,25 @@ export function PlanningCanvas({
             if (!route) return null;
             const pending = edge.variant === 'pending';
             const cross = edge.variant === 'cross';
+            const running = edge.variant === 'running';
             // When a node is selected, only its own edges stay lit; a lit non-cross
             // edge is EMPHASISED in the accent (so even a faint dashed `pending`
             // connector clearly pops, matching the selected card's accent ring).
             const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
-            const emph = lit && selectedId != null && !cross;
+            // ⚠️ `running` outranks the selection emphasis and yields only to
+            // `cross`. A run's live edge must stay the live one while a reader
+            // clicks around the graph; `cross` stays loudest because a plan that
+            // is WRONG outranks a plan that is in motion.
+            const emph = lit && selectedId != null && !cross && !running;
             const marker = cross
               ? 'warning'
-              : emph
-                ? 'emphasis'
-                : pending
-                  ? 'pending'
-                  : 'committed';
+              : running
+                ? 'running'
+                : emph
+                  ? 'emphasis'
+                  : pending
+                    ? 'pending'
+                    : 'committed';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
@@ -448,13 +469,21 @@ export function PlanningCanvas({
                 className={
                   cross
                     ? 'stroke-(--el-warning)'
-                    : emph
-                      ? 'stroke-(--el-accent)'
-                      : pending
-                        ? 'stroke-(--el-canvas-edge-pending)'
-                        : 'stroke-(--el-canvas-edge-committed)'
+                    : running
+                      ? // The dash + its travel are in `globals.css`, gated behind
+                        // `prefers-reduced-motion: no-preference` — so the STATIC
+                        // form is the default and reduced motion keeps this hue
+                        // and weight without moving (MOTIR-3972).
+                        'canvas-edge-running stroke-(--el-status-in-progress)'
+                      : emph
+                        ? 'stroke-(--el-accent)'
+                        : pending
+                          ? 'stroke-(--el-canvas-edge-pending)'
+                          : 'stroke-(--el-canvas-edge-committed)'
                 }
-                strokeWidth={lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2}
+                strokeWidth={
+                  running ? 3 : lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2
+                }
                 strokeLinecap="round"
                 // a denser dash when emphasised keeps the dashed line legible at the
                 // accent colour without losing the "pending" cue.

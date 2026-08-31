@@ -1,5 +1,6 @@
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { planContainerCount } from '@/lib/planning/planShape';
+import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 
 // WHICH BODY the plan-detail pane shows — the canvas or the list (MOTIR-3239,
 // `design/ai-planning/design-notes.md` Part VIII).
@@ -16,6 +17,26 @@ import { planContainerCount } from '@/lib/planning/planShape';
 // as one named symbol.
 
 export type PlanViewDto = 'canvas' | 'list';
+
+/**
+ * The largest ARRIVAL LEVEL the canvas can still open legibly — **twelve nodes**,
+ * four rows of the shipped 3-column `deterministicLayout` (MOTIR-4024, design
+ * Part XIII §6).
+ *
+ * ⚠️ THIS NUMBER IS THE DESIGN'S, NOT THIS FILE'S, and it is derived rather than
+ * chosen. Measured in Chromium across six level sizes and four viewports, against
+ * the closed form `min((W-96)/bw, (H-96)/bh)` over `NODE_W`/`NODE_H` = 280x124
+ * with the layout's 80/72 gaps: 12 is the largest count still at the canvas's own
+ * width-bound CEILING at the tightest viewport (1366x768) once the pane fills the
+ * fold, and it costs nothing at 1920x1080, where 12 nodes arrive at 1.130. Above
+ * it the fall is steep and measured — 18 nodes arrive at 0.364 at 1366x768, and
+ * 30 are clamped to `MIN_SCALE` at three of the four viewports, where a card is
+ * 84px wide and its title renders at 4.2px.
+ *
+ * A legibility threshold picked in code is a guess wearing a constant's
+ * authority; this one is a decision the plan holds.
+ */
+export const ARRIVAL_LEVEL_MAX_NODES = 12;
 
 /** The query parameter that carries the chosen view. */
 export const PLAN_VIEW_PARAM = 'view';
@@ -52,6 +73,34 @@ export const PLAN_VIEW_VALUES = ['canvas', 'list'] as const satisfies readonly P
  * `/plans/[id]` link stays byte-identical.
  */
 export function defaultPlanView(review: PlanReviewDto): PlanViewDto {
+  // ⚠️ THE TRUNCATION ARM FIRST, because it is not about legibility at all
+  // (MOTIR-4024, Part XIII §6). A level past `TREE_LEVEL_MAX_TAKE` is read
+  // key-ASCENDING and the read discards the HIGHEST keys — the most recently
+  // created cards — and a `modify` / `remove` targets a committed work item, so
+  // the cards a plan is most likely to be about are exactly the ones truncation
+  // drops. Past the cap the canvas can draw two hundred cards, ring none of them,
+  // and show a reviewer a plan whose subject is not on the screen. That is worse
+  // than illegible: it is absent while looking complete.
+  if (review.arrivalLevelTotal > TREE_LEVEL_MAX_TAKE) return 'list';
+
+  // ⚠️ THE LEGIBILITY ARM, AND ITS NUMBER IS THE DESIGN'S — do not re-derive it,
+  // exactly as `canvasGeometry.ts` does not re-derive `ARRIVAL_MIN_SCALE`.
+  //
+  // Part XIII §6 measured 24 arrival scales in Chromium, six level sizes across
+  // four viewports, against a closed form that reproduces every one of them. The
+  // finding that decides this line is that `ARRIVAL_MIN_SCALE = 0.80` is NOT
+  // REACHABLE on this surface: the plan detail's canvas is the `1fr` of a
+  // `grid-cols-[1fr_22rem]`, so the rail takes 352px and the canvas is 782px wide
+  // at 1440x900 against a 1000px world box at three columns — a width term of
+  // 0.686 before the level's height is considered at all, and 0.526 at 1280x800.
+  // A SIX-node level already misses the floor. So the predicate cannot be "does
+  // it arrive above the floor" (that answers *two nodes* and sends every plan to
+  // the list); it is the largest level still at the canvas's OWN ceiling at the
+  // tightest viewport, which is four rows of the shipped 3-column layout.
+  if (review.arrivalLevelSize > ARRIVAL_LEVEL_MAX_NODES) return 'list';
+
+  // Part IX §3's arm, unchanged and last: a plan SPREAD across containers has no
+  // single level that can show it, whatever any level's size is.
   return planContainerCount(review.items) > 1 ? 'list' : 'canvas';
 }
 

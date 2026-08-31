@@ -235,6 +235,10 @@ model User {
   // notificationPreferences pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
   apiTokens                   ApiToken[]
+  // CLI runs this person started (Story MOTIR-1789). `SetNull`, NOT cascade: a
+  // run is a record of what happened to the PROJECT's work, so deleting the
+  // operator must not destroy it — only the attribution.
+  dispatchRuns                DispatchRun[]
   // Upvotes the user cast on public requests (Story 6.12 · Subtask 6.12.3) —
   // the demand signal the triage queue sorts by (6.12.6). Cascade: a vote is
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
@@ -1151,6 +1155,10 @@ model Workspace {
   /// the `public_request_vote` shape (no workspace, an anonymous read arm) is
   /// the wrong precedent for a table holding rows with no acting user.
   publicFollows               PublicFollow[]
+  /// Every CLI run reported against this workspace (Story MOTIR-1789).
+  dispatchRuns                DispatchRun[]
+  dispatchRunCards            DispatchRunCard[]
+  dispatchRunEvents           DispatchRunEvent[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -1527,6 +1535,9 @@ model Project {
   /// and the migration-built DB in permanent drift. Cascade — a token bound to a
   /// deleted project has nothing left to act on.
   apiTokens                   ApiToken[]
+  /// Every CLI run reported against this project (Story MOTIR-1789). Cascade —
+  /// a run's whole meaning is the cards it worked, which go with the project.
+  dispatchRuns                DispatchRun[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -2210,6 +2221,12 @@ model WorkItem {
   // steps of its work, each one operation. Cascade with the card, exactly as
   // `comments` does: a deleted card's steps are not a fact about anything.
   todos                WorkItemTodo[]
+  /// The LEGS naming this card across every run that worked it (Story
+  /// MOTIR-1789). `SetNull` on the leg, not cascade: a run's history outlives a
+  /// deleted card, and the leg still says which key it was.
+  dispatchRunCards     DispatchRunCard[]
+  /// Runs that were pointed AT this card as their scope. Also `SetNull`.
+  dispatchRunScopes    DispatchRun[]             @relation("DispatchRunScope")
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -8090,4 +8107,363 @@ model DataExportRequest {
   /// Both columns are in its `WHERE`.
   @@index([status, expiresAt])
   @@map("data_export_request")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// The DISPATCH RUN record (Story MOTIR-1789 · Subtask MOTIR-1791), specified by
+// `docs/decisions/dispatch-run-record.md`.
+//
+// One invocation of a Motir CLI command, over a SET of cards. `motir run
+// <story>` claims every member of a scope in one transaction and works them in
+// dependency order; `motir batch` freezes what it will take and what it will
+// skip before it dispatches anything; `motir auto` discovers its set one card at
+// a time. All three are ONE run with one id, one order, one stop reason — so the
+// record is a run HEADER plus one LEG per card, and a single-card `motir next`
+// is the degenerate case of the same object (ADR Q1).
+//
+// ⚠️ IT IS NOT A `JobRun`, AND IT IS NOT motir-ai's `AgentRun`. `JobRun` records
+// one invocation of a server-side background job on Motir's OWN infrastructure,
+// which Motir schedules, executes and can cancel. A `DispatchRun` records one
+// invocation of a CLI command on SOMEBODY ELSE'S machine, which Motir never
+// executes and only ever hears about — every row here is a report, not an
+// observation. motir-ai's `AgentRun` is the METERING aggregate on the other side
+// of the open-core boundary (9.1.6), correlated to this row by run id and never
+// merged with it: a BYOK-local run has a row here and no metering row at all.
+// The naming exists because the first decomposition of this story called these
+// models `AgentRun`, documented the collision at length, and shipped it anyway
+// (MOTIR-1801 / MOTIR-3890) — by which point `JobRun` had landed and the
+// collision was three-way inside one schema file.
+//
+// ⚠️ THREE COLUMNS THAT MUST NEVER EXIST ON ANY OF THESE MODELS (ADR Q3), each
+// because the fact already has exactly one owner:
+//
+//   1. no pull-request or CI column — that is `WorkItemDelivery` →
+//      `GithubPullRequest` → `GithubCheckRun`, with the one verdict
+//      `derivePrCiState` derives (MOTIR-3655 / MOTIR-3697). The run's EVENTS
+//      record that a pull request was opened; the run's SURFACES read the
+//      delivery set;
+//   2. no work-item status column and no status write — the CLI owns every
+//      transition and the CI-green promotion is server-side (MOTIR-2999);
+//   3. no token, usage, credit or cost column — ever, not "not yet". Billing
+//      lives in motir-ai, and a BYOK run never touches the gateway.
+//
+// `tests/dispatchRunSchemaBoundaries.test.ts` asserts all three over the
+// GENERATED client's field names, so the boundary cannot be crossed by a
+// well-meaning migration.
+model DispatchRun {
+  id          String @id @default(cuid())
+  /// Tenant of record. Carried on the ROW because RLS does not traverse foreign
+  /// keys — the same reason `work_item_delivery` carries one.
+  workspaceId String @map("workspace_id")
+  projectId   String @map("project_id")
+
+  /// Which command opened the run. `run` and `run_scope` are the same word to a
+  /// person and genuinely different runs: one claims a card, the other claims a
+  /// container and every leaf under it.
+  command DispatchCommand
+  /// WHO EXECUTED IT. This discriminator is why there is one table and not two:
+  /// 9.1.7's hosted orchestrator becomes a second WRITER of the ingest
+  /// operations rather than the owner of a second record.
+  origin  DispatchRunOrigin @default(local)
+
+  /// The container or sprint-bearing item the run was pointed at, for a scoped
+  /// run. `SET NULL` — a run's history outlives a deleted card, and a scope that
+  /// has since been archived must not take the run with it.
+  scopeWorkItemId String? @map("scope_work_item_id")
+  /// What the CLI PRINTED for the scope ("MOTIR-1789", "the active sprint"). A
+  /// label rather than a derivation, so the page can render a run whose scope
+  /// row is gone.
+  scopeLabel      String? @map("scope_label")
+
+  status     DispatchRunStatus   @default(running)
+  /// Null while `running`. Written once, by the read-derived terminal update — a
+  /// late event must never re-open a closed run.
+  stopReason DispatchStopReason? @map("stop_reason")
+
+  /// The agent BINARY the operator ran (`claude`, `codex`), and the model it
+  /// self-reported. Deliberately the same vocabulary as
+  /// `WorkItem.implementationHarness` / `implementationModel`, so the two never
+  /// diverge — that pair is also the shipped precedent for recording HOW work
+  /// was done without recording what the agent read (ADR Q4).
+  agent String?
+  model String?
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+
+  /// The operator who started it. `SET NULL`: deleting a person must not destroy
+  /// the record of what their runs did.
+  createdById String? @map("created_by_id")
+
+  /// Supplied by the CLI so a retried open is ONE row rather than two runs that
+  /// each saw half the work.
+  idempotencyKey String? @map("idempotency_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scope     WorkItem? @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  cards  DispatchRunCard[]
+  events DispatchRunEvent[]
+
+  @@unique([workspaceId, idempotencyKey])
+  /// The run list and the `/runs/[id]` read: newest-first per project.
+  @@index([workspaceId, startedAt(sort: Desc)])
+  @@index([projectId, startedAt(sort: Desc)])
+  /// The scope's own run history.
+  @@index([scopeWorkItemId, startedAt(sort: Desc)])
+  /// The abandoned-run reap's discovery read (MOTIR-1792): the oldest rows still
+  /// `running`. Status-first, because `running` is a tiny minority of the table
+  /// — the same shape `job_run`'s reap index has.
+  @@index([status, startedAt])
+  @@map("dispatch_run")
+}
+
+/// One LEG — one card this run owns. The model the first decomposition did not
+/// have, and the reason it could not express a scoped or batch run.
+///
+/// A SKIPPED card gets a leg (ADR Q1): the skip and its reason is the most
+/// useful thing on a run page and the only place it can live. Nothing else in
+/// the product records a card a run deliberately did NOT take.
+model DispatchRunCard {
+  id            String @id @default(cuid())
+  /// Denormalized from the run for RLS, which does not traverse the FK.
+  workspaceId   String @map("workspace_id")
+  dispatchRunId String @map("dispatch_run_id")
+
+  /// `SET NULL` — a run's history outlives a deleted card, and every read and
+  /// every renderer must render that leg rather than throw. `dispatchRunCard`'s
+  /// own tests pin the null arm.
+  workItemId  String? @map("work_item_id")
+  /// The card's key AS THE RUN SAW IT ("MOTIR-1791"), so a leg whose work item
+  /// is gone still says which card it was. Same reasoning as `scopeLabel`.
+  workItemKey String? @map("work_item_key")
+
+  /// THE RUN'S OWN ORDER, stored rather than re-derived. A client must never
+  /// recompute dispatch order from the dependency graph: the order is a fact
+  /// about what the run DID, and the graph it came from moves underneath it.
+  position Int
+
+  disposition DispatchCardDisposition @default(queued)
+  /// Non-null EXACTLY when `disposition = skipped` — a CHECK constraint in the
+  /// migration, not a convention, because a skip whose reason is null is the one
+  /// row on the page that says nothing.
+  skipReason  DispatchSkipReason?     @map("skip_reason")
+
+  /// The session branch the leg's work was integrated onto, when it was. It
+  /// belongs HERE and not on the run: a card carries the session lineage, and
+  /// one run can touch more than one repository's branch.
+  sessionBranch String? @map("session_branch")
+
+  startedAt DateTime? @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  /// The agent process's exit code, when one ran.
+  exitCode  Int?      @map("exit_code")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
+  workItem    WorkItem?   @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  events DispatchRunEvent[]
+
+  /// One leg per card per run.
+  @@unique([dispatchRunId, workItemId])
+  /// The run view's read, in the run's own order.
+  @@index([dispatchRunId, position])
+  /// A card's run history.
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@map("dispatch_run_card")
+}
+
+/// The ordered event log. RUN-scoped when `dispatchRunCardId` is null,
+/// CARD-scoped when it is set — one stream the surface reads to render either,
+/// rather than two tables that have to be merged in the client.
+model DispatchRunEvent {
+  id            String @id @default(cuid())
+  workspaceId   String @map("workspace_id")
+  dispatchRunId String @map("dispatch_run_id")
+
+  /// Null for a RUN-scoped event. `CASCADE`, like the run itself: an event
+  /// cannot outlive the leg it describes.
+  dispatchRunCardId String? @map("dispatch_run_card_id")
+
+  /// MONOTONIC PER RUN, and the stream's resume cursor. ⚠️ Every read orders by
+  /// this and NEVER by `createdAt`: two events written in the same millisecond
+  /// have no order at all under a timestamp, and the SSE stream's whole contract
+  /// is "give me everything after `seq`".
+  seq  Int
+  kind DispatchEventKind
+
+  /// Structured detail for the event — the claim outcome, the exit code, the
+  /// verdict. Never a log body.
+  data Json?
+  /// THE OPT-IN LOG BODY (ADR Q4), and the only field on any of these models
+  /// that can carry content from the operator's machine. Null unless the run was
+  /// started with `--report-log`. Bounded at INGEST (16 KiB) and nulled by the
+  /// 30-day retention sweep — both MOTIR-1792's.
+  body String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun      @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
+  card        DispatchRunCard? @relation(fields: [dispatchRunCardId], references: [id], onDelete: Cascade)
+
+  /// The ordering guarantee AND the append's idempotency key: a redelivered
+  /// batch converges on the rows it already wrote.
+  @@unique([dispatchRunId, seq])
+  /// The tailing read — `WHERE dispatch_run_id = ? AND seq > ? ORDER BY seq`.
+  @@index([dispatchRunId, seq])
+  /// A card's own slice of the stream.
+  @@index([dispatchRunCardId, seq])
+  @@index([workspaceId])
+  @@map("dispatch_run_event")
+}
+
+/// Which CLI command opened the run. Five, not four: `motir run <key>` and
+/// `motir run <scope>` share a word and are different runs.
+enum DispatchCommand {
+  next
+  run
+  run_scope
+  batch
+  auto
+
+  @@map("dispatch_command")
+}
+
+/// WHERE the run executed. One table, two writers.
+enum DispatchRunOrigin {
+  /// A BYOK run on the operator's own machine, under their own key.
+  local
+  /// 9.1.7's container, on Motir's infrastructure.
+  hosted
+
+  @@map("dispatch_run_origin")
+}
+
+enum DispatchRunStatus {
+  running
+  succeeded
+  failed
+  cancelled
+  /// What the abandoned-run reap writes. Never reported by a client, because a
+  /// process that died cannot report anything — and `running` is the most
+  /// reassuring possible way to render a dead run.
+  timed_out
+
+  @@map("dispatch_run_status")
+}
+
+/// Why the run ended. The union of `autoLoop.ts`'s `StopReason` and
+/// `batchPlan.ts`'s `BatchStopReason`, plus `abandoned`, which neither can
+/// report. `replanned` stays distinct from `halted` because a re-plan is a
+/// CORRECT outcome that exits 0.
+enum DispatchStopReason {
+  /// The ready set is drained (`motir auto`).
+  drained
+  /// Every card the run planned to work was attempted. Also the single-card
+  /// `next` / `run`, which has no loop.
+  completed
+  max
+  halted
+  interrupted
+  replanned
+  /// A between-iteration gate said stop (`motir batch`).
+  gated
+  /// Written by the reap, never by a client.
+  abandoned
+
+  @@map("dispatch_stop_reason")
+}
+
+/// The LEG's state. `integrated` / `implemented` / `failed` / `replanned` are
+/// `autoLoop.ts`'s `AutoOutcome` verbatim; `not_reached` is
+/// `BatchSummary.notReached` — a card the snapshot took and the run never got
+/// to, which is neither a skip (nothing decided to leave it out) nor a failure
+/// (nothing ran).
+enum DispatchCardDisposition {
+  queued
+  running
+  integrated
+  implemented
+  failed
+  replanned
+  skipped
+  not_reached
+
+  @@map("dispatch_card_disposition")
+}
+
+/// Why a card was left out. The union of `SkipRecord.reason` and
+/// `SnapshotSkipReason`.
+enum DispatchSkipReason {
+  needs_planning
+  needs_human
+  claim_refused
+  blocked_in_scope
+  /// Ready ONLY via an integrated-awaiting-review dependency, so it cannot ship
+  /// a pull request against `main`.
+  integrated_dep
+  /// The card's agent ran and REFUSED it. Distinct from the `replanned`
+  /// disposition: `batch` records a skip because its snapshot implemented
+  /// nothing, `auto` records a card whose agent ran.
+  replan_submitted
+  checkout_unavailable
+
+  @@map("dispatch_skip_reason")
+}
+
+/// The CLOSED event vocabulary, derived from the shipped lifecycle at
+/// `origin/main` 435bce9bd and enumerated in the ADR. Every renderer must be
+/// TOTAL over it — a `switch` with no `default` arm — so adding a member is a
+/// type error at every render site rather than a blank cell in production.
+enum DispatchEventKind {
+  // ── RUN-scoped (`dispatch_run_card_id` is null) ──────────────────────────
+  run_opened
+  scope_claimed
+  snapshot_frozen
+  session_pr
+  plan_approved
+  run_closed
+
+  // ── CARD-scoped ──────────────────────────────────────────────────────────
+  card_claimed
+  card_skipped
+  checkout_ready
+  prompt_issued
+  agent_started
+  agent_exited
+  leg_verdict
+  delivery_linked
+  /// What THIS RUN observed of CI, which is not the card's CI state — that is
+  /// the delivery set's, derived once by `derivePrCiState`.
+  ci_verdict
+  ci_fix_attempt
+  ci_gave_up
+  card_settled
+  /// The opt-in log body.
+  log
+
+  // ── What the run PRODUCED, beyond code (MOTIR-3981) ──────────────────────
+  /// A `kind: 'bug'` work item was created while this leg was open.
+  /// ⚠️ CARD-scoped, and — with `plan_submitted` — one of only two members the
+  /// CLI reporter never emits: the id exists only server-side, so the SERVICE
+  /// that performs the write appends it
+  /// (`run-findings-protocol.md` Q5, `dispatch-run-record.md` AMENDMENT 1).
+  bug_filed
+  /// A plan-change job produced a plan while this leg was open — the plan a
+  /// person must still decide on, as distinct from the RUN-scoped
+  /// `plan_approved` a run decided for itself.
+  plan_submitted
+
+  @@map("dispatch_event_kind")
 }

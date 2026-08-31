@@ -14,6 +14,8 @@ import {
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
+import { RunTonePill } from '@/components/runs/RunTonePill';
+import type { RunTone } from '@/lib/runs/timeline';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -131,6 +133,13 @@ export function WorkItemStatusPill({
   );
 }
 
+/** One work item's disposition in a dispatch RUN, already resolved to a tone and
+ *  a localized label by the consumer (MOTIR-3895). */
+export interface RunLegBadge {
+  tone: RunTone;
+  label: string;
+}
+
 export function WorkItemNode({
   item,
   drillable = false,
@@ -140,6 +149,7 @@ export function WorkItemNode({
   progress = null,
   here = false,
   ready = false,
+  runLeg = null,
 }: {
   item: WorkItemNodeData;
   /** Has children — clicking DRILLS in; show the affordance. */
@@ -177,6 +187,17 @@ export function WorkItemNode({
    *  `--el-tint-mint` wash (MOTIR-1422). Suppressed on the "you are here" node (its
    *  accent treatment wins). */
   ready?: boolean;
+  /**
+   * THIS WORK ITEM'S DISPOSITION IN A RUN (MOTIR-3895) — the run modal's canvas
+   * pane, and nothing else, supplies it.
+   *
+   * ⚠️ RESOLVED BY THE CONSUMER, not here, for the same reason `originCrumbLabel`
+   * is: the tone comes from `lib/runs/timeline.ts`'s `DISPOSITION_TONE` (total
+   * over the enum, so nothing invents one) and the label is localized copy, and
+   * this node has neither map nor translator. Absent on every other surface, so
+   * the roadmap and onboarding canvases render exactly as before.
+   */
+  runLeg?: RunLegBadge | null;
 }) {
   const t = useTranslations('roadmap.canvas');
   // MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36): a human-gated node — the
@@ -284,6 +305,15 @@ export function WorkItemNode({
             category={item.statusCategory ?? null}
           />
         )}
+        {/* The run DISPOSITION (MOTIR-3895), beside the work item's own status and
+            never instead of it: they are different facts. The status is what the
+            work item IS; the disposition is what THIS RUN did with it, and a run
+            that skipped a work item has not changed its status at all. */}
+        {runLeg ? (
+          <RunTonePill tone={runLeg.tone} compact>
+            {runLeg.label}
+          </RunTonePill>
+        ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
               NOT the red cross-blocked flag: this node is simply outside the

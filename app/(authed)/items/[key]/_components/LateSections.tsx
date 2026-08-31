@@ -6,17 +6,27 @@ import { DesignResultPanel } from './DesignResultPanel';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
+import { RunSection } from './RunSection';
+import { formatRunTimes } from './runTimes';
 import {
   DevelopmentLinkProvider,
   LinkPullRequestDoor,
   LinkPullRequestForm,
 } from './DevelopmentLinkControl';
-import type { LateReads } from './lateReads';
+import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 
 // The item page's LATE STACK (Subtask MOTIR-3436), allocated by
 // `design/work-items/design-notes.md` § *The item page at ARRIVAL, and while it
-// STREAMS* — the tier table's third tier: Development, Acceptance, Design
+// STREAMS* — the tier table's third tier: Run, Development, Acceptance, Design
 // result, Attachments and Activity.
+//
+// ⚠️ RUN SITS ABOVE DEVELOPMENT, and the order is CAUSAL rather than merely
+// adjacent (Yue, 2026-08-29; `design/runs/design-notes.md` § Placement). The run
+// is what PRODUCES the pull request, so a reader meets *an agent worked this
+// card* and then *and here is what it shipped* — the order the events happened
+// in, and the order the run's own timeline ends in, since *pull request linked*
+// is its second-to-last step. Reversed, the page shows the artefact above the
+// act that made it.
 //
 // ── ONE SETTLE, DELIVERED BY TWO BOUNDARIES ────────────────────────────────
 // The design decides the page settles TWICE — once when the first content
@@ -136,14 +146,28 @@ export async function LateUpperSections({
   deliveries,
 }: LateProps) {
   const r = await reads;
-  const [tGithub, tAcceptance, tDesignResult] = await Promise.all([
+  const [tGithub, tAcceptance, tDesignResult, tRuns] = await Promise.all([
     getTranslations('github'),
     getTranslations('acceptance'),
     getTranslations('designResult'),
+    getTranslations('runs'),
   ]);
   const showDesignResult = r.designEvidence !== null || r.isDesignCard;
   return (
     <>
+      {/* THE RUN — above Development, because the run is what produced it. It
+          renders even with no runs: its empty state reads *nothing has run yet*,
+          and an absent section would be a third thing for a reader to interpret. */}
+      <ContentSectionCard title={tRuns('title')} subtitle={tRuns('gloss')}>
+        <RunSection
+          initialRuns={r.runs ?? []}
+          initialCursor={
+            r.runs && r.runs.length === RUN_HISTORY_PAGE ? (r.runs.at(-1)?.id ?? null) : null
+          }
+          itemKey={itemIdentifier}
+          formattedTimes={formatRunTimes(r.runs ?? [])}
+        />
+      </ContentSectionCard>
       <DevelopmentLinkProvider currentItemId={itemId} identifier={itemIdentifier}>
         <ContentSectionCard
           title={tGithub('development.title')}

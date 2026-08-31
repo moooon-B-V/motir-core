@@ -182,6 +182,12 @@ describe('shape-swap lint — no surface shapes its radius past the token layer'
       // corner on a transparent stage. The neighbouring `border-0` /
       // `shadow-none` are the same override in the other axes.
       'app/(authed)/items/[key]/_components/AttachmentPreview.tsx → rounded-none',
+      // The same case, one surface over (MOTIR-3895): the RUN MODAL is a
+      // `size="full"` dialog, so it IS the viewport. `--radius-modal` would draw
+      // a corner where the screen's own edge is, and the panel border it pairs
+      // with would frame the whole display. `border-0` beside it is that same
+      // override in the other axis, exactly as the lightbox's is.
+      'app/(authed)/runs/_components/RunModal.tsx → rounded-none',
       // A value DERIVED from a semantic token: the inner pill of a segmented
       // control fits its shell only at `--radius-btn` minus the shell's 2px
       // border, and `calc()` over the role token is how that stays true under

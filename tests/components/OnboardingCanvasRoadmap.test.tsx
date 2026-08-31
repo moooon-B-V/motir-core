@@ -69,7 +69,11 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     // (nothing rendered yet) rather than because the level really excludes them.
     await act(async () => {});
     expect(document.querySelector('[data-node-id="e1"]')).toBeNull(); // not yet drilled
-    expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
+    // ⚠️ The placeholder MOVED (MOTIR-4021): this canvas is the ONBOARDING one,
+    // and it used to offer to search the roadmap because the foundation owned the
+    // string. The consumer owns it now. What the case guards is unchanged — that
+    // the search affordance is MOUNTED on this consumer at all.
+    expect(screen.getByRole('searchbox', { name: 'Search this project' })).toBeTruthy();
     // The station serpentine is `flow`, not blocked-by deps → no dependency legend.
     expect(screen.queryByTestId('edge-legend')).toBeNull();
 

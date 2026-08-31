@@ -471,7 +471,9 @@ describe('the canvas controls the auto-drilled roadmap ships with', () => {
   const serveTwo = () => Promise.resolve(twoNodes);
 
   it('the "/" hotkey focuses the search field — unless the user is already typing', async () => {
-    render(<ProjectRoadmapCanvas loadLevel={serveTwo} searchable />);
+    render(
+      <ProjectRoadmapCanvas loadLevel={serveTwo} searchable searchLabel="Search the roadmap" />,
+    );
     await screen.findByText('Alpha');
     const search = screen.getByPlaceholderText('Search the roadmap');
 
@@ -495,7 +497,9 @@ describe('the canvas controls the auto-drilled roadmap ships with', () => {
   it('locating with no match leaves the level untouched', async () => {
     // `locate()` early-returns when the query matches nothing. Without this the
     // submit would highlight `undefined` and blank the current highlight.
-    render(<ProjectRoadmapCanvas loadLevel={serveTwo} searchable />);
+    render(
+      <ProjectRoadmapCanvas loadLevel={serveTwo} searchable searchLabel="Search the roadmap" />,
+    );
     await screen.findByText('Alpha');
     fireEvent.change(screen.getByPlaceholderText('Search the roadmap'), {
       target: { value: 'nothing matches this' },

@@ -12,6 +12,7 @@ import {
 import { RepoSessions, dispatchOne, type AutoOptions, type ResolvedAgent } from './auto.js';
 import { findingsPolicyOf, resolveDispatchTarget, resolveDispatchTargets } from '../dispatch.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../scopedRun.js';
+import { nullDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import type { runAgent } from '../agentRun.js';
 import type { DispatchItem, MotirClient } from '../client.js';
 import type { ProjectSession } from '../session.js';
@@ -54,6 +55,18 @@ export interface ScopeDrainInput {
   run: CommandRunner;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /**
+   * The run REPORTER (Story MOTIR-1789 · MOTIR-1794), already OPENED by the
+   * command with this run's full member set in `orderClaimedSet` order.
+   *
+   * ⚠️ THE SET WAS SETTLED BEFORE THIS FUNCTION WAS CALLED, and that is the
+   * point: the claim has just returned its members and the order has just been
+   * computed from edges the run already holds. That is the one instant anyone
+   * knows what this run set out to do — sending it later, from the stream of
+   * per-card events, would yield the cards the drain got round to and lose the
+   * skipped ones entirely.
+   */
+  reporter?: DispatchRunReporter;
 }
 
 /**
@@ -67,6 +80,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const { session, opts, members, edges, max, agent, runId, branch, run, clock, runAgentFn } =
     input;
   const { client } = session;
+  const reporter = input.reporter ?? nullDispatchRunReporter;
 
   const byKey = new Map(members.map((m) => [m.key, m]));
   const inScope = new Set(byKey.keys());
@@ -117,6 +131,13 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           reason: 'blocked_in_scope',
           blockedBy: open,
         });
+        reporter.event({
+          kind: 'card_skipped',
+          workItemKey: item.key,
+          disposition: 'skipped',
+          skipReason: 'blocked_in_scope',
+          data: { blockedBy: open },
+        });
         info(`${item.key}: skipped — waiting on ${open.join(', ')}, which did not land.`);
         continue;
       }
@@ -128,6 +149,12 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
       const disposition = classifyReadyItem(item);
       if (disposition !== 'dispatch') {
         skipped.push({ key: item.key, title: item.title, reason: disposition });
+        reporter.event({
+          kind: 'card_skipped',
+          workItemKey: item.key,
+          disposition: 'skipped',
+          skipReason: disposition,
+        });
         info(
           `${item.key}: skipped — ${
             disposition === 'needs_planning'
@@ -190,6 +217,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         run,
         opts,
         onIntegrated: (k) => repo?.forEach((s) => s.keys.push(k)),
+        reporter,
       });
 
       if (outcome.kind === 'skipped') {
@@ -224,6 +252,10 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   } finally {
     process.off('SIGINT', onSigint);
   }
+
+  // Whatever the drain queued reaches the server before the caller closes the
+  // run — best-effort, so a failure here is one stderr line and nothing else.
+  await reporter.flush();
 
   return {
     runId,

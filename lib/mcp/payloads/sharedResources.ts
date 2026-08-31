@@ -51,6 +51,25 @@ export function isSharedResourceName(value: string): value is SharedResourceName
  * becomes a failing assertion.
  */
 export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, string>> = {
+  DispatchRun:
+    'The DISPATCH RUN ingest (Story MOTIR-1789 · MOTIR-1792) has no MCP counterpart, and that ' +
+    'absence is a decision recorded in `tests/api/v1/work-loop-story-gate.test.ts`: MCP is the ' +
+    'AGENT’s surface, and the agent is the SUBJECT of a run rather than its reporter. A tool ' +
+    'would let the thing being observed write its own account of what it did. The reporter is ' +
+    'the process AROUND the agent, which speaks `/api/v1`. There is therefore no MCP payload to ' +
+    'compare — not a narrowing, an absence, and one that must not be closed by adding a tool.',
+  DispatchRunCard:
+    'The run’s LEG rides on `DispatchRun` and shares its reason: no MCP tool returns a run at ' +
+    'all, so no payload carries a leg. Listed separately because the guard reads RESOURCES ' +
+    'rather than the operations that return them.',
+  DispatchRunOpened:
+    'The OPEN result (`{ run, created }`) is the ingest’s own envelope and exists only on the ' +
+    'operation that has no MCP counterpart. `created` in particular answers a question only a ' +
+    'RETRYING reporter asks, and nothing on the agent surface retries an open.',
+  DispatchRunAppended:
+    'The APPEND result (`{ runId, appended, seq, cards }`) is the ingest’s own envelope, for the ' +
+    'same reason. Its `seq` is the reporter’s next cursor — a value that means nothing to a ' +
+    'caller which is not the one writing the stream.',
   WorkItemSummary:
     'The `search_work_items` row is a declared NARROWING (`.omit({ createdAt })`). The flat List ' +
     'projection that tool reads does not carry `createdAt`; v1’s collection route sources it from ' +

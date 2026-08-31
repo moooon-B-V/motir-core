@@ -372,6 +372,16 @@ Two things it deliberately does NOT inherit from R43, both recorded in `docs/dec
 Both routes authenticate a CI caller (keyless GitHub OIDC first, else a PAT granted the key) through the shared `authenticateCiPublisher`, so the permission above is asked of the resolved uploader, not of an interactive session.
 **R56.** The REQUIRE-2FA policy, at the organization and workspace tiers (Story 8.13 · MOTIR-1215) — one switch per tier, demanding a second factor of everyone in it. Governed by the TIER ROLE (org-admin; `isWorkspaceManager`), asserted inside `twoFactorPolicyService`, and deliberately **not** by a permission-catalog key.
 
+**R58.** The DISPATCH RUN read surface (Story MOTIR-1789 · MOTIR-1793) — the run with its set, its live SSE tail, a card's run history, and a project's live runs. Two different answers on one row, and the split is the point.
+
+The three PROJECT-addressed reads (`…/projects/[key]/dispatch-runs`, `…/dispatch-runs/active`, `…/work-items/[id]/dispatch-runs`) resolve a project and assert **`project:browse`** through `projectAccessService`, exactly as every other project-addressed read does: a run history is project data, and whoever may see the project may see what ran in it. The first of the three (MOTIR-3922, the runs index's read) takes an optional `?scope=<KEY>` that resolves a work item INSIDE the already-authorised project and inside the same transaction, so the narrowing adds no reachable row and no second gate.
+
+The two RUN-addressed reads (`/api/dispatch-runs/[id]`, `…/stream`) are **workspace-scoped**, and that is a decision rather than a gap. A run id is a cuid nobody can enumerate, and `dispatch_run` is RLS-gated on its own `workspace_id`, so a run in another tenant returns NOTHING and the route answers 404 — indistinguishable from one that never existed. Resolving the run's project to assert `project:browse` on it would mean READING the run first, which is the thing the gate is supposed to authorise: the tenancy check would run after the disclosure it exists to prevent. The narrower key is therefore available only at the cost of the property it is meant to protect, and RLS already answers the question the key would ask.
+
+⚠️ **The stream asserts BEFORE the first frame**, so a refusal is a real HTTP status rather than a stream that opens and immediately errors — the ordering `app/api/ai/plan/generate/[jobId]/stream/route.ts` established and this route mirrors.
+
+None of the four takes a WRITE key: the ingest is `/api/v1`'s, PAT-authenticated, and appears above under R1.
+
 **R57.** The JOB-QUEUE BACKLOG probe (Story MOTIR-3758 · MOTIR-3764) — _is anything being claimed?_ Deliberately **UNGATED**, and the ungatedness is the deliverable rather than a concession. On 2026-08-28 the queue stopped being claimed for thirty-five minutes and nothing noticed: the check that would have reported it, `system.daily-health-check`, is itself a JOB, so a wedged worker takes the alarm down with the thing it is meant to alarm on. The reader that has to work is an EXTERNAL monitor, polling from outside the deployment while the app is degraded — and every credential such a monitor carries is one more thing that can be wrong at three in the morning, discovered during the incident it was configured for.
 
 What makes that safe is the PAYLOAD, not the caller. It answers two integers about the deployment's own background queue — how many runs are claimable, and how long the oldest has waited — plus the threshold they were judged against. No workspace, no project, no job id, no event name, no row and no name: nothing that identifies a tenant, and nothing an attacker could act on. It is the same class of answer as R53's `current_user`, one tier out. The staff-gated platform-health BOARD (`/admin/monitoring`, R54's neighbour) is untouched and none of its six signals is exposed here — this is not a widening of that surface, it is the one reading that had to live outside it.
@@ -450,6 +460,9 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 | Operation                                                | Verbs | Gate today                                         | Permission | Decision     | Why |
 | -------------------------------------------------------- | ----- | -------------------------------------------------- | ---------- | ------------ | --- |
+| `/api/v1/dispatch-runs`                                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/close`                       | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/events`                      | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
 | `/api/v1/me`                                             | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/plans/[planId]`                                 | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/plans/[planId]/status`                          | —     | `aiPlanEditsService.getOutcome` (transitive)       | —          | token-scoped | R1  |
@@ -649,6 +662,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 | Operation                                                   | Verbs            | Gate today                                                                     | Permission            | Decision         | Why |
 | ----------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------ | --------------------- | ---------------- | --- |
+| `/api/dispatch-runs/[id]`                                   | GET              | `requireCompliantWorkspaceContext` + RLS (the run's own workspace)             | —                     | workspace-scoped | R58 |
+| `/api/dispatch-runs/[id]/stream`                            | GET              | `requireCompliantWorkspaceContext` + RLS, before the stream opens              | —                     | workspace-scoped | R58 |
 | `/api/dashboards`                                           | GET/POST         | workspace only                                                                 | —                     | workspace-scoped | R34 |
 | `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only                                                                 | —                     | workspace-scoped | R34 |
 | `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only                                                                 | —                     | workspace-scoped | R34 |
@@ -660,6 +675,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | `savedFiltersService.getDependents` → `getSavedFilterCapabilities`             | `project:browse`      | existing         | R16 |
 | `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | `savedFiltersService.{star,unstar}` → `assertPermission`                       | `saved_filter:manage` | existing         | R16 |
 | `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | `savedFilterSubscriptionsService.{subscribe,unsubscribe}` → `assertPermission` | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/dispatch-runs`                         | GET              | `dispatchRunService.listRunsForProject` → `assertCanBrowse`                    | `project:browse`      | existing         | R58 |
+| `/api/projects/[key]/dispatch-runs/active`                  | GET              | `dispatchRunService` → `assertCanBrowse`                                       | `project:browse`      | existing         | R58 |
 | `/api/projects/[key]/velocity`                              | GET              | `reportsService.getVelocity` → `assertPermission`                              | `report:view`         | existing         | R19 |
 | `/api/reports/average-age`                                  | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
 | `/api/reports/created-vs-resolved`                          | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
@@ -767,6 +784,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/work-items/[id]/components`                       | POST/PUT    | workspace only                                                                             | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/components/[componentId]`         | DELETE      | workspace only                                                                             | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/delete-preview`                   | GET         | `workItemsService.getDeletePreview` → `assertPermission`                                   | `work_item:delete`      | existing | R42 |
+| `/api/work-items/[id]/dispatch-runs`                    | GET         | `dispatchRunService` → `assertCanBrowse`                                                   | `project:browse`        | existing | R58 |
 | `/api/work-items/[id]/design-evidence`                  | POST        | `designEvidenceService` → `resolveTarget` → `assertPermission`                             | `work_item:edit`        | existing | R52 |
 | `/api/work-items/[id]/design-evidence/upload-token`     | POST        | `designEvidenceService` → `resolveTarget` → `assertPermission`                             | `work_item:edit`        | existing | R52 |
 | `/api/work-items/[id]/epic-privacy`                     | PATCH       | `assertCanManageProject`                                                                   | `work_item:edit`        | existing | R41 |

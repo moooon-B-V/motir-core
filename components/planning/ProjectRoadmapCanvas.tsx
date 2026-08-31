@@ -60,7 +60,7 @@ export interface RoadmapLevel {
   deps: ProjectCanvasDep[];
 }
 
-export interface ProjectRoadmapCanvasProps {
+interface ProjectRoadmapCanvasBaseProps {
   /** Fetch one level's nodes + edges (roots when `parentId` is null; else the
    *  parent's children). The consumer owns the I/O; memoize it. */
   loadLevel: (parentId: string | null) => Promise<RoadmapLevel>;
@@ -83,8 +83,7 @@ export interface ProjectRoadmapCanvasProps {
    *  quick-view peek, the onboarding consumer opens the tier doc. View (open detail)
    *  is DISTINCT from select (highlight) and from "Open" (drill into children). */
   onView?: (id: string) => void;
-  /** Show the search-to-locate overlay (`/` shortcut) — locates within the level. */
-  searchable?: boolean;
+
   /** Show the EXPAND-to-full-screen control (MOTIR-1420). The roadmap consumer opts
    *  in so a viewer can use the whole display for a large tree; onboarding does not.
    *  Takes the canvas full-viewport (via the Fullscreen API, with a fixed overlay as
@@ -123,6 +122,27 @@ export interface ProjectRoadmapCanvasProps {
     /** Shown as `title` + accessible description when there is nothing to
      *  emphasise on this level. */
     emptyLabel: string;
+    /**
+     * The other degenerate level (MOTIR-4020, Part XIII §3d): one made ENTIRELY of
+     * the emphasised set, where an ON state rings every card and dims none.
+     *
+     * ⚠️ Part IX §L6 called that state *"correct and harmless"* and left the
+     * control ENABLED, and it was right — of a state the reader CHOSE. Armed on
+     * ARRIVAL the same screen arrives unasked, and a ring that is on everything
+     * teaches the reader, at the moment they land, that the ring means nothing.
+     * So both degenerate levels disable the control, and each says its own why.
+     */
+    allLabel: string;
+    /**
+     * What the LOCATE control walks, in the consumer's words (Part XIII §4).
+     *
+     * When `emphasis` is supplied the locate targets become the emphasised set on
+     * this level — the same cards, ringed and walked, so the two controls cannot
+     * drift into two answers about which are the plan's. The label is the
+     * consumer's for the same reason `searchLabel` is (MOTIR-4021): the shipped
+     * `here` / `ready` wording names a frontier a proposal never is.
+     */
+    locateLabel: string;
   };
   /** The breadcrumb root label. */
   rootLabel?: string;
@@ -304,6 +324,29 @@ export interface ProjectRoadmapCanvasProps {
   levelCaption?: ReactNode;
 }
 
+/**
+ * SEARCH — opt-in, and turning it on REQUIRES saying what it SEARCHES
+ * (MOTIR-4021, design Part XIII §5).
+ *
+ * The label is the CONSUMER's word, on both the `aria-label` and the
+ * placeholder. It is a REQUIRING PAIR rather than an optional prop with a
+ * default, and the difference is the whole card: this canvas has four searchable
+ * mounts and exactly ONE of them is the roadmap, so a default of
+ * `roadmap.canvas.search` is how *"Search the roadmap"* came to greet a reader on
+ * `/plans/[id]`, on the plan-change canvas and in onboarding. A default cannot be
+ * wrong loudly; a required field cannot be forgotten.
+ *
+ * The non-searchable arm forbids the label outright, so a mount that turns search
+ * OFF cannot carry a dead string (the item page's Children panel is that mount,
+ * deliberately — a `/` overlay inside an embedded panel is a page-level key grab).
+ */
+type ProjectRoadmapCanvasSearchProps =
+  | { searchable: true; searchLabel: string }
+  | { searchable?: false | undefined; searchLabel?: undefined };
+
+export type ProjectRoadmapCanvasProps = ProjectRoadmapCanvasBaseProps &
+  ProjectRoadmapCanvasSearchProps;
+
 // The suppression ref (below) is keyed by LEVEL; the root level has no id.
 const ROOT_LEVEL_KEY = '__root__';
 const levelKey = (id: string | null) => id ?? ROOT_LEVEL_KEY;
@@ -330,6 +373,7 @@ export function ProjectRoadmapCanvas({
   onSelect,
   onView,
   searchable = false,
+  searchLabel,
   fullScreenable = false,
   emphasis,
   locatable = false,
@@ -381,10 +425,18 @@ export function ProjectRoadmapCanvas({
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // SHOW CHANGES (MOTIR-3261) — a MODE, opt-in and off by default. It RESETS on
-  // every level change alongside `selectedId` / `highlightId`, so a stale
-  // emphasis never survives a drill or a Back.
-  const [showChanges, setShowChanges] = useState(false);
+  // SHOW CHANGES (MOTIR-3261) — a MODE, opt-in. It RESETS on every level change
+  // alongside `selectedId` / `highlightId`, so a stale emphasis never survives a
+  // drill or a Back.
+  //
+  // ⚠️ ARMED ON ARRIVAL (MOTIR-4020, Part XIII §3). What changed is the reset's
+  // TARGET, not the reset: this is now an OVERRIDE over a per-level default
+  // rather than a flag, so clearing it on a level change re-arms rather than
+  // disarms. A reader who turns the emphasis off and then drills arrives armed
+  // again, because the reset is per LEVEL and a drill is a new question about a
+  // new set of cards — the same argument §L4 makes one tier down, where a
+  // momentary SELECTION does not end the mode.
+  const [showChangesOverride, setShowChangesOverride] = useState<boolean | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   // The ZOOM the next focus pan should land at: `undefined` preserves the current
   // scale (the search-locate's pan-only behaviour); `LOCATE_ZOOM` resets to a readable
@@ -484,7 +536,7 @@ export function ProjectRoadmapCanvas({
     setLocalPositions({});
     setSelectedId(null);
     setHighlightId(null);
-    setShowChanges(false);
+    setShowChangesOverride(null);
     setAdoption({ level: controlledFocusId });
   }
   // Record the suppression OUTSIDE render. Auto-descend must not carry the reader
@@ -601,7 +653,7 @@ export function ProjectRoadmapCanvas({
     setSelectedId(null);
     setFocusId(node.id);
     setHighlightId(null);
-    setShowChanges(false);
+    setShowChangesOverride(null);
     // REPORT the new level (MOTIR-3835). Computed from the crumbs ref rather than
     // inside the updater above: an updater may run twice (StrictMode), and a
     // consumer's callback is not something to fire twice. Because this is the ONE
@@ -681,6 +733,21 @@ export function ProjectRoadmapCanvas({
     const onLevel = new Set(nodes.map((n) => n.id));
     return new Set(emphasis.ids.filter((id) => onLevel.has(id)));
   }, [emphasis, nodes]);
+
+  // ⚠️ WHETHER THE EMPHASIS CAN SAY ANYTHING ON THIS LEVEL (MOTIR-4020, Part XIII
+  // §3d). The ring means *this one and not that one*, so it needs both halves: at
+  // least one of the plan's cards, AND at least one that is not. A level with
+  // neither is a screen that says nothing — and, armed on arrival, one that says
+  // nothing WITHOUT anybody having asked it to.
+  const emphasisArmable = emphasisedIds.size > 0 && emphasisedIds.size < nodes.length;
+  // The override is per level (it clears on every level change), so absent means
+  // "as this level arrives" and present means "as the reader last set it here".
+  const showChanges = showChangesOverride ?? emphasisArmable;
+  const emphasisDisabledReason = emphasis
+    ? emphasisedIds.size === 0
+      ? emphasis.emptyLabel
+      : emphasis.allLabel
+    : undefined;
 
   // The selected node + everything it is connected to (its dependencies/blockers) —
   // these stay lit while the rest of the level dims, so the selection reads clearly.
@@ -818,7 +885,7 @@ export function ProjectRoadmapCanvas({
     setLocalPositions({});
     setHighlightId(null);
     setSelectedId(null);
-    setShowChanges(false);
+    setShowChangesOverride(null);
     if (crumbId === null) {
       setCrumbs([]);
       setFocusId(null);
@@ -851,8 +918,28 @@ export function ProjectRoadmapCanvas({
   // destination), else the READY nodes (cycled, wrapping). Centring reuses the same
   // pan-to-node machinery the search-locate above uses (highlight + focusNonce bump),
   // so the located node lights up AND is assertable on `data-highlighted`.
-  const hereId = useMemo(() => nodes.find((n) => n.here)?.id ?? null, [nodes]);
-  const readyIds = useMemo(() => nodes.filter((n) => n.ready).map((n) => n.id), [nodes]);
+  //
+  // ⚠️ WHEN `emphasis` IS SUPPLIED THE CONTROL WALKS THAT SET INSTEAD (MOTIR-4020,
+  // Part XIII §4). A proposal is never `here` and never `ready`, so the shipped
+  // ladder finds nothing on a plan canvas — the control was mounted on a surface
+  // it could not serve. One prop, not two: the emphasis and the locate control are
+  // the same set of cards seen twice, ringed and walked, and a second `locate` set
+  // could drift from the first. In LAYOUT order, because the reader is walking a
+  // picture and the walk should move the way the eye does — not in `op` order,
+  // which jumps between three groups, nor in the plan's append order, which is
+  // invisible on screen. `nodes` IS that order.
+  const emphasisWalk = useMemo(
+    () => (emphasis ? nodes.filter((n) => emphasisedIds.has(n.id)).map((n) => n.id) : null),
+    [emphasis, nodes, emphasisedIds],
+  );
+  const hereId = useMemo(
+    () => (emphasisWalk ? null : (nodes.find((n) => n.here)?.id ?? null)),
+    [emphasisWalk, nodes],
+  );
+  const readyIds = useMemo(
+    () => emphasisWalk ?? nodes.filter((n) => n.ready).map((n) => n.id),
+    [emphasisWalk, nodes],
+  );
   const readySig = readyIds.join('|');
   const canLocate = hereId !== null || readyIds.length > 0;
   // THE FOCAL CARD of this level (MOTIR-3837) — the node an arrival centres on when
@@ -902,12 +989,19 @@ export function ProjectRoadmapCanvas({
     hereId === null && readyIds.length > 1 && locateIndex >= 0
       ? `${locateIndex + 1} / ${readyIds.length}`
       : null;
-  const locateLabel =
-    hereId !== null
+  // The consumer's word when it supplied the set, for the same reason
+  // `searchLabel` is (MOTIR-4021): the shipped strings name a READY frontier, and
+  // a proposal is not one. The disabled reason is the emphasis control's own
+  // (`emptyLabel`) — one sentence per situation, said once, rather than a second
+  // wording for "the plan does not reach this level".
+  const locateLabel = emphasis
+    ? emphasis.locateLabel
+    : hereId !== null
       ? t('locateCurrent')
       : readyIds.length > 1
         ? t('locateNextReady')
         : t('locateReady');
+  const locateDisabledReason = emphasis ? emphasis.emptyLabel : t('locateNothing');
 
   function renderNode(cn: CanvasNode) {
     const node = byId.get(cn.id);
@@ -1057,8 +1151,11 @@ export function ProjectRoadmapCanvas({
               <Input
                 ref={searchRef}
                 type="search"
-                aria-label={t('search')}
-                placeholder={t('search')}
+                // The CONSUMER's word, on both axes (MOTIR-4021). The foundation
+                // has four searchable mounts and knows which surface it is on for
+                // exactly none of them.
+                aria-label={searchLabel}
+                placeholder={searchLabel}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
@@ -1074,17 +1171,32 @@ export function ProjectRoadmapCanvas({
               // than an ON state that dims every card and rings none — a screen
               // that says nothing is worse than a control that says why it cannot
               // help (Part IX §L6).
-              disabled={emphasisedIds.size === 0}
-              title={emphasisedIds.size === 0 ? emphasis.emptyLabel : undefined}
-              aria-description={emphasisedIds.size === 0 ? emphasis.emptyLabel : undefined}
-              onClick={() => setShowChanges((on) => !on)}
+              // BOTH degenerate levels, each with its OWN reason (Part XIII §3d):
+              // a level the plan does not reach, where ON would dim every card and
+              // ring none; and a level made entirely OF the plan, where ON rings
+              // every card and dims none. Same disposition, opposite emptiness.
+              disabled={!emphasisArmable}
+              title={emphasisArmable ? undefined : emphasisDisabledReason}
+              aria-description={emphasisArmable ? undefined : emphasisDisabledReason}
+              onClick={() => setShowChangesOverride(!showChanges)}
               className={[
                 'inline-flex h-(--height-control) shrink-0 items-center gap-1.5 rounded-(--radius-btn)',
                 'border px-(--spacing-control-x) text-xs font-semibold shadow-(--shadow-card)',
                 'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 showChanges
-                  ? 'border-(--el-accent) bg-(--el-accent-soft) text-(--el-accent-on-surface)'
+                  ? // ⚠️ `--el-tint-lavender`, NOT `--el-accent-soft` (MOTIR-4020, Part
+                    // XIII §3e). The latter is defined NOWHERE — it began as a LOCAL
+                    // variable in Part IX's own mock (`#f4f2fd`, a hex in neither
+                    // `theme.css` nor `globals.css`) that the note transcribed into the
+                    // `--el-*` namespace, and this class built faithfully. An unresolved
+                    // custom property is invalid at computed-value time, so the
+                    // declaration was dropped and the PRESSED control rendered with no
+                    // background at all — measured `rgba(0, 0, 0, 0)`. This pair is the
+                    // shipped active-destination treatment (`components/ui/Sidebar.tsx`)
+                    // and its contrast against `--el-accent-on-surface` is already
+                    // asserted by `inkContrastLint` over every palette x theme.
+                    'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-accent-on-surface)'
                   : 'border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)',
               ].join(' ')}
             >
@@ -1154,7 +1266,7 @@ export function ProjectRoadmapCanvas({
             data-testid="locate-button"
             aria-label={locateLabel}
             disabled={!canLocate}
-            title={canLocate ? locateLabel : t('locateNothing')}
+            title={canLocate ? locateLabel : locateDisabledReason}
             onClick={locateActionable}
             // size-9 to match the engine's bottom-left zoom +/- buttons (also size-9)
             // exactly, so the locate control reads as part of that cluster.

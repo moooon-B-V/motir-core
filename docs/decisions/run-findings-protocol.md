@@ -1,6 +1,8 @@
 # A run's findings — what a dispatched agent may write, and who controls it
 
 **Status:** accepted · **Date:** 2026-08-19 · **Card:** MOTIR-3019 (story MOTIR-3017)
+**Q5 added** 2026-08-30 · MOTIR-3980 (story MOTIR-1789) — what the RUN RECORD says
+about a finding, now that a run has a record to say it in.
 
 > **On the file name.** `docs/decisions/` is slug-named, not numbered — forty-three
 > files, none carrying an ordinal. MOTIR-3019 asked for "the next free number";
@@ -14,7 +16,10 @@ An agent working a card finds two kinds of trouble: **this card is wrong**, and
 acting on the second — and the first does not survive the loop's close-out
 (MOTIR-3018, fixed alongside this). This ADR settles what a dispatched agent may
 write, how an operator controls it per run, and what automating plan approval
-costs.
+costs. **Q5, added later, settles the half that was missing:** Q1–Q4 gave a run the
+right to file a bug and submit a plan, but the shared run record — which did not
+exist when they were written — records neither, so nothing connects the finding
+back to the run that produced it.
 
 Every premise below was re-read on `origin/main` at `e04e2b9f`. Where the card
 that commissioned this ADR described the code inaccurately, the correction is
@@ -387,6 +392,212 @@ and a run that accepted both would be silently ignoring one of them.
 
 ---
 
+## Q5 — How the RUN RECORD points at the bug it filed and the plan it submitted (MOTIR-3980, 2026-08-30)
+
+Q2 and Q3 settled what a run may WRITE. Neither settled what the run RECORDS about
+having written it — and today the answer is nothing. `DispatchEventKind` has one
+finding-shaped member, `plan_approved`, and it fires only on the `auto`
+`--auto-approve-replan` path. A run that files a bug, or submits a re-plan a person
+must still decide, leaves no trace of it anywhere in `dispatch_run`,
+`dispatch_run_card` or `dispatch_run_event`. The Consequences above already claim
+the win — _"the bug it reproduced becomes a card; the re-plan it submitted survives
+the close-out"_ — and that much is true. What does not survive is the CONNECTION:
+the card exists, and nothing says which run produced it.
+
+### Decision: the SERVER records the finding on the leg, at the moment it observes the write
+
+**Three findings, one mechanism.** When a work item is created with `kind: 'bug'`,
+and when a plan-change job produces a plan, the SERVICE THAT PERFORMS THAT WRITE
+also appends a CARD-scoped event to the leg that is open for the work item in
+question, if one is. Two new `DispatchEventKind` members carry them —
+`bug_filed` and `plan_submitted` — alongside the shipped `plan_approved`, which
+is unchanged and stays RUN-scoped.
+
+| Finding                                     | Event                     | Written by                                | `data`                           |
+| ------------------------------------------- | ------------------------- | ----------------------------------------- | -------------------------------- |
+| A plan the run AUTO-APPROVED                | `plan_approved` (shipped) | the `auto` loop, via the reporter         | `{ key, planId, proposalCount }` |
+| A plan the run SUBMITTED, awaiting a person | `plan_submitted` (new)    | the plan-change service, server-side      | `{ planId, proposalCount }`      |
+| A bug the run FILED                         | `bug_filed` (new)         | `create_work_item`'s service, server-side | `{ key, workItemId, title }`     |
+
+### Why the SERVER and not the CLI — the reason is already written down
+
+The CLI cannot report either one, and this is not an accident of the current code.
+`plansService.approvePlanForWorkItem`'s own comment says why, about the plan id
+exactly:
+
+> the plan id came back on that agent's stdout, which the loop streams straight to
+> the terminal and never captures. So a plan-addressed entrance would have forced
+> either a second read to discover the id or a scrape of the agent's output, and
+> the anchoring check would have been a check on caller-supplied data.
+
+A bug's key is on the same stdout and just as uncaptured. So a CLI-reported finding
+would require exactly the two mechanisms Q2 rejected when it chose a card-addressed
+approve over a plan-addressed one — a scrape, or a second read whose answer the
+caller then supplies. The argument that bounded the approve entrance bounds this
+identically, and rejecting it twice for one reason is better than inventing a
+second.
+
+The server has no such problem. Both findings are server-side writes in the first
+place: the bug goes through `create_work_item`, the plan through the plan-change
+job. The one party that already sees both, with the ids in hand and no scraping,
+is the one that records them.
+
+### Why RECORDED and not RESOLVED at read time
+
+The tempting alternative is to write nothing and derive the answer when the run is
+read — a bug is discoverable as _"`kind: 'bug'`, `relates_to` this leg's card
+(Q3 REQUIRES that link), created inside the leg's `startedAt`/`endedAt` window"_,
+and a plan through the shipped anchor chain, `buildScope([key])` → the plan-change
+session at that scope → its `lastJobId` → the plan. Both queries are writable
+today against shipped data, and neither needs a migration. It is a real option and
+it was seriously considered.
+
+It is rejected because it contradicts the record's own governing principle, which
+is stated twice in the schema this decision extends. `dispatch_run_card.workItemId`
+is `SET NULL` on delete, annotated _"a run's history outlives a deleted card"_.
+`workItemKey` is denormalised beside it _"so a leg whose work item is gone still
+says which card it was."_ And `position` is stored rather than re-derived because
+_"the order is a fact about what the run DID, and the graph it came from moves
+underneath it."_
+
+A resolved pointer is precisely the thing those three annotations refuse. Archive
+the bug and the run silently stops having found it. Re-plan the card and the anchor
+chain answers about a later conversation. The run's history would move underneath
+it — which is the failure mode the whole table shape was built to prevent. A run
+record is a record of what HAPPENED, and what happened does not change when the
+tree does.
+
+### The leg the event lands on, and what happens when there is none
+
+CARD-scoped, on the leg open for that work item — the same lookup shape the shipped
+`@@index([workItemId, createdAt(sort: Desc)])` was added for. "Open" is
+`endedAt IS NULL` on the newest leg for that item; the write is attributed to the
+run that was in flight when it happened, and to no other.
+
+**No open leg means no event, and that is not an error.** A person filing a bug in
+the app, `motir log-bug` from a terminal, a plan submitted from the project-wide
+panel — none of them belong to a run, and the lookup returning nothing is the
+correct answer for all three. The append is best-effort and never fails the write
+that triggered it: a bug that was filed must stay filed even if the run it belonged
+to closed a millisecond earlier. This is the same posture Q3 took on filing itself —
+purely additive, never load-bearing.
+
+### id and copy — the event carries the ID, the surface reads the ROW
+
+`data` carries identifiers and the one label needed to render a row that has not
+loaded yet (`title` for a bug, `proposalCount` for a plan). It does not carry the
+description, the proposal bodies, or any other copy. A finding's copy is a live
+row that gets edited, re-titled and triaged after the run ends, and a run record
+that had frozen a copy of it would show the reader something that is no longer
+true — while claiming, by sitting in an immutable log, that it is.
+
+This is NOT a contradiction of the section above. What the run records immutably is
+THAT IT FOUND SOMETHING AND WHICH ROW IT IS; what the row currently SAYS is the
+row's business. The pointer is the fact; the copy is a read. So `bug_filed.title`
+is a fallback for a row the surface has not fetched or may no longer fetch, and the
+surface prefers the live row whenever it has it.
+
+### The privacy line — this moves it not at all
+
+Q4's boundary holds exactly as written: LIFECYCLE ALWAYS, LOG BODY OPT-IN, DEFAULT
+OFF. Both new events are LIFECYCLE, and — because the server writes them from rows
+it already stores, in the same project, under the same permissions — **a BYOK-local
+run sends not one additional byte to produce either of them.** No new field crosses
+the operator's machine boundary, `--report-log` gates nothing here, and `body` stays
+null on both. A local run and a hosted run record findings identically, which is
+the property the local-now/hosted-later story most needs to keep.
+
+**On the bug's TITLE specifically**, which the commissioning card was right to flag
+as the sharp case: a title is user content, and if the CLI reported it, it would be
+content leaving the operator's machine and would have to sit behind `--report-log`.
+Under this decision it does not leave the machine at all. The bug was created
+through `create_work_item` — a server-side write — so its title was already stored,
+in that project, before any event was written; the event copies a string from one
+server-side row to another. **The id and the title fall on the SAME side, the
+default-send side, for the same reason: neither is ever sent.** Had the CLI been the
+writer, the honest answer would have been the id by default and the title behind the
+flag, and the surface would have been left rendering bare keys — a second good
+reason the writer is the server.
+
+### Everything that must absorb the two members — named, because only ONE is compiler-enforced
+
+`DispatchEventKind` is a closed enum with total renderers, so two members are a change
+seven places must take. Measured on `parent/MOTIR-1789-agent-runs`:
+
+| site                                              | what it is                                                       | how it fails today if missed                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `prisma/schema.prisma` — `enum DispatchEventKind` | the enum + its migration                                         | the ingest rejects the value                                                     |
+| `lib/runs/timeline.ts:78` — `EVENT_STEP`          | `as const satisfies Record<DispatchEventKind, CardStep \| null>` | **`tsc` fails — the only compiler-enforced one**                                 |
+| `lib/api/v1/workLoop/schema.ts:1583`              | the OpenAPI enum, hand-written                                   | silent: the documented contract omits them                                       |
+| `packages/cli/src/client.ts:858`                  | the CLI's own union                                              | silent: the CLI cannot name a kind it never emits                                |
+| `packages/cli/src/api/schema.d.ts:9110`           | generated from the OpenAPI doc                                   | regenerate, do not hand-edit                                                     |
+| `tests/dispatchRunSchemaBoundaries.test.ts:84`    | the FROZEN key list, `toEqual`                                   | red, and correctly so                                                            |
+| `tests/dispatchRunSchemaBoundaries.test.ts:223`   | `'DispatchEventKind — six run-scoped, thirteen card-scoped'`     | red — **and its NAME must change too**, to `six run-scoped, fifteen card-scoped` |
+
+`tests/runs/runTimeline.test.ts:78` lists the kinds as fixture data and follows the
+frozen list. `packages/cli/src/agentLogTee.ts:15` names several kinds in a comment
+and should stay accurate.
+
+**Both new members are CARD-scoped**, so the run-scoped count is unchanged at six and
+the card-scoped one goes from thirteen to fifteen — twenty-one total.
+
+### What each surface shows when the target is archived, declined or deleted
+
+The three cases are NOT the same, and the record's answer differs:
+
+- **A plan a person DECLINED.** The plan row is still there and the pointer still
+  resolves. The run said _"I submitted this"_ and that stayed true; a person then
+  said no. **The surface shows the plan with its current status** and never re-words
+  the run's own event — a declined plan is the most informative outcome on the page,
+  not an error to hide.
+- **An ARCHIVED bug.** The row exists but is out of the tree. The finding renders,
+  marked archived, still linked. A run that found a real defect somebody later
+  archived is exactly the history a run record exists to keep.
+- **A DELETED row, or one this reader may not see.** The pointer resolves to
+  nothing. The surface renders the finding from `data` alone — the key and title it
+  recorded — as a fact without a link. **It must not drop the row and must not show
+  an empty state**, both of which would tell the reader the run found nothing when
+  it did. This is the same posture `dispatch_run_card.workItemKey` already takes for
+  a deleted work item, and it is why `data` carries a label at all.
+
+### Nothing in the prompt or the findings contract changes
+
+The dispatched agent reports nothing new, so **Q1's parameter shape, Q3's prompt
+requirements and `promptTemplate.ts` are all untouched by this.** That is a
+deliberate property of choosing the server as the writer: the prompt is the one
+contract in this system whose determinism is load-bearing and whose every widening
+has to be re-argued, and a decision that can be implemented without touching it
+should be.
+
+### The measurement this was written from
+
+Re-read on `parent/MOTIR-1789-agent-runs`, 2026-08-30:
+
+- `plan_approved` already carries `ApprovalRecord { key, planId, proposalCount }`,
+  emitted once, in `packages/cli/src/commands/auto.ts:372`. The auto-approved case
+  needed no record change — only a surface.
+- `agentSubmittedReplan` returns a **boolean**, from `item.status === 'planning'`.
+  The run learns THAT a re-plan happened and never which plan, which is why
+  `batchPlan.ts`'s `SKIP_LABEL` promises _"a re-plan is waiting for you in Motir"_
+  and cannot say where.
+- There is **no** `bug_logged` member of `DispatchEventKind`, and no reference to a
+  bug anywhere in `dispatchRunReporter` or `dispatchRunService`. Nothing ties a bug
+  to a run.
+- `dispatch_run_card` carries `startedAt` / `endedAt` and
+  `@@index([workItemId, createdAt(sort: Desc)])`, which is the lookup the
+  server-side append needs and does not have to add.
+
+### What the surface may therefore promise
+
+The run modal may state, for any run and without a `--report-log` opt-in, that this
+run filed these bugs and submitted these plans, each as a link to the live row. It
+must render a finding whose row is gone (deleted, archived, or not visible to this
+reader) as the recorded fact it is, from `data` alone — never as an empty state and
+never by dropping the row, both of which would tell the reader the run found
+nothing when it did.
+
+---
+
 ## Comments the implementing cards must correct
 
 Left as they stand, the codebase argues with itself — a comment insisting
@@ -453,6 +664,9 @@ prompt.
 - **A run's most valuable output stops evaporating.** The bug it reproduced
   becomes a card; the re-plan it submitted survives the close-out. Both were
   previously prose on a card nobody re-reads.
+- **And (Q5) it stops being anonymous.** The card exists AND says which run found
+  it, permanently — two `DispatchEventKind` members, written server-side, costing a
+  local run nothing it was not already sending.
 - **`batch` is untouched in every respect but the two `--disable-*` flags.** Its
   frozen snapshot is the one contract this story must not bend, and the `auto`-only
   scoping of the approval flag is what protects it.
@@ -466,3 +680,5 @@ prompt.
 - **MOTIR-3022** — Q1's naming, Q4's registration-to-refuse and the contradictory-flag refusal.
 - **MOTIR-3023** — Q2's B5 loop obligations and B6.
 - **MOTIR-3026 / MOTIR-3027** — the documented protocol, in `motir-core` and in `motir-meta`.
+- **MOTIR-3981** — Q5's two event members and the two server-side appends.
+- **MOTIR-3982 / MOTIR-3983** — Q5's closing section, in the design and in the surface.

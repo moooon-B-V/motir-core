@@ -395,11 +395,14 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     // rail draws with. The modify shares the target's node id (not a ghost copy);
     // the adds hang off the anchor.
     const byTitle = new Map(pending!.items.map((i) => [i.title, i]));
-    // A `modify` renders under the target's LIVE title, with the proposed value
-    // carried as the diff the rail overlays — not as a second node called
-    // "Checkout & payment". That distinction is the whole reason the read model
-    // exists, so assert the shape rather than assuming it.
-    const modify = byTitle.get('Checkout')!;
+    // ⚠️ AMENDED by MOTIR-4018, and the amendment is the point rather than a
+    // rename: a `modify` renders under the title it PROPOSES, not the one the
+    // card is about to stop being called. What this case has always guarded is
+    // unchanged and is the sentence below it — that the modify is the SAME NODE
+    // as its target, not a second node called "Checkout & payment" — and that
+    // assertion (`nodeId`) is untouched. Only the key it is looked up by moved,
+    // and the `changes` row still carries BOTH sides, which is asserted next.
+    const modify = byTitle.get('Checkout & payment')!;
     expect(modify.op).toBe('modify');
     expect(modify.nodeId).toBe(story.id);
     expect(modify.changes).toContainEqual({

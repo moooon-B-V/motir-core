@@ -452,6 +452,12 @@ export interface JobEventDataMap {
    *  every `plan_target_lock` whose window has run out, so a crashed planner can
    *  never leave an item permanently unplannable. Cross-tenant by design. */
   'system.plan-target-lock-sweep': SystemScheduledData;
+  /** The dispatch-run housekeeping (Story MOTIR-1789 · MOTIR-1792) — nulls
+   *  opt-in log bodies past their 30-day window and closes runs nothing is
+   *  holding, so a dead run stops rendering as `running`. Cron triggered, so it
+   *  carries no payload beyond the scheduled envelope. Cross-tenant by design:
+   *  it DISCOVERS across workspaces and WRITES within each. */
+  'system.dispatch-run-sweep': SystemScheduledData;
   /** The abandoned-plan reconciler (MOTIR-3064) — asks motir-ai what became of
    *  the job behind every empty `generating` plan past its grace, and declines
    *  the ones whose producer is gone, so a dead generation can no longer pause a

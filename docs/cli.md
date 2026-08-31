@@ -25,6 +25,7 @@ code. It never reads the agent's credential and never inspects its output.
 [Your first run](#your-first-run) · [Command reference](#command-reference) ·
 [The run shapes](#the-run-shapes) ·
 [Planning](#planning-from-the-terminal) ·
+[Dispatch runs](#dispatch-runs--the-record-of-what-a-run-did) ·
 [Session branches](#session-branches-what-motir-auto-actually-does) ·
 [Failure policy](#failure-policy) · [Agent wiring](#agent-wiring) ·
 [The sandbox](#the-sandbox) · [Files and environment](#files-and-environment) ·
@@ -1265,6 +1266,87 @@ Streams split the same way the rest of the CLI splits them: **stdout carries the
 result** (the proposal tree, or the detached ids), **stderr carries the
 conversation** — so `motir plan "…" > plan.txt` keeps the proposals and leaves
 the chatter on your terminal.
+
+---
+
+## Dispatch runs — the record of what a run did
+
+**Every dispatch command opens a RUN.** `motir next`, `motir run <KEY>`,
+`motir run <scope>`, `motir batch` and `motir auto` alike: the run is a persisted
+record of what that invocation DID — which cards it owned, in what order, what
+happened to each, and why it stopped. It is what turns _"Motir dispatched some
+work"_ into something you can open and watch.
+
+`docs/decisions/dispatch-run-record.md` is the decision behind it.
+
+### A run is a SET, not a card
+
+The most consequential thing about the record is that it holds a **set**. A run
+that claims a whole story owns eleven cards, in an order, some of which it will
+deliberately not take — and that is knowledge which exists at exactly one moment,
+in one process. Three shapes:
+
+| command                            | the set                                                                                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motir next` · `motir run <KEY>`   | **one card** — the degenerate case of the same object.                                                                                                                  |
+| `motir run <story>` · `run sprint` | **the claimed scope** — every member the claim locked, including the ones not startable yet, in the dependency order the run then works them in.                        |
+| `motir batch`                      | **the frozen snapshot** — what it took, in dispatch order, PLUS every card it skipped and the reason for each.                                                          |
+| `motir auto`                       | **empty, then one leg per card.** The loop holds no plan by design — it asks for one item per iteration — so its run grows as it goes rather than starting with a list. |
+
+**The skips are the useful half.** A card `motir batch` left out because it needs
+a human, or because its dependency is only on a session branch, exists nowhere
+else at all: nothing happens to a card that was never dispatched, so if the skip
+does not ride the run's opening it is simply gone.
+
+### Where to watch it
+
+| surface       | what it shows                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| `/runs/<id>`  | the run: its set, each card's live state, the skips with their reasons, the stop reason.     |
+| the work item | a run section on the card — live, saying which of N it is in this run — and its run history. |
+| `/ready`      | a strip on the row a run is working, linking through to the run.                             |
+
+A card's run history answers _"every run that carried a leg for this card"_, not
+_"every run that named it"_ — so the sprint run that swept a card up is findable
+from the card, which is where you will be looking.
+
+### What leaves your machine
+
+> Motir records what your run DID — the command, the cards it worked, what
+> happened to each, and why it stopped. That is all it sends by default.
+>
+> Your agent's output stays on your machine. Log lines, file contents, diffs and
+> prompts are only sent if you pass `--report-log` (or set `reportLogBodies` in
+> your config), and they are deleted after 30 days.
+
+A BYOK run executes on **your** machine, against **your** checkout, under **your**
+key. Its log can carry file paths, source excerpts, error output and whatever your
+environment happens to hold, so the default is that none of it is sent — the
+lifecycle goes, the content does not.
+
+**`--report-log` is a flag on `motir next`, `motir run`, `motir batch` and
+`motir auto`**, and there is deliberately **no server-side setting** for it: the
+machine that holds the content is the machine that decides whether it leaves. A
+workspace admin cannot turn it on for somebody else's laptop.
+
+### If reporting fails, the run does not
+
+**Reporting is best-effort and can never break a run.** If Motir is unreachable,
+answers 500, or your token has expired, the CLI prints **one** line saying run
+reporting is unavailable and carries on: the agent still runs, cards still move,
+pull requests still open, and the exit code is unchanged. You get one line per
+session, not one per event.
+
+The run surface shows such a run as **reporting-offline**. That is a run whose
+RECORD is incomplete — not a run that failed.
+
+### How long it is kept
+
+The run and its lifecycle events are kept indefinitely: they are the product's
+memory of what it did. **Opt-in log bodies are deleted after 30 days**, which is
+the only part of the record that carries content from your machine.
+
+`motir help runs` says all of this in the terminal.
 
 ---
 

@@ -292,6 +292,32 @@ export default defineConfig({
         // 99.7 lines over the set, with every FILE clearing 90 on all four axes.
         // Pinned at the project's 90 rather than at the measurement, so ordinary
         // churn does not fail the build while a real regression does.
+        // Story MOTIR-1789 (Agent runs) — the DISPATCH RUN seam's own files, and
+        // the point of naming them here is that until now NONE of the story's
+        // surface was in the report at all, so the ≥90% per-file gate has never
+        // applied to a line of it.
+        //
+        // ⚠️ NO LONGER REPORT-ONLY — MOTIR-1798 MEASURED THEM AND PINNED THEM,
+        // which is the sequence the blocks above state. The numbers it read, over
+        // the eleven suites that import these files (nothing else does, so that
+        // is a COMPLETE measurement for them):
+        //
+        //   dispatchRunMappers          100 / 100 / 100 / 100
+        //   dispatchRunRepository       100 / 100 / 100 / 100
+        //   dispatchRunCardRepository   100 / 100 / 100 / 100
+        //   dispatchRunEventRepository  100 / 100 / 100 / 100
+        //   dispatchRunService          96.61 S / 90.71 B / 100 F / 96.15 L
+        //
+        // Two of them only reached those numbers because the measurement named
+        // the gaps and tests were written for them: the repositories' CURSOR
+        // arms had never once been taken (`skip: 1` is what stops a page
+        // repeating its anchor row), and the service was at 87% branches until
+        // its edges — a scope that resolves to nothing, a leg moving OFF
+        // `skipped`, the event cap, a run with no events — were covered.
+        // The floor was never lowered and nothing was excluded.
+        'lib/services/dispatchRunService.ts',
+        'lib/repositories/dispatchRun*.ts',
+        'lib/mappers/dispatchRunMappers.ts',
         'lib/jobs/engine/**',
         'lib/repositories/jobQueueRepository.ts',
         'lib/repositories/jobStepRepository.ts',
@@ -2588,6 +2614,24 @@ export default defineConfig({
         'lib/jobs/definitions/notificationFanIn.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/notifications/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-1789 (Agent runs) · MOTIR-1798 — the dispatch-run seam,
+        // measured before it was pinned (see the `include` note above). Pinned at
+        // the project's 90, NOT at the measured number: a threshold set to
+        // today's figure turns every honest refactor into a red build, and the
+        // floor is what the project actually asks of a file.
+        'lib/services/dispatchRunService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/dispatchRunRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/dispatchRunCardRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/dispatchRunEventRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/dispatchRunMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-3050 (see the `include` note above).
         'lib/workItems/blockerReadiness.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workItems/readyFilter.ts': { branches: 90, functions: 90, lines: 90 },

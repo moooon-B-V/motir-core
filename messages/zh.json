@@ -297,7 +297,11 @@
     "event_revision_ended": "修订已完成",
     "listRevised": "已修订",
     "staleStatusOutcome": "计划已过期 —— 它要改动的工作已经完成。",
-    "staleReviewHint": "无法批准。可以拒绝它，或等待相关工作重新打开。"
+    "staleReviewHint": "无法批准。可以拒绝它，或等待相关工作重新打开。",
+    "searchLabel": "搜索本计划",
+    "showChangesAll": "此层级的每一项都来自本计划",
+    "locateChange": "定位到本计划的下一项",
+    "rowOpenAria": "打开 {name}"
   },
   "planEdits": {
     "submitting": "提交中…",
@@ -952,6 +956,7 @@
       "dashboard": "工作台",
       "issues": "工作项",
       "ready": "就绪",
+      "runs": "运行",
       "boards": "面板",
       "reports": "报表",
       "codeHealth": "代码健康度",
@@ -5598,7 +5603,8 @@
             "subtitle": "路线图从这里继续"
           }
         },
-        "loading": "正在加载你的路线图……"
+        "loading": "正在加载你的路线图……",
+        "searchLabel": "搜索本项目"
       },
       "validate": {
         "title": "规划前的一个决定",
@@ -6070,7 +6076,8 @@
       "roadmap": "已从路线图打开。"
     },
     "footerRestingTitle": "路线图 —— 已保存的版本",
-    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。"
+    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。",
+    "searchLabel": "搜索本项目"
   },
   "codeHealth": {
     "title": "代码健康度",
@@ -7174,6 +7181,137 @@
       "notesTooLong": "操作说明的上限为 {limit} 个字符。需要更多说明的步骤应当是一个独立的工作项。",
       "reorderConflict": "移动该步骤时清单已发生变化。请刷新后重试。",
       "generic": "出现问题，请重试。"
+    }
+  },
+  "runs": {
+    "title": "运行",
+    "gloss": "代理做了什么",
+    "empty": {
+      "title": "尚未运行过。",
+      "body": "使用 `motir next` 派发此工作项，或使用 `motir run <KEY>` 派发整个故事，代理的操作将显示在这里。"
+    },
+    "oneOfN": "此工作项是本次运行中的第 {position} 项，共 {total} 项。",
+    "seeWholeRun": "查看整个运行 →",
+    "reconnecting": "正在重新连接 — 从连接中断处继续。没有遗漏任何内容。",
+    "reportingOffline": "此运行已停止上报。不完整的是记录，而不是运行本身 — 请查看下方的开发部分了解实际交付内容。",
+    "history": {
+      "title": "近期运行",
+      "more": "显示更多"
+    },
+    "step": {
+      "claimed": "已认领",
+      "checkout": "检出就绪",
+      "prompt": "已下发提示",
+      "agent": "代理运行中",
+      "exit": "代理已退出",
+      "delivery": "已关联拉取请求",
+      "settled": "已结算"
+    },
+    "disposition": {
+      "queued": "排队中",
+      "running": "运行中",
+      "integrated": "已集成",
+      "implemented": "已实现",
+      "failed": "已失败",
+      "replanned": "已重新规划",
+      "skipped": "已跳过",
+      "not_reached": "未触及"
+    },
+    "runStatus": {
+      "running": "运行中",
+      "succeeded": "已成功",
+      "failed": "已失败",
+      "cancelled": "已取消",
+      "timed_out": "已超时"
+    },
+    "command": {
+      "next": "motir next",
+      "run": "motir run",
+      "run_scope": "motir run '<'scope>",
+      "batch": "motir batch",
+      "auto": "motir auto"
+    },
+    "skipReason": {
+      "needsPlanning": "已跳过 — 需要规划。",
+      "needsHuman": "已跳过 — 需要人工处理。",
+      "integratedDep": "已跳过 — 仅通过已集成的依赖才就绪（尚未合入 main）。",
+      "claimRefused": "已跳过 — 已被他人认领，或不再可认领。",
+      "replanSubmitted": "被其代理拒绝 — 重新规划正在 Motir 中等待你处理。",
+      "checkoutUnavailable": "已跳过 — 无法克隆其仓库。",
+      "blockedInScope": "已跳过 — 此范围内的阻塞项尚未落地。"
+    },
+    "indexHeading": "运行",
+    "indexSubtitle": "{project} 的所有运行——正在进行的和已完成的。",
+    "indexEmptyTitle": "还没有任何运行",
+    "indexEmptyBody": "当你用 motir next、motir run 或 motir batch 派发工作时，每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
+    "indexReadFailed": "无法加载这些运行。请重新加载后重试。",
+    "noProjectTitle": "还没有项目",
+    "noProjectDescription": "创建一个项目，即可开始把工作派发给智能体。",
+    "sectionLive": "正在运行",
+    "sectionPast": "历史运行",
+    "noneRunning": "当前没有正在运行的任务。",
+    "nonePast": "还没有已完成的运行。",
+    "colCommand": "命令",
+    "colScope": "范围",
+    "colAgent": "智能体",
+    "colStarted": "开始时间",
+    "colStatus": "状态",
+    "colItems": "工作项",
+    "scopeNone": "—",
+    "tookNone": "未纳入任何工作项",
+    "summaryDone": "{total} 项中已完成 {done} 项",
+    "summarySkipped": "跳过 {n} 项",
+    "summaryFailed": "失败 {n} 项",
+    "summaryNotReached": "未处理 {n} 项",
+    "summaryReplanned": "重新规划 {n} 项",
+    "loadMore": "显示更早的运行",
+    "loadingMore": "加载中…",
+    "modalTitle": "运行详情",
+    "modalLoading": "正在加载这次运行……",
+    "modalReadFailed": "无法加载这次运行。请关闭后重试。",
+    "paneSet": "工作项集合",
+    "paneSetCount": "工作项集合 — {count} 个",
+    "paneLog": "代理输出",
+    "tookNoneBody": "这次运行没有取到任何工作项，未认领、也未做任何改动。",
+    "stopReason": {
+      "drained": "就绪队列已取空",
+      "completed": "已尝试快照中的全部工作项",
+      "max": "已达到 --max 上限",
+      "halted": "在第一个代理失败时停止（--keep-going 可继续）",
+      "interrupted": "被中断（Ctrl-C）",
+      "replanned": "代理拒绝了它的工作项并提交了重新规划 — 正在 Motir 中等你处理",
+      "gated": "在两个工作项之间停止 — 刚完成的那个还不能作为下一个的基础",
+      "abandoned": "这台机器停止了上报"
+    },
+    "logCount": "{count, plural, other {# 行}}",
+    "logTruncated": "{count, plural, other {更早的 # 行未显示}}",
+    "logResumeFollow": "跟随",
+    "logSilence": {
+      "neverSent": {
+        "title": "没有发送任何内容",
+        "body": "这次运行没有上报日志正文。加上 --report-log 即可发送。"
+      },
+      "waiting": {
+        "title": "正在等待代理",
+        "body": "运行正在进行，但还没有任何输出。"
+      },
+      "expired": {
+        "title": "已超过保留期",
+        "body": "日志正文会在运行 30 天后删除，这次的已被删除。"
+      }
+    },
+    "findings": {
+      "label": "这次运行产出了什么",
+      "planSubmitted": "已提交计划",
+      "proposals": "{count, plural, other {# 条提案}}",
+      "waitingForYou": "正在等你处理。",
+      "review": "查看 →",
+      "plansApproved": "本次运行已批准的计划",
+      "treeChanged": "你不在时，你的树发生了变化。",
+      "approvedFor": "为 {key} 批准",
+      "materialized": "已落地 {count, plural, other {# 条提案}}",
+      "bugFiled": "已提交缺陷",
+      "open": "打开 →"
     }
   }
 }

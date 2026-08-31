@@ -136,6 +136,25 @@ const CLAIM = 'POST /api/v1/work-items/{key}/claim';
  * its presence is asserted here in position, not merely tolerated.
  */
 const READBACK = 'GET /api/v1/work-items/{key}';
+/**
+ * The RUN RECORD's open (Story MOTIR-1789), and it belongs to the PRE-FLIGHT
+ * rather than to the loop: `motir auto` opens one run for the whole invocation,
+ * after it has resolved its owner and before it reads the first ready set.
+ *
+ * ⚠️ THE STUB DOES NOT SERVE THIS ENDPOINT, AND THAT IS THE POINT OF ASSERTING
+ * IT HERE. The reporter is best-effort by construction — every failure mode a
+ * headless machine has is swallowed, `runId` stays null, and the events and the
+ * close are then skipped. So this smoke is the one place in the tree that proves
+ * the claim END TO END against a server that genuinely lacks the endpoint: two
+ * cards were still dispatched, integrated and pull-requested with the run record
+ * unavailable. A unit test can only prove the `catch` returns; it cannot prove
+ * the loop it wraps still finished.
+ *
+ * Two things are asserted below rather than merely tolerated: that the open
+ * happens exactly ONCE (a reporter that re-opened per card would spend a request
+ * per item on an endpoint that is not there), and that NOTHING followed it.
+ */
+const RUN_OPEN = 'POST /api/v1/dispatch-runs';
 
 // The suite runs `motir ready` against this same stub before the loop starts —
 // it is the cheapest proof that the credential resolved, whichever tier supplied
@@ -156,18 +175,36 @@ const shapes = v1.map(shapeOf);
 // Only a LEADING ready read: an extra one from inside the loop would be the
 // batch read-ahead this file exists to refuse, and the count check further down
 // is what catches it.
+//   • ONE `POST /api/v1/dispatch-runs` — the run record `motir auto` opens for
+//     the whole invocation, once the owner is known and before the first ready
+//     read. See `RUN_OPEN` above for why its FAILURE here is the interesting
+//     part.
 const WHOAMI = ['GET /api/v1/me', 'GET /api/v1/workspaces'];
 let preflight = 0;
 // In recorded order: the suite's `motir ready` runs first, THEN `motir auto`
-// resolves its owner, then the loop begins.
+// resolves its owner, THEN it opens the run record, then the loop begins.
 if (shapes[preflight] === READY) preflight += 1;
 for (const shape of WHOAMI) if (shapes[preflight] === shape) preflight += 1;
+if (shapes[preflight] === RUN_OPEN) preflight += 1;
 const loop = v1.slice(preflight);
 const loopShapes = shapes.slice(preflight);
 
 // The owner is resolved ONCE for the whole run, not once per item.
 const whoamiCount = shapes.filter((shape) => shape === 'GET /api/v1/me').length;
 check(whoamiCount === 1, `expected exactly ONE whoami for the run, got ${whoamiCount}`);
+
+// ── the run record, and its DEGRADATION ─────────────────────────────────────
+// One open for the invocation, and — because this stub answers nothing on that
+// path — no event append and no close. A reporter that retried the open per card
+// or kept queueing events at a server that refused the run would both show up
+// here as extra shapes, and both are the failure the `catch` exists to prevent.
+const runOpens = shapes.filter((shape) => shape === RUN_OPEN).length;
+check(runOpens === 1, `expected exactly ONE run-record open for the invocation, got ${runOpens}`);
+const runFollowUps = shapes.filter((shape) => /\/api\/v1\/dispatch-runs\//.test(shape));
+check(
+  runFollowUps.length === 0,
+  `the reporter kept talking to a run it never opened: ${runFollowUps.join(', ')}`,
+);
 
 // The expected shape, built rather than hard-coded so the item count is a knob.
 const expected = [];

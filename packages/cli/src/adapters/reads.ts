@@ -2,6 +2,8 @@ import type { SuccessBody } from '../transport.js';
 import type {
   ActivityAllPage,
   DispatchItem,
+  DispatchRunAppended,
+  DispatchRunOpened,
   PlanJobState,
   PlanOutcome,
   PlanProposal,
@@ -623,6 +625,31 @@ export function toWorkItemClaim(body: SuccessBody<'claimWorkItem'>): WorkItemCla
  * passed through, so a field the server adds later cannot arrive in the view
  * model without somebody deciding it should.
  */
+/**
+ * The DISPATCH RUN a report opened (Story MOTIR-1789 · MOTIR-1794).
+ *
+ * The reporter needs exactly three things off the open — the run's id, whether
+ * this call CREATED it, and the legs it now owns keyed by card — and reads
+ * nothing else. A wider adapter would make the reporter's behaviour depend on
+ * fields the ingest is free to change.
+ */
+export function toDispatchRunOpened(body: SuccessBody<'openDispatchRun'>): DispatchRunOpened {
+  return {
+    runId: body.run.id,
+    created: body.created,
+    status: body.run.status,
+    seq: body.run.seq,
+    cards: body.run.cards.map((card) => ({ key: card.key, disposition: card.disposition })),
+  };
+}
+
+/** What an APPEND returned — the new cursor, and how many rows were new. */
+export function toDispatchRunAppended(
+  body: SuccessBody<'appendDispatchRunEvents'>,
+): DispatchRunAppended {
+  return { runId: body.runId, appended: body.appended, seq: body.seq };
+}
+
 export function toScopeClaim(body: SuccessBody<'claimScope'>): ScopeClaim {
   return {
     scope: {

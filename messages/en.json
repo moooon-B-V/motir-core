@@ -297,7 +297,11 @@
     "event_revision_ended": "Revision landed",
     "listRevised": "Revised",
     "staleStatusOutcome": "Plan out of date — work it changes has since been finished.",
-    "staleReviewHint": "Approve is unavailable. Decline it, or wait in case the work reopens."
+    "staleReviewHint": "Approve is unavailable. Decline it, or wait in case the work reopens.",
+    "searchLabel": "Search this plan",
+    "showChangesAll": "Every item on this level is this plan's",
+    "locateChange": "Locate the next of this plan's items",
+    "rowOpenAria": "Open {name}"
   },
   "planEdits": {
     "submitting": "Submitting…",
@@ -952,6 +956,7 @@
       "dashboard": "Dashboard",
       "issues": "Work Items",
       "ready": "Ready",
+      "runs": "Runs",
       "boards": "Boards",
       "reports": "Reports",
       "codeHealth": "Code health",
@@ -5602,7 +5607,8 @@
             "subtitle": "the roadmap continues here"
           }
         },
-        "loading": "Loading your roadmap…"
+        "loading": "Loading your roadmap…",
+        "searchLabel": "Search this project"
       },
       "validate": {
         "title": "One call before we plan",
@@ -6074,7 +6080,8 @@
       "roadmap": "Opened from the roadmap."
     },
     "footerRestingTitle": "Roadmap — as saved",
-    "footerRestingBody": "Nothing proposed. The conversation has changed nothing."
+    "footerRestingBody": "Nothing proposed. The conversation has changed nothing.",
+    "searchLabel": "Search this project"
   },
   "codeHealth": {
     "title": "Code health",
@@ -7178,6 +7185,137 @@
       "notesTooLong": "Instructions are capped at {limit} characters. A step needing more than that is a work item.",
       "reorderConflict": "The list changed while you were moving that step. Reload and try again.",
       "generic": "Something went wrong. Please try again."
+    }
+  },
+  "runs": {
+    "title": "Run",
+    "gloss": "what the agent did",
+    "empty": {
+      "title": "Nothing has run yet.",
+      "body": "Dispatch this work item with `motir next`, or its whole story with `motir run <KEY>`, and what the agent does will appear here."
+    },
+    "oneOfN": "This work item is {position} of {total} in this run.",
+    "seeWholeRun": "See the whole run →",
+    "reconnecting": "Reconnecting — resuming from where the connection dropped. Nothing has been missed.",
+    "reportingOffline": "This run stopped reporting. The record is incomplete, not the run — check the Development section below for what actually shipped.",
+    "history": {
+      "title": "Recent runs",
+      "more": "Show more"
+    },
+    "step": {
+      "claimed": "Claimed",
+      "checkout": "Checkout ready",
+      "prompt": "Prompt issued",
+      "agent": "Agent running",
+      "exit": "Agent exited",
+      "delivery": "Pull request linked",
+      "settled": "Settled"
+    },
+    "disposition": {
+      "queued": "Queued",
+      "running": "Running",
+      "integrated": "Integrated",
+      "implemented": "Implemented",
+      "failed": "Failed",
+      "replanned": "Re-planned",
+      "skipped": "Skipped",
+      "not_reached": "Not reached"
+    },
+    "runStatus": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "timed_out": "Timed out"
+    },
+    "command": {
+      "next": "motir next",
+      "run": "motir run",
+      "run_scope": "motir run '<'scope>",
+      "batch": "motir batch",
+      "auto": "motir auto"
+    },
+    "skipReason": {
+      "needsPlanning": "Skipped — needs planning.",
+      "needsHuman": "Skipped — needs a human.",
+      "integratedDep": "Skipped — ready only via an integrated dependency (not on main).",
+      "claimRefused": "Skipped — claimed by somebody else, or no longer claimable.",
+      "replanSubmitted": "Refused by its agent — a re-plan is waiting for you in Motir.",
+      "checkoutUnavailable": "Skipped — its repository could not be cloned.",
+      "blockedInScope": "Skipped — its blockers inside this scope did not land."
+    },
+    "indexHeading": "Runs",
+    "indexSubtitle": "Every run {project} has made — current and past.",
+    "indexEmptyTitle": "Nothing has run yet",
+    "indexEmptyBody": "When you dispatch work with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
+    "indexReadFailed": "We couldn’t load these runs. Reload to try again.",
+    "noProjectTitle": "No project yet",
+    "noProjectDescription": "Create a project to start dispatching work to an agent.",
+    "sectionLive": "Running now",
+    "sectionPast": "Past runs",
+    "noneRunning": "Nothing is running.",
+    "nonePast": "No run has finished yet.",
+    "colCommand": "Command",
+    "colScope": "Scope",
+    "colAgent": "Agent",
+    "colStarted": "Started",
+    "colStatus": "Status",
+    "colItems": "Work items",
+    "scopeNone": "—",
+    "tookNone": "Took no work items",
+    "summaryDone": "{done} of {total} done",
+    "summarySkipped": "{n} skipped",
+    "summaryFailed": "{n} failed",
+    "summaryNotReached": "{n} not reached",
+    "summaryReplanned": "{n} re-planned",
+    "loadMore": "Show older runs",
+    "loadingMore": "Loading…",
+    "modalTitle": "Run detail",
+    "modalLoading": "Loading this run…",
+    "modalReadFailed": "We couldn’t load this run. Close and try again.",
+    "paneSet": "The set",
+    "paneSetCount": "The set — {count} work items",
+    "paneLog": "Agent output",
+    "tookNoneBody": "This run took no work items. Nothing was claimed and nothing was changed.",
+    "stopReason": {
+      "drained": "the ready set is drained",
+      "completed": "the whole snapshot was attempted",
+      "max": "--max reached",
+      "halted": "halted on the first agent failure (--keep-going continues past one)",
+      "interrupted": "interrupted (Ctrl-C)",
+      "replanned": "an agent refused its work item and submitted a re-plan — waiting for you in Motir",
+      "gated": "stopped between work items — the one just finished is not ready to build on",
+      "abandoned": "the machine stopped reporting"
+    },
+    "logCount": "{count, plural, =0 {No lines} one {# line} other {# lines}}",
+    "logTruncated": "{count, plural, one {# earlier line not shown} other {# earlier lines not shown}}",
+    "logResumeFollow": "Follow",
+    "logSilence": {
+      "neverSent": {
+        "title": "Nothing was sent",
+        "body": "This run did not report log bodies. Pass --report-log to send them."
+      },
+      "waiting": {
+        "title": "Waiting for the agent",
+        "body": "The run is live and has not printed anything yet."
+      },
+      "expired": {
+        "title": "Past the retention window",
+        "body": "Log bodies are deleted 30 days after a run. This one’s have been."
+      }
+    },
+    "findings": {
+      "label": "What this run produced",
+      "planSubmitted": "Plan submitted",
+      "proposals": "{count, plural, one {# proposal} other {# proposals}}",
+      "waitingForYou": "waiting for you.",
+      "review": "Review →",
+      "plansApproved": "Plans approved by this run",
+      "treeChanged": "your tree changed while you were away.",
+      "approvedFor": "approved for {key}",
+      "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
+      "bugFiled": "Bug filed",
+      "open": "Open →"
     }
   }
 }

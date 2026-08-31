@@ -92,7 +92,7 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the sixteen (authed) segments are the ones measured, not a copied list', () => {
+  it('the seventeen (authed) segments are the ones measured, not a copied list', () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
@@ -111,6 +111,8 @@ describe('proxy config.matcher', () => {
       'ready',
       'reports',
       'roadmap',
+      // MOTIR-3923 — the runs index, and the seventeenth segment.
+      'runs',
       'settings',
       'sprints',
       'triage',
