@@ -4,10 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 /*
  * MOTIR-3884 — the moved public surfaces leave the application host. Once the
  * public origin is configured (`MOTIR_PUBLIC_SITE_URL` → motir.co), the proxy
- * 308s `/`, `/explore/*`, `/docs/*` and `/legal/*` onto it, path and query
- * preserved. `/p/*` is NOT redirected — its move is MOTIR-3877's and is not
- * done — and nothing fires while the public origin is unconfigured (a redirect
- * would loop onto this origin).
+ * 308s `/`, `/explore/*`, `/docs/*`, `/legal/*` AND `/p/*` onto it, path and
+ * query preserved, and nothing fires while the public origin is unconfigured
+ * (a redirect would loop onto this origin).
  */
 
 vi.mock('better-auth/cookies', () => ({
@@ -68,14 +67,12 @@ describe('the moved public surfaces 308 to motir.co', () => {
     expect(res.headers.get('location')).toBe('https://motir.co/legal/privacy');
   });
 
-  it('does NOT redirect /p/* — its move is MOTIR-3877 and is not done', async () => {
+  it('308s /p/* — its move to motir.co was folded into this redirect set', async () => {
     process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
     process.env['MOTIR_BASE_URL'] = APP;
     const res = await redirect('/p/PROD');
-    expect(res.status).not.toBe(308);
-    // The fall-through is the ordinary session bounce on THIS origin, never a
-    // 308 to the public host.
-    expect(res.headers.get('location') ?? '').not.toMatch(/^https:\/\/motir\.co\//);
+    expect(res.status).toBe(308);
+    expect(res.headers.get('location')).toBe('https://motir.co/p/PROD');
   });
 
   it('does not redirect while the public origin is unconfigured (no self-loop)', async () => {
@@ -86,15 +83,15 @@ describe('the moved public surfaces 308 to motir.co', () => {
   });
 });
 
-describe('the matcher covers the moved surfaces, not /p', () => {
-  it('lists /, /explore, /docs, /legal and excludes /p', async () => {
+describe('the matcher covers the moved surfaces, including /p', () => {
+  it('lists /, /explore, /docs, /legal and /p', async () => {
     const { config, PUBLIC_REDIRECT_SEGMENTS } = await import('@/proxy');
     const segments = config.matcher.map((entry) => entry.replace(/^\//, '').split('/')[0]);
     expect(segments).toContain('');
     expect(segments).toContain('explore');
     expect(segments).toContain('docs');
     expect(segments).toContain('legal');
-    expect(segments).not.toContain('p');
-    expect([...PUBLIC_REDIRECT_SEGMENTS]).toEqual(['', 'explore', 'docs', 'legal']);
+    expect(segments).toContain('p');
+    expect([...PUBLIC_REDIRECT_SEGMENTS]).toEqual(['', 'explore', 'docs', 'legal', 'p']);
   });
 });

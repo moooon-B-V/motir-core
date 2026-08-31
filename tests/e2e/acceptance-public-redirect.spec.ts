@@ -6,12 +6,11 @@ import { signUp } from './_helpers/shell-session';
  * ACCEPTANCE — the moved public surfaces redirect off the application host
  * (Story MOTIR-3932 · Subtask MOTIR-3886).
  *
- * The whole public JOURNEY (landing → /explore → /docs → /legal) is rendered by
- * `motir-marketing` on `motir.co` — a different application this lane does not
- * boot, so this spec walks the half that lives here: the redirects MOTIR-3884
- * ships. Each moved path on the application host must 308 onto the public
- * origin with its path and query preserved, and `/p/*` — whose move is
- * MOTIR-3877's and is not done — must stay a 200, not a redirect.
+ * The whole public JOURNEY (landing → /explore → /docs → /legal → /p/*) is
+ * rendered by `motir-marketing` on `motir.co` — a different application this
+ * lane does not boot, so this spec walks the half that lives here: the
+ * redirects MOTIR-3884 ships. Each moved path on the application host must 308
+ * onto the public origin with its path and query preserved.
  *
  * ── THE HOST MECHANISM, named rather than inherited ─────────────────────────
  * The redirect's destination is the config-driven public origin
@@ -54,6 +53,7 @@ test('the moved public surfaces 308 off the application host', async ({
       ['/explore/topic/design', '/explore/topic/design'],
       ['/docs/api/getting-started', '/docs/api/getting-started'],
       ['/legal/privacy', '/legal/privacy'],
+      ['/p/PROD', '/p/PROD'],
     ] as const) {
       const res = await request.get(`${APP}${path}`, { maxRedirects: 0 });
       expect(res.status(), `${path} status`).toBe(308);
@@ -61,15 +61,7 @@ test('the moved public surfaces 308 off the application host', async ({
     }
   });
 
-  // ── Step 7 — /p/* stays 200, not a redirect ──────────────────────────────
-  await chapter('/p/* is not redirected', async () => {
-    // The public project surface still lives here until MOTIR-3877 ships.
-    const res = await request.get(`${APP}/p/PROD`, { maxRedirects: 0 });
-    expect(res.status()).toBe(200);
-    expect(res.headers()['location']).toBeUndefined();
-  });
-
-  // ── Step 8 — a signed-in journey is unaffected ────────────────────────────
+  // ── Step 7 — a signed-in journey is unaffected ────────────────────────────
   await chapter('signed-in surfaces do not redirect', async () => {
     await signUp(page, 'public-redirect-e2e@example.com');
     await expect(page).toHaveURL(/\/home$/);

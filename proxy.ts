@@ -58,11 +58,11 @@ export const CURRENT_PATH_HEADER = 'x-current-path';
  * `''` is the root `/`. The proxy 308s these to `motir.co` (the public origin)
  * once `MOTIR_PUBLIC_SITE_URL` is configured, path and query preserved.
  *
- * ⚠️ `/p/*` IS DELIBERATELY ABSENT. Its move is MOTIR-3877's, and that story is
- * `blocked_by` this one — so redirecting `/p/*` now would 308 into a 404 on the
- * brand host. It stays served here (200) until 3877 ships its own cutover.
+ * `/p/*` is included. Its move to `motir.co` is MOTIR-3877's (which renders the
+ * replacement), but the redirect ships here and MOTIR-3951 deletes the page from
+ * this application — so `/p/*` must 308 onto the public host, not 404.
  */
-export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal']);
+export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal', 'p']);
 
 /**
  * Redirect a moved public surface to the public origin, or `null` when this
@@ -87,6 +87,17 @@ export function proxy(request: NextRequest) {
   // are answered on motir.co now, so the session bounce below is not theirs.
   const moved = publicSiteRedirect(request);
   if (moved) return moved;
+
+  // While MOTIR_PUBLIC_SITE_URL is unset the moved surfaces are still served
+  // HERE — the root `/` runs its own session handling in `app/page.tsx` (no
+  // session → `/sign-in`, session → `/home`), and the deleted pages 404. They
+  // are NOT protected routes, so forward them untouched rather than bouncing a
+  // cookie-less request to `/sign-in?next=…` (which would shadow the root's
+  // own contract and turn a deleted page's 404 into a sign-in redirect).
+  const segment = request.nextUrl.pathname.split('/')[1] ?? '';
+  if (PUBLIC_REDIRECT_SEGMENTS.has(segment)) {
+    return NextResponse.next();
+  }
 
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
@@ -149,14 +160,14 @@ export const config = {
   // layout makes the same session read every authed page already makes.
   matcher: [
     // The MOVED public surfaces (MOTIR-3884) — the proxy runs on them to 308
-    // them onto motir.co. `/p/*` is NOT here: its move is MOTIR-3877's and is
-    // not done, so it stays served by this application (asserted by
-    // `tests/navigation/proxy-matcher.test.ts`'s stray-entry rule below, which
-    // exempts these four).
+    // them onto motir.co. `/p/*` IS here: its move to motir.co was folded into
+    // this redirect set (MOTIR-3877 renders the replacement; MOTIR-3951 deletes
+    // the page here), so it must 308, not 404.
     '/',
     '/explore/:path*',
     '/docs/:path*',
     '/legal/:path*',
+    '/p/:path*',
     '/backlog/:path*',
     '/boards/:path*',
     '/code-health/:path*',

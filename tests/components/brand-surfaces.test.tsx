@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { renderWithIntl } from '../helpers/renderWithIntl';
 import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 
 // MOTIR-1150 — every surface the mark enters (design/brand/design-notes.md §7),

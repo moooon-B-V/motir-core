@@ -128,15 +128,12 @@ describe('agile accents + tabnav + card-icon + vote are wired to their tokens', 
     expect(read('app/(authed)/_components/ProjectSwitcher.tsx')).toContain('tone="archived"');
   });
 
-  it('the tab primitives (Segmented + PublicTabNav) route track + active through --el-tabnav-*', () => {
-    for (const f of [
-      'packages/design-system/src/components/ui/Segmented.tsx',
-      'app/(public)/_components/PublicTabNav.tsx',
-    ]) {
-      const src = read(f);
-      expect(src, f).toContain('bg-(--el-tabnav-track)');
-      expect(src, f).toContain('--el-tabnav-active');
-    }
+  it('the Segmented primitive routes track + active through --el-tabnav-*', () => {
+    // `PublicTabNav` moved to motir-marketing (MOTIR-3951); the token route is
+    // now asserted on the surviving Segmented primitive alone.
+    const src = read('packages/design-system/src/components/ui/Segmented.tsx');
+    expect(src).toContain('bg-(--el-tabnav-track)');
+    expect(src).toContain('--el-tabnav-active');
   });
 
   it('the auth layout paints --el-auth-wash behind the sign-in card', () => {
@@ -147,10 +144,6 @@ describe('agile accents + tabnav + card-icon + vote are wired to their tokens', 
     const src = read('app/(authed)/reports/page.tsx');
     expect(src).toContain('bg-(--el-card-icon-bg)');
     expect(src).toContain('text-(--el-card-icon-fg)');
-  });
-
-  it('the previously-unused --el-vote-bg is now wired into the vote control (bug #3)', () => {
-    expect(read('app/(public)/_components/PublicRoadmapVote.tsx')).toContain('bg-(--el-vote-bg)');
   });
 });
 

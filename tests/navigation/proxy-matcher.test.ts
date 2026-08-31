@@ -72,10 +72,10 @@ describe('proxy config.matcher', () => {
     // is either a segment that has since been deleted or a typo, and both make
     // the list above look more complete than it is. The ONE deliberate class of
     // extra entry is the moved public surfaces (MOTIR-3884) — `/`, `/explore`,
-    // `/docs`, `/legal` — which the proxy 308s onto motir.co.
+    // `/docs`, `/legal`, `/p` — which the proxy 308s onto motir.co.
     const { config } = await import('@/proxy');
 
-    const PUBLIC_REDIRECT_SEGMENTS = ['', 'explore', 'docs', 'legal'];
+    const PUBLIC_REDIRECT_SEGMENTS = ['', 'explore', 'docs', 'legal', 'p'];
     expect(
       strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher).filter(
         (segment) => !PUBLIC_REDIRECT_SEGMENTS.includes(segment),

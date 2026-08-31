@@ -182,7 +182,11 @@ export default defineConfig({
       // The main config's command has carried this since MOTIR-3427; this one did
       // not need it while the executor was a second `webServer`.
       command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
-      url: BASE_URL,
+      // `/sign-in`, NOT the root: with `MOTIR_PUBLIC_SITE_URL` set (below) the
+      // root 308s onto the unreachable public origin, and Playwright's
+      // ready-check follows it — so the server would never read as ready. A
+      // non-redirected auth route is a stable, 200-answering probe.
+      url: `${BASE_URL}/sign-in`,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       // Generous: now covers a full `next build` (minutes) before the server binds.
       timeout: 600_000,

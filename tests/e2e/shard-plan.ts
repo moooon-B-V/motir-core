@@ -391,7 +391,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
-  'api-docs.spec.ts': 24.8,
   'api-tokens.spec.ts': 29.2,
   'appearance-sync.spec.ts': 7.0,
   'archive-flow.spec.ts': 14.7,
@@ -432,7 +431,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'data-subject-request-journey.spec.ts': 8.5,
   'dashboards.spec.ts': 13.9,
   'design-result.spec.ts': 9.2,
-  'docs-index.spec.ts': 3.1,
   'epic2-acceptance.spec.ts': 7.4,
   'epic6-at-scale.spec.ts': 0,
   'epic6-journey.spec.ts': 14.4,
@@ -452,7 +450,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-scheduled-engine.spec.ts': 14.6,
   'labels-components-watch.spec.ts': 28.5,
   'link-search-flow.spec.ts': 14.6,
-  'mcp-docs.spec.ts': 4.1,
   'member-facing-permissions.spec.ts': 7.7,
   'migrate-index-fleet.spec.ts': 26.7,
   'multi-tenant-isolation.spec.ts': 2.5,
@@ -477,7 +474,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'project-isolation.spec.ts': 5.4,
   'project-logo.spec.ts': 12.7,
   'project-repositories-api.spec.ts': 3.1,
-  'project-square-flow.spec.ts': 6.4,
   'projects-flow.spec.ts': 5.8,
   'provenance.spec.ts': 15.2,
   // Story MOTIR-3908 · Subtask MOTIR-4038 — the self-host arm of the
@@ -488,7 +484,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // above — under-estimating is the direction that unbalances the bin-packer.
   // RE-MEASURE from the first green CI run that includes it.
   'public-selfhost.spec.ts': 9.0,
-  'public-signin-modal.spec.ts': 3.9,
   'quick-view-edit.spec.ts': 16.4,
   'ready.spec.ts': 6.7,
   'reports.spec.ts': 20.9,
