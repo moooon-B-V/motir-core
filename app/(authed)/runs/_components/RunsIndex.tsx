@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CircleSlash, TriangleAlert } from 'lucide-react';
@@ -63,6 +63,9 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
   // strip was written to avoid, one layer up — and it opens NO stream per row:
   // the per-run stream belongs to the modal, which is opened deliberately.
   const anyLive = (live?.length ?? 0) > 0;
+  // What the poll last saw, as a REF: reading it as a dependency would tear the
+  // interval down and rebuild it every time a run's disposition changed.
+  const liveRef = useRef(live);
   useEffect(() => {
     if (!anyLive) return;
     let cancelled = false;
@@ -72,7 +75,31 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
           const res = await fetch(`${base}?status=live&limit=${pageSize}`);
           if (!res.ok || cancelled) return;
           const body = (await res.json()) as { runs: DispatchRunListItemDto[] };
-          if (!cancelled) setLive(body.runs);
+          if (cancelled) return;
+
+          // ⚠️ A RUN THAT LEAVES `live` HAS BECOME `past`, AND `past` WAS READ
+          // BEFORE IT GOT THERE. Polling only the live half meant a run watched
+          // to completion vanished from the page entirely: `live` went empty,
+          // `past` still held the answer from page load — when that same run was
+          // live — and the both-empty branch below then rendered *Nothing has
+          // run yet* over a project that had just finished one. So the moment a
+          // row leaves `live`, the past half is re-read.
+          const before = liveRef.current ?? [];
+          const settled = before.some((row) => !body.runs.some((now) => now.id === row.id));
+          liveRef.current = body.runs;
+          setLive(body.runs);
+          if (!settled) return;
+
+          const pastRes = await fetch(`${base}?status=past&limit=${pageSize}`);
+          if (!pastRes.ok || cancelled) return;
+          const pastBody = (await pastRes.json()) as { runs: DispatchRunListItemDto[] };
+          if (cancelled) return;
+          // The FIRST page, deliberately: the run that just settled is the
+          // newest, so it belongs at the top. This resets a reader who had paged
+          // further back, which is the lesser of the two costs — the alternative
+          // is a list that never learns the run it was watching is over.
+          setPast(pastBody.runs);
+          setExhausted(pastBody.runs.length < pageSize);
         } catch {
           /* a failed poll leaves the last good list on screen */
         }
@@ -119,10 +146,25 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
     shallowPush('/runs');
   }, []);
 
+  // ⚠️ RENDERED IN BOTH BRANCHES, and it must be. The empty-state return below
+  // used to sit ABOVE the modal, so a list that went empty UNMOUNTED an open run
+  // — the reader was watching it — while the URL kept its `?run=`, because
+  // nothing called `onCloseRun`. The modal answers to `openRunId`, never to how
+  // many rows the list happens to hold.
+  const modal =
+    openRunId !== null ? (
+      <RunModal key={openRunId} runId={openRunId} projectKey={projectKey} onClose={onCloseRun} />
+    ) : null;
+
   // Nothing at all has ever run — the ONE case that replaces both sections,
   // because two empty headings would be chrome around an absence.
   if (live?.length === 0 && past?.length === 0) {
-    return <EmptyState title={t('indexEmptyTitle')} description={t('indexEmptyBody')} />;
+    return (
+      <>
+        <EmptyState title={t('indexEmptyTitle')} description={t('indexEmptyBody')} />
+        {modal}
+      </>
+    );
   }
 
   return (
@@ -155,9 +197,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
           ) : null
         }
       />
-      {openRunId !== null ? (
-        <RunModal key={openRunId} runId={openRunId} projectKey={projectKey} onClose={onCloseRun} />
-      ) : null}
+      {modal}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { act, cleanup, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RunsIndex } from '@/app/(authed)/runs/_components/RunsIndex';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
@@ -17,6 +17,13 @@ import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 let params = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   useSearchParams: () => params,
+}));
+
+// The modal has its OWN suite (`RunModal.test.tsx`) and its own reads; here it
+// stands in for itself so the assertions are about the INDEX's decision to
+// mount it at all.
+vi.mock('@/app/(authed)/runs/_components/RunModal', () => ({
+  RunModal: ({ runId }: { runId: string }) => <div data-testid="run-modal">{runId}</div>,
 }));
 
 const fetchMock = vi.fn();
@@ -140,5 +147,44 @@ describe('⚠️ it polls only while something is LIVE, and opens no stream', ()
     mount([run({ status: 'running' })], [run(), run({ id: 'r2' })]);
     await Promise.resolve();
     expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes('/stream'))).toEqual([]);
+  });
+});
+
+describe('⚠️ the close-out — what the list does when the run it is showing ENDS', () => {
+  it('an EMPTY list still renders an open run: the reader was watching it', () => {
+    // The bug: the both-empty early return sat ABOVE the modal, so a list that
+    // went empty unmounted an open run out from under the reader — while the URL
+    // kept its `?run=`, because nothing called `onCloseRun`. The page then read
+    // *Nothing has run yet* over a run that had just finished.
+    params = new URLSearchParams('run=run_open');
+    mount([], []);
+
+    expect(screen.getByText('Nothing has run yet')).toBeTruthy();
+    // The modal answers to `openRunId`, never to how many rows the list holds.
+    expect(screen.getByTestId('run-modal').textContent).toBe('run_open');
+  });
+
+  it('re-reads PAST as soon as a run LEAVES the live list', async () => {
+    // Polling only the live half is what emptied the page: `live` went to zero
+    // and `past` still held the answer from page load — taken while that same
+    // run was live.
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementation(async (url: string) =>
+        String(url).includes('status=live')
+          ? { ok: true, json: async () => ({ runs: [] }) }
+          : { ok: true, json: async () => ({ runs: [run({ id: 'r_settled' })] }) },
+      );
+      mount([run({ id: 'r_settled', status: 'running' })], []);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000 + 50);
+      });
+
+      const readPast = fetchMock.mock.calls.some((c) => String(c[0]).includes('status=past'));
+      expect(readPast, 'the settled run was never looked for in `past`').toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
