@@ -121,7 +121,7 @@ icon) rather than faking in-app repo granting.
   - **#128** Open + Checks running → `pill-sky` + `pill-peach`
   - **#131** Merged + Checks passing → `pill-mint` + `pill-mint`
   - **#119** Closed + Checks failing → `pill-rose` + `pill-rose`
-- Caption: "Linked automatically when a branch or PR mentions `MOTIR-891`."
+- Caption: "Linked by `link_pull_request` over the MCP or a `motir auto` session branch."
 
 ### Panel 4 — empty + error states
 
@@ -252,8 +252,8 @@ requests" · `development.noMatches` "No matching pull requests" ·
 GitHub." · `development.linkedTo` "Linked to {key}" · `development.linkedManually`
 "linked manually" · `development.linkAction` "Link" · `development.notConnected`
 "GitHub isn't connected for this workspace. Connect it in Settings → Workspace →
-GitHub." · `development.autoLinkCaption` "Linked automatically when a branch or
-PR mentions {key} — or linked by hand from here." (cancel = the shared
+GitHub." · `development.autoLinkCaption` "Link with + Link pull request here, or
+with `link_pull_request` over the MCP." (cancel = the shared
 `common.cancel`).
 
 **Build seam (for MOTIR-1596):** MOTIR-1579 ships the pr-row component + the
