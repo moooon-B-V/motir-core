@@ -12,7 +12,7 @@
 // the submit and its 200 is awaited before asserting the signed-in state — never
 // a waitForTimeout, never the optimistic UI alone.
 //
-// Setup mirrors public-project-flow.spec.ts: the admin signs up through the real
+// Setup mirrors cloud-public-project-flow.spec.ts: the admin signs up through the real
 // UI, the project is created server-side through the shipped service (the one
 // sanctioned cross-layer reach for tests) and flipped public directly, and the
 // visitor account is created via a real sign-up (so it has a known password) in a
@@ -54,7 +54,7 @@ async function seedPublicProject(page: Page): Promise<void> {
     identifier: PUBLIC_KEY,
   });
   // Flip public directly — the make-public UI flow is exercised by
-  // public-project-flow.spec.ts; here we only need a public surface to sign in on.
+  // cloud-public-project-flow.spec.ts; here we only need a public surface to sign in on.
   await db.project.update({
     where: { id: project.id },
     data: { accessLevel: 'public', madePublicAt: new Date() },

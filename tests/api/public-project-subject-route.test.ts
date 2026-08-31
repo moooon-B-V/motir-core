@@ -16,7 +16,7 @@ runAsCloudBuild();
 // and that is right where a route OWNS a query. This route owns none: it is
 // `params` → one service call → error mapping, and the service it calls
 // (`getOverview`) is the SAME one `app/(public)/p/[identifier]/page.tsx` already
-// reads through, exercised by `tests/e2e/public-project-flow.spec.ts` against a
+// reads through, exercised by `tests/e2e/cloud-public-project-flow.spec.ts` against a
 // real project. Re-seeding a workspace here would test `getOverview` a second
 // time and this route not at all. What IS this route's own behaviour — the
 // anonymous posture, the 404 mapping, and the promise that its projection is the
