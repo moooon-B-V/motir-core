@@ -521,6 +521,18 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'sprint-lifecycle.spec.ts': 8.8,
   'sprint-rename.spec.ts': 7.2,
   'status-derivation.spec.ts': 22.6,
+  // ⚠️ LOCAL provenance, ESTIMATED rather than a full app run (MOTIR-3998) — this
+  // sandbox has no Postgres, so the spec could not be run against a production
+  // build here. What IS measured: the spec's dominant cost, the 44 computed-style
+  // fingerprint reads (11 truth + 3 ancestors × 11 tiles), timed at ~123 ms in
+  // headless Chromium against the real theme.css. The remainder — one public-page
+  // `goto('/tokens')` plus 14 Style-control clicks each awaited on `<html
+  // data-style>` — is estimated from the code path (no sign-in, no `resetDatabase`
+  // hook, no network write) at ~2–3 s. Recorded as 5.0: the estimate rounded UP,
+  // for this file's standing reason — under-estimating is the direction that
+  // unbalances a bin-packer. Re-measure from the first green CI run that includes
+  // it.
+  'style-material-isolation.spec.ts': 5.0,
   'supervision-pool-under-load.spec.ts': 4.7,
   'token-permissions.spec.ts': 4.4,
   'top-bar-budget.spec.ts': 7.2,
