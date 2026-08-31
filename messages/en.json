@@ -7189,6 +7189,7 @@
   },
   "runs": {
     "title": "Run",
+    "searchLabel": "Search this run",
     "gloss": "what the agent did",
     "empty": {
       "title": "Nothing has run yet.",
