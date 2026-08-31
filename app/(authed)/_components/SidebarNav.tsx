@@ -21,6 +21,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Waypoints,
 } from 'lucide-react';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
 import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
@@ -274,6 +275,20 @@ export function SidebarNav({
         label: t('nav.ready'),
         href: '/ready',
         active: isActive(pathname, '/ready'),
+      },
+      {
+        // The RUNS index (Story MOTIR-1789 / MOTIR-3923) — its own primary nav
+        // entry, per `design/runs/design-notes.md` § THE ACCESS PATH: every
+        // top-level project view here is a primary entry, and a runs index is a
+        // peer of those. It sits directly after Ready because "Ready is where
+        // you dispatch, Runs is where you watch". The glyph is `Waypoints` — a
+        // path through ordered nodes, which is what a run over a SET is — chosen
+        // because `CirclePlay` is Ready's, `Zap` is the epic issue type's,
+        // `Activity` is Code health's and `History` is Resume onboarding's.
+        icon: <Waypoints />,
+        label: t('nav.runs'),
+        href: '/runs',
+        active: isActive(pathname, '/runs'),
       },
       {
         icon: <Columns3 />,

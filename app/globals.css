@@ -166,3 +166,37 @@ body {
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   The RUNNING EDGE on the planning canvas (Story MOTIR-1789 · MOTIR-3972)
+   ═══════════════════════════════════════════════════════════════════════
+   On a run, the dependency edge is the explanation: it says why this work item
+   is being worked now, and what becomes reachable when it lands. A static arrow
+   says the dependency exists and nothing about travel — so an edge FROM the
+   running work item TO one it BLOCKS flows along its own path
+   (`design/runs/design-notes.md` § THE RUNNING EDGE; panel 2 of
+   `design/runs/run-modal.mock.html` draws both faces).
+
+   ⚠️ THE MOTION IS ADDED, NOT REMOVED — gated behind `no-preference`, matching
+   the shimmer / aura / aurora pattern above. So the STATIC form is the default
+   and a motion-sensitive user is never served an animation that then has to be
+   switched off. The run pane sits open for the length of a run, which is where a
+   permanent loop stops being decoration and becomes an attention sink.
+
+   ⚠️ AND THE STATIC FORM IS SOLID, not a frozen dash. A still dashed line is
+   already this canvas's `pending` connector, so freezing the dash would give two
+   different states one appearance. Reduced motion keeps the running edge's HUE
+   and WEIGHT — it still reads as the live one — and simply does not travel.
+
+   The dash travels one full period (12px = 5 + 7) so the pattern is seamless. */
+@keyframes canvas-edge-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .canvas-edge-running {
+    stroke-dasharray: 5 7;
+    animation: canvas-edge-flow 0.9s linear infinite;
+  }
+}

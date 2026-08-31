@@ -1506,3 +1506,255 @@ function presentActivityValue(value: unknown): z.infer<typeof activityValueSchem
       return { type: 'none' };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The DISPATCH RUN ingest (Story MOTIR-1789 · Subtask MOTIR-1792)
+//
+// The WRITE half of the run seam, specified by
+// `docs/decisions/dispatch-run-record.md`. Three operations — open with the SET,
+// append events, close — shaped for a TRANSPORT rather than for the CLI that is
+// their first caller, so 9.1.7's hosted orchestrator later becomes a second
+// caller with `origin: "hosted"` and nothing else changes.
+//
+// ⚠️ EVERY VOCABULARY BELOW IS CLOSED, and each one is the ADR's, enumerated
+// from the shipped CLI lifecycle at `origin/main` 435bce9bd. They are declared
+// here as `z.enum` literals rather than derived from the Prisma enums because
+// this is the WIRE: a value reaching the document is a value the contract has
+// promised, and deriving it from the schema would let a migration publish a new
+// member without a contract-version bump.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Which CLI command opened the run. */
+export const dispatchCommandSchema = z.enum(['next', 'run', 'run_scope', 'batch', 'auto']);
+
+/** WHERE the run executed — the discriminator that lets one record serve two writers. */
+export const dispatchRunOriginSchema = z.enum(['local', 'hosted']);
+
+/** The run header's own state. `timed_out` is written only by the reap. */
+export const dispatchRunStatusSchema = z.enum([
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'timed_out',
+]);
+
+/** Why the run ended. */
+export const dispatchStopReasonSchema = z.enum([
+  'drained',
+  'completed',
+  'max',
+  'halted',
+  'interrupted',
+  'replanned',
+  'gated',
+  'abandoned',
+]);
+
+/** A LEG's state. */
+export const dispatchCardDispositionSchema = z.enum([
+  'queued',
+  'running',
+  'integrated',
+  'implemented',
+  'failed',
+  'replanned',
+  'skipped',
+  'not_reached',
+]);
+
+/** Why a card was left out. */
+export const dispatchSkipReasonSchema = z.enum([
+  'needs_planning',
+  'needs_human',
+  'claim_refused',
+  'blocked_in_scope',
+  'integrated_dep',
+  'replan_submitted',
+  'checkout_unavailable',
+]);
+
+/** The ordered stream's vocabulary — six RUN-scoped, thirteen CARD-scoped. */
+/**
+ * The event kinds a CLIENT may REPORT — deliberately NOT every member of
+ * `DispatchEventKind`.
+ *
+ * ⚠️ `bug_filed` and `plan_submitted` are ABSENT ON PURPOSE (MOTIR-3981,
+ * `run-findings-protocol.md` Q5). Those two are written server-side, by the
+ * service that files the bug or produces the plan, because the ids exist only
+ * there. Accepting them here would let any client with a run token FORGE a
+ * finding — assert that a run produced a bug it never produced — and the whole
+ * value of the record is that it says what actually happened. The schema is the
+ * enforcement: `.strict()` plus this list refuses the kind outright.
+ *
+ * So this list grows when the CLI learns to report something new, and NOT when
+ * the enum does. A member added to the schema does not belong here by default.
+ */
+export const dispatchEventKindSchema = z.enum([
+  'run_opened',
+  'scope_claimed',
+  'snapshot_frozen',
+  'session_pr',
+  'plan_approved',
+  'run_closed',
+  'card_claimed',
+  'card_skipped',
+  'checkout_ready',
+  'prompt_issued',
+  'agent_started',
+  'agent_exited',
+  'leg_verdict',
+  'delivery_linked',
+  'ci_verdict',
+  'ci_fix_attempt',
+  'ci_gave_up',
+  'card_settled',
+  'log',
+]);
+
+/** One LEG on the wire. */
+export const dispatchRunCardSchema = z.object({
+  id: z.string(),
+  /** The card's key. It SURVIVES the work item's deletion; `workItemId` does not. */
+  key: workItemKeySchema.nullable(),
+  workItemId: z.string().nullable(),
+  /** The run's OWN order. Never re-derive it from a dependency graph. */
+  position: z.number().int(),
+  disposition: dispatchCardDispositionSchema,
+  /** Non-null exactly when `disposition === "skipped"`. */
+  skipReason: dispatchSkipReasonSchema.nullable(),
+  sessionBranch: z.string().nullable(),
+  startedAt: z.string().datetime().nullable(),
+  endedAt: z.string().datetime().nullable(),
+  exitCode: z.number().int().nullable(),
+});
+
+/** The run HEADER with its SET. */
+export const dispatchRunSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  command: dispatchCommandSchema,
+  origin: dispatchRunOriginSchema,
+  scopeWorkItemId: z.string().nullable(),
+  /** What the CLI printed for the scope. Survives the scope card's deletion. */
+  scopeLabel: z.string().nullable(),
+  status: dispatchRunStatusSchema,
+  stopReason: dispatchStopReasonSchema.nullable(),
+  agent: z.string().nullable(),
+  model: z.string().nullable(),
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime().nullable(),
+  createdById: z.string().nullable(),
+  /** The run's cards, in the run's own stored order. */
+  cards: z.array(dispatchRunCardSchema),
+  /** The stream's highest `seq`, or `0` — the cursor to resume from. */
+  seq: z.number().int(),
+});
+
+/** What OPEN answers with. */
+export const dispatchRunOpenedSchema = z.object({
+  run: dispatchRunSchema,
+  /** `false` when the same `idempotencyKey` had already opened this run. */
+  created: z.boolean(),
+});
+
+/** What APPEND answers with. */
+export const dispatchRunAppendedSchema = z.object({
+  runId: z.string(),
+  appended: z.number().int(),
+  /** The run's new highest `seq` — the cursor for the next append. */
+  seq: z.number().int(),
+  /** Every leg this batch moved, so the caller need not re-read the run. */
+  cards: z.array(dispatchRunCardSchema),
+});
+
+/**
+ * One card in the SET a run is opened with.
+ *
+ * ⚠️ THE PAIRING IS REFUSED AT THE EDGE, IN BOTH DIRECTIONS, and it mirrors the
+ * database's own CHECK constraint rather than restating a convention: a skip
+ * with no reason is the one row on a run page that says nothing, and a reason on
+ * a card that was not skipped reads as a skip to anyone scanning the column.
+ */
+export const dispatchRunCardInputSchema = z
+  .object({
+    key: workItemKeySchema,
+    disposition: dispatchCardDispositionSchema.extract(['queued', 'skipped']).default('queued'),
+    skipReason: dispatchSkipReasonSchema.optional(),
+  })
+  .strict()
+  .refine((c) => (c.disposition === 'skipped') === (c.skipReason !== undefined), {
+    message: '`skipReason` is required when `disposition` is "skipped", and forbidden otherwise',
+    path: ['skipReason'],
+  });
+
+export const dispatchRunOpenBodySchema = z
+  .object({
+    /** The project this run works in. Case-insensitive. */
+    projectKey: z.string().min(1).max(64),
+    command: dispatchCommandSchema,
+    origin: dispatchRunOriginSchema.default('local'),
+    /** The container or sprint-bearing card the run was pointed at. */
+    scopeKey: workItemKeySchema.optional(),
+    /** What the CLI printed for the scope, e.g. "the active sprint". */
+    scopeLabel: z.string().max(200).optional(),
+    agent: z.string().max(200).optional(),
+    model: z.string().max(200).optional(),
+    /** Supplied by the caller so a retried open is ONE run, not two. */
+    idempotencyKey: z.string().min(1).max(200).optional(),
+    /**
+     * THE SET, IN THE RUN'S OWN ORDER — every card this run owns, including the
+     * ones it has already decided to skip. `position` is the array index.
+     *
+     * ⚠️ It is settled HERE because this is the one moment it exists: a scope
+     * claim has just returned its members, or a batch snapshot has just been
+     * frozen. Rebuilt afterwards from per-card events it becomes a list of what
+     * the run got round to, and the skipped cards vanish entirely.
+     */
+    cards: z.array(dispatchRunCardInputSchema).max(500).default([]),
+  })
+  .strict();
+export type V1DispatchRunOpenBody = z.infer<typeof dispatchRunOpenBodySchema>;
+
+/** One event in an append batch. */
+export const dispatchRunEventInputSchema = z
+  .object({
+    kind: dispatchEventKindSchema,
+    /** The card this event is about. Omit for a RUN-scoped event. */
+    workItemKey: workItemKeySchema.optional(),
+    /** Structured detail — the claim outcome, the exit code, the verdict. */
+    data: z.unknown().optional(),
+    /**
+     * The OPT-IN log body (ADR Q4). Sent only when the run was started with
+     * `--report-log`; REFUSED rather than truncated when over 16 KiB, because a
+     * silently shortened log reads as the whole tail.
+     */
+    body: z.string().optional(),
+    /** The leg's new disposition, applied in the SAME transaction as the event. */
+    disposition: dispatchCardDispositionSchema.optional(),
+    skipReason: dispatchSkipReasonSchema.optional(),
+    sessionBranch: z.string().max(400).optional(),
+    exitCode: z.number().int().optional(),
+  })
+  .strict();
+
+export const dispatchRunAppendBodySchema = z
+  .object({
+    /** Batched, because a chatty agent must not cost one request per line. */
+    events: z.array(dispatchRunEventInputSchema).min(1).max(200),
+  })
+  .strict();
+export type V1DispatchRunAppendBody = z.infer<typeof dispatchRunAppendBodySchema>;
+
+export const dispatchRunCloseBodySchema = z
+  .object({
+    stopReason: dispatchStopReasonSchema,
+    /**
+     * The terminal status. Omit it and the server derives it from the stop
+     * reason, which is the mapping every caller would otherwise re-implement
+     * differently — `replanned` in particular is a SUCCESS.
+     */
+    status: dispatchRunStatusSchema.exclude(['running']).optional(),
+  })
+  .strict();
+export type V1DispatchRunCloseBody = z.infer<typeof dispatchRunCloseBodySchema>;

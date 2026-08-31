@@ -117,6 +117,16 @@ const GROUPS: readonly { key: string; label: string; test: (path: string) => boo
   // project's active sprint. Filing it under work items would put an endpoint no
   // `/api/v1/work-items/…` path leads to in the middle of the ones that do.
   { key: 'scope-claims', label: 'Scope claims', test: (p) => p.startsWith('/api/v1/scope-claims') },
+  // MOTIR-1792's dispatch-run ingest, beside the scope claim for the same
+  // reason: a run is addressed by its OWN id and acts on a SET of work items, so
+  // no `/api/v1/work-items/…` path leads to it. It reads AFTER the claim because
+  // that is the order an operator meets them — you claim a scope, then you
+  // report what you did with it.
+  {
+    key: 'dispatch-runs',
+    label: 'Dispatch runs',
+    test: (p) => p.startsWith('/api/v1/dispatch-runs'),
+  },
   { key: 'sprints', label: 'Sprints', test: (p) => p.startsWith('/api/v1/sprints') },
   {
     key: 'planning',

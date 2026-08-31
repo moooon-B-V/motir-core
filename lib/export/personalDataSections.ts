@@ -98,6 +98,7 @@ export type PersonalDataDelegate =
   | 'watcher'
   | 'commentMention'
   | 'publicFollow'
+  | 'dispatchRun'
   | 'comment'
   | 'workItem'
   | 'workItemRevision'
@@ -302,6 +303,25 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Saved filters the reader owns.',
     where: (userId) => ({ ownerId: userId }),
+  },
+  {
+    // Story MOTIR-1789 — the dispatch RUN record.
+    //
+    // ⚠️ EXPORTED RATHER THAN EXCLUDED, and the distinction is the person's own
+    // action. A run says *this person dispatched an agent over these work items,
+    // at this time, and it stopped for this reason* — durable history keyed to
+    // them by `createdById`, not the transient operational substrate the
+    // `PlanTargetLock` exclusion describes. It survives 30 days and outlives the
+    // work items it names, which is precisely what makes it a record.
+    //
+    // The LEGS and EVENTS are not separate sections: neither carries a User
+    // foreign key, so neither is user-keyed data. They belong to the RUN, and a
+    // run belongs to the workspace that owns the work.
+    table: 'dispatch_run',
+    model: 'dispatchRun',
+    tier: 'tenant',
+    basis: 'Agent runs this person started.',
+    where: (userId) => ({ createdById: userId }),
   },
   {
     table: 'saved_filter_star',

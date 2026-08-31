@@ -577,6 +577,25 @@ jobs:
       # ephemeral Postgres service container.
       - run: pnpm prisma generate
         if: steps.cache-prisma-build.outputs.cache-hit != 'true'
+      # ⚠️ THE BUILD'S HEAP IS RAISED IN THE `build` SCRIPT, and it is worth
+      # knowing why here, because this is the job that goes red. `next build`
+      # COMPILES and then runs TypeScript in a build worker, and node's default
+      # old-space is ~4.1GB for both phases together. The compile succeeds, the
+      # type check starts, and the worker dies with SIGABRT — a stack trace that
+      # names nothing in the diff.
+      #
+      # It is NOT a pathological type somebody added. Measured on one box, same
+      # toolchain, same node_modules, `tsc --noEmit --extendedDiagnostics` uses
+      # 5.36GB on `main` and 5.54GB with MOTIR-1789 on top: a 3.4% delta across
+      # 54 added files. The tree had simply grown to the edge, and the next story
+      # to land would have crossed it whichever one that was.
+      #
+      # The `typecheck` job above is the tell: it runs the SAME `tsc --noEmit`
+      # and passes, because it pays for the type check alone. Only the build pays
+      # for both, so only the build needed the ceiling raised. It is set in the
+      # `build` script rather than as `env:` here so that Vercel — which runs
+      # that script too — gets it as well; package.json cannot carry a comment,
+      # which is why the reasoning lives at this call site.
       - run: pnpm build
       # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
       # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly

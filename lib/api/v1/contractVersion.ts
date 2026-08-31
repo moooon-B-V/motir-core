@@ -258,5 +258,34 @@
  *   `origin/main` before merging and RENUMBER if a sibling has taken it since —
  *   the entry names the OPERATION rather than a position precisely so that stays
  *   one line (the 1.14.0 → 1.17.0 note above is the same process working).
+ *
+ * - `1.23.0` — MOTIR-1792 adds the DISPATCH RUN ingest: `openDispatchRun`
+ *   (`POST /api/v1/dispatch-runs`), `appendDispatchRunEvents`
+ *   (`POST …/{id}/events`) and `closeDispatchRun` (`POST …/{id}/close`), plus the
+ *   `DispatchRun` / `DispatchRunCard` / `DispatchRunOpened` / `DispatchRunAppended`
+ *   resources.
+ *
+ *   They exist because a run had nowhere to say what it did. A person types
+ *   `motir run <story>`, eleven cards go In Progress in one transaction, and the
+ *   whole account of which card is being worked, which were skipped and why, and
+ *   why the run stopped lives in a terminal on one machine until the window
+ *   closes. `docs/decisions/dispatch-run-record.md` is the contract.
+ *
+ *   ⚠️ THE SET RIDES IN THE OPEN, and that shape is the decision rather than a
+ *   convenience: it exists for exactly one moment, in one process — a scope claim
+ *   has just returned its members, or a batch snapshot has just been frozen — and
+ *   rebuilt afterwards from per-card events it degrades into a list of what the
+ *   run got round to, losing the SKIPPED cards entirely.
+ *
+ *   Additive: three new operations (§8's first allowed change) and four new
+ *   resources; no declared shape changed. Gated on `work_item:edit`, already in
+ *   `CLI_TOKEN_GRANT` — the grant is NOT widened. The ingest writes no work-item
+ *   status, no pull request and no cost, so nothing an existing operation reports
+ *   moves.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, per the rule the 1.22.0 entry
+ *   states: `V1_CONTRACT_VERSION` was `1.22.0` at `435bce9bd`, so this claims
+ *   `1.23.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATIONS rather than a position, precisely so that stays one line.
  */
-export const V1_CONTRACT_VERSION = '1.22.0';
+export const V1_CONTRACT_VERSION = '1.23.0';

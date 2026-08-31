@@ -109,6 +109,7 @@ import type {
 } from '@/lib/dto/plans';
 import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { buildScope } from '@/lib/planChange/scope';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
@@ -2433,6 +2434,62 @@ function generationActor(
   };
 }
 
+/**
+ * Record a SUBMITTED plan on the run whose agent produced it, when there is one
+ * (MOTIR-3981, `run-findings-protocol.md` Q5).
+ *
+ * ⚠️ EVERY ARM RETURNS QUIETLY. No source job, no session, a project-wide or
+ * multi-anchor scope, an anchor that no longer resolves, no open leg — every one
+ * of them is an ordinary plan that belongs to no run, which is most plans. The
+ * absence of a finding is the correct record, not a miss to log.
+ */
+async function recordSubmittedPlanFinding(
+  row: { id: string; projectId: string; sourceJobId: string | null },
+  proposalCount: number,
+  ctx: ServiceContext,
+): Promise<void> {
+  if (!row.sourceJobId) return;
+  try {
+    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndLastJobId(
+        row.projectId,
+        row.sourceJobId!,
+        ctx.workspaceId,
+        tx,
+      ),
+    );
+    if (!session) return;
+
+    // `scopeKey` is `buildScope`'s output — the deduped, sorted anchor keys
+    // joined by a comma — so it reads straight back with no second source of
+    // truth. Exactly one anchor, or this plan names no single leg.
+    const keys = session.scopeKey.split(',').filter(Boolean);
+    if (keys.length !== 1) return;
+
+    const [anchor] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifiers(row.projectId, [keys[0]!], tx),
+    );
+    if (!anchor) return;
+
+    await dispatchRunService.recordFinding(
+      {
+        anchorWorkItemId: anchor.id,
+        kind: 'plan_submitted',
+        findingId: row.id,
+        // The POINTER and the one number the row renders: what the reader is
+        // being asked to approve. Never the proposals themselves — the plan is
+        // a live row that can be revised, and a frozen copy would go stale
+        // while sitting in a log that claims to be current.
+        data: { planId: row.id, proposalCount },
+      },
+      ctx,
+    );
+  } catch {
+    // Best-effort, exactly like `recordFinding` itself: the plan is `planned`
+    // and nothing here may change that.
+  }
+}
+
 export const plansService = {
   /**
    * Open a `generating` Plan — the producer (7.4 generation / 7.11 re-planning)
@@ -2903,6 +2960,26 @@ export const plansService = {
         return { row: updated, count: n };
       },
     );
+
+    // WHAT THE RUN PRODUCED (MOTIR-3981, `run-findings-protocol.md` Q5). A plan
+    // that reaches `planned` while a dispatched agent's leg is open is that
+    // run's finding — the ASK the record could describe but never name, which is
+    // why `batchPlan.ts`'s skip label promises "a re-plan is waiting for you in
+    // Motir" and cannot say which one.
+    //
+    // ⚠️ ANCHORED, NOT GUESSED, and every hop is the one
+    // `approvePlanForWorkItem` already walks — in reverse. The plan's source job
+    // identifies the plan-change session; the session's `scopeKey` IS its anchor
+    // set (`buildScope` joins the sorted keys, so it reads straight back). A
+    // `motir plan --detach <KEY>` thread is anchored at exactly one key, and
+    // that is the only shape recorded: the project-wide scope is empty and a
+    // multi-anchor thread names no single leg, so both are skipped rather than
+    // attributed to whichever member happened to sort first.
+    //
+    // Post-commit and best-effort: the plan is `planned` and stays `planned`
+    // whatever happens here. `recordFinding` swallows its own failures.
+    await recordSubmittedPlanFinding(row, count, ctx);
+
     return toPlanDto(row, count);
   },
 

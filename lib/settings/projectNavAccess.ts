@@ -84,6 +84,12 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     evidence: '`workItemsService.listReady` / `countReady` assert no key past the browse gate.',
   },
   {
+    href: '/runs',
+    requires: 'browse-only',
+    evidence:
+      '`dispatchRunService.listRunsForProject` asserts `projectAccessService.assertCanBrowse` and nothing further; the page reads it directly and writes nothing.',
+  },
+  {
     href: '/boards',
     requires: 'browse-only',
     evidence: 'The page gates on `canBrowse`; the board WRITES are gated in `boardsService`.',

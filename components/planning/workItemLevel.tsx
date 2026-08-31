@@ -8,6 +8,7 @@ import {
   LevelGroupNode,
   LevelTruncationTile,
   WorkItemNode,
+  type RunLegBadge,
 } from '@/components/planning/WorkItemNode';
 import {
   workItemCrumbLabel,
@@ -120,6 +121,23 @@ export interface BuildWorkItemLevelOptions {
    * the ordinary case and the pre-MOTIR-3490 behaviour.
    */
   levelTotal?: number;
+  /**
+   * Each work item's DISPOSITION in a dispatch run, by work-item id (MOTIR-3895)
+   * — the run modal's canvas pane, and nothing else, supplies it.
+   *
+   * ⚠️ EXTENDING THIS ADAPTER IS THE REUSE. The alternative — casting a
+   * `DispatchRunCardDto` into a `ProjectCanvasNode` — is bug MOTIR-3152: the two
+   * shapes share no field name, the cast is from `unknown` so nothing type-checks
+   * it, and every node arrives with an undefined `content` that `renderNode`
+   * paints into a 0x0 box. The card was not blank, it was INVISIBLE, and the
+   * tests were green. So a run's extra fact rides HERE, on the builder every
+   * canvas consumer already goes through.
+   *
+   * The badge arrives already resolved to a tone and a localized label: this is a
+   * pure function with no translator and no tone map, exactly as
+   * `originCrumbLabel` and `groupCrumbLabel` are supplied rather than looked up.
+   */
+  runLegs?: ReadonlyMap<string, RunLegBadge>;
 }
 
 export function buildWorkItemLevel(
@@ -321,6 +339,7 @@ export function buildWorkItemLevel(
           progress={item.progress ?? null}
           here={item.id === activeId}
           ready={item.ready ?? false}
+          runLeg={opts.runLegs?.get(item.id) ?? null}
         />
       ),
     };

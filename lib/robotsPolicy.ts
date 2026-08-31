@@ -66,6 +66,8 @@ export const SIGNED_IN_SEGMENTS = [
   'ready',
   'reports',
   'roadmap',
+  // MOTIR-3923 — the runs index, and the eighteenth segment.
+  'runs',
   'settings',
   'sprints',
   'triage',

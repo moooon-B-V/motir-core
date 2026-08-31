@@ -191,6 +191,7 @@ export default async function IssueDetailPage({
     fullCtx: ctx,
     activityTab,
     canEdit,
+    itemIdentifier: item.identifier,
   });
 
   // ── TIER TWO: what the reader came for, awaited before the first flush ─────

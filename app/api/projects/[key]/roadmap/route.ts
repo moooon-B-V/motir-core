@@ -41,12 +41,35 @@ export async function GET(
   // absence, is the ordinary capped read; the service owns the ceiling it raises
   // to, so a forged value cannot widen the read past it.
   const all = search.get('all') === '1';
+  // `ids=<id>,<id>` — a level named by its MEMBERS rather than by a parent
+  // (MOTIR-3895). A dispatch run's set spans parents, so the run surface asks
+  // for exactly its members; every other level read is unchanged and this
+  // parameter is absent from all of them.
+  //
+  // De-duplicated here, CAPPED in the service — the ceiling lives with the read
+  // that owns it, so a hand-built URL cannot turn one level into a whole-tree
+  // fetch and the cap cannot drift from `all=1`'s. The service still applies the
+  // tenant gate, `report:view` and the archived/triage exclusions, so an id the
+  // actor may not see simply does not come back.
+  const idsParam = search.get('ids');
+  const ids =
+    idsParam === null
+      ? undefined
+      : [
+          ...new Set(
+            idsParam
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean),
+          ),
+        ];
 
   try {
     const project = await projectsService.getByKey(key, ctx);
     const roadmap = await workItemsService.getProjectRoadmap(project.id, parentId, ctx, {
       scope,
       all,
+      ...(ids !== undefined ? { ids } : {}),
     });
     return NextResponse.json(roadmap);
   } catch (err) {

@@ -8,7 +8,11 @@ import { CliError } from './errors.js';
 // Running the user's OWN coding agent (Subtask 7.9.3 · MOTIR-881). BYOK: the
 // agent binary, its credential, and its model are the user's — Motir launches
 // it, hands it the server-generated prompt, and reports its exit code. It never
-// reads the agent's credential and never inspects its output.
+// reads the agent's credential, and it inspects the agent's output only when
+// the operator has asked it to (`--report-log`; see TEEING below). That
+// sentence used to end "and never inspects its output", which stopped being
+// true the moment a caller could pass `onOutput` — amended rather than left to
+// contradict the code beneath it.
 //
 // The prompt is delivered BOTH ways, because agent CLIs disagree about how they
 // take input:
@@ -21,6 +25,15 @@ import { CliError } from './errors.js';
 // The child inherits stdout/stderr so its output STREAMS THROUGH live rather
 // than being buffered and replayed: a coding agent run is minutes long, and a
 // silent terminal is indistinguishable from a hang.
+//
+// ── TEEING the output ($MOTIR log bodies · MOTIR-3961) ─────────────────────
+// `inherit` hands the child our own file descriptors, so the output never
+// passes through this process and there is nothing to copy. When — and ONLY
+// when — a caller supplies `onOutput`, the two streams are PIPED instead and
+// every chunk is written through to the same place it would have gone anyway,
+// plus handed to the callback. With no callback the stdio is byte-identical to
+// what it always was, which is deliberate: the overwhelmingly common run does
+// not report bodies and must not pay for the ones that do.
 //
 // ── the agent's SELF-REPORT ($MOTIR_AGENT_REPORT · MOTIR-2419) ──────────────
 // One thing about a BYOK run only the agent can answer: WHICH MODEL ANSWERED.
@@ -99,6 +112,19 @@ export interface RunAgentOptions {
   /** The resolved checkout (or workspace root) the agent runs in. */
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Receive a COPY of the agent's stdout and stderr as they arrive.
+   *
+   * Supplying it switches the child's stdio from `inherit` to `pipe` — the
+   * output still reaches the terminal, through this process instead of around
+   * it. Omit it and nothing about the spawn changes.
+   *
+   * ⚠️ It is called from a stream handler, so it MUST NOT THROW and must not
+   * block: reporting is an observation of the run and may never fail it, change
+   * its exit code or slow the agent down. This function swallows a throw for
+   * the same reason, at the one place every chunk passes through.
+   */
+  onOutput?: (chunk: string) => void;
   /** Injectable seams for the tests — never overridden in production. */
   spawnFn?: (cmd: string, args: string[], opts: SpawnOptions) => ChildProcess;
   tempDirFactory?: () => string;
@@ -126,17 +152,41 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
 
   try {
     const result = await new Promise<Omit<AgentRunResult, 'model'>>((resolve, reject) => {
+      const tee = opts.onOutput;
       const child = spawnFn(opts.command.binary, opts.command.args, {
         cwd: opts.cwd,
         // stdin piped (we write the prompt); stdout/stderr inherited so the
-        // agent's output streams straight through to the user's terminal.
-        stdio: ['pipe', 'inherit', 'inherit'],
+        // agent's output streams straight through to the user's terminal —
+        // unless a caller wants a COPY, in which case they are piped and
+        // forwarded to the very same streams below.
+        stdio: ['pipe', tee ? 'pipe' : 'inherit', tee ? 'pipe' : 'inherit'],
         env: {
           ...(opts.env ?? process.env),
           MOTIR_PROMPT_FILE: promptFile,
           MOTIR_AGENT_REPORT: reportFile,
         },
       });
+
+      if (tee) {
+        // Forward FIRST, tee second: the terminal is the contract and the copy
+        // is the extra. A `pipe` nobody reads fills its buffer and stalls the
+        // child, so both streams are consumed unconditionally once piped.
+        const forward = (src: NodeJS.ReadableStream | null, sink: NodeJS.WritableStream): void => {
+          if (!src) return;
+          src.setEncoding('utf8');
+          src.on('data', (chunk: string) => {
+            sink.write(chunk);
+            try {
+              tee(chunk);
+            } catch {
+              /* an observation may never break the run it observes */
+            }
+          });
+          src.on('error', () => {});
+        };
+        forward(child.stdout, process.stdout);
+        forward(child.stderr, process.stderr);
+      }
 
       child.on('error', (err: NodeJS.ErrnoException) => {
         reject(

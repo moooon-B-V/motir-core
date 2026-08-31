@@ -145,6 +145,25 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'and held AUTHOR and DECIDE at once; the route followed its service, as the rule requires. ' +
     'This is the ONE work-loop operation whose key no MCP tool asserts, and deliberately so — ' +
     'a tool would hand approval to the very credential the bound above exists to keep out.',
+  openDispatchRun:
+    'MOTIR-1789 · MOTIR-1792 — the DISPATCH RUN ingest reports what a CLI invocation DID, and ' +
+    'its only writers are dispatch processes: `packages/cli` today, 9.1.7’s hosted orchestrator ' +
+    'with `origin: "hosted"` next. `packages/cli` retired its MCP transport in 11.5.6, so a ' +
+    'mirrored tool would be a second implementation with no caller. There is a second reason ' +
+    'here that the scope claim does not have: an MCP tool is the AGENT’s surface, and the agent ' +
+    'is the SUBJECT of a run rather than its reporter — handing it the ability to write its own ' +
+    'run record would let the thing being observed edit the observation. It takes ' +
+    '`work_item:edit`, the key every other work-loop write asserts, so no permission is invented.',
+  appendDispatchRunEvents:
+    'MOTIR-1789 · MOTIR-1792 — the same argument as `openDispatchRun`, and one degree sharper: ' +
+    'the event stream is the account of what the agent did, and an agent that could append to it ' +
+    'could write its own account. The reporter is the process AROUND the agent, which speaks ' +
+    '/api/v1. `work_item:edit`, mirroring the rest of the ingest.',
+  closeDispatchRun:
+    'MOTIR-1789 · MOTIR-1792 — the same argument again, plus a mechanical one: the close is ' +
+    'guarded by a row lock it shares with the server’s own abandoned-run reap, and a second ' +
+    'transport into that guard is a second place for the lock discipline to drift. ' +
+    '`work_item:edit`, mirroring the rest of the ingest.',
 };
 
 /**
@@ -182,13 +201,20 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
       [...Object.keys(MIRRORS), ...Object.keys(WORK_LOOP_UNMIRRORED)].sort(),
     );
     // …and the story's own audit named ten, plus MOTIR-2961's keyed claim,
-    // plus the THREE operations that deliberately have no counterpart
-    // (MOTIR-2421's implementation report, MOTIR-3017's plan approval and
-    // MOTIR-3049's scope claim). A count that drifted from the plan is worth
-    // failing on — a later operation joins these numbers deliberately, never
-    // silently.
+    // plus the SIX operations that deliberately have no counterpart
+    // (MOTIR-2421's implementation report, MOTIR-3017's plan approval,
+    // MOTIR-3049's scope claim and MOTIR-1792's three dispatch-run ingest
+    // operations). A count that drifted from the plan is worth failing on — a
+    // later operation joins these numbers deliberately, never silently.
+    //
+    // ⚠️ THE UNMIRRORED SET IS NOW LARGER THAN A LIST OF EXCEPTIONS, and that is
+    // a fact about the surface rather than a slipping standard: every addition
+    // since MOTIR-2961 serves the OPERATOR's loop, which speaks /api/v1, and the
+    // three newest are deliberately out of the AGENT's reach because the agent
+    // is the subject of a run rather than its reporter. Each still argues its
+    // case in `WORK_LOOP_UNMIRRORED` and each still mirrors a real permission.
     expect(Object.keys(MIRRORS)).toHaveLength(11);
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(14);
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(17);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

@@ -21,6 +21,13 @@ import {
   activityTotalsSchema,
   sessionCloseOutBodySchema,
   sessionCloseOutSchema,
+  dispatchRunAppendBodySchema,
+  dispatchRunAppendedSchema,
+  dispatchRunCardSchema,
+  dispatchRunCloseBodySchema,
+  dispatchRunOpenBodySchema,
+  dispatchRunOpenedSchema,
+  dispatchRunSchema,
 } from '@/lib/api/v1/workLoop/schema';
 
 // The WORK-LOOP operation declarations (Story 11.7 · Subtask 11.7.3 —
@@ -598,6 +605,132 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     errorStatuses: [404, 422],
   }),
+  // ── The DISPATCH RUN ingest (Story MOTIR-1789 · MOTIR-1792) ─────────────
+  //
+  // Three operations, PAT-authenticated like every other work-loop endpoint,
+  // because the reporter is a headless process on the operator's own machine.
+  // Shaped for a TRANSPORT rather than for the CLI: 9.1.7's hosted orchestrator
+  // becomes a second caller with `origin: "hosted"` and nothing else changes.
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs',
+    operationId: 'openDispatchRun',
+    summary: 'Open a dispatch run, with the SET of cards it owns',
+    description:
+      'OPEN one run of a Motir CLI command and record THE SET it owns: every card, in the ' +
+      'run’s own order, including the ones it has already decided to SKIP, each with its ' +
+      'reason. ' +
+      '⚠️ THE SET IS SETTLED HERE BECAUSE THIS IS THE ONE MOMENT IT EXISTS — a scope claim ' +
+      'has just returned its members, or a batch snapshot has just been frozen. Rebuilt ' +
+      'afterwards from per-card events it becomes a list of what the run got round to, and ' +
+      'the skipped cards vanish entirely. A single-card `motir next` is the degenerate case: ' +
+      'one card in the set. ' +
+      'IDEMPOTENT on `idempotencyKey`: a repeat returns the EXISTING run with ' +
+      '`created: false` rather than forking history, so a retry after a timeout is safe. ' +
+      'It records the run and NOTHING ELSE: it moves no work-item status, writes no pull ' +
+      'request and holds no cost.',
+    permission: 'work_item:edit',
+    parameters: [],
+    requestBody: {
+      schema: dispatchRunOpenBodySchema,
+      description:
+        'The command, its origin, the agent and model, an optional scope, an optional ' +
+        'idempotency key, and the ordered SET of cards.',
+    },
+    response: {
+      status: 201,
+      body: { kind: 'object', schema: dispatchRunOpenedSchema },
+      description: 'The run with its set and its resume cursor, and whether this call created it.',
+    },
+    // 404 for an unknown or cross-workspace project (no existence leak); 409 when
+    // two opens raced on one idempotency key; 422 for a malformed body or a card
+    // key this project does not have.
+    errorStatuses: [404, 409, 422],
+  }),
+
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/events',
+    operationId: 'appendDispatchRunEvents',
+    summary: 'Append a batch of events to a dispatch run',
+    description:
+      'APPEND events to a run’s ordered stream. Each is RUN-scoped, or CARD-scoped by naming a ' +
+      '`workItemKey` the run already owns — an event never ADDS a card to a run’s set, because ' +
+      'the set is the plan the run published. ' +
+      'The server assigns each event its `seq` inside ONE transaction, so a batch’s order ' +
+      'survives and the response’s `seq` is the cursor for the next append. Batch them: a ' +
+      'chatty agent must not cost one request per line. ' +
+      'An event may also carry the leg’s new `disposition` (plus `sessionBranch` / `exitCode`), ' +
+      'applied to that card in the SAME transaction — so a viewer sees a card go `implemented` ' +
+      'at the moment it happens rather than at close. ' +
+      '`body` is the OPT-IN log payload: send it only when the operator asked for it. It is ' +
+      'REFUSED above 16 KiB rather than truncated, and it is cleared 30 days after the event. ' +
+      'Appending to a run that has already closed is a conflict, not a silent no-op.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: dispatchRunAppendBodySchema,
+      description: 'Up to 200 events, in the order they happened.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunAppendedSchema },
+      description: 'How many events were written, the new cursor, and every leg this batch moved.',
+    },
+    // 404 for an unknown or cross-workspace run; 409 when the run is already
+    // closed; 413 for an over-sized log body; 422 for a malformed body, an
+    // unknown card key, or a run at its event ceiling.
+    errorStatuses: [404, 409, 413, 422],
+  }),
+
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/close',
+    operationId: 'closeDispatchRun',
+    summary: 'Close a dispatch run with its stop reason',
+    description:
+      'CLOSE the run: its terminal status, its `stopReason`, and every leg still unsettled — a ' +
+      '`queued` card becomes `not_reached` (the run never got to it) and a `running` one ' +
+      'becomes `failed` (the run ended while an agent was on it and nothing reported an ' +
+      'outcome). ' +
+      'Omit `status` and it is DERIVED from the stop reason, which is the mapping every caller ' +
+      'would otherwise re-implement differently: `halted` is the only failure, `interrupted` ' +
+      'is `cancelled`, and `replanned` is a SUCCESS — an agent that refused a card and ' +
+      'submitted a plan exited 0. ' +
+      'Guarded by a row lock and a re-read, so a close racing the server’s own abandoned-run ' +
+      'reap cannot overwrite an already-terminal answer; the loser is a conflict. ' +
+      'It writes NO work-item status — the CLI owns every transition.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: dispatchRunCloseBodySchema,
+      description: 'The stop reason, and optionally an explicit terminal status.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunSchema },
+      description: 'The closed run with its settled set.',
+    },
+    // 404 for an unknown or cross-workspace run; 409 when it is already closed;
+    // 422 for a malformed body.
+    errorStatuses: [404, 409, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -612,4 +745,8 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   Plan: planSchema,
   PlanSession: planSessionSchema,
   ActivityEntry: activityEntrySchema,
+  DispatchRun: dispatchRunSchema,
+  DispatchRunCard: dispatchRunCardSchema,
+  DispatchRunOpened: dispatchRunOpenedSchema,
+  DispatchRunAppended: dispatchRunAppendedSchema,
 };

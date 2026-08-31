@@ -54,10 +54,17 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.22.0";
+export const GENERATED_AGAINST = "1.23.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
+  "appendDispatchRunEvents": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/events",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "DispatchRunAppended",
+  },
   "appendPlanTurn": {
     method: "POST",
     path: "/api/v1/projects/{projectKey}/plan-session/turns",
@@ -92,6 +99,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:edit",
     successStatus: 200,
     responseComponent: "WorkItemClaim",
+  },
+  "closeDispatchRun": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/close",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "DispatchRun",
   },
   "completeSession": {
     method: "POST",
@@ -295,6 +309,13 @@ export const V1_OPERATIONS = {
     permission: "sprint:manage",
     successStatus: 200,
     responseComponent: "MembershipMoveResult",
+  },
+  "openDispatchRun": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs",
+    permission: "work_item:edit",
+    successStatus: 201,
+    responseComponent: "DispatchRunOpened",
   },
   "openPlanSession": {
     method: "POST",

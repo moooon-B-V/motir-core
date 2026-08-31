@@ -127,6 +127,7 @@ export const config = {
     '/ready/:path*',
     '/reports/:path*',
     '/roadmap/:path*',
+    '/runs/:path*',
     '/settings/:path*',
     '/sprints/:path*',
     '/triage/:path*',

@@ -25,6 +25,12 @@ import { parseAgentCommand } from '../src/agentProfiles.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 import { resolveFakeClaim } from './helpers/fakeClaim.js';
+import {
+  createDispatchRunReporter,
+  type DispatchRunReporter,
+  type OpenDispatchRunInput,
+} from '../src/dispatchRunReporter.js';
+import type { DispatchRunEventInput } from '../src/client.js';
 
 // `motir batch` — the FROZEN snapshot (Subtask 7.9.10 · MOTIR-888).
 //
@@ -326,6 +332,8 @@ interface DriveOptions {
   /** The BETWEEN-ITERATION gate (MOTIR-3695) — MOTIR-3685 hangs the CI watch
    *  here. Absent in production, so absent by default. */
   afterCard?: (record: BatchRecord) => Promise<'continue' | 'stop'>;
+  /** The run REPORTER (Story MOTIR-1789 · MOTIR-1794), when a test watches it. */
+  reporter?: DispatchRunReporter;
 }
 
 async function drive(
@@ -362,6 +370,7 @@ async function drive(
           ? { exitCode: 0, stdout: 'abc123\trefs/heads/subtask/pushed', stderr: '' }
           : { exitCode: 0, stdout: '', stderr: '' }),
     ...(drives.afterCard ? { afterCard: drives.afterCard } : {}),
+    ...(drives.reporter ? { reporter: drives.reporter } : {}),
   };
   const summary = await runBatch(input);
   return { summary, dispatched };
@@ -573,6 +582,154 @@ describe('motir batch — per-item pull requests', () => {
 });
 
 // ── what the snapshot leaves out ────────────────────────────────────────────
+
+/** A reporter that records what it was told, for the run-record assertions. */
+function recordingReporter(over: Partial<DispatchRunReporter> = {}): DispatchRunReporter & {
+  opens: OpenDispatchRunInput[];
+  events: DispatchRunEventInput[];
+  closed: string[];
+} {
+  const opens: OpenDispatchRunInput[] = [];
+  const events: DispatchRunEventInput[] = [];
+  const closed: string[] = [];
+  return {
+    opens,
+    events,
+    closed,
+    async open(input) {
+      opens.push(input);
+    },
+    async addCard() {},
+    event(e) {
+      events.push(e);
+    },
+    async flush() {},
+    async close(reason) {
+      closed.push(reason);
+    },
+    offline: false,
+    wantsLogBodies: false,
+    runId: 'run_1',
+    ...over,
+  };
+}
+
+describe('the RUN RECORD (Story MOTIR-1789 · MOTIR-1794)', () => {
+  it('opens with the FROZEN SNAPSHOT — taken in dispatch order AND every skip with its reason', async () => {
+    const server = new FakeServer([
+      { ...leaf('idS', 'PROD-5'), kind: 'story', type: null, executor: null },
+      leaf('idH', 'PROD-6', { type: 'manual' }),
+      leaf('idA', 'PROD-9'),
+      leaf('idB', 'PROD-10'),
+    ]);
+    const reporter = recordingReporter();
+
+    const { summary } = await drive(server, { reporter });
+
+    expect(reporter.opens).toHaveLength(1);
+    const open = reporter.opens[0]!;
+    expect(open.command).toBe('batch');
+    // ⚠️ BOTH HALVES, and the SKIPS are the half that matters. Nothing that
+    // happens later could reconstruct them, because nothing happens to a card
+    // that was never dispatched — so if they do not ride the open they are gone.
+    expect(open.cards).toEqual([
+      { key: 'PROD-9', disposition: 'queued' },
+      { key: 'PROD-10', disposition: 'queued' },
+      { key: 'PROD-5', disposition: 'skipped', skipReason: 'needs_planning' },
+      { key: 'PROD-6', disposition: 'skipped', skipReason: 'needs_human' },
+    ]);
+    // The set the reporter was given IS the snapshot the summary renders — not a
+    // second enumeration that could disagree with it.
+    expect(open.cards.filter((c) => c.disposition === 'skipped').map((c) => c.key)).toEqual(
+      summary.skipped.map((sk) => sk.key),
+    );
+    expect(reporter.events.find((e) => e.kind === 'snapshot_frozen')?.data).toEqual({
+      taken: 2,
+      skipped: 2,
+    });
+    expect(reporter.closed).toEqual(['completed']);
+  });
+
+  it('carries a run id of the SAME shape every other path uses', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-9')]);
+    const reporter = recordingReporter();
+    await drive(server, { reporter });
+
+    // `runIdFromDate`'s shape — `YYYYMMDD-HHMMSS`. `batch` is the one path with
+    // no session branch to derive an id from, so it mints one through the SAME
+    // function rather than inventing a second identity scheme.
+    expect(reporter.opens[0]?.runId).toMatch(/^\d{8}-\d{6}$/);
+  });
+
+  it('reports the STOP REASON the drain actually ended with', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-9'), leaf('idB', 'PROD-10')]);
+    const reporter = recordingReporter();
+
+    await drive(server, {
+      reporter,
+      opts: { max: '1' },
+    });
+
+    expect(reporter.closed).toEqual(['max']);
+  });
+
+  it('completes the whole drain with the reporting API returning 500', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-9'), leaf('idB', 'PROD-10')]);
+    const failing = (): never => {
+      throw new Error('500 Internal Server Error');
+    };
+    const warnings: string[] = [];
+
+    // ⚠️ THE REAL REPORTER, over a FAILING API — which is the failure the
+    // acceptance criterion names, and the one an operator actually meets. The
+    // guarantee lives in ONE place by construction (`createDispatchRunReporter`
+    // swallows every failure), and this asserts it END TO END: the agent still
+    // ran, the cards still moved, the summary is unchanged, and the process
+    // learned about it in one line.
+    const { summary, dispatched } = await drive(server, {
+      reporter: createDispatchRunReporter({
+        client: {
+          openDispatchRun: failing,
+          appendDispatchRunEvents: failing,
+          closeDispatchRun: failing,
+        },
+        warn: (m) => warnings.push(m),
+      }),
+    });
+
+    expect(dispatched).toEqual(['PROD-9', 'PROD-10']);
+    expect(summary.records.map((r) => r.outcome)).toEqual(['implemented', 'implemented']);
+    expect(summary.stopReason).toBe('completed');
+    expect(server.transitions.map((t) => t.status)).toContain('implemented');
+    // One line, once — not one per event across a two-card drain.
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('completes the whole drain with the server UNREACHABLE', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-9')]);
+    const unreachable = (): never => {
+      const err = new Error('connect ECONNREFUSED 127.0.0.1:3000');
+      (err as { code?: string }).code = 'ECONNREFUSED';
+      throw err;
+    };
+
+    const { summary, dispatched } = await drive(server, {
+      reporter: createDispatchRunReporter({
+        client: {
+          openDispatchRun: unreachable,
+          appendDispatchRunEvents: unreachable,
+          closeDispatchRun: unreachable,
+        },
+        warn: () => {},
+      }),
+    });
+
+    // An OFFLINE machine is a first-class state, not an error: the run is the
+    // user's actual work and the record is an observation of it.
+    expect(dispatched).toEqual(['PROD-9']);
+    expect(summary.records.map((r) => r.outcome)).toEqual(['implemented']);
+  });
+});
 
 describe('motir batch — exclusions', () => {
   it('excludes an integrated-dep item and an unexpanded story, and names both', async () => {

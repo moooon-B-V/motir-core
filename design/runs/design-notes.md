@@ -279,8 +279,14 @@ stays readable after its subject is gone). Neither is styled as a problem.
 
 **The wait and the failure are separate faces** (panel 5). _We could not load this_ and _nothing has
 run_ are opposite facts and must never share one. The frame is **an in-page `<Suspense>`, never a
-`loading.tsx`** — a route-level boundary here would sit above `/runs/[id]`, flush the response head,
-and turn that page's 404 into a 200.
+`loading.tsx`**. ⚠️ That rule used to be justified here by `/runs/[id]` — a route-level boundary
+would sit above it, flush the response head and turn its 404 into a 200 — and **that route no longer
+exists**, so the reason went stale when the run view became an overlay. The rule stands on the
+decision that was always the load-bearing one: `design/shell/design-notes.md` § _the
+navigation-pending grammar_ settles it for the whole group — every page's frame is its own in-page
+`<Suspense>`, placed after the page's own gate, and **no `loading.tsx` is added under
+`app/(authed)`** at all. `tests/navigation/loading-boundary-guard.test.ts` keeps its known-debt list
+empty.
 
 ### The run MODAL — full screen over `/runs`, opened from a row
 

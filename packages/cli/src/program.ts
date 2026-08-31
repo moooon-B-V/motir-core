@@ -268,6 +268,13 @@ export function buildProgram(): Command {
       '--auto-approve-replan',
       'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
     )
+    // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ────────
+    // Same words on all four commands: the boundary it moves is the same
+    // boundary whichever one a person types.
+    .option(
+      '--report-log',
+      'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+    )
     .action(nextCommand);
   register(program, 'run')
     .option(
@@ -335,6 +342,13 @@ export function buildProgram(): Command {
       '--kinds <list>',
       'Not supported — a scoped run drains the whole claimed set, not a filtered subset.',
     )
+    // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ────────
+    // Same words on all four commands: the boundary it moves is the same
+    // boundary whichever one a person types.
+    .option(
+      '--report-log',
+      'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+    )
     .action(runCommand);
   register(program, 'auto')
     .option('--agent <cmd>', 'Run THIS agent command on every prompt (overrides MOTIR_AGENT).')
@@ -395,6 +409,13 @@ export function buildProgram(): Command {
     )
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `autoCommand`'s injectable-deps parameter.
+    // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ────────
+    // Same words on all four commands: the boundary it moves is the same
+    // boundary whichever one a person types.
+    .option(
+      '--report-log',
+      'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+    )
     .action((opts) => autoCommand(opts));
   register(program, 'batch')
     .option('--agent <cmd>', 'Run THIS agent command on every prompt (overrides MOTIR_AGENT).')
@@ -453,6 +474,13 @@ export function buildProgram(): Command {
     )
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `batchCommand`'s injectable-deps parameter.
+    // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ────────
+    // Same words on all four commands: the boundary it moves is the same
+    // boundary whichever one a person types.
+    .option(
+      '--report-log',
+      'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+    )
     .action((opts) => batchCommand(opts));
   // The planning front door. NOT a dispatch command: it changes the PLAN (a
   // conversation whose submit produces proposals awaiting approval in Motir),

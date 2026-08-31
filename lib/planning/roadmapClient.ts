@@ -195,9 +195,17 @@ export async function fetchRoadmapLevel(
   scope: RoadmapScope = 'project',
   signal?: AbortSignal,
   all = false,
+  /**
+   * A level named by its MEMBERS rather than by a parent (MOTIR-3895) — the
+   * dispatch run's set, which spans parents because `motir batch` and
+   * `motir auto` take whatever was ready. Supplied, it REPLACES the parent
+   * predicate; absent, this call is byte-for-byte the shipped read.
+   */
+  ids?: readonly string[],
 ): Promise<RoadmapLevelData> {
   const params = new URLSearchParams();
   if (parentId) params.set('parentId', parentId);
+  if (ids !== undefined) params.set('ids', ids.join(','));
   if (scope === 'sprint') params.set('scope', 'sprint');
   // Only ever set after the reader has asked for it (MOTIR-3490) — the default
   // read stays the capped one, so nothing gets slower for the levels that fit.

@@ -118,6 +118,36 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 404 answers "there is no such resource *for you*". (ADR §4.)
   NOT_A_MEMBER: 404,
 
+  // ── Story MOTIR-1789, the DISPATCH RUN ingest (MOTIR-1792) ────────────────
+  // Every row is driven through the wrapper by a real service error in
+  // `tests/api/v1/dispatch-runs-route.test.ts` — an unproven row is
+  // indistinguishable from a missing one, and a missing one is a silent 500.
+  //
+  // 404 for a run in another workspace as well as one that never existed: RLS
+  // makes the read return nothing, so the service cannot tell the two apart even
+  // if it wanted to. The existence-oracle contract falls out of the tenancy gate
+  // rather than being re-implemented on top of it (ADR §4).
+  DISPATCH_RUN_NOT_FOUND: 404,
+  // 409 — the run is already closed. Well-formed, and would have been accepted a
+  // moment earlier, which is what a conflict means. Raised by BOTH the append and
+  // the close from the SAME locked read.
+  DISPATCH_RUN_TERMINAL: 409,
+  // 409 — two opens raced on one idempotency key. The ordinary repeat is not this
+  // (it returns the existing run); this is the narrow window in which the unique
+  // index is the arbiter, and it exists so a `P2002` never escapes as a bare 500.
+  DUPLICATE_DISPATCH_RUN: 409,
+  // 422 — an event names a card the run does not own. A client bug rather than a
+  // card to add: the SET is the plan the run published, and letting it grow
+  // behind that plan would defeat the record.
+  UNKNOWN_DISPATCH_RUN_CARD: 422,
+  // 413 — an over-sized opt-in log body. REFUSED rather than truncated: a
+  // silently shortened log reads as the whole tail, and the line that mattered is
+  // the one that was cut.
+  DISPATCH_RUN_BODY_TOO_LARGE: 413,
+  // 422 — the run has reached its per-run event ceiling, the bound that makes
+  // accepting a log body safe at all. The run stays closable.
+  DISPATCH_RUN_EVENT_LIMIT: 422,
+
   // ── Story 11.2, the work-item resource ────────────────────────────────────
   // Each row is added deliberately and each is exercised by a test that drives
   // the REAL error through the wrapper — an unproven row is indistinguishable

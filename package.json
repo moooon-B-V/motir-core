@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.2.2",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/migrate-deploy.mjs && next build",
+    "build": "prisma generate && node scripts/migrate-deploy.mjs && NODE_OPTIONS=--max-old-space-size=6144 next build",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",

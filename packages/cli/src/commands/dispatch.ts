@@ -10,7 +10,8 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
-import { runCiWatchPhase } from '../ciWatch.js';
+import { createDispatchRunReporter } from '../dispatchRunReporter.js';
+import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, runIdFromDate, sessionBranchName, type CommandRunner } from '../git.js';
 import {
@@ -20,7 +21,7 @@ import {
   resolveScopeTarget,
   type ScopeRunOptions,
 } from './scope.js';
-import { openChildrenHoldReason, renderOpenChildrenHold } from '../scopedRun.js';
+import { openChildrenHoldReason, orderClaimedSet, renderOpenChildrenHold } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
 import { closeOutRepos, parseMax, requireAgent } from './auto.js';
@@ -44,7 +45,14 @@ import {
   type FindingsPolicyOptions,
   type PromptEchoOptions,
 } from '../dispatch.js';
-import type { DispatchItem, DispatchPrompt, MotirClient, WorkItemClaim } from '../client.js';
+import type {
+  DispatchEventKind,
+  DispatchItem,
+  DispatchPrompt,
+  DispatchStopReason,
+  MotirClient,
+  WorkItemClaim,
+} from '../client.js';
 
 // `motir next` / `motir run <key>` / `motir done <key>` — SINGLE DISPATCH
 // (Story 7.9 · Subtask 7.9.3 · MOTIR-881). The heart of the CLI: take one work
@@ -111,6 +119,19 @@ export interface DeliveryOptions extends FindingsPolicyOptions, PromptEchoOption
    * commander's `unknown option` (MOTIR-1828 / MOTIR-1830).
    */
   autoApproveReplan?: boolean;
+  /**
+   * `--report-log` — ALSO send the agent's output to Motir (Story MOTIR-1789 ·
+   * MOTIR-1794), so a failed run shows its tail on the run page.
+   *
+   * ⚠️ OFF BY DEFAULT, AND THE DEFAULT IS THE PROMISE. A BYOK run executes on
+   * the operator's own machine, against a checkout Motir has never seen, under a
+   * key Motir does not hold; its log carries file paths, source excerpts, error
+   * output and possibly environment secrets. Without this flag the lifecycle
+   * goes and no body does — the stripping is enforced in ONE place, in the
+   * reporter, because a call site that forgot would leak and there are dozens.
+   * `docs/decisions/dispatch-run-record.md` Q4 is the decision.
+   */
+  reportLog?: boolean;
 }
 
 /**
@@ -243,6 +264,10 @@ export function echoPromptIfAsked(
 
 interface DeliverInput {
   session: ProjectSession;
+  /** Which command converged here — the one thing `next` and `run` differ in
+   *  that the run RECORD has to know, so a person reading a run page can tell a
+   *  picked card from a named one. */
+  command: 'next' | 'run';
   key: string;
   title: string | null;
   dispatch: DispatchPrompt;
@@ -339,6 +364,29 @@ async function deliver(input: DeliverInput): Promise<void> {
   // implements them. `motir batch` runs the same function; what each command
   // does with the VERDICT is where they legitimately differ, and that stays
   // here.
+  // THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) — opened here, with a SET OF
+  // ONE, which is the degenerate case of the same object a scoped run opens with
+  // eleven. It carries the run id `runIdFromDate` already produced, so the branch
+  // a reviewer sees and the run row in Motir name the same run.
+  //
+  // ⚠️ EVERYTHING BELOW IS BEST-EFFORT AND CANNOT FAIL THIS DISPATCH. The
+  // reporter swallows its own failures by construction; there is deliberately no
+  // error handling at this call site, because handling would imply there is
+  // something a caller could do.
+  const reporter = createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
+  await reporter.open({
+    projectKey,
+    command: input.command,
+    runId: runIdFromDate((deps.now ?? (() => new Date()))()),
+    cards: [{ key, disposition: 'queued' }],
+    // `agent` is non-null here by construction — the PRINT arm above returns
+    // before this line, and printing a prompt is not a run. Written flat rather
+    // than guarded, because a guard on a value that cannot be null is a branch
+    // no test can reach and a reader has to stop and disprove.
+    agent: agent.parsed.binary,
+  });
+  reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
+
   const verdict = await runDispatchLeg({
     client,
     rootDir: link.dir,
@@ -348,6 +396,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     targets,
     primary: target,
     sessionBranch: dispatch.sessionBranch,
+    reporter,
     onMaterialization: (lines: string[]) => {
       for (const line of lines) info(line);
     },
@@ -359,6 +408,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   });
 
   if (verdict.kind === 'checkout_unavailable') {
+    await reporter.close('halted');
     process.exitCode = 1;
     return;
   }
@@ -371,6 +421,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     info(renderAgentFailure(key, verdict.exitCode, dispatch));
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
     // must be able to tell a failed run from a successful one.
+    await reporter.close('halted');
     process.exitCode = verdict.exitCode;
     return;
   }
@@ -387,6 +438,10 @@ async function deliver(input: DeliverInput): Promise<void> {
     // record a local opinion about a card the server already holds back.
     info('');
     info(renderReplanSubmitted(key));
+    // ⚠️ `replanned`, NOT `halted`. The agent read its card, found the premise
+    // false, submitted a plan and exited 0 — a CORRECT outcome, and a run summary
+    // that called it a failure would teach an operator to ignore failures.
+    await reporter.close('replanned');
     return;
   }
 
@@ -400,6 +455,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     addExclude(serverUrl, projectKey, { key });
     info('');
     info(renderNothingPushed(key, dispatch));
+    await reporter.close('completed');
     return;
   }
 
@@ -420,6 +476,12 @@ async function deliver(input: DeliverInput): Promise<void> {
   } else {
     await client.transitionStatus({ key, status: IMPLEMENTED });
   }
+  reporter.event({
+    kind: 'card_settled',
+    workItemKey: key,
+    disposition: 'implemented',
+    ...(dispatch.sessionBranch ? { sessionBranch: dispatch.sessionBranch } : {}),
+  });
   removeExclude(serverUrl, projectKey, key);
 
   // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
@@ -458,8 +520,44 @@ async function deliver(input: DeliverInput): Promise<void> {
   // ⚠️ NON-ZERO on a give-up, and it must be obvious it gave up rather than
   // succeeded: the card is at `implemented` either way, and a script wrapping
   // `motir run` can only tell the two apart by the exit code.
+  // ⚠️ TWO TOTAL LOOKUPS, NOT TWO CONDITIONALS. Both are keyed on the watch's
+  // own closed vocabulary, so adding a `CiWatchOutcome` member is a TYPE ERROR
+  // here rather than a silent fall-through to the `else` — the same totality the
+  // ADR asks of every renderer of a closed enum. It also adds no branch to a
+  // function whose per-file coverage gate is real: a ternary here would be an
+  // arm no test reaches, on a tail that already has one.
+  reporter.event({ kind: CI_WATCH_EVENT[watch.kind], workItemKey: key, data: watch });
   if (watch.kind === 'gave_up' || watch.kind === 'fix_failed') process.exitCode = 1;
+  await reporter.close(CI_WATCH_STOP_REASON[watch.kind]);
 }
+
+/**
+ * The run event each CI-watch outcome produces — TOTAL over `CiWatchOutcome`.
+ *
+ * `nothing` reports a `ci_verdict` like the rest: *there was nothing to watch*
+ * is a verdict a person reading a run page needs, and it is NOT the same as
+ * green (`ciWatch.ts` says so in its own words — a card whose pull requests are
+ * unknown to this build has not been shown to pass).
+ */
+const CI_WATCH_EVENT = {
+  green: 'ci_verdict',
+  nothing: 'ci_verdict',
+  gave_up: 'ci_gave_up',
+  fix_failed: 'ci_gave_up',
+} as const satisfies Record<CiWatchOutcome['kind'], DispatchEventKind>;
+
+/**
+ * The run's stop reason for each CI-watch outcome — TOTAL over the same union.
+ *
+ * `halted` ONLY on a give-up. A green watch, and a run with nothing to watch,
+ * both ended the way they meant to.
+ */
+const CI_WATCH_STOP_REASON = {
+  green: 'completed',
+  nothing: 'completed',
+  gave_up: 'halted',
+  fix_failed: 'halted',
+} as const satisfies Record<CiWatchOutcome['kind'], DispatchStopReason>;
 
 /**
  * Refuse `--auto-approve-replan` on a command with no loop to continue into —
@@ -521,6 +619,7 @@ export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): P
     });
     await deliver({
       session,
+      command: 'next',
       key: item.key,
       title: item.title,
       dispatch,
@@ -675,6 +774,42 @@ export async function runCommand(
       const runId = runIdFromDate((deps.now ?? (() => new Date()))());
       const branch = sessionBranchName(runId);
       const run = deps.run ?? execCommand;
+
+      // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────
+      //
+      // ⚠️ OPENED WITH THE CLAIM'S FULL MEMBER SET, IN `orderClaimedSet` ORDER,
+      // and this is the operation the whole record is shaped around. The claim
+      // has just locked every member — including the ones that are not startable
+      // yet — and the order has just been computed from edges the run already
+      // holds. That knowledge exists for exactly one moment, in one process:
+      // rebuilt afterwards from per-card events it becomes a list of what the
+      // run got round to, and the SKIPPED cards vanish entirely.
+      //
+      // The order comes from the SAME `orderClaimedSet` the drain uses, so the
+      // positions a person reads on the run page are the order the drain
+      // actually worked. Nothing is re-queried to produce it.
+      const reporter = createDispatchRunReporter({
+        client,
+        reportLogBodies: opts.reportLog === true,
+      });
+      const claimOrder = orderClaimedSet(
+        claimed.ready.map((m) => m.key),
+        claimed.edges,
+      );
+      await reporter.open({
+        projectKey: session.projectKey,
+        command: 'run_scope',
+        runId,
+        cards: claimOrder.map((key) => ({ key, disposition: 'queued' as const })),
+        ...(decision.target.kind === 'work_item' ? { scopeKey: decision.target.key } : {}),
+        scopeLabel: claimed.claim.scope.name,
+        agent: agent.parsed.binary,
+      });
+      reporter.event({
+        kind: 'scope_claimed',
+        data: { outcome: claimed.claim.outcome, members: claimOrder.length },
+      });
+
       const summary = await drainScope({
         session,
         opts,
@@ -687,6 +822,7 @@ export async function runCommand(
         run,
         clock: deps.clock ?? Date.now,
         runAgentFn: deps.runAgentFn ?? runAgent,
+        reporter,
       });
       // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
       // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
@@ -710,6 +846,18 @@ export async function runCommand(
       // pull request, one CI run" is exactly true for a single-repo scope only.
       // Under a hold it still PUSHES every branch and opens none.
       closeOutRepos(summary, run, hold);
+      // Each repository's session pull request, with the outcome the close-out
+      // reported — `opened` · `existing` · `failed` · `empty` · `held`. `held`
+      // is the one the RUN chose rather than observed, and it is the one a person
+      // reading a run page most needs to see.
+      for (const pr of summary.prs) {
+        reporter.event({
+          kind: 'session_pr',
+          data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
+        });
+      }
+      reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
+      await reporter.close(summary.stopReason);
       info('');
       info(renderAutoSummary(summary));
       info(renderFindingsPolicy(opts));
@@ -761,6 +909,7 @@ export async function runCommand(
     });
     await deliver({
       session,
+      command: 'run',
       key: item.identifier,
       title: item.title,
       dispatch,

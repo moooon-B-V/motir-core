@@ -149,6 +149,8 @@ describe('the curated overview', () => {
                                   overrides.
         files                     The files Motir keeps: the credential store, the
                                   project link, the exclude list.
+        runs                      What a dispatch run records, where to watch it, and
+                                  what leaves your machine.
 
       FLAGS:
         -v, --version             Print the CLI version.
@@ -173,7 +175,7 @@ describe('the curated overview', () => {
 
       LEARN MORE:
         Use \`motir <command> --help\` for the flags of a single command.
-        Use \`motir help <topic>\` for a topic: environment, files.
+        Use \`motir help <topic>\` for a topic: environment, files, runs.
         Read packages/cli/README.md in the Motir checkout for the full guide.
       "
     `);
@@ -239,7 +241,7 @@ describe('group membership', () => {
       'plan',
       'done',
     ]);
-    expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files']);
+    expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files', 'runs']);
   });
 
   it('drops a command registered WITHOUT a group into ADDITIONAL COMMANDS', () => {
@@ -301,8 +303,8 @@ describe('per-command help stays commander’s own', () => {
 });
 
 describe('help topics', () => {
-  it('registers exactly the environment and files topics', () => {
-    expect(HELP_TOPICS.map((topic) => topic.name)).toEqual(['environment', 'files']);
+  it('registers exactly the environment, files and runs topics', () => {
+    expect(HELP_TOPICS.map((topic) => topic.name)).toEqual(['environment', 'files', 'runs']);
     expect(findHelpTopic('nope')).toBeUndefined();
   });
 
@@ -366,7 +368,7 @@ describe('help topics', () => {
     expect(printed).not.toContain('Usage: motir files');
   });
 
-  it('surfaces both topics in the overview so they are discoverable', () => {
+  it('surfaces every topic in the overview so they are discoverable', () => {
     const overview = render(buildProgram());
     const listed = commandGroups(overview).get(HELP_GROUP.topics) ?? [];
 
@@ -375,7 +377,8 @@ describe('help topics', () => {
     // rather than the whole line.
     expect(overview).toContain('Environment variables Motir reads');
     expect(overview).toContain('The files Motir keeps');
-    expect(overview).toContain('Use `motir help <topic>` for a topic: environment, files.');
+    expect(overview).toContain('What a dispatch run records');
+    expect(overview).toContain('Use `motir help <topic>` for a topic: environment, files, runs.');
   });
 });
 
