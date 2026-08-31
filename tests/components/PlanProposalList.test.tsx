@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { planReviewItem } from '../helpers/planReview';
@@ -464,4 +464,52 @@ describe('every item shape opens the same read view', () => {
       expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
     });
   }
+});
+
+// ── CLOSING RETURNS FOCUS TO THE ROW (MOTIR-4022 · MOTIR-4026) ────────────────
+//
+// The E2E walk found this and it is asserted here too, because the E2E is a
+// RECEIPT and this is the regression surface: after opening a row with Enter and
+// pressing Escape, focus was returned to NOTHING and a keyboard user had to Tab
+// from the top of the page. The dialog is mounted inside this list, so its
+// unmount lands in the same commit that re-renders the rows and the shipped
+// `Modal`'s own restore fires before the row it should return to is settled.
+describe('closing the quick view', () => {
+  it('returns focus to the row that opened it', async () => {
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    const row = screen.getByRole('button', { name: 'Open New · A proposed story' });
+
+    row.focus();
+    fireEvent.click(row);
+    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /close/i }));
+
+    // The restore is deferred one frame, past the unmount it would otherwise race.
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('returns focus to the RIGHT row when a second one was opened', async () => {
+    // The ref must follow the trigger, not the first row that ever opened one —
+    // the failure mode a single-row test cannot see.
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    const second = screen.getByRole('button', { name: /^Open MOTIR-812/ });
+    fireEvent.click(second);
+    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.activeElement).toBe(second);
+  });
 });
