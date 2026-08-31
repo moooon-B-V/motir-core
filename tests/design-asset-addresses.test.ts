@@ -236,6 +236,19 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── A route on a DIFFERENT host, kept in the unified chrome's nav ─────────
+  // `design/public-site/` (MOTIR-3880) draws the ONE chrome every motir.co
+  // surface wears, and the shipped `Design` showcase nav item resolves on
+  // motir.co — it is a motir-marketing route (MOTIR-3861), not one this repo's
+  // `app/**` tree serves. The chrome keeps the item as shipped; the address is
+  // real on the brand host and absent here, so this repo's route inventory
+  // cannot resolve it. Permanent rather than forward-looking: the route already
+  // ships, in the other repository.
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/design',
+    why: 'The `Design` showcase nav item, a motir-marketing route (MOTIR-3861) that does not live in motir-core. The unified chrome keeps the shipped nav item; the address resolves on motir.co, not in this repo, so the route inventory cannot resolve it.',
+  },
   // ── Prose that names an address without using it ──────────────────────────
   {
     file: 'design/agent-sandbox/design-notes.md',
