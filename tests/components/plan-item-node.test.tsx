@@ -98,6 +98,36 @@ describe('PlanItemNode', () => {
     expect(screen.getByText('+1 more')).toBeTruthy();
   });
 
+  // MOTIR-4030 — the diff-line's field label and struck OLD value were painted
+  // `--el-text-muted` at `text-xs` on a `--el-surface` card (4.12–4.34:1, below
+  // AA). Both now resolve `--el-text-secondary` (6.18–6.80:1); the strike stays,
+  // because `line-through` — a non-hue channel — is what carries "old".
+  it('draws the diff-line label and struck old value in secondary ink, not muted', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_aa',
+          identifier: 'PROD-40',
+          title: 'Seller onboarding',
+          status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
+          changes: [{ field: 'title', from: 'Invoice templates', to: 'Billing setup' }],
+        })}
+      />,
+    );
+
+    const label = screen.getByText('Title');
+    expect(label.className).toContain('text-(--el-text-secondary)');
+    expect(label.className).not.toContain('text-(--el-text-muted)');
+
+    const struck = screen.getByText('Invoice templates');
+    expect(struck.className).toContain('text-(--el-text-secondary)');
+    expect(struck.className).toContain('line-through');
+    expect(struck.className).not.toContain('text-(--el-text-muted)');
+  });
+
   it('renders a remove with a struck-through title + status pill', () => {
     renderWithIntl(
       <PlanItemNode

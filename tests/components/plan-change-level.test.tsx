@@ -143,6 +143,20 @@ describe('decoratePlanChangeLevel', () => {
     expect(screen.getByText('Send invoice')).toBeTruthy();
   });
 
+  it('strikes a REMOVED title in secondary ink, not muted (MOTIR-4030)', () => {
+    const level = decorate(REVIEW);
+    const removed = level.nodes.find((n) => n.id === 'wi-14')!;
+
+    renderWithIntl(<>{removed.content}</>);
+    const node = screen.getByTestId('plan-change-diff-node');
+    // The frame colours the wrapped node's `data-node-title` through a descendant
+    // selector. Muted on the card surface (4.12–4.34:1) fails AA; secondary
+    // (6.18–6.80:1) clears it. The strike is kept — it, not the ink, says "gone".
+    expect(node.className).toContain('[&_[data-node-title]]:text-(--el-text-secondary)');
+    expect(node.className).toContain('[&_[data-node-title]]:line-through');
+    expect(node.className).not.toContain('[&_[data-node-title]]:text-(--el-text-muted)');
+  });
+
   it('leaves an untouched, unfinished item with no diff chrome at all', () => {
     const level = decoratePlanChangeLevel(
       buildWorkItemLevel(LEVEL),

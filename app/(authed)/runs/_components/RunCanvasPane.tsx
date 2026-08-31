@@ -139,7 +139,14 @@ export function RunCanvasPane({
       // ── The opt-in props, each a decision (`design-notes.md` § The run MODAL) ──
       // `searchable` ON: a batch run can hold forty members, and finding one by key
       //   is the reader's first question. The canvas owns `/`; the dialog owns ESC.
+      //   ⚠️ `searchLabel` travels WITH it — the props are a discriminated union
+      //   (`{ searchable: true; searchLabel: string }`), so the two cannot come
+      //   apart. The canvas requires the consumer to supply the copy rather than
+      //   defaulting it, for the reason MOTIR-4021 records one file over: the
+      //   shipped default names a READY FRONTIER, which is a roadmap fact and not
+      //   a run one. This surface searches a RUN's members, so it says so.
       searchable
+      searchLabel={t('searchLabel')}
       // `locatable` OFF: it centres on the `here` / `ready` frontier, which are
       //   ROADMAP facts about the tree. On a run the equivalent question is "what is
       //   the agent working", and that is the flowing edge's job — two controls

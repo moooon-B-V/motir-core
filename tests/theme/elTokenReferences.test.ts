@@ -31,13 +31,16 @@ import { describe, expect, it } from 'vitest';
 // the next one.
 //
 // ── Scope ───────────────────────────────────────────────────────────────────
-// `components/planning/` in this pull request, deliberately: the story that found
-// the defect owns the surface it found it on, and widening later is then a
-// decision somebody can SIZE rather than discover. The pull request body reports
-// what a repo-wide run returns.
+// Widened from `components/planning` to the whole app source (MOTIR-4032): the
+// story that found the defect shipped the guard scoped to the surface it found
+// it on, and the widening was sized rather than discovered — a repo-wide run
+// over these three roots returns exactly ONE other undefined name (`--el-page`,
+// two sites), which that bug fixed. The three roots are every directory a
+// shipped `--el-*` reference can live in; `node_modules`, `.next` and the
+// compiled `dist/` are out of scope by construction (they are not listed).
 
 const ROOT = process.cwd();
-const SCOPE = 'components/planning';
+const SCOPE = ['components', 'app', 'packages/design-system/src'];
 const THEME = join(ROOT, 'packages/design-system/theme.css');
 
 /** Every `--el-*` name DECLARED anywhere in the shipped token layer. */
@@ -88,9 +91,9 @@ function referencesIn(file: string): Reference[] {
 }
 
 const declared = declaredTokens();
-const references = walk(join(ROOT, SCOPE)).flatMap(referencesIn);
+const references = SCOPE.flatMap((dir) => walk(join(ROOT, dir))).flatMap(referencesIn);
 
-describe(`every --el-* referenced under ${SCOPE} resolves`, () => {
+describe('every --el-* referenced in the app source resolves', () => {
   it('finds references to rule on', () => {
     // Without this the assertion below passes vacuously the day the walk stops
     // finding files, or the day the two spellings change.

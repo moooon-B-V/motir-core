@@ -22,6 +22,7 @@ import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 let captured: {
   loadLevel: (parentId: string | null) => Promise<RoadmapLevel>;
   searchable?: boolean;
+  searchLabel?: string;
   fullScreenable?: boolean;
   locatable?: boolean;
   reloadKey?: number;
@@ -216,6 +217,19 @@ describe('the opt-in canvas props are a decision', () => {
     // handlers — the collision the design flags.
     expect(captured!.fullScreenable).toBeUndefined();
     expect(captured!.locatable).toBeUndefined();
+  });
+
+  it('…and `searchable` brings its own LABEL, which is what a reader hears (MOTIR-4047)', async () => {
+    await levelFor([leg()]);
+    // The canvas's props are a discriminated union — `{ searchable: true;
+    // searchLabel: string }` — so the two cannot legally come apart, and the
+    // compiler is the primary guard. This asserts the half a type cannot: that
+    // the label is this surface's OWN copy rather than the canvas's roadmap
+    // default, which names a READY FRONTIER (MOTIR-4021) and would be a
+    // sentence about the tree on a surface about a run. It is the input's
+    // `aria-label` AND its placeholder, so it is the only thing a screen-reader
+    // user is given to identify the box.
+    expect(captured!.searchLabel).toBe('Search this run');
   });
 });
 
