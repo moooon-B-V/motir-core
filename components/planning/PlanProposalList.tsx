@@ -1,11 +1,13 @@
 'use client';
 
+import { useCallback, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, RotateCw } from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
+import { ProposalQuickView } from '@/components/planning/ProposalQuickView';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOpDto } from '@/lib/dto/plans';
@@ -155,7 +157,15 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
   );
 }
 
-function ProposalRow({ item, decided }: { item: PlanReviewItemDto; decided: boolean }) {
+function ProposalRow({
+  item,
+  decided,
+  onOpen,
+}: {
+  item: PlanReviewItemDto;
+  decided: boolean;
+  onOpen: (item: PlanReviewItemDto, trigger: HTMLButtonElement) => void;
+}) {
   const t = useTranslations('planReview');
   const facts = [
     item.kind,
@@ -170,11 +180,32 @@ function ProposalRow({ item, decided }: { item: PlanReviewItemDto; decided: bool
   const parent = item.parentTitle ?? item.parentIdentifier;
   const intraPlanParent = item.parentNodeId != null && item.parentIdentifier == null;
 
+  // THE ROW OPENS ITS PROPOSAL (MOTIR-4022, design Part XIII §7).
+  //
+  // ONE control per row, and it is the TITLE with a stretched `::after` — not a
+  // wrapper around the whole row. Three constraints decide that shape and each
+  // rules out the obvious alternative:
+  //   • it may not become a row of BUTTONS (the shipped listbox-rows a11y
+  //     lesson), so there is exactly one interactive element and one tab stop;
+  //   • `<button>` takes PHRASING content and the change lines are a `<dl>`,
+  //     which is flow — so wrapping the row would be invalid markup, and the
+  //     `<dl>` stays a sibling while `after:inset-0` still makes it clickable;
+  //   • the ring belongs on the ROW, not on the title's text box, so the focus
+  //     outline frames the target — hence `focus-within` on the `<li>`.
+  //
+  // This is `ChildList`'s row grammar with a `<button>` where its `<a>` is,
+  // because a proposal has no page and therefore no `href` — the one place the
+  // two rows must differ.
+  const name = item.identifier
+    ? `${item.identifier} · ${item.title}`
+    : `${t('newItem')} · ${item.title}`;
+
   return (
     <li
       className={
-        'grid grid-cols-[1.125rem_1fr_auto] items-start gap-3 rounded-(--radius-control) ' +
-        'px-(--spacing-control-x) py-(--spacing-control-y)'
+        'relative grid grid-cols-[1.125rem_1fr_auto] items-start gap-3 rounded-(--radius-control) ' +
+        'px-(--spacing-control-x) py-(--spacing-control-y) hover:bg-(--el-surface) ' +
+        'focus-within:ring-2 focus-within:ring-(--focus-ring-color) active:bg-(--el-surface-soft)'
       }
     >
       <IssueTypeIcon type={issueTypeOf(item.kind)} className="mt-0.5 h-4 w-4" />
@@ -191,14 +222,18 @@ function ProposalRow({ item, decided }: { item: PlanReviewItemDto; decided: bool
               {t('listNoKey')}
             </span>
           )}
-          <span
+          <button
+            type="button"
+            aria-label={t('rowOpenAria', { name })}
+            onClick={(event) => onOpen(item, event.currentTarget)}
             className={
-              'truncate text-sm font-semibold text-(--el-text)' +
+              'truncate text-left text-sm font-semibold text-(--el-text) ' +
+              'after:absolute after:inset-0 hover:underline focus-visible:outline-none' +
               (item.op === 'remove' ? ' line-through' : '')
             }
           >
             {item.title}
-          </span>
+          </button>
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
           {facts.length > 0 ? <span>{facts.join(' · ')}</span> : null}
@@ -251,6 +286,31 @@ export interface PlanProposalListProps {
 
 export function PlanProposalList({ items, decided }: PlanProposalListProps) {
   const t = useTranslations('planReview');
+  // The SAME read modal the canvas's View pill opens — this body does not gain a
+  // second read view, which is the property Part XIII §7 is about. It is mounted
+  // HERE rather than lifted to the island because the two bodies are mutually
+  // exclusive (only one renders at a time, so the two mounts can never both be
+  // open) and the canvas's peek state is a compound one — a proposal OR a
+  // committed key — of which a list row can only ever be the first.
+  const [peeked, setPeeked] = useState<PlanReviewItemDto | null>(null);
+  // ⚠️ FOCUS RETURN IS EXPLICIT HERE, and it is not redundant with the modal's own
+  // (MOTIR-4022). The dialog is mounted INSIDE this list, so closing it unmounts
+  // the dialog in the same commit that re-renders the rows — and the restore the
+  // shipped `Modal` performs on unmount lands before the row it should return to
+  // is settled, leaving focus on the body. Measured: a keyboard user who opened a
+  // row with Enter and pressed Escape was returned to nothing and had to Tab from
+  // the top of the page. Remembering the trigger and refocusing it after the close
+  // is one ref and closes that.
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const openPeek = useCallback((item: PlanReviewItemDto, trigger: HTMLButtonElement) => {
+    triggerRef.current = trigger;
+    setPeeked(item);
+  }, []);
+  const closePeek = useCallback(() => {
+    setPeeked(null);
+    // After the close has flushed, so the restore is not racing the unmount.
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
 
   if (items.length === 0) {
     return (
@@ -280,12 +340,18 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
             </h3>
             <ul className="flex flex-col">
               {rows.map((item) => (
-                <ProposalRow key={item.planItemId} item={item} decided={decided} />
+                <ProposalRow
+                  key={item.planItemId}
+                  item={item}
+                  decided={decided}
+                  onOpen={openPeek}
+                />
               ))}
             </ul>
           </section>
         );
       })}
+      <ProposalQuickView item={peeked} onClose={closePeek} />
     </div>
   );
 }

@@ -3008,13 +3008,13 @@ set, expressed in the component's own props type so a consumer cannot turn searc
 it searches. **This is the ONE change in this story that sweeps all four consumers** — the story's
 boundary names it as the exception, and this is why.
 
-| mount                                                           | searchable?                   | label + placeholder | en                      | zh         | namespace                |
-| --------------------------------------------------------------- | ----------------------------- | ------------------- | ----------------------- | ---------- | ------------------------ |
-| `PlanReviewCanvas` — `/plans/[id]`                              | yes                           | changes             | **Search this plan**    | 搜索本计划 | `planReview.searchLabel` |
-| `PlanChangeCanvas` — the re-plan conversation                   | yes                           | changes             | **Search this project** | 搜索本项目 | `planChange.searchLabel` |
-| `OnboardingCanvas` — `searchable={!!projectKey}`                | yes, when pinned              | changes             | **Search this project** | 搜索本项目 | `onboarding.searchLabel` |
-| `WorkItemRoadmap` — `/roadmap` (`RoadmapView`)                  | yes                           | **UNCHANGED**       | Search the roadmap      | 搜索路线图 | `roadmap.canvas.search`  |
-| `WorkItemRoadmap` — the item page Children panel (`ChildPanel`) | **no** — `searchable={false}` | **none is owed**    | —                       | —          | —                        |
+| mount                                                           | searchable?                   | label + placeholder | en                      | zh         | namespace                          |
+| --------------------------------------------------------------- | ----------------------------- | ------------------- | ----------------------- | ---------- | ---------------------------------- |
+| `PlanReviewCanvas` — `/plans/[id]`                              | yes                           | changes             | **Search this plan**    | 搜索本计划 | `planReview.searchLabel`           |
+| `PlanChangeCanvas` — the re-plan conversation                   | yes                           | changes             | **Search this project** | 搜索本项目 | `planningWorkspace.searchLabel` ⚠️ |
+| `OnboardingCanvas` — `searchable={!!projectKey}`                | yes, when pinned              | changes             | **Search this project** | 搜索本项目 | `onboarding.searchLabel`           |
+| `WorkItemRoadmap` — `/roadmap` (`RoadmapView`)                  | yes                           | **UNCHANGED**       | Search the roadmap      | 搜索路线图 | `roadmap.canvas.search`            |
+| `WorkItemRoadmap` — the item page Children panel (`ChildPanel`) | **no** — `searchable={false}` | **none is owed**    | —                       | —          | —                                  |
 
 **Why the plan review says _plan_ and the plan-change canvas says _project_.** The review canvas draws
 ONE plan's proposals on the levels they land in, and the page is a plan; the change canvas draws the
@@ -3285,14 +3285,14 @@ about who may decide changes** — `ai:decide_plan` gates approve and discard ex
 
 Both catalogues are owed in the same pull request (the `zh` parity gate).
 
-| key              | namespace        | en                                      | zh                         | introduced by |
-| ---------------- | ---------------- | --------------------------------------- | -------------------------- | ------------- |
-| `searchLabel`    | `planReview`     | Search this plan                        | 搜索本计划                 | §5            |
-| `searchLabel`    | `planChange`     | Search this project                     | 搜索本项目                 | §5            |
-| `searchLabel`    | `onboarding`     | Search this project                     | 搜索本项目                 | §5            |
-| `search`         | `roadmap.canvas` | Search the roadmap — **UNCHANGED**      | 搜索路线图 — UNCHANGED     | §5            |
-| `showChangesAll` | `planReview`     | Every item on this level is this plan's | 此层级的每一项都来自本计划 | §3d           |
-| `rowOpenAria`    | `planReview`     | Open {name}                             | 打开 {name}                | §7            |
+| key              | namespace           | en                                      | zh                         | introduced by |
+| ---------------- | ------------------- | --------------------------------------- | -------------------------- | ------------- |
+| `searchLabel`    | `planReview`        | Search this plan                        | 搜索本计划                 | §5            |
+| `searchLabel`    | `planningWorkspace` | Search this project                     | 搜索本项目                 | §5            |
+| `searchLabel`    | `onboarding`        | Search this project                     | 搜索本项目                 | §5            |
+| `search`         | `roadmap.canvas`    | Search the roadmap — **UNCHANGED**      | 搜索路线图 — UNCHANGED     | §5            |
+| `showChangesAll` | `planReview`        | Every item on this level is this plan's | 此层级的每一项都来自本计划 | §3d           |
+| `rowOpenAria`    | `planReview`        | Open {name}                             | 打开 {name}                | §7            |
 
 **No new string for the locate control** (§4 reuses `roadmap.canvas.showChangesNone`, `locateCurrent` /
 `locateNextReady` / `locateReady` / `locateNothing` and `showChangesCount` unchanged), **none for the
@@ -3377,6 +3377,15 @@ acceptance criteria in this same pass:
 | **IX §L1** | _"ACTIVE takes `--el-accent-soft` fill"_                              | the token does not exist. The ACTIVE fill is **`--el-tint-lavender`** (§3e)            |
 | **IX §L6** | an all-proposals level is _"enabled, and ON simply rings everything"_ | **DISABLED**, with its own reason, once the control is ARMED rather than pressed (§3d) |
 | **IX §3**  | _"the LIST when the proposals sit under more than one container"_     | **kept, and widened** by two arms ahead of it (§6)                                     |
+
+**⚠️ AND FOUR OF THIS PART'S OWN CLAUSES ARE AMENDED BY THE BUILD (MOTIR-4016's parent run), on the record rather than quietly:**
+
+| §         | what this Part said                                                     | what shipped, and why                                                                                                                                                                                                                       |
+| --------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **§5**    | the plan-change canvas's key is `planChange.searchLabel`                | **`planningWorkspace.searchLabel`** — no `planChange` namespace exists; that feature's strings live under `planningWorkspace`. A namespace this Part named without checking                                                                 |
+| **§4/§9** | the locate control reuses the shipped `locateNextReady` / `locateReady` | **a consumer-supplied `locateLabel`** — `planReview.locateChange`, _"Locate the next of this plan's items"_. The shipped strings name a READY frontier, which a proposal never is; reusing them would ship §5's own defect one control over |
+| **§7**    | the quick view is ONE mount lifted to the island                        | mounted in the LIST. The two bodies are mutually exclusive, so two mounts can never both be open, and the canvas's peek state is a compound one a list row can only ever be half of. What §7 is about — no SECOND read view — holds         |
+| **§7**    | focus return is the shipped `Modal`'s                                   | **explicit**. The dialog unmounts in the same commit that re-renders the rows, so the shipped restore lands before the row is settled and a keyboard user was returned to nothing. Found by the acceptance walk, fixed in MOTIR-4022        |
 
 ## 12. §12 · Access path
 

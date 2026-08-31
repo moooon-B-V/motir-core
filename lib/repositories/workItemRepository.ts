@@ -1731,6 +1731,29 @@ export const workItemRepository = {
   },
 
   /**
+   * HOW MANY non-archived siblings a level holds (MOTIR-4024) — the same set
+   * `findSiblings` returns, counted rather than read.
+   *
+   * The plan-detail's derived default view needs the SIZE of the level the canvas
+   * will arrive at, and only the size: a `count` keeps a busy container from
+   * loading two hundred rows to answer a question about a number. `parentId:
+   * null` is the project's ROOT level, scoped by `projectId` so a null-parent
+   * query cannot span every project's roots — the same pairing `findSiblings`
+   * documents one method up.
+   */
+  async countSiblingsInWorkspace(
+    projectId: string,
+    parentId: string | null,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.workItem.count({
+      where: { projectId, workspaceId, parentId, archivedAt: null },
+    });
+  },
+
+  /**
    * Non-archived work items in a project, filtered by any combination of
    * kind / status / assignee (Subtask 1.4.4). Ordered by `key` asc to match
    * the PROD-N identifier order the list surfaces render. A read-only list

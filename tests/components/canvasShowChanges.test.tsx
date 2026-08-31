@@ -64,6 +64,8 @@ const EMPHASIS = {
   total: 3,
   label: 'Show changes',
   emptyLabel: 'No proposed changes on this level',
+  allLabel: 'Every item on this level is this plan\u2019s',
+  locateLabel: 'Locate the next of this plan\u2019s items',
 };
 
 const renderCanvas = (emphasis: typeof EMPHASIS | null = EMPHASIS) =>
@@ -89,11 +91,13 @@ describe('the prop is OPT-IN (MOTIR-3261)', () => {
 });
 
 describe('the emphasis (MOTIR-3261)', () => {
-  it('lights EVERY id on the level and dims the rest, with the SHIPPED classes', async () => {
+  it('lights EVERY id on the level and dims the rest, with the SHIPPED classes — ON ARRIVAL', async () => {
+    // ⚠️ AMENDED by MOTIR-4020 (Part XIII §3), not rewritten: the emphasis is
+    // ARMED from first paint, so the click that used to precede these assertions
+    // is gone. What the case guards is unchanged — the SHIPPED ring and the
+    // SHIPPED dim, applied to a SET, with no second vocabulary.
     renderCanvas();
     await screen.findByText('A proposal');
-
-    fireEvent.click(toggle());
 
     for (const id of ['P1', 'P2', 'P3']) {
       const cls = box(id).className;
@@ -109,11 +113,10 @@ describe('the emphasis (MOTIR-3261)', () => {
     }
   });
 
-  it('pressing it again restores the level exactly', async () => {
+  it('pressing it once DISARMS — a reader who did not arm it can still turn it off', async () => {
     renderCanvas();
     await screen.findByText('A proposal');
 
-    fireEvent.click(toggle());
     fireEvent.click(toggle());
 
     for (const id of ['P1', 'P2', 'P3', 'C1', 'C2']) {
@@ -127,6 +130,11 @@ describe('the emphasis (MOTIR-3261)', () => {
     renderCanvas();
     await screen.findByText('A proposal');
 
+    // Pressed from first paint (Part XIII §3b): the treatment plus `aria-pressed`
+    // IS the affordance, and a screen-reader user is told the mode is on WITHOUT
+    // anybody having pressed anything — the case a visual state cannot cover.
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(toggle());
     expect(toggle().getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle());
     expect(toggle().getAttribute('aria-pressed')).toBe('true');
@@ -147,7 +155,6 @@ describe('a live SELECTION wins, and the toggle stays pressed (Part IX §L4)', (
     renderCanvas();
     await screen.findByText('A proposal');
 
-    fireEvent.click(toggle());
     fireEvent.keyDown(el('C1')!, { key: 'Enter' });
 
     // The selected committed node is ringed and NOT dimmed; a proposal outside
@@ -164,8 +171,9 @@ describe('a live SELECTION wins, and the toggle stays pressed (Part IX §L4)', (
     renderCanvas();
     await screen.findByText('A proposal');
 
+    // The mode is already on, so this is the SELECTION arriving second rather
+    // than the toggle — the order Part IX §L4 says must not change the outcome.
     fireEvent.keyDown(el('C1')!, { key: 'Enter' });
-    fireEvent.click(toggle());
 
     expect(box('C1').className).toContain('ring-2');
     expect(box('P1').className).toContain('opacity-35');
@@ -176,7 +184,6 @@ describe('a live SELECTION wins, and the toggle stays pressed (Part IX §L4)', (
     renderCanvas();
     await screen.findByText('A proposal');
 
-    fireEvent.click(toggle());
     fireEvent.keyDown(el('C1')!, { key: 'Enter' });
     expect(box('P1').className).toContain('opacity-35');
 
@@ -195,26 +202,34 @@ describe('a live SELECTION wins, and the toggle stays pressed (Part IX §L4)', (
   });
 });
 
-describe('the toggle RESETS on a level change (MOTIR-3261)', () => {
-  it('drilling arrives un-emphasised', async () => {
+describe('the toggle RESETS on a level change — and RE-ARMS (MOTIR-3261 · MOTIR-4020)', () => {
+  // ⚠️ The RESET is unchanged; its TARGET flipped (Part XIII §3a). A stale
+  // emphasis still never survives a level change — what a level change now
+  // restores is the level's OWN default, which is armed wherever the emphasis
+  // can say anything. A reader who turns it off and then drills arrives armed
+  // again: the reset is per LEVEL, and a drill is a new question about a new set
+  // of cards.
+  it('a level the plan does not reach arrives DISABLED, not merely un-armed', async () => {
     renderCanvas();
     await screen.findByText('A proposal');
-    fireEvent.click(toggle());
     expect(toggle().getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.keyDown(el('C1')!, { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('drill-button'));
     await screen.findByText('Nothing proposed here');
 
-    // A stale emphasis must never survive a drill — the assertion is on the
-    // RESET, so a later refactor of the level-change handler cannot drop it
-    // silently.
+    expect(toggle().hasAttribute('disabled')).toBe(true);
     expect(toggle().getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('and Back arrives un-emphasised too', async () => {
+  it('coming BACK to a level the plan DOES reach re-arms it', async () => {
     renderCanvas();
     await screen.findByText('A proposal');
+    // Turn it OFF here, so the return cannot be confused with a state that
+    // merely survived the round trip.
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute('aria-pressed')).toBe('false');
+
     fireEvent.keyDown(el('C1')!, { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('drill-button'));
     await screen.findByText('Nothing proposed here');
@@ -222,7 +237,8 @@ describe('the toggle RESETS on a level change (MOTIR-3261)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     await screen.findByText('A proposal');
 
-    expect(toggle().getAttribute('aria-pressed')).toBe('false');
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
+    expect(box('P1').className).toContain('ring-2');
   });
 });
 
@@ -240,7 +256,13 @@ describe('the degenerate levels (Part IX §L6)', () => {
     expect(toggle().getAttribute('title')).toBe('No proposed changes on this level');
   });
 
-  it('a level that is ENTIRELY the plan’s rings everything and dims nothing', async () => {
+  it('a level that is ENTIRELY the plan’s DISABLES the toggle too, with its OWN reason', async () => {
+    // ⚠️ THIS REVERSES Part IX §L6's second bullet, on the record (Part XIII §3d).
+    // §L6 called this state *"correct and harmless"* — and it was, of a state the
+    // reader CHOSE. Armed on ARRIVAL the same screen arrives unasked: every card
+    // ringed, none dimmed, teaching the reader at the moment they land that the
+    // ring means nothing. That is §L6's own argument for the empty case, applied
+    // to its mirror. Same disposition, opposite emptiness, different reason.
     render(
       <ProjectRoadmapCanvas
         loadLevel={loadLevel}
@@ -250,10 +272,12 @@ describe('the degenerate levels (Part IX §L6)', () => {
     );
     await screen.findByText('A proposal');
 
-    fireEvent.click(toggle());
-
+    expect(toggle().hasAttribute('disabled')).toBe(true);
+    expect(toggle().getAttribute('title')).toBe('Every item on this level is this plan\u2019s');
+    // Nothing is ringed and nothing is dimmed — the screen says nothing, and now
+    // says so with a control that explains why rather than with a lit board.
     for (const id of ['P1', 'C1', 'P2', 'C2', 'P3']) {
-      expect(box(id).className).toContain('ring-2');
+      expect(box(id).className).not.toContain('ring-2');
       expect(box(id).className).not.toContain('opacity-35');
     }
   });

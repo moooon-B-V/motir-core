@@ -2,6 +2,8 @@ import type { WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { fullestContainer } from '@/lib/planning/planShape';
+import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
@@ -583,10 +585,25 @@ export const planReviewService = {
         // but an approved one now names the card it became, which is what lets a
         // reader answer *what did I just say yes to?* on the surface that asked.
         identifier: target?.identifier ?? null,
+        // THE TITLE THE PROPOSAL IS ASKING FOR (MOTIR-4018, Part XIII §1).
+        //
+        // A `modify` carrying `patch.title` reports THAT, not the name the card
+        // is about to stop being called. `buildChanges` eleven lines up already
+        // knew — it emits `{ field: 'title', from: target, to: patch.title }` —
+        // so the same response was carrying the proposed title in one field and
+        // refusing it in the other.
+        //
+        // The fix is at the PRODUCER, once: every consumer reads this field and
+        // none of them should have to learn about `patch` (the shape MOTIR-3191
+        // established one axis over, for the same model getting a `modify`'s
+        // PLACEMENT wrong). The patch is SPARSE, so `?? target?.title` is
+        // load-bearing: an absent `title` means the name is unchanged.
         title:
           item.op === 'add'
             ? (proposed?.title ?? 'Untitled item')
-            : (target?.title ?? 'Unavailable item'),
+            : ((item.op === 'modify' ? item.patch?.title : undefined) ??
+              target?.title ??
+              'Unavailable item'),
         kind: item.op === 'add' ? (proposed?.kind ?? 'task') : (target?.kind ?? 'task'),
         // The add's editable proposed values (the inline edit form seeds from
         // these); null for modify/remove — only an `add` is editable (7.21.6).
@@ -691,6 +708,38 @@ export const planReviewService = {
 
     const staleCount = items.filter((i) => i.stale).length;
 
+    // ── HOW BIG IS THE LEVEL THE CANVAS ARRIVES AT (MOTIR-4024, Part XIII §6) ──
+    //
+    // The derived default view has to answer *can the canvas hold this plan's
+    // cards together?* BEFORE the canvas has drawn anything, and the answer is
+    // about the level's COMMITTED neighbourhood, which the plan's own items say
+    // nothing about. So it is read once, here, where the arrival container is
+    // already resolved — `fullestContainer` is the same function the arrival
+    // level itself reads, so the two cannot name different levels.
+    //
+    // A container that is ITSELF a proposal has no committed children, and the
+    // count comes back 0 without a special case: no work item carries that id.
+    const arrivalContainer = fullestContainer(items);
+    const arrivalParentId = arrivalContainer?.parentNodeId ?? null;
+    const arrivalLevelTotal =
+      (await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.countSiblingsInWorkspace(
+          plan.projectId,
+          arrivalParentId,
+          ctx.workspaceId,
+          tx,
+        ),
+      )) +
+      // The plan's own `add`s draw a node each and no committed row backs them.
+      // A `modify` / `remove` SHARES its node with the committed card it targets,
+      // so counting it again would double it.
+      items.filter((i) => i.op === 'add' && (i.parentNodeId ?? null) === arrivalParentId).length;
+    // What the canvas will actually DRAW: the level read is capped, so a level
+    // past the cap draws the cap, not its total. Both numbers are carried because
+    // the two arms of the rule read different ones — the legibility arm reads what
+    // is drawn, the truncation arm reads what was dropped.
+    const arrivalLevelSize = Math.min(arrivalLevelTotal, TREE_LEVEL_MAX_TAKE);
+
     return {
       id: plan.id,
       projectId: plan.projectId,
@@ -728,6 +777,8 @@ export const planReviewService = {
       items,
       stale: staleCount > 0,
       staleCount,
+      arrivalLevelSize,
+      arrivalLevelTotal,
     };
   },
 };

@@ -113,14 +113,46 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
         </h1>
       </header>
 
-      {/* The canvas+chat shell is `h-full`; give it a definite, viewport-relative
-          height so it fills the main area without a double scrollbar: 8.5rem of
-          chrome ABOVE (top nav + the shell's pt-6 + this header), then whatever
-          the shell reserves BELOW. The second term was baked into a flat 10rem,
-          which encoded the shell's old 1.5rem bottom padding — reading the
-          variable instead keeps this exact when no orb mounts and absorbs the
-          orb clearance when one does (MOTIR-2763). */}
-      <div className="h-[calc(100dvh_-_8.5rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-[34rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
+      {/* THE PANE FILLS THE FOLD (MOTIR-4019, design Part XIII §2).
+
+          The chrome above this box is 133px, MEASURED in Chromium at all four
+          viewports rather than summed: the top nav `h-14` plus its 1px bottom
+          hairline (57) + the shell's `pt-6` (24) + this page's own header (36) +
+          this stack's `gap-4` (16). The shipped value subtracted `8.5rem` (136)
+          AND `--shell-bottom-clearance` on top of it — a band the shell has
+          already spent as `pb-(--shell-bottom-clearance)`
+          (`app/(authed)/layout.tsx`). Net dead band under the graph at 1440x900:
+          99px, on a surface whose whole job is showing a plan. At 1366x768 it was
+          worse than dead: `min-h-[34rem]` (544) exceeded the computed height
+          (536), so the pane grew past its own budget and ate 8px of the shell's
+          clearance. (It did NOT make the page scroll — measured at all four —
+          which is the one thing the card's own text got wrong.)
+
+          ⚠️ ONE TERM IS A TOKEN, NOT A CONSTANT, and that is why this reads
+          `var(--height-control)` where the roadmap's twin reads a flat rem. This
+          page's header is a `size-(--height-control)` back-link beside a
+          `text-xl` h1 whose line box is 28 — so the header IS one control tall,
+          and every `[data-style]` axis redefines that token: 34 / 36 / 38 / 40.
+          A hard-coded budget is wrong by up to 4px on seven of the nine styles,
+          in a `calc` whose error mode is a scrolling page. The roadmap's 10rem is
+          safe from this only because its header is an h1 + subtitle stack, which
+          no style axis moves.
+
+          The negative bottom margin is how the pane SPENDS the shell's band
+          without making `<main>` scroll — done locally here rather than by
+          touching the shell, so no other route's layout moves. `min-h-[34rem]`
+          stays and no longer binds (635px at 1366x768, the tightest measured).
+
+          ⚠️ AND THIS PANE DECLARES NO `--canvas-fold-inset`, deliberately —
+          the one place it departs from `RoadmapView`'s otherwise identical
+          block. That variable lifts the CANVAS's bottom-RIGHT control clear of
+          the floating Plan-with-AI orb; here the canvas is the `1fr` of
+          `PlanningWorkspace`'s `grid-cols-[1fr_22rem]`, so at `md` and above the
+          orb sits over the 22rem REVIEW RAIL and the canvas column ends 309px
+          clear of it (measured at 1440x900: orb x 1364-1420, rail x 1055-1407).
+          Declaring it would lift a control that has nothing to clear. The inset
+          this surface does need is the rail footer's own, and it is MOTIR-4023's. */}
+      <div className="mb-[calc(-1*var(--shell-bottom-clearance,1.5rem))] h-[calc(100dvh_-_3.5rem_-_1px_-_1.5rem_-_1rem_-_var(--height-control))] min-h-[34rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
         <PlanDetail
           initialReview={review}
           projectKey={projectKey ?? ''}

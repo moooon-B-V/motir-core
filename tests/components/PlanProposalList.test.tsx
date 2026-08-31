@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
+import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { planReviewItem } from '../helpers/planReview';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
@@ -332,5 +333,183 @@ describe('the field LABEL, not the wire name (MOTIR-3242)', () => {
 
     expect(screen.getByText('somethingNew')).toBeTruthy();
     expect(screen.queryByText(/planReview\.field_/)).toBeNull();
+  });
+});
+
+// ── THE HEADLINE IS THE PROPOSED TITLE (MOTIR-4018, design Part XIII §1) ──────
+//
+// The producer now reports the title the proposal is ASKING for, so the row's
+// headline names the card as the plan leaves it. What must NOT follow is the
+// change line losing the outgoing name: Part VIII §3 split these deliberately —
+// the headline says what the card will BE, the `TITLE` line says what it is
+// leaving — and a row showing the new name twice would take the old one off the
+// only surface that spells it.
+describe('a renaming modify (MOTIR-4018)', () => {
+  const renaming = () =>
+    planReviewItem({
+      planItemId: 'm-rename',
+      op: 'modify',
+      identifier: 'MOTIR-812',
+      // As `getPlanReview` now emits it: the PROPOSED title.
+      title: 'Invoice templates + branding',
+      changes: [{ field: 'title', from: 'Invoice templates', to: 'Invoice templates + branding' }],
+    });
+
+  it('shows the PROPOSED title as the headline, beside the committed key', () => {
+    renderWithIntl(<PlanProposalList items={[renaming()]} decided={false} />);
+    // The proposed title appears TWICE on the row, and that is the design: once
+    // as the headline (what the card will BE) and once as the `to` side of the
+    // TITLE change line (what it is changing to). Take the first — the headline.
+    const headline = screen.getAllByText('Invoice templates + branding')[0]!;
+    expect(headline.className).toContain('text-sm');
+    const row = headline.closest('li') as HTMLElement;
+    expect(within(row).getByText('MOTIR-812')).toBeTruthy();
+  });
+
+  it('still spells `old → new` on the TITLE change line', () => {
+    renderWithIntl(<PlanProposalList items={[renaming()]} decided={false} />);
+    const row = screen
+      .getAllByText('Invoice templates + branding')[0]!
+      .closest('li') as HTMLElement;
+    // The OUTGOING name survives, exactly once, and on the line whose job it is.
+    const struck = within(row).getByText('Invoice templates');
+    expect(struck.className).toContain('line-through');
+  });
+});
+
+// ── A LIST ROW OPENS ITS PROPOSAL (MOTIR-4022, design Part XIII §7) ───────────
+//
+// The row was an inert `<li>`: no handler, no role, no key binding — and
+// `ProposalQuickView` was built, shipped, and mounted only by the canvas. So the
+// list was the one body of the two that can say what a card CONTAINS and the only
+// one that could not open it.
+describe('the row opens its proposal', () => {
+  it('carries exactly ONE control, and it is the title', () => {
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided={false} />);
+    // One tab stop per row. A row of buttons is the shipped listbox-rows a11y
+    // lesson, and the chips beside the title stay non-interactive text.
+    const rows = screen.getAllByRole('listitem');
+    for (const row of rows) {
+      expect(within(row).getAllByRole('button')).toHaveLength(1);
+    }
+  });
+
+  it('names itself `Open <key> · <title>`, and `New · <title>` when the card has no key yet', () => {
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    // The visible title is contained in the accessible name (WCAG 2.5.3), and an
+    // `add` is named the way this surface already names a keyless card.
+    expect(screen.getByRole('button', { name: 'Open MOTIR-812 · Payout ledger' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open New · A proposed story' })).toBeTruthy();
+  });
+
+  it('opens the SAME quick view the canvas’s View pill opens, and closes again', async () => {
+    renderWithIntl(<PlanProposalList items={[add()]} decided={false} />);
+    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
+    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+
+    // ⚠️ ONE close affordance. The shipped modal rendered TWO controls named
+    // `Close` — the base `Modal`'s corner x beside the header's own button — and
+    // this is the assertion that keeps `hideClose` from being dropped.
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
+  });
+
+  it('stretches its hit area over the whole row, so the row is the target', () => {
+    renderWithIntl(<PlanProposalList items={[modify()]} decided={false} />);
+    const button = screen.getByRole('button', { name: /^Open MOTIR-812/ });
+    // `after:inset-0` is what makes the row clickable without wrapping the `<dl>`
+    // of change lines in a `<button>`, which would be invalid markup.
+    expect(button.className).toContain('after:absolute');
+    expect(button.className).toContain('after:inset-0');
+    const row = button.closest('li') as HTMLElement;
+    expect(row.className).toContain('relative');
+    // The ring frames the ROW, not the title's text box.
+    expect(row.className).toContain('focus-within:ring-2');
+  });
+});
+
+// ── THE PEEK-ROUTING SEAM (MOTIR-4025) ───────────────────────────────────────
+//
+// The property that stops the two bodies diverging: for the SAME proposal, the
+// list and the canvas open the SAME modal. The canvas half is asserted in
+// `plan-review-canvas.test.tsx`; this is the list half, run over all four item
+// shapes — because the row's accessible name is built from `identifier`, and an
+// `add` before and after materialization are the two cases that differ.
+describe('every item shape opens the same read view', () => {
+  const shapes: [string, ReturnType<typeof planReviewItem>][] = [
+    ['an add with no key yet', add()],
+    [
+      'an add that has MATERIALIZED',
+      planReviewItem({
+        planItemId: 'a2',
+        op: 'add',
+        identifier: 'MOTIR-901',
+        title: 'Created card',
+      }),
+    ],
+    ['a modify', modify()],
+    ['a remove', remove()],
+  ];
+
+  for (const [label, item] of shapes) {
+    it(`opens for ${label}`, async () => {
+      renderWithIntl(<PlanProposalList items={[item]} decided={false} />);
+      const row = screen.getByRole('button', { name: /^Open / });
+      fireEvent.click(row);
+      expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+      // One close, on every shape — not only on the one the fix was written for.
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
+    });
+  }
+});
+
+// ── CLOSING RETURNS FOCUS TO THE ROW (MOTIR-4022 · MOTIR-4026) ────────────────
+//
+// The E2E walk found this and it is asserted here too, because the E2E is a
+// RECEIPT and this is the regression surface: after opening a row with Enter and
+// pressing Escape, focus was returned to NOTHING and a keyboard user had to Tab
+// from the top of the page. The dialog is mounted inside this list, so its
+// unmount lands in the same commit that re-renders the rows and the shipped
+// `Modal`'s own restore fires before the row it should return to is settled.
+describe('closing the quick view', () => {
+  it('returns focus to the row that opened it', async () => {
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    const row = screen.getByRole('button', { name: 'Open New · A proposed story' });
+
+    row.focus();
+    fireEvent.click(row);
+    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /close/i }));
+
+    // The restore is deferred one frame, past the unmount it would otherwise race.
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('returns focus to the RIGHT row when a second one was opened', async () => {
+    // The ref must follow the trigger, not the first row that ever opened one —
+    // the failure mode a single-row test cannot see.
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    const second = screen.getByRole('button', { name: /^Open MOTIR-812/ });
+    fireEvent.click(second);
+    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.activeElement).toBe(second);
   });
 });

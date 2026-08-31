@@ -160,7 +160,27 @@ export interface PlanReviewItemDto {
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`,
    *  which has no key, and the target's real key for every proposal that does. */
   identifier: string | null;
-  /** The display title: the proposed title (`add`) or the live target title. */
+  /**
+   * The display title — **the title this proposal is ASKING for**, on every op
+   * (MOTIR-4018, design Part XIII §1).
+   *
+   * An `add` reports its proposed title; a `modify` reports `patch.title` when
+   * the patch carries one and the target's live title when it does not; a
+   * `remove` reports the target's, which is the only title it has.
+   *
+   * ⚠️ IT USED TO REPORT THE TARGET'S TITLE FOR EVERY NON-`add` OP, and the
+   * sentence describing that is worth keeping because the defect it produced is
+   * the kind nothing catches: a plan renaming a card drew the node, its
+   * breadcrumb crumb, its search text and the list row's headline under the name
+   * the card is about to STOP being called — while the same response carried the
+   * proposed one three lines away, as a `changes` row. The surface named the card
+   * by what it is called and, much more quietly, by what it will be called.
+   *
+   * The `changes` array is UNCHANGED and still carries both sides
+   * (`{ field: 'title', from: <live>, to: <proposed> }`): the node is a SIGNAL and
+   * the list is where a change is SPELLED (Part VIII §3), so this field says what
+   * the card will BE and the diff says what it is leaving.
+   */
   title: string;
   /** The work-item kind (`epic`/`story`/`task`/`bug`/`subtask`); defaults `task`. */
   kind: string;
@@ -408,4 +428,33 @@ export interface PlanReviewDto {
   stale: boolean;
   /** How many items are stale (the summary count). */
   staleCount: number;
+
+  /**
+   * HOW MANY NODES THE ARRIVAL LEVEL DRAWS (MOTIR-4024, design Part XIII §6) —
+   * the committed siblings the level read will return, plus the plan's own
+   * proposals under that container.
+   *
+   * ⚠️ THE CLIENT CANNOT COMPUTE IT. `defaultPlanView` runs before the canvas has
+   * fetched anything, and the answer is about the level's COMMITTED
+   * neighbourhood, which the plan's own items say nothing about. So it is read
+   * once here, where the level's container is already resolved.
+   *
+   * Read by `defaultPlanView` (`lib/planning/planView.ts`) and by nothing else.
+   * It is the level's TOTAL, not the plan's share of it: the arrival SCALE is a
+   * function of how many nodes the canvas DRAWS, and a plan of three cards under
+   * a container of two hundred is exactly the case the rule exists for.
+   */
+  arrivalLevelSize: number;
+  /**
+   * The same level's UNTRUNCATED size — what it holds before
+   * `TREE_LEVEL_MAX_TAKE` caps the read (MOTIR-4024, Part XIII §6, second arm).
+   *
+   * The level read sorts key-ASCENDING and discards the HIGHEST keys, which are
+   * the most recently created cards — and a `modify` or `remove` targets a
+   * committed work item, so the cards a plan is most likely to be about are
+   * exactly the ones truncation drops. Past the cap the canvas can draw two
+   * hundred cards, ring none of them, and show a reviewer a plan whose subject is
+   * not on the screen.
+   */
+  arrivalLevelTotal: number;
 }

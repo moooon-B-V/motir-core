@@ -280,7 +280,13 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
 
     // Before the fix `searchText` was undefined on every committed node and
     // `searchMatches` threw on the first keystroke.
-    fireEvent.change(screen.getByPlaceholderText('Search the roadmap'), {
+    //
+    // ⚠️ The placeholder MOVED (MOTIR-4021): this box is on a PLAN, and it used
+    // to offer to search the roadmap because the foundation owned the string.
+    // The consumer owns it now, so this assertion names the plan-review label —
+    // and it is addressed by ACCESSIBLE NAME, which is what a reader hears and
+    // what the E2E leg asserts.
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this plan' }), {
       target: { value: 'MOTIR-9' },
     });
 

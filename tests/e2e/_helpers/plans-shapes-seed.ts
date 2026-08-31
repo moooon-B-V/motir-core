@@ -103,6 +103,27 @@ export interface ShapeThree {
   story: CommittedRef;
 }
 
+/**
+ * SHAPE FOUR — a plan proposing into a CROWDED container (MOTIR-4026).
+ *
+ * Sixteen committed siblings under one epic, plus two proposals: ONE container,
+ * so Part IX §3's arm says canvas — and eighteen nodes, so Part XIII §6's
+ * legibility arm says LIST. It is the shape the widened default exists for, and
+ * it is deliberately indistinguishable from shape TWO to the reader who only
+ * counts containers.
+ *
+ * Its plan also carries a LONG generated title and a long summary, because the
+ * rail's fold is the other thing this shape is here to drive: a decision held at
+ * the bottom of a scrolling column is only invisible once the column is long.
+ */
+export interface ShapeFour {
+  planId: string;
+  epic: CommittedRef;
+  committedCount: number;
+  addedTitles: string[];
+  longTitle: string;
+}
+
 export interface PlansShapesSeed {
   email: string;
   password: string;
@@ -111,6 +132,7 @@ export interface PlansShapesSeed {
   one: ShapeOne;
   two: ShapeTwo;
   three: ShapeThree;
+  four: ShapeFour;
 }
 
 async function makeTenant(email: string): Promise<{ ctx: ServiceContext; projectId: string }> {
@@ -257,6 +279,40 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
   );
   await plansService.markPlanned(threePlan.id, ctx);
 
+  // ── SHAPE FOUR ────────────────────────────────────────────────────────────
+  // Sixteen committed siblings and two proposals under ONE epic: the container
+  // count says canvas, the level's SIZE says list (Part XIII §6). Sixteen is
+  // chosen against the threshold rather than for roundness — 18 nodes is the
+  // first level past `ARRIVAL_LEVEL_MAX_NODES` that still reads as an ordinary
+  // epic rather than a stress fixture.
+  const fourEpic = await commit('epic', 'Notifications platform');
+  const FOUR_COMMITTED = 16;
+  for (let i = 0; i < FOUR_COMMITTED; i += 1) {
+    await commit('story', `Notification channel ${i + 1}`, fourEpic.id);
+  }
+  const fourLongTitle =
+    'Re-plan MOTIR-3232 after the PLAN_REVIEW_STREAM_BATCH_SIZE change: the tabbed list, the detail pane, and the canvas arrival level, with every referrer swept';
+  const fourPlan = await plansService.createPlan(
+    projectId,
+    {
+      title: fourLongTitle,
+      summary:
+        'A long summary, so the rail has a transcript worth scrolling: the decision is only invisible once the column above it is long, which is the condition the pinned footer exists for.',
+    },
+    ctx,
+  );
+  const fourTitles = ['Digest scheduling', 'Delivery receipts'];
+  await plansService.addProposals(
+    fourPlan.id,
+    fourTitles.map((title) => ({
+      op: 'add' as const,
+      proposedFields: { title, kind: 'story' as const },
+      parentRef: fourEpic.id,
+    })),
+    ctx,
+  );
+  await plansService.markPlanned(fourPlan.id, ctx);
+
   return {
     email,
     password: PLANS_SHAPES_PASSWORD,
@@ -280,6 +336,13 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
       addedNodeIds: twoAddedNodeIds,
       modified: twoModified,
       untouched: twoUntouched,
+    },
+    four: {
+      planId: fourPlan.id,
+      epic: fourEpic,
+      committedCount: FOUR_COMMITTED,
+      addedTitles: fourTitles,
+      longTitle: fourLongTitle,
     },
     three: {
       planId: threePlan.id,

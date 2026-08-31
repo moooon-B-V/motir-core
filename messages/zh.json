@@ -297,7 +297,11 @@
     "event_revision_ended": "修订已完成",
     "listRevised": "已修订",
     "staleStatusOutcome": "计划已过期 —— 它要改动的工作已经完成。",
-    "staleReviewHint": "无法批准。可以拒绝它，或等待相关工作重新打开。"
+    "staleReviewHint": "无法批准。可以拒绝它，或等待相关工作重新打开。",
+    "searchLabel": "搜索本计划",
+    "showChangesAll": "此层级的每一项都来自本计划",
+    "locateChange": "定位到本计划的下一项",
+    "rowOpenAria": "打开 {name}"
   },
   "planEdits": {
     "submitting": "提交中…",
@@ -5598,7 +5602,8 @@
             "subtitle": "路线图从这里继续"
           }
         },
-        "loading": "正在加载你的路线图……"
+        "loading": "正在加载你的路线图……",
+        "searchLabel": "搜索本项目"
       },
       "validate": {
         "title": "规划前的一个决定",
@@ -6070,7 +6075,8 @@
       "roadmap": "已从路线图打开。"
     },
     "footerRestingTitle": "路线图 —— 已保存的版本",
-    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。"
+    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。",
+    "searchLabel": "搜索本项目"
   },
   "codeHealth": {
     "title": "代码健康度",

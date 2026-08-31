@@ -154,7 +154,9 @@ describe('ProjectRoadmapCanvas', () => {
   });
 
   it('search-to-focus highlights a match in the current level', async () => {
-    render(<ProjectRoadmapCanvas loadLevel={loadLevel} searchable />);
+    render(
+      <ProjectRoadmapCanvas loadLevel={loadLevel} searchable searchLabel="Search the roadmap" />,
+    );
     await screen.findByText('Epic one');
     fireEvent.change(screen.getByPlaceholderText('Search the roadmap'), {
       target: { value: 'Epic two' },
@@ -736,6 +738,7 @@ describe('ProjectRoadmapCanvas', () => {
           loadLevel={load}
           autoDescendSingleParent
           searchable
+          searchLabel="Search the roadmap"
           rootLabel="Roadmap"
           reloadKey="1"
         />,
@@ -755,6 +758,7 @@ describe('ProjectRoadmapCanvas', () => {
           loadLevel={load}
           autoDescendSingleParent
           searchable
+          searchLabel="Search the roadmap"
           rootLabel="Roadmap"
           reloadKey="2"
         />,
@@ -1068,7 +1072,14 @@ describe('ProjectRoadmapCanvas — levelCaption', () => {
 
     // The CLUSTER alone pushes it down — it is on the right, but a caption wide
     // enough to reach the right edge would run under it.
-    render(<ProjectRoadmapCanvas loadLevel={loadLevel} levelCaption="A caption" searchable />);
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        levelCaption="A caption"
+        searchable
+        searchLabel="Search the roadmap"
+      />,
+    );
     await screen.findByText('Epic one');
     expect(screen.getByTestId('level-caption').getAttribute('data-below-chrome')).toBe('true');
     cleanup();
@@ -1103,7 +1114,14 @@ describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', ()
     render(
       <ProjectRoadmapCanvas
         loadLevel={() => Promise.resolve(wide)}
-        emphasis={{ ids: ['A', 'B', 'C'], total: 11, label: 'Show changes', emptyLabel: 'None' }}
+        emphasis={{
+          ids: ['A', 'B', 'C'],
+          total: 11,
+          label: 'Show changes',
+          emptyLabel: 'None',
+          allLabel: 'All',
+          locateLabel: 'Locate',
+        }}
       />,
     );
     await screen.findByText('a');
@@ -1116,7 +1134,14 @@ describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', ()
     render(
       <ProjectRoadmapCanvas
         loadLevel={() => Promise.resolve(wide)}
-        emphasis={{ ids: ['A', 'B', 'C'], total: 3, label: 'Show changes', emptyLabel: 'None' }}
+        emphasis={{
+          ids: ['A', 'B', 'C'],
+          total: 3,
+          label: 'Show changes',
+          emptyLabel: 'None',
+          allLabel: 'All',
+          locateLabel: 'Locate',
+        }}
       />,
     );
     await screen.findByText('a');
