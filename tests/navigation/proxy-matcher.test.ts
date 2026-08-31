@@ -67,13 +67,20 @@ describe('proxy config.matcher', () => {
     expect(missing).toEqual([]);
   });
 
-  it('lists nothing the signed-in route groups do not serve', async () => {
+  it('lists nothing the signed-in route groups do not serve, except the moved public surfaces', async () => {
     // The other direction of the same rule. An entry for a path no group serves
     // is either a segment that has since been deleted or a typo, and both make
-    // the list above look more complete than it is.
+    // the list above look more complete than it is. The ONE deliberate class of
+    // extra entry is the moved public surfaces (MOTIR-3884) — `/`, `/explore`,
+    // `/docs`, `/legal` — which the proxy 308s onto motir.co.
     const { config } = await import('@/proxy');
 
-    expect(strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher)).toEqual([]);
+    const PUBLIC_REDIRECT_SEGMENTS = ['', 'explore', 'docs', 'legal'];
+    expect(
+      strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher).filter(
+        (segment) => !PUBLIC_REDIRECT_SEGMENTS.includes(segment),
+      ),
+    ).toEqual([]);
   });
 
   it('excludes /admin — the 404-not-403 posture, `platform-staff-auth.md` §2', async () => {
