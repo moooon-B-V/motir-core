@@ -300,7 +300,8 @@
     "staleReviewHint": "无法批准。可以拒绝它，或等待相关工作重新打开。",
     "searchLabel": "搜索本计划",
     "showChangesAll": "此层级的每一项都来自本计划",
-    "locateChange": "定位到本计划的下一项"
+    "locateChange": "定位到本计划的下一项",
+    "rowOpenAria": "打开 {name}"
   },
   "planEdits": {
     "submitting": "提交中…",

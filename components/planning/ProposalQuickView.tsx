@@ -71,6 +71,16 @@ export function ProposalQuickView({
       onOpenChange={(next) => (next ? undefined : onClose())}
       srTitle={item.title}
       size="xl"
+      // ONE close affordance (MOTIR-4022, design Part XIII §7). This was the only
+      // quick-view host passing neither `hideClose` nor its own suppression, so
+      // the base `Modal`'s corner x rendered BESIDE the header's own
+      // `QuickViewCloseButton` — measured at 1147,98 (24x24) and 1107,124
+      // (36x36): two glyphs 40px apart, and two controls with the identical
+      // accessible name `Close` in one dialog, which is the a11y half of the same
+      // defect. Its sibling hosts (`IssueQuickView`, `WorkItemQuickView`,
+      // `AttachmentPreview`) all pass this and keep the header button, which is
+      // the one the quick-view chrome is built around.
+      hideClose
     >
       <div className="flex h-[min(82vh,680px)] flex-col" data-testid="proposal-quick-view">
         <QuickViewHeader>

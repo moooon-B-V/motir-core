@@ -300,7 +300,8 @@
     "staleReviewHint": "Approve is unavailable. Decline it, or wait in case the work reopens.",
     "searchLabel": "Search this plan",
     "showChangesAll": "Every item on this level is this plan's",
-    "locateChange": "Locate the next of this plan's items"
+    "locateChange": "Locate the next of this plan's items",
+    "rowOpenAria": "Open {name}"
   },
   "planEdits": {
     "submitting": "Submitting…",

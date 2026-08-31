@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
+import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { planReviewItem } from '../helpers/planReview';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
@@ -373,5 +374,58 @@ describe('a renaming modify (MOTIR-4018)', () => {
     // The OUTGOING name survives, exactly once, and on the line whose job it is.
     const struck = within(row).getByText('Invoice templates');
     expect(struck.className).toContain('line-through');
+  });
+});
+
+// ── A LIST ROW OPENS ITS PROPOSAL (MOTIR-4022, design Part XIII §7) ───────────
+//
+// The row was an inert `<li>`: no handler, no role, no key binding — and
+// `ProposalQuickView` was built, shipped, and mounted only by the canvas. So the
+// list was the one body of the two that can say what a card CONTAINS and the only
+// one that could not open it.
+describe('the row opens its proposal', () => {
+  it('carries exactly ONE control, and it is the title', () => {
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided={false} />);
+    // One tab stop per row. A row of buttons is the shipped listbox-rows a11y
+    // lesson, and the chips beside the title stay non-interactive text.
+    const rows = screen.getAllByRole('listitem');
+    for (const row of rows) {
+      expect(within(row).getAllByRole('button')).toHaveLength(1);
+    }
+  });
+
+  it('names itself `Open <key> · <title>`, and `New · <title>` when the card has no key yet', () => {
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    // The visible title is contained in the accessible name (WCAG 2.5.3), and an
+    // `add` is named the way this surface already names a keyless card.
+    expect(screen.getByRole('button', { name: 'Open MOTIR-812 · Payout ledger' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open New · A proposed story' })).toBeTruthy();
+  });
+
+  it('opens the SAME quick view the canvas’s View pill opens, and closes again', async () => {
+    renderWithIntl(<PlanProposalList items={[add()]} decided={false} />);
+    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
+    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+
+    // ⚠️ ONE close affordance. The shipped modal rendered TWO controls named
+    // `Close` — the base `Modal`'s corner x beside the header's own button — and
+    // this is the assertion that keeps `hideClose` from being dropped.
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
+  });
+
+  it('stretches its hit area over the whole row, so the row is the target', () => {
+    renderWithIntl(<PlanProposalList items={[modify()]} decided={false} />);
+    const button = screen.getByRole('button', { name: /^Open MOTIR-812/ });
+    // `after:inset-0` is what makes the row clickable without wrapping the `<dl>`
+    // of change lines in a `<button>`, which would be invalid markup.
+    expect(button.className).toContain('after:absolute');
+    expect(button.className).toContain('after:inset-0');
+    const row = button.closest('li') as HTMLElement;
+    expect(row.className).toContain('relative');
+    // The ring frames the ROW, not the title's text box.
+    expect(row.className).toContain('focus-within:ring-2');
   });
 });
