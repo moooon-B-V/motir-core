@@ -87,19 +87,38 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
           const before = liveRef.current ?? [];
           const settled = before.some((row) => !body.runs.some((now) => now.id === row.id));
           liveRef.current = body.runs;
-          setLive(body.runs);
-          if (!settled) return;
+          if (!settled) {
+            setLive(body.runs);
+            return;
+          }
 
-          const pastRes = await fetch(`${base}?status=past&limit=${pageSize}`);
-          if (!pastRes.ok || cancelled) return;
-          const pastBody = (await pastRes.json()) as { runs: DispatchRunListItemDto[] };
+          // ⚠️ READ `past` BEFORE COMMITTING `live`, and the order is the whole
+          // fix. Committing the empty live list first makes `anyLive` false,
+          // which is this effect's own dependency — React tears the interval
+          // down, the cleanup sets `cancelled`, and the `past` response that was
+          // still in flight is then dropped by the guard below. The poll would
+          // cancel its own read, land on an empty page, and never recover.
+          // Leaving `live` untouched across the await keeps `anyLive` true, so
+          // the effect survives long enough to commit BOTH halves together.
+          let settledPast: DispatchRunListItemDto[] | null = null;
+          try {
+            const pastRes = await fetch(`${base}?status=past&limit=${pageSize}`);
+            if (pastRes.ok) {
+              settledPast = ((await pastRes.json()) as { runs: DispatchRunListItemDto[] }).runs;
+            }
+          } catch {
+            /* the run still leaves `live`; the past half keeps its last good rows */
+          }
           if (cancelled) return;
+
+          setLive(body.runs);
+          if (settledPast === null) return;
           // The FIRST page, deliberately: the run that just settled is the
           // newest, so it belongs at the top. This resets a reader who had paged
           // further back, which is the lesser of the two costs — the alternative
           // is a list that never learns the run it was watching is over.
-          setPast(pastBody.runs);
-          setExhausted(pastBody.runs.length < pageSize);
+          setPast(settledPast);
+          setExhausted(settledPast.length < pageSize);
         } catch {
           /* a failed poll leaves the last good list on screen */
         }

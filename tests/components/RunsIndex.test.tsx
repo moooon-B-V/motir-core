@@ -164,25 +164,51 @@ describe('⚠️ the close-out — what the list does when the run it is showing
     expect(screen.getByTestId('run-modal').textContent).toBe('run_open');
   });
 
-  it('re-reads PAST as soon as a run LEAVES the live list', async () => {
+  it('re-reads PAST as soon as a run LEAVES the live list, and RENDERS it', async () => {
     // Polling only the live half is what emptied the page: `live` went to zero
     // and `past` still held the answer from page load — taken while that same
     // run was live.
+    //
+    // ⚠️ THE PAST READ IS HELD OPEN ACROSS A RE-RENDER, deliberately, and that
+    // is the only reason this test can see the bug it exists for. Committing the
+    // empty `live` list flips `anyLive` — the poll effect's OWN dependency — so
+    // React tears the interval down and the cleanup sets `cancelled`, which then
+    // discards the in-flight `past` response. Resolving both fetches inside one
+    // `act` scope hides that entirely: an earlier version of this test asserted
+    // only that a `status=past` request was MADE, passed, and the page went on
+    // going empty in a real browser. The gate forces the interleaving.
     vi.useFakeTimers();
     try {
-      fetchMock.mockImplementation(async (url: string) =>
-        String(url).includes('status=live')
-          ? { ok: true, json: async () => ({ runs: [] }) }
-          : { ok: true, json: async () => ({ runs: [run({ id: 'r_settled' })] }) },
-      );
+      let releasePast: () => void = () => {};
+      const pastGate = new Promise<void>((resolve) => {
+        releasePast = resolve;
+      });
+      fetchMock.mockImplementation(async (url: string) => {
+        if (String(url).includes('status=live')) {
+          return { ok: true, json: async () => ({ runs: [] }) };
+        }
+        await pastGate;
+        return { ok: true, json: async () => ({ runs: [run({ id: 'r_settled' })] }) };
+      });
       mount([run({ id: 'r_settled', status: 'running' })], []);
 
+      // The poll fires and sees an empty `live`. The past read is still open.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5_000 + 50);
+      });
+      // Only now does the past half answer — after any teardown has happened.
+      await act(async () => {
+        releasePast();
+        await Promise.resolve();
       });
 
       const readPast = fetchMock.mock.calls.some((c) => String(c[0]).includes('status=past'));
       expect(readPast, 'the settled run was never looked for in `past`').toBe(true);
+      // ⚠️ ASSERTED ON WHAT RENDERS. A request proves an intent; the surviving
+      // headings prove the reader got the answer. If the past read is dropped,
+      // both halves are empty and the empty state replaces them — the bug.
+      expect(screen.queryByText('Nothing has run yet')).toBeNull();
+      expect(screen.getByText('Past runs')).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
