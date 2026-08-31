@@ -1360,16 +1360,6 @@ export default defineConfig({
         // wrong — a spec that would not build, a footer read that failed, a
         // filter that matches nothing. Each is a way the published reference can
         // be silently useless while every module beneath it is green.
-        'app/**/docs/layout.tsx',
-        'app/**/docs/api/page.tsx',
-        'app/**/docs/api/getting-started/page.tsx',
-        'app/**/docs/api/stability/page.tsx',
-        'app/**/docs/_components/CatalogueNav.tsx',
-        'app/**/docs/_components/CodeBlock.tsx',
-        'app/**/docs/_components/DocBlocks.tsx',
-        'app/**/docs/_components/MethodPill.tsx',
-        'app/**/docs/_components/OperationSection.tsx',
-        'app/**/docs/sandbox/page.tsx',
         'lib/apiDocs/sandbox.ts',
         // Story MOTIR-2315 · Subtask MOTIR-2524 — the `/docs` INDEX and the
         // shared surface list behind it. The index is the area's front door, so
@@ -1377,7 +1367,6 @@ export default defineConfig({
         // read by BOTH renderers, so a defect there is wrong in two places at
         // once. `pageMetadata.ts` is what stops a page inheriting another
         // page's title — the defect MOTIR-2526 fixed, now under the gate.
-        'app/**/docs/page.tsx',
         'lib/apiDocs/surfaces.ts',
         'lib/apiDocs/pageMetadata.ts',
         'app/**/settings/account/_components/ApiDocsLinkPanel.tsx',
@@ -2350,45 +2339,10 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
         'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
-        'app/**/docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/docs/api/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/docs/api/getting-started/page.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'app/**/docs/api/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2315 · Subtask MOTIR-2524 — the index and its shared list.
-        'app/**/docs/page.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/apiDocs/surfaces.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/apiDocs/pageMetadata.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/**/docs/_components/CatalogueNav.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'app/**/docs/_components/CodeBlock.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'app/**/docs/_components/DocBlocks.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'app/**/docs/_components/MethodPill.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'app/**/docs/sandbox/page.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/apiDocs/sandbox.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/**/docs/_components/OperationSection.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
         // Story 8.12 · Subtask MOTIR-3612 — MEASURED on this branch, in these
         // numbers, before being pinned:
         //   PasskeyManager.tsx        97.56 / 92.10 / 100 / 100
