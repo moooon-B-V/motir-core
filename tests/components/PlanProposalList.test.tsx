@@ -429,3 +429,39 @@ describe('the row opens its proposal', () => {
     expect(row.className).toContain('focus-within:ring-2');
   });
 });
+
+// ── THE PEEK-ROUTING SEAM (MOTIR-4025) ───────────────────────────────────────
+//
+// The property that stops the two bodies diverging: for the SAME proposal, the
+// list and the canvas open the SAME modal. The canvas half is asserted in
+// `plan-review-canvas.test.tsx`; this is the list half, run over all four item
+// shapes — because the row's accessible name is built from `identifier`, and an
+// `add` before and after materialization are the two cases that differ.
+describe('every item shape opens the same read view', () => {
+  const shapes: [string, ReturnType<typeof planReviewItem>][] = [
+    ['an add with no key yet', add()],
+    [
+      'an add that has MATERIALIZED',
+      planReviewItem({
+        planItemId: 'a2',
+        op: 'add',
+        identifier: 'MOTIR-901',
+        title: 'Created card',
+      }),
+    ],
+    ['a modify', modify()],
+    ['a remove', remove()],
+  ];
+
+  for (const [label, item] of shapes) {
+    it(`opens for ${label}`, async () => {
+      renderWithIntl(<PlanProposalList items={[item]} decided={false} />);
+      const row = screen.getByRole('button', { name: /^Open / });
+      fireEvent.click(row);
+      expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+      // One close, on every shape — not only on the one the fix was written for.
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
+    });
+  }
+});
