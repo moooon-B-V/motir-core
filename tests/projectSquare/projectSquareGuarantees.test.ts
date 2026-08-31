@@ -10,6 +10,11 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { scannedTestCount, testsRidingTheDefaultTimeout } from '../helpers/timeoutBudget';
 import type { ProjectSquareCardDto } from '@/lib/dto/projectSquare';
+import { runAsCloudBuild } from '../helpers/cloudBuild';
+
+// This suite asserts what the public surface SERVES, which is a CLOUD build
+// (MOTIR-4034): off-cloud every `app/api/public/*` route is an absent capability.
+runAsCloudBuild();
 
 // Story 6.13 · Subtask 6.13.7 — the PROJECT SQUARE comprehensive guarantee
 // suite. The per-subtask tests (6.13.2 directory, 6.13.3 search/tag, 6.13.4

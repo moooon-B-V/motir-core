@@ -90,7 +90,13 @@ vi.mock('@/lib/services/notificationsService', () => ({
 }));
 vi.mock('@/lib/ai/availability', () => ({ isMotirAiConfigured: () => false }));
 vi.mock('@/lib/onboarding/resumeVisibility', () => ({ resumeGateEnabled: () => false }));
-vi.mock('@/lib/billing/availability', () => ({ isCloudBilling: () => false }));
+// Both predicates (MOTIR-4035): the shell asks the BILLING question for the org
+// menu's plans row and the CLOUD question for the build-in-public slot. Mocking
+// only the first leaves `isCloud` undefined and the layout throws at render.
+vi.mock('@/lib/billing/availability', () => ({
+  isCloudBilling: () => false,
+  isCloud: () => false,
+}));
 vi.mock('@/lib/mappers/workspaceMappers', () => ({ toWorkspaceSummaryDTO: (w: unknown) => w }));
 vi.mock('@/lib/permissions/catalog', () => ({}));
 

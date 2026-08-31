@@ -25,7 +25,7 @@
 // the URL-driven rank/search/tag navigation, and the card → public-view
 // handoff.
 //
-// Setup mirrors public-project-flow.spec.ts (the 6.12.10 sibling): the public
+// Setup mirrors cloud-public-project-flow.spec.ts (the 6.12.10 sibling): the public
 // projects, their tags, votes, and made-public state are created SERVER-SIDE
 // through the shipped services + the repository edge (the one sanctioned
 // cross-layer reach for tests); EVERY navigation, sort, search, filter, and
@@ -33,7 +33,7 @@
 //
 // NB on the card's flagged knock-on: the card warned the 6.12.4 view might still
 // be account-required (assert a sign-in redirect "until the 6.12-side anonymous
-// revision lands"). That revision HAS landed — public-project-flow.spec.ts drives
+// revision lands"). That revision HAS landed — cloud-public-project-flow.spec.ts drives
 // an anonymous visitor to `/p/<key>` and gets the public surface with no session
 // — so this test asserts the real public view, not a redirect.
 

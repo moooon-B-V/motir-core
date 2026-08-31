@@ -20,7 +20,7 @@
 //   4. the admin UNSETS privacy → the public viewer (re-loaded) now sees the
 //      children too, proving the toggle drives enforcement LIVE.
 //
-// Division of labour (mirrors public-project-flow.spec.ts): the integration /
+// Division of labour (mirrors cloud-public-project-flow.spec.ts): the integration /
 // vitest suite (6.14.8) pins the access + projection matrix and the
 // admin-ONLY permission gate at the service layer; this file owns the thing only
 // a browser proves — the real toggle, the rendered placeholders, the member
@@ -45,6 +45,22 @@ import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+
+// ⚠️ MOVED TO THE CLOUD LANE (Story MOTIR-3908 · MOTIR-4038). This spec exercises
+// the PUBLIC-PROJECTS capability, which is now cloud-only: with `MOTIR_CLOUD`
+// unset `app/api/public/*` answers 404 and the publish affordance is not
+// rendered. The MAIN lane sets no `MOTIR_CLOUD` (`playwright.config.ts` — and
+// deliberately: turning it on there would activate the §4 entitlement caps and
+// surface the billing row, breaking unrelated specs), so this spec would assert
+// a product that is switched off. It runs in `playwright.cloud.config.ts`'s
+// cloud-on lane instead, which is what the `cloud-` prefix selects.
+//
+// ⚠️ THE COST: that lane is the `billing-cloud` leg of `e2e-at-scale`, which runs
+// on push-to-`main` and on a pull request carrying the `e2e-at-scale` LABEL — not
+// on every pull request, as this spec did before. That is a real reduction in
+// per-PR coverage and it is recorded rather than absorbed; the self-host arm the
+// main lane keeps is `public-selfhost.spec.ts`. A per-PR cloud-on lane is the
+// alternative and is its own card.
 
 test.describe.configure({ timeout: 180_000 });
 

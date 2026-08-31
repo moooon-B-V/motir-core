@@ -4,6 +4,7 @@ import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidRoadmapCursorError } from '@/lib/publicProjects/roadmapCursor';
 import { PUBLIC_ROADMAP_BUCKET_KEYS, type PublicRoadmapBucketKey } from '@/lib/dto/publicProjects';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // Public roadmap per-column pagination endpoint (Story 6.12 · Subtask 6.12.7) —
 // the "Load more" fetch behind one roadmap column (submitted / planned /
@@ -21,6 +22,11 @@ function isRoadmapBucketKey(value: string | null): value is PublicRoadmapBucketK
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;

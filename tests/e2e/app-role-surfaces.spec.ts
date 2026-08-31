@@ -3,9 +3,9 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedScrumBoard, type ScrumSeed } from './_helpers/scrum-board-seed';
 import { isAppRoleE2E, type ServerDbRole } from './_helpers/appRoleServer';
+import { adminDb } from '../helpers/adminDb';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 
 // THE `motir_app` SURFACE SPEC (MOTIR-2796 · MOTIR-2816) — the rehearsal for the
@@ -218,13 +218,22 @@ test('7 · the PUBLIC page works signed OUT — the arms are still open', async 
   // other assertion in the file, and the reason `publicProjectsService` carries
   // nine standing `public-arm` verdicts in the call-site guard.
   //
-  // Flipped through the SERVICE (the shipped write path), not a raw UPDATE, so
-  // the page is public the way the product makes it public.
-  await projectMembersService.setAccessLevel({
-    key: PROJECT_KEY,
-    actorUserId: seed.userId,
-    ctx: { userId: seed.userId, workspaceId: seed.workspaceId, projectId: seed.projectId },
-    level: 'public',
+  // ⚠️ FLIPPED THROUGH `adminDb`, AND IT USED TO GO THROUGH THE SERVICE — the
+  // reason is worth keeping because the old comment's intent is still right.
+  // It read: *"flipped through the SERVICE (the shipped write path), not a raw
+  // UPDATE, so the page is public the way the product makes it public."*
+  // Since Story MOTIR-3908 the product's write path REFUSES `public` on a
+  // self-hosted build (`PublicAccessUnavailableError`), and this lane is
+  // off-cloud — so the shipped write path can no longer produce the state this
+  // test reads. The row it needs is identical either way (`accessLevel`; the
+  // service additionally stamps `madePublicAt`, which no RLS policy reads), and
+  // the SUBJECT here is the READ binding — `work_item_public_project_read` and
+  // `project_public_read` firing when `app.workspace_id` is UNSET — which the
+  // gate does not touch. The publish path's own two arms are
+  // `tests/integration/publicSurfaceCloudGate.test.ts`'s.
+  await adminDb.project.update({
+    where: { id: seed.projectId },
+    data: { accessLevel: 'public' },
   });
 
   // A fresh context: no cookies, no session, nothing bound anywhere.

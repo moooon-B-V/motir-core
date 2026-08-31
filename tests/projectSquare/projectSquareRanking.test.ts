@@ -16,6 +16,13 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { scannedTestCount, testsRidingTheDefaultTimeout } from '../helpers/timeoutBudget';
+import { runAsCloudBuild } from '../helpers/cloudBuild';
+
+// The project SQUARE is a cloud-only capability (Story MOTIR-3908), and this
+// file's `madePublicAt` cases publish a project — refused off-cloud, which is
+// what a Vitest run is by default. It asserts what a CLOUD build does, so it
+// says so (MOTIR-4037).
+runAsCloudBuild();
 
 // Story 6.13 · Subtask 6.13.4 — the PROJECT SQUARE ranking: trending (recent
 // windowed upvotes + activity), popular (lifetime upvotes), recent (made-public

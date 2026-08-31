@@ -11,6 +11,11 @@ import {
   publicTreeLevelSchema,
   publicWorkItemPageSchema,
 } from '@/lib/api/public/openapi/schemas';
+import { runAsCloudBuild } from '../../helpers/cloudBuild';
+
+// This suite asserts what the public surface SERVES, which is a CLOUD build
+// (MOTIR-4034): off-cloud every `app/api/public/*` route is an absent capability.
+runAsCloudBuild();
 
 // ⚠️ THE DRIFT GUARD, AND IT RUNS IN THIS REPOSITORY'S CI (MOTIR-3946).
 //

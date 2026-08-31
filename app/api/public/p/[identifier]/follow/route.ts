@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { publicFollowService } from '@/lib/services/publicFollowService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { enforcePublicFollowRateLimit } from '@/lib/rateLimit/publicFollowGuard';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // The ACCOUNT follow toggle (Story 8.9 · Subtask 8.9.5). Unlike the public READ
 // routes beside it, this one IS session-gated: following is a relationship
@@ -21,6 +22,11 @@ async function requireSession() {
 
 /** Follow, or update the digest opt-in on an existing follow. */
 export async function POST(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const actorUserId = await requireSession();
   if (!actorUserId) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
@@ -54,6 +60,11 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ identifier: string }> },
 ) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const actorUserId = await requireSession();
   if (!actorUserId) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });

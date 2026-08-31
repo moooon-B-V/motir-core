@@ -334,7 +334,7 @@ test.describe('@a11y widened route coverage', () => {
 
     // Flip the project PUBLIC — the ONE filter the square and the /p/[key]
     // portal read (`accessLevel = 'public'`). Written directly because the
-    // make-public JOURNEY is public-project-flow.spec.ts's subject; here it is
+    // make-public JOURNEY is cloud-public-project-flow.spec.ts's subject; here it is
     // fixture state, and driving the confirm dialog would add a surface this
     // test does not audit.
     await db.project.update({
