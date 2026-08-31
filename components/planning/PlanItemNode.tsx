@@ -290,11 +290,11 @@ function DiffLine({
       data-testid="diff-line"
       className="mt-1.5 flex shrink-0 items-center gap-1 overflow-hidden text-xs text-(--el-text-secondary)"
     >
-      <span className="shrink-0 font-medium text-(--el-text-muted)">
+      <span className="shrink-0 font-medium text-(--el-text-secondary)">
         {fieldLabel(t, first.field)}
       </span>
       {first.from != null ? (
-        <span className="truncate text-(--el-text-muted) line-through">{first.from}</span>
+        <span className="truncate text-(--el-text-secondary) line-through">{first.from}</span>
       ) : null}
       <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
       <span className="truncate font-medium text-(--el-text)">{first.to ?? '—'}</span>
