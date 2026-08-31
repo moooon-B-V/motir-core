@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
+import { publicSiteOrigin } from '@/lib/publicProjects/urls';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
 // Optimistic cookie-presence check on every incoming request to a
 // protected route: if no session cookie is present, bounce to /sign-in.
@@ -51,7 +53,52 @@ import { getSessionCookie } from 'better-auth/cookies';
  */
 export const CURRENT_PATH_HEADER = 'x-current-path';
 
+/**
+ * The top-level URL segments that have MOVED to the public site (MOTIR-3884).
+ * `''` is the root `/`. The proxy 308s these to `motir.co` (the public origin)
+ * once `MOTIR_PUBLIC_SITE_URL` is configured, path and query preserved.
+ *
+ * `/p/*` is included. Its move to `motir.co` is MOTIR-3877's (which renders the
+ * replacement), but the redirect ships here and MOTIR-3951 deletes the page from
+ * this application — so `/p/*` must 308 onto the public host, not 404.
+ */
+export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal', 'p']);
+
+/**
+ * Redirect a moved public surface to the public origin, or `null` when this
+ * request is not one. Gated on the public origin being CONFIGURED: while
+ * `MOTIR_PUBLIC_SITE_URL` is unset, `publicSiteOrigin()` falls back to THIS
+ * origin and a redirect would loop — so nothing fires until the cutover card
+ * points the public origin at `motir.co`.
+ */
+function publicSiteRedirect(request: NextRequest): NextResponse | null {
+  if (publicSiteOrigin() === resolveBaseUrlTrimmed()) return null;
+  const segment = request.nextUrl.pathname.split('/')[1] ?? '';
+  if (!PUBLIC_REDIRECT_SEGMENTS.has(segment)) return null;
+  const destination = new URL(
+    request.nextUrl.pathname + request.nextUrl.search,
+    publicSiteOrigin(),
+  );
+  return NextResponse.redirect(destination, 308);
+}
+
 export function proxy(request: NextRequest) {
+  // The moved public surfaces leave this application first (MOTIR-3884): they
+  // are answered on motir.co now, so the session bounce below is not theirs.
+  const moved = publicSiteRedirect(request);
+  if (moved) return moved;
+
+  // While MOTIR_PUBLIC_SITE_URL is unset the moved surfaces are still served
+  // HERE — the root `/` runs its own session handling in `app/page.tsx` (no
+  // session → `/sign-in`, session → `/home`), and the deleted pages 404. They
+  // are NOT protected routes, so forward them untouched rather than bouncing a
+  // cookie-less request to `/sign-in?next=…` (which would shadow the root's
+  // own contract and turn a deleted page's 404 into a sign-in redirect).
+  const segment = request.nextUrl.pathname.split('/')[1] ?? '';
+  if (PUBLIC_REDIRECT_SEGMENTS.has(segment)) {
+    return NextResponse.next();
+  }
+
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
     const signInUrl = new URL('/sign-in', request.url);
@@ -112,6 +159,15 @@ export const config = {
   // `requirePlatformStaff()` with the ordinary 404. It costs nothing: that
   // layout makes the same session read every authed page already makes.
   matcher: [
+    // The MOVED public surfaces (MOTIR-3884) — the proxy runs on them to 308
+    // them onto motir.co. `/p/*` IS here: its move to motir.co was folded into
+    // this redirect set (MOTIR-3877 renders the replacement; MOTIR-3951 deletes
+    // the page here), so it must 308, not 404.
+    '/',
+    '/explore/:path*',
+    '/docs/:path*',
+    '/legal/:path*',
+    '/p/:path*',
     '/backlog/:path*',
     '/boards/:path*',
     '/code-health/:path*',

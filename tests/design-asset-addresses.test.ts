@@ -453,6 +453,318 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   // excused. (Contrast the point-in-time rows above, which are permanent: those
   // record an address that WAS live when the asset was drawn and has since moved
   // away, and nothing is ever coming back to change them.)
+
+  // ── The public reading surface moved to motir-marketing (MOTIR-3932) ──
+  {
+    file: 'design/agent-sandbox/agent-sandbox.mock.html',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/agent-sandbox/agent-sandbox.mock.html',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/agent-sandbox/agent-sandbox.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/agent-sandbox/design-notes.md',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/agent-sandbox/design-notes.md',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/agent-sandbox/design-notes.md',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    address: '/docs/api/getting-started',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    address: '/docs/api/stability',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    address: '/docs/api/getting-started',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    address: '/docs/api/stability',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    address: '/docs/cli',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/docs/cli',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/docs/mcp',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/docs/api/getting-started',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/docs/api/stability',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/docs/cli',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/cli-guide/design-notes.md',
+    address: '/docs/cli',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/home/home.mock.html',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/mcp',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/mcp/tools',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/docs/api',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/docs/mcp',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/docs/mcp/tools',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/docs/sandbox',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/design-notes.md',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/design-notes.md',
+    address: '/explore/opengraph-image',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/opengraph-image',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/topic/ai',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/topic/content',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/topic/design',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/topic/developer-tools',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/topic/open-source',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/topic/productivity',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-projects/design-notes.md',
+    address: '/p/[identifier]/items/[key]',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-projects/public-projects.mock.html',
+    address: '/p/moooon-motir/opengraph-image',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/explore/topic/[slug]',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/p/[identifier]',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/roadmap/root-non-epic-rows.mock.html',
+    address: '/explore/topic/[slug]',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/shell/design-notes.md',
+    address: '/explore',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    address: '/docs',
+    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -658,11 +970,11 @@ describe('the sweep catches the drift it was written for', () => {
       '/api-docs redirects-away',
       '/api-docs/getting-started redirects-away',
       '/api-docs/stability redirects-away',
-      // ⚠️ `/docs ok`, not `redirects-away`, since MOTIR-2523: the area root is
-      // a real page now (Amendment 19 Q1) and its redirect is deleted. The
-      // three `/api-docs*` verdicts — the drift this fixture was written to
-      // prove the sweep catches — are unchanged, which is the point of the case.
-      '/docs ok',
+      // ⚠️ `/docs` resolves-to-nothing since MOTIR-3951: the docs surface moved
+      // to motir-marketing, so the redirect TARGET no longer resolves on this
+      // host. The three `/api-docs*` verdicts — the drift this fixture was
+      // written to prove the sweep catches — are unchanged.
+      '/docs resolves-to-nothing',
     ]);
   });
 
@@ -672,21 +984,6 @@ describe('the sweep catches the drift it was written for', () => {
       '/api-docs/getting-started redirects-away',
       '/api-docs/stability redirects-away',
     ]);
-  });
-
-  it('passes the corrected asset that shipped in its place', () => {
-    const corrected = readFileSync(join(ROOT, 'design/api-docs/api-docs.mock.html'), 'utf8');
-    const stillDead = addressesIn(corrected)
-      .map(({ raw }) => toPageAddress(raw))
-      .filter((address): address is string => address !== null)
-      .filter((address) => classify(address) !== null);
-    expect([...new Set(stillDead)]).toEqual([]);
-  });
-
-  it('accepts an address that a redirect POINTS AT, not just any /docs path', () => {
-    expect(classify('/docs/api')).toBeNull();
-    expect(classify('/docs/api/getting-started')).toBeNull();
-    expect(classify('/docs/sandbox')).toBeNull();
   });
 });
 
@@ -1060,6 +1357,153 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   // MOTIR-3680's forward-looking row is gone — deleted by the card that built
   // the file, in the same commit that landed it beside its `ACCOUNT_SETTINGS_NAV`
   // entry, exactly as that row's own `why` instructed.
+
+  // ── The public rendering files were deleted (MOTIR-3951) ──
+  {
+    file: 'design/agent-sandbox/agent-sandbox.mock.html',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/agent-sandbox/design-notes.md',
+    path: 'app/(public)/docs/_components/OperationSection.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    path: 'app/(public)/docs',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    path: 'app/(public)/docs/_components/CatalogueNav.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    path: 'app/(public)/explore',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    path: 'tests/api-docs',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    path: 'app/(public)/docs/layout.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/api-docs/docs-index.mock.html',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/brand/brand-mark.mock.html',
+    path: 'app/(public)/_components/PublicTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/brand/brand-mark.mock.html',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/brand/brand-mark.mock.html',
+    path: 'app/(public)/p/[identifier]/opengraph-image.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/brand/design-notes.md',
+    path: 'app/(public)/_components/PublicTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/brand/design-notes.md',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/design-system/design-notes.md',
+    path: 'app/(public)/_components/PublicRoadmapVote.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/home/design-notes.md',
+    path: 'app/(public)/_components/PublicTabNav.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/public-projects/design-notes.md',
+    path: 'app/(public)/_components/PublicOverviewHero.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/public-projects/design-notes.md',
+    path: 'app/(public)/_components/PublicTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/public-projects/public-changelog.mock.html',
+    path: 'app/(public)/_components/PublicTabNav.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/public-projects/public-signin-modal.mock.html',
+    path: 'app/(public)/_components',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    path: 'app/(public)/explore/_components',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    path: 'app/(public)/explore/_components/ExploreTopBar.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/settings/arrival.mock.html',
+    path: 'app/(public)/explore/(square)/loading.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/settings/design-notes.md',
+    path: 'app/(public)/explore/(square)/loading.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/shell/design-notes.md',
+    path: 'app/(public)/explore/(square)/loading.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    path: 'app/(public)/explore/(square)/loading.tsx',
+    why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
 ];
 
 describe('a design asset cites source paths that still exist', () => {

@@ -94,7 +94,6 @@ describe('the coverage gate resolves every pattern it names', () => {
         'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx',
         'app/(authed)/settings/project/repositories/_components/RepositoriesRoom.tsx',
         'app/(auth)/device/_components/DeviceApproval.tsx',
-        'app/(public)/docs/sandbox/page.tsx',
       ]),
     );
   });

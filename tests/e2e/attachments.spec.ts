@@ -369,32 +369,31 @@ test('an absolute link the app BUILDS resolves — the app-URL contract from the
   page,
   baseURL,
 }) => {
-  // The sitemap is the cheapest surface that EMITS the app's own origin: every
-  // <loc> comes from publicSiteOrigin() → resolveBaseUrlTrimmed(), the single
-  // accessor MOTIR-2388 collapsed the four VERCEL_* / BETTER_AUTH_URL rungs
-  // into. It needs no seeding (the origin, /explore and its rank tabs are
-  // unconditional) and no session, so it exercises the accessor and nothing
-  // else.
-  const sitemap = await page.request.get('/sitemap.xml');
-  expect(sitemap.status()).toBe(200);
+  // robots.txt is the cheapest surface that EMITS the app's own origin now that
+  // the sitemap lists no public pages (they moved to motir-marketing,
+  // MOTIR-3951): its `sitemap:` line comes from resolveBaseUrlTrimmed(), the
+  // single accessor MOTIR-2388 collapsed the four VERCEL_* / BETTER_AUTH_URL
+  // rungs into. It needs no seeding and no session, so it exercises the
+  // accessor and nothing else.
+  const robots = await page.request.get('/robots.txt');
+  expect(robots.status()).toBe(200);
 
-  const locations = [...(await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
-  expect(locations.length).toBeGreaterThan(0);
+  const sitemapLine = (await robots.text()).match(/^sitemap:\s*(\S+)\s*$/im);
+  expect(sitemapLine, 'robots.txt advertises a sitemap URL').toBeTruthy();
+  const sitemapUrl = sitemapLine![1]!;
+
   // ABSOLUTE, and on the origin this run is actually driving. A relative link,
   // or one carrying some other host, is precisely what an unset or mis-set
   // MOTIR_BASE_URL produces — and it fails silently everywhere else, because a
   // wrong origin in an email is only discovered by the person who clicks it.
-  for (const location of locations) expect(location.startsWith(`${baseURL}`)).toBe(true);
-
-  const explore = locations.find((location) => location.endsWith('/explore'));
-  expect(explore, 'the sitemap advertises /explore').toBeTruthy();
+  expect(sitemapUrl.startsWith(`${baseURL}`)).toBe(true);
 
   // Follow it the way an outside reader would — with the absolute URL, not a
-  // path — and land on the page it claims.
-  const landed = await page.goto(explore!);
+  // path — and land on the file it claims (an empty urlset, which still
+  // resolves 200).
+  const landed = await page.goto(sitemapUrl);
   expect(landed?.status()).toBe(200);
   // `startsWith`, not equality: the assertion is that the generated origin is
-  // the one the browser stays on, and the page is free to append its own query.
-  expect(page.url().startsWith(explore!)).toBe(true);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  // the one the browser stays on.
+  expect(page.url().startsWith(sitemapUrl)).toBe(true);
 });

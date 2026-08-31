@@ -312,92 +312,10 @@ test.describe('@a11y widened route coverage', () => {
     expectClean(reports);
   });
 
-  // The PUBLIC surfaces — swept with NO session at all, which is how a visitor
-  // and a crawler reach them, and populated so the square's cards and the
-  // public work-item tree render real content (a card's relative "active"
-  // timestamp, the tree's "Showing N of M" tail) rather than empty states.
-  // The fixture is seeded entirely server-side, so this browser context never
-  // signs in and the pages are audited exactly as an anonymous visitor gets
-  // them.
-  test('the public routes are axe-clean with no session and a POPULATED square (WCAG 2.1 AA; strict)', async ({
-    page,
-  }) => {
-    const tenant = await seedTenant({
-      email: 'e2e-a11y-wide-public@example.com',
-      name: 'Bo Wide',
-      workspaceName: 'Public Sweep Workspace',
-      projectName: 'Open Roadmap',
-      projectKey: 'OPEN',
-    });
-
-    const reports: string[] = [];
-
-    // Flip the project PUBLIC — the ONE filter the square and the /p/[key]
-    // portal read (`accessLevel = 'public'`). Written directly because the
-    // make-public JOURNEY is cloud-public-project-flow.spec.ts's subject; here it is
-    // fixture state, and driving the confirm dialog would add a surface this
-    // test does not audit.
-    await db.project.update({
-      where: { id: tenant.projectId },
-      data: { accessLevel: 'public', publicTagline: 'What we are building, in the open.' },
-    });
-
-    // Enough items that the portal's tree renders rows AND its count tail.
-    for (const title of [
-      'Dark mode for the dashboard',
-      'Export the board to CSV',
-      'Keyboard shortcuts for navigation',
-    ]) {
-      await workItemsService.createWorkItem(
-        { projectId: tenant.projectId, kind: 'task', title },
-        tenant.ctx,
-      );
-    }
-
-    // ── /explore — the project square, populated gallery ─────────────────────
-    await page.goto('/explore');
-    await expect(
-      page.getByRole('heading', { name: /^Explore public project plans/ }),
-    ).toBeVisible();
-    await expect(page.getByText('Open Roadmap').first()).toBeVisible();
-    await sweep(page, '/explore (populated square)', reports);
-
-    // ── /docs — the area INDEX, a route of its own ───────────────────────────
-    // ⚠️ It used to be a PERMANENT redirect to /docs/api, and this sweep used to
-    // follow it with a `waitForURL`. MOTIR-2523 deleted that rule (ADR
-    // Amendment 19 Q5) and `/docs` now renders the documentation area's front
-    // door: a title, a lede and one row per documented surface, with no
-    // catalogue rail. So it is a NEW public route, and this spec's subject is
-    // exactly "the public routes are axe-clean" — it gets its own sweep rather
-    // than being folded into the reference's.
-    await page.goto('/docs');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await sweep(page, '/docs (the area index)', reports);
-
-    // ── /docs/api — the catalogue's entry pane, now reached directly ─────────
-    await page.goto('/docs/api');
-    await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
-    // MOTIR-2494 removed this route's carve-out (`scrollable-region-focusable`,
-    // 20+ code panes with nothing focusable in them) by measuring each pane and
-    // making the ones that OVERFLOW a named focus stop. That measurement runs
-    // on hydration, so wait for it before axe reads the DOM — an unmeasured
-    // page is indistinguishable from an unfixed one, and would fail this sweep
-    // intermittently rather than honestly.
-    await expect(page.locator('pre[tabindex="0"]').first()).toBeAttached();
-    await sweep(page, '/docs/api (the reference)', reports);
-
-    // ── /p/[identifier] — the public project overview ────────────────────────
-    await page.goto(`/p/${tenant.projectKey}`);
-    await expect(page.getByRole('heading', { name: 'Open Roadmap', level: 1 })).toBeVisible();
-    await sweep(page, '/p/[identifier] (overview)', reports);
-
-    // ── /p/[identifier]/items — the public work-item projection, whose tail is
-    //    the literal "Showing N of M" the finding named. ────────────────────
-    await page.goto(`/p/${tenant.projectKey}/items`);
-    await expect(page.getByRole('heading', { name: 'Work items', level: 1 })).toBeVisible();
-    await expect(page.getByText('Export the board to CSV').first()).toBeVisible();
-    await sweep(page, '/p/[identifier]/items (populated)', reports);
-
-    expectClean(reports);
-  });
+  // The public-routes sweep ("the public routes are axe-clean … a POPULATED
+  // square") MOVED OUT with the surface it audited: `/explore`, `/docs` and
+  // `/p/[identifier]` are served on motir.co now (MOTIR-3951 deleted them from
+  // this repository), so there is nothing for this file to `goto`. The a11y
+  // audit of those pages is motir-marketing's to carry alongside the pages
+  // themselves, not this repository's.
 });

@@ -120,9 +120,6 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   // deleted the last link to it.)
   'console.neon.tech': "operator link to Neon's console; never requested by the server",
   'sentry.io': "operator link to Sentry's issue list; never requested by the server",
-
-  // A vocabulary namespace, not an endpoint.
-  'schema.org': 'JSON-LD vocabulary namespace; never requested',
 };
 
 /**

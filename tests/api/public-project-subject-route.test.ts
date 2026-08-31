@@ -27,7 +27,6 @@ const routeSrc = readFileSync(
   join(process.cwd(), 'app/api/public/p/[identifier]/route.ts'),
   'utf8',
 );
-const pageSrc = readFileSync(join(process.cwd(), 'app/(public)/p/[identifier]/page.tsx'), 'utf8');
 
 const getOverview = vi.hoisted(() => vi.fn());
 const getSession = vi.hoisted(() => vi.fn());
@@ -84,15 +83,12 @@ describe('GET /api/public/p/[identifier]', () => {
   });
 
   // ── the projection guard ──────────────────────────────────────────────────
-  // The card's contract is that this route returns what the PAGE renders. That
-  // cannot be asserted at runtime without duplicating the page, so it is
-  // asserted at the source: both reach the same service method, so a field the
-  // page gains is a field this route returns, by construction. If the page ever
-  // switches to a richer read, this fails and the contract is re-decided
-  // deliberately instead of drifting.
-  it('reads the SAME projection the page renders — one service method, not two', () => {
+  // The card's contract was that this route returns what the PAGE rendered. The
+  // page has since moved to motir-marketing (MOTIR-3951 deleted
+  // app/(public)/p), so the guard that remains is that the route reaches the
+  // service through the same cache() wrapper, not a second projection.
+  it('reads the same projection through the cache wrapper', () => {
     expect(routeSrc).toMatch(/publicProjectsService\.getOverview\(/);
-    expect(pageSrc).toMatch(/getPublicOverview\(/);
     // `getPublicOverview` is the cache() wrapper over the same call.
     const viewerCtx = readFileSync(
       join(process.cwd(), 'lib/publicProjects/viewerContext.ts'),

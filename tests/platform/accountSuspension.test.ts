@@ -117,16 +117,12 @@ describe('where it is wired', () => {
     //
     // Distinguishing it enumerates nothing, because of WHEN the code is raised:
     // the guard hangs off `session.create`, which runs only after the credential
-    // has verified. Both surfaces are asserted, because fixing one and leaving
-    // the other is the shape of this defect's recurrence.
-    for (const file of [
-      'app/(auth)/sign-in/_components/SignInCard.tsx',
-      'app/(public)/_components/PublicAuthDialog.tsx',
-    ]) {
-      const source = readFileSync(file, 'utf8');
-      expect(source, file).toContain("code === 'ACCOUNT_SUSPENDED'");
-      expect(source, file).toContain('signInErrorKey(result.error)');
-    }
+    // has verified. (The other credential surface — the public auth dialog —
+    // moved to motir-marketing in MOTIR-3951, so only the sign-in card remains
+    // in this repository to assert.)
+    const source = readFileSync('app/(auth)/sign-in/_components/SignInCard.tsx', 'utf8');
+    expect(source).toContain("code === 'ACCOUNT_SUSPENDED'");
+    expect(source).toContain('signInErrorKey(result.error)');
   });
 
   it('the message it renders is the same one the guard raises', () => {
