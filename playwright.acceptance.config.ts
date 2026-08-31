@@ -224,6 +224,12 @@ export default defineConfig({
         GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         MOTIR_BASE_URL: BASE_URL,
+        // MOTIR-3886 — the moved public surfaces' redirect destination. A
+        // synthetic public origin so the redirect FIRES here and points at a
+        // host that need not be reachable (the spec asserts the Location header
+        // without following it). Must differ from MOTIR_BASE_URL above, which is
+        // the gate `publicSiteRedirect` reads. Test-only, never a real deploy.
+        MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
         E2E_DISABLE_RATE_LIMIT: '1',
         E2E_DISABLE_DEV_INDICATOR: '1',
         // Mock the object store so any in-app upload the spec drives never needs
