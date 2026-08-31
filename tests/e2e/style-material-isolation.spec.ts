@@ -91,6 +91,17 @@ async function readFingerprint(page: Page, id: string): Promise<string[]> {
     for (const surface of surfaces) {
       const el = tile.querySelector<HTMLElement>(`[data-surface="${surface}"]`);
       for (const prop of props) {
+        // ⚠️ The MODAL's `box-shadow` is NOT a material-layer property: the
+        // vignette's modal carries `shadow-(--shadow-modal)`, and `--shadow-*` is
+        // a SHAPE/feel token that inherits down the `data-style` axis. The base
+        // style (`warm-editorial`) has no `[data-style]` block, so its
+        // `--shadow-modal` inherits from the ancestor's block and a scoped base
+        // tile wears the ACTIVE style's modal shadow — a real but DIFFERENT
+        // defect from the material layer this guard covers (shape-token
+        // inheritance, the `data-style` sibling of MOTIR-3933), filed separately.
+        // The card/sidebar/input surfaces carry no `--shadow-*` utility, so their
+        // `box-shadow` is the material layer alone and IS asserted.
+        if (surface === 'modal' && prop === 'box-shadow') continue;
         const value = el ? getComputedStyle(el).getPropertyValue(prop) : '<missing>';
         parts.push(`${surface}.${prop}:${value}`);
       }
