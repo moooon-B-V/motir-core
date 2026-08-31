@@ -6,6 +6,7 @@ import {
   InvalidProjectSquareRankError,
   InvalidProjectSquareWindowError,
 } from '@/lib/projectSquare/errors';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // The PROJECT SQUARE directory endpoint (Story 6.13 · Subtasks 6.13.2 + 6.13.4 +
 // 6.13.3) — the cross-org list of every `public` project that backs the
@@ -20,6 +21,11 @@ import {
 // call → map errors.
 
 export async function GET(req: Request): Promise<NextResponse> {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const params = new URL(req.url).searchParams;
   const cursor = params.get('cursor') ?? undefined;
   const rank = params.get('rank') ?? undefined;

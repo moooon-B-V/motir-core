@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { runAsCloudBuild } from '../helpers/cloudBuild';
+
+// This suite asserts what the public surface SERVES, which is a CLOUD build
+// (MOTIR-4034): off-cloud every `app/api/public/*` route is an absent capability.
+runAsCloudBuild();
 
 // The public project SUBJECT route (MOTIR-3945) — the endpoint the page's own
 // subject never had, while every list beside it did.

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { projectTagsService } from '@/lib/services/projectTagsService';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // GET /api/public/categories (Story 6.13 · Subtask 6.13.5) — the PROJECT SQUARE
 // browse-by-topic facet: every category with at least one PUBLIC project, with
@@ -13,6 +14,11 @@ import { projectTagsService } from '@/lib/services/projectTagsService';
 // repository aggregate, so this handler is pure transport: one service call.
 
 export async function GET(): Promise<NextResponse> {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const categories = await projectTagsService.listCategories();
   return NextResponse.json({ categories });
 }

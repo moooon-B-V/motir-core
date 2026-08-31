@@ -4,6 +4,7 @@ import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import type { TriageSubmissionKind } from '@/lib/services/triageService';
 import { mapPublicProjectError } from '@/lib/publicProjects/errorResponse';
 import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // POST /api/public/projects/[projectId]/requests (Story 6.12 · Subtask 6.12.5)
 // — the cross-account public "submit a request" intake. ANY signed-in account
@@ -23,6 +24,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ): Promise<Response> {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   // The shared per-IP ceiling (8.5.9 / MOTIR-1165), BEFORE the session read: an
   // account is free to create, so the per-account throttle inside the service
   // bounds one identity while this bounds one origin.

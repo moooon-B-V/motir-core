@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidChangelogCursorError } from '@/lib/publicProjects/changelogCursor';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // Public CHANGELOG pagination endpoint (Story 8.9 · Subtask 8.9.4) — the "Load
 // more" fetch behind the Changelog tab. The same shape as the Work items and
@@ -19,6 +20,11 @@ import { InvalidChangelogCursorError } from '@/lib/publicProjects/changelogCurso
 // `changelogCursor.ts`).
 
 export async function GET(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;

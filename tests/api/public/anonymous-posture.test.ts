@@ -1,6 +1,11 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { runAsCloudBuild } from '../../helpers/cloudBuild';
+
+// This suite asserts what the public surface SERVES, which is a CLOUD build
+// (MOTIR-4034): off-cloud every `app/api/public/*` route is an absent capability.
+runAsCloudBuild();
 
 // THE ANONYMOUS POSTURE, PER ROUTE — asserted by CALLING each one with no
 // session (MOTIR-3885).
