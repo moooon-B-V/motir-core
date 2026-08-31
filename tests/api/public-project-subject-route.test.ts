@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { runAsCloudBuild } from '../helpers/cloudBuild';
+
+// This suite asserts what the public surface SERVES, which is a CLOUD build
+// (MOTIR-4034): off-cloud every `app/api/public/*` route is an absent capability.
+runAsCloudBuild();
 
 // The public project SUBJECT route (MOTIR-3945) — the endpoint the page's own
 // subject never had, while every list beside it did.
@@ -11,7 +16,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 // and that is right where a route OWNS a query. This route owns none: it is
 // `params` → one service call → error mapping, and the service it calls
 // (`getOverview`) is the SAME one `app/(public)/p/[identifier]/page.tsx` already
-// reads through, exercised by `tests/e2e/public-project-flow.spec.ts` against a
+// reads through, exercised by `tests/e2e/cloud-public-project-flow.spec.ts` against a
 // real project. Re-seeding a workspace here would test `getOverview` a second
 // time and this route not at all. What IS this route's own behaviour — the
 // anonymous posture, the 404 mapping, and the promise that its projection is the

@@ -30,7 +30,7 @@ import { ThemeProvider } from '@/lib/contexts/theme-context';
 //
 // The pixel half — `document.elementFromPoint` at the hamburger's centre at
 // 375×812 AND 700×812, and the drawer strip the displaced controls land in — is
-// `tests/e2e/top-bar-budget.spec.ts`, in a real browser against the real CSS.
+// `tests/e2e/cloud-top-bar-budget.spec.ts`, in a real browser against the real CSS.
 //
 // `showPlanWithAi` is UNREACHABLE in the main E2E lane by standing decision
 // (`tests/e2e/ai-callout-gate.spec.ts` documents it and is that decision's

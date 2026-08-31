@@ -120,7 +120,8 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * saves proportionally more. Re-measure from the first green CI run that
  * includes it; expect something between the two.
  *
- * ⚠️ `follow-the-build-flow.spec.ts` (MOTIR-1117) carries the LOCAL provenance
+ * ⚠️ `cloud-follow-the-build-flow.spec.ts` (MOTIR-1117; MOVED to the cloud lane
+ *    by MOTIR-4038, so it no longer carries a cost here) carries the LOCAL provenance
  * too, measured TWICE rather than the usual three times — said plainly rather
  * than dressed up as the usual method.
  *
@@ -416,7 +417,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'board-scrum.spec.ts': 14.0,
   'board-swimlanes.spec.ts': 16.9,
   'board-ui.spec.ts': 43.5,
-  'build-in-public-flow.spec.ts': 8.8,
   'canvas-detail.spec.ts': 6.1,
   'cascade-under-load.spec.ts': 3.7,
   'charts.spec.ts': 9.7,
@@ -433,13 +433,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'dashboards.spec.ts': 13.9,
   'design-result.spec.ts': 9.2,
   'docs-index.spec.ts': 3.1,
-  'epic-privacy-flow.spec.ts': 7.2,
   'epic2-acceptance.spec.ts': 7.4,
   'epic6-at-scale.spec.ts': 0,
   'epic6-journey.spec.ts': 14.4,
   'estimation.spec.ts': 14.6,
   'filter-builder.spec.ts': 23.8,
-  'follow-the-build-flow.spec.ts': 7.1,
   'github.spec.ts': 8.3,
   'gitlab.spec.ts': 6.1,
   'home.spec.ts': 10.9,
@@ -482,8 +480,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'project-square-flow.spec.ts': 6.4,
   'projects-flow.spec.ts': 5.8,
   'provenance.spec.ts': 15.2,
-  'public-overview-edit.spec.ts': 8.0,
-  'public-project-flow.spec.ts': 8.3,
+  // Story MOTIR-3908 · Subtask MOTIR-4038 — the self-host arm of the
+  // public-projects gate. ⚠️ AN ESTIMATE, not a measurement: one sign-up, three
+  // navigations and eight API requests, no second browser session and no
+  // seeding beyond a single project. Sized against `public-signin-modal`
+  // (one sign-up plus one journey) with headroom, per the calibration note
+  // above — under-estimating is the direction that unbalances the bin-packer.
+  // RE-MEASURE from the first green CI run that includes it.
+  'public-selfhost.spec.ts': 9.0,
   'public-signin-modal.spec.ts': 3.9,
   'quick-view-edit.spec.ts': 16.4,
   'ready.spec.ts': 6.7,
@@ -535,7 +539,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'style-material-isolation.spec.ts': 5.0,
   'supervision-pool-under-load.spec.ts': 4.7,
   'token-permissions.spec.ts': 4.4,
-  'top-bar-budget.spec.ts': 7.2,
   'triage-flow.spec.ts': 13.1,
   'passkeys.spec.ts': 7.7,
   'two-factor.spec.ts': 20.2,

@@ -4,12 +4,14 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import { isCloud } from '@/lib/billing/availability';
 import {
   AlreadyProjectMemberError,
   InvalidAccessLevelError,
   InvalidProjectRoleError,
   LastProjectAdminError,
   NotAProjectMemberError,
+  PublicAccessUnavailableError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
@@ -345,6 +347,24 @@ export const projectMembersService = {
   async setAccessLevel(input: ActorScopedInput & { level: string }): Promise<ProjectAccessDTO> {
     const level = asAccessLevel(input.level);
     if (!level) throw new InvalidAccessLevelError(input.level);
+
+    // THE PUBLISH GATE (MOTIR-4035). `public` is the one level that publishes a
+    // project to strangers, and that reading surface is a CLOUD capability
+    // (Story MOTIR-3908) — off-cloud `app/api/public/*` serves nothing, so a
+    // project made public there would be published into a void.
+    //
+    // This is the ENFORCEMENT point, not the UI. `ProjectMembersSettings` also
+    // stops offering the level, but a stale client, a direct `PATCH` or a script
+    // must be refused too — defence in depth, and the service is the half that
+    // owns the invariant.
+    //
+    // BEFORE the transaction and before the permission assert, deliberately: the
+    // answer is a property of the BUILD, identical for every caller and every
+    // key, so it needs no project read and leaks nothing about one. Only
+    // `public` is gated — `open` / `limited` / `private` are how a self-hosted
+    // team shares work inside its own workspace, which is what self-hosting is
+    // for.
+    if (level === 'public' && !isCloud()) throw new PublicAccessUnavailableError();
 
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);

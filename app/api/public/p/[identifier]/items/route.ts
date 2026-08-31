@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // Public work-items pagination endpoint (Story 6.12 · Subtask 6.12.4) — the
 // "Load more" fetch behind the Work items tab's lazy list. NOT session-gated on
@@ -11,6 +12,11 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 // layer only: parse → one service call → map errors.
 
 export async function GET(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;

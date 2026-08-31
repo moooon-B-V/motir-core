@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { isCloud } from '@/lib/billing/availability';
 import { sanitizeNextPath } from '@/lib/navigation/nextDestination';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 
@@ -80,15 +81,24 @@ const CURRENT_PATH_HEADER = 'x-current-path';
  * Terms would be both wrong and unclearable. `/legal` still renders for them —
  * it describes our service, which is what its own index copy already says.
  *
- * Reads the same explicit `MOTIR_CLOUD` flag `lib/billing/availability.ts`
- * documents (ADR `docs/decisions/billing-tiering.md` §6). It is deliberately
- * NOT an import of `isCloudBilling`: that function answers *"does this build
+ * Deliberately NOT `isCloudBilling()`: that function answers *"does this build
  * have a commercial layer?"*, this one answers *"is moooon B.V. the counterparty
  * to these documents?"*, and the two are the same flag today for a reason that
- * is a coincidence of deployment rather than a fact about either question.
+ * is a coincidence of deployment rather than a fact about either question. That
+ * distinction is ADR `docs/decisions/billing-tiering.md` §6's, and it is kept.
+ *
+ * ⚠️ What CHANGED (MOTIR-4033): the distinction is a NAME, not a second read of
+ * the environment. This wrapper used to inline
+ * `process.env['MOTIR_CLOUD'] === 'true'`, which made it the tree's second
+ * reader of the flag — so a build that later decides `MOTIR_CLOUD` is not the
+ * whole answer would have had to be found here, by grep, by whoever thought to
+ * look. It now delegates to `isCloud()`, the cloud-vs-self-host predicate that
+ * exists for exactly this class of question, and keeps its own name and its own
+ * paragraph explaining what it is asking.
+ * `tests/hosting/cloudBuildFlag.test.ts` holds the single-reader rule.
  */
 function isMotirCloud(): boolean {
-  return process.env['MOTIR_CLOUD'] === 'true';
+  return isCloud();
 }
 
 /** What the gate learned. `null` means nobody is held — the common answer. */

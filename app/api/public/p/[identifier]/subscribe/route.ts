@@ -8,6 +8,7 @@ import {
 } from '@/lib/publicProjects/followErrors';
 import { enforcePublicFollowRateLimit } from '@/lib/rateLimit/publicFollowGuard';
 import { normalizeFollowEmail } from '@/lib/publicProjects/followTokens';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // The EMAIL-ONLY subscribe (Story 8.9 · Subtask 8.9.5) — the tier that exists
 // because a public project is a launch funnel and its visitor has no account.
@@ -23,6 +24,11 @@ import { normalizeFollowEmail } from '@/lib/publicProjects/followTokens';
 // be (ADR §7). The two errors below are about the REQUEST, never about the row.
 
 export async function POST(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const session = await getSession();
 

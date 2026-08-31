@@ -10,6 +10,7 @@ import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { ProjectDetailsCard } from './_components/ProjectDetailsCard';
 import { BuildInPublicPromoCard } from './_components/BuildInPublicPromoCard';
 import { guardSettingsPage } from './_guard';
+import { isCloud } from '@/lib/billing/availability';
 
 // Project-settings AREA landing — the registry's `details` entry. Story 6.5 ·
 // 6.5.3 shipped this read-only; Story 6.8 · 6.8.4 grows it into the EDITABLE
@@ -113,7 +114,10 @@ async function DetailsPaneBody({
       {/* The durable build-in-public entry point (Story 6.17 · Subtask 6.17.3 ·
           design Panel 10c) — shown to a project admin while the project is not
           yet public; the confirm goes through the reusable 6.17.2 dialog. */}
-      {caps.canManage && accessLevel !== 'public' ? (
+      {/* …and only on a build that HAS a public surface (MOTIR-4035): off-cloud
+          `app/api/public/*` serves nothing, so the promo would be an invitation
+          to publish into a void. */}
+      {isCloud() && caps.canManage && accessLevel !== 'public' ? (
         <BuildInPublicPromoCard projectKey={projectKey} />
       ) : null}
     </>

@@ -126,7 +126,7 @@ describe('the shell brand slot (§7a)', () => {
     // The budget itself — the four slots, the `hidden md:inline-flex` gates on
     // the displaced controls, the `lg` label breakpoint — is
     // `top-nav-control-budget.test.tsx`; the hit-test is
-    // `tests/e2e/top-bar-budget.spec.ts`.
+    // `tests/e2e/cloud-top-bar-budget.spec.ts`.
     const { container } = render(await TopNav(props));
     const brand = container.querySelector('a[href="/dashboard"]')!;
     expect(brand.className).toContain('hidden');

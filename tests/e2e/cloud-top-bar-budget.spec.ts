@@ -50,6 +50,25 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 
+// ⚠️ MOVED TO THE CLOUD LANE (Story MOTIR-3908 · MOTIR-4038). The CROWDED bar this file exists to measure is only producible on a cloud
+// build: the "Building in public" indicator is the widest control in it (117px
+// at 375px, per this file's own seed comment), and off-cloud that slot is
+// EMPTY. Asserting the budget without it would measure a narrower bar and could
+// not catch the defect the file was written for. The per-PR safety net for the
+// crowded bar is `tests/components/top-nav-control-budget.test.tsx`, which
+// renders it from PROPS with every optional slot live — the division of labour
+// this file's own header already describes.
+// With `MOTIR_CLOUD` unset the publish path is refused and the shell's
+// build-in-public slot is not rendered, so this spec cannot reach the state it
+// asserts on. The MAIN lane sets no `MOTIR_CLOUD` and deliberately does not
+// (turning it on there activates the §4 entitlement caps and surfaces the
+// billing row, breaking unrelated specs), so the spec runs in
+// `playwright.cloud.config.ts`'s cloud-on lane — which is what the `cloud-`
+// prefix selects.
+//
+// ⚠️ THE COST: that lane is the `billing-cloud` leg of `e2e-at-scale` — push, or
+// a PR carrying the `e2e-at-scale` label. Recorded, not absorbed: MOTIR-4041.
+
 const PASSWORD = 'top-bar-budget-e2e-pass-9';
 const EMAIL = 'e2e-top-bar-budget@example.com';
 

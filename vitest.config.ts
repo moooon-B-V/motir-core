@@ -1309,6 +1309,23 @@ export default defineConfig({
         'lib/api/public/openapi/emit.ts',
         'app/api/openapi/public.json/route.ts',
         'app/api/public/p/[identifier]/route.ts',
+        // Story MOTIR-3908 · Subtask MOTIR-4037 — the PUBLIC-PROJECTS CAPABILITY
+        // GATE. `isCloud()` is the cloud-vs-self-host predicate (MOTIR-4033) and
+        // `publicSurfaceUnavailable()` is the one refusal every gated route
+        // answers with (MOTIR-4034); together they decide whether a build serves
+        // a reading surface to strangers at all, which makes them about as
+        // load-bearing as two small functions get. MEASURED at 100/100/100 on
+        // `tests/api/public/cloud-gate.test.ts` + `tests/hosting/cloudBuildFlag.test.ts`
+        // + `tests/integration/publicSurfaceCloudGate.test.ts`, then pinned at
+        // the 90 floor below, per this block's own rule.
+        //
+        // ⚠️ `availability.ts` joins with it deliberately. The two predicates
+        // read one variable and answer different questions, and the failure this
+        // story is guarding against is exactly a branch of one of them going
+        // unexercised — a `MOTIR_CLOUD=1` typo that silently reads as cloud, say.
+        // Both arms of both functions are asserted; the gate keeps them that way.
+        'lib/billing/availability.ts',
+        'lib/publicProjects/cloudGate.ts',
         // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
         'lib/api/v1/identity/schema.ts',
         'lib/api/v1/planning/operations.ts',
@@ -2331,6 +2348,9 @@ export default defineConfig({
         'lib/api/public/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/openapi/public.json/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/public/p/[identifier]/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3908 · Subtask MOTIR-4037 — the capability gate (above).
+        'lib/billing/availability.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicProjects/cloudGate.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
         'lib/api/v1/identity/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/planning/operations.ts': { branches: 90, functions: 90, lines: 90 },

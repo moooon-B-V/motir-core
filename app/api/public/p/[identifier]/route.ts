@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // The public project's own SUBJECT (MOTIR-3945) — name, key, workspace, the
 // authored hero (tagline + tags + README) and the computed stats, as
@@ -34,6 +35,11 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 // asserts that, so the contract cannot drift from what the page renders.
 
 export async function GET(_req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;

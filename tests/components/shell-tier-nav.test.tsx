@@ -14,7 +14,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 // happy-dom has no layout engine, so nothing here can measure a pixel — the
 // widths this design was decided on were measured in Chromium and live in the
 // asset, and the runtime geometry (zero overflow at 320px, the hamburger's
-// hit-test) is `tests/e2e/top-bar-budget.spec.ts`, in a real browser.
+// hit-test) is `tests/e2e/cloud-top-bar-budget.spec.ts`, in a real browser.
 //
 // What this file CAN pin — and what no browser test pins as cheaply — is the
 // CONTRACT the ladder is: which tiers exist, in which order, and behind which

@@ -36,7 +36,7 @@ import { db } from '@/lib/db';
  * do not, if its children already imply the destination — wait for the
  * derivation instead. A manual walk races the job in the other direction and
  * loses with `IllegalTransitionError` when the job wins a hop
- * (`follow-the-build-flow.spec.ts`, the first instance of this class).
+ * (`cloud-follow-the-build-flow.spec.ts`, the first instance of this class).
  *
  * Never a fixed sleep: this polls the authoritative row.
  */

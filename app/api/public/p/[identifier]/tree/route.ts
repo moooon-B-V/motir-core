@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // Public work-item TREE level endpoint (Story 6.14 · Subtask 6.14.10) — the
 // lazy fetch behind the Tree tab: one level at a time (the project roots, or one
@@ -17,6 +18,11 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 //   ?offset=<n>      the level's paging offset ("Load more children")
 
 export async function GET(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const { identifier } = await params;
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;

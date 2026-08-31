@@ -26,7 +26,7 @@ import { signUp, createFirstProject, createWorkspace } from './_helpers/shell-se
 //
 // What this spec does NOT re-cover: the create / switch / archive FLOWS
 // (`projects-flow.spec.ts`), the four-slot right-cluster budget and the
-// hamburger hit-test at 375/700 (`top-bar-budget.spec.ts` — which this story
+// hamburger hit-test at 375/700 (`cloud-top-bar-budget.spec.ts` — which this story
 // extends with a 320px overflow assertion of its own), and the ⌘K switch path
 // (`shell-flows.spec.ts`). Those specs reach the switcher by its accessible
 // name, so they followed it into the bar without a change.

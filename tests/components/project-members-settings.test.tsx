@@ -107,6 +107,9 @@ function renderAdmin(overrides: Partial<React.ComponentProps<typeof ProjectMembe
         workspaceMembers={workspaceMembers}
         currentUserId={SELF}
         canManage
+        // The cloud arm by default (MOTIR-4035) — this file's subject is the
+        // 6.4.5 control, and the build gate is `cloud-gate-selector.test.tsx`'s.
+        publicAccessAvailable
         {...overrides}
       />
     </ToastProvider>,

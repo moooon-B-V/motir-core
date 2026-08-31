@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { mapPublicProjectError } from '@/lib/publicProjects/errorResponse';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // GET /api/public/projects/[projectId]/requests/duplicates?title=… (Story 6.12
 // · Subtask 6.12.5) — the duplicate-detection pre-check the public submit form
@@ -19,6 +20,11 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ): Promise<Response> {
+  // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
+  // any session read: with `MOTIR_CLOUD` unset this surface does not exist.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
   const { session } = gate;

@@ -303,6 +303,17 @@ export class InvalidProjectRoleError extends Error {
   }
 }
 
+export class PublicAccessUnavailableError extends Error {
+  readonly code = 'PUBLIC_ACCESS_UNAVAILABLE' as const;
+  constructor() {
+    super(
+      'Public projects are a Motir Cloud capability. This build does not serve a public ' +
+        'reading surface, so a project cannot be made public on it.',
+    );
+    this.name = 'PublicAccessUnavailableError';
+  }
+}
+
 export class InvalidAccessLevelError extends Error {
   readonly code = 'INVALID_ACCESS_LEVEL' as const;
   constructor(level: string) {
