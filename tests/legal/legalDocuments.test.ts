@@ -1,195 +1,278 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  byPreferredOrder,
+  LEGAL_DOCUMENTS_ENV,
   getLegalDocument,
   legalDocumentSlugs,
+  legalManifestState,
   listLegalDocuments,
-  parseLegalDocument,
 } from '@/lib/legal/documents';
+import {
+  PUBLISHED_FIXTURE,
+  clearLegalManifest,
+  manifestJson,
+  setLegalManifest,
+} from '../helpers/legalManifest';
 
-// The legal-document loader (MOTIR-1134).
+// THE CONFIGURED MANIFEST (MOTIR-4007), which replaced a `readdirSync` of
+// `content/legal/`.
 //
-// Two halves, deliberately. `parseLegalDocument` is PURE, so every branch is
-// reachable from a string and the edge cases are tested exhaustively there.
-// The filesystem half is tested against the REAL `content/legal/` directory,
-// because the property that matters about it — "every published document has a
-// route" — is a claim about the actual tree and is worthless against a fixture.
+// ── ⚠️ WHAT LEFT THIS FILE, AND WHERE IT WENT ──────────────────────────────
+// The `parseLegalDocument` and `byPreferredOrder` suites are GONE from here
+// because their SUBJECT moved, not because they stopped mattering. MOTIR-4009
+// ported the front-matter parser to `motir-marketing` with the documents it
+// reads, and its tests travelled with it — `motir-marketing`
+// `tests/legal/legalDocuments.test.ts` carries all ten parser cases and all
+// three ordering cases, verbatim. Re-asserting them here would test a parser
+// this repository no longer has.
+//
+// `PREFERRED_ORDER` did not move; it was RETIRED
+// (`docs/decisions/public-surface-hosts.md` AMENDMENT 2 §C). The manifest is an
+// authored array, so its order is the operator's, and a hardcoded list re-sorting
+// it would impose one company's document ordering on every self-hoster.
+//
+// ── What this file asserts instead ─────────────────────────────────────────
+// Three things, and the middle one is why the module was worth rewriting rather
+// than deleting: the UNCONFIGURED arm behaves (it is the self-hoster's state and
+// the common case for the open product), a MALFORMED entry never reaches a
+// consumer, and the refusal is LOUD.
 
-describe('parseLegalDocument', () => {
-  const full = [
-    '---',
-    'title: Terms of Service',
-    'version: 1.2.0',
-    'effectiveDate: 2026-09-01',
-    'status: approved',
-    '---',
-    '',
-    '# Terms',
-    'body text',
-  ].join('\n');
+describe('an UNCONFIGURED deployment', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = clearLegalManifest();
+  });
+  afterEach(() => restore());
 
-  it('reads the front-matter keys and strips them from the body', () => {
-    const doc = parseLegalDocument('terms', full);
-    expect(doc).toMatchObject({
-      slug: 'terms',
-      title: 'Terms of Service',
-      version: '1.2.0',
-      effectiveDate: '2026-09-01',
-      status: 'approved',
-    });
-    expect(doc.body).toBe('\n# Terms\nbody text');
-    expect(doc.body).not.toContain('title:');
+  // ⚠️ EACH OF THESE IS A SEPARATE BEHAVIOUR, asserted separately and on purpose.
+  // Every one is a deliberate empty-set arm somewhere downstream, and the whole
+  // failure mode MOTIR-3909 guards against is those arms being silently correct
+  // together. "Nothing threw" is not what is being claimed.
+  it('lists no documents', () => {
+    expect(listLegalDocuments()).toEqual([]);
   });
 
-  // `changeSummary` (MOTIR-1135) — the one-sentence "what moved" line the
-  // re-consent interstitial draws beside each changed document's version delta.
-  it('reads changeSummary when present, and reports its absence as null', () => {
-    const withSummary = parseLegalDocument(
-      'terms',
-      [
-        '---',
-        'title: T',
-        'version: 2.0.0',
-        'changeSummary: Adds the hosted agent.',
-        '---',
-        '',
-      ].join('\n'),
-    );
-    expect(withSummary.changeSummary).toBe('Adds the hosted agent.');
-
-    // Absent, and present-but-empty, are ONE state to the renderer: there is no
-    // sentence to show. An invented fallback would be worse than nothing on a
-    // screen whose whole subject is what changed.
-    expect(parseLegalDocument('terms', full).changeSummary).toBeNull();
-    expect(
-      parseLegalDocument('terms', ['---', 'changeSummary:', '---', ''].join('\n')).changeSummary,
-    ).toBeNull();
+  it('has no slugs, so nothing generates a route', () => {
+    expect(legalDocumentSlugs()).toEqual([]);
   });
 
-  it('maps the TBD sentinel to null rather than passing it through', () => {
-    // ⚠️ The point of the whole sentinel. A published policy whose effective
-    // date renders as the literal "TBD" reads as an unfinished draft, so the
-    // string must not survive parsing — the pages branch on null instead.
-    const doc = parseLegalDocument('privacy', full.replace('2026-09-01', 'TBD'));
-    expect(doc.effectiveDate).toBeNull();
-    expect(JSON.stringify(doc)).not.toContain('TBD');
+  it('resolves NO slug, including one that would be valid when configured', () => {
+    expect(getLegalDocument('terms')).toBeNull();
   });
 
-  it('maps an absent or empty effectiveDate to null too', () => {
-    expect(parseLegalDocument('x', '---\ntitle: X\n---\nbody').effectiveDate).toBeNull();
-    expect(
-      parseLegalDocument('x', full.replace('effectiveDate: 2026-09-01', 'effectiveDate:'))
-        .effectiveDate,
-    ).toBeNull();
+  it('reports `unconfigured` — which is NOT `faulted`', () => {
+    const state = legalManifestState();
+    expect(state.status).toBe('unconfigured');
+    expect(state.faults).toEqual([]);
   });
 
-  it('falls back to the slug when there is no title, rather than an empty heading', () => {
-    expect(parseLegalDocument('cookies', '---\nversion: 1.0.0\n---\nbody').title).toBe('cookies');
-    expect(parseLegalDocument('cookies', '---\ntitle:\n---\nbody').title).toBe('cookies');
-  });
-
-  it('treats a file with no front matter as all body', () => {
-    expect(parseLegalDocument('raw', '# Just a heading')).toMatchObject({
-      title: 'raw',
-      version: '',
-      status: '',
-      effectiveDate: null,
-      body: '# Just a heading',
-    });
-  });
-
-  it('treats an UNTERMINATED front-matter block as all body', () => {
-    // Otherwise a truncated file would silently publish its own front matter as
-    // the opening lines of a legal document.
-    const doc = parseLegalDocument('broken', '---\ntitle: Broken\nno closing fence');
-    expect(doc.title).toBe('broken');
-    expect(doc.body).toContain('title: Broken');
-  });
-
-  it('ignores a front-matter line with no colon instead of throwing', () => {
-    expect(parseLegalDocument('x', '---\ntitle: X\ngarbage line\nversion: 2\n---\nb').version).toBe(
-      '2',
-    );
-  });
-
-  it('keeps a colon inside a value', () => {
-    expect(parseLegalDocument('x', '---\ntitle: Motir: the terms\n---\nb').title).toBe(
-      'Motir: the terms',
-    );
+  it('treats an EMPTY value as unset rather than as malformed JSON', () => {
+    process.env[LEGAL_DOCUMENTS_ENV] = '   ';
+    expect(legalManifestState().status).toBe('unconfigured');
   });
 });
 
-describe('byPreferredOrder', () => {
-  const order = (...slugs: string[]) =>
-    slugs
-      .map((slug) => ({ slug }))
-      .sort(byPreferredOrder)
-      .map((d) => d.slug);
+describe('a CONFIGURED manifest', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = setLegalManifest();
+  });
+  afterEach(() => restore());
 
-  it('puts known documents in the curated order, not alphabetically', () => {
-    expect(order('subprocessors', 'terms', 'dpa', 'privacy')).toEqual([
-      'terms',
-      'privacy',
-      'dpa',
-      'subprocessors',
-    ]);
+  it('lists every entry', () => {
+    expect(listLegalDocuments()).toHaveLength(PUBLISHED_FIXTURE.length);
+    expect(legalManifestState().status).toBe('configured');
   });
 
-  it('sorts an UNKNOWN document after every known one, and never drops it', () => {
-    // The branch that matters and that the real directory cannot reach today:
-    // every file in `content/legal/` is currently named in PREFERRED_ORDER. A
-    // future document must still appear — an ordering list may shape the page,
-    // it may never hide a legal document.
-    expect(order('zzz-new-policy', 'terms')).toEqual(['terms', 'zzz-new-policy']);
-    expect(order('terms', 'aaa-new-policy')).toEqual(['terms', 'aaa-new-policy']);
-  });
-
-  it('sorts two unknown documents alphabetically between themselves', () => {
-    expect(order('zebra', 'aardvark')).toEqual(['aardvark', 'zebra']);
-  });
-});
-
-describe('the published legal set', () => {
-  const docs = listLegalDocuments();
-
-  it('is not vacuous, and every document carries a title and a version', () => {
-    expect(docs.length).toBeGreaterThanOrEqual(6);
-    for (const doc of docs) {
-      expect(doc.title, `${doc.slug} has no title`).not.toBe(doc.slug);
-      expect(doc.version, `${doc.slug} has no version`).not.toBe('');
-      expect(doc.body.trim().length).toBeGreaterThan(0);
+  it('keeps the MANIFEST’S OWN ORDER rather than a curated one', () => {
+    // The retired `PREFERRED_ORDER` began `terms, privacy, cookies, …`. This
+    // manifest is deliberately shuffled away from it, so an accidental
+    // re-introduction of a sort would show up as a reordering rather than as a
+    // no-op against a fixture that happened to match.
+    const shuffled = [...PUBLISHED_FIXTURE].reverse();
+    const take = setLegalManifest(shuffled);
+    try {
+      expect(legalDocumentSlugs()).toEqual(shuffled.map((doc) => doc.slug));
+    } finally {
+      take();
     }
   });
 
-  it('routes every document — slugs and documents cannot disagree', () => {
-    // The property the glob exists to buy: a document ships by EXISTING, so a
-    // file with no route is impossible rather than merely unlikely.
-    expect(legalDocumentSlugs()).toEqual(docs.map((d) => d.slug));
+  it('resolves a configured slug, with its url', () => {
+    const doc = getLegalDocument('terms');
+    expect(doc?.title).toBe('Terms of Service');
+    expect(doc?.url).toBe('https://motir.co/legal/terms');
   });
 
-  it('renders NO placeholder token on any page', () => {
-    // MOTIR-3619's values are substituted on main; this keeps them substituted.
-    for (const doc of docs) {
-      expect(doc.body, `${doc.slug} still carries a placeholder`).not.toMatch(
-        /«REGISTERED ADDRESS»|«KVK NUMBER»/,
-      );
-    }
-  });
-
-  it('puts the known documents in preferred order and unknown ones after', () => {
-    const known = docs.map((d) => d.slug).filter((s) => s === 'terms' || s === 'privacy');
-    expect(known).toEqual(['terms', 'privacy']);
-  });
-
-  it('resolves a real slug and refuses an unknown one', () => {
-    expect(getLegalDocument('terms')?.slug).toBe('terms');
+  it('refuses a slug that names no entry', () => {
     expect(getLegalDocument('not-a-document')).toBeNull();
   });
 
-  it('refuses a path-traversal slug rather than reading the file', () => {
-    // The slug is matched against the directory LISTING, never concatenated
-    // into a path — so this returns null instead of reading outside the tree.
-    expect(getLegalDocument('../../package')).toBeNull();
-    expect(getLegalDocument('../../../etc/passwd')).toBeNull();
+  // ⚠️ THE TRAVERSAL CASES SURVIVE THE SWAP, and they now hold by construction:
+  // there is no path to build. They are kept because the property is what
+  // matters, not the mechanism that used to provide it — a later refactor that
+  // reintroduced a path would be caught here.
+  it.each(['../../package', '../../../etc/passwd', '../terms'])(
+    'refuses the traversal-shaped slug %s',
+    (slug) => {
+      expect(getLegalDocument(slug)).toBeNull();
+    },
+  );
+
+  it('maps an absent effectiveDate and changeSummary to null', () => {
+    const doc = getLegalDocument('privacy');
+    expect(doc?.effectiveDate).toBeNull();
+    expect(doc?.changeSummary).toBeNull();
+  });
+
+  it('carries an effectiveDate and a changeSummary when the entry has them', () => {
+    const take = setLegalManifest([
+      {
+        slug: 'terms',
+        title: 'Terms of Service',
+        version: '2.0.0',
+        effectiveDate: '2026-10-12',
+        changeSummary: 'Adds the hosted-agent execution service.',
+        url: 'https://motir.co/legal/terms',
+      },
+    ]);
+    try {
+      const doc = getLegalDocument('terms');
+      expect(doc?.effectiveDate).toBe('2026-10-12');
+      expect(doc?.changeSummary).toBe('Adds the hosted-agent execution service.');
+    } finally {
+      take();
+    }
+  });
+});
+
+describe('a MALFORMED entry never reaches a consumer, and says so LOUDLY', () => {
+  let restore: () => void;
+  let errors: string[];
+
+  beforeEach(() => {
+    errors = [];
+    vi.spyOn(console, 'error').mockImplementation((message: unknown) => {
+      errors.push(String(message));
+    });
+  });
+  afterEach(() => {
+    restore?.();
+    vi.restoreAllMocks();
+  });
+
+  // ⚠️ THIS IS THE LOAD-BEARING CASE, and the alternative that was REJECTED is
+  // named here so the assertion cannot be softened by accident.
+  // `consent.ts`'s `parseSemanticVersion` returns null for an unreadable version
+  // and `isMaterialChange` then answers TRUE — right for a version in a file we
+  // control, and catastrophic for operator input: one typo would hold EVERY
+  // signed-in reader at `/re-consent`, on a screen they cannot clear. So the
+  // entry is refused before a consumer sees it (AMENDMENT 2 §C).
+  //
+  // The other rejected alternative was refusing SILENTLY and reporting the
+  // manifest as unset — which is precisely the failure MOTIR-3909 exists to
+  // prevent, reached from the other side. Hence `faulted`, and the log.
+  it('refuses an entry whose version is not <major>.<minor>.<patch>', () => {
+    restore = setLegalManifest([
+      { ...PUBLISHED_FIXTURE[0]!, version: '1.0' },
+      PUBLISHED_FIXTURE[1]!,
+    ]);
+    expect(legalDocumentSlugs()).toEqual(['privacy']);
+    expect(getLegalDocument('terms')).toBeNull();
+  });
+
+  it('reports `faulted` — never `unconfigured` — and names the entry and the field', () => {
+    restore = setLegalManifest([{ ...PUBLISHED_FIXTURE[0]!, version: 'v1' }]);
+    const state = legalManifestState();
+    expect(state.status).toBe('faulted');
+    expect(state.faults).toEqual([
+      { entry: 'terms', field: 'version', reason: '"v1" is not <major>.<minor>.<patch>' },
+    ]);
+    expect(errors.some((line) => line.includes('terms') && line.includes('version'))).toBe(true);
+  });
+
+  it('refuses ONE bad entry without disabling the others — the refusal is per entry', () => {
+    restore = setLegalManifest([
+      PUBLISHED_FIXTURE[0]!,
+      { ...PUBLISHED_FIXTURE[1]!, version: 'nonsense' },
+      PUBLISHED_FIXTURE[2]!,
+    ]);
+    // The two re-consent documents that ARE well-formed keep gating.
+    expect(legalDocumentSlugs()).toEqual(['terms', 'acceptable-use']);
+    expect(legalManifestState().status).toBe('faulted');
+  });
+
+  it.each([
+    ['slug', { title: 'T', version: '1.0.0', url: 'https://motir.co/legal/t' }],
+    ['title', { slug: 't', version: '1.0.0', url: 'https://motir.co/legal/t' }],
+    ['url', { slug: 't', title: 'T', version: '1.0.0' }],
+    ['version', { slug: 't', title: 'T', url: 'https://motir.co/legal/t' }],
+  ])('refuses an entry missing %s', (field, entry) => {
+    restore = setLegalManifest([entry]);
+    expect(listLegalDocuments()).toEqual([]);
+    expect(legalManifestState().faults.map((f) => f.field)).toContain(field);
+  });
+
+  it('refuses a DUPLICATE slug rather than silently shadowing one', () => {
+    restore = setLegalManifest([
+      PUBLISHED_FIXTURE[0]!,
+      { ...PUBLISHED_FIXTURE[0]!, version: '2.0.0' },
+    ]);
+    expect(listLegalDocuments()).toHaveLength(1);
+    expect(getLegalDocument('terms')?.version).toBe('1.0.0');
+    expect(legalManifestState().faults).toEqual([
+      { entry: 'terms', field: 'slug', reason: 'duplicate' },
+    ]);
+  });
+
+  it('refuses an element that is not an object', () => {
+    restore = setLegalManifest(['terms', 42, null]);
+    expect(listLegalDocuments()).toEqual([]);
+    expect(legalManifestState().faults).toHaveLength(3);
+  });
+
+  it('refuses a value that is not JSON at all, and logs it', () => {
+    const previous = process.env[LEGAL_DOCUMENTS_ENV];
+    process.env[LEGAL_DOCUMENTS_ENV] = '{not json';
+    restore = () => {
+      if (previous === undefined) delete process.env[LEGAL_DOCUMENTS_ENV];
+      else process.env[LEGAL_DOCUMENTS_ENV] = previous;
+    };
+    const state = legalManifestState();
+    expect(state.status).toBe('faulted');
+    expect(state.documents).toEqual([]);
+    expect(errors.some((line) => line.includes('not valid JSON'))).toBe(true);
+  });
+
+  it('refuses valid JSON that is not an array', () => {
+    const previous = process.env[LEGAL_DOCUMENTS_ENV];
+    process.env[LEGAL_DOCUMENTS_ENV] = manifestJson([]).replace('[]', '{"terms":{}}');
+    restore = () => {
+      if (previous === undefined) delete process.env[LEGAL_DOCUMENTS_ENV];
+      else process.env[LEGAL_DOCUMENTS_ENV] = previous;
+    };
+    expect(legalManifestState().status).toBe('faulted');
+    expect(errors.some((line) => line.includes('must be a JSON array'))).toBe(true);
+  });
+});
+
+describe('the module reads the environment at the moment of the call', () => {
+  // ⚠️ NO MODULE-LEVEL CACHE, DELIBERATELY — `legalAcceptanceService`'s own
+  // comment argues it: a cache serves the PREVIOUS version of the Terms for the
+  // life of a server process after a deploy, on a screen whose entire job is to
+  // be current about what a person is agreeing to. This is what asserts it.
+  it('sees a manifest that changed after the first read', () => {
+    const clear = clearLegalManifest();
+    try {
+      expect(listLegalDocuments()).toEqual([]);
+      const take = setLegalManifest([PUBLISHED_FIXTURE[0]!]);
+      try {
+        expect(legalDocumentSlugs()).toEqual(['terms']);
+      } finally {
+        take();
+      }
+      expect(listLegalDocuments()).toEqual([]);
+    } finally {
+      clear();
+    }
   });
 });

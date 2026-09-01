@@ -1,23 +1,36 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
-import { MarkdownView } from '@/components/ui/MarkdownView';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getLegalDocument, legalDocumentSlugs } from '@/lib/legal/documents';
 
-// One published legal document (Story 8.4 · Subtask MOTIR-1134).
+// One published legal document (Story 8.4 · MOTIR-1134) — now a REDIRECT to it
+// (MOTIR-4007).
 //
-// ── The routes come from the DIRECTORY, not from a list ────────────────────
-// `generateStaticParams` globs `content/legal/`, so every `.md` file there is a
-// route and adding a document needs no edit here. The card was written for six
-// documents and there are seven; see `lib/legal/documents.ts` for why that is
-// the design rather than a shortcut.
+// ── ⚠️ WHY THIS PAGE STOPPED RENDERING A DOCUMENT ──────────────────────────
+// It rendered `doc.body`, and `lib/legal/documents.ts` no longer has one: the
+// documents are moooon B.V.'s contract text and have left this GPL-3.0
+// repository (MOTIR-3909), so the loader reads a configured MANIFEST whose
+// entries carry a `url` instead. This route therefore has nothing of its own to
+// serve, and there are exactly two honest things it can do with a slug it
+// recognises: 404 it, or send the reader to where the document actually is.
 //
-// ── Server-rendered and indexable ──────────────────────────────────────────
-// No `'use client'`, no auth gate, no `robots` restriction. A legal page that a
-// crawler cannot read is one a customer's procurement review cannot find, and
-// the whole point of publishing a subprocessor list is that it can be read
-// without asking us for it.
+// It sends them. A reader holding a `/legal/terms` link — from an email, a
+// bookmark, an old sign-up notice — asked for the Terms, and the Terms exist;
+// answering 404 because the bytes moved would lose them for no reason. The
+// redirect is PERMANENT because the document's home has genuinely changed.
+//
+// ── ⚠️ THIS IS A WINDOW, NOT AN ARRANGEMENT ────────────────────────────────
+// The route itself is deleted with the rest of `app/(public)/legal/` by
+// MOTIR-4103, which runs in the story AFTER the deploy boundary. Until then it
+// stays reachable on a build whose `MOTIR_PUBLIC_SITE_URL` is unset — with it
+// set, `proxy.ts`'s `PUBLIC_REDIRECT_SEGMENTS` 308s `/legal/*` to the public
+// site before this file is ever reached (MOTIR-3884). So this redirect covers
+// exactly the un-cut-over case, which is the only one that gets here.
+//
+// ── The unconfigured build ─────────────────────────────────────────────────
+// No manifest ⇒ no entries ⇒ `getLegalDocument` returns `null` ⇒ 404, which is
+// correct and is the self-hoster's state: they have published no documents, so
+// there is nothing here and nowhere to send anybody. Nothing renders an empty
+// page, which is the failure this shape exists to avoid.
 
 export async function generateStaticParams() {
   return legalDocumentSlugs().map((slug) => ({ slug }));
@@ -31,15 +44,9 @@ export async function generateMetadata({
   const { slug } = await params;
   const doc = getLegalDocument(slug);
   if (!doc) return {};
-
-  const t = await getTranslations('legal');
-  return {
-    title: doc.title,
-    // The version rides the description so a search result distinguishes two
-    // revisions of the same policy, which is the one thing a reader checking
-    // "is this the version I agreed to" needs from a result list.
-    description: t('metaDocDescription', { title: doc.title, version: doc.version }),
-  };
+  // The canonical is the document's real home, so a crawler that reaches this
+  // route indexes the published page rather than a redirect stub.
+  return { title: doc.title, alternates: { canonical: doc.url } };
 }
 
 export default async function LegalDocumentPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -50,38 +57,5 @@ export default async function LegalDocumentPage({ params }: { params: Promise<{ 
   // renders a `loading.tsx` above this call, so the status code survives.
   if (!doc) notFound();
 
-  const t = await getTranslations('legal');
-
-  return (
-    <main className="mx-auto w-full max-w-[46rem] px-(--spacing-card-padding) py-10">
-      <nav aria-label={t('breadcrumbAria')} className="mb-6">
-        <Link
-          href="/legal"
-          className="text-[13px] text-(--el-text-secondary) hover:text-(--el-link)"
-        >
-          {t('allDocuments')}
-        </Link>
-      </nav>
-
-      <header className="mb-8 border-b border-(--el-border) pb-6">
-        <h1 className="font-serif text-3xl text-(--el-text)">{doc.title}</h1>
-        <p className="mt-2 text-[13px] text-(--el-text-secondary)">
-          {/*
-            ⚠️ The effective date is rendered from `doc.effectiveDate`, which is
-            `null` while the front matter says `TBD`. The literal string must
-            never reach this page: a published policy whose date reads "TBD" is
-            indistinguishable from an unfinished draft, whereas "not yet in
-            effect" is TRUE, useful, and exactly what a reader should know
-            before the service opens. `lib/legal/documents.ts` does the mapping
-            so no page has to remember it.
-          */}
-          {doc.effectiveDate
-            ? t('versionAndEffective', { version: doc.version, date: doc.effectiveDate })
-            : t('versionNotYetEffective', { version: doc.version })}
-        </p>
-      </header>
-
-      <MarkdownView value={doc.body} aria-label={doc.title} />
-    </main>
-  );
+  permanentRedirect(doc.url);
 }

@@ -5,6 +5,7 @@ import { listLegalDocuments, type LegalDocument } from '@/lib/legal/documents';
 import { RECONSENT_DOCUMENT_SLUGS, outstandingReconsent } from '@/lib/legal/consent';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setLegalManifest } from '../helpers/legalManifest';
 
 // THE CONSENT RECORD, FROM THE DOOR A PERSON ACTUALLY COMES IN THROUGH
 // (Story 8.4 · Subtask MOTIR-1137, covering MOTIR-1135).
@@ -38,7 +39,15 @@ beforeEach(async () => {
   await truncateAuthTables();
 });
 
+// ⚠️ THE MANIFEST IS CONFIGURED FOR THIS SUITE (MOTIR-4007). `lib/legal/documents.ts`
+// reads `MOTIR_LEGAL_DOCUMENTS` rather than `content/legal/`, so a test process is
+// an UNCONFIGURED deployment and `listLegalDocuments()` answers `[]` — correctly.
+// This suite is about the SEAM behaving over a configured set, so it configures
+// one; `tests/legal/legalDocuments.test.ts` owns the unconfigured arm.
+const restoreManifest = setLegalManifest();
+
 afterAll(async () => {
+  restoreManifest();
   await db.$disconnect();
   await adminDb.$disconnect();
 });

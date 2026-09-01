@@ -1,189 +1,245 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import 'server-only';
 
-// The legal-document loader (Story 8.4 · Subtask MOTIR-1134).
+// The legal-document loader (Story 8.4 · MOTIR-1134; re-sourced by MOTIR-4007).
 //
-// `content/legal/*.md` holds the published legal set. This module is the ONE
-// place that reads it, so the routes, the index and the footer all agree about
-// which documents exist and what each one is called.
+// ── ⚠️ WHAT CHANGED, AND WHY IT IS A SOURCE SWAP RATHER THAN A REDESIGN ─────
+// This module used to `readdirSync` `content/legal/`. Those documents are
+// moooon B.V.'s own contract text and have left this GPL-3.0 repository
+// (MOTIR-3909); what stays is the MECHANISM. So the exported surface is
+// unchanged in name and call shape and the SOURCE is now configuration:
+// `MOTIR_LEGAL_DOCUMENTS`, a JSON array the operator supplies.
 //
-// ── ⚠️ THE DIRECTORY IS THE REGISTRY, and that is the whole design ──────────
-// Nothing here enumerates slugs. `generateStaticParams` globs this directory, so
-// a document ships by EXISTING and no route table has to be edited to add one.
+// `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §C is the record. Read it
+// before changing anything here — every choice below is decided there, with its
+// rejected alternatives.
 //
-// That is not tidiness, it is a defect this story already hit. The card was
-// written for SIX documents; `model-providers.md` was added days later by
-// MOTIR-3631, and a hardcoded list of six would have shipped a subprocessor page
-// linking to a 404 — disclosing LESS than it did before the split. The
-// legal-document set has grown three times during Story 8.4 alone, so the cost
-// of a list is paid repeatedly and the cost of a glob is paid once.
+// **`body` is GONE and `url` replaces it.** That is what makes this a swap: no
+// surviving caller read `body`. The two pages that did are leaving with the
+// documents, and every other consumer — `legalAcceptanceService`, the re-consent
+// interstitial, `consent.ts` — takes `slug` / `title` / `version` and now `url`.
 //
-// ── Front matter is parsed here rather than by a dependency ─────────────────
-// The shape is fixed and tiny — five scalar keys, no nesting, no arrays — and
-// the repository has no YAML parser in its dependency tree. Adding one to read
-// `title: Terms of Service` would be a new production dependency, a new
-// subprocessor-adjacent supply-chain surface, and a new thing to keep current,
-// for a grammar this file handles in fifteen lines.
-
-/** Where the published legal copy lives, relative to the app root. */
-const LEGAL_DIR = join(process.cwd(), 'content', 'legal');
+// ── ⚠️ THE ORDER IS THE OPERATOR'S, so `PREFERRED_ORDER` is GONE ────────────
+// The old constant existed because a DIRECTORY LISTING has no order. An authored
+// array does. A hardcoded list in the open product re-sorting an operator's
+// manifest would impose moooon's document ordering on every self-hoster, which is
+// a smaller instance of exactly what MOTIR-3909 is undoing. `byPreferredOrder`
+// goes with it (§C); nothing outside this module imported it.
+//
+// ── ⚠️ NO MODULE-LEVEL CACHE, DELIBERATELY ─────────────────────────────────
+// `legalAcceptanceService`'s own comment argues this and the argument only got
+// stronger: a cache serves the PREVIOUS version of the Terms for the life of a
+// server process after a deploy, and parsing one string is cheaper than the
+// `readdirSync` + seven `readFileSync`s it replaces. On a screen whose entire job
+// is to be current about what a person is agreeing to, stale is the failure that
+// matters.
 
 /**
- * The front-matter value that means "no date is set yet".
- *
- * ⚠️ It must NEVER reach a rendered page. `TBD` is a note to ourselves in a file
- * a customer will read, and a published policy whose effective date literally
- * says "TBD" reads as unfinished rather than as not-yet-in-force. It is mapped to
- * a `null` `effectiveDate` here, and the pages branch on that null — so the
- * mapping lives in one place and no page has to remember the sentinel.
+ * The environment value the manifest is read from — ONE variable holding a JSON
+ * array (§C). One, because the consumer is `fly secrets set` or a single line in
+ * a self-hoster's env; a per-document variable set would make "which documents
+ * exist" unanswerable without enumerating variable names.
  */
-const NOT_YET_SET = 'TBD';
+export const LEGAL_DOCUMENTS_ENV = 'MOTIR_LEGAL_DOCUMENTS';
 
+/** A published legal document, as the manifest describes it. */
 export interface LegalDocument {
-  /** URL slug — the filename without its extension. `/legal/<slug>`. */
+  /** Stable identifier — what an acceptance row is keyed on, and what `consent.ts` matches. */
   slug: string;
-  /** Human title, from front matter. */
+  /** Human title, rendered on the re-consent row. */
   title: string;
   /**
-   * Version string, verbatim from the front matter — `1.0.0`.
+   * Version string, verbatim — `1.0.0`.
    *
    * ⚠️ ITS COMPONENTS CARRY MEANING, and `lib/legal/consent.ts` is where that
    * meaning lives: a MAJOR or MINOR bump is a MATERIAL change and prompts every
    * reader to re-accept, a PATCH bump takes effect when published and prompts
-   * nobody. That is not a convention this module invented — `content/legal/terms.md`
-   * §14 promises outright that clarifications and corrections *"take effect when
-   * published"*, so a bare `>` comparison over this string would break a clause in
-   * the published contract on every typo fix. Bump the right component.
+   * nobody. That is not a convention this module invented — the published Terms
+   * §14 promise outright that clarifications *"take effect when published"*.
+   *
+   * It is also the ONE field whose malformation is dangerous rather than merely
+   * wrong — see {@link isValidEntry}.
    */
   version: string;
-  /**
-   * The effective date, or `null` when it is not yet set. `null` is the
-   * MEANINGFUL case today: nothing is in force until the service opens.
-   */
+  /** The effective date, or `null` when it is not yet set. `null` is meaningful. */
   effectiveDate: string | null;
-  /** Front-matter status, e.g. `approved`. */
-  status: string;
-  /**
-   * One human sentence saying what MOVED in this version, or `null` when the
-   * author has not written one (Story 8.4 · Subtask MOTIR-1135).
-   *
-   * The re-consent interstitial draws each changed document as a row carrying
-   * its title, its version delta and this sentence — *"a person asked to
-   * re-accept is owed a link to what changed"* (`design/auth/design-notes.md`).
-   * A version delta alone tells a reader that something moved and nothing about
-   * what, which is the difference between a notice and a formality.
-   *
-   * ⚠️ NULL IS A SUPPORTED STATE, NOT A BUG. The design names the degraded form
-   * — the delta and a link, with no sentence — as an acceptable fallback, so the
-   * row renders either way and nothing gates on this being present. It is
-   * deliberately NOT defaulted to a generic string: an invented sentence is
-   * worse than an absent one on a screen whose whole subject is what changed.
-   */
+  /** One human sentence saying what MOVED in this version, or `null`. */
   changeSummary: string | null;
-  /** The Markdown body, front matter removed. */
-  body: string;
+  /**
+   * The ABSOLUTE url of the published document, on whatever host the operator
+   * publishes. Absolute because it is no longer a page this application serves.
+   */
+  url: string;
+}
+
+/** Why one manifest entry was refused. */
+export interface LegalManifestFault {
+  /** The entry's `slug` when it had a usable one, else its index in the array. */
+  entry: string;
+  /** The field that failed, or `'entry'` when the whole element is unusable. */
+  field: string;
+  reason: string;
+}
+
+/** What this deployment's legal configuration currently IS. */
+export type LegalManifestStatus = 'unconfigured' | 'configured' | 'faulted';
+
+export interface LegalManifestState {
+  status: LegalManifestStatus;
+  documents: LegalDocument[];
+  faults: LegalManifestFault[];
+}
+
+/** `true` when every required string is present and non-empty. */
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/** A nullable scalar: absent, empty and `null` all mean "not set". */
+function optionalString(value: unknown): string | null {
+  return nonEmptyString(value) ? value.trim() : null;
 }
 
 /**
- * The order documents are listed in — most-asked-for first, not alphabetical.
+ * Validate ONE entry, returning it or the faults that refuse it.
  *
- * A document NOT named here still appears; it sorts after the known ones, by
- * slug. So this array shapes presentation and can never hide a document, which
- * is the property that matters: a stale ordering list is a cosmetic problem, a
- * stale ROUTING list is a 404 on a legal page.
+ * ⚠️ THE `version` CHECK IS THE LOAD-BEARING ONE, and the reason is not
+ * tidiness. `consent.ts`'s `parseSemanticVersion` returns `null` for a version it
+ * cannot read, and `isMaterialChange` then answers **true** — deliberately, and
+ * rightly, for a version in a file we control, because a version whose
+ * materiality nobody can rule out should ask rather than stay silent. Applied to
+ * OPERATOR INPUT that arm turns one typo into a hold on every signed-in reader,
+ * on a screen they cannot clear. So a malformed entry never reaches a consumer
+ * (§C), and the refusal is per ENTRY rather than per manifest: one bad optional
+ * document must not disable the gate for the three that govern it.
  */
-const PREFERRED_ORDER = [
-  'terms',
-  'privacy',
-  'cookies',
-  'acceptable-use',
-  'dpa',
-  'subprocessors',
-  'model-providers',
-];
-
-/** Split `---\n…\n---\n` off the top of a file. Returns the pairs and the rest. */
-function splitFrontMatter(source: string): { meta: Map<string, string>; body: string } {
-  const meta = new Map<string, string>();
-  if (!source.startsWith('---\n')) return { meta, body: source };
-
-  const end = source.indexOf('\n---\n', 4);
-  if (end === -1) return { meta, body: source };
-
-  for (const line of source.slice(4, end).split('\n')) {
-    const at = line.indexOf(':');
-    if (at === -1) continue;
-    meta.set(line.slice(0, at).trim(), line.slice(at + 1).trim());
+function validateEntry(value: unknown, index: number): LegalDocument | LegalManifestFault[] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return [{ entry: String(index), field: 'entry', reason: 'not a JSON object' }];
   }
-  return { meta, body: source.slice(end + 5) };
-}
+  const raw = value as Record<string, unknown>;
+  const slug = nonEmptyString(raw['slug']) ? raw['slug'].trim() : null;
+  const name = slug ?? String(index);
+  const faults: LegalManifestFault[] = [];
 
-/**
- * Parse one document from its raw source. Exported because it is the whole of
- * this module's logic and it is PURE — every branch that matters (a missing
- * title, `TBD`, an absent date, a file with no front matter) is reachable from
- * a string, with no fixture directory to build and no filesystem to stub.
- */
-export function parseLegalDocument(slug: string, source: string): LegalDocument {
-  const { meta, body } = splitFrontMatter(source);
-  const effectiveDate = meta.get('effectiveDate') ?? '';
+  if (!slug) faults.push({ entry: name, field: 'slug', reason: 'missing or empty' });
+  if (!nonEmptyString(raw['title']))
+    faults.push({ entry: name, field: 'title', reason: 'missing or empty' });
+  if (!nonEmptyString(raw['url']))
+    faults.push({ entry: name, field: 'url', reason: 'missing or empty' });
+  if (!nonEmptyString(raw['version'])) {
+    faults.push({ entry: name, field: 'version', reason: 'missing or empty' });
+  } else if (!/^\d+\.\d+\.\d+$/.test(raw['version'].trim())) {
+    // The same grammar `consent.ts` parses. Rejecting it HERE is what stops
+    // `isMaterialChange`'s unparseable-is-material arm from meeting it.
+    faults.push({
+      entry: name,
+      field: 'version',
+      reason: `"${raw['version'].trim()}" is not <major>.<minor>.<patch>`,
+    });
+  }
+
+  if (faults.length > 0) return faults;
   return {
-    slug,
-    // A document with no `title:` falls back to its slug rather than rendering
-    // an empty heading — the page still works, and the omission is visible.
-    title: meta.get('title') || slug,
-    version: meta.get('version') ?? '',
-    effectiveDate: effectiveDate === '' || effectiveDate === NOT_YET_SET ? null : effectiveDate,
-    status: meta.get('status') ?? '',
-    // An absent key and an empty value both mean "no sentence written", so the
-    // renderer branches on ONE thing. `|| null` rather than `?? null` for
-    // exactly that: `changeSummary:` with nothing after it parses to `''`.
-    changeSummary: meta.get('changeSummary') || null,
-    body,
+    slug: slug as string,
+    title: (raw['title'] as string).trim(),
+    version: (raw['version'] as string).trim(),
+    effectiveDate: optionalString(raw['effectiveDate']),
+    changeSummary: optionalString(raw['changeSummary']),
+    url: (raw['url'] as string).trim(),
   };
 }
 
-/** Every published legal document, in `PREFERRED_ORDER` then by slug. */
-export function listLegalDocuments(): LegalDocument[] {
-  const slugs = readdirSync(LEGAL_DIR)
-    .filter((name) => name.endsWith('.md'))
-    .map((name) => name.slice(0, -3));
+/**
+ * The whole manifest, with every refusal it produced — read at the moment of the
+ * call, never cached (see the module header).
+ *
+ * ⚠️ THE REFUSAL IS LOUD, and that is the half that separates this from the
+ * failure MOTIR-3909 exists to prevent (§C). Rejecting a bad entry SILENTLY and
+ * treating the manifest as unset is a legal gate that stops holding people with
+ * nothing to see. So every fault is logged at error level naming the entry and
+ * the field, and {@link legalManifestState} reports `faulted` — which
+ * `/api/health/legal` serves, so *unconfigured* and *misconfigured* can never
+ * render as the same state.
+ */
+export function legalManifestState(): LegalManifestState {
+  const configured = process.env[LEGAL_DOCUMENTS_ENV];
+  if (!nonEmptyString(configured)) {
+    return { status: 'unconfigured', documents: [], faults: [] };
+  }
 
-  return slugs
-    .map((slug) => parseLegalDocument(slug, readFileSync(join(LEGAL_DIR, `${slug}.md`), 'utf8')))
-    .sort(byPreferredOrder);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(configured);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unparseable';
+    console.error(`[legal] ${LEGAL_DOCUMENTS_ENV} is not valid JSON: ${reason}`);
+    return {
+      status: 'faulted',
+      documents: [],
+      faults: [{ entry: LEGAL_DOCUMENTS_ENV, field: 'json', reason }],
+    };
+  }
+
+  if (!Array.isArray(parsed)) {
+    console.error(`[legal] ${LEGAL_DOCUMENTS_ENV} must be a JSON array of documents`);
+    return {
+      status: 'faulted',
+      documents: [],
+      faults: [{ entry: LEGAL_DOCUMENTS_ENV, field: 'json', reason: 'not an array' }],
+    };
+  }
+
+  const documents: LegalDocument[] = [];
+  const faults: LegalManifestFault[] = [];
+  const seen = new Set<string>();
+  parsed.forEach((entry, index) => {
+    const result = validateEntry(entry, index);
+    if (Array.isArray(result)) {
+      faults.push(...result);
+      return;
+    }
+    // A duplicate slug is refused rather than silently shadowed: two entries for
+    // one document means the operator disagrees with themselves about its
+    // version, and `outstandingReconsent` would take whichever came first.
+    if (seen.has(result.slug)) {
+      faults.push({ entry: result.slug, field: 'slug', reason: 'duplicate' });
+      return;
+    }
+    seen.add(result.slug);
+    documents.push(result);
+  });
+
+  for (const fault of faults) {
+    console.error(`[legal] manifest entry "${fault.entry}": ${fault.field} — ${fault.reason}`);
+  }
+
+  return { status: faults.length > 0 ? 'faulted' : 'configured', documents, faults };
 }
 
 /**
- * The list comparator: `PREFERRED_ORDER` first, then unknown slugs alphabetically.
+ * Every configured legal document, IN THE MANIFEST'S OWN ORDER.
  *
- * Exported and pure for the same reason `parseLegalDocument` is. Its interesting
- * branches are the UNKNOWN-slug ones, and every document in `content/legal/` is
- * currently named in `PREFERRED_ORDER` — so against the real directory those
- * branches are unreachable, and the behaviour that protects a future document
- * from being dropped could not be tested at all through `listLegalDocuments()`.
+ * Unset ⇒ `[]`, which is the right answer for a self-hosted build and is a state
+ * every downstream consumer already handles deliberately (`recordAcceptance`'s
+ * *"NO EMPTY-SET GUARD HERE, DELIBERATELY"*, `outstandingReconsent`'s `[]`, the
+ * interstitial's `terms ? … : null`). Do NOT add a second guard at another tier.
  */
-export function byPreferredOrder(a: { slug: string }, b: { slug: string }): number {
-  const ai = PREFERRED_ORDER.indexOf(a.slug);
-  const bi = PREFERRED_ORDER.indexOf(b.slug);
-  if (ai !== -1 && bi !== -1) return ai - bi;
-  if (ai !== -1) return -1;
-  if (bi !== -1) return 1;
-  return a.slug.localeCompare(b.slug);
+export function listLegalDocuments(): LegalDocument[] {
+  return legalManifestState().documents;
 }
 
-/** Every slug, for `generateStaticParams`. */
+/** Every configured slug. */
 export function legalDocumentSlugs(): string[] {
   return listLegalDocuments().map((doc) => doc.slug);
 }
 
 /**
- * One document, or `null` when the slug names no file.
+ * One document, or `null` when the slug names no entry.
  *
- * ⚠️ The slug is checked against the DIRECTORY LISTING rather than used to build
- * a path, so a traversal attempt (`../../.env`) finds no match and returns null
- * instead of reading a file. Reading `join(LEGAL_DIR, slug + '.md')` directly
- * would be the obvious implementation and would be a path-traversal read.
+ * ⚠️ The slug is matched against the configured ENTRIES rather than used to build
+ * anything, so a traversal-shaped slug (`../../../etc/passwd`) finds no match and
+ * returns null. That was a real property of the filesystem loader and it survives
+ * the swap by construction: there is no path to build any more.
  */
 export function getLegalDocument(slug: string): LegalDocument | null {
   return listLegalDocuments().find((doc) => doc.slug === slug) ?? null;
