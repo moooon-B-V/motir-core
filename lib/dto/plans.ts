@@ -31,7 +31,10 @@ export type PlanStatusDto = (typeof PLAN_STATUS_DTO_VALUES)[number];
  * `decidedById` happen to be null.
  *
  * `reviewed` — a person read a `planned` plan and rejected it.
- * `discarded` — a person ended a `generating` plan that never finished.
+ * `discarded` — a plan ended without proposals ever being written: a person
+ * ended a `generating` plan that never finished, or (MOTIR-4124) a producer
+ * CLOSED one it had written nothing into, which `markPlanned` records here
+ * rather than putting an empty plan in a reviewer's queue.
  * `abandoned` — `abandonedPlanService` terminated one whose producer was gone.
  *
  * Deliberately NOT a fourth `PlanStatusDto` member: that vocabulary is public

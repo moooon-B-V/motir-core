@@ -339,6 +339,13 @@ describe('get_plan_status — the outcome read', () => {
     const { planId } = struct(
       await call(client, EXPAND_ITEM_TOOL_NAME, { key: story.identifier }),
     ) as { planId: string };
+    // One proposal, so the close SETTLES the plan into the review queue rather
+    // than discarding it (MOTIR-4124) — a settled plan is what this reads.
+    await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'Proposed child', kind: 'task' } }],
+      fx.ctx,
+    );
     await plansService.markPlanned(planId, fx.ctx);
     vi.mocked(getJob).mockClear();
 
@@ -358,6 +365,13 @@ describe('get_plan_status — the outcome read', () => {
     const plan = await plansService.createPlan(
       fx.projectId,
       { title: null, summary: null, sourceJobId: null },
+      fx.ctx,
+    );
+    // A proposal to approve: an empty close is a DISCARD (MOTIR-4124), and this
+    // case is about what an APPROVED plan reports.
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Materialized item', kind: 'task' } }],
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);

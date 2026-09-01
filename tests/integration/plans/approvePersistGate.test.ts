@@ -559,12 +559,25 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
     ).toBe(1);
   });
 
-  it('an empty plan stays a valid no-op that writes nothing', async () => {
+  it('an empty plan stays a valid no-op that writes nothing — on the one row that can still reach approve', async () => {
+    // ⚠️ THE ROUTE TO THIS SHAPE CHANGED, AND THE PROMISE DID NOT (MOTIR-4124).
+    // `markPlanned` now DISCARDS a plan holding no proposals, so a fresh one
+    // cannot reach `planned` and cannot be approved at all. The shape is still
+    // reachable — by the rows written BEFORE that fix, which exist, and whose
+    // review rail now renders, so Approve is a button a person can press on
+    // one. The gate's promise over the empty set is therefore still owed, and
+    // the fixture writes the pre-fix row directly because nothing produces it
+    // any more.
     const fx = await makeWorkItemFixture();
-    const planId = await plannedPlan(fx, []);
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Proposed' }, fx.ctx);
+    expect((await plansService.markPlanned(plan.id, fx.ctx)).status).toBe('declined');
+    await adminDb.plan.update({
+      where: { id: plan.id },
+      data: { status: 'planned', plannedAt: new Date(), decidedAt: null, decisionReason: null },
+    });
     const before = await treeSnapshot(fx);
 
-    const approved = await plansService.approvePlan(planId, fx.ctx);
+    const approved = await plansService.approvePlan(plan.id, fx.ctx);
     expect(approved.status).toBe('approved');
     expect(await treeSnapshot(fx)).toEqual(before);
   });
