@@ -53,8 +53,9 @@ import type { TypeId } from '../../theme/typography';
  *     base entry too.
  *   • TYPE (`type`) — ISOLATED, same mechanism plus a base `[data-type='motir']`
  *     block. That axis ships no descendant rules, so the tokens are all of it.
- *   • SHAPE (`styleId`, the token block) — ISOLATED. A `[data-style]` block sets
- *     plain custom properties on the wrapper and they inherit down the subtree.
+ *   • SHAPE (`styleId`, the token block) — ISOLATED. Every style, including the
+ *     Tier-0 `warm-editorial` base, has a `[data-style]` block that sets plain
+ *     custom properties on the wrapper; they inherit down only that subtree.
  *   • MATERIAL (`styleId`, the descendant layer) — ISOLATED by the SCOPING
  *     LIMIT, since MOTIR-3997. The layer used to ship as descendant rules
  *     (`[data-style='X'] [data-surface=…]`, `[data-style='X'] body`, …), and a
@@ -68,11 +69,7 @@ import type { TypeId } from '../../theme/typography';
  *     matrix measures 121 / 121. See
  *     `docs/decisions/scoped-preview-isolation.md` for the measurement, the two
  *     rejected candidates and what the mechanism costs.
- *     Two things that follow, and neither is a claim about who consumes this
- *     component today: do NOT add a `[data-style='warm-editorial']` base block
- *     as a remedy — the base ships no material layer, and such a block only
- *     makes a resolved-TOKEN assertion pass on a tile that still paints as the
- *     ancestor. And the mechanism is structural, not automatic: a material rule
+ *     The mechanism is structural, not automatic: a material rule
  *     authored as a plain descendant crosses the boundary exactly as these did,
  *     which is what `tests/theme/styleRegistry.test.ts`'s 69-rule ratchet
  *     exists to catch.

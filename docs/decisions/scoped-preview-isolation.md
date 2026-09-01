@@ -97,7 +97,7 @@ nothing to leak", never "is isolated".
 
 ---
 
-## Q2 — why a base token block is the wrong remedy
+## Q2 — why a base token block is not the material-layer remedy
 
 MOTIR-3933 framed the style half as a missing base entry, remediable with a
 `[data-style='warm-editorial']` block mirroring the palette fix. It is not, and
@@ -107,8 +107,12 @@ A base block would make a **resolved-token** assertion pass — `--radius-card`
 would come back correct on every tile — on a tile that still paints as glass,
 because the material layer is not a token layer. The assertion would be green
 over a wrong page, which is the exact failure the isolation work exists to close.
-`StyleVignette`'s header already carries the instruction not to add one; this ADR
-is the reasoning behind it.
+That makes a base block insufficient for _this ADR's material defect_, not
+incorrect for the token axis itself. MOTIR-4039 later proved the complementary
+failure: without an explicit base block, a scoped `warm-editorial` tile inherits
+the active style's plain shape/feel custom properties. The shipped contract now
+uses both mechanisms: the base block isolates tokens, and `@scope` isolates
+material.
 
 The two axes need different remedies because they break in different layers:
 
@@ -295,7 +299,7 @@ Stated once, so the next reader does not re-derive it. After this decision ships
 | -------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
 | **colour** (`data-palette`)                        | **yes**   | `data-appearance-scope` re-emits the Tier-3 `--el-*` layer locally (MOTIR-3933)             |
 | **type** (`data-type`)                             | **yes**   | same mechanism, plus a base `[data-type='motir']` block; the axis ships no descendant rules |
-| **shape / feel tokens** (`data-style` token block) | **yes**   | they are plain custom properties on the wrapper and inherit down                            |
+| **shape / feel tokens** (`data-style` token block) | **yes**   | every style, including the Tier-0 base, declares them on the wrapper (MOTIR-4039)           |
 | **material** (`data-style` descendant rules)       | **yes**   | this decision — `@scope … to ([data-style])`                                                |
 
 And what a nested preview is deliberately **not** isolated from, in every case:

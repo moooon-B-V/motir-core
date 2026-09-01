@@ -349,13 +349,75 @@
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 2 — Named-style overrides ([data-style], Axis 2)
    `warm-editorial` is the base (the Tier-0 defaults above — Notion-sober
-   rectangles), so it needs no override block.
+   rectangles). Its explicit block repeats that shape/feel contract so a nested
+   base-style scope shadows a foreign active style instead of inheriting it.
    `soft-playful` adopts Figma's pill buttons + larger radius + softer shadows
    + roomier spacing + a gentler motion feel. Each later style (Swiss,
    Neo-Brutalism, Glassmorphism, …) adds its own `[data-style='<id>']` block
    here, overriding ONLY shape/feel tokens (radius / shadow / spacing / sizing /
    motion / type) — NEVER a colour token (that is the data-palette axis).
    ═══════════════════════════════════════════════════════════════════════ */
+
+[data-style='warm-editorial'] {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+  --radius-btn: 8px;
+  --radius-card: 12px;
+  --radius-input: 8px;
+  --radius-modal: 12px;
+  --radius-badge: 9999px;
+  --radius-control: 6px;
+  --radius-kbd: 4px;
+  --shadow-flat: none;
+  --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+  --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+  --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+  --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+  --spacing-xxs: 4px;
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 40px;
+  --spacing-section: 64px;
+  --spacing-section-lg: 96px;
+  --spacing-hero: 120px;
+  --spacing-btn-x: 18px;
+  --spacing-btn-y: 10px;
+  --spacing-btn-x-sm: 12px;
+  --spacing-btn-y-sm: 8px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 12px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 10px;
+  --spacing-control-y: 6px;
+  --spacing-icon-btn: 4px;
+  --spacing-chip-x: 10px;
+  --spacing-chip-y: 2px;
+  --spacing-kbd-x: 6px;
+  --spacing-kbd-y: 2px;
+  --spacing-tooltip-x: 8px;
+  --spacing-tooltip-y: 4px;
+  --height-btn-sm: 32px;
+  --height-btn-md: 40px;
+  --height-btn-lg: 48px;
+  --height-input: 44px;
+  --height-control: 36px;
+  --transition-duration: 150ms;
+  --transition-fast: 100ms;
+  --transition-slow: 250ms;
+  --hover-scale: 1;
+  --active-scale: 0.98;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
 
 [data-style='soft-playful'] {
   /* Figma's pill geometry */
