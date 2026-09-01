@@ -393,7 +393,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // measurement. These are conservative, complexity-relative first-run costs;
   // replace them from the first green bulk artifacts, as for every new entry.
   'agent-authored-plan.spec.ts': 18.0,
-  'agent-runs.spec.ts': 22.0,
   'activity.spec.ts': 13.8,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
@@ -517,7 +516,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'roadmap-fullscreen.spec.ts': 3.5,
   'roadmap-locate.spec.ts': 4.2,
   'roadmap-refresh-scope.spec.ts': 10.7,
-  'roadmap-arrival.spec.ts': 16.0,
   'roadmap-scope-toggle.spec.ts': 7.2,
   'roles-permissions.spec.ts': 15.9,
   'saved-filters.spec.ts': 17.0,
