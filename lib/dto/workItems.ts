@@ -333,6 +333,30 @@ export interface RelationshipLinkDto {
 }
 
 /**
+ * ALL FIVE relationship groups of one work item, each `key ASC` (MOTIR-4063).
+ *
+ * `blockedBy` = items this item `is_blocked_by` (its OUT edges of that kind);
+ * `blocks` = the items it blocks (the IN edges of the same kind); `relatesTo` /
+ * `duplicates` / `clones` = its OUT edges of those kinds (`relates_to` persists
+ * a reciprocal row, so its OUT set already covers both directions).
+ *
+ * ⚠️ The five are ONE CONCEPT and were, until MOTIR-4063, THREE ROUTES: the item
+ * detail assembled all five for the UI/MCP, the AI boundary carried none of them
+ * on its item payload, and `blocked_by` reached a planner only through its own
+ * `walk-blocking` closure — which has no inverse, so `blocks` was unreachable
+ * for the same reason as the other three rather than available like its pair
+ * (planning bug MOTIR-4090). Naming the whole group in one type is what stops
+ * the next reader classifying a member by its neighbour instead of its route.
+ */
+export interface RelationshipLinkGroups {
+  blockedBy: RelationshipLinkDto[];
+  blocks: RelationshipLinkDto[];
+  relatesTo: RelationshipLinkDto[];
+  duplicates: RelationshipLinkDto[];
+  clones: RelationshipLinkDto[];
+}
+
+/**
  * ONE end of a dependency edge, as a LIST row renders it (Subtask 7.9.0f /
  * MOTIR-1842). Deliberately thinner than {@link RelationshipLinkDto}: a list
  * projection names the far end and shows whether it is still open — it never

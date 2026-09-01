@@ -3,6 +3,7 @@ import {
   Prisma,
   type WorkItem,
   type WorkItemKind,
+  type WorkItemLink,
   type WorkItemPriority,
 } from '@/generated/prisma/client';
 import {
@@ -162,6 +163,7 @@ import type {
   IssueDetailDto,
   ProjectTreeFilter,
   RelationshipLinkDto,
+  RelationshipLinkGroups,
   UpdateWorkItemInput,
   WorkItemDeletePreviewDto,
   WorkItemDependencyEdgesDto,
@@ -531,6 +533,113 @@ function toRelationshipLinks(
   return rows
     .sort(byKeyAsc)
     .map((r) => ({ linkId: linkIdByItem.get(r.id) ?? '', item: toWorkItemSummaryDto(r) }));
+}
+
+/** The five link-row batches of one item, before their far ends are resolved. */
+type RelationshipLinkRows = {
+  blockedByLinks: WorkItemLink[];
+  blocksLinks: WorkItemLink[];
+  relatesLinks: WorkItemLink[];
+  duplicatesLinks: WorkItemLink[];
+  clonesLinks: WorkItemLink[];
+};
+
+/** The far-end rows of {@link RelationshipLinkRows}, batch by batch. */
+type RelationshipTargetRows = {
+  blockerRows: WorkItem[];
+  blockingRows: WorkItem[];
+  relatesRows: WorkItem[];
+  duplicatesRows: WorkItem[];
+  clonesRows: WorkItem[];
+};
+
+/**
+ * Phase 1 of the five-group assembly: ONE query per group, never one per link.
+ * `blocks` is the IN edge of `is_blocked_by`, which is why it is the only batch
+ * read `findByToItem`; the other three are OUT edges.
+ *
+ * Takes an already-bound `tx` so a caller can fold it into its own transaction
+ * (the one-transaction-per-service-method shape,
+ * `docs/decisions/bound-read-transaction-shape.md`).
+ */
+async function readRelationshipLinkRows(
+  itemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<RelationshipLinkRows> {
+  return {
+    blockedByLinks: await workItemLinkRepository.findByFromItem(itemId, 'is_blocked_by', tx),
+    blocksLinks: await workItemLinkRepository.findByToItem(itemId, 'is_blocked_by', tx),
+    relatesLinks: await workItemLinkRepository.findByFromItem(itemId, 'relates_to', tx),
+    duplicatesLinks: await workItemLinkRepository.findByFromItem(itemId, 'duplicates', tx),
+    clonesLinks: await workItemLinkRepository.findByFromItem(itemId, 'clones', tx),
+  };
+}
+
+/** Phase 2: resolve each batch's far end — five batched `findByIds`, never one
+ *  round trip per link. */
+async function resolveRelationshipTargetRows(
+  links: RelationshipLinkRows,
+  tx: Prisma.TransactionClient,
+): Promise<RelationshipTargetRows> {
+  return {
+    blockerRows: await workItemRepository.findByIds(
+      links.blockedByLinks.map((l) => l.toId),
+      tx,
+    ),
+    blockingRows: await workItemRepository.findByIds(
+      links.blocksLinks.map((l) => l.fromId),
+      tx,
+    ),
+    relatesRows: await workItemRepository.findByIds(
+      links.relatesLinks.map((l) => l.toId),
+      tx,
+    ),
+    duplicatesRows: await workItemRepository.findByIds(
+      links.duplicatesLinks.map((l) => l.toId),
+      tx,
+    ),
+    clonesRows: await workItemRepository.findByIds(
+      links.clonesLinks.map((l) => l.toId),
+      tx,
+    ),
+  };
+}
+
+/** Phase 3: pair every resolved row with the edge that points at it. */
+function toRelationshipGroups(
+  links: RelationshipLinkRows,
+  rows: RelationshipTargetRows,
+): RelationshipLinkGroups {
+  return {
+    blockedBy: toRelationshipLinks(links.blockedByLinks, rows.blockerRows, 'toId'),
+    blocks: toRelationshipLinks(links.blocksLinks, rows.blockingRows, 'fromId'),
+    relatesTo: toRelationshipLinks(links.relatesLinks, rows.relatesRows, 'toId'),
+    duplicates: toRelationshipLinks(links.duplicatesLinks, rows.duplicatesRows, 'toId'),
+    clones: toRelationshipLinks(links.clonesLinks, rows.clonesRows, 'toId'),
+  };
+}
+
+/**
+ * Drop every far end that lives OUTSIDE `projectId`, before it is mapped.
+ *
+ * A relationship edge is a legitimate CROSS-PROJECT link in the UI, where the
+ * viewer's own access decides what they see. A caller scoped to ONE project —
+ * the AI boundary's job token — has no such latitude: the link is the one path
+ * by which a read pinned to project A could name a row in project B.
+ * `WorkItemSummaryDto` carries no `projectId`, so this runs on the ROWS.
+ */
+function keepRelationshipTargetsInProject(
+  rows: RelationshipTargetRows,
+  projectId: string,
+): RelationshipTargetRows {
+  const keep = (batch: WorkItem[]): WorkItem[] => batch.filter((r) => r.projectId === projectId);
+  return {
+    blockerRows: keep(rows.blockerRows),
+    blockingRows: keep(rows.blockingRows),
+    relatesRows: keep(rows.relatesRows),
+    duplicatesRows: keep(rows.duplicatesRows),
+    clonesRows: keep(rows.clonesRows),
+  };
 }
 
 /** A revision-diff cell. */
@@ -4497,6 +4606,40 @@ export const workItemsService = {
   },
 
   /**
+   * ALL FIVE relationship groups of one item (MOTIR-4063) — the SAME assembly
+   * `getIssueDetail` renders, without the twelve other reads a detail page buys.
+   *
+   * The caller has already resolved and GATED the item (it is passing an id, so
+   * it must have); this method adds no gate of its own beyond the workspace
+   * binding every read here runs under. ONE transaction for the method, two
+   * batched phases inside it — the links, then their far ends — so a link set
+   * costs a constant number of queries whatever its size
+   * (`docs/decisions/bound-read-transaction-shape.md`).
+   *
+   * `restrictToProjectId` drops every far end outside that project. It is what a
+   * caller scoped to ONE project passes: a relationship edge may legitimately
+   * cross projects, so without it a read pinned to project A can name a row in
+   * project B. A caller with a real viewer (the item page, the MCP) omits it and
+   * gets the whole graph, as it always has.
+   */
+  async getRelationshipLinks(
+    itemId: string,
+    ctx: ServiceContext,
+    opts: { restrictToProjectId?: string } = {},
+  ): Promise<RelationshipLinkGroups> {
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const links = await readRelationshipLinkRows(itemId, tx);
+      const rows = await resolveRelationshipTargetRows(links, tx);
+      return toRelationshipGroups(
+        links,
+        opts.restrictToProjectId === undefined
+          ? rows
+          : keepRelationshipTargetsInProject(rows, opts.restrictToProjectId),
+      );
+    });
+  },
+
+  /**
    * The LINEAGE read (MOTIR-2070) — `getWorkItemByIdentifier` plus the item's
    * ancestor chain, for a caller that needs where the item SITS in the tree.
    * The planning workspace's `?item=` anchor is the caller: to open its
@@ -4623,11 +4766,7 @@ export const workItemsService = {
     const [
       ancestorRows,
       childRows,
-      blockedByLinks,
-      blocksLinks,
-      relatesLinks,
-      duplicatesLinks,
-      clonesLinks,
+      linkRows,
       labelRows,
       componentRows,
       customFieldRows,
@@ -4639,11 +4778,9 @@ export const workItemsService = {
       // separately too so the 2.4.2 rail's Parent field need not re-derive it.
       await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
       await workItemRepository.findChildren(item.id, tx),
-      await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
-      await workItemLinkRepository.findByToItem(item.id, 'is_blocked_by', tx),
-      await workItemLinkRepository.findByFromItem(item.id, 'relates_to', tx),
-      await workItemLinkRepository.findByFromItem(item.id, 'duplicates', tx),
-      await workItemLinkRepository.findByFromItem(item.id, 'clones', tx),
+      // The five relationship batches, from the SHARED assembly the AI boundary
+      // also reads (MOTIR-4063) — one query per group, riding this fan-out.
+      await readRelationshipLinkRows(item.id, tx),
       // The issue's labels (5.4.2) — one bounded query riding the same
       // fan-out (no extra round-trip; capped per-issue by labelsService).
       await labelRepository.listByWorkItem(item.id, tx),
@@ -4672,39 +4809,23 @@ export const workItemsService = {
     // bound transaction (the 5-wide fan-out MOTIR-2799 measured); `getReadiness`
     // is a service call and opens its own, per the call-into-another-service
     // clause in the transaction-shape ADR.
-    const { blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, archivedActor } =
-      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
-        blockerRows: await workItemRepository.findByIds(
-          blockedByLinks.map((l) => l.toId),
-          tx,
-        ),
-        blockingRows: await workItemRepository.findByIds(
-          blocksLinks.map((l) => l.fromId),
-          tx,
-        ),
-        relatesRows: await workItemRepository.findByIds(
-          relatesLinks.map((l) => l.toId),
-          tx,
-        ),
-        duplicatesRows: await workItemRepository.findByIds(
-          duplicatesLinks.map((l) => l.toId),
-          tx,
-        ),
-        clonesRows: await workItemRepository.findByIds(
-          clonesLinks.map((l) => l.toId),
-          tx,
-        ),
+    const { targetRows, archivedActor } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        targetRows: await resolveRelationshipTargetRows(linkRows, tx),
         // Who archived it (2.9.6) — ONLY for an archived item; an active item
         // skips the read entirely (no extra round-trip on the common path). The
         // banner names the actor from this; the timestamp rides `item.archivedAt`.
         archivedActor: item.archivedAt
           ? await workItemRevisionRepository.findLatestArchivedActor(item.id, tx)
           : null,
-      }));
+      }),
+    );
     const readiness = await this.getReadiness(item.id, ctx);
 
     const ancestors = ancestorRows.map(toWorkItemSummaryDto);
-    const blockedBy = toRelationshipLinks(blockedByLinks, blockerRows, 'toId');
+    const linkGroups = toRelationshipGroups(linkRows, targetRows);
+    const blockedBy = linkGroups.blockedBy;
     const openBlockers = blockedBy
       .filter((l) => readiness.openBlockerIds.has(l.item.id))
       .map((l) => l.item);
@@ -4728,11 +4849,7 @@ export const workItemsService = {
       ancestors,
       parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
-      blockedBy,
-      blocks: toRelationshipLinks(blocksLinks, blockingRows, 'fromId'),
-      relatesTo: toRelationshipLinks(relatesLinks, relatesRows, 'toId'),
-      duplicates: toRelationshipLinks(duplicatesLinks, duplicatesRows, 'toId'),
-      clones: toRelationshipLinks(clonesLinks, clonesRows, 'toId'),
+      ...linkGroups,
       readiness: { ready: readiness.ready, openBlockers, blockedByAncestor },
       workflow,
       labels: labelRows.map(toLabelDto),

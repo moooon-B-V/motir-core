@@ -3,6 +3,7 @@
 // retrieval supersedes the read in Story 7.5.
 
 import type {
+  RelationshipLinkGroups,
   WorkItemDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
@@ -54,8 +55,25 @@ export interface WorkItemHistoryPage {
 // GET /api/internal/ai/get-item — one work item by key, plus (on request) the
 // DEPTH context 7.1.6 deferred: the full comment thread and the change log, each
 // bounded/paginated. `comments` / `history` are present ONLY when asked for.
+/**
+ * The AI boundary's item shape: the work-item DTO PLUS all five relationship
+ * groups (MOTIR-4063).
+ *
+ * ⚠️ The links ride the ITEM rather than sitting beside it, because that is
+ * where the planner reads them (`motir-ai` `readLinks` indexes `blockedBy` /
+ * `blocks` / `relatesTo` / `duplicates` / `clones` off the item object) — and
+ * because a link IS a property of the item, unlike `comments` / `history`,
+ * which are separately-paginated windows a caller asks for.
+ *
+ * ADDITIVE, deliberately: a `motir-ai` that predates this ignores the new keys,
+ * so the two repositories deploy in either order. The consumer distinguishes an
+ * ABSENT arm from an EMPTY one and reports the absent ones as `unavailable`, so
+ * an arm arriving here silently becomes readable with no change on that side.
+ */
+export type AiWorkItemDto = WorkItemDto & RelationshipLinkGroups;
+
 export interface GetItemResponse {
-  item: WorkItemDto;
+  item: AiWorkItemDto;
   comments?: CommentsPageDTO;
   history?: WorkItemHistoryPage;
 }
