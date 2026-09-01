@@ -5748,8 +5748,6 @@
         "blocksMeaning": "blocker done",
         "pending": "pending",
         "pendingMeaning": "not done yet",
-        "removed": "being removed",
-        "removedMeaning": "this plan deletes this dependency",
         "blockedElsewhere": "blocked elsewhere",
         "blockedElsewhereMeaning": "the blocker sits elsewhere in the plan",
         "blockerNotInSprint": "blocker not in sprint",

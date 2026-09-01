@@ -728,13 +728,20 @@ describe('arrivalLevel', () => {
 
 // ── THE REMOVED EDGE (bug MOTIR-4092) ────────────────────────────────────────
 //
-// `mergePlanLevel` starts from the committed deps VERBATIM, so an edge a plan
+// `mergePlanLevel` started from the committed deps VERBATIM, so an edge a plan
 // proposes to delete kept rendering exactly like one it keeps. The shape that
 // makes that wrong rather than merely incomplete is an EDGE SWAP — the
 // correction for an inverted dependency, and the standard output of the run-time
 // correction path. It is necessarily two `modify` proposals, so with the removal
 // unread the canvas drew BOTH directions: a mutual block, i.e. a cycle the
 // approve will not produce.
+//
+// ⚠️ THE ANSWER IS SUBTRACTION (bug MOTIR-4098), reversing the first fix, which kept
+// the edge and marked it as going away. A drawn arrow is read as STRUCTURE
+// however it is skinned — what blocks what — so a canvas carrying lines the
+// reader must decode as *ignore me* is the confusing picture the marking was
+// meant to fix. The words for the change live in the `links` diff row; the graph
+// draws what approving would LEAVE BEHIND.
 describe('mergePlanLevel — an edge the plan REMOVES', () => {
   function committed(ids: string[], deps: PlanCanvasLevel['deps'] = []): PlanCanvasLevel {
     return {
@@ -750,11 +757,9 @@ describe('mergePlanLevel — an edge the plan REMOVES', () => {
     };
   }
 
-  it('re-skins the committed dep `removed` — it does NOT drop it', () => {
-    // Dropping the edge would render the plan's OUTCOME instead of its PROPOSAL:
-    // a graph with no edge and no account of where it went, which is the same
-    // wordless surface this bug is about, one step on. A review canvas exists to
-    // show what APPROVING would change, so the edge stays and says it is going.
+  it('DROPS the committed dep — it does not draw it in any variant', () => {
+    // Not re-skinned, not faded, not struck: gone. The canvas is read for its
+    // shape, and an edge the approve deletes is not part of the shape.
     const level = mergePlanLevel(
       committed(['wi_a', 'wi_b'], [{ from: 'wi_a', to: 'wi_b' }]),
       [
@@ -769,7 +774,7 @@ describe('mergePlanLevel — an edge the plan REMOVES', () => {
       'parent_1',
     );
 
-    expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'removed' }]);
+    expect(level.deps).toEqual([]);
   });
 
   it('leaves a committed dep the plan does NOT name alone', () => {
@@ -793,13 +798,10 @@ describe('mergePlanLevel — an edge the plan REMOVES', () => {
       'parent_1',
     );
 
-    expect(level.deps).toEqual([
-      { from: 'wi_a', to: 'wi_b', variant: 'removed' },
-      { from: 'wi_b', to: 'wi_c' },
-    ]);
+    expect(level.deps).toEqual([{ from: 'wi_b', to: 'wi_c' }]);
   });
 
-  it('an EDGE SWAP renders as a swap, NOT as a mutual block', () => {
+  it('an EDGE SWAP renders as ONE arrow, NOT as a mutual block', () => {
     // The fixture is the live one this bug was found on: plan
     // `cmtijiwul00a1hvn8dek1ok8w` proposes `modify MOTIR-4058` removing its
     // blocker MOTIR-4057, and `modify MOTIR-4057` adding MOTIR-4058 — the
@@ -826,21 +828,14 @@ describe('mergePlanLevel — an edge the plan REMOVES', () => {
       'parent_1',
     );
 
-    expect(level.deps).toEqual([
-      { from: 'wi_4057', to: 'wi_4058', variant: 'removed' },
-      { from: 'wi_4058', to: 'wi_4057', variant: 'pending' },
-    ]);
-
-    // The assertion that actually names the defect: the two directions are
-    // present and DISTINGUISHABLE. A reader can no longer see a cycle, because
-    // exactly one of the pair is drawn as arriving.
-    const arriving = level.deps.filter((d) => d.variant !== 'removed');
-    expect(arriving).toHaveLength(1);
-    expect(arriving[0]).toMatchObject({ from: 'wi_4058', to: 'wi_4057' });
+    // The assertion that actually names the defect: the swap draws the ONE edge
+    // the approve leaves behind, pointing the corrected way. There is no reading
+    // of this picture that shows a mutual block, because only one line exists.
+    expect(level.deps).toEqual([{ from: 'wi_4058', to: 'wi_4057', variant: 'pending' }]);
   });
 
   it('ignores a removal naming an edge that is not on this level', () => {
-    // A `blockedByRemove` whose edge is not among the committed deps draws
+    // A `blockedByRemove` whose edge is not among the committed deps subtracts
     // nothing — the same tolerance the ADD carrier already has.
     const level = mergePlanLevel(
       committed(['wi_a', 'wi_b'], [{ from: 'wi_a', to: 'wi_b' }]),

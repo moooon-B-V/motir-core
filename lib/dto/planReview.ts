@@ -165,7 +165,10 @@ export interface PlanReviewItemDto {
    * the whole design. An edge the plan deletes is not a blocker the proposal
    * declares: folding it in would draw it as an arriving dependency and say the
    * OPPOSITE of what the plan proposes. It travels on its own channel so the
-   * canvas can render it in the `remove` language instead.
+   * canvas can SUBTRACT it (bug MOTIR-4098) — `mergePlanLevel` drops the matching
+   * committed dep, so the graph shows the edge set approving would leave behind
+   * and the removal is reported in words by the `links` diff row rather than as
+   * a marked arrow.
    *
    * Empty for an `add` and for a `remove` (neither carries a patch), and for any
    * `modify` whose patch does not touch the edge set.

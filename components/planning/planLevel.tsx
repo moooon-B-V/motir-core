@@ -96,32 +96,37 @@ export function mergePlanLevel(
     });
   }
 
-  // The committed edges are kept verbatim; a proposal's own `blocked_by` edges are
-  // added when BOTH ends are at this level. Proposed edges are `pending` (not yet
-  // firm) — the canvas upgrades one to `cross` when the ends sit under different
-  // parents, which is its own bad-plan signal and not this module's business.
+  // The committed edges are kept verbatim EXCEPT the ones the plan DELETES; a
+  // proposal's own `blocked_by` edges are added when BOTH ends are at this level.
+  // Proposed edges are `pending` (not yet firm) — the canvas upgrades one to
+  // `cross` when the ends sit under different parents, which is its own bad-plan
+  // signal and not this module's business.
   const nodeIds = new Set(nodes.map((n) => n.id));
-  // ⚠️ THE COMMITTED DEPS ARE KEPT VERBATIM *EXCEPT* THE ONES THE PLAN DELETES
-  // (bug MOTIR-4092). `blockedByRemovedNodeIds` is the removal carrier the review
-  // model resolves separately — separately, because an edge the plan deletes is
-  // not a blocker the proposal declares and must never be drawn as one. Here is
-  // where the two meet: a committed dep whose (from, to) pair a proposal at this
-  // level names for removal is re-skinned `removed` rather than dropped.
+  // ⚠️ AN EDGE THE PLAN DELETES IS DROPPED, NOT DRAWN (bug MOTIR-4092, whose
+  // first fix drew it, reversed by bug MOTIR-4098).
   //
-  // RE-SKINNED, NOT DROPPED, and that is the decision. Deleting the edge from the
-  // array would render the plan's OUTCOME instead of its PROPOSAL — the reviewer
-  // would see a graph with no edge and no account of where it went, which is the
-  // same wordless surface this bug is about, one step further on. The whole point
-  // of a review canvas is to show what APPROVING would change, so the edge stays
-  // and says it is going.
+  // `blockedByRemovedNodeIds` is the removal carrier the review model resolves
+  // separately — separately, because an edge the plan deletes is not a blocker
+  // the proposal declares and must never be drawn as one. Here is where the two
+  // meet: a committed dep whose (from, to) pair a proposal at this level names
+  // for removal does not reach the canvas at all.
+  //
+  // DROPPED, NOT RE-SKINNED — MOTIR-4098 REVERSES the first fix, which kept the
+  // edge and marked it as going away. Whatever it is skinned like, a
+  // drawn edge is still an ARROW between two cards, and the canvas is read for
+  // its SHAPE: what blocks what, in what order. A shape carrying lines the reader
+  // has to decode as *ignore me* is the confusing picture the marking was meant
+  // to fix. The removal is not silenced by dropping it — `buildChanges`' `links`
+  // row still reports `+N / −N blockers` in words, which is where a diff belongs.
+  // The graph draws what approving would LEAVE BEHIND.
   const removedPairs = new Set<string>();
   for (const item of atLevel) {
     for (const blockerId of item.blockedByRemovedNodeIds) {
       removedPairs.add(`${blockerId} ${item.nodeId}`);
     }
   }
-  const deps: ProjectCanvasDep[] = committed.deps.map((dep) =>
-    removedPairs.has(`${dep.from} ${dep.to}`) ? { ...dep, variant: 'removed' as const } : dep,
+  const deps: ProjectCanvasDep[] = committed.deps.filter(
+    (dep) => !removedPairs.has(`${dep.from} ${dep.to}`),
   );
   const seen = new Set(deps.map((d) => `${d.from} ${d.to}`));
   for (const item of atLevel) {
