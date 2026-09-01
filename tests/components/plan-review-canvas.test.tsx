@@ -171,6 +171,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
       { id: BUG_ID, identifier: 'MOTIR-3070', title: 'The plan review surface is narrower' },
     ],
     blockedByNodeIds: [],
+    blockedByRemovedNodeIds: [],
     identifier: null,
     title: 'A proposed subtask',
     kind: 'subtask',

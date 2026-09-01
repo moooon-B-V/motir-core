@@ -1409,3 +1409,77 @@ describe('planReviewService.getPlanReview', () => {
     ).rejects.toBeInstanceOf(PlanNotFoundError);
   });
 });
+
+// ── THE REMOVAL CARRIER (bug MOTIR-4092) ────────────────────────────────────
+//
+// The MOTIR-3366 block above resolved the two carriers that ADD an edge, and
+// deliberately left `patch.blockedByRemove` out — an edge the plan DELETES is
+// not a blocker the proposal declares, and drawing it as one would say the
+// opposite of what the plan proposes. That reasoning was right; the half it
+// deferred to "its own card" is this one. Unread, a removal reached the canvas
+// as NOTHING — `mergePlanLevel` starts from the committed deps verbatim, so the
+// edge on its way out kept rendering exactly like one being kept.
+describe('planReviewService — the edge a plan REMOVES', () => {
+  it('resolves a MODIFY’s `patch.blockedByRemove` into `blockedByRemovedNodeIds`', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await seedChild(fx, 'story', 'The MAY-I-START gate');
+    const first = await seedChild(fx, 'task', 'Withdraw the ask', story.id);
+    const second = await seedChild(fx, 'task', 'Build the surface it moves to', story.id);
+    // The committed edge, pointing the WRONG way: the card that BUILDS the
+    // surface is blocked by the card that puts a tool on it.
+    await workItemsService.linkWorkItems(
+      { fromId: second.id, toId: first.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Invert the edge' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: second.id, patch: { blockedByRemove: [first.id] } },
+        { op: 'modify', workItemId: first.id, patch: { blockedByAdd: [second.id] } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    // A `modify`'s node id IS its target's work-item id, which is what makes the
+    // two halves of the swap findable here.
+    const remover = review.items.find((i) => i.nodeId === second.id)!;
+    const adder = review.items.find((i) => i.nodeId === first.id)!;
+
+    // THE assertion: the removal reaches the canvas on its OWN channel.
+    expect(remover.blockedByRemovedNodeIds).toEqual([first.id]);
+    // …and is NOT folded into the declared-blockers set, which would draw it as
+    // an arriving dependency and invert the plan's meaning.
+    expect(remover.blockedByNodeIds).toEqual([]);
+    // The other half of the swap is unaffected.
+    expect(adder.blockedByNodeIds).toEqual([second.id]);
+    expect(adder.blockedByRemovedNodeIds).toEqual([]);
+    // The `links` diff row is the SECOND reader of the same patch and still
+    // reports the removal as a count — it always did, which is why the defect
+    // was invisible on the list view and only wrong on the canvas.
+    expect(remover.changes).toContainEqual({ field: 'links', from: null, to: '−1 blocker' });
+  });
+
+  it('is EMPTY for an `add` and for a `remove` — neither carries a patch', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await seedChild(fx, 'story', 'A story');
+    const victim = await seedChild(fx, 'task', 'Superseded', story.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Mixed ops' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', parentRef: story.id, proposedFields: { title: 'A new card' } },
+        { op: 'remove', workItemId: victim.id },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    for (const item of review.items) expect(item.blockedByRemovedNodeIds).toEqual([]);
+  });
+});

@@ -845,6 +845,8 @@ export function ProjectRoadmapCanvas({
     to: d.to,
     variant: d.variant,
   }));
+  /** Does THIS level draw an edge a plan proposes to delete (bug MOTIR-4092)? */
+  const hasRemovedEdge = canvasEdges.some((e) => e.variant === 'removed');
 
   const handleMove = useCallback(
     (id: string, x: number, y: number) => {
@@ -1412,6 +1414,17 @@ export function ProjectRoadmapCanvas({
                 ['committed', t('legend.blocks'), t('legend.blocksMeaning')],
                 ['pending', t('legend.pending'), t('legend.pendingMeaning')],
                 ['warning', resolvedWarningLegend.label, resolvedWarningLegend.meaning],
+                // ⚠️ CONDITIONAL, unlike the three above (bug MOTIR-4092). A
+                // `removed` edge only ever occurs on the PLAN REVIEW surface —
+                // this same canvas mounted over a plan's proposals — so a
+                // permanent fourth row would be a key to a state the ordinary
+                // roadmap cannot produce. It appears when the level actually
+                // draws one, which is also the only moment a reader needs it:
+                // the cut mark is deliberately not a hue, so it is the one
+                // variant whose meaning is not guessable from the line alone.
+                ...(hasRemovedEdge
+                  ? ([['removed', t('legend.removed'), t('legend.removedMeaning')]] as const)
+                  : []),
               ] as const
             ).map(([kind, label, meaning]) => (
               <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
@@ -1425,17 +1438,30 @@ export function ProjectRoadmapCanvas({
                     className={
                       kind === 'warning'
                         ? 'stroke-(--el-warning)'
-                        : kind === 'pending'
+                        : kind === 'pending' || kind === 'removed'
                           ? 'stroke-(--el-canvas-edge-pending)'
                           : 'stroke-(--el-canvas-edge-committed)'
                     }
                   />
+                  {/* The swatch carries the CUT too, or the key would show a line
+                      the canvas never draws — `removed` is solid quiet ink, which
+                      on its own is indistinguishable from a faded `committed`. */}
+                  {kind === 'removed' && (
+                    <g
+                      className="stroke-(--el-canvas-edge-pending)"
+                      strokeWidth={2.2}
+                      strokeLinecap="round"
+                    >
+                      <line x1="13" y1="3" x2="20" y2="9" />
+                      <line x1="13" y1="9" x2="20" y2="3" />
+                    </g>
+                  )}
                   <path
                     d="M30 2 36 6 30 10z"
                     className={
                       kind === 'warning'
                         ? 'fill-(--el-warning)'
-                        : kind === 'pending'
+                        : kind === 'pending' || kind === 'removed'
                           ? 'fill-(--el-canvas-edge-pending)'
                           : 'fill-(--el-canvas-edge-committed)'
                     }

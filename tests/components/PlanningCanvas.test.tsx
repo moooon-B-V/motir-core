@@ -134,9 +134,16 @@ describe('PlanningCanvas', () => {
     edgePaths.forEach((p) => expect(p.getAttribute('marker-end')).toMatch(/^url\(#/));
     // ONE MARKER PER VARIANT, and the count is frozen on purpose: an edge that
     // inherited another variant's arrowhead would still point the right way and
-    // be the one inconsistency in the set. Five since MOTIR-3972 added `running`
-    // (committed / pending / warning / emphasis / running).
-    expect(document.querySelectorAll('marker')).toHaveLength(5);
+    // be the one inconsistency in the set. Five since MOTIR-3972 added `running`;
+    // SIX since bug MOTIR-4092 added `removed`
+    // (committed / pending / warning / emphasis / running / removed).
+    //
+    // ⚠️ `removed` shares the QUIET INK with `pending` and still takes its OWN
+    // marker rather than borrowing pending's, which is the whole point of the
+    // freeze: the two are told apart by the cut mark and the dash, so an
+    // arrowhead shared today is an arrowhead nobody notices is wrong the day one
+    // of the two changes hue.
+    expect(document.querySelectorAll('marker')).toHaveLength(6);
   });
 
   it('emphasises a selected node’s edges in the accent (so a dashed one still pops)', () => {
@@ -279,5 +286,97 @@ describe('the RUNNING edge variant', () => {
     expect(runningPath!.getAttribute('class')).toContain('stroke-(--el-status-in-progress)');
     expect(runningPath!.getAttribute('class')).not.toContain('stroke-(--el-accent)');
     expect(crossPath!.getAttribute('class')).toContain('stroke-(--el-warning)');
+  });
+});
+
+// ── THE REMOVED EDGE (bug MOTIR-4092) ──────────────────────────────────────
+// A COMMITTED edge a plan proposes to DELETE. It is drawn in the shipped
+// `remove` language — quiet ink, solid, cut through — and every assertion below
+// pins one of the three cues the design forbids it from using, because each one
+// is already spoken for by another state.
+describe('the REMOVED edge variant', () => {
+  const paths = () =>
+    Array.from(
+      document.querySelector('[data-testid="canvas-edges"]')?.querySelectorAll('path') ?? [],
+    );
+  const cuts = () => Array.from(document.querySelectorAll('[data-testid="canvas-edge-cut"]'));
+
+  it('draws the cut mark — the one cue that is not already spent', () => {
+    // HUE is taken (warning = cross, in-progress = running, accent = selection),
+    // DASH is taken (pending, i.e. an edge ARRIVING — the opposite claim), and
+    // OPACITY is taken by the selection's own lit/unlit dimming. So the state is
+    // carried by a MARK, matching the `remove` node language's strike-through.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[{ from: 'a', to: 'b', variant: 'removed' }]}
+        renderNode={renderNode}
+      />,
+    );
+    expect(cuts()).toHaveLength(1);
+    // Two crossing strokes — an ✕, not a tick that could read as a chevron.
+    expect(cuts()[0]!.querySelectorAll('line')).toHaveLength(2);
+  });
+
+  it('is NEUTRAL and SOLID — never the warning hue, never dashed', () => {
+    // `design/ai-planning/design-notes.md` Panel B: the `remove` treatment is
+    // "deliberately not red/dashed/hatched, since archive is reversible … not
+    // the error/attention signal cross-story deps carry". Red-hatch stays
+    // reserved for the cross-story dependency anchor.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[{ from: 'a', to: 'b', variant: 'removed' }]}
+        renderNode={renderNode}
+      />,
+    );
+    const p = paths()[0]!;
+    expect(p.getAttribute('class')).toContain('stroke-(--el-canvas-edge-pending)');
+    expect(p.getAttribute('class')).not.toContain('--el-warning');
+    expect(p.getAttribute('stroke-dasharray')).toBeNull();
+    expect(p.getAttribute('marker-end')).toContain('-removed');
+  });
+
+  it('⚠️ keeps the path count equal to the edge count — the cut is not a second path', () => {
+    // The same invariant the running edge protects: the cut mark is a <g> of
+    // <line>s, so it cannot be mistaken for an extra connector by the guard that
+    // asserts one path per edge.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[
+          { from: 'a', to: 'b', variant: 'removed' },
+          { from: 'b', to: 'c', variant: 'pending' },
+        ]}
+        renderNode={renderNode}
+      />,
+    );
+    expect(paths()).toHaveLength(2);
+    expect(cuts()).toHaveLength(1);
+  });
+
+  it('⚠️ is OPT-IN — a canvas with no removed edge draws no cut mark', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    expect(cuts()).toHaveLength(0);
+  });
+
+  it('an EDGE SWAP draws both directions, told apart by the cut', () => {
+    // The shape this bug is about: before the fix both directions rendered
+    // identically and the plan read as a mutual block.
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[
+          { from: 'a', to: 'b', variant: 'removed' },
+          { from: 'b', to: 'a', variant: 'pending' },
+        ]}
+        renderNode={renderNode}
+      />,
+    );
+    expect(paths()).toHaveLength(2);
+    expect(cuts()).toHaveLength(1);
+    // Exactly one of the pair reads as arriving.
+    const dashed = paths().filter((p) => p.getAttribute('stroke-dasharray') !== null);
+    expect(dashed).toHaveLength(1);
   });
 });
