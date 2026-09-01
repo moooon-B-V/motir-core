@@ -156,8 +156,9 @@ describe('PlanItemPatch edge carriers ⟷ planReviewService', () => {
     // What must never happen is a removal becoming a DECLARED BLOCKER — drawing
     // an edge the plan deletes as one it is adding says the opposite of what the
     // plan proposes. What is now correct is reading the key into its OWN field,
-    // so the canvas can draw it in the `remove` language. A file-wide string ban
-    // cannot tell those two apart, and it failed the one that is right.
+    // so the canvas can SUBTRACT it — `mergePlanLevel` drops the committed dep
+    // it names. A file-wide string ban cannot tell those two apart, and it
+    // failed the one that is right.
     //
     // So the ban moves to the function it was always about: `blockedByNodeIdsOf`
     // is the set that becomes arrows, and the removal carrier may not appear

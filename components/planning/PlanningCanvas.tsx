@@ -69,7 +69,7 @@ export interface CanvasEdge {
    * `fullScreenable`): a consumer that never sends it renders exactly as before,
    * which is what keeps the onboarding canvas from growing a flowing edge.
    */
-  variant?: 'firm' | 'pending' | 'cross' | 'running' | 'removed';
+  variant?: 'firm' | 'pending' | 'cross' | 'running';
 }
 
 export interface PlanningCanvasProps {
@@ -400,38 +400,33 @@ export function PlanningCanvas({
             points blocker → blocked). MOTIR-1331. */}
         <svg className="absolute h-0 w-0" aria-hidden="true">
           <defs>
-            {(['committed', 'pending', 'warning', 'emphasis', 'running', 'removed'] as const).map(
-              (kind) => (
-                <marker
-                  key={kind}
-                  id={`${mId}-${kind}`}
-                  viewBox="0 0 10 10"
-                  refX="8.5"
-                  refY="5"
-                  markerWidth="7"
-                  markerHeight="7"
-                  orient="auto-start-reverse"
-                >
-                  <path
-                    d="M0 0L10 5L0 10z"
-                    className={
-                      kind === 'warning'
-                        ? 'fill-(--el-warning)'
-                        : kind === 'running'
-                          ? 'fill-(--el-status-in-progress)'
-                          : kind === 'emphasis'
-                            ? 'fill-(--el-accent)'
-                            : // `removed` shares the QUIET INK with `pending` and is told
-                              // apart by its cut mark, never by hue — the `remove`
-                              // language is neutral by decision (design Panel B).
-                              kind === 'pending' || kind === 'removed'
-                              ? 'fill-(--el-canvas-edge-pending)'
-                              : 'fill-(--el-canvas-edge-committed)'
-                    }
-                  />
-                </marker>
-              ),
-            )}
+            {(['committed', 'pending', 'warning', 'emphasis', 'running'] as const).map((kind) => (
+              <marker
+                key={kind}
+                id={`${mId}-${kind}`}
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M0 0L10 5L0 10z"
+                  className={
+                    kind === 'warning'
+                      ? 'fill-(--el-warning)'
+                      : kind === 'running'
+                        ? 'fill-(--el-status-in-progress)'
+                        : kind === 'emphasis'
+                          ? 'fill-(--el-accent)'
+                          : kind === 'pending'
+                            ? 'fill-(--el-canvas-edge-pending)'
+                            : 'fill-(--el-canvas-edge-committed)'
+                  }
+                />
+              </marker>
+            ))}
           </defs>
         </svg>
 
@@ -448,13 +443,6 @@ export function PlanningCanvas({
             const pending = edge.variant === 'pending';
             const cross = edge.variant === 'cross';
             const running = edge.variant === 'running';
-            // A COMMITTED edge this plan proposes to DELETE (bug MOTIR-4092),
-            // drawn in the shipped `remove` language: quiet ink, SOLID (dashed is
-            // `pending`, i.e. arriving — the opposite claim), and cut through at
-            // its midpoint below. It never takes the selection's accent emphasis:
-            // an edge on its way out is not the thing to shout about when a
-            // reader clicks its neighbour.
-            const removed = edge.variant === 'removed';
             // When a node is selected, only its own edges stay lit; a lit non-cross
             // edge is EMPHASISED in the accent (so even a faint dashed `pending`
             // connector clearly pops, matching the selected card's accent ring).
@@ -463,18 +451,16 @@ export function PlanningCanvas({
             // `cross`. A run's live edge must stay the live one while a reader
             // clicks around the graph; `cross` stays loudest because a plan that
             // is WRONG outranks a plan that is in motion.
-            const emph = lit && selectedId != null && !cross && !running && !removed;
+            const emph = lit && selectedId != null && !cross && !running;
             const marker = cross
               ? 'warning'
               : running
                 ? 'running'
                 : emph
                   ? 'emphasis'
-                  : removed
-                    ? 'removed'
-                    : pending
-                      ? 'pending'
-                      : 'committed';
+                  : pending
+                    ? 'pending'
+                    : 'committed';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
@@ -491,22 +477,12 @@ export function PlanningCanvas({
                         'canvas-edge-running stroke-(--el-status-in-progress)'
                       : emph
                         ? 'stroke-(--el-accent)'
-                        : pending || removed
+                        : pending
                           ? 'stroke-(--el-canvas-edge-pending)'
                           : 'stroke-(--el-canvas-edge-committed)'
                 }
                 strokeWidth={
-                  running
-                    ? 3
-                    : removed
-                      ? 2
-                      : lit && selectedId != null
-                        ? cross
-                          ? 3.5
-                          : 3
-                        : cross
-                          ? 2.5
-                          : 2
+                  running ? 3 : lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2
                 }
                 strokeLinecap="round"
                 // a denser dash when emphasised keeps the dashed line legible at the
@@ -516,44 +492,6 @@ export function PlanningCanvas({
                 vectorEffect="non-scaling-stroke"
                 style={{ opacity: lit ? 1 : 0.12 }}
               />
-            );
-          })}
-
-          {/* THE CUT MARK — a removed edge's only unambiguous cue (bug MOTIR-4092).
-              An ✕ across the connector's midpoint, in the same quiet ink as its
-              stroke, using the `mid` point `routeEdges` already returns for the
-              cross-story flag.
-
-              ⚠️ IT IS LOAD-BEARING, NOT DECORATION, and the reason is that every
-              cheaper cue is already spent. HUE is taken: warning is `cross`, the
-              in-progress hue is `running`, and the accent is the selection — and
-              the design reserves red/hatch for the cross-story signal and calls
-              the `remove` language explicitly NEUTRAL. DASH is taken: it means
-              `pending`, an edge ARRIVING, which is the opposite claim. OPACITY is
-              taken twice over — the canvas dims an unlit edge to 0.12 for the
-              selection, so a merely-faded edge reads as *deselected*. What is
-              left is a MARK, and a cut is the one the shipped `remove` node
-              language already uses (a strike-through title). */}
-          {edges.map((edge, i) => {
-            if (edge.variant !== 'removed') return null;
-            const route = routes[i];
-            if (!route) return null;
-            const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
-            const { x, y } = route.mid;
-            const r = 5;
-            return (
-              <g
-                key={`cut~${edge.from}~${edge.to}~${i}`}
-                className="stroke-(--el-canvas-edge-pending)"
-                strokeWidth={2}
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-                style={{ opacity: lit ? 1 : 0.12 }}
-                data-testid="canvas-edge-cut"
-              >
-                <line x1={x - r} y1={y - r} x2={x + r} y2={y + r} />
-                <line x1={x - r} y1={y + r} x2={x + r} y2={y - r} />
-              </g>
             );
           })}
         </svg>

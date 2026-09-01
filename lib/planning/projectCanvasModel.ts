@@ -84,17 +84,7 @@ export interface ProjectCanvasDep {
    *  this lands*. ⚠️ `cross` still WINS over it below: an edge that leaves the
    *  level is a plan problem, and hiding that under an animation would trade a
    *  diagnosis for a decoration. */
-  /** `removed` = a COMMITTED edge a plan proposes to DELETE (bug MOTIR-4092).
-   *  It is the only variant that describes an edge going AWAY, and it is drawn
-   *  in the shipped `remove` LANGUAGE rather than a new one: dimmed,
-   *  de-saturated, NEUTRAL, with a cut mark — deliberately not red, not dashed
-   *  and not hatched (`design/ai-planning/design-notes.md` Panel B: *"solid
-   *  muted border + grey fill + strike-through title … since archive is
-   *  reversible, not the error/attention signal cross-story deps carry"*).
-   *  ⚠️ OPACITY ALONE CANNOT CARRY IT: the canvas already spends opacity on the
-   *  selection's lit/unlit state, so a merely-dimmed edge reads as *deselected*.
-   *  The CUT MARK is what makes the state legible, not decoration. */
-  variant?: 'firm' | 'pending' | 'cross' | 'running' | 'removed';
+  variant?: 'firm' | 'pending' | 'cross' | 'running';
   /** `dependency` (default) = a real blocked-by edge → counts toward the
    *  dependency LEGEND. `flow` = a sequence/journey edge (the onboarding station
    *  serpentine) that is drawn but is NOT a blocked-by relationship, so it must
@@ -102,7 +92,7 @@ export interface ProjectCanvasDep {
   kind?: 'dependency' | 'flow';
 }
 
-export type CanvasEdgeVariant = 'firm' | 'pending' | 'cross' | 'running' | 'removed';
+export type CanvasEdgeVariant = 'firm' | 'pending' | 'cross' | 'running';
 
 export interface CanvasLevelNode {
   node: ProjectCanvasNode;

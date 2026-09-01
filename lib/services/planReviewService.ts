@@ -512,8 +512,8 @@ export const planReviewService = {
      *
      * The exclusion from `blockedByNodeIdsOf` deferred a *treatment the canvas
      * does not have* to "its own card". Until that card, the consequence was
-     * that a removal reached the canvas as NOTHING: `mergePlanLevel` starts from
-     * the committed deps verbatim, so the edge the plan is deleting kept
+     * that a removal reached the canvas as NOTHING: `mergePlanLevel` started
+     * from the committed deps verbatim, so the edge the plan is deleting kept
      * rendering exactly like one it is keeping.
      *
      * ⚠️ THE SHAPE THAT MAKES IT WRONG RATHER THAN MERELY INCOMPLETE is an EDGE
@@ -525,10 +525,17 @@ export const planReviewService = {
      * *"this plan is broken"*, and the plan is fine — so the surface was at its
      * least accurate on exactly the plans a reviewer cannot re-derive by hand.
      *
-     * A removal is only drawable where the edge EXISTS to begin with, so this
-     * resolves refs and leaves it to the level builder to intersect them with
-     * the committed deps — a `blockedByRemove` naming an edge that is not on
-     * this level simply draws nothing, which is the same tolerance the add
+     * The canvas answers it by SUBTRACTION, not by a marking (bug MOTIR-4098):
+     * `mergePlanLevel`
+     * drops the committed dep this names, so the graph shows the edge set the
+     * approve would leave behind. A marked-as-going-away edge was tried first
+     * and reverted — a drawn arrow is read as structure however it is skinned,
+     * and the words for the change already exist in the `links` diff row.
+     *
+     * A removal only bites where the edge EXISTS to begin with, so this resolves
+     * refs and leaves it to the level builder to intersect them with the
+     * committed deps — a `blockedByRemove` naming an edge that is not on this
+     * level simply subtracts nothing, which is the same tolerance the add
      * carrier already has.
      */
     const blockedByRemovedNodeIdsOf = (item: PlanItemDto): string[] => {
