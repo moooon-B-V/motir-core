@@ -106,11 +106,29 @@ describe('isStyleId / resolveStyle', () => {
 });
 
 describe('runtime contract in globals.css', () => {
-  it('ships a [data-style] block for every non-default style', () => {
+  it('ships a [data-style] block for every style, including the Tier-0 default', () => {
     for (const id of STYLE_IDS) {
-      if (id === DEFAULT_STYLE_ID) continue; // the base needs no override block
       expect(GLOBALS_CSS).toContain(`[data-style='${id}']`);
     }
+  });
+
+  it('keeps the default style block at parity with every Tier-0 shape/feel token', () => {
+    const css = GLOBALS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const tier0 = css.match(/@theme\s*\{([\s\S]*?)\n\}/)?.[1];
+    const base = css.match(/\[data-style='warm-editorial'\]\s*\{([^}]*)\}/)?.[1];
+    expect(tier0).toBeDefined();
+    expect(base).toBeDefined();
+
+    const shapeToken =
+      /^--(?:radius|shadow|spacing|height|transition)-(?!.*-color)|^--(?:hover|active)-scale$|^--focus-ring-(?:width|offset)$/;
+    const declarations = (body: string) =>
+      new Map(
+        [...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)]
+          .filter(([, name]) => shapeToken.test(name ?? ''))
+          .map(([, name, value]) => [name, value?.trim()]),
+      );
+
+    expect(declarations(base ?? '')).toEqual(declarations(tier0 ?? ''));
   });
 
   it('keeps the style axis disjoint from colour AND type — no colour or font token in a [data-style] token block', () => {
