@@ -1129,6 +1129,10 @@ carry. No string says "or else", and none counts down.
 | 9   | **What does NOT trigger it**  | the four excluded documents, each with its published ground                 |
 | 10  | **Mobile (390px)**            | a width, not a second design — with one measurement that came out otherwise |
 | 11  | **Dark**                      | both surfaces, tokens flipped                                               |
+| 12  | **Sign-up · UNCONFIGURED**    | the notice ABSENT, and what its hairline leaving does to the card foot      |
+| 13  | **Sign-up · CONFIGURED**      | the same notice with OFF-HOST links, and the external-link treatment        |
+| 14  | **The rail's bottom section** | with the Legal row and without it, side by side — the difference is one row |
+| 15  | **Re-consent · UNCONFIGURED** | the row with no way out, drawn as the CLOUD MISCONFIGURATION it is          |
 
 ### Per-control map — primitive, tokens
 
@@ -1248,7 +1252,179 @@ Everything the area's a11y section states holds. Four additions:
 5. **Self-host.** MOTIR-1135's own criteria already say gating keys off the CLOUD
    document version. Nothing on this screen changes for a self-hoster except that
    it should not appear at all: their operator sets their own terms, and
-   `content/legal/` ships as our copy of ours.
+   ~~`content/legal/` ships as our copy of ours~~ — **⚠️ AMENDED 2026-09-01
+   (MOTIR-4006): that last clause is now false.** `content/legal/` LEAVES this
+   repository; `motir-core` reads a configured manifest instead, and an
+   unconfigured build has no documents at all. The gate is still `MOTIR_CLOUD`-only,
+   so this screen still never appears for a self-hoster — the reason is unchanged
+   and the mechanism underneath it is not. See the amendment below.
+
+### ⚠️ AMENDMENT 2026-09-01 (MOTIR-4006) — the UNCONFIGURED arm, once the documents leave
+
+This asset drew one world: `motir-core` ships the seven legal documents and every
+surface links to them. MOTIR-3909 takes the documents out and replaces them with a
+**configured manifest**, so the repository gains a state it has never had — **no legal
+documents at all** — and it is not an edge case. It is what every self-hosted build
+shows on day one, which makes it the COMMON case for the open product.
+
+Panels 12–15 draw the second arm of each surface. The decisions they carry are
+`docs/decisions/public-surface-hosts.md` **AMENDMENT 2**'s (MOTIR-4004); this asset
+draws them rather than deciding them.
+
+#### The sign-up notice is ABSENT, not re-flowed — and that was the open question
+
+The card that commissioned this amendment left the choice open: _"decide and draw
+whether the sentence disappears entirely or re-flows to a shorter form."_ **The
+record decided it, in §D: the whole paragraph does not render.**
+
+The reason is the sentence itself. `legal.signUpNotice` is _"By creating a Motir
+account you agree to our `<terms>`Terms of Service`</terms>` and
+`<privacy>`Privacy Policy`</privacy>."_ — a sentence **entirely about two
+documents**. Turn the links into plain text and it does not become a weaker notice;
+it becomes a **false one**, asserting that the reader has agreed to documents nobody
+published. A self-hoster has no Terms of Service, and the honest sign-up form is one
+that does not claim otherwise.
+
+Three consequences worth stating, because each is a thing a builder might otherwise
+add:
+
+- **No new copy string, and therefore no `zh` twin.** An absent paragraph needs no
+  words. `legal.signUpNotice` survives unchanged for panel 2's case, and the
+  catalogue-parity gate has nothing new to check. A card that finds itself authoring
+  a string for this arm is building the superseded shape.
+- **What moves is the card FOOT, not the sentence.** The notice sat under a
+  `border-top` at `padding-top: 16px`, so removing it takes a hairline away as well
+  as a paragraph — the card ends on _"Already have an account?"_ with the body's own
+  bottom padding as its closing space. That is the entire visible change and panel 12
+  is what a reviewer checks it against.
+- **The assertion is the paragraph's ABSENCE.** Not "the anchor is missing", which a
+  re-flowed sentence would also satisfy.
+
+#### The links now LEAVE the application — panel 13
+
+Panel 2's links are same-origin. After MOTIR-3909 they are **absolute URLs on
+whatever host the operator publishes**, which for the hosted service is
+`motir.co` — a different application. Panel 13 gives them the shipped external-link
+treatment: lucide `external-link` at **13px**, inline after the label, **in the
+link's own colour** so it reads as part of the link rather than as an adjacent
+control. That mirrors `components/github/DevelopmentSection.tsx` and
+`components/planning/repositories/RepositoryRow.tsx`, which is where it ships today.
+
+The anchors are plain `<a>`, **not** client-navigating links: a cross-origin
+`next/link` looks identical until it is used. The decision is made once here rather
+than three times in three components.
+
+#### ⚠️ The rail's two arms are drawn HERE, and the reason is a defect in the other area
+
+The card said to draw the rail's absent arm _"in whichever asset owns the rail's
+bottom section — `design/shell/` if it draws it, `design/auth/` otherwise — and the
+notes say which and why."_ **It is `design/auth/`, and this is the why.**
+
+`design/shell/` owns the rail, and its sources do not draw the row. Counted over the
+`.pen` files:
+
+| asset                   | `Legal` | `Docs` | `Git` |
+| ----------------------- | ------- | ------ | ----- |
+| `desktop.pen`           | **0**   | 1      | **0** |
+| `mobile-drawer.pen`     | **0**   | 1      | **0** |
+| `desktop-collapsed.pen` | **0**   | 0      | **0** |
+
+`desktop.pen`'s nav frames are `Dashboard · Issues · Boards · Reports · Settings ·
+Docs`. **An asset that never drew the Legal row cannot draw its ABSENCE as a state** —
+an absence is only specifiable against a presence — so re-specifying the rail inside
+a stale source would have made the two disagree twice over. Panel 14 is therefore the
+interim source for this row's two arms, and the staleness is filed as
+**MOTIR-4130**, which supersedes panel 14 when it lands.
+
+Panel 14 is **cropped to the last three rows** of that section — Git, Docs, Legal, in
+`SidebarNav.tsx` declaration order — because those are the rows the change is about;
+Security and Job runs sit above them and neither moves. The two rails are side by side
+because the difference is exactly one row, and that is the whole specification: the
+row is **absent**, not disabled and not empty-stated. Nothing else re-centres, and the
+separator above the section stays. **If the section were ever to empty entirely**, the
+section and its separator go with the last row — a rail does not render an empty group
+under a hairline.
+
+#### ⚠️ Panel 15 is a MISCONFIGURATION, and the label is load-bearing
+
+The re-consent screen is reachable only on a cloud build:
+`lib/legal/reconsentGate.ts`'s `isMotirCloud()` returns early otherwise, so a
+self-hosted deployment never renders it. A cloud build holding a reader while its
+manifest carries no `url` for that document is therefore **misconfigured** — it is not
+the ordinary unconfigured state panels 12 and 14 draw, and drawing it as one would
+teach a builder to treat a fault as a supported mode.
+
+The row keeps everything that identifies the change — the name, the version delta, the
+author's sentence — because all of those come from the manifest entry. What is missing
+is the way OUT: no _"Read the new version →"_. **That is uncomfortable and it is
+correct**: a person is being asked to agree to a change they cannot read, and the
+drawing should say so rather than hide it. The row does **not** invent a fallback link
+and does **not** render an "unavailable" string — a legal notice that explains our
+operational problem to the reader has put the wrong thing on their screen.
+
+Where the operator is told instead: AMENDMENT 2 §C makes this a **named condition** —
+a manifest whose rejected entry is one of the three re-consent slugs is reported as
+_faulted_ by the deployment's health surface, never as _unconfigured_. The reader gets
+a row that still says what changed; the operator gets the alarm.
+
+#### Measured, not asserted
+
+Rendered with the repository's own chromium at `deviceScaleFactor: 1`:
+
+| measurement             | 1280×800                          | 390×844                                     |
+| ----------------------- | --------------------------------- | ------------------------------------------- |
+| the auth card           | **448 × 563**                     | 292 × 643                                   |
+| the rail                | **252 × 144**                     | 252 × 144 (unchanged — it is a fixed width) |
+| a rail row              | **228 × 36** (`--height-control`) | 228 × 36                                    |
+| the rail row's icon     | **18 × 18**                       | 18 × 18                                     |
+| the external-link glyph | **13 × 13**                       | 13 × 13                                     |
+| panel 14                | 1080 × 164                        | **342 × 316**                               |
+| document height         | 11 308                            | 18 478                                      |
+
+**The fold is the viewport height** — 800 and 844 — and this asset is a panel board
+rather than a screen, so no panel is expected to fit it; each panel is read on its own
+and every one is shorter than the fold except the full auth cards, which is how panels
+2–11 already behave.
+
+**One thing the measurement changed.** At 390 the two rails side by side came to
+532px against a 342px panel and overflowed. `.railpair` now carries `flex-wrap: wrap`,
+so they stack — panel 14 goes 164px tall to 316px — and the comparison survives at
+both widths. The rail itself does **not** narrow, deliberately: 252px is its shipped
+width, and at 390 the real product shows a drawer rather than a sidebar
+(`design/shell/mobile-drawer.pen`), which is a different surface this panel does not
+claim to draw.
+
+AA contrast is asserted by `tests/design-ink-contrast.test.ts` over `design/**`, green
+in this branch's `vitest --config vitest.design.config.ts` run (7 files, 90 tests) —
+so the new panels' inks are measured by the lane rather than by this note.
+
+#### The GIVES / TAKES sweep
+
+Run over every `MOTIR-<n>` this asset names, bounded by MOTIR-3909's subtree rather
+than by the asset's own key list.
+
+| card                                     | GIVES                                                                              | TAKES                                                                                                                                                                       | acted on                                                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **MOTIR-4010** (the three link surfaces) | panels 12–14: the absent notice, the off-host glyph, the rail's one-row difference | **YES — it TAKES the new copy string.** The card said its unconfigured arm was _"the one piece of new copy here"_ and needed a `zh` twin; §D's omission means there is none | `update_work_item` — done 2026-09-01, before this asset was drawn                              |
+| **MOTIR-4015** (the E2E)                 | panel 12 is what step 1 asserts against                                            | **YES — the assertion changes kind**, from _"reads as a finished sentence"_ to _"the paragraph is not in the tree"_                                                         | `update_work_item` — done 2026-09-01                                                           |
+| **MOTIR-4007** (the manifest reader)     | panel 13's `url` is the field it must carry per entry                              | no                                                                                                                                                                          | —                                                                                              |
+| **MOTIR-1135**                           | planning flag 5's last clause                                                      | **YES — the premise it rests on is retired** (`content/legal/` leaves)                                                                                                      | flag 5 amended above; the card is `done`, so it is amended in place here rather than re-opened |
+| **MOTIR-4130**                           | panel 14, as the interim source for the rail's two arms                            | no — it is a defect this asset FOUND, not scope taken from it                                                                                                               | filed 2026-09-01                                                                               |
+
+**Nothing else in the subtree is touched by this asset.** MOTIR-4014's clauses are
+about the manifest seam and are unaffected; MOTIR-4011 is `motir-marketing`'s.
+
+### ⚠️ Planning flags for MOTIR-4006
+
+1. **`design/shell/`'s rail sources are two rows short of what ships — MOTIR-4130.**
+   Neither the `Git` row nor the `Legal` row is drawn by any of the three shell
+   assets, and a `Settings` row is drawn that the shipped bottom section does not
+   carry in that position. It is why panel 14 lives in this area. **That card must
+   answer a toolchain question before it edits anything**: this repository cannot
+   re-export a `.pen` (Pencil is not in the tree — see the divergence ledger at the
+   top of this file), so the fix is either a re-exportable source or the
+   `*.mock.html` route this area's own siblings already took. A `.pen` edit whose
+   `.png` cannot be regenerated is a second divergence, not a fix.
 
 ### Self-review
 
