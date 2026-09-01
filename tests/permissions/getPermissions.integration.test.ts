@@ -613,34 +613,46 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     }
   });
 
-  it('the access LEVEL subtracts NOTHING — a custom role grants exactly what it lists', async () => {
-    // Yue, 2026-08-09, and it is the behaviour change the decision to drop
-    // `based_on` produced. Before, a role's tier was its seed built-in, so two
-    // roles holding the SAME set resolved differently on a `limited` project.
-    // Now every custom-role membership sits at `CUSTOM_ROLE_TIER`, and the
-    // level's subtraction — which exists to narrow the COARSE built-ins — takes
-    // nothing from a set an admin enumerated by hand.
-    const permissions = ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'];
-    for (const level of ['open', 'limited', 'private', 'public'] as const) {
-      const s = await buildScenario(level, `custom-level-${level}`);
-      await putOnCustomRole({
-        workspaceId: s.workspaceId,
-        projectId: s.projectId,
-        userId: s.ctxs.viewer.userId,
-        name: 'Contractor',
-        permissions,
-      });
-      const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.viewer);
-      for (const key of permissions) {
-        expect(held.has(key as PermissionKey), `${level} · ${key}`).toBe(true);
+  // ⚠️ FOUR ROUNDS, each seeding a scenario and ending in `truncateAuthTables()`
+  // — a per-round database reset, which is lock-wait bound rather than CPU bound
+  // and so degrades non-linearly under shard contention. That is the shape that
+  // timed out twice on `Vitest (7/12)` in `planningTargetLockGate.test.ts`
+  // (MOTIR-3736, MOTIR-4089), and this was the only other instance of it in the
+  // tree. Measured at 691 ms locally; 60 s is ~87x that, so reaching it means a
+  // hang rather than a busy runner. `tests/timeout-budget-lane.test.ts` is what
+  // found this test and what keeps the third one from being written.
+  it(
+    'the access LEVEL subtracts NOTHING — a custom role grants exactly what it lists',
+    { timeout: 60_000 },
+    async () => {
+      // Yue, 2026-08-09, and it is the behaviour change the decision to drop
+      // `based_on` produced. Before, a role's tier was its seed built-in, so two
+      // roles holding the SAME set resolved differently on a `limited` project.
+      // Now every custom-role membership sits at `CUSTOM_ROLE_TIER`, and the
+      // level's subtraction — which exists to narrow the COARSE built-ins — takes
+      // nothing from a set an admin enumerated by hand.
+      const permissions = ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'];
+      for (const level of ['open', 'limited', 'private', 'public'] as const) {
+        const s = await buildScenario(level, `custom-level-${level}`);
+        await putOnCustomRole({
+          workspaceId: s.workspaceId,
+          projectId: s.projectId,
+          userId: s.ctxs.viewer.userId,
+          name: 'Contractor',
+          permissions,
+        });
+        const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.viewer);
+        for (const key of permissions) {
+          expect(held.has(key as PermissionKey), `${level} · ${key}`).toBe(true);
+        }
+        // …and it gains nothing either: the set is the whole answer.
+        expect([...held].sort()).toEqual(
+          level === 'public' ? [...permissions, ...PUBLIC_KEYS()].sort() : [...permissions].sort(),
+        );
+        await truncateAuthTables();
       }
-      // …and it gains nothing either: the set is the whole answer.
-      expect([...held].sort()).toEqual(
-        level === 'public' ? [...permissions, ...PUBLIC_KEYS()].sort() : [...permissions].sort(),
-      );
-      await truncateAuthTables();
-    }
-  });
+    },
+  );
 
   it('a BUILT-IN role is still narrowed by the level — the change is custom-only', async () => {
     // The other half, and the one that proves nothing leaked: an ordinary

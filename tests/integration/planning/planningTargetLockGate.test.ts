@@ -1,4 +1,6 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobTestEngine } from '../../helpers/jobs';
 
 import { db } from '@/lib/db';
@@ -6,6 +8,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { scannedTestCount, testsRidingTheDefaultTimeout } from '../../helpers/timeoutBudget';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE STORY GATE for MOTIR-2786 — two sessions race one epic through a real
@@ -33,6 +36,92 @@ import { truncateAuthTables } from '../../helpers/db';
 // window is the thing being tested, and a window has no meaning without
 // simultaneity. Which racer loses is timing, so one round tests whichever path
 // fired that morning.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIMEOUT BUDGETS (MOTIR-4089) — every test here declares one, and the guard at
+// the bottom of the file keeps that true for tests written later. This is
+// MOTIR-3736's shape, carried to the half of the pair its file-scoped guard was
+// structurally unable to reach; `tests/timeout-budget-lane.test.ts` is the
+// tree-wide check that stops there being a third one.
+//
+// ⚠️ NOBODY CHOSE 15 SECONDS FOR THIS FILE — it is `vitest.config.ts`'s global
+// default, and every number below is measured rather than picked:
+//
+//   local, quiet box     the whole file 9.84 s wall / 3.40 s of test time;
+//                        `the race` 1357 ms; slowest other test 322 ms
+//   CI, run 33492578435  `Vitest (7/12)` 23 m and RED at the 15 s ceiling,
+//     attempt 1          against 7–10 m for its eleven sibling shards
+//   CI, run 33504795817  `Vitest (7/12)` 18 m and RED again, four days later,
+//     attempt 1          against 7–8 m for all eleven siblings — 2.4x
+//
+// Both reds were on pull requests that touch no file in the lock graph (#2494,
+// a static OpenAPI route; #2496, the plan-review canvas), and both went green on
+// a plain re-run with no diff at all.
+//
+// ⚠️ THE SHARD FIGURE IS NOT INNOCENT WEATHER — it is partly this test's own
+// doing, which is why the drain below is half the fix. A timeout ABANDONS the
+// body without cancelling what it started, so the round's two in-flight
+// `acquireForScope` transactions keep holding row locks while the next test's
+// `beforeEach` asks for `AccessExclusiveLock` on the same tables. That is how one
+// 15 s overrun becomes ten extra minutes of shard.
+
+/**
+ * The ordinary real-Postgres case here: a fixture, a route call or two, and an
+ * assertion — measured at 155–322 ms locally. 30 s is ~93x the slowest of them,
+ * and ~3.7x what the file's worst observed degradation would project onto it, so
+ * reaching this number means a hang rather than a busy runner. It is the same
+ * budget `planTargetLockService.test.ts` carries, and deliberately so: the two
+ * files do the same kind of work against the same database.
+ */
+const DB_TEST_TIMEOUT_MS = 30_000;
+
+/**
+ * `the race` alone — five rounds, each with its own `truncateAuthTables()` and a
+ * genuinely concurrent pair of route calls. Two derivations, and the budget is
+ * the larger:
+ *
+ *   - the sibling's method. `planTargetLockService.test.ts` set 90 s from the
+ *     worst whole-file duration ever recorded for it (82.2 s) plus ~10 %. This
+ *     file's race is 1357 ms local against that file's 847 ms — 1.6x — and its
+ *     rounds drive the shipped route and the jobs engine rather than the lock
+ *     service directly. 90 s x 1.6 = 144 s.
+ *   - the sibling's MULTIPLE. That 90 s is 106x its local 847 ms; 106 x 1357 ms
+ *     is 144 s again.
+ *
+ * Rounded up to 150 s. Erring large is the cheap direction here and it is not
+ * symmetric: a budget that is too small reds an unrelated pull request and costs
+ * a shard ten minutes to the cascade above, while one that is too large only
+ * delays a signal for a hang that is not occurring.
+ */
+const RACE_TEST_TIMEOUT_MS = 150_000;
+
+/** The guard at the bottom, which touches no database and does no IO. */
+const PURE_TEST_TIMEOUT_MS = 5_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ABANDONED-ROUND DRAIN (MOTIR-3736's second half, carried here)
+//
+// Every round is registered before it is awaited, and `afterEach` waits for
+// whatever is still registered — so a round that runs out of time takes only
+// itself down instead of leaving open transactions for the next test's truncate
+// to deadlock against. `Promise.allSettled` semantics are what matter: the round
+// is a `Promise.all` of two Prisma transactions, and a drained round holds none
+// of them open.
+
+let inFlightRound: Promise<unknown> | null = null;
+
+/** Register the round currently in flight, so `afterEach` can wait for it. */
+function trackRound<T>(round: Promise<T>): Promise<T> {
+  inFlightRound = round;
+  return round;
+}
+
+/** Wait for whatever a round left running. Its outcome is not this hook's business. */
+async function drainRound(): Promise<void> {
+  const pending = inFlightRound;
+  inFlightRound = null;
+  if (pending) await pending.catch(() => undefined);
+}
 
 const session = { current: null as { user: { id: string; email: string; name: string } } | null };
 const activeCtx = { current: null as ProjectContext | null };
@@ -97,6 +186,8 @@ beforeEach(async () => {
     project: fx.project,
   };
 });
+
+afterEach(drainRound);
 
 afterAll(async () => {
   await db.$disconnect();
@@ -215,63 +306,69 @@ describe('1 · the race, with genuine concurrency', () => {
   // every lease row to carry the WINNER's `sessionId`. A leaked lease from the
   // refused session produces the same id list and a different holder, so only this
   // form can tell the two apart.
-  it('gives exactly one of two overlapping sessions the epic, and tells the other who has it', async () => {
-    for (let round = 0; round < 5; round += 1) {
-      await truncateAuthTables();
-      fx = await makeWorkItemFixture();
-      session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
-      activeCtx.current = {
-        userId: fx.ownerId,
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-        project: fx.project,
-      };
-      const epic = await seedItem('epic', `Billing ${round}`);
-      const other = await seedItem('story', `Invoices ${round}`);
+  it(
+    'gives exactly one of two overlapping sessions the epic, and tells the other who has it',
+    { timeout: RACE_TEST_TIMEOUT_MS },
+    async () => {
+      for (let round = 0; round < 5; round += 1) {
+        await truncateAuthTables();
+        fx = await makeWorkItemFixture();
+        session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
+        activeCtx.current = {
+          userId: fx.ownerId,
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          project: fx.project,
+        };
+        const epic = await seedItem('epic', `Billing ${round}`);
+        const other = await seedItem('story', `Invoices ${round}`);
 
-      // OVERLAPPING scopes, opened at the same instant through the real route.
-      // Identical scopes resume ONE thread by design, so they are not the case the
-      // lock exists for; `{epic}` versus `{epic, other}` is.
-      const [a, b] = await Promise.all([planFrom(epic.id), planFrom(epic.id, [other.identifier])]);
+        // OVERLAPPING scopes, opened at the same instant through the real route.
+        // Identical scopes resume ONE thread by design, so they are not the case the
+        // lock exists for; `{epic}` versus `{epic, other}` is.
+        const [a, b] = await trackRound(
+          Promise.all([planFrom(epic.id), planFrom(epic.id, [other.identifier])]),
+        );
 
-      const statuses = [a.status, b.status].sort();
-      expect(statuses, `round ${round}: one accepted, one refused`).toEqual([200, 409]);
+        const statuses = [a.status, b.status].sort();
+        expect(statuses, `round ${round}: one accepted, one refused`).toEqual([200, 409]);
 
-      const multiAnchorWon = b.status === 200;
-      const [accepted, refused] = multiAnchorWon ? [b, a] : [a, b];
-      const won = (await accepted.json()) as { sessionId: string };
-      const body = (await refused.json()) as {
-        code: string;
-        error: string;
-        target: string;
-        holder: string | null;
-      };
-      // A refusal a user cannot act on is not a refusal, it is a dead end: with a
-      // multi-anchor scope they would not know WHICH target is taken, and with no
-      // holder they would not know whom to ask or whether to wait. The epic is the
-      // contended anchor either way — `other` is uncontended, so it can never be
-      // what a refusal names.
-      expect(body.code).toBe('PLAN_TARGET_LOCKED');
-      expect(body.target).toBe(epic.identifier);
-      expect(body.holder).toBe('Owner');
-      expect(body.error).toContain(epic.identifier);
+        const multiAnchorWon = b.status === 200;
+        const [accepted, refused] = multiAnchorWon ? [b, a] : [a, b];
+        const won = (await accepted.json()) as { sessionId: string };
+        const body = (await refused.json()) as {
+          code: string;
+          error: string;
+          target: string;
+          holder: string | null;
+        };
+        // A refusal a user cannot act on is not a refusal, it is a dead end: with a
+        // multi-anchor scope they would not know WHICH target is taken, and with no
+        // holder they would not know whom to ask or whether to wait. The epic is the
+        // contended anchor either way — `other` is uncontended, so it can never be
+        // what a refusal names.
+        expect(body.code).toBe('PLAN_TARGET_LOCKED');
+        expect(body.target).toBe(epic.identifier);
+        expect(body.holder).toBe('Owner');
+        expect(body.error).toContain(epic.identifier);
 
-      // Exactly the WINNER's scope is held, by the WINNER's thread, and there is
-      // exactly one thread — the refused open wrote nothing, whichever it was.
-      const expectedHeld = multiAnchorWon ? [epic.id, other.id].sort() : [epic.id];
-      const leases = await heldLeases();
-      expect(
-        leases.map((l) => l.workItemId),
-        `round ${round}: held set is the winner's scope (multi-anchor won: ${multiAnchorWon})`,
-      ).toEqual(expectedHeld);
-      expect(
-        leases.map((l) => l.sessionId),
-        `round ${round}: every lease belongs to the winning thread`,
-      ).toEqual(expectedHeld.map(() => won.sessionId));
-      expect(await adminDb.planChangeSession.count()).toBe(1);
-      expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
-    }
-  });
+        // Exactly the WINNER's scope is held, by the WINNER's thread, and there is
+        // exactly one thread — the refused open wrote nothing, whichever it was.
+        const expectedHeld = multiAnchorWon ? [epic.id, other.id].sort() : [epic.id];
+        const leases = await heldLeases();
+        expect(
+          leases.map((l) => l.workItemId),
+          `round ${round}: held set is the winner's scope (multi-anchor won: ${multiAnchorWon})`,
+        ).toEqual(expectedHeld);
+        expect(
+          leases.map((l) => l.sessionId),
+          `round ${round}: every lease belongs to the winning thread`,
+        ).toEqual(expectedHeld.map(() => won.sessionId));
+        expect(await adminDb.planChangeSession.count()).toBe(1);
+        expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
+      }
+    },
+  );
 });
 
 describe('1b · all-or-nothing, forced rather than raced (MOTIR-2971)', () => {
@@ -281,222 +378,295 @@ describe('1b · all-or-nothing, forced rather than raced (MOTIR-2971)', () => {
   // matters most and that no amount of racing reliably reaches: an acquire refused
   // PART-WAY through a multi-anchor scope.
 
-  it('reproduces the CI reading — the multi-anchor session first holds BOTH its anchors', async () => {
-    // `{epic, other}` opens first, so it wins the epic and legitimately takes the
-    // second anchor too. This is byte-for-byte the state CI reported on run
-    // 32084804058 (two lease rows where the assertion allowed one), and it is
-    // CORRECT: both rows belong to the winning thread, and the refused session
-    // holds nothing.
-    const epic = await seedItem('epic', 'Billing');
-    const other = await seedItem('story', 'Invoices');
+  it(
+    'reproduces the CI reading — the multi-anchor session first holds BOTH its anchors',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // `{epic, other}` opens first, so it wins the epic and legitimately takes the
+      // second anchor too. This is byte-for-byte the state CI reported on run
+      // 32084804058 (two lease rows where the assertion allowed one), and it is
+      // CORRECT: both rows belong to the winning thread, and the refused session
+      // holds nothing.
+      const epic = await seedItem('epic', 'Billing');
+      const other = await seedItem('story', 'Invoices');
 
-    const winner = await planOk(epic.id, [other.identifier]);
-    const refused = await planFrom(epic.id);
-    expect(refused.status).toBe(409);
-    expect(((await refused.json()) as { target: string }).target).toBe(epic.identifier);
+      const winner = await planOk(epic.id, [other.identifier]);
+      const refused = await planFrom(epic.id);
+      expect(refused.status).toBe(409);
+      expect(((await refused.json()) as { target: string }).target).toBe(epic.identifier);
 
-    const leases = await heldLeases();
-    expect(leases.map((l) => l.workItemId)).toEqual([epic.id, other.id].sort());
-    // The discriminator the id list cannot carry: ONE thread holds both, and it
-    // is the WINNER's. A leaked lease from the refused open names the other one.
-    expect(leases.map((l) => l.sessionId)).toEqual([winner.sessionId, winner.sessionId]);
-    expect(await adminDb.planChangeSession.count()).toBe(1);
-    expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
-  });
+      const leases = await heldLeases();
+      expect(leases.map((l) => l.workItemId)).toEqual([epic.id, other.id].sort());
+      // The discriminator the id list cannot carry: ONE thread holds both, and it
+      // is the WINNER's. A leaked lease from the refused open names the other one.
+      expect(leases.map((l) => l.sessionId)).toEqual([winner.sessionId, winner.sessionId]);
+      expect(await adminDb.planChangeSession.count()).toBe(1);
+      expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
+    },
+  );
 
-  it('a refused multi-anchor open leaves NO lease and NO thread behind', async () => {
-    // The mirror order: `{epic}` opens first, so `{epic, other}` is refused. The
-    // uncontended second anchor must come out of it untouched — asserted on the
-    // table directly rather than inferred from a round loop.
-    const epic = await seedItem('epic', 'Billing');
-    const other = await seedItem('story', 'Invoices');
+  it(
+    'a refused multi-anchor open leaves NO lease and NO thread behind',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // The mirror order: `{epic}` opens first, so `{epic, other}` is refused. The
+      // uncontended second anchor must come out of it untouched — asserted on the
+      // table directly rather than inferred from a round loop.
+      const epic = await seedItem('epic', 'Billing');
+      const other = await seedItem('story', 'Invoices');
 
-    const winner = await planOk(epic.id);
-    const refused = await planFrom(epic.id, [other.identifier]);
-    expect(refused.status).toBe(409);
+      const winner = await planOk(epic.id);
+      const refused = await planFrom(epic.id, [other.identifier]);
+      expect(refused.status).toBe(409);
 
-    const leases = await heldLeases();
-    expect(leases).toEqual([{ workItemId: epic.id, sessionId: winner.sessionId }]);
-    expect(await adminDb.planTargetLock.count({ where: { workItemId: other.id } })).toBe(0);
-    expect(await adminDb.planChangeSession.count()).toBe(1);
-    expect(await statusOf(other.id)).toBe('todo');
-  });
+      const leases = await heldLeases();
+      expect(leases).toEqual([{ workItemId: epic.id, sessionId: winner.sessionId }]);
+      expect(await adminDb.planTargetLock.count({ where: { workItemId: other.id } })).toBe(0);
+      expect(await adminDb.planChangeSession.count()).toBe(1);
+      expect(await statusOf(other.id)).toBe('todo');
+    },
+  );
 
-  it('an acquire refused on its SECOND anchor gives back the FIRST', async () => {
-    // The actual all-or-nothing case, and the one the race can never produce: the
-    // refusal has to land AFTER a lease has already been taken. Targets are locked
-    // in ascending id order and `epic` was created first, so `{epic, other}` takes
-    // the epic and is only then refused on `other` — and the epic's lease and its
-    // `planning` status must both roll back with the transaction.
-    //
-    // A partial acquire here is the failure MOTIR-2786 called worse than the race
-    // it prevents: the refused user is told about `other` and is silently holding
-    // the epic, which nothing in the refusal names.
-    const epic = await seedItem('epic', 'Billing');
-    const other = await seedItem('story', 'Invoices');
-    expect(epic.id < other.id, 'the epic must sort first for this to be the SECOND anchor').toBe(
-      true,
-    );
+  it(
+    'an acquire refused on its SECOND anchor gives back the FIRST',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // The actual all-or-nothing case, and the one the race can never produce: the
+      // refusal has to land AFTER a lease has already been taken. Targets are locked
+      // in ascending id order and `epic` was created first, so `{epic, other}` takes
+      // the epic and is only then refused on `other` — and the epic's lease and its
+      // `planning` status must both roll back with the transaction.
+      //
+      // A partial acquire here is the failure MOTIR-2786 called worse than the race
+      // it prevents: the refused user is told about `other` and is silently holding
+      // the epic, which nothing in the refusal names.
+      const epic = await seedItem('epic', 'Billing');
+      const other = await seedItem('story', 'Invoices');
+      expect(epic.id < other.id, 'the epic must sort first for this to be the SECOND anchor').toBe(
+        true,
+      );
 
-    const holder = await planOk(other.id);
-    expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
+      const holder = await planOk(other.id);
+      expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
 
-    const refused = await planFrom(epic.id, [other.identifier]);
-    expect(refused.status).toBe(409);
-    expect(((await refused.json()) as { target: string }).target).toBe(other.identifier);
+      const refused = await planFrom(epic.id, [other.identifier]);
+      expect(refused.status).toBe(409);
+      expect(((await refused.json()) as { target: string }).target).toBe(other.identifier);
 
-    expect(await heldLeases()).toEqual([{ workItemId: other.id, sessionId: holder.sessionId }]);
-    expect(await adminDb.planTargetLock.count({ where: { workItemId: epic.id } })).toBe(0);
-    expect(await statusOf(epic.id)).toBe('todo');
-    expect(await adminDb.planChangeSession.count()).toBe(1);
-  });
+      expect(await heldLeases()).toEqual([{ workItemId: other.id, sessionId: holder.sessionId }]);
+      expect(await adminDb.planTargetLock.count({ where: { workItemId: epic.id } })).toBe(0);
+      expect(await statusOf(epic.id)).toBe('todo');
+      expect(await adminDb.planChangeSession.count()).toBe(1);
+    },
+  );
 });
 
 describe('2 · the hand-off, observed as a whole', () => {
-  it('runs epic → stories → story, and lets a SECOND session take a different story meanwhile', async () => {
-    const epic = await seedItem('epic', 'Billing');
+  it(
+    'runs epic → stories → story, and lets a SECOND session take a different story meanwhile',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const epic = await seedItem('epic', 'Billing');
 
-    // ── The epic is the target ────────────────────────────────────────────
-    const { planId } = await planOk(epic.id);
-    expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
-    expect(await heldItems()).toEqual([epic.id]);
+      // ── The epic is the target ────────────────────────────────────────────
+      const { planId } = await planOk(epic.id);
+      expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
+      expect(await heldItems()).toEqual([epic.id]);
 
-    // ── Its stories exist ⇒ the epic goes back to `to do` ─────────────────
-    await engineProposes(planId, 'Invoices');
-    await approve(planId);
-    expect(await statusOf(epic.id)).toBe('todo');
-    expect(await heldItems()).toEqual([]);
+      // ── Its stories exist ⇒ the epic goes back to `to do` ─────────────────
+      await engineProposes(planId, 'Invoices');
+      await approve(planId);
+      expect(await statusOf(epic.id)).toBe('todo');
+      expect(await heldItems()).toEqual([]);
 
-    // The stories the approve materialized, plus one more to race on.
-    const invoices = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Invoices' } });
-    const refunds = await seedItem('story', 'Refunds', epic.id);
+      // The stories the approve materialized, plus one more to race on.
+      const invoices = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Invoices' } });
+      const refunds = await seedItem('story', 'Refunds', epic.id);
 
-    // ── Breaking one story down takes ITS lock, and only its ──────────────
-    await planOk(invoices.id);
-    expect(await statusOf(invoices.id)).toBe(PLANNING_STATUS_KEY);
-    expect(await statusOf(epic.id)).toBe('todo');
+      // ── Breaking one story down takes ITS lock, and only its ──────────────
+      await planOk(invoices.id);
+      expect(await statusOf(invoices.id)).toBe(PLANNING_STATUS_KEY);
+      expect(await statusOf(epic.id)).toBe('todo');
 
-    // ── …while a second session takes a DIFFERENT story of the same epic ──
-    // The case per-project serialization would have wrongly blocked, and the
-    // reason MOTIR-2780 rejected it. Two people planning different stories of one
-    // project is ordinary use, and it has to stay ordinary.
-    await planOk(refunds.id);
-    expect(await statusOf(refunds.id)).toBe(PLANNING_STATUS_KEY);
-    expect(await heldItems()).toEqual([invoices.id, refunds.id].sort());
-  });
+      // ── …while a second session takes a DIFFERENT story of the same epic ──
+      // The case per-project serialization would have wrongly blocked, and the
+      // reason MOTIR-2780 rejected it. Two people planning different stories of one
+      // project is ordinary use, and it has to stay ordinary.
+      await planOk(refunds.id);
+      expect(await statusOf(refunds.id)).toBe(PLANNING_STATUS_KEY);
+      expect(await heldItems()).toEqual([invoices.id, refunds.id].sort());
+    },
+  );
 
-  it('never leaves the epic held once its stories exist', async () => {
-    // The half of the hand-off that is easy to get subtly wrong in the OTHER
-    // direction: releasing upward has to actually happen, or a sibling story is
-    // blocked for no reason and nobody notices until someone tries.
-    const epic = await seedItem('epic', 'Billing');
-    const { planId } = await planOk(epic.id);
-    await engineProposes(planId, 'Invoices');
-    await approve(planId);
+  it(
+    'never leaves the epic held once its stories exist',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // The half of the hand-off that is easy to get subtly wrong in the OTHER
+      // direction: releasing upward has to actually happen, or a sibling story is
+      // blocked for no reason and nobody notices until someone tries.
+      const epic = await seedItem('epic', 'Billing');
+      const { planId } = await planOk(epic.id);
+      await engineProposes(planId, 'Invoices');
+      await approve(planId);
 
-    // A completely different session can now take the epic.
-    await planOk(epic.id);
-    expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
-  });
+      // A completely different session can now take the epic.
+      await planOk(epic.id);
+      expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
+    },
+  );
 });
 
 describe('3 · the lock survives a crash', () => {
-  it('releases a stranded target through the SHIPPED sweep, with no database edit', async () => {
-    // The single most important assertion in the story. The race this lock
-    // prevents produces a confusing tree a person can repair; a lock that is never
-    // released produces an item NOBODY can plan again, discovered by a customer
-    // rather than by us. Between a bug that degrades and a bug that traps, the
-    // trap is the one worth spending the test on.
-    //
-    // And there is no product event to hang the release on: a plan whose job dies
-    // stays `generating` forever — `PlanStatus` has no `failed` member — so the
-    // session simply stops existing as far as anything downstream can tell.
-    const epic = await seedItem('epic', 'Billing');
-    await planOk(epic.id);
-    expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
+  it(
+    'releases a stranded target through the SHIPPED sweep, with no database edit',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // The single most important assertion in the story. The race this lock
+      // prevents produces a confusing tree a person can repair; a lock that is never
+      // released produces an item NOBODY can plan again, discovered by a customer
+      // rather than by us. Between a bug that degrades and a bug that traps, the
+      // trap is the one worth spending the test on.
+      //
+      // And there is no product event to hang the release on: a plan whose job dies
+      // stays `generating` forever — `PlanStatus` has no `failed` member — so the
+      // session simply stops existing as far as anything downstream can tell.
+      const epic = await seedItem('epic', 'Billing');
+      await planOk(epic.id);
+      expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
 
-    // The planner dies here. Nothing marks the plan, nothing closes the thread.
-    await ageAllLeases();
+      // The planner dies here. Nothing marks the plan, nothing closes the thread.
+      await ageAllLeases();
 
-    const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
+      const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
 
-    expect(result).toMatchObject({ released: 1 });
-    expect(await statusOf(epic.id)).toBe('todo');
-    expect(await heldItems()).toEqual([]);
+      expect(result).toMatchObject({ released: 1 });
+      expect(await statusOf(epic.id)).toBe('todo');
+      expect(await heldItems()).toEqual([]);
 
-    // …and the epic is plannable again by anyone, which is the property that
-    // actually matters to the person who was locked out.
-    await planOk(epic.id);
-    expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
-  });
+      // …and the epic is plannable again by anyone, which is the property that
+      // actually matters to the person who was locked out.
+      await planOk(epic.id);
+      expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
+    },
+  );
 
-  it('leaves a LIVE session alone — recovery must not become the race', async () => {
-    const epic = await seedItem('epic', 'Billing');
-    await planOk(epic.id);
+  it(
+    'leaves a LIVE session alone — recovery must not become the race',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const epic = await seedItem('epic', 'Billing');
+      await planOk(epic.id);
 
-    const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
+      const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
 
-    expect(result).toMatchObject({ released: 0 });
-    expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
-    expect(await heldItems()).toEqual([epic.id]);
-  });
+      expect(result).toMatchObject({ released: 0 });
+      expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
+      expect(await heldItems()).toEqual([epic.id]);
+    },
+  );
 });
 
 describe('4 · the prior status is restored, not assumed', () => {
-  it('round-trips `in_progress → planning → in_progress` through the real entrance', async () => {
-    // Distinct from the `todo` case ON PURPOSE. The workflow allows
-    // `in_progress ↔ planning`, so a release that hardcoded `todo` would silently
-    // discard real progress — and it would pass every test written from a fresh
-    // item, which is exactly the sort of test people write.
-    const story = await seedItem('story', 'Invoices');
-    await workItemsService.updateStatus(story.id, 'in_progress', svcCtx());
+  it(
+    'round-trips `in_progress → planning → in_progress` through the real entrance',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // Distinct from the `todo` case ON PURPOSE. The workflow allows
+      // `in_progress ↔ planning`, so a release that hardcoded `todo` would silently
+      // discard real progress — and it would pass every test written from a fresh
+      // item, which is exactly the sort of test people write.
+      const story = await seedItem('story', 'Invoices');
+      await workItemsService.updateStatus(story.id, 'in_progress', svcCtx());
 
-    const { planId } = await planOk(story.id);
-    expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
+      const { planId } = await planOk(story.id);
+      expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
 
-    await engineProposes(planId, 'Line items');
-    await approve(planId);
+      await engineProposes(planId, 'Line items');
+      await approve(planId);
 
-    expect(await statusOf(story.id)).toBe('in_progress');
-  });
+      expect(await statusOf(story.id)).toBe('in_progress');
+    },
+  );
 
-  it('restores from `in_progress` on the DECLINE path too', async () => {
-    // Decline is as terminal for the lock as approve, and it is the path where a
-    // missed release would be hardest to notice: nothing was built, so nobody goes
-    // looking at the tree afterwards.
-    const story = await seedItem('story', 'Invoices');
-    await workItemsService.updateStatus(story.id, 'in_progress', svcCtx());
+  it(
+    'restores from `in_progress` on the DECLINE path too',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // Decline is as terminal for the lock as approve, and it is the path where a
+      // missed release would be hardest to notice: nothing was built, so nobody goes
+      // looking at the tree afterwards.
+      const story = await seedItem('story', 'Invoices');
+      await workItemsService.updateStatus(story.id, 'in_progress', svcCtx());
 
-    const { planId } = await planOk(story.id);
-    // ⚠️ Assert the item was actually HELD before asserting it came back. Without
-    // this line the case passes vacuously when the lock is removed — the item
-    // never left `in_progress`, so "it is `in_progress`" is true for the wrong
-    // reason. Measured: it was one of two cases that stayed green under the
-    // lock-removal check, which is precisely the tell.
-    expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
+      const { planId } = await planOk(story.id);
+      // ⚠️ Assert the item was actually HELD before asserting it came back. Without
+      // this line the case passes vacuously when the lock is removed — the item
+      // never left `in_progress`, so "it is `in_progress`" is true for the wrong
+      // reason. Measured: it was one of two cases that stayed green under the
+      // lock-removal check, which is precisely the tell.
+      expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
 
-    await engineProposes(planId, 'Line items');
-    await decline(planId);
+      await engineProposes(planId, 'Line items');
+      await decline(planId);
 
-    expect(await statusOf(story.id)).toBe('in_progress');
-    expect(await heldItems()).toEqual([]);
-  });
+      expect(await statusOf(story.id)).toBe('in_progress');
+      expect(await heldItems()).toEqual([]);
+    },
+  );
 
-  it('restores from `in_progress` when the SWEEP is what releases it', async () => {
-    // The third combination, and the one no other case reaches: the crash path
-    // signs its restore as a different actor and runs under a system context, so
-    // "does it remember the prior status?" has to be asked of it separately.
-    const story = await seedItem('story', 'Invoices');
-    await workItemsService.updateStatus(story.id, 'in_progress', svcCtx());
-    await planOk(story.id);
-    // Held first — otherwise the restore assertion below is true for the wrong
-    // reason (see the note on the decline case).
-    expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
-    await ageAllLeases();
+  it(
+    'restores from `in_progress` when the SWEEP is what releases it',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // The third combination, and the one no other case reaches: the crash path
+      // signs its restore as a different actor and runs under a system context, so
+      // "does it remember the prior status?" has to be asked of it separately.
+      const story = await seedItem('story', 'Invoices');
+      await workItemsService.updateStatus(story.id, 'in_progress', svcCtx());
+      await planOk(story.id);
+      // Held first — otherwise the restore assertion below is true for the wrong
+      // reason (see the note on the decline case).
+      expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
+      await ageAllLeases();
 
-    const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
+      const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
 
-    expect(result).toMatchObject({ released: 1 });
-    expect(await statusOf(story.id)).toBe('in_progress');
+      expect(result).toMatchObject({ released: 1 });
+      expect(await statusOf(story.id)).toBe('in_progress');
+    },
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The guard that keeps the budgets above true for tests written LATER.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('this file does not ride the global testTimeout (MOTIR-4089)', () => {
+  it('EVERY test declares an explicit budget', { timeout: PURE_TEST_TIMEOUT_MS }, () => {
+    // ⚠️ A SCAN, NOT A COUNT — MOTIR-2017's lesson, restated by MOTIR-3167 and
+    // MOTIR-3736, and paid for a third time here. "The eleven tests in this file
+    // carry a budget" is true today and says nothing about the twelfth.
+    //
+    // The budget belongs to the FILE, so the file reads itself: `__dirname` is
+    // absent under Vitest's ESM transform, and `import.meta.url` is the form that
+    // survives it.
+    //
+    // ⚠️ AND THIS GUARD IS NOT SUFFICIENT ON ITS OWN — that is the whole finding
+    // behind MOTIR-4089. Its identical twin in `planTargetLockService.test.ts`
+    // was green throughout the four days THIS file was riding the 15 s default
+    // and reddening other people's pull requests, because a file that reads its
+    // own source cannot see the file next door. `tests/timeout-budget-lane.test.ts`
+    // asks the tree the question this one asks the file; neither replaces the other.
+    const source = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+    const offenders = testsRidingTheDefaultTimeout(source, [
+      'DB_TEST_TIMEOUT_MS',
+      'RACE_TEST_TIMEOUT_MS',
+      'PURE_TEST_TIMEOUT_MS',
+    ]);
+
+    expect(offenders, 'these tests inherit vitest.config.ts’s 15 s default').toEqual([]);
+    // ...and it must not pass vacuously: there ARE tests here, and all of them
+    // are bounded. A scan over an empty chunk list is green for the wrong reason.
+    expect(scannedTestCount(source)).toBeGreaterThanOrEqual(12);
   });
 });

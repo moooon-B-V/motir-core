@@ -165,6 +165,20 @@ export const STRUCTURAL_GUARD_SPECS = [
   // nothing from `lib/` or `app/`, so it carries no coverage into the merged
   // report.
   'tests/vitest-shard-plan.test.ts',
+  // ── tests/ — the per-round database-reset budget guard (MOTIR-4089) ───────
+  // Same profile as its neighbours: it walks all of `tests/` and reads every
+  // file in it, asking which tests reset the database inside a loop while riding
+  // `vitest.config.ts`'s 15 s default. It opens no database and imports only
+  // `tests/helpers/timeoutBudget`, which imports nothing at all, so it carries
+  // no coverage into the merged report.
+  //
+  // ⚠️ It is here for the second reason `vitest-shard-plan` is, and the stronger
+  // one: it guards a property OF THE SHARDED RUN. Left inside that run it would
+  // be a check its own subject can starve — the shape it exists to catch is a
+  // shard going 2.4–2.9x over its siblings, which is exactly the condition under
+  // which a whole-tree read in a 15 s budget stops finishing. A guard that goes
+  // red for the reason it was written to report is not a guard.
+  'tests/timeout-budget-lane.test.ts',
 ] as const;
 
 /**
