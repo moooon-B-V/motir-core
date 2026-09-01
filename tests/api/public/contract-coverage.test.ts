@@ -3,6 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PUBLIC_OPERATIONS } from '@/lib/api/public/openapi/operations';
 import { publicOperationKey } from '@/lib/api/public/openapi/operation';
+import { stripSourceComments } from '../../helpers/stripSourceComments';
 
 // EVERY method under `app/api/public` is DECLARED — the totality guard
 // (MOTIR-3990), and the deliverable this card is really about.
@@ -48,11 +49,6 @@ function pathTemplateFor(routeFile: string): string {
   return `/${segments.join('/')}`;
 }
 
-/** Source with comments stripped — a verb named in prose is not an export. */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
-
 interface ShippedMethod {
   method: string;
   path: string;
@@ -75,7 +71,7 @@ interface ShippedMethod {
 function shippedMethods(): ShippedMethod[] {
   const found: ShippedMethod[] = [];
   for (const file of routeFiles()) {
-    const source = stripComments(readFileSync(join(REPO_ROOT, file), 'utf8'));
+    const source = stripSourceComments(readFileSync(join(REPO_ROOT, file), 'utf8'));
     const gated = /requireCompliantSession|status:\s*401/.test(source);
     for (const match of source.matchAll(
       /export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)\b/g,

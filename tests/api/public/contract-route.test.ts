@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Validator } from '@seriousme/openapi-schema-validator';
 import { describe, expect, it } from 'vitest';
-import { stripComments, v1RouteFiles } from '../../helpers/v1RouteAudit';
+import { auditV1RouteSource, stripComments, v1RouteFiles } from '../../helpers/v1RouteAudit';
 
 // GET /api/openapi/public.json — the served public contract (MOTIR-3946).
 //
@@ -25,6 +25,22 @@ const SPEC_ROUTE = join('app', 'api', 'openapi', 'public.json', 'route.ts');
 const source = stripComments(readFileSync(join(REPO_ROOT, SPEC_ROUTE), 'utf8'));
 
 describe('the public spec route is safe to serve unauthenticated', () => {
+  it('keeps code below a line comment containing a block-comment opener', () => {
+    const fixture = [
+      '// the described routes live under app/api/public/*',
+      'export async function GET() { return db.project.findMany(); }',
+      '/** a later block comment */',
+    ].join('\n');
+
+    // The comments-only scanner keeps the handler, and the comments-and-strings
+    // scanner used by the route audit still sees both deliberately planted
+    // violations. This exercises both orders against a fixed counterfactual.
+    expect(stripComments(fixture)).toContain('export async function GET()');
+    expect(
+      auditV1RouteSource('app/api/v1/counterfactual/route.ts', fixture).map((v) => v.rule),
+    ).toEqual(['prisma-in-route', 'bypasses-wrapper']);
+  });
+
   it('is NOT among the files the v1 route audit walks — so that guard keeps its unconditional form', () => {
     expect(v1RouteFiles(REPO_ROOT)).not.toContain(SPEC_ROUTE);
   });

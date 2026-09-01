@@ -256,7 +256,14 @@ export async function loadV1RouteModules(): Promise<Map<string, V1RouteModule>> 
  * header comment explains why by naming them.
  */
 export function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+  // Line comments must go first: route-shaped prose such as `app/api/v1/*`
+  // otherwise opens a block for the second expression and can hide real code
+  // through the next closing delimiter.
+  //
+  // This is still deliberately a cheap scanner, not a parser. In particular,
+  // a `/*` inside a string literal can still open a block; scanners that need
+  // certainty use the TypeScript compiler API (as the heavier RLS guards do).
+  return source.replace(/\/\/[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 /**
@@ -267,8 +274,8 @@ export function stripComments(source: string): string {
  */
 function stripCommentsAndStrings(source: string): string {
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/\/\/[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
     .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
     .replace(/`(?:[^`\\]|\\.)*`/g, '``');
