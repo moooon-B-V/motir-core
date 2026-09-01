@@ -142,14 +142,51 @@ describe('PlanItemPatch edge carriers ⟷ planReviewService', () => {
     expect(carriers.sort()).toEqual(['blockedByAdd', 'blockedByRemove']);
   });
 
-  it('resolves the ADD carrier into node ids, and states why REMOVE is excluded', () => {
-    // `blockedByAdd` is a blocker the proposal DECLARES, so it becomes an edge.
-    // `blockedByRemove` is an edge the plan would DELETE — drawing it as a
-    // blocker would say the opposite of what the plan proposes — so it is named
-    // in the service, deliberately, and not resolved. Both facts are asserted
-    // here so a later reader cannot mistake the exclusion for an oversight.
-    expect(service).toContain('item.patch?.blockedByAdd');
-    expect(service).not.toContain('item.patch?.blockedByRemove');
+  it('resolves BOTH carriers — each into its own field, never into one set', () => {
+    // ⚠️ RE-SCOPED FROM THE FILE TO THE FUNCTION (bug MOTIR-4092), and the
+    // invariant it protects is UNCHANGED.
+    //
+    // This assertion used to read `expect(service).not.toContain(
+    // 'item.patch?.blockedByRemove')` — the service must not read the removal
+    // carrier AT ALL. That was a correct proxy while there was nowhere for a
+    // removal to go: the canvas had no treatment for an edge going away, so the
+    // only thing reading the key could have done was fold it in with the adds.
+    //
+    // The proxy and the invariant come apart the moment the treatment exists.
+    // What must never happen is a removal becoming a DECLARED BLOCKER — drawing
+    // an edge the plan deletes as one it is adding says the opposite of what the
+    // plan proposes. What is now correct is reading the key into its OWN field,
+    // so the canvas can draw it in the `remove` language. A file-wide string ban
+    // cannot tell those two apart, and it failed the one that is right.
+    //
+    // So the ban moves to the function it was always about: `blockedByNodeIdsOf`
+    // is the set that becomes arrows, and the removal carrier may not appear
+    // inside it.
+    const fn = (name: string): string => {
+      const start = service.indexOf(`const ${name} = `);
+      expect(start).toBeGreaterThan(-1);
+      const end = service.indexOf('\n    };', start);
+      expect(end).toBeGreaterThan(start);
+      return service.slice(start, end);
+    };
+
+    // The DECLARED blockers: the add carriers, and NOT the removal one.
+    const declaredBlockers = fn('blockedByNodeIdsOf');
+    expect(declaredBlockers).toContain('item.patch?.blockedByAdd');
+    expect(declaredBlockers).not.toContain('blockedByRemove');
+
+    // The removal travels on its own channel, and reads only its own carrier.
+    const removed = fn('blockedByRemovedNodeIdsOf');
+    expect(removed).toContain('item.patch?.blockedByRemove');
+    expect(removed).not.toContain('blockedByAdd');
+
+    // …and the two land on DIFFERENT DTO fields, which is the property the whole
+    // separation exists for.
+    expect(service).toContain('blockedByNodeIds: blockedByNodeIdsOf(item)');
+    expect(service).toContain('blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item)');
+
+    // The reasoning stays on the record at the site, so a later reader still
+    // cannot mistake the separation for an oversight.
     expect(service).toMatch(/`blockedByRemove` is deliberately NOT here/);
   });
 });
