@@ -17,6 +17,18 @@ import { emitPublicOpenApiDocument } from '@/lib/api/public/openapi/emit';
 // It composes no wrapper: there is nothing to authenticate and nothing to
 // personalise. It is a static projection of a registry, which is why it needs no
 // database and has nothing to go stale.
+//
+// ── It remains available on self-hosted builds ──────────────────────────────
+// `MOTIR_CLOUD` makes the public-projects CAPABILITY absent: its request routes
+// and publish affordances do not exist off-cloud. This document is different.
+// It describes Motir's product contract for documentation and generated clients,
+// just as the first-party `/docs` surface does; serving it neither publishes a
+// project nor makes any declared operation available. Keeping it available also
+// preserves the static, per-deploy cache below. Gating in this handler would make
+// a force-static build capture the BUILDER's flag rather than the DEPLOYMENT's,
+// while making the route dynamic would discard that cache for no capability or
+// data exposure. `cloud-gate-totality.test.ts` records this deliberate exclusion
+// so a route outside `app/api/public` cannot be mistaken for an omission again.
 
 /** Assembled from compile-time declarations; nothing per-request. */
 export const dynamic = 'force-static';
