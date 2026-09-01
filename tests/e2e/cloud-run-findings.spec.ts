@@ -6,7 +6,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardViewportWidth, getBoard, columnByStatus } from './_helpers/board';
 import { signUp } from './_helpers/shell-session';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 
 // ACCEPTANCE — a run can log a bug and re-plan a wrong card, and you decide
 // whether it may (Story MOTIR-3017 · Subtask MOTIR-3025).

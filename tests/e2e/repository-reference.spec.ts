@@ -17,7 +17,7 @@ import { linkPr } from './_helpers/pr-link';
 import { signUp } from './_helpers/shell-session';
 import { resetDatabase } from './_helpers/db-reset';
 import { adminDb } from '../helpers/adminDb';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
 // ACCEPTANCE — a card's repository is a THING, not a word

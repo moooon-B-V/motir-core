@@ -1,7 +1,7 @@
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-seed';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
 // ACCEPTANCE — the plan DETAIL, refined (Story MOTIR-4016 · Subtask MOTIR-4026).

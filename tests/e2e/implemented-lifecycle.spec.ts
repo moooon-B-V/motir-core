@@ -11,7 +11,7 @@ import { linkPr } from './_helpers/pr-link';
 import { boardViewportWidth, getBoard, columnByStatus, cardIdsIn } from './_helpers/board';
 import { signUp } from './_helpers/shell-session';
 import { resetDatabase } from './_helpers/db-reset';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 

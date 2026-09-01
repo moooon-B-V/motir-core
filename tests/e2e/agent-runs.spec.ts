@@ -1,4 +1,4 @@
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { signIn } from './_helpers/shell-session';
 import { seedScopedRun, SCOPED_RUN_PASSWORD } from './_helpers/scoped-run-seed';
 import { appendEvents, closeRun, ingestContext, openRun } from './_helpers/agent-run-seed';
