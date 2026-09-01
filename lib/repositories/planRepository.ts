@@ -96,6 +96,12 @@ export const planRepository = {
    * Inngest retry fire a second job at the same stub. So an empty plan with a
    * job still gates; only an empty plan with NO job does not.
    *
+   * ⚠️ THAT IS THE RULE FOR `generating`. A `planned` plan holding NO items is
+   * excluded too (MOTIR-4124), on the count alone and regardless of producer —
+   * a closed plan can never gain one, so there is no window the count could
+   * misread, and a plan proposing nothing is a decision nobody owes. The close
+   * no longer writes that shape; the rows that predate it still exist.
+   *
    * ⚠️ AND IT IS A WHERE CLAUSE, NOT A CALLER-SIDE FILTER. This returns ONE row,
    * newest first: dropping the orphan after the read would answer "not paused"
    * for a project whose real `planned` proposal sits one row down — trading a
@@ -127,7 +133,23 @@ export const planRepository = {
         projectId,
         workspaceId,
         status: { in: ['generating', 'planned'] },
-        NOT: { status: 'generating', sourceJobId: null, items: { none: {} } },
+        AND: [
+          { NOT: { status: 'generating', sourceJobId: null, items: { none: {} } } },
+          // ⚠️ A CLOSED plan holding NOTHING is nobody's decision either
+          // (MOTIR-4124). `markPlanned` no longer produces this shape — an
+          // empty close is DISCARDED — but rows written before that fix are
+          // still `planned` with zero items, and each of them silences its
+          // project's cadence for ever: nothing expires a `planned` plan, and
+          // the abandoned sweep only reaches `generating` ones.
+          //
+          // ⚠️ AND THE COUNT IS SAFE HERE, WHERE THE PARAGRAPH ABOVE SAYS IT IS
+          // NOT. That warning is about `generating`, where zero items is the
+          // ordinary window between a submit's `createPlan` and the producer's
+          // first append — which is why the discriminator there is the PRODUCER.
+          // A `planned` plan is closed: it can never gain an item, so an empty
+          // one is empty for good and there is no window to misread.
+          { NOT: { status: 'planned', items: { none: {} } } },
+        ],
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });

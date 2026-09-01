@@ -5188,8 +5188,11 @@ enum PlanDecisionReason {
   /// A person reviewed a `planned` plan and rejected it — `declinePlan` from
   /// `planned`, the only ending that existed before this enum.
   reviewed
-  /// A person ended a `generating` plan that never finished — `declinePlan`
-  /// from `generating`. `plannedAt` stays NULL: the frontier never closed.
+  /// A plan ended without proposals ever being written. Two producers:
+  /// `declinePlan` from `generating` (a person ended one that never finished),
+  /// and `markPlanned` over an EMPTY proposal set (MOTIR-4124) — a close with
+  /// nothing in it is a decision, not a review request. `plannedAt` stays NULL
+  /// in both: the frontier never became something a person was asked to read.
   discarded
   /// `abandonedPlanService.reconcileAbandoned` terminated a plan whose producer
   /// was provably gone. `decidedById` is NULL — nobody decided it.

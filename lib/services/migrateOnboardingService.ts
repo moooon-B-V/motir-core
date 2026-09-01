@@ -331,7 +331,15 @@ const GENERATE: StepWiring = {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(generateJobId, ctx.workspaceId, tx),
     );
-    return { ready: plan?.status === 'planned' || plan?.status === 'approved' };
+    // ⚠️ THE GENERATE STEP EXITS WHEN THE PLAN STOPS GENERATING — whatever it
+    // produced (MOTIR-4124). This read used to name `planned` / `approved`,
+    // which was a complete enumeration only while EVERY close produced one of
+    // them. A close over a plan that proposed nothing now DISCARDS it
+    // (`declined` / `discarded`), and under the old predicate that run's
+    // wizard would sit on the generate step for ever waiting for a status
+    // nothing will write. The step's own question is *has generation
+    // finished?*, and `generating` is the only status that answers no.
+    return { ready: plan != null && plan.status !== 'generating' };
   },
 };
 

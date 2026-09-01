@@ -2854,7 +2854,16 @@ export const plansService = {
     }
   },
 
-  /** Mark the generation frontier complete: `generating` → `planned`. */
+  /**
+   * Mark the generation frontier complete: `generating` → `planned`.
+   *
+   * ⚠️ TWO OUTCOMES, not one (MOTIR-4124). A plan holding at least one proposal
+   * closes into the review queue as `planned`. A plan holding NONE is
+   * DISCARDED instead — `declined` with `decisionReason: 'discarded'`, decided
+   * by nobody — because `planned` means *a person is being asked to decide
+   * this*, and there is nothing there to decide. Read `status` on the returned
+   * DTO rather than assuming the first.
+   */
   async markPlanned(
     planId: string,
     ctx: ServiceContext,
@@ -2935,6 +2944,62 @@ export const plansService = {
         const proposals = await planItemRepository.findByPlan(planId, tx);
         assertProposalSetSelfConsistent(proposals.map(toProposalNode));
 
+        // ⚠️ A CLOSE OVER *NOTHING* IS A DECISION, NOT A REVIEW REQUEST
+        // (MOTIR-4124). `planned` is the status that puts a plan in front of a
+        // person and hands them a button (MOTIR-3560), and a plan proposing
+        // zero items asks for a decision there is nothing to make — so it must
+        // not wear it. Everything above this line is a gate over a proposal
+        // SET; over the empty set every one of them passes vacuously, which is
+        // exactly why the count has to be read here rather than trusted to
+        // them.
+        //
+        // WHY `declined` + `discarded` rather than a refusal: refusing the
+        // close would leave the plan `generating`, which is the state
+        // MOTIR-3193 relaxed the empty final batch to escape — a pass that has
+        // finished writing and cannot say so. And `discarded` is already the
+        // recorded meaning of *a plan that ended without proposals ever being
+        // written* (`lib/dto/plans.ts`; `declinePlan` stamps it for exactly the
+        // `generating` origin). So the ending is expressible with the
+        // vocabulary MOTIR-3189 shipped, and needs no sixth status.
+        //
+        // `decidedById` is NULL and `plannedAt` is left unstamped, both
+        // deliberately: nobody decided this — the producer finished with
+        // nothing — and the frontier never became something a person was asked
+        // to read, which is the fact `plannedAt` records.
+        //
+        // ⚠️ IT STAYS ON THE AUTHOR KEY (`ai:view_plan`), not `ai:decide_plan`.
+        // That split is *who decides someone's proposals* versus *who writes to
+        // a plan* — and there are no proposals here to decide. This is the
+        // producer recording how its own pass ended, which is the same act the
+        // `planned` branch performs.
+        if (proposals.length === 0) {
+          const discarded = await planRepository.update(
+            planId,
+            {
+              status: 'declined',
+              decidedAt: new Date(),
+              decidedById: null,
+              decisionReason: 'discarded',
+              ...(productName != null ? { productName } : {}),
+            },
+            tx,
+          );
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              changeKind: 'declined',
+              ...generationActor(fresh, ctx),
+              diff: {
+                itemCount: 0,
+                decisionReason: 'discarded',
+                ...(productName != null ? { productName } : {}),
+              },
+            },
+            tx,
+          );
+          return { row: discarded, count: 0 };
+        }
+
         const updated = await planRepository.update(
           planId,
           {
@@ -2978,7 +3043,21 @@ export const plansService = {
     //
     // Post-commit and best-effort: the plan is `planned` and stays `planned`
     // whatever happens here. `recordFinding` swallows its own failures.
-    await recordSubmittedPlanFinding(row, count, ctx);
+    //
+    // ⚠️ THE EMPTY CLOSE RECORDS NO FINDING (MOTIR-4124). This finding is the
+    // ASK — *a plan is waiting for you in Motir* — and there is nothing waiting:
+    // the plan is decided before this line runs. Recording one would put a
+    // pointer to a discarded plan on a run's leg.
+    if (row.status === 'planned') {
+      await recordSubmittedPlanFinding(row, count, ctx);
+    } else {
+      // A discarded close is as terminal as a decline, so it releases the
+      // planning-target locks the same way `declinePlan` does. A plan with zero
+      // proposals usually holds none — but a `modify` that was appended and
+      // then WITHDRAWN leaves the plan empty with its target still leased, and
+      // that lease would otherwise sit out its expiry blocking a colleague.
+      await releasePlanTargetLocks(row, ctx);
+    }
 
     return toPlanDto(row, count);
   },

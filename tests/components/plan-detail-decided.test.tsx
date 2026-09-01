@@ -10,9 +10,18 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 // !== 'generating') matched a declined plan and rendered the "no proposals"
 // empty state, SHADOWING the review rail's declined-outcome branch ("Plan
 // declined …"). These tests pin: a decided (declined/approved) plan flows to the
-// rail regardless of item count, while a genuinely-empty *planned* plan still
-// shows the empty state. The heavy roadmap canvas is stubbed — it is irrelevant
-// to this branch (and exercised by the real-DB + E2E plan suites).
+// rail regardless of item count. The heavy roadmap canvas is stubbed — it is
+// irrelevant to this branch (and exercised by the real-DB + E2E plan suites).
+//
+// ⚠️ AMENDED AGAIN by MOTIR-4124, and this time the guard is GONE rather than
+// narrowed. The clause that stood here — "while a genuinely-empty *planned*
+// plan still shows the empty state" — was the defect written down as a
+// property: the hand-off was an early `return`, so it suppressed the rail, and
+// the only plans that could reach it were the two UNDECIDED statuses. A plan
+// nobody can approve or decline is not a plan a reviewer can do anything with,
+// and one undecided plan pauses its project's cadence indefinitely. The server
+// no longer closes an empty plan into `planned` at all, and this surface no
+// longer has a branch that can replace the rail.
 //
 // ⚠️ AMENDED by MOTIR-3161 (bug MOTIR-3154). This header used to open with
 // *"`declinePlan` drops every PlanItem, so a declined plan's review model
@@ -109,13 +118,25 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
     expect(screen.queryByText('This plan has no proposals')).toBeNull();
   });
 
-  it('still shows the EMPTY state for a genuinely-empty planned plan (no over-broad fix)', () => {
+  // ⚠️ REWRITTEN, NOT DELETED (MOTIR-4124). This case read *"still shows the
+  // EMPTY state for a genuinely-empty planned plan (no over-broad fix)"* — and
+  // it was pinning the defect. The empty state was an early `return`, so it took
+  // `PlanReviewRail` with it: the ONE plan a reviewer could do nothing about was
+  // the one plan they were handed no Approve and no Decline for, while it went
+  // on pausing that project's auto-plan cadence. The server no longer writes
+  // this shape (an empty close is DISCARDED), and the rows that predate it must
+  // still be endable from the page, which is what this now asserts.
+  it('a zero-item plan AWAITING A DECISION keeps its rail — the hand-off never replaces the decide door', () => {
     renderWithIntl(
       <PlanDetail projectKey="PRJ" initialReview={review({ status: 'planned', items: [] })} />,
     );
 
-    expect(screen.getByText('This plan has no proposals')).toBeTruthy();
-    expect(screen.queryByText('Plan declined — your tree was left untouched')).toBeNull();
+    // The rail is mounted: the plan can be decided.
+    expect(screen.getByRole('button', { name: /Decline/ })).toBeTruthy();
+    expect(screen.queryByText('This plan has no proposals')).toBeNull();
+    // …and the pane still renders, with nothing in it, rather than being
+    // replaced by a terminal state.
+    expect(screen.getByTestId('plan-review-canvas').getAttribute('data-item-count')).toBe('0');
   });
 
   // ── THE FIFTH STATUS (MOTIR-3578, AMENDMENT 9 D6) ────────────────────────
@@ -146,15 +167,18 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
     expect(screen.getByTestId('plan-review-canvas').getAttribute('data-item-count')).toBe('2');
   });
 
-  it('a genuinely EMPTY stale plan still shows the empty state — the guard did not widen', () => {
+  it('an EMPTY stale plan keeps its rail too — the same door, on the other undecided status', () => {
+    // ⚠️ REWRITTEN with its `planned` twin above (MOTIR-4124), and for the same
+    // reason: `stale` is the second status the Plans list presents as awaiting a
+    // decision, so a zero-item one hit the identical dead end. MOTIR-3578's
+    // point — that `stale` is NOT decided and its outcome is not the rail's
+    // read-only block — is unchanged and is asserted by the case above it.
     renderWithIntl(
       <PlanDetail projectKey="PRJ" initialReview={review({ status: 'stale', items: [] })} />,
     );
 
-    // The `!decided` short-circuit applies to `stale` exactly as it does to
-    // `planned`, because both are undecided. Widening `decided` to *not planned*
-    // would have flipped this and put the outcome block over an empty plan.
-    expect(screen.getByText('This plan has no proposals')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Decline/ })).toBeTruthy();
+    expect(screen.queryByText('This plan has no proposals')).toBeNull();
   });
 
   it('shows the declined outcome ALONGSIDE the cards it decided about', () => {

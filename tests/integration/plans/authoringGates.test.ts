@@ -440,10 +440,18 @@ describe('the CLOSE gate — `markPlanned` runs the whole verdict before `planne
     expect((err as PlanNotInExpectedStatusError).actual).toBe('planned');
   });
 
-  it('an EMPTY plan is still a valid close — the gate passes a no-op', async () => {
+  it('an EMPTY plan passes the gate vacuously — and is DISCARDED rather than queued', async () => {
+    // ⚠️ REWRITTEN (MOTIR-4124), and the first half is the whole point: this
+    // gate is a property of a proposal SET, so over the empty set every arm of
+    // it passes without looking at anything. That is correct and unchanged —
+    // and it is exactly why the close could not rely on the gate to notice that
+    // there was nothing to close over. The COUNT is a separate question, asked
+    // after the gate, and its answer is that a plan proposing nothing is
+    // recorded as ended instead of being put in front of a person.
     const fx = await makeWorkItemFixture();
     const planId = await openPlan(fx);
     const closed = await plansService.markPlanned(planId, fx.ctx);
-    expect(closed.status).toBe('planned');
+    expect(closed.status).toBe('declined');
+    expect(closed.decisionReason).toBe('discarded');
   });
 });

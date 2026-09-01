@@ -220,8 +220,15 @@ export const aiGenerationService = {
     if (opts.final) {
       // `productName` (MOTIR-1554/1551) is persisted onto the Plan here, on the
       // final append — it is later consumed at approve to name the draft project.
-      await plansService.markPlanned(plan.id, ctx, { productName: opts.productName ?? null });
-      planned = true;
+      //
+      // ⚠️ `planned` IS READ OFF THE CLOSE, NOT ASSERTED (MOTIR-4124). A close
+      // over a plan that received no proposals DISCARDS it, so a hardcoded
+      // `true` here would tell the producer its output reached a reviewer when
+      // it never will.
+      const closed = await plansService.markPlanned(plan.id, ctx, {
+        productName: opts.productName ?? null,
+      });
+      planned = closed.status === 'planned';
     }
 
     return { planId: plan.id, planItemIds: createdIds, planned };

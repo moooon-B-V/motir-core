@@ -52,6 +52,25 @@ async function seedLeaf(title = 'A work item a run works'): Promise<{ id: string
 }
 
 /** A live run whose one leg is OPEN — `running`, `endedAt` still null. */
+/**
+ * Close a plan the way a real generation closes one — with something in it.
+ *
+ * ⚠️ THE PROPOSAL IS LOAD-BEARING (MOTIR-4124). A close over an EMPTY plan is a
+ * DISCARD, and a discarded plan records NO `plan_submitted` finding: the finding
+ * is the ASK — *a plan is waiting for you in Motir* — and nothing is waiting.
+ * These fixtures used to close empty plans, which after that change would make
+ * every "records nothing" case below pass for the WRONG REASON, proving nothing
+ * about the anchoring walk each was written to test.
+ */
+async function closeWithProposal(planId: string): Promise<void> {
+  await plansService.addProposals(
+    planId,
+    [{ op: 'add', proposedFields: { title: 'A proposed card', kind: 'task' } }],
+    fixture.ctx,
+  );
+  await plansService.markPlanned(planId, fixture.ctx);
+}
+
 async function openRunWithLiveLeg(key: string): Promise<string> {
   const { run } = await dispatchRunService.open(
     {
@@ -495,14 +514,44 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
       { title: 'The work item was wrong', sourceJobId: jobId },
       fixture.ctx,
     );
-    await plansService.markPlanned(plan.id, fixture.ctx);
+    await closeWithProposal(plan.id);
 
     const findings = (await readBack(runId)).filter((e) => e.kind === 'plan_submitted');
     expect(findings).toHaveLength(1);
     // The POINTER and the one number the row renders — what the reader is being
     // asked to approve. Never the proposals themselves.
-    expect(findings[0]!.data).toEqual({ planId: plan.id, proposalCount: 0 });
+    expect(findings[0]!.data).toEqual({ planId: plan.id, proposalCount: 1 });
     expect(findings[0]!.body).toBeNull();
+  });
+
+  it('records NOTHING for a plan that proposed nothing — a discard is not an ask (MOTIR-4124)', async () => {
+    // The same anchoring chain as the case above, differing in exactly one
+    // thing: the plan closes EMPTY. `markPlanned` discards it rather than
+    // queueing it, so there is no plan waiting for anybody — and a finding
+    // pointing a reviewer at a discarded plan is a promise the record cannot
+    // keep. The anchoring is deliberately perfect here, so the only reason for
+    // the empty result is the discard.
+    const leaf = await seedLeaf();
+    const runId = await openRunWithLiveLeg(leaf.key);
+
+    const jobId = `job_empty_${leaf.key.toLowerCase()}`;
+    await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fixture.workspaceId,
+        projectId: fixture.projectId,
+        scopeKey: leaf.key,
+        lastJobId: jobId,
+      },
+    });
+    const plan = await plansService.createPlan(
+      fixture.projectId,
+      { title: 'A pass that produced nothing', sourceJobId: jobId },
+      fixture.ctx,
+    );
+    const closed = await plansService.markPlanned(plan.id, fixture.ctx);
+    expect(closed.status).toBe('declined');
+
+    expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
   });
 
   it('records nothing for a PROJECT-WIDE plan — it names no single leg', async () => {
@@ -526,7 +575,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
       { title: 'A project-wide plan', sourceJobId: jobId },
       fixture.ctx,
     );
-    await plansService.markPlanned(plan.id, fixture.ctx);
+    await closeWithProposal(plan.id);
 
     expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
   });
@@ -550,7 +599,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
       { title: 'A two-anchor plan', sourceJobId: jobId },
       fixture.ctx,
     );
-    await plansService.markPlanned(plan.id, fixture.ctx);
+    await closeWithProposal(plan.id);
 
     expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
   });
@@ -563,7 +612,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
       { title: 'A job with no thread behind it', sourceJobId: 'job_orphan' },
       fixture.ctx,
     );
-    await plansService.markPlanned(plan.id, fixture.ctx);
+    await closeWithProposal(plan.id);
 
     expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
   });
@@ -587,7 +636,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
       { title: 'Anchored at a work item that is gone', sourceJobId: jobId },
       fixture.ctx,
     );
-    await plansService.markPlanned(plan.id, fixture.ctx);
+    await closeWithProposal(plan.id);
 
     expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
   });
@@ -600,7 +649,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
       { title: 'A plan nobody generated' },
       fixture.ctx,
     );
-    await plansService.markPlanned(plan.id, fixture.ctx);
+    await closeWithProposal(plan.id);
 
     expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
   });

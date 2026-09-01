@@ -373,12 +373,18 @@ describe('add_plan_items — CLOSING a titles-first plan (MOTIR-3193)', () => {
     await client.close();
   });
 
-  it('closes a plan holding NO proposals at all — the reviewer gets an empty plan to decline', async () => {
-    // MOTIR-3193 AC 3 leaves this behaviour AS IT IS rather than deciding it:
-    // `markPlanned` has never counted proposals, and a `planned` plan — empty or
-    // not — is one `declinePlan` accepts. MOTIR-3189, which settles the discard
-    // path out of `generating`, is where the question belongs; closing an empty
-    // plan is the outcome it does NOT strand.
+  it('DISCARDS a plan holding NO proposals at all — it is never queued for review', async () => {
+    // ⚠️ REWRITTEN, NOT ADDED (MOTIR-4124). This case previously read *"the
+    // reviewer gets an empty plan to decline"* and asserted `planned` /
+    // `itemCount: 0`, on MOTIR-3193's own AC 3 — which explicitly did NOT
+    // decide the zero-proposal case and handed it to MOTIR-3189, where only the
+    // discard path out of `generating` was settled. Nobody closed the gap, so a
+    // behaviour nobody chose sat here looking chosen.
+    //
+    // What the reviewer actually got was worse than an empty plan to decline:
+    // `PlanDetail` returned the discovery hand-off INSTEAD of the review rail,
+    // so there was no Decline to press, and the undecided row silenced that
+    // project's auto-plan cadence for good. The close now records the ending.
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -389,8 +395,15 @@ describe('add_plan_items — CLOSING a titles-first plan (MOTIR-3193)', () => {
       final: true,
     });
     expect(closed.isError, text(closed)).toBeFalsy();
-    expect(struct(closed).status).toBe('planned');
+    expect(struct(closed).status).toBe('declined');
     expect(struct(closed).itemCount).toBe(0);
+
+    // The agent is TOLD, in the half a watching operator reads: reporting a
+    // plan as queued for review when nobody will ever be shown it is the
+    // failure this arm exists to prevent.
+    const summary = text(closed);
+    expect(summary).toContain('DISCARDED');
+    expect(summary).not.toContain('review queue');
     await client.close();
   });
 

@@ -678,6 +678,25 @@ function summarizeCreate(plan: PlanDto, projectKey: string): string {
  * session reads, so it says what changed.
  */
 function summarizeClose(plan: PlanWithItemsDto): string {
+  // ⚠️ A CLOSE OVER NOTHING DOES NOT REACH THE REVIEW QUEUE (MOTIR-4124), so
+  // this note must not say it did. `markPlanned` DISCARDS a plan holding zero
+  // proposals — `declined` / `discarded` — because `planned` means somebody is
+  // being asked to decide, and there is nothing here to decide. An agent
+  // reading "it is in the review queue now" would report a plan as submitted
+  // that nobody will ever be shown.
+  if (plan.status !== 'planned') {
+    return [
+      `Closed plan ${plan.id} — ${plan.status}, and it proposed NOTHING. Nothing was appended ` +
+        'by this call, and the plan held no proposals to close over.',
+      '',
+      'It was DISCARDED rather than queued for review: a plan with no proposals asks for a ' +
+        'decision there is nothing to make, so it is recorded as ended instead of waiting on ' +
+        'somebody. Nobody will be shown it. If you meant to propose something, open a NEW plan ' +
+        `with \`${CREATE_PLAN_TOOL_NAME}\` and append before you close it.`,
+      '',
+      PROPOSAL_GATE,
+    ].join('\n');
+  }
   return [
     `Closed plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s) in total. ` +
       'Nothing was appended by this call.',
