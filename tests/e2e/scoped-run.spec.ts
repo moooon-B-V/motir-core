@@ -15,7 +15,7 @@ import {
   seedTwoLayerStory,
   type ScopedRunSeed,
 } from './_helpers/scoped-run-seed';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 // ACCEPTANCE — a whole STORY claimed at once, worked to Implemented, and closed

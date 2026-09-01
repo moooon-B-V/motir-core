@@ -24,7 +24,7 @@
 // taken only AFTER an assertion above them has already proven the state (see
 // CHAPTER_HOLD_MS in `_helpers/acceptance-video.ts`) — never synchronisation.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
 import { resetDatabase, db } from './_helpers/db-reset';

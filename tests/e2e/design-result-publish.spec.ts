@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';

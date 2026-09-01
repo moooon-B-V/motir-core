@@ -1,4 +1,4 @@
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 

@@ -8,7 +8,7 @@ import {
   APPROVED_PLAN_COUNT,
   PLANS_SURFACE_PASSWORD,
 } from './_helpers/plans-surface-seed';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
 // ACCEPTANCE — the PLANS LIST, refined (Story MOTIR-3232 · Subtask MOTIR-3243).
