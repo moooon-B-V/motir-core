@@ -5744,6 +5744,8 @@
         "blocksMeaning": "阻塞项已完成",
         "pending": "待定",
         "pendingMeaning": "阻塞项尚未完成",
+        "removed": "即将移除",
+        "removedMeaning": "此计划将删除该依赖关系",
         "blockedElsewhere": "受阻于别处",
         "blockedElsewhereMeaning": "阻塞项位于计划中的别处",
         "blockerNotInSprint": "阻塞项不在冲刺中",

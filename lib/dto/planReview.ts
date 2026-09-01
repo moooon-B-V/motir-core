@@ -157,6 +157,20 @@ export interface PlanReviewItemDto {
   parentTrail: PlanParentCrumbDto[];
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
+  /**
+   * Resolved node ids of the committed blocked-by edges this proposal would
+   * DELETE — `patch.blockedByRemove`, as canvas node ids (bug MOTIR-4092).
+   *
+   * ⚠️ A SEPARATE FIELD, NOT A MERGE INTO {@link blockedByNodeIds}, and that is
+   * the whole design. An edge the plan deletes is not a blocker the proposal
+   * declares: folding it in would draw it as an arriving dependency and say the
+   * OPPOSITE of what the plan proposes. It travels on its own channel so the
+   * canvas can render it in the `remove` language instead.
+   *
+   * Empty for an `add` and for a `remove` (neither carries a patch), and for any
+   * `modify` whose patch does not touch the edge set.
+   */
+  blockedByRemovedNodeIds: string[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`,
    *  which has no key, and the target's real key for every proposal that does. */
   identifier: string | null;

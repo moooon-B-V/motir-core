@@ -493,17 +493,46 @@ export const planReviewService = {
      * produce the `links` diff row, so the edge was present as a counted word
      * and absent as a shape — which is why nothing looked broken.
      *
-     * `blockedByRemove` is deliberately NOT here: an edge the plan would DELETE
-     * is not a blocker this proposal declares, and drawing it as one would say
-     * the opposite of what the plan proposes. Marking it as going away needs a
-     * treatment the canvas does not have (`firm` / `pending` / `cross`, and
-     * nothing for *removed*), which is a design decision and its own card.
+     * `blockedByRemove` is deliberately NOT here, and STILL is not: an edge the
+     * plan would DELETE is not a blocker this proposal declares, and drawing it
+     * as one would say the opposite of what the plan proposes. That reasoning
+     * was right and is unchanged — what was missing is the OTHER half, and it
+     * is {@link blockedByRemovedNodeIdsOf} below (bug MOTIR-4092).
      *
      * `planProjectionService` unions the same two carriers for the projected
      * reads — one rule, two consumers.
      */
     const blockedByNodeIdsOf = (item: PlanItemDto): string[] => {
       const refs = [...item.blockedByRefs, ...(item.patch?.blockedByAdd ?? [])];
+      return [...new Set(refs.map(resolveNodeRef))];
+    };
+    /**
+     * Every COMMITTED blocked-by edge this proposal would DELETE, as canvas node
+     * ids (bug MOTIR-4092) — the second half of the sentence above.
+     *
+     * The exclusion from `blockedByNodeIdsOf` deferred a *treatment the canvas
+     * does not have* to "its own card". Until that card, the consequence was
+     * that a removal reached the canvas as NOTHING: `mergePlanLevel` starts from
+     * the committed deps verbatim, so the edge the plan is deleting kept
+     * rendering exactly like one it is keeping.
+     *
+     * ⚠️ THE SHAPE THAT MAKES IT WRONG RATHER THAN MERELY INCOMPLETE is an EDGE
+     * SWAP — the correction for an inverted dependency, and the standard output
+     * of the run-time correction path. It is necessarily two proposals
+     * (`modify A` removing `B`, `modify B` adding `A`), so with the removal
+     * unread the canvas drew A → B AND B → A: a mutual block, i.e. a cycle the
+     * approve will not produce. The only correct reading of that picture is
+     * *"this plan is broken"*, and the plan is fine — so the surface was at its
+     * least accurate on exactly the plans a reviewer cannot re-derive by hand.
+     *
+     * A removal is only drawable where the edge EXISTS to begin with, so this
+     * resolves refs and leaves it to the level builder to intersect them with
+     * the committed deps — a `blockedByRemove` naming an edge that is not on
+     * this level simply draws nothing, which is the same tolerance the add
+     * carrier already has.
+     */
+    const blockedByRemovedNodeIdsOf = (item: PlanItemDto): string[] => {
+      const refs = item.patch?.blockedByRemove ?? [];
       return [...new Set(refs.map(resolveNodeRef))];
     };
     /**
@@ -579,6 +608,7 @@ export const planReviewService = {
         // MOTIR-3152's committed ancestor trail — unchanged by this merge.
         parentTrail: committedParent ? trailFor(committedParent.id) : [],
         blockedByNodeIds: blockedByNodeIdsOf(item),
+        blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item),
         // The target's key, for EVERY op that has a target (MOTIR-3160). An
         // un-materialized `add` still reports null — it has no key and inventing
         // one would be the surface asserting a work item that does not exist —

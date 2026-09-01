@@ -29,6 +29,7 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     parentKind: null,
     parentTrail: [],
     blockedByNodeIds: [],
+    blockedByRemovedNodeIds: [],
     identifier: null,
     title: 'A proposed item',
     kind: 'task',
@@ -722,5 +723,139 @@ describe('arrivalLevel', () => {
     );
 
     expect(arrival?.id).toBe('wi_p2');
+  });
+});
+
+// ── THE REMOVED EDGE (bug MOTIR-4092) ────────────────────────────────────────
+//
+// `mergePlanLevel` starts from the committed deps VERBATIM, so an edge a plan
+// proposes to delete kept rendering exactly like one it keeps. The shape that
+// makes that wrong rather than merely incomplete is an EDGE SWAP — the
+// correction for an inverted dependency, and the standard output of the run-time
+// correction path. It is necessarily two `modify` proposals, so with the removal
+// unread the canvas drew BOTH directions: a mutual block, i.e. a cycle the
+// approve will not produce.
+describe('mergePlanLevel — an edge the plan REMOVES', () => {
+  function committed(ids: string[], deps: PlanCanvasLevel['deps'] = []): PlanCanvasLevel {
+    return {
+      nodes: ids.map((id) => ({
+        id,
+        parentId: 'parent_1',
+        searchText: id,
+        crumbLabel: id,
+        drillable: false,
+        content: <span>{id}</span>,
+      })),
+      deps,
+    };
+  }
+
+  it('re-skins the committed dep `removed` — it does NOT drop it', () => {
+    // Dropping the edge would render the plan's OUTCOME instead of its PROPOSAL:
+    // a graph with no edge and no account of where it went, which is the same
+    // wordless surface this bug is about, one step on. A review canvas exists to
+    // show what APPROVING would change, so the edge stays and says it is going.
+    const level = mergePlanLevel(
+      committed(['wi_a', 'wi_b'], [{ from: 'wi_a', to: 'wi_b' }]),
+      [
+        item({
+          planItemId: 'p1',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          blockedByRemovedNodeIds: ['wi_a'],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'removed' }]);
+  });
+
+  it('leaves a committed dep the plan does NOT name alone', () => {
+    const level = mergePlanLevel(
+      committed(
+        ['wi_a', 'wi_b', 'wi_c'],
+        [
+          { from: 'wi_a', to: 'wi_b' },
+          { from: 'wi_b', to: 'wi_c' },
+        ],
+      ),
+      [
+        item({
+          planItemId: 'p1',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          blockedByRemovedNodeIds: ['wi_a'],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([
+      { from: 'wi_a', to: 'wi_b', variant: 'removed' },
+      { from: 'wi_b', to: 'wi_c' },
+    ]);
+  });
+
+  it('an EDGE SWAP renders as a swap, NOT as a mutual block', () => {
+    // The fixture is the live one this bug was found on: plan
+    // `cmtijiwul00a1hvn8dek1ok8w` proposes `modify MOTIR-4058` removing its
+    // blocker MOTIR-4057, and `modify MOTIR-4057` adding MOTIR-4058 — the
+    // inverted-dependency correction. Before the fix the canvas drew a → b AND
+    // b → a with nothing to tell them apart.
+    const level = mergePlanLevel(
+      committed(['wi_4057', 'wi_4058'], [{ from: 'wi_4057', to: 'wi_4058' }]),
+      [
+        item({
+          planItemId: 'p_4058',
+          nodeId: 'wi_4058',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          blockedByRemovedNodeIds: ['wi_4057'],
+        }),
+        item({
+          planItemId: 'p_4057',
+          nodeId: 'wi_4057',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          blockedByNodeIds: ['wi_4058'],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([
+      { from: 'wi_4057', to: 'wi_4058', variant: 'removed' },
+      { from: 'wi_4058', to: 'wi_4057', variant: 'pending' },
+    ]);
+
+    // The assertion that actually names the defect: the two directions are
+    // present and DISTINGUISHABLE. A reader can no longer see a cycle, because
+    // exactly one of the pair is drawn as arriving.
+    const arriving = level.deps.filter((d) => d.variant !== 'removed');
+    expect(arriving).toHaveLength(1);
+    expect(arriving[0]).toMatchObject({ from: 'wi_4058', to: 'wi_4057' });
+  });
+
+  it('ignores a removal naming an edge that is not on this level', () => {
+    // A `blockedByRemove` whose edge is not among the committed deps draws
+    // nothing — the same tolerance the ADD carrier already has.
+    const level = mergePlanLevel(
+      committed(['wi_a', 'wi_b'], [{ from: 'wi_a', to: 'wi_b' }]),
+      [
+        item({
+          planItemId: 'p1',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          blockedByRemovedNodeIds: ['wi_elsewhere'],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b' }]);
   });
 });

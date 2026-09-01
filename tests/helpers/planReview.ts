@@ -24,6 +24,7 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     // default, matching the null parent above.
     parentTrail: [],
     blockedByNodeIds: [],
+    blockedByRemovedNodeIds: [],
     identifier: null,
     title: 'A proposed item',
     kind: 'task',
