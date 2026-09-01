@@ -274,15 +274,45 @@ on:
   push:
     branches: [main]
 
-# Cancel older runs on the same ref when a new commit lands (saves CI minutes).
+# ⚠️ THE GROUP IS PER-COMMIT ON `push`, PER-REF ON `pull_request` (MOTIR-4095).
+# `cancel-in-progress: false` is NOT enough to protect a main baseline, and the
+# comment that used to stand here said it was. It governs the run that is
+# already EXECUTING; GitHub separately holds only ONE PENDING run per group, and
+# a third event in that group EVICTS the queued one. Every push to `main` shares
+# `github.ref`, so a merge burst cancelled the middle baselines before they ran
+# a single job — measured on 2026-09-01 at 23 of the last 100 `push: main` runs,
+# every one of them `cancelled` with ZERO jobs, each at the instant the next
+# merge's run was created. That is one merge in four with no baseline at all,
+# which is precisely the "which merge broke the lane?" ambiguity MOTIR-2760
+# added this trigger to remove.
+#
+# So the group is keyed on the COMMIT for a push — two merges are never in the
+# same group, nothing is ever queued behind anything, and nothing is evicted —
+# and on the REF for a pull request, where superseding the older run is the
+# saving we want (MOTIR-2760) and `github.ref` is `refs/pull/<n>/merge`, so a PR
+# cancels only itself. `tests/ci-acceptance-lane.test.ts` asserts this by
+# RESOLVING the expression against a fabricated context rather than matching its
+# text — the group is arithmetic, not structure.
+#
+# ⚠️ AND `ci.yml` KEEPS THE PER-REF FORM ON PURPOSE — do not "finish the job"
+# there. It evicts harder (33 of its last 100 `push: main` runs, same
+# measurement, all with zero jobs), and MOTIR-3760 read that and ruled it NOT a
+# defect: ci.yml's main run answers "does the trunk build, and does it deploy",
+# and the survivor of a burst carries every commit before it, so the answer it
+# gives is still true. THIS lane answers a different question — WHICH merge
+# broke a spec — and "the survivor carries every commit before it" is exactly
+# the ambiguity that destroys. Same expression, different product: that is why
+# the fix is scoped to this file.
+#
 # Safe interpolation: github.workflow is a fixed workflow name; github.ref is a
-# validated git ref identifier (not user-controlled free-form input).
+# validated git ref identifier and github.sha a 40-character commit id (neither
+# is user-controlled free-form input).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   # PR-ONLY (MOTIR-2760). On a PR only the tip matters, so cancelling a
-  # superseded run saves minutes. On `main` it would cancel a baseline whose job
-  # is to say WHICH merge broke the lane — back-to-back merges would each cancel
-  # the last and leave exactly the ambiguity the baseline exists to remove.
+  # superseded run saves minutes. On `main` cancelling would destroy the
+  # baseline's whole product — which merge broke the lane. Note this line alone
+  # never protected it: see the eviction above.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
