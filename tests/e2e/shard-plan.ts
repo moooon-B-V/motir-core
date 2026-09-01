@@ -484,7 +484,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-timeline.spec.ts': 14.0,
   'planning-anchor-level.spec.ts': 11.0,
   'plans-review.spec.ts': 14.8,
-  'plans-surface.spec.ts': 18.0,
   'profile.spec.ts': 11.4,
   'project-access.spec.ts': 9.7,
   'project-details.spec.ts': 7.7,
