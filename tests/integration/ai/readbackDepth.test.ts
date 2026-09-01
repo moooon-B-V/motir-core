@@ -1,8 +1,10 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { aiBoundaryService } from '@/lib/services/aiBoundaryService';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
   makeWorkItemFixture as makeFixture,
@@ -313,6 +315,38 @@ describe('workItemsService.listRevisionsPage', () => {
   });
 });
 
+describe('workItemsService.getRelationshipLinks', () => {
+  it('returns the WHOLE graph when no project restriction is given', async () => {
+    const fx = await makeFixture();
+    // The unrestricted arm is what a caller with a real VIEWER uses — the item
+    // page, the MCP — where a cross-project link is a legitimate thing to see.
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'OTHR',
+    });
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Target' },
+      fx.ctx,
+    );
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: other.id, kind: 'story', title: 'Across the boundary' },
+      fx.ctx,
+    );
+    await createTestLink({
+      workspaceId: fx.workspaceId,
+      fromId: target.id,
+      toId: foreign.id,
+      kind: 'clones',
+      createdById: fx.ownerId,
+    });
+
+    const links = await workItemsService.getRelationshipLinks(target.id, fx.ctx);
+    expect(links.clones.map((l) => l.item.identifier)).toEqual([foreign.identifier]);
+    expect(links.blockedBy).toEqual([]);
+  });
+});
+
 describe('aiBoundaryService — the graph-traversal boundary', () => {
   it('getItem returns the item, and comments/history only when asked', async () => {
     const fx = await makeFixture();
@@ -333,6 +367,191 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     });
     expect(rich.comments?.threads).toHaveLength(1);
     expect(rich.history?.revisions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── MOTIR-4063 — the WHOLE link set crosses the AI boundary ──────────────
+  // The planner read a TREE while the product keeps a GRAPH: `get-item`
+  // resolved through the LIGHT work-item shape, so `relates_to` / `duplicates`
+  // / `clones` reached motir-ai not at all, and `blocks` did not either —
+  // it was assumed reachable because `blocked_by` is, via `walk-blocking`,
+  // which has no inverse (planning bug MOTIR-4090).
+
+  /** Seed the target plus one far end per link kind, in `fx`'s project. */
+  async function seedAllFiveLinkKinds(fx: Awaited<ReturnType<typeof makeFixture>>): Promise<{
+    target: Awaited<ReturnType<typeof workItemsService.createWorkItem>>;
+    far: Record<'blockedBy' | 'blocks' | 'relatesTo' | 'duplicates' | 'clones', string>;
+  }> {
+    const make = (title: string) =>
+      workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'story', title }, fx.ctx);
+    const target = await make('Target');
+    const blocker = await make('Blocker');
+    const blocked = await make('Blocked');
+    const related = await make('Related');
+    const duplicate = await make('Duplicate');
+    const clone = await make('Clone');
+    const link = (
+      fromId: string,
+      toId: string,
+      kind: 'is_blocked_by' | 'relates_to' | 'duplicates' | 'clones',
+    ) =>
+      createTestLink({
+        workspaceId: fx.workspaceId,
+        fromId,
+        toId,
+        kind,
+        createdById: fx.ownerId,
+      });
+    // `blockedBy` is the OUT edge of `is_blocked_by`; `blocks` is the SAME kind
+    // read from the other end — which is exactly why it needs the item payload
+    // and cannot ride the one-direction blocking closure.
+    await link(target.id, blocker.id, 'is_blocked_by');
+    await link(blocked.id, target.id, 'is_blocked_by');
+    await link(target.id, related.id, 'relates_to');
+    await link(target.id, duplicate.id, 'duplicates');
+    await link(target.id, clone.id, 'clones');
+    return {
+      target,
+      far: {
+        blockedBy: blocker.identifier,
+        blocks: blocked.identifier,
+        relatesTo: related.identifier,
+        duplicates: duplicate.identifier,
+        clones: clone.identifier,
+      },
+    };
+  }
+
+  it('getItem carries ALL FIVE link kinds — asserted per kind, not per group', async () => {
+    const fx = await makeFixture();
+    const { target, far } = await seedAllFiveLinkKinds(fx);
+
+    const res = await aiBoundaryService.getItem(fx.projectId, target.identifier, fx.ctx);
+
+    // Per KIND. A test covering only `relatesTo` would let the other four
+    // regress unseen, which is how `blocks` went missing in the first place.
+    for (const kind of ['blockedBy', 'blocks', 'relatesTo', 'duplicates', 'clones'] as const) {
+      expect(
+        res.item[kind].map((l) => l.item.identifier),
+        kind,
+      ).toEqual([far[kind]]);
+    }
+  });
+
+  it('getItem gives every link the KEY, title, kind and STATUS a planner acts on', async () => {
+    const fx = await makeFixture();
+    const { target, far } = await seedAllFiveLinkKinds(fx);
+
+    const res = await aiBoundaryService.getItem(fx.projectId, target.identifier, fx.ctx);
+
+    // A link to a `done` item and a link to a `todo` item mean opposite things;
+    // a bare key would force a second read to find out which.
+    expect(res.item.relatesTo[0]?.item).toMatchObject({
+      identifier: far.relatesTo,
+      title: 'Related',
+      kind: 'story',
+      status: 'todo',
+    });
+    // The edge's own id rides along, so a caller can name the link, not just
+    // its far end.
+    expect(res.item.relatesTo[0]?.linkId).toEqual(expect.any(String));
+    expect(res.item.relatesTo[0]?.linkId).not.toBe('');
+  });
+
+  it('getItem is ADDITIVE — the shape it carried before is untouched', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Alone' },
+      fx.ctx,
+    );
+
+    const res = await aiBoundaryService.getItem(fx.projectId, item.identifier, fx.ctx);
+
+    // The pre-existing item fields are unchanged, so a motir-ai that predates
+    // the widening reads exactly what it always did and ignores the new keys —
+    // which is what lets the two repositories deploy in either order.
+    const { blockedBy, blocks, relatesTo, duplicates, clones, ...before } = res.item;
+    expect(before).toEqual(
+      await workItemsService.getWorkItemByIdentifier(fx.projectId, item.identifier, fx.ctx),
+    );
+    // An item with no links reports EMPTY arrays, never absent keys — the
+    // consumer distinguishes "none" from "not readable" on exactly that.
+    expect([blockedBy, blocks, relatesTo, duplicates, clones]).toEqual([[], [], [], [], []]);
+  });
+
+  it('getItem WITHHOLDS a link whose far end is in another project', async () => {
+    const fx = await makeFixture();
+    // A SECOND project in the SAME workspace: a relationship edge across
+    // projects is legal in the UI, so this is a real case and not a
+    // defensive one. The job token is scoped to `fx.projectId`.
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'OTHR',
+    });
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Target' },
+      fx.ctx,
+    );
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: other.id, kind: 'story', title: 'Somebody else’s secret' },
+      fx.ctx,
+    );
+    await createTestLink({
+      workspaceId: fx.workspaceId,
+      fromId: target.id,
+      toId: foreign.id,
+      kind: 'relates_to',
+      createdById: fx.ownerId,
+    });
+
+    const res = await aiBoundaryService.getItem(fx.projectId, target.identifier, fx.ctx);
+    expect(res.item.relatesTo).toEqual([]);
+
+    // ...and the SAME edge is fully visible to the item page, which has a real
+    // viewer rather than a project-scoped token. The withholding is the
+    // boundary's rule, not a property of the link.
+    const detail = await workItemsService.getIssueDetail(fx.projectId, target.identifier, fx.ctx);
+    expect(detail.relatesTo.map((l) => l.item.identifier)).toEqual([foreign.identifier]);
+  });
+
+  it('getItem assembles the link set in a CONSTANT number of reads — no N+1', async () => {
+    const fx = await makeFixture();
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Target' },
+      fx.ctx,
+    );
+    // SIX far ends on one kind, so a per-link round trip would show up as six
+    // resolves rather than one.
+    for (let i = 0; i < 6; i += 1) {
+      const related = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'story', title: `Related ${i}` },
+        fx.ctx,
+      );
+      await createTestLink({
+        workspaceId: fx.workspaceId,
+        fromId: target.id,
+        toId: related.id,
+        kind: 'relates_to',
+        createdById: fx.ownerId,
+      });
+    }
+
+    const fromItem = vi.spyOn(workItemLinkRepository, 'findByFromItem');
+    const toItem = vi.spyOn(workItemLinkRepository, 'findByToItem');
+    const byIds = vi.spyOn(workItemRepository, 'findByIds');
+    try {
+      const res = await aiBoundaryService.getItem(fx.projectId, target.identifier, fx.ctx);
+      expect(res.item.relatesTo).toHaveLength(6);
+      // Four OUT-edge batches + one IN-edge batch + five far-end resolves. The
+      // link COUNT does not appear in any of those numbers.
+      expect(fromItem).toHaveBeenCalledTimes(4);
+      expect(toItem).toHaveBeenCalledTimes(1);
+      expect(byIds).toHaveBeenCalledTimes(5);
+    } finally {
+      fromItem.mockRestore();
+      toItem.mockRestore();
+      byIds.mockRestore();
+    }
   });
 
   it('getSubtree returns the skeleton neighborhood with parentKey resolved', async () => {

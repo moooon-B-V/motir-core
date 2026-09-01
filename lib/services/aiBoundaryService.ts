@@ -102,6 +102,15 @@ export const aiBoundaryService = {
   // depth context 7.1.6 deferred: the cursor-paginated comment thread and the
   // cursor-paginated change log. `getWorkItemByIdentifier` is the gate (browse +
   // tenant, AS the token's user); comments/history are read only when asked.
+  //
+  // ⚠️ The item carries ALL FIVE relationship groups (MOTIR-4063). It used to
+  // carry none: this read resolved through the LIGHT work-item shape while the
+  // full set was assembled for the UI/MCP only, so a planner saw a TREE where
+  // the product keeps a GRAPH. `blocked_by` reached it anyway — through
+  // `walkBlocking`, its own read — and `blocks` was assumed reachable because
+  // its PAIR was, though the closure has no inverse (MOTIR-4090). All five come
+  // from ONE assembly now, so no member of the set can be classified by its
+  // neighbour again.
   async getItem(
     projectId: string,
     key: string,
@@ -114,7 +123,21 @@ export const aiBoundaryService = {
     } = {},
   ): Promise<GetItemResponse> {
     const item = await workItemsService.getWorkItemByIdentifier(projectId, key, ctx);
-    const response: GetItemResponse = { item };
+    // ALL FIVE link groups (MOTIR-4063), from the assembly the item page already
+    // uses — `getWorkItemByIdentifier` is the gate, so this read follows it.
+    // `restrictToProjectId` is not a new rule — it is the one this boundary
+    // already applies to the only link kind that could cross it.
+    // `getBlockingClosure` drops an out-of-project blocker outright
+    // (`blockerProjectId !== root.projectId` → *"out-of-project → out of
+    // scope"*), so `walk-blocking` has never named another project's row. The
+    // token is scoped to ONE project and a relationship edge is a legitimate
+    // CROSS-PROJECT link, so the four kinds arriving here take the same
+    // treatment — otherwise widening the payload would open, on four new kinds,
+    // exactly the path the closure was written to close.
+    const links = await workItemsService.getRelationshipLinks(item.id, ctx, {
+      restrictToProjectId: projectId,
+    });
+    const response: GetItemResponse = { item: { ...item, ...links } };
     if (opts.withComments) {
       response.comments = await commentsService.listComments(
         item.id,

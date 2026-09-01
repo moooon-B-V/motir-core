@@ -7,7 +7,11 @@ import { GET as getItemGET } from '@/app/api/internal/ai/get-item/route';
 import { GET as getSubtreeGET } from '@/app/api/internal/ai/get-subtree/route';
 import { GET as walkBlockingGET } from '@/app/api/internal/ai/walk-blocking/route';
 import { GET as skeletonGET } from '@/app/api/internal/ai/skeleton/route';
-import { makeWorkItemFixture as makeFixture, createTestLink } from '../../fixtures';
+import {
+  makeWorkItemFixture as makeFixture,
+  createTestLink,
+  createTestProject,
+} from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -80,6 +84,100 @@ describe('GET /api/internal/ai/get-item', () => {
     expect(body.item.identifier).toBe(item.identifier);
     expect(body.comments.threads).toHaveLength(1);
     expect(body.history.revisions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('carries all five link kinds on the item — the whole graph, not the tree', async () => {
+    const fx = await makeFixture();
+    const make = (title: string) =>
+      workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'story', title }, fx.ctx);
+    const target = await make('Target');
+    const blocker = await make('Blocker');
+    const blocked = await make('Blocked');
+    const related = await make('Related');
+    const duplicate = await make('Duplicate');
+    const clone = await make('Clone');
+    const link = (
+      fromId: string,
+      toId: string,
+      kind: 'is_blocked_by' | 'relates_to' | 'duplicates' | 'clones',
+    ) =>
+      createTestLink({ workspaceId: fx.workspaceId, fromId, toId, kind, createdById: fx.ownerId });
+    await link(target.id, blocker.id, 'is_blocked_by');
+    await link(blocked.id, target.id, 'is_blocked_by');
+    await link(target.id, related.id, 'relates_to');
+    await link(target.id, duplicate.id, 'duplicates');
+    await link(target.id, clone.id, 'clones');
+
+    const res = await getItemGET(
+      req('get-item', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        query: { key: target.identifier },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const expected: Record<string, string> = {
+      blockedBy: blocker.identifier,
+      blocks: blocked.identifier,
+      relatesTo: related.identifier,
+      duplicates: duplicate.identifier,
+      clones: clone.identifier,
+    };
+    // Per KIND — the enumeration that went short by one is exactly the thing a
+    // group-shaped assertion would not have caught (MOTIR-4090).
+    for (const [kind, identifier] of Object.entries(expected)) {
+      expect(
+        body.item[kind].map((l: { item: { identifier: string } }) => l.item.identifier),
+        kind,
+      ).toEqual([identifier]);
+    }
+    // Each entry carries what a planner acts on, over the wire.
+    expect(body.item.blocks[0].item).toMatchObject({
+      identifier: blocked.identifier,
+      title: 'Blocked',
+      kind: 'story',
+      status: 'todo',
+    });
+  });
+
+  it('withholds a link whose far end is in a project the token is not scoped to', async () => {
+    const fx = await makeFixture();
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'OTHR',
+    });
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Target' },
+      fx.ctx,
+    );
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: other.id, kind: 'story', title: 'Somebody else’s secret' },
+      fx.ctx,
+    );
+    await createTestLink({
+      workspaceId: fx.workspaceId,
+      fromId: target.id,
+      toId: foreign.id,
+      kind: 'relates_to',
+      createdById: fx.ownerId,
+    });
+
+    const res = await getItemGET(
+      req('get-item', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        query: { key: target.identifier },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(JSON.parse(text).item.relatesTo).toEqual([]);
+    // Not merely absent from the array — the other project's key and title do
+    // not appear in the payload at all.
+    expect(text).not.toContain(foreign.identifier);
+    expect(text).not.toContain('secret');
   });
 
   it('400s a missing key', async () => {
