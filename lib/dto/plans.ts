@@ -698,16 +698,19 @@ export interface ListPlansOptions {
   limit?: number;
   /**
    * Narrow the page to ONE lifecycle status — the tabbed Plans list
-   * (MOTIR-3241) asks for exactly one tab at a time. **Omit it for the whole
-   * project**, which is what every caller predating the tabs does and what
-   * keeps their pages byte-identical.
+   * (MOTIR-3241) asks for exactly one tab at a time — or to a SET of them
+   * (MOTIR-4106), which is what a caller asking a QUESTION about the lifecycle
+   * rather than rendering a tab needs: *which plans are pending?* spans more
+   * than one status. **Omit it for the whole project**, which is what every
+   * caller predating the tabs does and what keeps their pages byte-identical.
    *
    * Applied as a `where` predicate in the repository, never after the read: a
    * caller-side filter would take the cursor page and then shrink it, so a
    * `planned` page would come back short while `nextCursor` claimed there was
-   * more.
+   * more. That is exactly why the SET is expressed here rather than by a caller
+   * making one call per status and merging the pages.
    */
-  status?: PlanStatusDto | null;
+  status?: PlanStatusDto | readonly PlanStatusDto[] | null;
 }
 
 /** How many plans a project holds in EACH lifecycle status — the counts the

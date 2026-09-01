@@ -4,6 +4,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { plansService } from '@/lib/services/plansService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import {
   toPlanTreeSkeleton,
@@ -11,23 +12,27 @@ import {
   toSearchResultRows,
   toBlockingEdges,
   toOrgContextResponse,
+  toPendingPlanRows,
   toSimilarWorkItemRows,
 } from '@/lib/mappers/aiBoundaryMappers';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { decodeSearchCursor, encodeSearchCursor } from '@/lib/mcp/searchCursor';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type {
-  PlanTreeResponse,
-  OrgContextResponse,
-  GetItemResponse,
-  SubtreeResponse,
-  BlockingClosureResponse,
-  SearchWorkItemsResponse,
-  SemanticSearchResponse,
-  SimilarWorkItemsResponse,
+import {
+  AI_PENDING_PLAN_STATUSES,
+  AI_PENDING_PLANS_LIMIT,
+  type PlanTreeResponse,
+  type OrgContextResponse,
+  type GetItemResponse,
+  type SubtreeResponse,
+  type BlockingClosureResponse,
+  type PendingPlansResponse,
+  type SearchWorkItemsResponse,
+  type SemanticSearchResponse,
+  type SimilarWorkItemsResponse,
 } from '@/lib/dto/ai';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
@@ -89,6 +94,60 @@ export const aiBoundaryService = {
       organizationId: access.organizationId,
     });
     return toOrgContextResponse(footprint);
+  },
+
+  // GET /api/internal/ai/pending-plans (MOTIR-4106) — WHAT IS ALREADY PROPOSED
+  // on the token's project: the plans a person still has to decide about.
+  //
+  // The one input GATE 1 names that had no read path. Every other internal read
+  // in this family answers about the COMMITTED tree, and `plan-proposals`
+  // answers about the CALLER'S OWN plan, resolved by `sourceJobId` — deliberately
+  // so, since a job token must not read another job's plan. Neither can say "a
+  // plan is already in flight here", which is the fact that turns a proposal into
+  // a duplicate.
+  //
+  // ⚠️ THE STATUS SET IS THIS METHOD'S DECISION, NOT AN ARGUMENT
+  // (`AI_PENDING_PLAN_STATUSES`). *Is this plan still in flight?* is one product
+  // question; a parameter would let every consumer answer it differently, and the
+  // consumer most likely to get it wrong is a prompt-assembling one that reads
+  // `approved` as pending and warns about the tree.
+  //
+  // BOUNDED, and by the SAME `where` clause that narrows it: `listPlans` applies
+  // both the status set and the limit in the repository, so the page returned is
+  // a full page of pending plans rather than a filtered remnant of a mixed one.
+  // `truncated` reports the cut — read off `nextCursor`, which is the service's
+  // own answer to "was there more", and then DROPPED: this seam is a bounded
+  // question, not a paginated list, so it never hands out a cursor.
+  //
+  // The project is the TOKEN's, gated by `plansService.listPlans`'s own
+  // `assertCanBrowse` — the same gate the Plans page goes through.
+  //
+  // ⚠️ THE BROWSE DENIAL IS TRANSLATED HERE, NOT AT THE ROUTE, and this is
+  // `readPlanTree`'s posture rather than a new one: that method re-throws
+  // `ProjectNotFoundError` for a project outside the token's workspace, so the
+  // boundary — not each route — is where "a project you cannot see does not
+  // exist" is decided. `listPlans` is a UI read and raises the UI's
+  // `ProjectAccessDeniedError('browse')`, which its own callers render as a 404;
+  // letting that reach the route would put the no-leak decision in the transport,
+  // one copy per endpoint. An 'edit' denial cannot arise on a read and is
+  // rethrown untouched rather than folded into the 404.
+  async readPendingPlans(projectId: string, ctx: ServiceContext): Promise<PendingPlansResponse> {
+    let page;
+    try {
+      page = await plansService.listPlans(projectId, ctx, {
+        status: AI_PENDING_PLAN_STATUSES,
+        limit: AI_PENDING_PLANS_LIMIT,
+      });
+    } catch (err) {
+      if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
+        throw new ProjectNotFoundError(projectId);
+      }
+      throw err;
+    }
+    return {
+      plans: toPendingPlanRows(page.plans),
+      truncated: page.nextCursor !== null,
+    };
   },
 
   // ── Story 7.5 — the plan-tree GRAPH-TRAVERSAL read family ────────────────

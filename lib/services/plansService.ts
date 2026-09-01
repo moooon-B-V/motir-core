@@ -2987,10 +2987,11 @@ export const plansService = {
    * A project's plans, newest first, cursor-paginated (the list view).
    *
    * `opts.status` narrows the page to ONE lifecycle status — the tabbed list's
-   * read (MOTIR-3235). Omitted, the page is the whole project exactly as it was
-   * before the option existed; the predicate is applied in the repository's
-   * `where`, so a narrowed page is a full page rather than a filtered remnant
-   * of one.
+   * read (MOTIR-3235) — or to a SET of them (MOTIR-4106), which is what a
+   * lifecycle QUESTION needs rather than a tab. Omitted, the page is the whole
+   * project exactly as it was before the option existed; the predicate is
+   * applied in the repository's `where` in both forms, so a narrowed page is a
+   * full page rather than a filtered remnant of one.
    */
   async listPlans(
     projectId: string,

@@ -263,6 +263,18 @@ export const planRepository = {
    * `nextCursor` still claimed there was more. `null` / omitted ⇒ the whole
    * project, exactly as before this argument existed.
    *
+   * ⚠️ IT ALSO TAKES A SET (MOTIR-4106), and for the SAME reason it is a `where`
+   * clause rather than a caller-side filter. The AI boundary asks a question the
+   * tabbed list never did — *which plans are PENDING?* — and "pending" is more
+   * than one status, so a single-value argument left that caller either reading
+   * one status per round trip and merging (three pages, three cursors, one
+   * ordering nobody owns) or reading the whole project and shrinking it, which
+   * is the exact defect the paragraph above rejects. An ARRAY compiles to
+   * `status: { in: [...] }` and keeps the page, the ordering and the cursor a
+   * property of ONE query. An EMPTY array is a caller asking for nothing and is
+   * honoured as such — `{ in: [] }` matches no row — never silently widened to
+   * the whole project, which is what treating it as falsy would do.
+   *
    * Served by `@@index([projectId, status, createdAt])`: the narrowed set is
    * already in `createdAt` order under the index, so the keyset walk never
    * sorts a status in the heap.
@@ -273,11 +285,13 @@ export const planRepository = {
     limit: number,
     cursorId: string | null,
     tx?: Prisma.TransactionClient,
-    status?: PlanStatus | null,
+    status?: PlanStatus | readonly PlanStatus[] | null,
   ): Promise<Plan[]> {
     const client = tx ?? db;
+    const statusWhere =
+      status == null ? {} : { status: typeof status === 'string' ? status : { in: [...status] } };
     return client.plan.findMany({
-      where: { projectId, workspaceId, ...(status ? { status } : {}) },
+      where: { projectId, workspaceId, ...statusWhere },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
