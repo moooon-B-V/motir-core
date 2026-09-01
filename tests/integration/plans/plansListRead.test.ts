@@ -50,6 +50,16 @@ async function planIn(
 ): Promise<string> {
   const plan = await plansService.createPlan(fx.projectId, { title }, fx.ctx);
   if (status === 'generating') return plan.id;
+  // ⚠️ ONE PROPOSAL, ALWAYS (MOTIR-4124). A close over a plan holding NOTHING
+  // DISCARDS it — `declined` / `discarded` — so a helper that appended nothing
+  // could not reach `planned` at all, and every status above it would be the
+  // wrong one. The proposal is fixture scaffolding, not a subject of these
+  // cases.
+  await plansService.addProposals(
+    plan.id,
+    [{ op: 'add', proposedFields: { title: `${title} — a proposal`, kind: 'task' } }],
+    fx.ctx,
+  );
   await plansService.markPlanned(plan.id, fx.ctx);
   if (status === 'planned') return plan.id;
   if (status === 'approved') await plansService.approvePlan(plan.id, fx.ctx);

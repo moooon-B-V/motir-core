@@ -36,6 +36,26 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/**
+ * Append one proposal to a `generating` plan.
+ *
+ * ⚠️ IT IS WHAT MAKES THE NEXT CLOSE A CLOSE (MOTIR-4124). `markPlanned` over a
+ * plan holding NOTHING discards it — `declined` / `discarded` — so a row-view
+ * case that wants a plan sitting in the review queue has to put something in it
+ * first. None of these cases is about what the plan proposes; they are about
+ * the row's when-label, its attribution and its staleness.
+ */
+async function proposeOne(
+  fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+  planId: string,
+): Promise<void> {
+  await plansService.addProposals(
+    planId,
+    [{ op: 'add', proposedFields: { title: 'A proposed card', kind: 'task' } }],
+    fx.ctx,
+  );
+}
+
 describe('buildPlanRowViews — the row view-model', () => {
   it('resolves every requester NAME in ONE query, whatever the page size', async () => {
     const fx = await makeWorkItemFixture();
@@ -241,12 +261,13 @@ describe('buildPlanRowViews — the row view-model', () => {
   it('still builds the pre-existing row fields — title fallback, count, when-label', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'A title' }, fx.ctx);
+    await proposeOne(fx, plan.id);
     const planned = await plansService.markPlanned(plan.id, fx.ctx);
 
     const [view] = await buildPlanRowViews([planned], fx.ctx);
 
     expect(view!.title).toBe('A title');
-    expect(view!.itemCount).toBe(0);
+    expect(view!.itemCount).toBe(1);
     expect(view!.whenKey).toBe('plannedAt');
     expect(view!.whenLabel).toContain('at ');
     expect(view!.staleCount).toBe(0);
@@ -269,6 +290,7 @@ describe('buildPlanRowViews — the lifecycle when-label, over every status', ()
     expect(view!.whenKey).toBe('createdAt');
 
     // planned → plannedAt
+    await proposeOne(fx, plan.id);
     const planned = await plansService.markPlanned(plan.id, fx.ctx);
     [view] = await buildPlanRowViews([planned], fx.ctx);
     expect(view!.whenKey).toBe('plannedAt');
@@ -282,6 +304,7 @@ describe('buildPlanRowViews — the lifecycle when-label, over every status', ()
   it('labels a DECLINED plan with its own verb', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'p' }, fx.ctx);
+    await proposeOne(fx, plan.id);
     await plansService.markPlanned(plan.id, fx.ctx);
     const declined = await plansService.declinePlan(plan.id, fx.ctx);
 
@@ -345,6 +368,7 @@ describe('buildPlanRowViews — the lifecycle when-label, over every status', ()
   it('degrades to a zero stale count when the staleness read fails', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'p' }, fx.ctx);
+    await proposeOne(fx, plan.id);
     const planned = await plansService.markPlanned(plan.id, fx.ctx);
 
     const boom = vi
@@ -362,6 +386,7 @@ describe('buildPlanRowViews — the lifecycle when-label, over every status', ()
   it('counts the stale items of a planned plan', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'p' }, fx.ctx);
+    await proposeOne(fx, plan.id);
     const planned = await plansService.markPlanned(plan.id, fx.ctx);
 
     const stale = vi.spyOn(planStalenessService, 'computePlanStaleness').mockResolvedValue({

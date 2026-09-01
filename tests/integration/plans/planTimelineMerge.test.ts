@@ -70,16 +70,24 @@ describe('the merged sequence', () => {
   it('does NOT render the four stored kinds the derived events already say', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'P' }, fx.ctx);
+    // The proposal is what makes the close a CLOSE (MOTIR-4124): a plan holding
+    // nothing is discarded instead of queued, and this case is about the
+    // lifecycle trail of a plan that reached a reviewer.
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'One', kind: 'task' } }],
+      fx.ctx,
+    );
     await plansService.markPlanned(plan.id, fx.ctx);
 
     // The TRAIL holds all of them — it is the audit record and must be complete…
     const stored = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       planRevisionRepository.listByPlan(plan.id, tx),
     );
-    expect(stored.map((r) => r.changeKind)).toEqual(['created', 'planned']);
+    expect(stored.map((r) => r.changeKind)).toEqual(['created', 'appended', 'planned']);
     // …and the TIMELINE says each of them exactly once, from the derived side.
     const history = await timeline(plan.id, fx.ctx);
-    expect(history.map((e) => e.kind)).toEqual(['created', 'planned']);
+    expect(history.map((e) => e.kind)).toEqual(['created', 'appended', 'planned']);
   });
 
   it('gives every event a distinct id, so a repeated kind is still a distinct row', async () => {
@@ -227,6 +235,14 @@ describe('a plan with NO content rows renders its lifecycle timeline unchanged',
   it('produces exactly the four derived events — the state every pre-existing plan is in', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Legacy' }, fx.ctx);
+    // One proposal, so the close QUEUES the plan rather than discarding it
+    // (MOTIR-4124) — this case is about a plan that reached a reviewer and was
+    // then declined, which is the history the three derived events describe.
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'One', kind: 'task' } }],
+      fx.ctx,
+    );
     await plansService.markPlanned(plan.id, fx.ctx);
     await plansService.declinePlan(plan.id, fx.ctx);
     // Wipe the trail: this is exactly a plan created before MOTIR-3535 shipped.
