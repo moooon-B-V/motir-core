@@ -1,5 +1,24 @@
 # Acceptance-video recording + upload (BYOK)
 
+> ## ⚠️ THE TWO PIECES THIS GUIDE HANDS YOU NO LONGER EXIST IN THIS REPOSITORY
+>
+> **Retired 2026-09-01 by MOTIR-4096** (`docs/decisions/acceptance-video.md`, the
+> 2026-09-01 amendment). `scripts/upload-acceptance-video.mjs` and
+> `.github/actions/upload-acceptance-video/` are DELETED: Motir's own receipt is
+> published by the **agent**, over the Motir MCP surface, not by CI. This page is
+> kept rather than deleted because **the SERVER side is unchanged and still
+> shipped** — the publish endpoint, its eligibility and cap checks, the keyless
+> GitHub-OIDC auth and the `integration` PAT fallback all work exactly as
+> described below, and an external CI is still welcome to use them.
+>
+> **So read it as a PROTOCOL, not as a set of files to `uses:`.** Everything about
+> the recording half is current (the Playwright lane, the `chapter()` harness, the
+> `acceptance-story.json` sidecar, the watchability floor and the size caps).
+> Everything that says "the uploader" or "the Action" now describes a client you
+> would have to write: the requests it makes, and the responses it must handle,
+> are what this page pins. `nextjs-prisma-vercel-starter` still vendors a copy of
+> the Action; MOTIR-4097 retires that one.
+
 Story **MOTIR-1627** closes the review loop with a human **acceptance gate**: a
 story's E2E, on a green run, records a short **video**; CI ships it to the story
 as pending acceptance evidence; a reviewer watches it in the acceptance panel and

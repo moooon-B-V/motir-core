@@ -126,7 +126,7 @@ on:
 # the deployment and is red past 90 minutes. Read it before concluding that a
 # merge has shipped.
 #
-# The expression is deliberately the one `acceptance-video.yml` already carries
+# The expression is deliberately the one `acceptance-tests.yml` already carries
 # — that lane reached the same conclusion for its own reason (a blanket cancel
 # destroys the per-merge baseline that tells you WHICH merge broke it), and one
 # idiom across the repo is worth more than a second way of saying it. This
@@ -523,8 +523,10 @@ jobs:
       # publish step authenticated off (MOTIR-2668). That step is retired
       # (MOTIR-3797) — the AGENT now publishes through `publish_design_result`
       # — so the permission has no consumer left and is dropped with it.
-      # `authenticateGithubOidc` itself is untouched: the acceptance-video
-      # publisher still uses it, from its own workflow's own `id-token: write`.
+      # `authenticateGithubOidc` itself is untouched, but it no longer has a CI
+      # caller in this repository either: MOTIR-4096 retired the acceptance
+      # publisher the same way, so `acceptance-tests.yml` mints no token now
+      # (it is the SERVER side of that door, still open to external CI).
       contents: read
     steps:
       - uses: actions/checkout@v6
@@ -972,10 +974,10 @@ jobs:
     # far below a budget no legitimate leg could ever need.
     timeout-minutes: 45
     # Read-only: these legs check out, run specs and upload a report. The
-    # `id-token: write` this job used to carry belonged to the acceptance-video
-    # publish, which now lives in its own `acceptance-video.yml` workflow
-    # (MOTIR-1949) — the lane that mints an OIDC token should be the one lane
-    # that actually publishes.
+    # `id-token: write` this job used to carry belonged to the acceptance
+    # publish, which moved to its own workflow (MOTIR-1949) and was then retired
+    # outright (MOTIR-4096) — the receipt is published by the agent over MCP, so
+    # NEITHER Playwright lane mints an OIDC token any more.
     permissions:
       contents: read
     # Skip E2E when the diff touches only documentation, design assets or
@@ -1050,8 +1052,8 @@ jobs:
             args: '--grep "@a11y" --shard=1/2'
           - id: a11y-2
             args: '--grep "@a11y" --shard=2/2'
-          # NOTE: the acceptance-video lane is NOT a leg here (MOTIR-1949). It
-          # is its own WORKFLOW — `.github/workflows/acceptance-video.yml`, with
+          # NOTE: the acceptance lane is NOT a leg here (MOTIR-1949). It
+          # is its own WORKFLOW — `.github/workflows/acceptance-tests.yml`, with
           # a `paths:` filter on `tests/e2e/acceptance*.spec.ts` — so that a PR
           # which owns no acceptance spec sees no acceptance check AT ALL. A
           # matrix leg cannot be dropped by an expression, and a job-level `if:`
@@ -1086,7 +1088,7 @@ jobs:
         uses: ./.github/actions/postgres
       # pnpm + Node, the three caches, the pre-built `.next/`, migrate deploy and
       # the retrying Playwright install — shared verbatim with the acceptance
-      # lane in `acceptance-video.yml` (MOTIR-1949).
+      # lane in `acceptance-tests.yml` (MOTIR-1949).
       - uses: ./.github/actions/e2e-setup
       # NOTE: the lane's job EXECUTOR needs no setup step of its own. It used to
       # be a vendor dev-server binary — a pinned `inngest-cli` devDependency whose
@@ -1127,7 +1129,7 @@ jobs:
       # silently uploaded NOTHING ("No files were found with the provided path")
       # — a red billing leg left no trace, screenshot, or report to debug from.
       # (The acceptance lane's own `-acceptance` report is uploaded by the
-      # `acceptance-video.yml` workflow, which owns that lane since MOTIR-1949.)
+      # `acceptance-tests.yml` workflow, which owns that lane since MOTIR-1949.)
       #
       # `out/e2e-harness` is the MOTIR-2617 watchdog series — one JSONL per leg
       # carrying MemAvailable + the webServer's RSS sampled on a timer and at
@@ -1178,7 +1180,7 @@ jobs:
   # WHY A SEPARATE JOB rather than a condition on the legs: a matrix leg cannot
   # be dropped by an expression — the `matrix` context is not available to a
   # job-level `if:` — so the only way to gate a SUBSET of legs is to make that
-  # subset its own job. The `e2e` job's comment on the acceptance-video lane
+  # subset its own job. The `e2e` job's comment on the acceptance lane
   # records the same constraint from the other side.
   #
   # The bulk legs' `--grep-invert` still excludes these tags, and this job's
@@ -1265,7 +1267,7 @@ jobs:
         uses: ./.github/actions/postgres
       # pnpm + Node, the three caches, the pre-built `.next/`, migrate deploy and
       # the retrying Playwright install — shared verbatim with the acceptance
-      # lane in `acceptance-video.yml` (MOTIR-1949).
+      # lane in `acceptance-tests.yml` (MOTIR-1949).
       - uses: ./.github/actions/e2e-setup
       # NOTE: the lane's job EXECUTOR needs no setup step of its own. It used to
       # be a vendor dev-server binary — a pinned `inngest-cli` devDependency whose
@@ -1306,7 +1308,7 @@ jobs:
       # silently uploaded NOTHING ("No files were found with the provided path")
       # — a red billing leg left no trace, screenshot, or report to debug from.
       # (The acceptance lane's own `-acceptance` report is uploaded by the
-      # `acceptance-video.yml` workflow, which owns that lane since MOTIR-1949.)
+      # `acceptance-tests.yml` workflow, which owns that lane since MOTIR-1949.)
       #
       # `out/e2e-harness` is the MOTIR-2617 watchdog series — one JSONL per leg
       # carrying MemAvailable + the webServer's RSS sampled on a timer and at

@@ -59,14 +59,14 @@ describe('CI Postgres container (MOTIR-1742)', () => {
     // make every assertion below pass vacuously.
     expect(allJobs.length).toBeGreaterThan(5);
     expect(dbJobs.map((j) => `${j.file}:${j.id}`).sort()).toEqual([
-      // The acceptance-video lane, lifted out of the `e2e` matrix into its own
+      // The acceptance lane, lifted out of the `e2e` matrix into its own
       // `paths:`-filtered workflow by MOTIR-1949, and split by MOTIR-2600 into
       // one build + four sharded test legs. BOTH halves need a database: the
       // build because `pnpm build` runs `prisma migrate deploy` (the same reason
       // `ci.yml:build` has one), the test legs because they seed and drive the
       // app. The matrix does not multiply the entry — a matrix is one job.
-      'acceptance-video.yml:acceptance',
-      'acceptance-video.yml:build',
+      'acceptance-tests.yml:acceptance',
+      'acceptance-tests.yml:build',
       'ci.yml:build',
       'ci.yml:e2e',
       // The volume legs, split out of `e2e` by MOTIR-3148 so they can be gated

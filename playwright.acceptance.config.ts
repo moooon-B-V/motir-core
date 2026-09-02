@@ -11,7 +11,7 @@ import {
   E2E_PROVISIONING_ORG,
 } from './tests/e2e/_helpers/github-const';
 
-// Dedicated ACCEPTANCE-VIDEO E2E lane (Story MOTIR-1627 · Subtask MOTIR-1632;
+// Dedicated ACCEPTANCE E2E lane (Story MOTIR-1627 · Subtask MOTIR-1632;
 // per-story support MOTIR-1700).
 //
 // The main suite records `video: 'retain-on-failure'` — it keeps a clip only
@@ -24,19 +24,23 @@ import {
 // `testMatch` catches BOTH the MOTIR-1627 self-test dogfood
 // (`acceptance-video.spec.ts`) AND story-specific acceptance specs
 // (`acceptance-<story>.spec.ts`) — the planner rule (MOTIR-1644) creates an
-// acceptance-video E2E subtask for every user-facing story, and each writes its
+// acceptance E2E subtask for every user-facing story, and each writes its
 // spec using the `acceptance-<area>.spec.ts` naming convention so this lane
 // discovers it. The main config (playwright.config.ts) `testIgnore`s the same
 // `acceptance*.spec.ts` pattern so acceptance specs never run in the bulk
 // shards (video:'retain-on-failure' + no upload step).
 //
-// The uploader (`scripts/upload-acceptance-video.mjs`) reads this lane's
-// `outputDir` after a green run and POSTs the video + trace + chapters to the
-// publish endpoint (MOTIR-1631). Each spec declares its target story via the
-// `acceptanceStory()` helper → `acceptance-story.json` sidecar; the uploader
-// resolves each recorded video's story from its sidecar (→ PR ref → fallback).
-// A failing run leaves no video, so the uploader is a no-op — a red acceptance
-// E2E publishes nothing.
+// ⚠️ WHO PUBLISHES — CHANGED 2026-09-01 (MOTIR-4096). This lane's `outputDir`
+// used to be read by a CI uploader (`scripts/upload-acceptance-video.mjs`),
+// which POSTed the video + trace + chapters to the publish endpoint
+// (MOTIR-1631). That uploader is RETIRED: the receipt is published by the AGENT,
+// through the Motir MCP surface, and the lane's job now ends at the Playwright
+// report artifact the clips and sidecars land in.
+// What is unchanged is the PRODUCTION side, and it is what this config still
+// owes: each spec declares its target story via the `acceptanceStory()` helper →
+// `acceptance-story.json` sidecar, and `chapter()` writes `chapters.json`
+// beside it, so whoever publishes can resolve a recording to its story. A
+// failing run leaves no video — a red acceptance E2E still produces no receipt.
 //
 // ── Cloud posture: this lane runs CLOUD-ON ──────────────────────────────────
 //
