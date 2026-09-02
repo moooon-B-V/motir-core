@@ -275,6 +275,14 @@ follow-up.
 
 ## §7 — Q7: what blocks launch
 
+> **⚠️ WHERE THIS DOCUMENT SET LIVES CHANGED — see `public-surface-hosts.md`
+> AMENDMENT 2 (MOTIR-4004, 2026-09-01).** The seven documents move to
+> `motir-marketing` and `motir-core` reads a CONFIGURED manifest of them
+> (`slug` / `title` / `version` / `effectiveDate` / `changeSummary` / `url`)
+> instead of `content/legal/`. This record still owns WHICH documents exist and
+> what each is for; it no longer describes where they are served from, and the
+> `content/legal/*.md` paths below are the old home rather than the current one.
+
 ### The decision
 
 | document                  | launch-blocking?          | why                                                                                                                                                                                                                                            |

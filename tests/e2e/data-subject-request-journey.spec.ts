@@ -161,21 +161,31 @@ test('@smoke the deletion journey: confirm through the ledger → signed out →
   await expect(page.getByTestId('account-deletion-banner')).toHaveCount(0);
 });
 
-test('the Privacy Policy’s §7 link resolves to the Data & privacy pane, and that page renders', async ({
-  page,
-}) => {
-  // The criterion no unit test reaches: `content/legal/privacy.md` §7 promises
-  // *"In your account settings you can export your personal data and request
-  // deletion of your account"* and links there. This asserts the door opens —
-  // the link exists on the published page, its target answers 200, and the
-  // route it lands on is the one it named (no redirect loop back to sign-in,
-  // and no 404).
+test('the pane the Privacy Policy’s §7 names answers 200 and renders', async ({ page }) => {
+  // ── ⚠️ NARROWED BY MOTIR-4015, AND ONLY THE HALF THIS REPOSITORY CAN STILL MAKE ──
+  //
+  // This test used to `goto('/legal/privacy')` and assert the RENDERED document
+  // carried an anchor to the pane. It cannot any more, and not because the
+  // assertion got inconvenient: `content/legal/` left this repository with
+  // MOTIR-3909, `app/(public)/legal/[slug]/page.tsx` is a redirect onto the
+  // operator's configured URL rather than a renderer, and on a build with no
+  // manifest configured — which is what `playwright.config.ts` is — the route
+  // 404s by design. There is no document HERE to read the link off.
+  //
+  // ⚠️ SO THE OTHER HALF IS SOMEBODY ELSE'S, AND IT IS NAMED RATHER THAN DROPPED.
+  // *"the published Privacy Policy links to the pane"* is now an assertion about
+  // `motir-marketing`, whose `content/legal/privacy.md` §7 holds the sentence and
+  // whose `/legal/[slug]` renders it. It is tracked as bug MOTIR-4147 — which
+  // exists because sweeping the referrers for this test FOUND the link broken
+  // there: §7 points at the relative `/settings/account/data`, which on
+  // `motir.co` is a 404, so the promise the Privacy Policy makes about exporting
+  // your data currently leads nowhere.
+  //
+  // What stays here is the half this repository owns and is the only one that
+  // can prove: the route §7 names ANSWERS, on the host that serves it. A
+  // Privacy-Policy link is broken by either end, and this is this end.
   const email = `dsr-link-${Date.now()}@example.com`;
   await signUp(page, email);
-
-  await page.goto('/legal/privacy');
-  const link = page.locator(`a[href="${DATA_PRIVACY_PANE_PATH}"]`);
-  await expect(link).toHaveCount(1);
 
   const response = await page.goto(DATA_PRIVACY_PANE_PATH);
   expect(response?.status()).toBe(200);

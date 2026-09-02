@@ -22,9 +22,12 @@ function doc(overrides: Partial<LegalDocument> & { slug: string }): LegalDocumen
     title: overrides.slug,
     version: '1.0.0',
     effectiveDate: null,
-    status: 'approved',
     changeSummary: null,
-    body: '',
+    // MOTIR-4007: `body` and `status` left `LegalDocument` with the files they
+    // came from; `url` arrived with the manifest. `consent.ts` reads none of
+    // the three, which is exactly why it is UNCHANGED by that swap — this
+    // fixture moving is the whole of its blast radius here.
+    url: `https://motir.co/legal/${overrides.slug}`,
     ...overrides,
   };
 }

@@ -99,16 +99,21 @@ export const STRUCTURAL_GUARD_SPECS = [
   // database, renders nothing, and imports only `tests/helpers/importGraph`, so
   // it carries no coverage into the merged report.
   'tests/theme/namedMaxWidthUtilities.test.ts',
-  // ── tests/legal/ — the subprocessor-list guard (MOTIR-3631) ───────────────
+  // ── tests/legal/ — the EGRESS-MANIFEST guard (MOTIR-3631 · MOTIR-4008) ────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
-  // read against `content/legal/subprocessors.md`, `content/legal/model-providers.md`
-  // and `package.json` — BOTH pages, because the disclosure is split across them
-  // and reading one would let a vendor move to the other and vanish. It opens
-  // no database, renders nothing, and imports nothing from `lib/` or `app/`, so
-  // it carries no coverage into the merged report — but it reads ~1 650 files,
-  // which is precisely the profile this lane exists to keep out of the sharded
-  // database job.
-  'tests/legal/subprocessor-list-guard.test.ts',
+  // read against `package.json` and `lib/legal/egressManifest.ts`.
+  //
+  // ⚠️ ITS SUBJECT CHANGED AND ITS PROFILE DID NOT. It used to read the two
+  // published pages; those left for `motir-marketing` with the documents
+  // (MOTIR-3909), and the EVIDENCE could not follow them — measured there it
+  // would pass forever. So the guard holds this tree against the committed
+  // manifest this application serves, and `motir-marketing` holds its page
+  // against that manifest (`docs/decisions/public-surface-hosts.md`
+  // AMENDMENT 2 §E). It still reads ~1 650 files, which is precisely the
+  // profile this lane exists to keep out of the sharded database job — and it
+  // still opens no database, renders nothing, and imports only a data module
+  // from `lib/`, so it carries no meaningful coverage into the merged report.
+  'tests/legal/egress-manifest-guard.test.ts',
   // ── the 2FA-enforcement guards (Story MOTIR-1215 · MOTIR-3649) ────────────
   // Four at once, and they were DERIVED rather than remembered — which is the
   // whole argument for a mechanical membership predicate. Each walks the tree

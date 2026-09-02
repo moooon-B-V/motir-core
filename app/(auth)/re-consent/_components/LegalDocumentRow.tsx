@@ -1,5 +1,4 @@
-import Link from 'next/link';
-import { FileText } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 /**
@@ -28,14 +27,28 @@ export function LegalDocumentRow({
   title,
   versionLabel,
   summary,
-  slug,
+  url,
   linkLabel,
 }: {
   title: string;
   /** The mono chip's text — a delta, a bare version, or a "new" label. */
   versionLabel: string;
   summary?: string | null;
-  slug: string;
+  /**
+   * The document's ABSOLUTE url from the configured manifest, or `null` when it
+   * is not configured (MOTIR-4010).
+   *
+   * ⚠️ NULL IS A REAL ARM AND IT IS UNCOMFORTABLE ON PURPOSE. It means a CLOUD
+   * build is holding somebody over a document whose url the manifest does not
+   * carry — a misconfiguration, drawn as one
+   * (`design/auth/legal-agreement.mock.html` panel 15). The row keeps everything
+   * that identifies the change and loses only the way out: it does NOT invent a
+   * fallback link, and it does NOT render an "unavailable" string, because a
+   * legal notice that explains our operational problem to the reader has put the
+   * wrong thing on their screen. The operator is told by
+   * `/api/health/legal` instead, which reports the manifest as *faulted*.
+   */
+  url: string | null;
   linkLabel: ReactNode;
 }) {
   return (
@@ -56,12 +69,25 @@ export function LegalDocumentRow({
         {summary ? (
           <span className="font-sans text-[13px] text-(--el-text-secondary)">{summary}</span>
         ) : null}
-        <Link
-          href={`/legal/${slug}`}
-          className="self-start font-sans text-[13px] text-(--el-link) hover:text-(--el-link-pressed) focus-visible:underline focus-visible:outline-none"
-        >
-          {linkLabel}
-        </Link>
+        {/*
+          ⚠️ A PLAIN ANCHOR, NOT `next/link`. The target is an ABSOLUTE url on
+          whatever host the operator publishes — another application — so
+          prefetching and client navigation are wrong for it, and a cross-origin
+          `next/link` looks identical until it is used. The external-link glyph
+          is the shipped treatment (`components/github/DevelopmentSection.tsx`,
+          `components/planning/repositories/RepositoryRow.tsx`), drawn in the
+          link's OWN colour so it reads as part of the link rather than as an
+          adjacent control (`design/auth/legal-agreement.mock.html` panel 13).
+        */}
+        {url ? (
+          <a
+            href={url}
+            className="inline-flex self-start items-center gap-1 font-sans text-[13px] text-(--el-link) hover:text-(--el-link-pressed) focus-visible:underline focus-visible:outline-none"
+          >
+            {linkLabel}
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+          </a>
+        ) : null}
       </span>
     </li>
   );

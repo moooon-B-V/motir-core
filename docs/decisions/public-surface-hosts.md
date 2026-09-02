@@ -284,18 +284,18 @@ as part of MOTIR-3910's sweep, not here.
 
 ## Consequences — §7: what this record binds, card by card
 
-| card                                         | what changes                                                                                                                                                                                                                                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **MOTIR-3945** (the project-subject route)   | **UNCHANGED, and now justified.** §2 records that the subject is the one endpoint the page's own subject lacks.                                                                                                                                                                                        |
-| **MOTIR-3946** (the versioned contract)      | **BOUND by §3.** It must decide where the contract is published, and it must put the drift guard in `motir-core`'s CI rather than the consumer's.                                                                                                                                                      |
-| **MOTIR-3881** (the origin split)            | **UNCHANGED in substance.** §2 is why one variable can no longer answer both questions. Its fallback-to-the-application-origin arm is what makes the split deployable before anything moves.                                                                                                           |
-| **MOTIR-3932** (the rendering move)          | **BOUND by §3 and §8.** Every read goes through the contract; `/docs` may not be a copied spec.                                                                                                                                                                                                        |
-| **MOTIR-3877** (`/p/*`)                      | **BOUND by §4.** The host-only cookie stops being a property to preserve and becomes an assertion it owns.                                                                                                                                                                                             |
-| **MOTIR-3908** (the cloud gate)              | **BOUND by §5.** The gate is the capability, including `app/api/public/*` and the publish affordance — not the pages.                                                                                                                                                                                  |
-| **MOTIR-3909** (`/legal`)                    | **UNCHANGED.** §2 records why this one moves rather than being gated.                                                                                                                                                                                                                                  |
-| **MOTIR-3910** (redirects and registrations) | **NARROWED, materially.** `motir.co`'s address records already point at the `motir-marketing` Fly app, so **there is no apex repoint and no new certificate.** What remains is the 301s, the external registrations and a live smoke.                                                                  |
-| **MOTIR-3878** (per-tenant addressing)       | **GAINS A QUESTION**: §4's reversal condition. It is where the separate-domain decision is taken.                                                                                                                                                                                                      |
-| **`marketing-site-hosting.md`**              | **AMENDED** — see the amendment in that file, dated 2026-08-29. Q3 (CI) and Q4 (subprocessor) stand; Q1's _"where the marketing site runs"_ is unchanged for the site itself but no longer describes the whole public surface, and Q2's apex target is now the record of a state that does not change. |
+| card                                         | what changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-3945** (the project-subject route)   | **UNCHANGED, and now justified.** §2 records that the subject is the one endpoint the page's own subject lacks.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **MOTIR-3946** (the versioned contract)      | **BOUND by §3.** It must decide where the contract is published, and it must put the drift guard in `motir-core`'s CI rather than the consumer's.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **MOTIR-3881** (the origin split)            | **UNCHANGED in substance.** §2 is why one variable can no longer answer both questions. Its fallback-to-the-application-origin arm is what makes the split deployable before anything moves.                                                                                                                                                                                                                                                                                                                                                                             |
+| **MOTIR-3932** (the rendering move)          | **BOUND by §3 and §8.** Every read goes through the contract; `/docs` may not be a copied spec.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **MOTIR-3877** (`/p/*`)                      | **BOUND by §4.** The host-only cookie stops being a property to preserve and becomes an assertion it owns.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **MOTIR-3908** (the cloud gate)              | **BOUND by §5.** The gate is the capability, including `app/api/public/*` and the publish affordance — not the pages.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **MOTIR-3909** (`/legal`)                    | **⚠️ SUPERSEDED 2026-09-01 — was UNCHANGED, and is now BOUND by [AMENDMENT 2](#amendment-2--motir-core-keeps-the-legal-mechanism-and-loses-the-content-a-configured-document-manifest-an-absent-unconfigured-surface-and-a-subprocessor-seam-that-fails-on-divergence-motir-4004-2026-09-01).** §2 records why `/legal` MOVES rather than being gated, and that is still right; what this row missed is that `content/legal/*.md` is also an INPUT to the re-consent gate, so the move is a change of SOURCE and not a deletion. AMENDMENT 2 §A carries the measurement. |
+| **MOTIR-3910** (redirects and registrations) | **NARROWED, materially.** `motir.co`'s address records already point at the `motir-marketing` Fly app, so **there is no apex repoint and no new certificate.** What remains is the 301s, the external registrations and a live smoke.                                                                                                                                                                                                                                                                                                                                    |
+| **MOTIR-3878** (per-tenant addressing)       | **GAINS A QUESTION**: §4's reversal condition. It is where the separate-domain decision is taken.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **`marketing-site-hosting.md`**              | **AMENDED** — see the amendment in that file, dated 2026-08-29. Q3 (CI) and Q4 (subprocessor) stand; Q1's _"where the marketing site runs"_ is unchanged for the site itself but no longer describes the whole public surface, and Q2's apex target is now the record of a state that does not change.                                                                                                                                                                                                                                                                   |
 
 ---
 
@@ -537,3 +537,349 @@ is the anonymous eight. What it does change is the DOCUMENT — the public
 contract declares the 401 on each of the four rather than implying a uniformly
 anonymous surface (MOTIR-3990), and declares no security scheme for the precise
 reason that there is no credential its reader can present.
+
+---
+
+## AMENDMENT 2 — `motir-core` keeps the legal MECHANISM and loses the CONTENT: a configured document manifest, an absent unconfigured surface, and a subprocessor seam that fails on divergence (MOTIR-4004, 2026-09-01)
+
+§7 records MOTIR-3909 as **UNCHANGED**, on the ground that §2 already says
+`/legal` moves rather than being gated. That row is superseded by this
+amendment, and the reason it was wrong is worth stating before the decisions:
+**`content/legal/*.md` is not only rendered copy.** It is an INPUT to the
+re-consent gate, and no section of this record had asked what the gate reads
+once the files leave.
+
+### §A — The measurement this amendment is built on
+
+Read on `motir-core` `origin/main` `5fb216b21`, 2026-09-01.
+
+| reading                        | command                                                                                                   | result                                                                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| non-test callers of the loader | `git grep -n "listLegalDocuments\|getLegalDocument" -- ':!lib/legal/documents.ts'`                        | `app/(public)/legal/{page,[slug]/page}.tsx`, **`app/(auth)/re-consent/page.tsx`**, **`lib/services/legalAcceptanceService.ts`**, + 6 tests |
+| what `content/` holds          | `git ls-tree origin/main content/ --name-only`                                                            | `content/legal`, and nothing else                                                                                                          |
+| the referrer population        | `git grep -l -E "content/legal\|lib/legal\|'/legal\|\"/legal\|legalDocument\|LegalAcceptance\|reconsent"` | 84 files                                                                                                                                   |
+
+**The two RUNTIME entry points are the finding.**
+`legalAcceptanceService.recordAcceptance` runs from the Better-Auth
+`user.create.after` hook on **every sign-up**;
+`legalAcceptanceService.resolveOutstanding` runs from `resolveReconsentHold` in
+the `(authed)`, `(onboarding)` and `(planning)` layouts on **every signed-in
+page load**. Both call `listLegalDocuments()`, which is a `readdirSync` of
+`content/legal/`. The front-matter `version` is what `lib/legal/consent.ts`
+reads to decide materiality — which is how `terms.md` §14's promise, _"we will
+not treat silence as agreement to a material change"_, is actually kept.
+
+**So the naive removal fails SILENTLY, and every layer is deliberately built to
+let it.** `recordAcceptance` carries an explicit _"NO EMPTY-SET GUARD HERE,
+DELIBERATELY"_; `createMany` returns 0 for an empty batch without touching the
+database; `outstandingReconsent` answers `[]` for an empty document list; and
+`app/(auth)/re-consent/page.tsx` branches on `terms ? … : null`. Each of those
+is correct on its own terms and documented. Composed, they mean a deployment
+with no documents records no acceptances and holds nobody — with no error, no
+exception and no red test.
+
+### §B — The rung-1 reading, which is where this amendment started
+
+`plan-rules/core.md`'s decision-authority ladder puts the mirror product above
+everything except shipped reality, and a remembered claim is not a check. Four
+open-core products were read on 2026-09-01, in their own repositories:
+
+| product        | does the VENDOR's policy TEXT ship in the open repo?                                         | what a SELF-HOSTED install links to                                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mattermost** | **No.** `SupportSettings.TermsOfServiceLink` / `PrivacyPolicyLink` are per-deployment CONFIG | the operator's URL — but the shipped **DEFAULT is the vendor's own**, `https://mattermost.com/pl/terms-of-use/`                              |
+| **Plane**      | **No.** Two **hardcoded** absolute URLs in one shared sign-up component                      | `https://plane.so/legals/{terms-and-conditions,privacy-policy}`, unconditionally, for every self-hoster                                      |
+| **Sentry**     | **No.** `https://sentry.io/privacy/` is linked from ONE screen                               | the vendor's policy — correctly, because that screen is the self-hosted telemetry-beacon consent, a feature Sentry Inc. itself operates      |
+| **GitLab**     | **No.** No policy directory at the repository root                                           | `about.gitlab.com/terms` cited in SUBSCRIPTION documentation — i.e. in prose about buying from the vendor, not as the deployment's own terms |
+
+**Unanimous on the thing this story is doing: none of the four ships the
+vendor's policy text in the tree.** That is the strongest support this record
+can have for the removal, and it is a measurement rather than an intuition.
+
+**They differ from us on Q2, and the record answers that rather than omitting
+it.** Mattermost DEFAULTS an unconfigured deployment to the vendor's own terms;
+Plane hardcodes them. Our Q2 below is stricter than both. The ladder's rule is
+that a deviation from the mirror needs a concrete reason — and here it is the
+mirrors themselves: **Plane's shipped behaviour is precisely the defect
+MOTIR-3909 exists to remove**, a self-hoster's own sign-up page telling their own
+employees they agree to another company's Terms. Mattermost's default is the
+same shape with a settings page in front of it. Copying either would move
+moooon's contract text out of the tree and leave moooon's contract _link_ in it.
+
+**And Mattermost supplies the positive precedent for Q1**, which is the more
+useful half: `CustomTermsOfServiceEnabled` plus
+`SupportSettingsDefaultReAcceptancePeriod = 365` is a shipped product in which
+**the operator supplies the terms and the PRODUCT supplies the mechanism and the
+re-acceptance clock**. That is exactly the shape decided below, in a comparable
+product, already in production.
+
+### §C — Q6: what does `motir-core` read once `content/legal/` leaves?
+
+#### The decision
+
+**A CONFIGURED LEGAL-DOCUMENT MANIFEST.** `lib/legal/documents.ts` keeps its
+purpose and changes its SOURCE, from the filesystem to configuration.
+
+| field           | type             | meaning                                                                                               |
+| --------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `slug`          | `string`         | the document's stable identifier — what an acceptance row is keyed on, and what `consent.ts` matches  |
+| `title`         | `string`         | the human name, rendered on the re-consent row                                                        |
+| `version`       | `string`         | semver, verbatim. **The load-bearing field**: `consent.ts` reads its components to decide materiality |
+| `effectiveDate` | `string \| null` | when it comes into force, or `null` while not yet set — the existing `null` contract, unchanged       |
+| `changeSummary` | `string \| null` | one sentence on what moved, or `null`. Already a supported null (the design names the degraded form)  |
+| `url`           | `string`         | the **absolute** URL of the published document, on whatever host the operator publishes               |
+
+**`body` GOES**, and that is what makes this a source swap rather than a
+redesign: **no surviving caller reads it.** The two pages that did are leaving.
+
+**The shape is ONE environment variable holding a JSON array —
+`MOTIR_LEGAL_DOCUMENTS` — and the array's ORDER is authoritative.**
+
+- One variable, because the consumer is `fly secrets set` (the hosted
+  deployment) or a single line in a self-hoster's env. A config module read from
+  a committed file would put a _file_ back in the repository, which is the thing
+  being removed; a per-document variable set makes seven documents seven
+  secrets and makes "which documents exist" unanswerable without enumerating
+  variable names.
+- **The order is the operator's**, so `PREFERRED_ORDER` and `byPreferredOrder`
+  are REMOVED rather than kept. The constant existed because a directory listing
+  has no order. An authored array does, and a hardcoded list in the open product
+  re-sorting an operator's manifest imposes moooon's document ordering on every
+  self-hoster — a smaller instance of exactly what this story is undoing.
+
+**Downstream is unchanged in shape.** `lib/legal/consent.ts` stays pure and keeps
+`RECONSENT_DOCUMENT_SLUGS` closed at three; `legalAcceptanceService` keeps its
+read-at-call-time contract (its no-cache argument holds a fortiori — parsing a
+string is cheaper than the `readdirSync` it replaces); `reconsentGate` is
+untouched.
+
+#### Validation — and this is the half that can make the gate WRONG rather than absent
+
+`parseSemanticVersion` returns `null` for a version it cannot read, and
+`isMaterialChange` then answers **true**. So a single typo in a manifest entry
+does not degrade to _absent_ — it holds **every signed-in reader** at
+`/re-consent`, on a screen they cannot clear, across the whole product.
+
+**DECIDED: an entry that does not validate is REJECTED — it never reaches
+`listLegalDocuments()` — AND the rejection is LOUD.** Loud means three things,
+and the third is the one that matters:
+
+1. it logs at error level, naming the offending `slug` (or its index) and the
+   field that failed;
+2. the deployment's health / preflight surface reports the manifest as
+   **faulted**, not as unconfigured — _unconfigured_ and _misconfigured_ must
+   never render as the same state;
+3. **a rejected entry whose `slug` is in `RECONSENT_DOCUMENT_SLUGS` is a
+   separately named condition**, because that is the case where the gate quietly
+   stops asking for a document it is supposed to gate on.
+
+| Alternative                                                           | Why rejected                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Refuse to boot on a malformed manifest**                            | A typo in a legal-copy value must not be able to take sign-in down. It makes the blast radius of editing a version string the entire application, and the operator most likely to make the edit is the one least able to roll it back.                                                    |
+| **Let the malformed entry through and let `isMaterialChange` decide** | It answers `true` for an unparseable version — by design, and rightly, since an unreadable version is one whose materiality nobody can rule out. But that arm was written for a version in a file we control; applied to operator input it converts a typo into a total signed-in outage. |
+| **Reject silently and treat as unset**                                | This is the failure the whole story exists to prevent, arrived at from the other side: a legal gate that stops holding people, with nothing to see. The rejection is right; the SILENCE is what is rejected here.                                                                         |
+| **Reject the WHOLE manifest when any entry is bad**                   | One malformed optional document would disable the gate for the three that govern it. Per-entry keeps the failure proportional to the fault.                                                                                                                                               |
+
+### §D — Q7: what does an UNCONFIGURED build do?
+
+#### The decision
+
+**Nothing legal renders, and nobody is held. The surface is ABSENT, not
+degraded** — the same line §5 draws for public projects, one document over.
+
+| surface                  | with `MOTIR_LEGAL_DOCUMENTS` unset                                                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **sign-up notice**       | **ABSENT.** The whole `<p>` does not render. **Not re-flowed to plain text** — see below                                                                  |
+| **the rail's Legal row** | **ABSENT.** `SidebarNav`'s bottom section renders without it, exactly as it renders without any other row it is not given                                 |
+| **the re-consent rows**  | **UNREACHABLE.** `outstandingReconsent` answers `[]`, so nothing holds anybody and the screen is never rendered. Reached directly, it has no rows to draw |
+| **the re-consent gate**  | **HOLDS NOBODY**, and stays `MOTIR_CLOUD`-gated — see below                                                                                               |
+| **acceptance recording** | **WRITES NOTHING**, which is correct: there is no document to record an acceptance of                                                                     |
+
+**⚠️ AMENDED 2026-09-02 (MOTIR-4010) — what the rail row points at when it IS
+configured, which this section left open.** The table above answers the
+unconfigured arm, and §C's field set is per-DOCUMENT, so the manifest carries no
+index url — while the rail row is a door to the SET rather than to a document.
+The gap was found by building it.
+
+**DECIDED: the index is DERIVED from the urls the operator already supplied — if
+every configured url is `<base>/<slug>`, the index is `<base>` — and where that
+does not hold the row is ABSENT rather than guessed.** It holds for the hosted
+arrangement (`https://motir.co/legal/<slug>`) and for any operator who publishes
+a document set at one place, which is what having an index means. An operator
+publishing at unrelated addresses — `acme.com/terms-of-service`,
+`legal.acme.com/privacy` — genuinely has no index for the row to point at, and
+sending a reader to an invented one is worse than sending them nowhere. Sign-up
+and the re-consent rows still link each document directly, so nothing becomes
+unreachable; what is missing is a single door, which is exactly what is missing
+in reality. `lib/legal/links.ts`'s `legalIndexUrl()` is the implementation, and
+`tests/legal/legalLinks.test.ts` pins both arms.
+
+| Alternative                                         | Why rejected                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Add an `indexUrl` to the manifest**               | The cleanest answer, and it needs a SHAPE change: the manifest is a JSON array, so an index would make it an object. That widens the operator's configuration and re-opens a contract §C settled, for a row derivable from data they already supply. Worth revisiting if a second set-level value ever appears — one is not a shape. |
+| **Point the row at the first document**             | It is a door to the SET. Landing a reader on the Terms when they asked for _Legal_ is a wrong answer wearing a right one.                                                                                                                                                                                                            |
+| **Keep the row pointing at the old `/legal` route** | That route is deleted by the story after this one, so the row would 404 by design.                                                                                                                                                                                                                                                   |
+| **Drop the rail row entirely**                      | It is a shipped affordance and the hosted arrangement has a perfectly good index. Removing it for every operator to avoid deriving it for some is the wrong trade.                                                                                                                                                                   |
+
+**⚠️ The sign-up notice is ABSENT rather than re-flowed, and this reverses the
+form MOTIR-3909 was authored with.** The string is
+`legal.signUpNotice` — _"By creating a Motir account you agree to our
+`<terms>`Terms of Service`</terms>` and `<privacy>`Privacy Policy`</privacy>`."_
+The entire sentence is ABOUT the two documents. Rendering it with the anchors
+turned into plain text does not produce a weaker notice; it produces a **false
+one** — an assertion that the reader has agreed to documents that do not exist
+and that nobody has published. A self-hoster running Motir for their own team
+has no Terms of Service, and the honest sign-up form is one that does not claim
+otherwise.
+
+It is also the cheapest form available: it needs **no new copy string and no
+`zh` twin**, so there is no new catalogue key to keep in parity. `signUpNotice`
+survives, unchanged, for the configured case.
+
+> **Consequence for three sibling cards, applied here rather than left as
+> prose** (`plan-rules`' _a decision recorded beside a card does not re-scope the
+> card_): MOTIR-3909's verification recipe, MOTIR-4006's design and MOTIR-4015's
+> E2E were each written for _"re-flows without its two links"_ / _"reads as a
+> finished sentence"_. Those clauses are amended on their own cards in the same
+> pass that writes this record. A record that decides one thing while three
+> cards instruct a runner to build another is a record nobody follows.
+
+**And the gate stays `MOTIR_CLOUD`-gated — DECIDED here, not deferred.**
+`isMotirCloud()`'s own comment says it answers _"is moooon B.V. the counterparty
+to these documents?"_. A configured manifest does not answer that question: an
+operator who publishes their own terms has not thereby acquired moooon's
+re-consent semantics, its thirty-day DPA objection window or its §14 materiality
+promise. Widening it is a product decision this record explicitly does not make
+and does not owe a follow-up card, because nothing in MOTIR-3909 depends on it.
+
+| Alternative                                                      | Why rejected                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Default the manifest to moooon's published URLs** (Mattermost) | It is §B's own finding: it moves the TEXT out of the tree and leaves the LINK in it, so every self-hoster still points their users at another company's contract. The problem was never where the bytes render. |
+| **Render the notice as plain text with no links** (as authored)  | A statement that a reader agrees to documents nobody published. A weaker link is a degradation; an unlinkable claim is a false one.                                                                             |
+| **Ship a second "no legal documents configured" string**         | A sign-up form is not the place to tell a user about the operator's configuration. It also buys a new key in two catalogues, with a `zh` twin to keep in parity, to say something no reader needs.              |
+| **Point the unconfigured build at a generic template**           | There is no such document, and inventing one would be moooon drafting terms on behalf of a stranger's deployment.                                                                                               |
+
+### §E — Q8: where does the subprocessor guard's evidence live?
+
+`tests/legal/subprocessor-list-guard.test.ts` holds
+`content/legal/{subprocessors,model-providers}.md`'s vendor rows against
+**`motir-core`'s own** `package.json` dependencies and the outbound host
+literals in `lib/` and `app/` (`tests/helpers/subprocessorRegistry.ts`'s
+`VENDOR_SIGNATURES`). **The page moves; the evidence cannot.** Deleting the
+guard is not available: its own header records the page going stale FOUR times
+on 2026-08-26/27, each caught by a person who happened to look.
+
+#### The decision
+
+**Split it at the repository line, and give each half to the repository that
+owns the thing it measures — which is §3's rule (_the guard belongs in the
+PRODUCING repository_) applied per side.**
+
+| half                | lives in          | asserts                                                                                                                              | fires when                                                            |
+| ------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| **the MEASUREMENT** | `motir-core`      | the committed **egress manifest** still equals what the tree measures — dependencies and outbound hosts, through `VENDOR_SIGNATURES` | somebody adds a dependency or an outbound host and does not update it |
+| **the DISCLOSURE**  | `motir-marketing` | every vendor row on its `subprocessors.md` / `model-providers.md` has a manifest entry, **and every manifest entry has a row**       | the published page and the software's actual egress disagree          |
+
+**The `motir-core` half is the load-bearing one**, and it is why the split is
+this way round rather than the reverse. It fires **on the pull request that adds
+the dependency, in the repository that added it, before it ships** — which is
+instance 3's exact shape, preserved whole. A guard that lived only in the
+consumer would report that `motir-core` broke a published legal page after it
+had already shipped: §3's smoke alarm in the wrong building.
+
+**The manifest is a COMMITTED artifact in `motir-core`, SERVED at a versioned
+public path, and FETCHED by the consumer.** It carries only what the guard can
+actually see — the vendor name and the evidence that makes it live (the package,
+the host). It carries **nothing** about transfer bases, regions or the deployed
+platform: the existing guard's header already records that those need a
+credential CI does not have and a judgement CI cannot make, and putting them in
+a machine-checked artifact would license exactly the belief that let instance 3
+through.
+
+#### The transport, and the coupling this record is required to state
+
+**MOTIR-3909's Q3 asks the same question §8's cost 3 raised for `/docs`, and the
+answer must be the same one or one of the two records is wrong. It is the same
+one.** MOTIR-3932 answered `/docs` in MOTIR-4046, and the answer is shipped and
+readable:
+
+- `motir-marketing` `lib/docs.ts` fetches `${APP_ORIGIN}/api/openapi/v1.json`
+  fresh, with the comment _"This repository consumes that published artifact
+  rather than copying a spec that would drift"_;
+- `motir-marketing` `tests/docs/docs.test.ts` asserts **structurally** that the
+  source fetches the published URL and that **no copied artifact is committed**
+  (`existsSync('content/docs') === false`).
+
+**So: a SERVED, VERSIONED artifact the consumer FETCHES — never a committed
+copy — and a repository-local guard that the consumption is still of the
+published artifact.** The egress manifest takes the same transport and the same
+guard shape. §8's sentence governs both: _a published artifact `motir-core`
+emits and the consumer installs does not rot; a copied spec does._
+
+**The requirement this record imposes is the PROPERTY, not the transport: the
+seam must FAIL when the two sides diverge.** A copy with no drift check does not
+satisfy it, whatever else is true of it.
+
+#### ⚠️ The cost, stated as a cost: the seam is TWO failures, not one, and there is a window between them
+
+A new vendor turns `motir-core`'s guard red on the pull request that adds it.
+Updating the manifest turns it green — and the published page is still wrong
+until `motir-marketing`'s own CI runs and somebody edits the page. **That window
+is real and this record does not close it**, because closing it would mean one
+repository's CI blocking on another's, which is the coupling the whole split
+exists to avoid.
+
+What it does instead: **`motir-core`'s guard failure message NAMES the page and
+the repository**, so the person holding the red check is told where the other
+half is. That is a mitigation, not a fix, and it is written here as a cost so
+that nobody later reads a green `motir-core` build as evidence that a published
+legal document is accurate.
+
+| Alternative                                                         | Why rejected                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Move the whole guard with the page**                              | It would measure a marketing website's dependency tree against a disclosure about the application — passing for ever, on evidence that has nothing to do with the software the page is about. This is the cheap answer and it is a lie. |
+| **Delete the guard**                                                | The page went stale four times in two days while a person was watching. Not available for a document an auditor reads.                                                                                                                  |
+| **Commit a copy of the manifest into `motir-marketing`**            | Rejected by §8 and by MOTIR-4046's shipped answer for the same class of artifact. A copy with no drift check is the failure mode, and a copy WITH one needs the fetch anyway.                                                           |
+| **Keep both halves in `motir-core` by fetching the published page** | Inverts the direction: `motir-core`'s CI would depend on a live marketing site, and a red build in the producing repository would be caused by a change in the consumer.                                                                |
+
+### §F — What this amendment changes about §7
+
+**§7's `MOTIR-3909` row is SUPERSEDED.** It read **UNCHANGED**, and it was
+written before anyone had asked what the re-consent gate reads once
+`content/legal/` leaves. The row now reads **BOUND by this amendment**, and the
+table above carries it.
+
+### §G — What this amendment deliberately does NOT decide
+
+- **Whether the re-consent gate should ever be available to a self-hoster.**
+  §D keeps it `MOTIR_CLOUD`-gated with its reason. No card is owed.
+- **The `motir-marketing` page's layout or copy.** MOTIR-3932's, and shipped.
+- **How the egress manifest is generated** (a script, a test fixture, a build
+  step) — MOTIR-4008's, within the property §E requires.
+- **The manifest's own versioning.** It is an internal artifact between two
+  repositories under one owner, not a public contract with third-party readers;
+  if it ever gains one, AMENDMENT 1 §D is the policy to copy.
+
+### Sources
+
+- `motir-core` `origin/main` `5fb216b21`, 2026-09-01 — `lib/legal/documents.ts`,
+  `lib/legal/consent.ts`, `lib/legal/reconsentGate.ts`,
+  `lib/services/legalAcceptanceService.ts`, `lib/billing/availability.ts`,
+  `app/(auth)/sign-up/_components/SignUpCard.tsx`,
+  `app/(authed)/_components/SidebarNav.tsx`,
+  `tests/legal/subprocessor-list-guard.test.ts`,
+  `tests/helpers/subprocessorRegistry.ts`, `messages/{en,zh}.json`
+- `motir-marketing` `origin/main` — `lib/docs.ts`, `tests/docs/docs.test.ts`,
+  `content/legal/` (the seven documents, shipped by MOTIR-3932)
+- Mattermost — https://github.com/mattermost/mattermost/blob/master/server/public/model/config.go
+  (`SupportSettingsDefaultTermsOfServiceLink`, `SupportSettings.TermsOfServiceLink`,
+  `SupportSettingsDefaultReAcceptancePeriod`); `CustomTermsOfServiceEnabled` in
+  https://github.com/mattermost/mattermost/blob/master/webapp/channels/src/components/admin_console/custom_terms_of_service_settings/custom_terms_of_service_settings.tsx
+- Plane — https://github.com/makeplane/plane/blob/preview/apps/web/core/components/account/terms-and-conditions.tsx
+  (hardcoded `https://plane.so/legals/*`)
+- Sentry — https://github.com/getsentry/sentry/blob/master/static/app/views/beaconConsent/index.tsx
+  (`https://sentry.io/privacy/`, on the self-hosted beacon consent screen)
+- GitLab — no policy directory at the repository root of
+  https://github.com/gitlabhq/gitlabhq ; `about.gitlab.com/terms` appears only in
+  subscription documentation (`doc/subscriptions/*`)
+- `docs/decisions/legal-document-set.md` §7 (the seven-document set),
+  `billing-tiering.md` §6 (`MOTIR_CLOUD` is explicit, never inferred)

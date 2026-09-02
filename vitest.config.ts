@@ -231,6 +231,10 @@ export default defineConfig({
         // candidate like any other file rather than an impossibility.)
         'lib/legal/consent.ts',
         'lib/legal/documents.ts',
+        // MOTIR-4010 — where the three legal surfaces point once the documents are
+        // configuration. Pinned with its siblings: a wrong answer here is a link
+        // to a document nobody published, or a rail door that vanishes.
+        'lib/legal/links.ts',
         'lib/legal/reconsentGate.ts',
         'lib/repositories/legalAcceptanceRepository.ts',
         'lib/services/legalAcceptanceService.ts',
@@ -1904,6 +1908,12 @@ export default defineConfig({
           statements: 90,
         },
         'lib/legal/documents.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/legal/links.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

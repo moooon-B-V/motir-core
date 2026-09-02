@@ -9,6 +9,7 @@ import {
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
   E2E_PROVISIONING_ORG,
 } from './tests/e2e/_helpers/github-const';
+import { E2E_LEGAL_DOCUMENTS_JSON } from './tests/e2e/_helpers/legal-manifest';
 
 // The CLOUD-ON regression lane (Subtask 8.1.10, widened by MOTIR-2849).
 //
@@ -110,6 +111,16 @@ process.env['E2E_JOB_WORKER'] ??= '1';
 // The cloud gate the billing surfaces read — also set for the runner process so
 // seed-side service reads see the same cloud state the server does.
 process.env['MOTIR_CLOUD'] ??= 'true';
+// ⚠️ THE LEGAL MANIFEST, ON THE RUNNER TOO — AND IT IS NOT OPTIONAL HERE
+// (MOTIR-4015). `motir-core` reads its legal documents from configuration now
+// (MOTIR-4007); an unset variable is a VALID state meaning "this operator
+// published none", and on that build `outstandingReconsent` has nothing to
+// compare and the re-consent gate holds nobody. So without this line
+// `cloud-legal-reconsent.spec.ts` does not go red in an informative way — it
+// asserts a hold that the build can no longer perform. The runner needs the SAME
+// value as the webServer because that spec calls `listLegalDocuments()` itself
+// to learn the published versions it then expects on the screen.
+process.env['MOTIR_LEGAL_DOCUMENTS'] ??= E2E_LEGAL_DOCUMENTS_JSON;
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 
@@ -181,6 +192,12 @@ export default defineConfig({
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
         MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
+        // The configured legal manifest (MOTIR-4015) — the same value the runner
+        // above reads, from the same module, so the two cannot drift. Its URLs
+        // sit under the synthetic public origin on the line above, which is
+        // deliberately unreachable: every assertion reads the `href`, none
+        // follows it.
+        MOTIR_LEGAL_DOCUMENTS: E2E_LEGAL_DOCUMENTS_JSON,
         // ── The prod-build harness (MOTIR-1682) ──
         // `next start` forces NODE_ENV=production; this re-relaxes ONLY the test
         // seams (Secure cookies / the `/api/_test` 404 gate / 'file' email — see

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { RECONSENT_DOCUMENT_SLUGS } from '@/lib/legal/consent';
+import { setLegalManifest } from '../helpers/legalManifest';
 
 // THE RE-CONSENT GATE (Story 8.4 · Subtask MOTIR-1135) — what holds a signed-in
 // reader, where it sends them, and the three things it must NEVER do: hold a
@@ -33,6 +34,12 @@ async function makeCurrentUser(email: string) {
   return user;
 }
 
+// ⚠️ THE MANIFEST IS CONFIGURED FOR THIS SUITE (MOTIR-4007). The gate reads its
+// documents through `legalAcceptanceService`, which reads `MOTIR_LEGAL_DOCUMENTS`
+// rather than `content/legal/` — so an unconfigured test process holds NOBODY,
+// which is correct behaviour and would make every assertion below vacuous.
+const restoreManifest = setLegalManifest();
+
 describe('resolveReconsentHold', () => {
   beforeEach(async () => {
     await truncateAuthTables();
@@ -45,6 +52,7 @@ describe('resolveReconsentHold', () => {
   });
 
   afterAll(async () => {
+    restoreManifest();
     await db.$disconnect();
   });
 

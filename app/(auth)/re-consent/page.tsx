@@ -56,14 +56,14 @@ export default async function ReconsentPage({
   const session = await getSession();
   if (!session) {
     // The deferred screen links the reader to the Terms without signing in, so
-    // it needs the document's title and version — a filesystem read, with no
-    // session and no database behind it. `null` if the file is ever absent; the
-    // row simply does not render, and the screen still says the thing it exists
-    // to say.
+    // it needs the document's title, version and url — a manifest read
+    // (MOTIR-4007), with no session and no database behind it. `null` if the
+    // manifest does not carry it; the row simply does not render, and the screen
+    // still says the thing it exists to say.
     const terms = getLegalDocument('terms');
     return (
       <ReconsentDeferred
-        terms={terms ? { slug: terms.slug, title: terms.title, version: terms.version } : null}
+        terms={terms ? { title: terms.title, version: terms.version, url: terms.url } : null}
       />
     );
   }

@@ -88,19 +88,24 @@ describe('the map is TOTAL over both surfaces', () => {
     // not under `/settings/`, which is the only reason it is named here rather
     // than swept up by the prefix skip below.
     //
-    // `/legal` (MOTIR-1134) is exempt for exactly the reasons `/docs` is, and the
-    // two now stand or fall together: same ungated footer group, same `(public)`
-    // route group, readable with no session at all. A project permission cannot
-    // sensibly gate the Privacy Policy — GDPR Art. 13 owes it to a person who has
-    // not signed up yet — so a map entry would be a claim nothing enforces, and
-    // one that would be WRONG if anything did.
-    const exempt = new Set([
-      '/onboarding',
-      '/settings/project',
-      '/settings/workspace',
-      '/docs',
-      '/legal',
-    ]);
+    // The legal row is exempt for exactly the reasons `/docs` is, and the two
+    // stand or fall together: same ungated footer group, same off-shell target,
+    // readable with no session at all. A project permission cannot sensibly gate
+    // the Privacy Policy — GDPR Art. 13 owes it to a person who has not signed
+    // up yet — so a map entry would be a claim nothing enforces, and one that
+    // would be WRONG if anything did.
+    //
+    // ⚠️ IT IS NOT IN THE SET BELOW, AND ITS ABSENCE IS NOT AN EXCEPTION BEING
+    // DROPPED (MOTIR-4010). The row's href is `legalIndexUrl` — a prop, not a
+    // literal — because the documents left this repository and live wherever the
+    // operator publishes them. `hrefsIn` scans for `href: '…'` and therefore
+    // cannot see this row at all, so an exemption keyed on `/legal` would be a
+    // dead entry: it would exempt a string the sidebar no longer contains, and
+    // go on doing so silently. The property it stood for is pinned directly in
+    // the test below, against the shape the row actually has now. Leaving the
+    // entry here would also mask a real regression — a future edit that puts a
+    // LITERAL `/legal` back into `primaryItems` should fail this test loudly.
+    const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace', '/docs']);
     for (const href of hrefsIn(SIDEBAR)) {
       if (exempt.has(href) || href.startsWith('/settings/')) continue;
       expect(known.has(href), `SidebarNav offers ${href}, which the map does not carry`).toBe(true);
@@ -123,13 +128,36 @@ describe('the map is TOTAL over both surfaces', () => {
     expect(bottom, 'the footer section marker moved — re-check the public rows').toBeGreaterThan(
       -1,
     );
-    for (const href of ['/docs', '/legal']) {
+    for (const href of ['/docs']) {
       expect(
         SIDEBAR.indexOf(`href: '${href}'`),
         `${href} left the ungated footer group`,
       ).toBeGreaterThan(bottom);
       expect(canOfferNavDestination(href, ADMIN)).toBe(false);
     }
+
+    // ⚠️ THE LEGAL ROW IS PINNED SEPARATELY BECAUSE IT NO LONGER HAS A LITERAL
+    // HREF (MOTIR-4010), NOT BECAUSE IT IS HELD TO A WEAKER STANDARD. It renders
+    // from `legalIndexUrl`, so the string this loop looks for is gone and the
+    // assertion above would have failed at `indexOf` returning -1 — which is
+    // what it did. The property is unchanged and is what is asserted here: the
+    // row sits AFTER the footer marker, so it is never filtered through
+    // `canOfferNavDestination` and cannot disappear for some actors and not
+    // others. That is the whole point of pinning it — a Privacy Policy missing
+    // from the shell for a subset of people is a hole nobody reports.
+    const legalHref = SIDEBAR.indexOf('href: legalIndexUrl');
+    expect(legalHref, 'the legal row no longer renders from legalIndexUrl').toBeGreaterThan(-1);
+    expect(legalHref, 'the legal row left the ungated footer group').toBeGreaterThan(bottom);
+
+    // …and the second half of MOTIR-4010: ABSENT rather than dead. An
+    // unconfigured build has nowhere to point the row, and a link to nothing is
+    // worse than no link, so the row is spread in conditionally. Pinned here
+    // because the conditional is the only thing standing between a self-hosted
+    // build and a rail row that 404s.
+    expect(
+      SIDEBAR.slice(bottom),
+      'the legal row is no longer conditional on there being somewhere to point it',
+    ).toContain('...(legalIndexUrl');
   });
 
   it('every palette navigation goes through offerNav or an explicit requirement', () => {

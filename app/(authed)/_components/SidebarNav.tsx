@@ -118,6 +118,16 @@ export interface SidebarNavProps {
    * every count, so a caller that forgets to thread it fails closed.
    */
   workspaceTierRevealed?: boolean;
+  /**
+   * Where the rail's `Legal` row points, or `null` when the deployment has
+   * configured no legal documents (MOTIR-4010).
+   *
+   * Resolved on the SERVER by `app/(authed)/layout.tsx` via
+   * `lib/legal/links.ts`, because the manifest is a server-side read and this is
+   * a client component. **Defaults `null`** — an omitted prop draws no row,
+   * which is the honest failure: a door pointing nowhere is worse than no door.
+   */
+  legalIndexUrl?: string | null;
 }
 
 function isActive(pathname: string, match: string): boolean {
@@ -154,6 +164,7 @@ export function SidebarNav({
   settingsPermissions,
   user,
   workspaceTierRevealed = false,
+  legalIndexUrl = null,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -495,20 +506,34 @@ export function SidebarNav({
         label: t('nav.docs'),
         href: '/docs',
       },
-      {
-        // The legal set (MOTIR-1134). Same shape as the `/docs` row above and
-        // for the same reasons: a `(public)` route reached from the authed
-        // shell, so it takes no `active` arm — this rail is never on screen at
-        // `/legal` and `pathname` can never match.
-        //
-        // It sits HERE rather than in a footer because the authed shell has no
-        // footer to put it in. The card asked for one "where appropriate", and
-        // inventing a footer for three links would be a surface the design does
-        // not draw; this bottom section already carries the non-product doors.
-        icon: <Scale />,
-        label: t('nav.legal'),
-        href: '/legal',
-      },
+      // The legal set (MOTIR-1134), now CONDITIONAL (MOTIR-4010). Same shape as
+      // the `/docs` row above and for the same reasons: an off-shell target, so
+      // it takes no `active` arm — this rail is never on screen at the legal
+      // documents and `pathname` can never match.
+      //
+      // It sits HERE rather than in a footer because the authed shell has no
+      // footer to put it in. The card asked for one "where appropriate", and
+      // inventing a footer for three links would be a surface the design does
+      // not draw; this bottom section already carries the non-product doors.
+      //
+      // ⚠️ ABSENT WHEN THERE IS NOWHERE TO POINT IT. The documents left this
+      // repository (MOTIR-3909) and live wherever the operator publishes them,
+      // so `legalIndexUrl` is `null` on a build that has configured none — and
+      // then the row does not render at all. Absent, not disabled and not
+      // empty-stated: the same line the rest of this epic draws for a capability
+      // that is not configured, and the arm
+      // `design/auth/legal-agreement.mock.html` panel 14 draws beside its
+      // configured twin. Nothing else about the section moves; the difference is
+      // exactly one row.
+      ...(legalIndexUrl
+        ? [
+            {
+              icon: <Scale />,
+              label: t('nav.legal'),
+              href: legalIndexUrl,
+            },
+          ]
+        : []),
     ],
   });
 

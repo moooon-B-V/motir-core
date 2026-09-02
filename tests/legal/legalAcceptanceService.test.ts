@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, beforeAll } from 'vitest';
 import { db } from '@/lib/db';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 import { listLegalDocuments } from '@/lib/legal/documents';
@@ -6,6 +6,7 @@ import { RECONSENT_DOCUMENT_SLUGS } from '@/lib/legal/consent';
 import { legalAcceptanceRepository } from '@/lib/repositories/legalAcceptanceRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setLegalManifest } from '../helpers/legalManifest';
 
 // `legalAcceptanceService` against a REAL Postgres (Story 8.4 · Subtask
 // MOTIR-1135) — the repo's testing contract, and the only way to test the thing
@@ -36,12 +37,24 @@ function publishedReconsentVersions(): Record<string, string> {
   );
 }
 
+// ⚠️ THE MANIFEST IS CONFIGURED FOR THIS SUITE (MOTIR-4007). `lib/legal/documents.ts`
+// reads `MOTIR_LEGAL_DOCUMENTS` rather than `content/legal/`, so a test process is
+// an UNCONFIGURED deployment and `listLegalDocuments()` answers `[]` — correctly.
+// This suite is about the SEAM behaving over a configured set, so it configures
+// one; `tests/legal/legalDocuments.test.ts` owns the unconfigured arm.
+let restoreManifest: () => void;
+
 describe('legalAcceptanceService', () => {
+  beforeAll(() => {
+    restoreManifest = setLegalManifest();
+  });
+
   beforeEach(async () => {
     await truncateAuthTables();
   });
 
   afterAll(async () => {
+    restoreManifest?.();
     await db.$disconnect();
   });
 
