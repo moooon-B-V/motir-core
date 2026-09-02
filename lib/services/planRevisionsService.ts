@@ -55,6 +55,14 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
  * say. And it is `withdrawn`, not `removed`: a `remove` OP is a proposal to
  * delete an existing work item from the tree, so rendering a withdraw as
  * *"1 proposal removed"* would read to a reviewer as a card being deleted.
+ *
+ * ⚠️ `bug_filed` is the tenth (Story MOTIR-4053 · MOTIR-4076), and it is the
+ * first verb that describes a WORK ITEM rather than a proposal: the planning
+ * job filed a real `bug` into its own project, unreviewed, and this row is where
+ * a reviewer of the plan sees it (`planner-files-tenant-bug.md` §3, RECORD). It
+ * carries no `planItemId` — there is no proposal — and its `diff` names the
+ * filed key. The same rows are what the VOLUME bound counts, under the plan's
+ * row lock, so the record and the cap cannot disagree.
  */
 export type PlanRevisionChangeKind =
   | 'created'
@@ -65,7 +73,8 @@ export type PlanRevisionChangeKind =
   | 'approved'
   | 'declined'
   | 'revision_started'
-  | 'revision_ended';
+  | 'revision_ended'
+  | 'bug_filed';
 
 /**
  * WHICH AGENT performed a change, when one did — the

@@ -1600,6 +1600,18 @@ export default defineConfig({
         // is exactly the kind of code that quietly stops refusing.
         'app/api/internal/ai/similar-work-items/route.ts',
 
+        // Story MOTIR-4053 · Subtask MOTIR-4076 — the PLANNER's `log_bug` sink:
+        // the job-token create route and the service that enforces the bound
+        // (`planner-files-tenant-bug.md` §3) under the plan's row lock. GATED,
+        // for the reason `similar-work-items` is: nearly all of it is REFUSAL —
+        // the token's project and only the token's, the volume cap, the parent
+        // outside the project — and the tenant-isolation case is part of the
+        // gated number rather than a test beside it. The service file also
+        // holds the system-principal `fileBug` (MOTIR-1450), covered by
+        // `tests/ai/work-items-route.test.ts`; both suites feed one number.
+        'app/api/internal/ai/log-bug/route.ts',
+        'lib/services/aiWorkItemsService.ts',
+
         // Story MOTIR-2694 · Subtask MOTIR-2698 — the two files the story CHANGED
         // rather than wrote, which its other subtasks therefore left out of the
         // report entirely. They are added on DIFFERENT terms, and the difference
@@ -2654,6 +2666,9 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story MOTIR-4053 · Subtask MOTIR-4076 (see the `include` note above).
+        'app/api/internal/ai/log-bug/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/aiWorkItemsService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2694 · Subtask MOTIR-2698 — the keys-not-prose enforcement
         // point (see the `include` note above; `aiBoundaryService.ts` is
         // deliberately NOT here, and that note says why).
