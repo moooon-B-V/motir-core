@@ -31,6 +31,14 @@ import path from 'node:path';
 // guard SKIPS, so it fires in CI and not on a laptop. It is never silent about
 // which of the two it did.
 //
+// ⚠️ AND THAT SENTENCE WAS FALSE FOR ELEVEN WEEKS (MOTIR-4093). No job set
+// either variable, so the guard took its degraded branch on every run it ever
+// had — printing "It runs in CI" while measuring nothing. The degradation is
+// still the design; what it now needs is an environment that DECLARES it must
+// bind (`MOTIR_GUARD_REQUIRED`), and `requireStatusSource` FAILS there instead
+// of degrading. `tests/ci-acceptance-lane-credential.test.ts` is what keeps the
+// declaration attached to the job that runs this guard.
+//
 // ── WHAT A DEVELOPER SEES ───────────────────────────────────────────────────
 //
 // This will fire months from now, on someone who has never read this story, in
@@ -144,20 +152,130 @@ export interface StatusSource {
 }
 
 /**
+ * ── THE NAMES, IN ONE PLACE (MOTIR-4093) ────────────────────────────────────
+ *
+ * The environment variables this guard reads, exported because they now have a
+ * SECOND reader: `tests/ci-acceptance-lane-credential.test.ts` scans
+ * `.github/workflows/**` for a job that runs this guard without setting them.
+ * A workflow guard that hard-codes its own copy of these names is a guard that
+ * keeps passing after a rename — the precise shape of the defect this card is
+ * about, one level up.
+ *
+ * ⚠️ ORDER IS PRECEDENCE, and the guard-specific name comes FIRST for a reason
+ * that is not cosmetic. `MOTIR_BASE_URL` is the APPLICATION's own origin
+ * (`lib/baseUrl.ts` rung 1, whose header says "Nothing else may read the
+ * variable directly"), so setting it in a job's `env:` re-points every emailed
+ * link, Better-Auth `baseURL`, canonical and sitemap entry that the ~1360-file
+ * Vitest lane resolves. `MOTIR_GUARD_BASE_URL` has exactly one reader — this
+ * function — so a job that sets it cannot change what any other test sees. The
+ * legacy names stay accepted so an environment that already exports them keeps
+ * working; nothing in this repository sets them any more.
+ */
+export const GUARD_ORIGIN_VARS = ['MOTIR_GUARD_BASE_URL', 'MOTIR_BASE_URL'] as const;
+/** The credential, same precedence rule. `MOTIR_UPLOAD_TOKEN` was the acceptance
+ *  publisher's PAT fallback and is kept only as a legacy alias — MOTIR-4096
+ *  retired its last writer, and it was never a configured secret here. */
+export const GUARD_TOKEN_VARS = ['MOTIR_GUARD_TOKEN', 'MOTIR_UPLOAD_TOKEN'] as const;
+/** Opt into the keyless arm. Anything but the exact value is the PAT arm. */
+export const GUARD_AUTH_VAR = 'MOTIR_GUARD_AUTH';
+/**
+ * The environment's own declaration that it is SUPPOSED to bind — the
+ * discriminator {@link requireStatusSource} turns a silent degradation into a
+ * failure on.
+ *
+ * ⚠️ IT CANNOT BE `CI`, and that is the whole reason this variable exists. A
+ * fork's pull request sets `CI` too and is given no secrets, so keying the
+ * requirement on `CI` would red-light every fork PR — the one degradation this
+ * guard's design is explicit about keeping. Only the workflow knows which of
+ * its own runs are supposed to have a credential, so the workflow says it.
+ */
+export const GUARD_REQUIRED_VAR = 'MOTIR_GUARD_REQUIRED';
+
+/** `a ?? b ?? ''` over a name list — an empty string SET beats a name unset,
+ *  which is the existing behaviour and is what makes `${{ secrets.MISSING }}`
+ *  (which expands to `''`) resolve to no source rather than to the next name. */
+function firstDefined(env: Record<string, string | undefined>, names: readonly string[]): string {
+  for (const name of names) {
+    const value = env[name];
+    if (value !== undefined) return value;
+  }
+  return '';
+}
+
+/**
  * The credential + origin the guard reads the product with, or null when this
  * environment has none (a laptop, a fork's CI).
  *
  * `MOTIR_GUARD_AUTH=github-oidc` opts into the keyless arm; anything else (and
- * the absence of it) is the bearer-PAT arm, which is what CI is expected to
- * wire — the read asks only for `project:browse`
- * (`ACCEPTANCE_STATUS_READ_PERMISSION`), so the credential this guard needs is a
- * read-only PAT and nothing more. MOTIR-4093 owns putting it in the lane.
+ * the absence of it) is the bearer-PAT arm, which is what CI wires — the read
+ * asks only for `project:browse` (`ACCEPTANCE_STATUS_READ_PERMISSION`), so the
+ * credential this guard needs is a read-only PAT and nothing more. MOTIR-4162
+ * minted it; MOTIR-4093 put it in the lane.
+ *
+ * ⚠️ A null here is NOT by itself a pass — see {@link requireStatusSource},
+ * which is what callers use.
  */
 export function resolveStatusSource(env: Record<string, string | undefined>): StatusSource | null {
-  const baseUrl = env['MOTIR_GUARD_BASE_URL'] ?? env['MOTIR_BASE_URL'] ?? '';
-  const token = env['MOTIR_GUARD_TOKEN'] ?? env['MOTIR_UPLOAD_TOKEN'] ?? '';
-  const authMode = env['MOTIR_GUARD_AUTH'] === 'github-oidc' ? 'github-oidc' : 'bearer';
+  const baseUrl = firstDefined(env, GUARD_ORIGIN_VARS);
+  const token = firstDefined(env, GUARD_TOKEN_VARS);
+  const authMode = env[GUARD_AUTH_VAR] === 'github-oidc' ? 'github-oidc' : 'bearer';
   return baseUrl && token ? { baseUrl: baseUrl.replace(/\/$/, ''), token, authMode } : null;
+}
+
+/** Whether this environment DECLARES that it must bind. */
+export function statusSourceRequired(env: Record<string, string | undefined>): boolean {
+  return (env[GUARD_REQUIRED_VAR] ?? '').trim().toLowerCase() === 'true';
+}
+
+/**
+ * The guard was told it must bind, and could not.
+ *
+ * ⚠️ THIS IS THE HATCH BEING SHUT, AND IT IS WORTH SAYING WHY A DEGRADATION
+ * BRANCH NEEDED ONE. Skipping cleanly when there is no credential is correct
+ * and stays: a laptop and a fork's pull request have no secrets, and a guard
+ * that fails there is a guard somebody deletes. What was missing is the
+ * assertion that the environment which is SUPPOSED to bind actually binds —
+ * so for eleven weeks this guard printed "It runs in CI" and never did. No job
+ * set either name, it took the degraded branch on every run it ever had, and
+ * reported green (MOTIR-4093). An escape hatch needs a test that it is shut
+ * where it counts, or the check is indistinguishable from one that works right
+ * up until the day it matters.
+ */
+export class LaneGuardUnboundError extends Error {
+  constructor() {
+    super(
+      `The acceptance-lane guard was told this environment MUST bind (${GUARD_REQUIRED_VAR}=true)\n` +
+        'and could not resolve a status source, so it FAILS rather than degrading.\n\n' +
+        "It needs BOTH, in the job's `env:`:\n" +
+        `  ${GUARD_ORIGIN_VARS[0]}   the origin to ask, e.g. https://app.motir.co\n` +
+        `  ${GUARD_TOKEN_VARS[0]}      a Motir PAT granted \`project:browse\` and nothing else —\n` +
+        `                          the repository Actions secret of the same name (MOTIR-4162)\n\n` +
+        'Which one is it?\n\n' +
+        '  · the secret is missing or was renamed  →  `gh secret list --repo <owner>/<repo>`\n' +
+        '  · the token was revoked                 →  MOTIR-4162 AC 3 is the curl that tells you\n' +
+        `  · you are on a laptop                   →  leave ${GUARD_REQUIRED_VAR} unset; nothing is wrong\n` +
+        `  · you are on a FORK's pull request      →  the workflow already leaves ${GUARD_REQUIRED_VAR}\n` +
+        '                                             false there; if it did not, that is the bug\n\n' +
+        'Do NOT "fix" this by deleting the requirement. The degradation is the design;\n' +
+        'the declaration is what stops it from being the only branch that ever runs.',
+    );
+    this.name = 'LaneGuardUnboundError';
+  }
+}
+
+/**
+ * The status source, or null when this environment is ALLOWED to degrade.
+ *
+ * THROWS {@link LaneGuardUnboundError} when the environment declares it must
+ * bind and no source resolves. Callers use this rather than
+ * {@link resolveStatusSource} — a null from that function alone cannot tell a
+ * laptop from a mis-wired CI job.
+ */
+export function requireStatusSource(env: Record<string, string | undefined>): StatusSource | null {
+  const source = resolveStatusSource(env);
+  if (source) return source;
+  if (statusSourceRequired(env)) throw new LaneGuardUnboundError();
+  return null;
 }
 
 /**
