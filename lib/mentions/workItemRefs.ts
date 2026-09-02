@@ -24,8 +24,12 @@ import { escapeRegExp } from '@/lib/utils/regexp';
  * label is the display key (anything up to the closing bracket); the payload
  * is the work-item cuid. Defined with `/g` for `matchAll` (which clones the
  * regex per call, so the shared constant carries no lastIndex state).
+ *
+ * ⚠️ THE LABEL CLASS EXCLUDES `[` AS WELL AS `]` (MOTIR-4202) — the same
+ * quadratic scan `MENTION_TOKEN_RE` had on a body of unclosed openers (CodeQL
+ * `js/polynomial-redos`, alert #2). A key label never contains `[`.
  */
-export const WORKITEM_TOKEN_RE = /\[[^\]]*\]\(motir:([A-Za-z0-9_-]+)\)/g;
+export const WORKITEM_TOKEN_RE = /\[[^\]\[]*\]\(motir:([A-Za-z0-9_-]+)\)/g;
 
 /**
  * A well-formed `motir:` href: the id is the cuid character set, non-empty —
@@ -175,8 +179,10 @@ export function parseWorkItemRefs(text: string, projectIdentifier: string): Work
  * stripped — the bare id materialize's temp-ref → work-item-id map is keyed by).
  * `/g` for `matchAll`/`replace`. The `motir-ref:planItem:` prefix can't match an
  * existing-item `motir:<id>` token or a bare key, so those pass through.
+ * The label class excludes `[` for the reason `WORKITEM_TOKEN_RE`'s does
+ * (MOTIR-4202; CodeQL alert #3).
  */
-export const INTRA_PLAN_REF_TOKEN_RE = /\[([^\]]*)\]\(motir-ref:planItem:([A-Za-z0-9_-]+)\)/g;
+export const INTRA_PLAN_REF_TOKEN_RE = /\[([^\]\[]*)\]\(motir-ref:planItem:([A-Za-z0-9_-]+)\)/g;
 
 /**
  * Extract the intra-plan sibling planItem ids referenced in a body — one per
