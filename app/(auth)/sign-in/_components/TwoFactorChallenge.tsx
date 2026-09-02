@@ -59,6 +59,7 @@ export function TwoFactorChallenge({
   otpPeriodMinutes,
 }: Props) {
   const t = useTranslations('auth.twoFactor');
+  const tc = useTranslations('common');
 
   const [view, setView] = useState<View>(methods.includes('totp') ? 'totp' : 'choose');
   const [code, setCode] = useState('');
@@ -151,6 +152,7 @@ export function TwoFactorChallenge({
       onChange={setTrustDevice}
       label={t('trustDevice', { days: trustDeviceDays })}
       labelVisible
+      stateLabels={{ checked: tc('checked'), unchecked: tc('notChecked') }}
     />
   );
 

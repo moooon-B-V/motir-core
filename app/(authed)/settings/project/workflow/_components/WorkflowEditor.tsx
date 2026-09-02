@@ -682,6 +682,7 @@ function StatusFormModal({
             label={t('workflow.makeInitial')}
             labelVisible
             disabled={isPending}
+            stateLabels={{ checked: tc('checked'), unchecked: tc('notChecked') }}
           />
         )}
         <Modal.Footer>

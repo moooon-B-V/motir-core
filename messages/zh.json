@@ -164,7 +164,9 @@
     "retry": "重试",
     "cancel": "取消",
     "save": "保存",
-    "loading": "加载中…"
+    "loading": "加载中…",
+    "checked": "已勾选",
+    "notChecked": "未勾选"
   },
   "planReview": {
     "backToPlans": "返回计划列表",
