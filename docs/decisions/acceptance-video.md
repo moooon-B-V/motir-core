@@ -36,6 +36,36 @@
   GitHub OIDC). Implemented by MOTIR-1650 (endpoint) + MOTIR-1651 (BYOK docs /
   Action); §4 below is rewritten to reflect it. This is the "recommend the BEST,
   not the shipped" correction to the original §4.
+- **Amendment (2026-09-01, decided by Yue; applied 2026-09-02 by MOTIR-4096) —
+  CI NO LONGER UPLOADS THE RECORDING. THE AGENT PUBLISHES IT, over the Motir MCP
+  surface.** Only the UPLOADER changed hands. The receipt concept, its
+  eligibility gate (§1), its storage and retention rules (§2), the org toggle
+  (§3), the publish endpoint and the review flow are all UNCHANGED, and so is the
+  recording itself: the acceptance lane still runs Playwright with `video: 'on'`,
+  and the clips, traces and `chapters.json` sidecars still land in its report
+  artifact — which is now where a reviewer, and the publishing agent, read them
+  from. What was RETIRED in this repository, in one change:
+  - the lane's publish step and its `ACCEPTANCE_*` env, including the owned-specs
+    step that computed `ACCEPTANCE_CHANGED_SPECS` (the MOTIR-1937 ownership
+    filter) — it fed nothing else;
+  - `scripts/upload-acceptance-video.mjs` and its composite wrapper
+    `.github/actions/upload-acceptance-video/` (MOTIR-1651's BYOK Action);
+  - `tests/acceptance-video-uploader.test.ts`, which tested both;
+  - the job's `id-token: write` grant and its `MOTIR_UPLOAD_TOKEN` secret
+    reference — §4's two credentials had no consumer left, and a credential with
+    no consumer is one nobody thinks about when deciding whether to rotate it.
+    **§4 IS NOT REVOKED — its SERVER side is untouched and still shipped.**
+    `lib/github/oidcAuth.ts` and `lib/publishAuth/ciPublishAuth.ts` still accept a
+    keyless GitHub-OIDC publish and still fall back to an `integration` PAT, so any
+    external CI that wants the BYOK path still has a door. What this repository no
+    longer ships is a reference CLIENT for it. See the §4 banner below.
+    **And the lane was RENAMED with it**: `Acceptance video` →
+    **`Acceptance tests`**, at `.github/workflows/acceptance-tests.yml`. A name
+    describing a mechanism the file no longer has is a standing tax on every reader
+    — and the header's reasoning was largely ABOUT publishing, so the prose moved
+    with the step it explained rather than being left to explain a mechanism that
+    is gone. `nextjs-prisma-vercel-starter` carries its own copy of the lane and
+    the Action; MOTIR-4097 follows there.
 - **Story / Subtask:** MOTIR-1627 (Story acceptance gate — E2E acceptance video,
   review & approve, BYOK, motir-ai-plan-gated) · Subtask MOTIR-1628.
 - **Consumed by:** MOTIR-1629 (data model + video allowlist), MOTIR-1630
@@ -259,6 +289,18 @@ before their first acceptance video is friction with no cost upside.
 > _Amended 2026-07-06 (MOTIR-1648 / MOTIR-1649): keyless OIDC is now the PRIMARY
 > path; the `integration` PAT is the fallback. The original PAT-only reasoning is
 > preserved as the fallback bullet below._
+>
+> ⚠️ _Amended 2026-09-01 (MOTIR-4096): **motir-core's own CI no longer uses either
+> credential.** The SERVER side of this section is unchanged and shipped —
+> `lib/publishAuth/ciPublishAuth.ts` still verifies a keyless GitHub-OIDC publish
+> and still falls back to an `integration` PAT — but the CLIENT that used them
+> here (the publish step, `scripts/upload-acceptance-video.mjs`, and the
+> `.github/actions/upload-acceptance-video/` Action MOTIR-1651 shipped for BYOK
+> consumers) is retired. Motir's own receipt is published by the AGENT over the
+> MCP surface. Read this section as the contract an external CI may still
+> implement against; do NOT read it as a description of what this repository's
+> workflows do, because they no longer do any of it. `docs/e2e/acceptance-video-byok.md`
+> carries the same banner._
 
 No artifact-upload endpoint exists. The BYOK model is: **the user's own CI** runs
 the acceptance E2E and POSTs the video to a new motir-core publish endpoint.
@@ -295,6 +337,13 @@ fall back to an `integration`-scoped API token otherwise.**
   service principal inside its sandbox — explicitly out of scope here.)
 
 #### Amendment 2026-07-31 (Yue · MOTIR-1937) — WHICH RUN may publish a story's receipt
+
+> ⚠️ **Superseded in part by the 2026-09-01 amendment (MOTIR-4096): the CI
+> uploader this section reasons about no longer exists.** The reasoning is kept
+> as the record of why the lane is shaped the way it is; the files it names
+> (`scripts/upload-acceptance-video.mjs`, `tests/acceptance-video-uploader.test.ts`,
+> the publish step) are retired, and the lane is now
+> `.github/workflows/acceptance-tests.yml`.
 
 The original decision settled **how** CI authenticates and never said **which runs**
 may publish. That gap had a live cost, so the answer is recorded here rather than
@@ -369,7 +418,9 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
 | Push to `main`                                   | **no lane** | nothing (the PR already did) |
 
 - **Absent, not skipped — and only ONE mechanism achieves that.** The lane moves
-  out of `ci.yml` into its own `.github/workflows/acceptance-video.yml`, triggered
+  out of `ci.yml` into its own `.github/workflows/acceptance-video.yml` (RENAMED
+  `acceptance-tests.yml` by MOTIR-4096 — the sentence records what MOTIR-1949
+  did, and the mechanism it describes is unchanged), triggered
   by `on: pull_request: paths: ['tests/e2e/acceptance*.spec.ts']`. A workflow whose
   path filter does not match is never TRIGGERED, so no run exists and no check
   appears. The two cheaper-looking options were both tried and are both wrong:
@@ -487,6 +538,13 @@ bounded, attributed to the author who caused it, and no longer inherited by the
 next passer-by.
 
 #### Amendment 2026-08-10 (MOTIR-2600) — the lane is SHARDED, and it triggers on its own definition
+
+> ⚠️ **Superseded in part by the 2026-09-01 amendment (MOTIR-4096): the CI
+> uploader this section reasons about no longer exists.** The reasoning is kept
+> as the record of why the lane is shaped the way it is; the files it names
+> (`scripts/upload-acceptance-video.mjs`, `tests/acceptance-video-uploader.test.ts`,
+> the publish step) are retired, and the lane is now
+> `.github/workflows/acceptance-tests.yml`.
 
 Two clauses of the amendment above are superseded in shape, not in principle. Both
 changes are structural; nothing about who may publish, or when, moves.

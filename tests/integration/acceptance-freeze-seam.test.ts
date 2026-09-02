@@ -7,7 +7,21 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
-import { ALREADY_APPROVED_CODE } from '../../scripts/upload-acceptance-video.mjs';
+
+// The WIRE code, written out rather than imported — deliberately (MOTIR-4096).
+//
+// It used to be imported from `scripts/upload-acceptance-video.mjs`, because
+// that CI uploader was the third layer: a `.mjs` run by a workflow, which could
+// not import the TS class and so carried its own copy of the string. That
+// uploader is retired — the receipt is published by the AGENT over the Motir MCP
+// surface — and the third layer moved OUT of this repository with it.
+//
+// So the literal is the join now, and it has to be a literal: every remaining
+// client of this code (the agent, and any external CI publishing through the
+// HTTP route) recognises it as a STRING off the wire, with nothing to import.
+// A test that derived it from the error class would assert the class equals
+// itself and could be renamed green while every one of those clients broke.
+const ALREADY_APPROVED_CODE = 'ACCEPTANCE_EVIDENCE_ALREADY_APPROVED';
 
 // THE FREEZE SEAM (Story MOTIR-2765 · Subtask MOTIR-2771).
 //
@@ -59,7 +73,7 @@ async function inReviewStory() {
   return story;
 }
 
-/** Publish through the ROUTE the CI uploader actually calls. */
+/** Publish through the ROUTE a publishing client actually calls. */
 async function publish(story: { id: string; identifier: string }, videoName: string, sha: string) {
   const req = new Request(
     `http://localhost/api/work-items/${story.identifier}/acceptance-evidence`,
@@ -167,8 +181,10 @@ describe('the freeze seam, end to end', () => {
     const routeCode = (await res.json()).code;
     expect(routeCode).toBe(ALREADY_APPROVED_CODE);
 
-    // Layer 3 — the UPLOADER's recognition keys on that exact string. It is a
-    // `.mjs` run by CI and cannot import the TS class, so this is the join.
+    // Layer 3 — a CLIENT's recognition keys on that exact string. Nothing
+    // outside this repository can import the TS class, so the wire literal is
+    // the join (see the constant above; MOTIR-4096 moved that client from the
+    // CI uploader to the agent publishing over MCP, and the join is unchanged).
     expect(ALREADY_APPROVED_CODE).toBe(new AcceptanceEvidenceAlreadyApprovedError('MOTIR-1').code);
 
     // …and all three are literally the same value, in one assertion, so no two

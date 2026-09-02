@@ -50,7 +50,7 @@ import { join } from 'node:path';
 //      target: 45 (the number `e2e` uses, and the tempting one to copy) would
 //      have FAILED the healthy 47.5-minute run above, converting a rare stall
 //      into frequent false reds — the worse trade. The same discipline is why
-//      `acceptance-video.yml`'s legs are sized from their own runs rather than
+//      `acceptance-tests.yml`'s legs are sized from their own runs rather than
 //      from `e2e`'s, and why four lanes with no healthy run on record say so in
 //      their comment and take a stated floor.
 //

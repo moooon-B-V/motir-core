@@ -21,7 +21,7 @@ import path from 'node:path';
 // database is DERIVED, not written down:
 //
 //   * `playwright.acceptance.config.ts` — one database per shard, and
-//     `.github/workflows/acceptance-video.yml` fans out `--shard=i/N` where N is
+//     `.github/workflows/acceptance-tests.yml` fans out `--shard=i/N` where N is
 //     the number of acceptance specs the pull request touches. `--shard`
 //     partitions in discovery order, so ADDING ANY SPEC FILE MOVES THE
 //     PARTITION.
@@ -159,7 +159,7 @@ const WHY = [
   '  installation, whose `installation_id` is @unique, so a second seed upserts',
   '  the first spec’s row). The acceptance lane then runs many spec FILES against',
   '  ONE database — playwright.acceptance.config.ts, one database per shard — and',
-  '  WHICH files share it is derived: acceptance-video.yml fans out `--shard=i/N`',
+  '  WHICH files share it is derived: acceptance-tests.yml fans out `--shard=i/N`',
   '  over the touched specs, and `--shard` partitions in discovery order, so THE',
   '  SHARD PARTITION CHANGES WHENEVER A SPEC FILE IS ADDED. (The main lane is the',
   '  same hazard by a different mechanism: tests/e2e/shard-plan.ts bin-packs the',
