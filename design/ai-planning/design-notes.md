@@ -3658,12 +3658,12 @@ An unmarked row means one of two different things — _the plan carries this fie
 it_, or _no plan can carry this field at all_ — and a marker cannot separate them without a second
 marker on fourteen rows. **So the rail does not try; one line at the rail's foot does:**
 
-| op                  | the line                                                    |
-| ------------------- | ----------------------------------------------------------- |
-| **`add`**           | `Every value here is what approval will create.`            |
-| **`modify`**, n > 0 | `This plan changes {n} of the {m} fields it can set.`       |
-| **`modify`**, n = 0 | `This plan changes nothing in this rail — only the bodies.` |
-| **`remove`**        | `Approving this plan archives {key}.`                       |
+| op                  | the line                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| **`add`**           | `Every value here is what approval will create.`                                     |
+| **`modify`**, n > 0 | `This plan changes {n} of the {m} fields it can set.`                                |
+| **`modify`**, n = 0 | `This plan changes none of these fields — only the description and the explanation.` |
+| **`remove`**        | `Approving this plan archives {key}.`                                                |
 
 **Naming the DENOMINATOR is what makes the silence readable.** `2 of 9` says both that seven settable
 fields are untouched and that everything outside the nine is beyond the plan's reach — which is what
@@ -3796,7 +3796,7 @@ PROPOSES, so the two tabs carry two different names for one card, with nothing c
 built to stop it.**
 
 **The decision: KEEP the control, and CHANGE ITS LABEL so the tense is honest.** In proposal mode it
-reads **`Open the card as it stands →`** (`planReview.openTargetAsItStands`), not `Open full page`.
+reads **`Open the work item as it stands →`** (`planReview.openTargetAsItStands`), not `Open full page`.
 
 | candidate                                                  | verdict                                                                                                                                                                                                                                                                                                                          |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -3832,7 +3832,7 @@ card**.
 | bodies       | the TARGET's. A `remove` carries no patch, so what is shown is exactly what will be archived                                                                         |
 | rail         | the target's, with **no marker on any row, ever** — a `remove` changes no field                                                                                      |
 | foot line    | `Approving this plan archives {key}.`                                                                                                                                |
-| the link out | present, labelled `Open the card as it stands →` (§7)                                                                                                                |
+| the link out | present, labelled `Open the work item as it stands →` (§7)                                                                                                           |
 
 **`targetMissing`.** A `remove` whose target is already archived or hard-deleted (the DTO's own flag)
 shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
@@ -3856,20 +3856,35 @@ committed key is.
 
 ## 10. §10 · Copy — every string this Part introduces or re-points
 
-| key                                                    | string                                                                   | note                                                                                                                     |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `planReview.railChangedMark`                           | `changed`                                                                | NEW — the rail marker chip                                                                                               |
-| `planReview.railChangeCount`                           | `This plan changes {n} of the {m} fields it can set.`                    | NEW — the pinned line, `modify`, n > 0                                                                                   |
-| `planReview.railChangeNone`                            | `This plan changes nothing in this rail — only the bodies.`              | NEW — `modify`, n = 0                                                                                                    |
-| `planReview.railAddAll`                                | `Every value here is what approval will create.`                         | NEW — `add`                                                                                                              |
-| `planReview.railRemoveArchives`                        | `Approving this plan archives {key}.`                                    | NEW — `remove`                                                                                                           |
-| `planReview.openTargetAsItStands`                      | `Open the card as it stands`                                             | NEW — the link out, on a `modify` / `remove`; it REPLACES `issueViews.openFullPage` in proposal mode and only there (§7) |
-| `planReview.peekNoActivity`                            | `A proposal has no comments, children or activity until it is approved.` | NEW — the main column's foot sentence (the `<link>` arm carries the `modify` / `remove` variant)                         |
-| `planReview.newItem`                                   | `New`                                                                    | REUSED — the header's identifier slot                                                                                    |
-| `planReview.notYetCreated`                             | `not yet created`                                                        | REUSED — the `add` op chip                                                                                               |
-| `planReview.opModify` / `opRemove`                     | `change` / `remove`                                                      | REUSED — the op chip                                                                                                     |
-| `planReview.aiDrafted`                                 | `AI-drafted`                                                             | REUSED — beside `Why this matters`                                                                                       |
-| `planReview.sectionDescription` / `sectionExplanation` | `Description` / `Why this matters`                                       | REUSED                                                                                                                   |
+| key                                                    | string                                                                               | note                                                                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `planReview.railChangedMark`                           | `changed`                                                                            | NEW — the rail marker chip                                                                                               |
+| `planReview.railChangeCount`                           | `This plan changes {n} of the {m} fields it can set.`                                | NEW — the pinned line, `modify`, n > 0                                                                                   |
+| `planReview.railChangeNone`                            | `This plan changes none of these fields — only the description and the explanation.` | NEW — `modify`, n = 0                                                                                                    |
+| `planReview.railAddAll`                                | `Every value here is what approval will create.`                                     | NEW — `add`                                                                                                              |
+| `planReview.railRemoveArchives`                        | `Approving this plan archives {key}.`                                                | NEW — `remove`                                                                                                           |
+| `planReview.openTargetAsItStands`                      | `Open the work item as it stands`                                                    | NEW — the link out, on a `modify` / `remove`; it REPLACES `issueViews.openFullPage` in proposal mode and only there (§7) |
+| `planReview.peekNoActivity`                            | `A proposal has no comments, children or activity until it is approved.`             | NEW — the main column's foot sentence (the `<link>` arm carries the `modify` / `remove` variant)                         |
+| `planReview.newItem`                                   | `New`                                                                                | REUSED — the header's identifier slot                                                                                    |
+| `planReview.notYetCreated`                             | `not yet created`                                                                    | REUSED — the `add` op chip                                                                                               |
+| `planReview.opModify` / `opRemove`                     | `change` / `remove`                                                                  | REUSED — the op chip                                                                                                     |
+| `planReview.aiDrafted`                                 | `AI-drafted`                                                                         | REUSED — beside `Why this matters`                                                                                       |
+| `planReview.sectionDescription` / `sectionExplanation` | `Description` / `Why this matters`                                                   | REUSED                                                                                                                   |
+
+**⚠️ THE NOUN IS `work item`, AND THIS SECTION IS WHERE THAT IS ENFORCED.** A mock is not a sketch —
+its rendered strings are the copy a code card transcribes into the catalog, so the planner's shorthand
+ships verbatim unless it is translated HERE. Motir's user-facing noun for a tracked unit is
+**work item**, never `card` and never `issue`: `issueViews` says it 30 times
+(`This work item isn't available`, `Child work items`, `Back to work items`), and the shipped catalog
+carries `card` only in the PAYMENT sense. `planReview`'s own `item` / `proposed item` is a different
+referent — a PROPOSAL, not the work item it is about — and stays as it is.
+
+**This was got wrong in this asset's first draft** (the label read `Open the card as it stands`) and
+corrected on Yue's reading. It is recorded rather than quietly fixed because the failure is invisible
+locally: whoever writes the mock has just read a corpus that says `card` on every page, so the word
+looks like the product's word, and whoever builds to the mock is instructed to render its strings
+verbatim. **Read the mock's VISIBLE text — strip the markup — and ask of every occurrence of the
+working vocabulary whether a user would read it.**
 
 Both catalogs (`messages/en.json`, `messages/zh.json`) in the same change — a key added to one is a
 parity failure.
