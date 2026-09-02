@@ -37,6 +37,12 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import {
+  AI_REQUIREMENT_FIELDS,
+  AI_REQUIREMENT_REQUIRED_NON_EMPTY,
+  completeRequirement,
+  satisfiesBuildRequirement,
+} from '../fixtures/settledRequirement';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -553,6 +559,264 @@ describe('submit_plan_session — one job for the whole thread', () => {
     expect(after.turns.map((t) => t.body)).toEqual(['Add the reporting epic.']);
     expect(after.lastJobId).toBeNull();
     expect(after.lastSubmittedAt).toBeNull();
+    await client.close();
+  });
+});
+
+// The composed WHAT reaching the wire (Story MOTIR-3942 · MOTIR-4172) — the
+// carrier between the engine that ACCEPTS a settled first phase (MOTIR-4082)
+// and the agent that COMPOSES one (MOTIR-4083). Nothing carried it between
+// them, and the two halves had assumed different shapes (MOTIR-4168), so each
+// would have passed its own tests while the feature did not exist.
+//
+// The last point in THIS repository where the value is observable is the
+// envelope `submitJob` is called with, so that is where these assert — not at
+// the tool, whose return says nothing about what went out.
+describe('submit_plan_session — the requirement reaches context.requirement', () => {
+  /** The context bag the one `submitJob` call went out with. */
+  function sentContext(): Record<string, unknown> {
+    expect(vi.mocked(submitJob)).toHaveBeenCalledTimes(1);
+    return vi.mocked(submitJob).mock.calls[0]![2] as unknown as Record<string, unknown>;
+  }
+
+  async function threadWithOneTurn(): Promise<Client> {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    await call(client, APPEND_PLAN_TURN_TOOL_NAME, {
+      projectKey: 'PROD',
+      body: 'This card is wrong.',
+    });
+    return client;
+  }
+
+  it('a complete requirement lands on the envelope and SATISFIES the far side', async () => {
+    const client = await threadWithOneTurn();
+    const requirement = completeRequirement();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      requirement,
+    });
+    expect(res.isError).toBeFalsy();
+
+    // Landed, at the envelope — and DEEP-equal, so a re-ordered or re-built
+    // object would not pass.
+    expect(sentContext().requirement).toEqual(requirement);
+
+    // …and it is what motir-ai's own validator accepts. This is the half a
+    // round-trip assertion cannot give: `toEqual` above is true of ANY object,
+    // and MOTIR-4168 was two halves that each passed exactly that test.
+    expect(satisfiesBuildRequirement(sentContext().requirement)).toBe(true);
+    await client.close();
+  });
+
+  it('the six field names and their order are the CONTRACT, not this repo’s choice', async () => {
+    const client = await threadWithOneTurn();
+    await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      requirement: completeRequirement(),
+    });
+
+    // The keys that reached the envelope ARE motir-ai's field list, in ITS
+    // order. Drop one, rename one, or reorder either side and this fails HERE.
+    expect(Object.keys(sentContext().requirement as object)).toEqual([...AI_REQUIREMENT_FIELDS]);
+
+    // The advertised schema teaches the same set, and marks the three that must
+    // be non-empty at the far end. The tool description is the surface an agent
+    // composing one actually reads, so it is asserted rather than assumed.
+    const tools = (await client.listTools()).tools;
+    const submit = tools.find((t) => t.name === SUBMIT_PLAN_SESSION_TOOL_NAME)!;
+    const advertised = (submit.inputSchema.properties as Record<string, unknown>).requirement as {
+      properties: Record<string, unknown>;
+    };
+    const props = Object.keys(advertised.properties);
+    expect(props).toEqual([...AI_REQUIREMENT_FIELDS]);
+    // The tool description names all six, so an agent reading only the summary
+    // still learns the shape it is being asked to compose.
+    for (const field of AI_REQUIREMENT_FIELDS) {
+      expect(submit.description).toContain(field);
+    }
+
+    // …and each field's OWN description says which of the two kinds it is.
+    // Asserted per FIELD rather than by matching a phrase against the whole
+    // description, which would pass on any prose that happened to contain both
+    // words somewhere.
+    const describes = (field: string) =>
+      (advertised.properties[field] as { description?: string }).description ?? '';
+    for (const field of AI_REQUIREMENT_FIELDS) {
+      const required = (AI_REQUIREMENT_REQUIRED_NON_EMPTY as readonly string[]).includes(field);
+      expect(describes(field).includes('non-empty')).toBe(required);
+      // The other three say the empty string is an ANSWER — the distinction the
+      // far side's per-field validation exists to preserve.
+      if (!required) expect(describes(field)).toContain('""');
+    }
+    await client.close();
+  });
+
+  it('the schema is PERMISSIVE — a requirement missing a REQUIRED field still submits', async () => {
+    const client = await threadWithOneTurn();
+    // `outcome` is one of the three the far side demands. This surface does not
+    // care: refusing a card must never become conditional on composing well.
+    const partial = { ...completeRequirement(), outcome: '' };
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      requirement: partial,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().requirement).toEqual(partial);
+    // It reached the envelope AS SENT — and the far side is the one that will
+    // decline to treat it as settled, which is the whole division of labour.
+    expect(satisfiesBuildRequirement(sentContext().requirement)).toBe(false);
+    await client.close();
+  });
+
+  it('the schema is PERMISSIVE — a requirement carrying ONLY `outcome` still submits', async () => {
+    const client = await threadWithOneTurn();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      requirement: { outcome: 'Only this much is known.' },
+    });
+    expect(res.isError).toBeFalsy();
+    // No completeness check ⇒ no invented keys either. What arrives is what was
+    // sent, missing keys included.
+    expect(sentContext().requirement).toEqual({ outcome: 'Only this much is known.' });
+    await client.close();
+  });
+
+  it('THE VALUE IS UNCHANGED END TO END — long prose, newlines, backticks, quotes', async () => {
+    const client = await threadWithOneTurn();
+    // A trim or a cap anywhere on this chain silently clips the planner's only
+    // grounding, which is the quiet version of not sending it at all. So the
+    // fields here carry every character class that tempts a normalizer.
+    const behaviour = [
+      '  Leading and trailing whitespace is CONTENT, not noise.  ',
+      '',
+      'A second paragraph, with `backticks`, "double quotes", \'single\' and $dollar.',
+      'A tab\there, a backslash \\ there, and a unicode em dash — plus 中文.',
+      '',
+      `${'A long clause that keeps going. '.repeat(120)}`,
+    ].join('\n');
+    const requirement = { ...completeRequirement(), behaviour, scopeEdge: '   ' };
+
+    await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD', requirement });
+    const landed = sentContext().requirement as Record<string, string>;
+    // Byte for byte, including the whitespace-only `scopeEdge` — trimming that
+    // to `''` would be a different ANSWER, not a tidier one.
+    expect(landed).toEqual(requirement);
+    expect(landed.behaviour).toBe(behaviour);
+    expect(landed.behaviour!.length).toBe(behaviour.length);
+    expect(landed.scopeEdge).toBe('   ');
+    await client.close();
+  });
+
+  it('an ANCHORED submit carries it too — the arm a dispatched re-plan actually takes', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Anchor me' },
+      fx.ctx,
+    );
+    const client = await connectClient(fx.ctx);
+    await call(client, APPEND_PLAN_TURN_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [story.identifier],
+      body: 'This card is wrong.',
+    });
+    const requirement = completeRequirement();
+    await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [story.identifier],
+      requirement,
+    });
+    // Both halves ride together: the anchor set AND the WHAT.
+    expect(sentContext().targetKeys).toEqual([story.identifier]);
+    expect(sentContext().requirement).toEqual(requirement);
+    await client.close();
+  });
+
+  it('a submit with NO requirement is unchanged — asserted by ABSENCE, not by null', async () => {
+    const client = await threadWithOneTurn();
+    await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' });
+    const context = sentContext();
+    // This card's risk is an optional field quietly becoming mandatory. Absence
+    // already means "nobody supplied one" for every other hole in this bag, and
+    // the consumer's reading of it — open the conversation — is exactly right;
+    // `null` or `{}` would be a third state neither side has a reading for.
+    expect('requirement' in context).toBe(false);
+    expect(context.requirement).toBeUndefined();
+    expect(JSON.stringify(context)).not.toContain('requirement');
+    await client.close();
+  });
+
+  it('the door is the TOOL, so `--requirement` in a turn body is just prose', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    // `motir plan` never grew this option (tests/mcp/submit-requirement-door.test.ts
+    // asserts that by absence). The consequence a user can actually see is here:
+    // a turn that TALKS about the flag is a turn, and it reaches the thread
+    // verbatim rather than being eaten as an argument.
+    const body = 'Pass --requirement ./what.json — or rather, do not: it is a tool argument now.';
+    await call(client, APPEND_PLAN_TURN_TOOL_NAME, { projectKey: 'PROD', body });
+
+    const reopened = session(
+      await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }),
+    );
+    expect(reopened.turns.map((t) => t.body)).toEqual([body]);
+
+    await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' });
+    expect(sentContext().prompt).toBe(body);
+    await client.close();
+  });
+
+  it('a REJECTED argument creates NO job and spends NO credits — the one safe retry', async () => {
+    const client = await threadWithOneTurn();
+    // A mis-typed field: the six are strings, and zod refuses this BEFORE the
+    // handler runs. That is what makes this the single legitimate exception to
+    // "submit exactly once" — the agent's one shot survives it.
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      requirement: { outcome: 42 },
+    });
+    expect(res.isError).toBe(true);
+    // Asserted on the JOB COUNT, not on the error message: what matters is that
+    // nothing was spent, not how the refusal was worded.
+    expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
+    expect(await adminDb.plan.count()).toBe(0);
+
+    // …and the retry the description promises actually works.
+    const retry = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' });
+    expect(retry.isError).toBeFalsy();
+    expect(vi.mocked(submitJob)).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+
+  it('the prose TURN still rides append_plan_turn — composed once, delivered TWICE', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    // Neither delivery is a summary of the other: the turn lands on the shared
+    // thread where a person reads it, the struct lands on the envelope where
+    // the planner reads it. An append THEN a submit, both on one thread.
+    await call(client, APPEND_PLAN_TURN_TOOL_NAME, {
+      projectKey: 'PROD',
+      body: 'The card names a CLI door that is not the agent’s surface.',
+    });
+    const requirement = completeRequirement();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      requirement,
+    });
+
+    const out = struct(res) as unknown as { session: PlanChangeSessionDto };
+    const bodies = out.session.turns.map((t) => t.body);
+    expect(bodies).toContain('The card names a CLI door that is not the agent’s surface.');
+    expect(sentContext().prompt).toBe('The card names a CLI door that is not the agent’s surface.');
+    expect(sentContext().requirement).toEqual(requirement);
+
+    // The thread records the INTENT that went out, not the struct — persisting
+    // the requirement onto the session is a different seam (MOTIR-4159), and a
+    // second copy here would be free to diverge.
+    const reopened = session(
+      await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }),
+    );
+    expect(JSON.stringify(reopened)).not.toContain(requirement.outcome);
     await client.close();
   });
 });

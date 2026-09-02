@@ -21,6 +21,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | The **FIFTH plan status** on every surface   | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
 | **Revising a plan under review**             | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
 | **The plan detail, refined**                 | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
+| **The shipped peek in PROPOSAL mode**        | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -3466,3 +3467,514 @@ Measurement at `deviceScaleFactor: 1`; the PNG is re-exported with the shipped
    only way to pass is the concrete-hex re-declaration §3e argues against. This asset therefore draws no
    nested dark scope (panel 9 says so). Whether that guard should render in Chromium, as the ink guard's
    own scan does, is a decision nobody has made.
+
+---
+
+# Part XIV — The SHIPPED peek in PROPOSAL MODE: the per-op header, the CHANGED marker, the explanation with no page to defer to, and what an un-materialized `add` cannot show (MOTIR-4182 / Story MOTIR-4181)
+
+**Its OWN asset**: `design/ai-planning/peek-proposal-mode.mock.html` + `peek-proposal-mode.png`, plus
+this section. Part V §3 — which decided that a proposal is READ with the shipped quick view — stays
+exactly as drawn; this Part is what that decision becomes once BOTH doors use it and all three ops
+arrive (_A design result is a MOMENT_, above).
+
+**Why the story leads with a design.** `ProposalQuickView` is a SECOND peek. It exists because, when
+it was written, a proposal peek could only ever be opened on an `add`; [MOTIR-4022](motir:cmtgaukpn0006hwn86ttsr1mu)
+made a list row a door and that premise became false. Every field the review model carries has since
+had to be walked across the `op` axis by hand, one report at a time —
+[MOTIR-4134](motir:cmtj5u1g40109hvph31dpb4mz) for both bodies,
+[MOTIR-4143](motir:cmtjzu6do000bhvphdqtaf8ag) for the rail — and `explanationSource`,
+`planningProvenance` and `status` are still `add`-only. **This Part draws the collapse**:
+`IssueQuickViewPanel` gains a PROPOSAL MODE, both doors route to it, and the second surface is
+deleted.
+
+## 0. Drawn against SHIPPED reality — what was RENDERED first, and what the render settled
+
+Every panel is composed in the app's own utility classes against the **dumped markup of the shipped
+components**, taken from the running application at `origin/main` @ `68685ad3a` on a seeded plan
+carrying one `add`, one `modify` and one `remove`, each with a real multi-paragraph `descriptionMd`
+and `explanationMd` — not a redraw. **Every number is measured in Chromium at 1440×900.** The harness
+is reproduced in §15 rather than cited, because it is deleted before this asset lands.
+
+**What the render settled, and two of the four could not have been read off the source:**
+
+| what was rendered                         | what it settled                                                                                                                                                                                      |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the same `modify`, opened from BOTH doors | the list door renders **3** rail rows and the canvas door **12**, for one work item in one plan (§1)                                                                                                 |
+| `ProposalQuickView`'s rail                | it prints **raw wire values** — `highest`, not the shipped `↑↑ Highest` priority chip; `8`, not the estimate grammar — because it composes `QuickViewRailField` without the shipped VALUE components |
+| the shipped peek with a long body         | main 626×613 holding **933**, rail 300×613 holding **832**. The peek's rail ALREADY overflows by 219px on an ordinary card, which is what makes §3's pinned line a decision rather than a preference |
+| `ProposalQuickView` on the `remove`       | **2** rail rows, no status, no `line-through`, and **nothing anywhere that says approving will archive the card** — the one thing a `remove` peek exists to say (§8)                                 |
+
+**A fifth thing the render settled, and it corrects a premise this Part started with.** The shipped
+rail shows no `Type` / `Executor` row on a `story`: they are leaf-only (`isTypeableKind`), so the
+twelve rows above are what a container-kind card gets and a `subtask` gets fourteen. **The row set is
+already a function of the SUBJECT, not of the surface** — which is the whole of §1's answer, and it is
+a fact about the shipped component rather than an argument this Part makes.
+
+## 1. §1 · The premise — ONE component, and why the rail is still allowed to be shorter
+
+**The peek a proposal opens IS the peek a work item opens.** `IssueQuickViewPanel` gains a mode;
+nothing composes a second surface out of `QuickViewSurface` again. Every decision below is a
+consequence of that rather than a separate choice.
+
+**The objection to answer first.** If the two surfaces are one, a reader might expect the same rail
+rows a work item gets. They will not always get them — and that is the component behaving as it
+already does:
+
+- the shipped rail is **already data-driven**: `Type` and `Executor` are leaf-only (measured above),
+  `Sprint` is omitted for an epic, custom fields split into valued rows and a `Show more fields (N)`
+  disclosure, and the readiness banner is suppressed past the `todo` category;
+- so **a row's absence is a statement about the SUBJECT, never about the surface**.
+
+**What makes that honest rather than convenient is §2's merge**: on a `modify` / `remove` the peek
+renders the TARGET's own core-field set — the same rail `/items` draws — so the canvas door loses
+nothing it shows today. Only an **un-materialized `add`** is short, because there is no other card to
+read from.
+
+## 2. §2 · The PROJECTION — a merge for `modify` / `remove`, the proposed fields alone for an `add`
+
+The projection answers one question: **what will this work item BE if this plan is approved?** Three
+sources, and the op decides which exist:
+
+| op                          | base                              | overlay                                 | result                                                                         |
+| --------------------------- | --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------ |
+| **`add`** (un-materialized) | none — there is no card yet       | the proposal's `PlanItemProposedFields` | every value is proposed, and every absent row is a field **no plan can carry** |
+| **`modify`**                | the TARGET's live `QuickViewData` | the patch's own fields                  | the card as it will stand, with the changed fields MARKED                      |
+| **`remove`**                | the TARGET's live `QuickViewData` | none — a `remove` carries no patch      | the card as it stands, marked nowhere, plus the archive statement              |
+
+**Why a merge and not the proposal's fields alone.** Today a `modify` opened from the CANVAS renders
+`WorkItemQuickView` — the target's full rail. A proposal mode built only from
+`PlanItemProposedFields` would take `Assignee`, `Reporter`, `Labels`, `Components`, `Due date`,
+`Sprint` and every custom field away from that door. **Collapsing two surfaces must not be a
+regression on the one that was already right**; this is a re-shape precisely because neither door was
+right on its own.
+
+**Why the `add` arm is short, and why that is not the same defect returning.** An `add` has one
+source, and `PlanItemProposedFields` is a CLOSED set held against `PlanReviewItemDto` by
+`tests/dto/planReviewFieldParity.test.ts`. A row it cannot fill has no value to show and no card to
+read one from; an empty-state row would promise that approval settles a field it never touches.
+
+**The rail, row by row, in the shipped order.** _(m) = markable — the plan HAS a carrier for this
+field._
+
+| shipped rail row      | `add`                                                                                                | `modify`                                                                                            | `remove`                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------ |
+| **Status**            | **SUPPRESS** — no card, so no status; the header's op chip is where the proposal's own state lives   | the target's live status, never marked                                                              | the target's live status |
+| **Repositories**      | the PIN — `targetRepo ?? targetRepoRole` **(m)**                                                     | the target's `repoDelivery` set; marked when `patch.targetRepo` / `targetRepoRole` moves it **(m)** | the target's             |
+| **Type**              | proposed **(m)**                                                                                     | merged **(m)**                                                                                      | the target's             |
+| **Executor**          | proposed **(m)**                                                                                     | merged **(m)**                                                                                      | the target's             |
+| **Priority**          | proposed **(m)**                                                                                     | merged **(m)**                                                                                      | the target's             |
+| **Assignee**          | **SUPPRESS**                                                                                         | the target's, never marked                                                                          | the target's             |
+| **Reporter**          | **SUPPRESS**                                                                                         | the target's, never marked                                                                          | the target's             |
+| **Parent**            | proposed `parentIdentifier`, with the intra-plan marker when the parent is itself a proposal **(m)** | merged; marked when `patch.parentRef` re-parents it **(m)**                                         | the target's             |
+| **Labels**            | **SUPPRESS**                                                                                         | the target's, never marked                                                                          | the target's             |
+| **Components**        | **SUPPRESS**                                                                                         | the target's, never marked                                                                          | the target's             |
+| **Due date**          | **SUPPRESS**                                                                                         | the target's, never marked                                                                          | the target's             |
+| **Sprint**            | **SUPPRESS**                                                                                         | the target's, never marked                                                                          | the target's             |
+| **Story points**      | proposed **(m)**                                                                                     | merged **(m)**                                                                                      | the target's             |
+| **Estimate**          | proposed **(m)**                                                                                     | merged **(m)**                                                                                      | the target's             |
+| **Custom fields**     | **SUPPRESS**                                                                                         | the target's valued rows + `Show more fields (N)`, never marked                                     | the target's             |
+| **Created / Updated** | **REPLACED** — §3's foot line                                                                        | **REPLACED**                                                                                        | **REPLACED**             |
+
+**`Sprint` is suppressed on an `add` for a reason worth writing down**: a plan has no sprint carrier at
+all (`move_to_sprint` has no proposal form), so no approval can ever place a card in one. A row that
+can never move is not an empty state; it is noise in a 300px rail.
+
+### ⚠️ The rail's EMPTY VALUES take `--el-text-secondary`, and the asset could not reproduce the shipped markup
+
+**The asset was built by reproducing the shipped rail verbatim, and the design-side ink guard rejected
+it 23 times.** `QuickViewRail` is `bg-(--el-surface-soft)`, and two components it mounts paint their
+empty value `--el-text-muted` — `RepositorySetField.tsx:97` (the `Repositories` row's `None`) and
+`IssueQuickViewPanel.tsx:229` (`mutedNone`, every empty custom field). Measured from the shipped
+tokens: `#787671` on `#fafaf9` is **4.34:1**, under AA; `--el-text-secondary` is **6.51:1**.
+
+**So Part XIV specifies `--el-text-secondary` for every empty value in the rail** — the mock draws it
+that way, and a build that follows this asset gets it right. This is a design DECISION, not the asset
+diverging from reality by accident, and it is stated here because the mock and the running app
+genuinely differ on this one class until the defect is fixed.
+
+**The defect is filed as [MOTIR-4196](motir:cmtkjnfn100hbhxphx8o5s36b), not absorbed.** It is present on
+`origin/main` independently of this story, it needs a failing test of its own, and it owes a sweep of
+the rail's other mounted components — none of which belongs in a design card or in MOTIR-4184.
+`tests/theme/inkContrastLint.test.ts`'s muted arm ABSTAINS on it by its own documented rule (the
+surface is painted in a third module), which is why the tree is green and why a design pass is what
+found it.
+
+**Nine markable fields**, and that number is the denominator §3's foot line names: `targetRepo` /
+`targetRepoRole` (one row), `type`, `executor`, `priority`, `parent`, `storyPoints`,
+`estimateMinutes`, plus `title` and the two bodies, which are marked in the main column rather than in
+the rail. The rail's own denominator is therefore **9** as drawn; a build that changes
+`PlanItemProposedFields` changes it, which is why the line computes it rather than stating a constant.
+
+## 3. §3 · The CHANGED marker — `--el-diff-moved` — and the PINNED line that reads the silence
+
+### The marker
+
+**A rail row the plan CHANGES carries a `changed` chip beside its `LABEL`**, inside the `<dt>`, on the
+caption's own line. It is the marker grammar this area already uses twice — the `AI-drafted` chip
+beside `Why this matters` (`ProposalQuickView.tsx:141`) and `RevisionDiff`'s kind chip
+(`RevisionDiff.tsx:69`) — at chip scale, so the row's height does not change.
+
+```html
+<dt class="… uppercase">
+  Priority
+  <span
+    class="ml-1.5 inline-flex items-center rounded-(--radius-badge) bg-(--el-diff-moved)
+           px-(--spacing-chip-x) py-(--spacing-chip-y) text-[10px] font-semibold
+           text-(--el-text-strong) normal-case"
+    >changed</span
+  >
+</dt>
+```
+
+### The token — NAMED, not invented
+
+| what                      | token                 | Tier-0 source      | light                                                 | dark      |
+| ------------------------- | --------------------- | ------------------ | ----------------------------------------------------- | --------- |
+| the `changed` chip's fill | **`--el-diff-moved`** | `--color-tint-sky` | `#dcecfa`                                             | `#1a2a3a` |
+| its ink                   | `--el-text-strong`    | —                  | the AA ink every tinted chip in the tree already uses |           |
+
+**`--el-diff-moved` is the right token by SEMANTIC, not by resemblance.** It is the shipped diff
+family's own "changed" slot (`theme.css:3044`), and `RevisionDiff.tsx:53` already consumes it for a
+chip whose word is literally `changed`. Nothing is invented, and no second vocabulary for _this moved_
+enters the product.
+
+**It also lands the same colour as the `change` op chip, by CONSTRUCTION rather than by coincidence** —
+both resolve through `--color-tint-sky` — so the rail speaks the header's colour without either side
+naming the other's value, and a palette that re-skins that source moves both.
+
+**⚠️ The card asked for "a named Tier-0 token" and this names a Tier-3 one, deliberately.** Consuming
+`--color-*` directly is forbidden (`CLAUDE.md`'s colour rule): a Tier-0 override is HOW a palette
+re-skins, so a component that reads Tier-0 defeats the mechanism. The criterion's intent — _a shipped
+colour, named in the asset, with its dark value stated, and no new hue_ — is satisfied above, and the
+Tier-0 SOURCE is named beside it so the value stays checkable.
+
+**Colour is never the only carrier.** The chip contains the word `changed`, inside the row's own
+`<dt>`, so a screen reader announces _Priority changed_ rather than a loose chip a reader has to
+associate by position.
+
+### The SILENCE — one line, and it is PINNED
+
+An unmarked row means one of two different things — _the plan carries this field and is not changing
+it_, or _no plan can carry this field at all_ — and a marker cannot separate them without a second
+marker on fourteen rows. **So the rail does not try; one line at the rail's foot does:**
+
+| op                  | the line                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| **`add`**           | `Every value here is what approval will create.`                                     |
+| **`modify`**, n > 0 | `This plan changes {n} of the {m} fields it can set.`                                |
+| **`modify`**, n = 0 | `This plan changes none of these fields — only the description and the explanation.` |
+| **`remove`**        | `Approving this plan archives {key}.`                                                |
+
+**Naming the DENOMINATOR is what makes the silence readable.** `2 of 9` says both that seven settable
+fields are untouched and that everything outside the nine is beyond the plan's reach — which is what
+the `add` arm's short rail and the `modify` arm's never-marked rows are each half of.
+
+**⚠️ AND IT IS PINNED OUTSIDE THE SCROLLER, WHICH IS A MEASUREMENT RATHER THAN A PREFERENCE.** With
+the line inside the rail's `<dl>` the column's content is **799px in a 613px track** — the shipped
+peek's own condition (832 in 613 on the running app) — so **186px sit below the fold**, the line among
+them, and so does the marked `Story points` row at y 616. Pinned, the scroller is 572 and holds 743:
+**171px still below the fold, and the line always visible.** A line whose whole job is to be read as a
+statement ABOUT the rows above it cannot live at the bottom of their scroller — a reader would read
+twelve rows and never reach it, which is exactly the ambiguity this section exists to remove. Same
+instrument and same reasoning as Part XIII §8's pinned decision.
+
+**And it is what makes a marked row BELOW the fold safe**, which is the other half of the same
+measurement: the reader is told there are two changes before they have scrolled to either.
+
+**Why the audit line goes rather than moves.** `Created` / `Updated` on a proposal are the instants the
+PLAN ROW was written — a fact about the plan, which the plan's own timeline (Part X) already carries
+better. It also scrolled, and could: `Created` / `Updated` is a fact you go looking for; the count is a
+fact you must not be able to miss.
+
+**Rejected: reordering the rail so marked rows rise to the top.** The rail's order is settled and one
+of its positions is itself a measurement (Part V / 8.8.8 put `Repositories` second because measured
+last it fell below the fold). A reader who has learned where `Priority` sits should find it there
+whether or not a plan touches it; the pinned line is what tells them to look further down.
+
+## 4. §4 · The HEADER, per op — the op word takes the STATUS slot
+
+The shipped header, left to right:
+
+`IssueTypeIcon(kind)` · `identifier` (a link) · `StatusValue` · [`Archived` pill] · _spacer_ ·
+`WorkItemPlanEntrance` · `Open full page →` · `QuickViewCloseButton`
+
+Proposal mode, per slot:
+
+| slot            | `add`                                                                                                            | `modify`                                                          | `remove`                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| kind glyph      | the PROPOSED kind                                                                                                | the target's kind                                                 | the target's kind                                                 |
+| identifier      | **`New`**, same mono slot, unlinked — `planReview.newItem`, the word the node crumb and the list row already use | the target's key, linked as `/items` links it                     | the target's key, linked                                          |
+| **status slot** | the OP CHIP — `not yet created`                                                                                  | the OP CHIP — `change` — **then** the target's live `StatusValue` | the OP CHIP — `remove` — **then** the target's live `StatusValue` |
+| `Archived` pill | absent                                                                                                           | rendered when the target is archived                              | rendered when the target is archived                              |
+| plan entrance   | **SUPPRESS** (§5)                                                                                                | **SUPPRESS**                                                      | **SUPPRESS**                                                      |
+| the link out    | **ABSENT** (§7)                                                                                                  | present                                                           | present                                                           |
+| close           | ONE — the header's `QuickViewCloseButton`, with `hideClose` on the `Modal` (§7)                                  |                                                                   |                                                                   |
+
+**The decision the card asks for: YES, the op word sits where `/items` puts the status.** A status
+answers _what state is this card in_; on a review surface the reader's question is _what will the plan
+do to it_, and the op is the proposal's own state. It costs no new geometry and reuses the `Pill`
+grammar the list row and the canvas node already speak: `add` → `Pill severity="info"`, `modify` →
+`Pill status="planned"`, `remove` → `Pill tone="archived"` (`PlanProposalList.tsx:90-92`, unchanged).
+
+**And on a `modify` / `remove` BOTH chips render, op first.** They are different facts and the surface
+owes both — a reviewer approving a change to a card already `In Review` needs to know that. Left to
+right the header then reads _what the plan does_ → _where the card is now_, which is the order the
+decision is made in. An `add` has no status chip at all, so the two never crowd on the op whose word is
+longest.
+
+**No fourth vocabulary.** The op word is `planReview.opModify` / `opRemove` (`change` / `remove`), with
+`notYetCreated` kept for the `add` arm — the stronger statement, and the copy that head already shipped
+(`ProposalQuickView.tsx:69`). No new key.
+
+## 5. §5 · The sections a proposal cannot fill — SUPPRESS or EMPTY-STATE, stated per section
+
+The card asks for a decision in words, per section. **Every one is SUPPRESS**, with one REPLACEMENT and
+one split, and the reason has the same shape each time: an empty state is a promise that the thing
+could arrive, and here it cannot.
+
+| section                       | `add`                        | `modify` / `remove`                   | why                                                                                                                                                                                                                                |
+| ----------------------------- | ---------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Development / delivery**    | SUPPRESS                     | SUPPRESS                              | a proposal delivers nothing. The target's pull requests are about the card as it STANDS; rendering them here would attribute delivery to the change, and the link out (§7) is the door to them                                     |
+| **Comments / activity**       | SUPPRESS                     | SUPPRESS                              | the shipped peek never renders them either. What changes is that an `add` has nowhere to defer them TO — §6's foot sentence says so once                                                                                           |
+| **Children**                  | SUPPRESS                     | SUPPRESS                              | the shipped peek renders no child list. `hasChildren` exists only to pick the plan entrance's face, and that entrance is suppressed                                                                                                |
+| **Readiness banner**          | SUPPRESS                     | SUPPRESS                              | it answers _can I start this?_, moot before approval. A proposal's dependency story is the canvas's arrows (Part IX), where `blockedByNodeIds` and `blockedByRemovedNodeIds` are already drawn                                     |
+| **The audit line**            | REPLACED                     | REPLACED                              | §3                                                                                                                                                                                                                                 |
+| **Custom fields**             | SUPPRESS                     | **RENDER** the target's, never marked | no carrier in `PlanItemProposedFields`, so an `add` has no source and no plan can ever change one. On a target they are part of _what this work item is_                                                                           |
+| **`Plan / Re-plan` entrance** | SUPPRESS                     | SUPPRESS                              | it opens a planning conversation ON a work item. A proposal is already the output of one, and its target is being re-planned right now — two plans open on one card is the state this prevents                                     |
+| **Every rail EDITOR**         | SUPPRESS (the VALUES render) | SUPPRESS (the VALUES render)          | proposal editing is OUT ([MOTIR-3084](motir:cmszunxc501v8i2ph8pw1qvwk), and the story's boundary). The mode reuses the read-only path the peek already takes for an actor without `work_item:edit` rather than adding a second one |
+| **`Archived` notice**         | SUPPRESS                     | **RENDER**                            | a fact about the TARGET, and a reviewer approving a change to an archived card should see it before deciding                                                                                                                       |
+
+## 6. §6 · The EXPLANATION — inline, second, and unclamped
+
+**`Why this matters` renders INLINE in the main column, directly under `Description`**, as two sibling
+sections in the same `QuickViewSectionLabel` grammar — which is what the item PAGE does and what
+`ProposalQuickView` already does. `explanationSource === 'ai_draft'` puts the shipped `AI-drafted` chip
+beside the label; it stays `add`-only, because `PlanItemPatch` has no `explanationSource` twin and
+reporting the target's source beside a rewritten explanation would attribute the new text to whoever
+wrote the old one (the field's own note in `lib/dto/planReview.ts`).
+
+**When it is long: it scrolls, with the description, in the main column's own scroller. No clamp, no
+disclosure, no `read more`.** The main column is already `overflow-y-auto` (measured: 933 of content in
+a 613 track on the shipped peek). A clamp needs a destination for the rest, and for an `add` there is
+none — **deferring to a thing that does not exist is exactly how `explanationMd` came to be carried,
+diffed and materialized while nothing displayed it** (MOTIR-4134). A clamp would be that defect at a
+smaller scale.
+
+**The shipped foot line is REPLACED, not kept.** `/items` ends its main column with _"Explanation,
+relationships, attachments, and the activity feed live on the full page"_ — wrong twice over in this
+mode: the explanation is right here, and an `add` has no full page. Proposal mode ends with:
+
+| op                          | the line                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| **`add`**                   | `A proposal has no comments, children or activity until it is approved.` — no link |
+| **`modify`** / **`remove`** | the same sentence, with `activity` linking the TARGET's full page                  |
+
+## 7. §7 · `Open full page →`, and the ONE close
+
+**`Open full page →` is ABSENT for an un-materialized `add`** — there is no route, and a control that
+navigates nowhere is worse than no control. **It is PRESENT for a `modify` / `remove`**: the target has
+a page, and it is the only way to reach the delivery, comments and children this mode suppresses. Both
+are drawn.
+
+### ⚠️ AMENDED 2026-09-02 — WHAT IT OPENS, which the first draft of this section did not say
+
+**It opens `/items/<key>` in a NEW TAB, and that page shows the card AS IT STANDS.** Two facts,
+both read off shipped code rather than assumed:
+
+- `OpenFullPageLink` is `target="_blank" rel="noopener noreferrer"`
+  (`IssueQuickViewPanel.tsx:111-124`), so the peek is not dismissed — the proposal stays open behind
+  the new tab.
+- **The work-item detail page has no pending-plan affordance of any kind.** `ArchivedBanner`,
+  `CoreFieldsPanel`, `RelationshipsPanel`, `ChildPanel` and the late sections read no plan; nothing
+  on that page knows a proposal exists.
+
+**So the reviewer crosses a seam this story exists to close.** The peek says
+`PRIORITY · changed · ↑↑ Highest`; one click later the page says `↑ High`. On a rename it is sharper
+still — since [MOTIR-4018](motir:cmtgaukgt0002hwn8b22q8jsg) the peek's headline is the title the plan
+PROPOSES, so the two tabs carry two different names for one card, with nothing connecting them.
+**That is _one card described two different ways_, reappearing one click out of the surface that was
+built to stop it.**
+
+**The decision: KEEP the control, and CHANGE ITS LABEL so the tense is honest.** In proposal mode it
+reads **`Open the work item as it stands →`** (`planReview.openTargetAsItStands`), not `Open full page`.
+
+| candidate                                                  | verdict                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SUPPRESS it on a `modify` / `remove` too**               | **Rejected.** Proposal mode suppresses Development / delivery, comments, children and readiness (§5), and on a real target those are decision-relevant — a `remove` of a card with an open pull request is a different decision. The link is the ONLY door; removing it makes proposal mode a dead end on a card that has a page |
+| **Keep it and re-label it** ✅                             | The smallest change that stops the surface asserting something false. The peek's question is _what will this BE_; the destination answers _what it IS_, and the label now says which. One copy key, no new surface, no new read                                                                                                  |
+| **Keep it and put a pending-plan banner on the item page** | **Right, and OUT of this story** — the boundary ENDS AT what the reviewer reads on the review surface. It is also a new read on every item-page render. Filed as [MOTIR-4197](motir:cmtkk86cq0001hvphojbe053t) rather than deferred to this paragraph                                                                            |
+
+**The label change is the whole of what this asset owes**, and it is deliberately not more: a
+re-labelled control tells the truth about where it goes, and the banner is what would make the
+destination itself agree. The two are independent, and the second is somebody else's card.
+
+**An `add` that HAS materialized is not this surface at all.** `PlanReviewCanvas.onView` already routes
+it to the committed peek (MOTIR-3161), because the proposal has become a card and carries a real
+identifier. That branch is UNCHANGED, and it is the one `op === 'add'` test that survives the collapse.
+
+**ONE close affordance, inherited rather than re-litigated.** The host passes `hideClose` to the
+`Modal` and keeps the header's `QuickViewCloseButton` — Part XIII §7's decision, taken after
+[MOTIR-4022](motir:cmtgaukpn0006hwn86ttsr1mu) measured two controls named `Close` 40px apart in one
+dialog. `IssueQuickView`, `WorkItemQuickView` and `AttachmentPreview` all already do it.
+
+## 8. §8 · The `remove` arm — what a card the plan will ARCHIVE looks like
+
+The op no other panel reaches on its own, and the one the shipped surface says least about: rendered
+today it is **2 rail rows, no status, no strike, and nothing anywhere that says approving archives the
+card**.
+
+| element      | treatment                                                                                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| identity     | the TARGET's — kind glyph, key (linked), title                                                                                                                       |
+| the title    | the shipped `line-through` the list row already applies to a `remove` (`PlanProposalList.tsx:232`), so the two surfaces mark the same card the same way              |
+| op chip      | `remove`, `Pill tone="archived"` — `--el-archived-pill-bg` / `--el-archived-pill-text`, the dedicated pair, because archived is an inactive state and not a severity |
+| status pill  | the target's live status — a `remove` of an `In Review` card is a different decision from a `remove` of a `To Do` one                                                |
+| bodies       | the TARGET's. A `remove` carries no patch, so what is shown is exactly what will be archived                                                                         |
+| rail         | the target's, with **no marker on any row, ever** — a `remove` changes no field                                                                                      |
+| foot line    | `Approving this plan archives {key}.`                                                                                                                                |
+| the link out | present, labelled `Open the work item as it stands →` (§7)                                                                                                           |
+
+**`targetMissing`.** A `remove` whose target is already archived or hard-deleted (the DTO's own flag)
+shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
+`IssueQuickViewPanel state="notfound"` already draws, reused rather than re-invented.
+
+## 9. §9 · The two ENTRANCES — unchanged in shape, re-pointed in target
+
+| door                                                                                                                                                  | today                                                                                     | after                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| the plan **list row** (`PlanProposalList.tsx:305-313`) — the title `<button>` with the stretched `::after`, `aria-label` `Open {name}` (Part XIII §7) | `ProposalQuickView`, on every op                                                          | the shipped peek in proposal mode                                                                            |
+| the canvas **View** pill (`PlanReviewCanvas.tsx:226-240`) — the node's one control (Part V §3)                                                        | `ProposalQuickView` for an un-materialized `add`; `WorkItemQuickView` for everything else | the shipped peek in proposal mode for every proposal; `WorkItemQuickView` still for a COMMITTED sibling node |
+
+**Neither row nor node moves.** Part IX drew the node and Part XIII drew the row; this story adds a
+reading without moving one, which is the boundary the story states in its own words.
+
+**Both doors now hold the SAME compound state.** `PlanProposalList`'s mount comment records the
+assumption this Part removes — _"the canvas's peek state is a compound one — a proposal OR a committed
+key — of which a list row can only ever be the first"_ — which was true and stops being true here: a
+list row can still only ever open a proposal, but a proposal is now peeked through the same component a
+committed key is.
+
+## 10. §10 · Copy — every string this Part introduces or re-points
+
+| key                                                    | string                                                                               | note                                                                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `planReview.railChangedMark`                           | `changed`                                                                            | NEW — the rail marker chip                                                                                               |
+| `planReview.railChangeCount`                           | `This plan changes {n} of the {m} fields it can set.`                                | NEW — the pinned line, `modify`, n > 0                                                                                   |
+| `planReview.railChangeNone`                            | `This plan changes none of these fields — only the description and the explanation.` | NEW — `modify`, n = 0                                                                                                    |
+| `planReview.railAddAll`                                | `Every value here is what approval will create.`                                     | NEW — `add`                                                                                                              |
+| `planReview.railRemoveArchives`                        | `Approving this plan archives {key}.`                                                | NEW — `remove`                                                                                                           |
+| `planReview.openTargetAsItStands`                      | `Open the work item as it stands`                                                    | NEW — the link out, on a `modify` / `remove`; it REPLACES `issueViews.openFullPage` in proposal mode and only there (§7) |
+| `planReview.peekNoActivity`                            | `A proposal has no comments, children or activity until it is approved.`             | NEW — the main column's foot sentence (the `<link>` arm carries the `modify` / `remove` variant)                         |
+| `planReview.newItem`                                   | `New`                                                                                | REUSED — the header's identifier slot                                                                                    |
+| `planReview.notYetCreated`                             | `not yet created`                                                                    | REUSED — the `add` op chip                                                                                               |
+| `planReview.opModify` / `opRemove`                     | `change` / `remove`                                                                  | REUSED — the op chip                                                                                                     |
+| `planReview.aiDrafted`                                 | `AI-drafted`                                                                         | REUSED — beside `Why this matters`                                                                                       |
+| `planReview.sectionDescription` / `sectionExplanation` | `Description` / `Why this matters`                                                   | REUSED                                                                                                                   |
+
+**⚠️ THE NOUN IS `work item`, AND THIS SECTION IS WHERE THAT IS ENFORCED.** A mock is not a sketch —
+its rendered strings are the copy a code card transcribes into the catalog, so the planner's shorthand
+ships verbatim unless it is translated HERE. Motir's user-facing noun for a tracked unit is
+**work item**, never `card` and never `issue`: `issueViews` says it 30 times
+(`This work item isn't available`, `Child work items`, `Back to work items`), and the shipped catalog
+carries `card` only in the PAYMENT sense. `planReview`'s own `item` / `proposed item` is a different
+referent — a PROPOSAL, not the work item it is about — and stays as it is.
+
+**This was got wrong in this asset's first draft** (the label read `Open the card as it stands`) and
+corrected on Yue's reading. It is recorded rather than quietly fixed because the failure is invisible
+locally: whoever writes the mock has just read a corpus that says `card` on every page, so the word
+looks like the product's word, and whoever builds to the mock is instructed to render its strings
+verbatim. **Read the mock's VISIBLE text — strip the markup — and ask of every occurrence of the
+working vocabulary whether a user would read it.**
+
+Both catalogs (`messages/en.json`, `messages/zh.json`) in the same change — a key added to one is a
+parity failure.
+
+## 11. §11 · a11y
+
+- **The op chip carries TEXT**, never colour alone; so does the `changed` marker. Nothing on this
+  surface is distinguished by hue.
+- **The `changed` marker lives INSIDE the `<dt>`**, so it is announced as part of the row's own term —
+  _Priority changed_ — rather than as a loose chip a reader associates by position.
+- **The dialog is labelled by the proposal's title** (`Modal srTitle`), as both peeks already are.
+- **ONE control named `Close`** (§7).
+- **The link out is ABSENT rather than disabled on an `add`** — a disabled control in a dialog is
+  a tab stop that answers nothing.
+- The pinned foot line is a `<p>` in the rail column, outside the `<dl>` — so it is not announced as a
+  term/definition pair, which it is not.
+- The rail's `Show more fields (N)` disclosure keeps its shipped `aria-expanded`; proposal mode adds no
+  control of its own.
+
+## 12. §12 · Access path
+
+`Plans` (left nav, Part I §5) → a row on the tabbed list (Part VII) → the plan detail (Part VIII) →
+either body: the LIST's row title, or the CANVAS's `View` pill on a selected node (§9). This Part adds
+no route, no nav entry and no new modal host.
+
+## 13. §13 · GIVES / TAKES — swept over the story SUBTREE
+
+`grep`ped this asset for every `MOTIR-<n>` it names and read the result against MOTIR-4181's children:
+
+| key                                        | gives / takes                                                                                                                                                     | action                                                                |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **MOTIR-4183** (the projection)            | **GIVES** §2 — the merge table, the closed row set, and the marked-field set beside the payload; **and §3's denominator**, which is computed rather than constant | none; its criteria already ask for the projection and the CHANGED set |
+| **MOTIR-4184** (the panel's proposal mode) | **GIVES** §3–§8 — the header, the marker, the PINNED line, the inline explanation, every suppression, the RE-LABELLED link out, and its absence on an `add`       | none; its criteria already name all four                              |
+| **MOTIR-4185** (both doors)                | **GIVES** §9 — and CONFIRMS its boundary: neither door's look changes                                                                                             | none                                                                  |
+| **MOTIR-4186** (the vitest gate)           | **GIVES** §2's per-op table as the thing to derive assertions FROM, and §3's `n of m` as a computed value worth a test                                            | none                                                                  |
+| **MOTIR-4187** (the E2E)                   | **GIVES** the story's four verification reads a drawn expectation per op                                                                                          | none                                                                  |
+| MOTIR-3084 / Part V §3                     | neither — this composes that decision and reverses none of it                                                                                                     | none                                                                  |
+| MOTIR-4022 / Part XIII §7                  | neither — §7 inherits the ONE-close decision verbatim                                                                                                             | none                                                                  |
+| MOTIR-4134 / MOTIR-4143                    | neither — cited as the defects whose shared cause §0 measures                                                                                                     | none                                                                  |
+| MOTIR-3510                                 | neither — cited for the height-bound rule §3 and §6 apply                                                                                                         | none                                                                  |
+
+**Nothing is TAKEN from any card in the subtree.** One scope statement WIDENS rather than narrows: §2's
+merge asks MOTIR-4183 for the target's `QuickViewData` as the base on a `modify` / `remove`, where that
+card's own wording (_"project into the payload the shipped quick view reads"_) is satisfied by either
+reading. It is recorded here as a decision rather than left for the build to pick, and it costs no new
+criterion — the read it needs is `GET /api/work-items/peek`'s own, already shipped.
+
+**And one thing this Part ADDS to MOTIR-4184 that its criteria do not name: the rail column stops being
+a bare `<dl>`.** §3's pinned line needs a flex column holding a scrolling `<dl>` plus a `<p>`. That is a
+change to `QuickViewRail`'s shape, so it is either a prop on the shared chrome or a local composition —
+a build decision, but not a silent one, and it is why it is written down here.
+
+## 14. §14 · What Part XIV does NOT draw
+
+The canvas node and the list row (Parts IX and XIII); the review rail and the Approve / Decline gate
+(Part XIII §8); the revision affordance (Part XII); any editing affordance anywhere; and a full old→new
+DIFF inside the peek — `changes[]` spells old→new in the list row and that is where a diff belongs
+(MOTIR-4134's boundary, unchanged). **The peek's question stays _what will this work item BE_.**
+
+## 15. §15 · How this asset was produced (reproduced here, because the harness is deleted)
+
+The mock's stylesheet IS Tailwind's real output for this document, and its markup is composed in the
+app's own utility classes against the dumped markup of the shipped components. **No token is declared
+locally.**
+
+```js
+// .scratch4182/input.css  →  postcss  →  inlined verbatim into the mock's <style>
+//   @import 'tailwindcss' source(none);
+//   @source '../design/ai-planning/peek-proposal-mode.mock.html';
+//   @import '@motir/design-system/theme.css';
+postcss([tailwindcssPostcss]).process(css, { from: inputPath });
+```
+
+```ts
+// a throwaway Playwright spec under tests/e2e/, deleted before the commit, driven against
+// `next build && next start` on the sandbox Postgres, seeded through the SHIPPED services:
+//   workItemsService.createWorkItem  — one epic, one story with a long descriptionMd, one story
+//   plansService.createPlan + addProposals + markPlanned — one `add` (full proposedFields,
+//     long descriptionMd + explanationMd), one `modify` (patch: title, both bodies, priority,
+//     storyPoints) on the first story, one `remove` on the second
+// then, at 1440x900:
+//   /items?peek=<key>              → outerHTML + getBoundingClientRect/scrollHeight of the dialog,
+//                                    its header, its main column and its rail; the rail's <dt> list
+//   /plans/<id>?view=list          → the list body's outerHTML, then each row opened in turn for
+//                                    the `add`, the `modify` and the `remove` peeks
+//   /plans/<id>?view=canvas        → the node's outerHTML
+```
+
+Measurement at `deviceScaleFactor: 1`; the PNG is exported with the shipped
+`node scripts/render-design-mock.mjs --width 1240 design/ai-planning/peek-proposal-mode.mock.html`,
+**after** `prettier --write` on the mock. The dark panel was rendered in Chromium at
+`data-theme="dark"` with `data-appearance-scope`, not inferred — a bare nested `data-theme` re-skins
+nothing, because `--el-*` resolves at the element that DECLARES it.
