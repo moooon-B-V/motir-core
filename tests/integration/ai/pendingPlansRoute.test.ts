@@ -76,6 +76,19 @@ async function planIn(
 ): Promise<string> {
   const plan = await plansService.createPlan(fx.projectId, { title }, fx.ctx);
   if (status === 'generating') return plan.id;
+  // ⚠️ ONE PROPOSAL BEFORE THE CLOSE, AND IT IS LOAD-BEARING (bug MOTIR-4148).
+  // `markPlanned` over a plan holding NOTHING no longer produces `planned` — it
+  // DISCARDS the plan (`declined` / `discarded`, MOTIR-4124), because `planned`
+  // is the status that puts a plan in front of a person and an empty one asks
+  // for a decision there is nothing to make. So a plan must PROPOSE something
+  // to be able to reach `planned` at all, and every arm below it — `approved`,
+  // `declined` — closes through here too. Without this the helper handed back a
+  // decided plan under three different names and `approvePlan` threw.
+  await plansService.addProposals(
+    plan.id,
+    [{ op: 'add', proposedFields: { title: `${title} — a proposal`, kind: 'task' } }],
+    fx.ctx,
+  );
   await plansService.markPlanned(plan.id, fx.ctx);
   if (status === 'planned') return plan.id;
   if (status === 'stale') {
