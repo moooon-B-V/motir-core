@@ -82,6 +82,22 @@ const EXEMPT: { file: string; why: string }[] = [
     why: 'Anonymous-tolerant, same shape as follow.',
   },
   {
+    file: 'app/api/public/p/[identifier]/board/route.ts',
+    why: 'Anonymous-tolerant public project surface, same shape (MOTIR-4109) — `session?.user.id ?? null`, read only to personalise member visibility, never to authorise.',
+  },
+  {
+    file: 'app/api/public/p/[identifier]/items/[key]/route.ts',
+    why: 'Anonymous-tolerant public project surface, same shape (MOTIR-4110) — the DETAIL read beside the list read already exempt above it.',
+  },
+  {
+    file: 'app/api/public/p/[identifier]/requests/[requestKey]/route.ts',
+    why: 'Anonymous-tolerant public project surface, same shape (MOTIR-4110).',
+  },
+  {
+    file: 'app/api/projects/[key]/public-overview/route.ts',
+    why: 'NOT anonymous-tolerant, and exempt for the opposite reason (MOTIR-4114). It reads the session to name the actor and then REFUSES: `setPublicOverview` throws `NotProjectAdminError` when `actorUserId` is null or `canManage` is false, before any write, and `projectsService.setPublicOverview` re-runs `assertCanManage` inside the write transaction. The route has its own refusal; adding `requireCompliantSession` on top would change a 403 into a different error for the same caller.',
+  },
+  {
     file: 'app/api/internal/ai/dev/noop/route.ts',
     why: 'SERVICE-authenticated, not cookie-authenticated: `app/api/internal/**` is called by motir-ai over a shared secret and there is no browser session to hold. This one reads a session only to label a dev fixture.',
   },

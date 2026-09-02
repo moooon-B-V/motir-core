@@ -200,6 +200,10 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'project_public_read (20260811230000) · publicAccessAndProjection.test "listPublicForSitemap … CROSS-TENANT" (added by MOTIR-2833 — the read had NO test at all)',
   ],
+  'projectRepository.ts#listPublicIndexPage': [
+    'public',
+    'project_public_read (20260811230000) · publicAccessAndProjection.test "listPublicIndex pages every PUBLIC project CROSS-TENANT" (MOTIR-4111 — the crawl index motir.co walks; unbound for the same reason as the sitemap read above, a crawler belongs to no workspace)',
+  ],
   // The unbound `work_item` arm is GATED on there being no bound workspace, which is
   // precisely the public path. Both of these touch `work_item` and nothing else.
   'workItemRepository.ts#maxActivityByProjects': [

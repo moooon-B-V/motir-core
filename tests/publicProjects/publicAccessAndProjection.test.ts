@@ -167,6 +167,48 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
     }
   });
 
+  it('listPublicIndex pages every PUBLIC project CROSS-TENANT, newest first, and its cursor does not repeat a row', async () => {
+    /*
+     * The crawl INDEX motir.co walks (MOTIR-4111). Same unbound, cross-tenant
+     * shape as `listPublicForSitemap` above and the same reason it must be
+     * unbound: a crawler belongs to no workspace, so a workspace-scoped read
+     * would return an empty index and look like a site with no public projects.
+     *
+     * ⚠️ THIS TEST IS WHAT THE `singleton-read-guard` VERDICT CITES. That guard
+     * exists because a singleton read against a policy-gated table returns ZERO
+     * ROWS AND RAISES NOTHING under the non-bypass role — the failure is silent,
+     * so the verdict may not be an argument, it has to be a run.
+     */
+    const a = await makePublicProjectFixture('Index Org A');
+    const b = await makeWorkItemFixture({ name: 'Index Org B', identifier: 'IXB' });
+    await adminDb.project.update({
+      where: { id: b.projectId },
+      data: { accessLevel: 'public' },
+    });
+    const priv = await makeWorkItemFixture({ name: 'Index Private', identifier: 'IXP' });
+
+    const first = await publicProjectsService.listPublicIndex();
+    const seen = first.projects.map((r) => r.identifier);
+
+    // Two DIFFERENT tenants in one unbound page — the property that proves the
+    // read is not silently scoped to nothing.
+    expect(seen).toContain(a.projectIdentifier);
+    expect(seen).toContain(b.projectIdentifier);
+    expect(seen).not.toContain(priv.projectIdentifier);
+    for (const row of first.projects) {
+      expect(typeof row.identifier).toBe('string');
+      expect(() => new Date(row.updatedAt).toISOString()).not.toThrow();
+    }
+
+    // The cursor is the page's LAST row, so the next page starts after it — a
+    // pager that repeated its boundary row would make a crawler walk forever.
+    if (first.nextCursor) {
+      const second = await publicProjectsService.listPublicIndex(first.nextCursor);
+      const overlap = second.projects.map((r) => r.identifier).filter((id) => seen.includes(id));
+      expect(overlap).toEqual([]);
+    }
+  });
+
   it('a NON-public project reads as 404 through every public read (the cross-org exception is public-only)', async () => {
     const fx = await makeWorkItemFixture({ name: 'Private Co' }); // default access — NOT public
     const crossOrg = await createTestUser();
