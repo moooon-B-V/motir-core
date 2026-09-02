@@ -64,4 +64,19 @@ export const planRevisionRepository = {
   async listByPlan(planId: string, tx: Prisma.TransactionClient): Promise<PlanRevision[]> {
     return tx.planRevision.findMany({ where: { planId }, orderBy: { changedAt: 'asc' } });
   },
+
+  /**
+   * How many rows of ONE verb a plan's trail holds (MOTIR-4076) — the read the
+   * planner-bug VOLUME bound counts on. Required `tx` for the reason `listByPlan`
+   * gives, and one more: this read GUARDS a write, so the caller holds the plan's
+   * row lock (`planRepository.lockById`) in the same transaction — a count taken
+   * outside it could be passed by two filings at once.
+   */
+  async countByPlanAndKind(
+    planId: string,
+    changeKind: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.planRevision.count({ where: { planId, changeKind } });
+  },
 };
