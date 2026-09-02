@@ -326,16 +326,26 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
   describe('the at-scale split (AC 2)', () => {
     const atScale = codeOf(ciJobs.get('e2e-at-scale') ?? '');
 
-    it('runs on push-to-main and on an opted-in PR, and otherwise not at all', () => {
-      expect(atScale).toContain("github.event_name == 'push'");
+    it('runs on a merge-queue entry and on an opted-in PR, and otherwise not at all', () => {
+      // ⚠️ `push` UNTIL MOTIR-4050. The legs did not leave the gate, they moved
+      // one step earlier: from after the merge to the composed tree that is
+      // about to become `main`. MOTIR-3148's property is untouched — still once
+      // per merge, still never on an ordinary pull request.
+      expect(atScale).toContain("github.event_name == 'merge_group'");
+      expect(atScale).not.toContain("github.event_name == 'push'");
       expect(atScale).toContain(
         "contains(github.event.pull_request.labels.*.name, 'e2e-at-scale')",
       );
     });
 
-    it('still gates the deploy, so `main` cannot release without it', () => {
-      // The legs left the PR lane; they did not leave the release gate.
-      expect(codeOf(ciJobs.get('deploy') ?? '')).toMatch(/needs:.*\be2e-at-scale\b/);
+    it('still gates the MERGE, so nothing reaches `main` without it', () => {
+      // The legs left the PR lane, then left the push lane; they did not leave
+      // the gate. `deploy` cannot be the assertion any more — the job is skipped
+      // on a push, and a skipped `needs` entry would stop the release rather
+      // than gate it — so the property is read where it now lives: the required
+      // `CI complete` context, which a merge-queue entry must satisfy.
+      expect(codeOf(ciJobs.get('deploy') ?? '')).not.toMatch(/needs:.*\be2e-at-scale\b/);
+      expect(codeOf(ciJobs.get('ci-complete') ?? '')).toMatch(/\be2e-at-scale\b/);
     });
 
     it('holds the volume legs and none of the bulk ones', () => {

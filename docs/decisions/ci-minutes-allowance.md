@@ -1173,6 +1173,34 @@ different claim from the one anybody needed. Fixed here.
 `MOTIR_RUNNER`, or changes what `motir-core` runs on — §J.4's three reasons and
 §O's guard are exactly as they were.
 
+##### §J.6 — ⛔ §J.5's MERGE-QUEUE REJECTION IS SUPERSEDED (MOTIR-4050, 2026-09-02)
+
+**Only the merge queue moves. §J.5's other verdict — the deploy-only `main` run
+rejected as (c) — is not re-opened by this, it is DELIVERED by it**, as a
+consequence of the queue rather than on its own terms, and both of the reasons
+(c) was refused are retired: `e2e-at-scale` now runs on `merge_group`, and the
+merged SUM is verified by the queue BEFORE the merge instead of by the push
+after it.
+
+§J.5 rejected a merge queue as a latency fix and was RIGHT to: measured again on
+2026-09-02, click-to-deployed is a wash (~22–26 min against 21 fastest / ~34
+median). It then named the heading under which the answer would differ — _"a
+**correctness** improvement … re-opened under the both-green-main-red heading,
+sized against the second run per change"_ — and MOTIR-4050 is that card.
+
+**The one thing §J.5 got wrong is the sizing, and it is what inverts the
+verdict.** _"Every change pays for a second full run rather than replacing
+one"_ measures against a baseline where `main` runs nothing. `main` was in fact
+running the full matrix on every merge, so the second full run was **already
+being paid**; the queue relocates it from after the merge to before it. Per
+merged change: **353 runner-minutes before, 370 unbatched (+5%), 232 batched
+three to a group (−34%)**.
+
+The decision, the ejection cost it adds, the ruleset parameters and the
+measurement still owed are `docs/decisions/merge-queue.md`. **§J itself is
+untouched** — nothing there routes a job anywhere or changes what `motir-core`
+runs on.
+
 #### §K — What SURVIVES the substrate change — verified against shipped code, not assumed
 
 The change is far narrower than it looks, because the shipped meter is already
