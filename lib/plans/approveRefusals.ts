@@ -199,6 +199,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       'The generation callback resolves a plan by job id; approve is handed a plan id.',
   },
+  PLANNER_BUG_CAP_EXCEEDED: {
+    cause: 'not-approve',
+    justification:
+      "The planner's `log-bug` door refusing a sixth filing on one job (MOTIR-4076) — a bound on a work-item WRITE counted on the plan's trail. Approve materializes proposals and files nothing.",
+  },
   NO_PLAN_FOR_WORK_ITEM: {
     cause: 'not-approve',
     justification: "The work-item plan lookup's refusal. Approve never asks that question.",
