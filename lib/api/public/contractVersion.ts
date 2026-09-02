@@ -49,8 +49,32 @@
  *   moved. Four of them REQUIRE the application's session and say so, which is
  *   a correction to what 1.0.0's document implied rather than a change to any
  *   route (see AMENDMENT 1 §G).
+ * - `1.2.0` — MOTIR-4109 gives the BOARD tab and the ROADMAP's first page their
+ *   reads: a new `getPublicProjectBoard`, and a second ARM on the existing
+ *   `getPublicProjectRoadmapColumn` — with neither `bucket` nor `cursor` it now
+ *   answers the whole `PublicRoadmap` instead of `MISSING_ROADMAP_CURSOR`.
+ *   Additive under §D: a new operation, and two REQUIRED parameters relaxed to
+ *   optional, which is the direction §D permits (it forbids the inverse). Every
+ *   request that has a defined answer today keeps exactly that answer — the
+ *   both-absent case is the only new one — so no status an existing condition
+ *   returns has moved. The `operationId` is deliberately NOT renamed: a
+ *   generated client names its method after it.
+ * - `1.3.0` — MOTIR-4110 gives the two DETAIL reads their routes:
+ *   `getPublicProjectWorkItem` and `getPublicProjectRequest`. Additive under §D
+ *   — two new operations, no declared shape changed. Both are keyed by the
+ *   project key plus the target's WORK-ITEM identifier, which is what the
+ *   service takes and what a shared link carries; the request WRITES beside
+ *   them stay keyed by ids, and that asymmetry is declared rather than
+ *   smoothed over.
+ * - `1.4.0` — MOTIR-4111 restores the CRAWL surface: `listPublicProjectIndex`
+ *   (the sitemap enumeration, keyset-paged on a stable order) and
+ *   `getPublicProjectChangelogFeed` (the Atom document whose builder had been
+ *   caller-less since the pages were deleted). Additive under §D — two new
+ *   operations. The feed is the FIRST operation here that does not answer JSON,
+ *   so the declaration gained a `responseMediaType`; every existing operation
+ *   defaults to `application/json` and none of their documents changed.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.1.0';
+export const PUBLIC_CONTRACT_VERSION = '1.4.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;

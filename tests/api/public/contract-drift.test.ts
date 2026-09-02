@@ -7,8 +7,13 @@ import {
   publicFollowStateSchema,
   publicProjectOverviewSchema,
   publicRequestResultSchema,
+  publicBoardSchema,
+  publicProjectIndexPageSchema,
+  publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
+  publicRoadmapSchema,
   publicTreeLevelSchema,
+  publicWorkItemDetailSchema,
   publicWorkItemPageSchema,
 } from '@/lib/api/public/openapi/schemas';
 import { runAsCloudBuild } from '../../helpers/cloudBuild';
@@ -37,6 +42,12 @@ runAsCloudBuild();
 const getOverview = vi.hoisted(() => vi.fn());
 const getProjectTreeLevel = vi.hoisted(() => vi.fn());
 const getWorkItems = vi.hoisted(() => vi.fn());
+const getBoard = vi.hoisted(() => vi.fn());
+const getWorkItemDetail = vi.hoisted(() => vi.fn());
+const getChangelogFeed = vi.hoisted(() => vi.fn());
+const listPublicIndex = vi.hoisted(() => vi.fn());
+const getRequestDetail = vi.hoisted(() => vi.fn());
+const getRoadmap = vi.hoisted(() => vi.fn());
 const getRoadmapColumn = vi.hoisted(() => vi.fn());
 const getChangelog = vi.hoisted(() => vi.fn());
 const submitPublicRequest = vi.hoisted(() => vi.fn());
@@ -69,6 +80,12 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getOverview,
     getProjectTreeLevel,
     getWorkItems,
+    getBoard,
+    getWorkItemDetail,
+    getRequestDetail,
+    getChangelogFeed,
+    listPublicIndex,
+    getRoadmap,
     getRoadmapColumn,
     getChangelog,
     submitPublicRequest,
@@ -87,7 +104,14 @@ const { GET: getExplore } = await import('@/app/api/public/explore/route');
 const { GET: getCategories } = await import('@/app/api/public/categories/route');
 const { GET: getTree } = await import('@/app/api/public/p/[identifier]/tree/route');
 const { GET: getItems } = await import('@/app/api/public/p/[identifier]/items/route');
-const { GET: getRoadmap } = await import('@/app/api/public/p/[identifier]/roadmap/route');
+const { GET: getBoardRoute } = await import('@/app/api/public/p/[identifier]/board/route');
+const { GET: getItemDetailRoute } =
+  await import('@/app/api/public/p/[identifier]/items/[key]/route');
+const { GET: getRequestDetailRoute } =
+  await import('@/app/api/public/p/[identifier]/requests/[requestKey]/route');
+const { GET: getFeedRoute } = await import('@/app/api/public/p/[identifier]/changelog.xml/route');
+const { GET: getProjectIndexRoute } = await import('@/app/api/public/projects/route');
+const { GET: getRoadmapRoute } = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const { GET: getChangelogRoute } = await import('@/app/api/public/p/[identifier]/changelog/route');
 const { POST: postFollow, DELETE: deleteFollow } =
   await import('@/app/api/public/p/[identifier]/follow/route');
@@ -202,11 +226,305 @@ describe('the published schema matches what the route actually returns', () => {
       ],
       nextCursor: null,
     });
-    const res = await getRoadmap(
+    const res = await getRoadmapRoute(
       url('/api/public/p/ACME/roadmap?bucket=planned&cursor=abc'),
       identifierParams,
     );
     expect(publicRoadmapColumnPageSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  // ── MOTIR-4109: the board, and the roadmap's OTHER arm ────────────────────
+  //
+  // The roadmap operation now declares a UNION, so both arms are driven here.
+  // One arm passing proves nothing about the other — they are different service
+  // calls returning different shapes down one path, which is exactly the
+  // configuration a drift guard is for.
+
+  it('GET /api/public/p/{identifier}/roadmap — with NEITHER parameter, the whole tab', async () => {
+    getRoadmap.mockResolvedValue({
+      columns: [
+        {
+          key: 'planned',
+          totalCount: 4,
+          cards: [
+            {
+              id: 'wi_2',
+              identifier: 'ACME-2',
+              key: 2,
+              title: 'A card',
+              kind: 'task',
+              voteCount: 3,
+              voted: false,
+            },
+          ],
+          nextCursor: 'next',
+        },
+      ],
+    });
+    const res = await getRoadmapRoute(url('/api/public/p/ACME/roadmap'), identifierParams);
+    expect(res.status).toBe(200);
+    expect(publicRoadmapSchema.parse(await res.json())).toBeTruthy();
+    expect(getRoadmapColumn).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/public/p/{identifier}/board', async () => {
+    getBoard.mockResolvedValue({
+      boardId: 'board_1',
+      name: 'Delivery',
+      columns: [
+        {
+          id: 'col_1',
+          name: 'In progress',
+          statusKeys: ['in_progress'],
+          cards: [
+            {
+              id: 'wi_4',
+              identifier: 'ACME-4',
+              key: 4,
+              title: 'A board card',
+              kind: 'task',
+              status: 'in_progress',
+              statusCategory: 'in_progress',
+              priority: 'medium',
+            },
+          ],
+          totalCount: 12,
+        },
+      ],
+      cap: 200,
+      truncated: true,
+    });
+    const res = await getBoardRoute(url('/api/public/p/ACME/board'), identifierParams);
+    expect(res.status).toBe(200);
+    expect(publicBoardSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  // ── MOTIR-4110: the two detail reads ─────────────────────────────────────
+
+  it('GET /api/public/p/{identifier}/items/{key}', async () => {
+    getWorkItemDetail.mockResolvedValue({
+      id: 'wi_6',
+      identifier: 'ACME-6',
+      key: 6,
+      title: 'A work item',
+      kind: 'task',
+      status: 'in_progress',
+      statusLabel: 'In progress',
+      statusCategory: 'in_progress',
+      descriptionMd: '## Body',
+      parent: { identifier: 'ACME-1', key: 1, title: 'A parent', kind: 'epic' },
+      childrenHidden: false,
+      childCount: 2,
+      children: [
+        {
+          id: 'wi_7',
+          identifier: 'ACME-7',
+          key: 7,
+          title: 'A child',
+          kind: 'subtask',
+          status: 'todo',
+          statusCategory: 'todo',
+          priority: 'low',
+          parentId: 'wi_6',
+          hasChildren: false,
+        },
+      ],
+      childrenHasMore: true,
+    });
+    const res = await getItemDetailRoute(url('/api/public/p/ACME/items/ACME-6'), {
+      params: Promise.resolve({ identifier: 'ACME', key: 'ACME-6' }),
+    });
+    expect(res.status).toBe(200);
+    expect(publicWorkItemDetailSchema.parse(await res.json())).toBeTruthy();
+    // The route passes the segment through UNCHANGED — it does not rebuild the
+    // identifier from the project key and a number.
+    expect(getWorkItemDetail).toHaveBeenCalledWith('ACME', 'ACME-6', null);
+  });
+
+  it('a ROOT item and a HIDDEN epic both parse — null parent, and the marker', async () => {
+    getWorkItemDetail.mockResolvedValue({
+      id: 'wi_8',
+      identifier: 'ACME-8',
+      key: 8,
+      title: 'A private epic',
+      kind: 'epic',
+      status: 'todo',
+      statusLabel: 'To do',
+      statusCategory: 'todo',
+      descriptionMd: null,
+      parent: null,
+      childrenHidden: true,
+      childCount: 0,
+      children: [],
+      childrenHasMore: false,
+    });
+    const res = await getItemDetailRoute(url('/api/public/p/ACME/items/ACME-8'), {
+      params: Promise.resolve({ identifier: 'ACME', key: 'ACME-8' }),
+    });
+    expect(publicWorkItemDetailSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  it('GET /api/public/p/{identifier}/requests/{requestKey}', async () => {
+    getRequestDetail.mockResolvedValue({
+      id: 'wi_9',
+      identifier: 'ACME-9',
+      key: 9,
+      title: 'A feature request',
+      kind: 'task',
+      status: 'open',
+      statusLabel: 'Open',
+      statusCategory: 'todo',
+      descriptionMd: 'Please build this',
+      openedByName: 'A Reader',
+      createdAt: '2026-08-30T00:00:00.000Z',
+      voteCount: 12,
+      voted: false,
+      comments: [
+        {
+          id: 'c_1',
+          workItemId: 'wi_9',
+          parentCommentId: null,
+          author: { id: 'u_1', name: 'A Reader', image: null },
+          bodyMd: 'Me too',
+          editedAt: null,
+          createdAt: '2026-08-30T01:00:00.000Z',
+          mentionedUserIds: [],
+        },
+      ],
+    });
+    const res = await getRequestDetailRoute(url('/api/public/p/ACME/requests/ACME-9'), {
+      params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-9' }),
+    });
+    expect(res.status).toBe(200);
+    expect(publicRequestDetailSchema.parse(await res.json())).toBeTruthy();
+    expect(getRequestDetail).toHaveBeenCalledWith('ACME', 'ACME-9', null);
+  });
+
+  it('the request thread admits a REPLY — parentCommentId is not always null', async () => {
+    getRequestDetail.mockResolvedValue({
+      id: 'wi_9',
+      identifier: 'ACME-9',
+      key: 9,
+      title: 'A feature request',
+      kind: 'task',
+      status: 'open',
+      statusLabel: 'Open',
+      statusCategory: 'todo',
+      descriptionMd: null,
+      openedByName: 'A Reader',
+      createdAt: '2026-08-30T00:00:00.000Z',
+      voteCount: 0,
+      voted: false,
+      comments: [
+        {
+          id: 'c_2',
+          workItemId: 'wi_9',
+          parentCommentId: 'c_1',
+          author: { id: 'u_2', name: 'Someone', image: 'https://cdn.test/a.png' },
+          bodyMd: 'Agreed',
+          editedAt: '2026-08-30T02:00:00.000Z',
+          createdAt: '2026-08-30T01:30:00.000Z',
+          mentionedUserIds: [],
+        },
+      ],
+    });
+    const res = await getRequestDetailRoute(url('/api/public/p/ACME/requests/ACME-9'), {
+      params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-9' }),
+    });
+    expect(publicRequestDetailSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  // ── MOTIR-4111: the crawl surface ────────────────────────────────────────
+
+  it('GET /api/public/projects', async () => {
+    listPublicIndex.mockResolvedValue({
+      projects: [
+        { identifier: 'ACME', updatedAt: '2026-08-30T00:00:00.000Z' },
+        { identifier: 'OPEN-CORE', updatedAt: '2026-08-29T00:00:00.000Z' },
+      ],
+      nextCursor: 'cmt_last',
+    });
+    const res = await getProjectIndexRoute(url('/api/public/projects'));
+    expect(res.status).toBe(200);
+    expect(publicProjectIndexPageSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  it('the LAST page parses too — a null cursor is a declared value, not an absence', async () => {
+    listPublicIndex.mockResolvedValue({ projects: [], nextCursor: null });
+    const res = await getProjectIndexRoute(url('/api/public/projects?cursor=cmt_x'));
+    expect(publicProjectIndexPageSchema.parse(await res.json())).toBeTruthy();
+    expect(listPublicIndex).toHaveBeenCalledWith('cmt_x');
+  });
+
+  it('GET /api/public/p/{identifier}/changelog.xml is ATOM, not JSON', async () => {
+    // The one operation on this surface whose CONTENT TYPE is part of the
+    // contract. A drift guard that only parsed the body would pass on a route
+    // that had silently started answering JSON.
+    getChangelogFeed.mockResolvedValue({
+      project: { identifier: 'ACME', name: 'Acme & Co' },
+      entries: [
+        {
+          identifier: 'ACME-3',
+          key: 3,
+          title: 'Shipped <something>',
+          kind: 'task',
+          status: 'done',
+          priority: 'medium',
+          shippedAt: '2026-08-30T00:00:00.000Z',
+          epic: null,
+          descriptionMd: 'A body',
+        },
+      ],
+    });
+    const res = await getFeedRoute(url('/api/public/p/ACME/changelog.xml'), identifierParams);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/atom+xml; charset=utf-8');
+
+    const body = await res.text();
+    expect(body).toContain('<feed xmlns="http://www.w3.org/2005/Atom">');
+    // The escaping the builder exists for, driven through the ROUTE rather than
+    // through the builder's own unit test: an unescaped ampersand or angle
+    // bracket makes the document malformed, and a reader rejects the WHOLE feed
+    // rather than the one entry.
+    expect(body).toContain('Acme &amp; Co');
+    expect(body).toContain('Shipped &lt;something&gt;');
+    expect(body).not.toMatch(/<title>[^<]*&(?!amp;|lt;|gt;|quot;|apos;)/);
+  });
+
+  it('the board carries the epic-privacy MARKER, and the schema admits it', async () => {
+    // `childrenHidden` is optional and present only on a private epic's row seen
+    // by a non-member. A `.strict()` schema that forgot it would reject exactly
+    // the payload the public projection exists to produce.
+    getBoard.mockResolvedValue({
+      boardId: 'board_1',
+      name: 'Delivery',
+      columns: [
+        {
+          id: 'col_1',
+          name: 'To do',
+          statusKeys: ['todo'],
+          cards: [
+            {
+              id: 'wi_5',
+              identifier: 'ACME-5',
+              key: 5,
+              title: 'A private epic',
+              kind: 'epic',
+              status: 'todo',
+              statusCategory: 'todo',
+              priority: 'high',
+              childrenHidden: true,
+            },
+          ],
+          totalCount: 1,
+        },
+      ],
+      cap: 200,
+      truncated: false,
+    });
+    const res = await getBoardRoute(url('/api/public/p/ACME/board'), identifierParams);
+    expect(publicBoardSchema.parse(await res.json())).toBeTruthy();
   });
 
   it('GET /api/public/p/{identifier}/changelog', async () => {

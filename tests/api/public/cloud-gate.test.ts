@@ -45,6 +45,15 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getOverview: vi.fn(async () => ({})),
     getProjectTreeLevel: vi.fn(async () => ({ rows: [], hasMore: false, total: 0 })),
     getWorkItems: vi.fn(async () => ({ items: [], nextCursor: null })),
+    getBoard: vi.fn(async () => ({ boardId: '', name: '', columns: [], cap: 0, truncated: false })),
+    getWorkItemDetail: vi.fn(async () => ({})),
+    getRequestDetail: vi.fn(async () => ({})),
+    getChangelogFeed: vi.fn(async () => ({
+      project: { identifier: 'ACME', name: 'Acme' },
+      entries: [],
+    })),
+    listPublicIndex: vi.fn(async () => ({ projects: [], nextCursor: null })),
+    getRoadmap: vi.fn(async () => ({ columns: [] })),
     getRoadmapColumn: vi.fn(async () => ({ bucket: 'planned', cards: [], nextCursor: null })),
     getChangelog: vi.fn(async () => ({ entries: [], nextCursor: null })),
     submitPublicRequest: vi.fn(async () => ({})),
@@ -74,6 +83,11 @@ vi.mock('@/lib/rateLimit/publicFollowGuard', () => ({
 const subject = await import('@/app/api/public/p/[identifier]/route');
 const tree = await import('@/app/api/public/p/[identifier]/tree/route');
 const items = await import('@/app/api/public/p/[identifier]/items/route');
+const board = await import('@/app/api/public/p/[identifier]/board/route');
+const itemDetail = await import('@/app/api/public/p/[identifier]/items/[key]/route');
+const requestDetail = await import('@/app/api/public/p/[identifier]/requests/[requestKey]/route');
+const feed = await import('@/app/api/public/p/[identifier]/changelog.xml/route');
+const projectIndex = await import('@/app/api/public/projects/route');
 const roadmap = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const changelog = await import('@/app/api/public/p/[identifier]/changelog/route');
 const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route');
@@ -116,6 +130,37 @@ const CASES: Case[] = [
     file: 'p/[identifier]/items/route.ts',
     method: 'GET',
     call: () => (items.GET as Handler)(get('/api/public/p/ACME/items'), identifierCtx),
+  },
+  {
+    file: 'p/[identifier]/board/route.ts',
+    method: 'GET',
+    call: () => (board.GET as Handler)(get('/api/public/p/ACME/board'), identifierCtx),
+  },
+  {
+    file: 'p/[identifier]/items/[key]/route.ts',
+    method: 'GET',
+    call: () =>
+      (itemDetail.GET as Handler)(get('/api/public/p/ACME/items/ACME-42'), {
+        params: Promise.resolve({ identifier: 'ACME', key: 'ACME-42' }),
+      }),
+  },
+  {
+    file: 'p/[identifier]/requests/[requestKey]/route.ts',
+    method: 'GET',
+    call: () =>
+      (requestDetail.GET as Handler)(get('/api/public/p/ACME/requests/ACME-7'), {
+        params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-7' }),
+      }),
+  },
+  {
+    file: 'p/[identifier]/changelog.xml/route.ts',
+    method: 'GET',
+    call: () => (feed.GET as Handler)(get('/api/public/p/ACME/changelog.xml'), identifierCtx),
+  },
+  {
+    file: 'projects/route.ts',
+    method: 'GET',
+    call: () => (projectIndex.GET as Handler)(get('/api/public/projects')),
   },
   {
     file: 'p/[identifier]/roadmap/route.ts',

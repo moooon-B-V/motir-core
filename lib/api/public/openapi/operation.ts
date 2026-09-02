@@ -80,6 +80,19 @@ export interface PublicOperation {
    * oracle for "does this address follow this project".
    */
   response: z.ZodType | null;
+  /**
+   * The success body's MEDIA TYPE. Defaults to `application/json`, which is what
+   * every operation on this surface answered until MOTIR-4111.
+   *
+   * ⚠️ IT IS DECLARED RATHER THAN ASSUMED because the changelog FEED answers
+   * `application/atom+xml`, and a document that described that as JSON would
+   * mislead exactly the consumer it exists for: a feed reader chooses its parser
+   * from the declared type, and a generated client would call `.json()` on an
+   * XML document. The schema for such a response is `z.string()` — the document
+   * is text, and pretending to describe its structure in JSON Schema would be a
+   * second lie on top of the first.
+   */
+  responseMediaType?: string;
   /** The request body, for the writes. */
   requestBody?: PublicRequestBody;
   /**

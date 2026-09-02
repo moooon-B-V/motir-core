@@ -120,6 +120,10 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   'evil.example': 'negative-case fixture for URL validation',
   'motir.example.com': 'documentation placeholder',
   'device-handoff.invalid': 'RFC 2606 invalid TLD, used in a fixture',
+  'evil.test':
+    'negative-case fixture for URL validation, in comments only — the sibling of `evil.example` above (MOTIR-4114)',
+  'placeholder.invalid':
+    'RFC 2606 invalid TLD used as a parsing BASE, never fetched — `app/act/route.ts` resolves a relative path against it and reads back only the path (MOTIR-4114)',
 
   // Documentation we LINK to. A link is rendered for a human to click; the
   // server never requests it, so no data of ours reaches these.

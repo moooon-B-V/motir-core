@@ -32,19 +32,41 @@ import { stripSourceComments } from '../../helpers/stripSourceComments';
 
 const REPO_ROOT = process.cwd();
 const PUBLIC_ROOT = join(REPO_ROOT, 'app', 'api', 'public');
+/**
+ * ⚠️ THE SECOND ROOT (MOTIR-4114). `app/api/public-requests/*` acts on public
+ * requests and is therefore part of the same CAPABILITY, but it sits in a
+ * namespace that predates the public contract — so this walk did not reach it,
+ * and a self-hosted build answered its two write routes for the whole window.
+ *
+ * `public-surface-hosts.md` AMENDMENT 4 §F decides that they STAY there — after
+ * AMENDMENT 4 nothing on `motir.co` calls them, so they are application routes
+ * rather than entries in the public read contract — and that they carry the
+ * gate. Adding the root here is what makes the second half of that decision a
+ * guard rather than a sentence: the whole point of this file is that a rule
+ * living only in a comment is not one.
+ *
+ * They are deliberately NOT added to `contract-coverage.test.ts`: they are not
+ * in the public document, and they should not be.
+ */
+const PUBLIC_REQUESTS_ROOT = join(REPO_ROOT, 'app', 'api', 'public-requests');
 const PUBLIC_CONTRACT_ROUTE = 'app/api/openapi/public.json/route.ts';
 
 /** The gate's call, as a route source has to spell it. */
 const GATE_CALL = 'publicSurfaceUnavailable()';
 
-/** Every `route.ts` under `app/api/public`, repo-relative. */
-function routeFiles(dir = PUBLIC_ROOT, out: string[] = []): string[] {
+/** Every `route.ts` under a root, repo-relative. */
+function walkRoutes(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir).sort()) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) routeFiles(full, out);
+    if (statSync(full).isDirectory()) walkRoutes(full, out);
     else if (entry === 'route.ts') out.push(relative(REPO_ROOT, full).split(sep).join('/'));
   }
   return out;
+}
+
+/** Every route file of the public-projects CAPABILITY, across both its roots. */
+function routeFiles(): string[] {
+  return [...walkRoutes(PUBLIC_ROOT), ...walkRoutes(PUBLIC_REQUESTS_ROOT)];
 }
 
 interface Handler {

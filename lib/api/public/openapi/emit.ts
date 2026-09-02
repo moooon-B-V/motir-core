@@ -129,7 +129,11 @@ function responsesFor(operation: PublicOperation, components: Components): JsonO
         : {
             description: successDescription(operation),
             content: {
-              'application/json': { schema: convert(operation.response, 'output', components) },
+              // The declared media type, defaulting to JSON — which every
+              // operation here answered until the changelog feed (MOTIR-4111).
+              [operation.responseMediaType ?? 'application/json']: {
+                schema: convert(operation.response, 'output', components),
+              },
             },
           },
   };

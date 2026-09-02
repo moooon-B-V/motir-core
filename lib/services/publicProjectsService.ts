@@ -59,6 +59,7 @@ import type {
   PublicChangelogEntryDto,
   PublicChangelogPageDto,
   PublicDuplicateMatchesDto,
+  PublicProjectIndexPageDto,
   PublicProjectOverviewDto,
   PublicProjectStatsDto,
   PublicRequestMatchDto,
@@ -114,6 +115,14 @@ const PUBLIC_BOARD_CAP = 200;
 
 /** The Work-items tab page size (cursor-paginated, lazy — the at-scale rule). */
 const PUBLIC_WORK_ITEMS_PAGE_SIZE = 30;
+
+/**
+ * The public-project INDEX page size (MOTIR-4111). Larger than the work-item
+ * page because each row is two short fields and the consumer is a sitemap
+ * generator walking the WHOLE set — a small page there is just more round trips
+ * for the same bytes. Still bounded: the set's size is the customer count.
+ */
+const PUBLIC_PROJECT_INDEX_PAGE_SIZE = 200;
 /**
  * The public CHANGELOG's page size (Story 8.9 · Subtask 8.9.3 · ADR §3). Smaller
  * than the work-items list because a changelog entry is a read-and-move-on unit
@@ -397,6 +406,46 @@ export const publicProjectsService = {
    */
   async listPublicForSitemap(): Promise<Array<{ identifier: string; updatedAt: Date }>> {
     return projectRepository.listPublic();
+  },
+
+  /**
+   * One PAGE of the public-project INDEX (MOTIR-4111) — the crawl enumeration
+   * `motir.co` reads to build its sitemap.
+   *
+   * ⚠️ WHY THIS EXISTS BESIDE {@link listPublicForSitemap} RATHER THAN REPLACING
+   * IT. That method loads every public project at once, and its ONE caller is
+   * `publicFollowDigestService`, which fans out per project inside a job — a
+   * whole-set read is right there. This one is served over HTTP to a crawler on
+   * another host, and its size is the CUSTOMER COUNT: unbounded by construction,
+   * so it pages (finding #57 — a system-level list is never load-all).
+   *
+   * The page is ordered by `id`, not `updatedAt` — the repository's own note
+   * carries the reasoning, and it is the reason a sitemap walk over this cannot
+   * skip or duplicate a project. `nextCursor` is the last row's id, opaque to the
+   * caller, exactly as the public work-items list already does it; null on the
+   * last page.
+   *
+   * NO GATE, and none is possible or needed: every row is `accessLevel = 'public'`
+   * by the repository's own filter, which is the same reason
+   * {@link listPublicForSitemap} has no gate. Cross-workspace by design — the
+   * public directory lists every public project regardless of tenant.
+   */
+  async listPublicIndex(cursor?: string): Promise<PublicProjectIndexPageDto> {
+    // Over-fetch one row to learn whether a next page exists, then trim — the
+    // idiom `getWorkItems` uses, so the two pagers behave identically.
+    const rows = await projectRepository.listPublicIndexPage({
+      take: PUBLIC_PROJECT_INDEX_PAGE_SIZE + 1,
+      cursor,
+    });
+    const hasMore = rows.length > PUBLIC_PROJECT_INDEX_PAGE_SIZE;
+    const page = hasMore ? rows.slice(0, PUBLIC_PROJECT_INDEX_PAGE_SIZE) : rows;
+    return {
+      projects: page.map((row) => ({
+        identifier: row.identifier,
+        updatedAt: row.updatedAt.toISOString(),
+      })),
+      nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+    };
   },
 
   /**
