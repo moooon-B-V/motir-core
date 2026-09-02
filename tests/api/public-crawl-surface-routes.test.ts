@@ -122,6 +122,18 @@ describe('GET /api/public/p/{identifier}/changelog.xml — the orphaned builder 
     expect(await res.json()).toEqual({ code: 'PROJECT_NOT_FOUND' });
   });
 
+  it('an UNEXPECTED error THROWS — a broken feed is not an empty one', async () => {
+    // MOTIR-4120's coverage top-up, and the arm with the worst failure mode on
+    // this route: a catch that answered 404 for everything would tell every
+    // subscriber the project had been deleted the moment the database blinked,
+    // and a feed reader that receives a 404 unsubscribes.
+    getChangelogFeed.mockRejectedValue(new Error('the database fell over'));
+
+    await expect(feedGET(req('/api/public/p/PROD/changelog.xml'), params('PROD'))).rejects.toThrow(
+      'the database fell over',
+    );
+  });
+
   it('names the public URL and the redirect that produces it', () => {
     // The card asks for this in terms, and it is the sentence that stops the
     // next reader inventing a second feed address: a feed URL is copied into

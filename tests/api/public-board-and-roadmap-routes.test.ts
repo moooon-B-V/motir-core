@@ -229,6 +229,39 @@ describe('GET /api/public/p/{identifier}/roadmap — arm 2 is UNCHANGED (the reg
     expect(Object.keys((await res.json()) as object)).toEqual(['code']);
   });
 
+  it('a non-public project is still 404 on THIS arm too', async () => {
+    // MOTIR-4120's coverage top-up. The 404 arm was asserted on the new arm and
+    // on the board, and not on the arm that was already here — which is exactly
+    // the shape a per-card floor leaves behind: each card covers what it wrote.
+    getSession.mockResolvedValue(null);
+    getRoadmapColumn.mockRejectedValue(new ProjectNotFoundError('NOPE'));
+
+    const res = await roadmapGET(
+      req('/api/public/p/NOPE/roadmap?bucket=planned&cursor=abc'),
+      params('NOPE'),
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ code: 'PROJECT_NOT_FOUND' });
+  });
+
+  it('an UNEXPECTED error THROWS on both arms — it is not swallowed into a 404', async () => {
+    // The arm that matters most and is hardest to notice missing: a route whose
+    // catch block returned 404 for everything would turn a database outage into
+    // "no such project", on a public page, silently.
+    getSession.mockResolvedValue(null);
+
+    getRoadmap.mockRejectedValue(new Error('the database fell over'));
+    await expect(roadmapGET(req('/api/public/p/PROD/roadmap'), params('PROD'))).rejects.toThrow(
+      'the database fell over',
+    );
+
+    getRoadmapColumn.mockRejectedValue(new Error('the database fell over'));
+    await expect(
+      roadmapGET(req('/api/public/p/PROD/roadmap?bucket=planned&cursor=abc'), params('PROD')),
+    ).rejects.toThrow('the database fell over');
+  });
+
   it('calls the capability gate BEFORE any session read', () => {
     const gateAt = roadmapSrc.indexOf('publicSurfaceUnavailable()');
     const sessionAt = roadmapSrc.indexOf('await getSession()');
