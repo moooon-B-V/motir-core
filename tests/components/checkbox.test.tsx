@@ -31,6 +31,33 @@ describe('the two states each render their stated accessible name', () => {
     expect(checkboxStateLabel(false)).toBe('Not held');
   });
 
+  it('uses a caller-provided state vocabulary when its checkbox is not set membership', () => {
+    const { rerender } = render(
+      <Checkbox
+        checked={false}
+        onChange={noop}
+        label="Trust this device for 30 days"
+        stateLabels={{ checked: 'Checked', unchecked: 'Not checked' }}
+      />,
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Trust this device for 30 days, Not checked' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('checkbox', { name: /Held|Not held/ })).toBeNull();
+
+    rerender(
+      <Checkbox
+        checked
+        onChange={noop}
+        label="Trust this device for 30 days"
+        stateLabels={{ checked: 'Checked', unchecked: 'Not checked' }}
+      />,
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Trust this device for 30 days, Checked' }),
+    ).toBeTruthy();
+  });
+
   it('takes NO provenance discriminator — a permission is held or it is not', () => {
     // Yue, 2026-08-09. An earlier revision had a third state: a grey fill for a
     // permission that came WITH the author's chosen base, distinct from the

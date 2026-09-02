@@ -118,6 +118,7 @@ export function TwoFactorManager({
   passkeySection,
 }: Props) {
   const t = useTranslations('settings.account.twoFactor');
+  const tc = useTranslations('common');
   // The hero's callout and the methods card's passkey row are passkey copy, so
   // they live under `settings.account.passkeys.*` with the rest of it rather than
   // being duplicated into this namespace.
@@ -629,6 +630,7 @@ export function TwoFactorManager({
               onChange={setAcknowledged}
               label={t('codes.acknowledge')}
               labelVisible
+              stateLabels={{ checked: tc('checked'), unchecked: tc('notChecked') }}
             />
           </div>
         </Modal.Body>
