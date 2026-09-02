@@ -1,0 +1,151 @@
+# Cutting a release is one merge (MOTIR-3970).
+#
+# Two things, on every push to `main`, and deliberately no more:
+#
+#   1. Keep a **Version Packages** pull request in sync with the accumulated
+#      changesets. Merging it is what bumps the three published packages'
+#      versions and writes their changelogs.
+#   2. When that pull request merges — i.e. when there are no changesets left —
+#      push `cli-v<version>` / `brand-v<version>` / `design-system-v<version>`
+#      for whatever is now on `main`. Those tags are what make the EXISTING
+#      release lanes fire.
+#
+# ── ⚠️ IT DOES NOT PUBLISH, AND THAT IS THE DESIGN ──────────────────────────
+#
+# `release-cli.yml`, `release-brand.yml` and `release-design-system.yml` each
+# already build, test, pack and `npm publish --access public --provenance` under
+# OIDC trusted publishing. Letting `changesets/action` publish would duplicate
+# those lanes while LOSING their pre-publish assertions and their provenance
+# attestation, and would leave two publish paths for the same package. So this
+# lane runs `changesets/action` with a `version` input and NO `publish` input,
+# and the publishing stays exactly where it is. This file edits no other
+# workflow.
+#
+# ── ⚠️ WHY A GITHUB APP, AND NOT `secrets.GITHUB_TOKEN` ─────────────────────
+#
+# This is the sharp edge, because the wrong implementation fails SILENTLY. A tag
+# pushed with the token GitHub hands every workflow succeeds — the push is green,
+# the tag appears — and NONE of the release lanes run, because GitHub
+# deliberately refuses to trigger workflow runs from its own token to prevent
+# loops. The result is a tag pointing at a version that was never published, the
+# `sandbox-staleness` tripwire still red, and nothing anywhere saying why.
+#
+# So every git and API operation below uses the installation token minted from
+# `RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY` (MOTIR-3969), and the job's own
+# `permissions:` is EMPTY: nothing here needs the automatic token, and an empty
+# block is the only way to say that in a form a reader and a guard can both
+# check. The story's gate card (MOTIR-3971) asserts the token expression
+# specifically, because a regression that swapped it back would pass every other
+# check in the repository.
+#
+# ── ⚠️ IT KEEPS THIS REPOSITORY'S TAG FORMAT, NOT THE TOOL'S ────────────────
+#
+# Changesets' own tagging emits `@motir/cli@0.4.0`; the five existing lanes
+# trigger on `cli-v0.4.0`. The derivation, the count behind that trade, and the
+# idempotence live in `scripts/releaseTags.mjs` (unit-tested in
+# `tests/scripts/release-tags.test.ts`, which also asserts this file's wiring) —
+# same arrangement as `scripts/deployFreshness.mjs` and `deploy-freshness.yml`:
+# a script a human can run from any shell, and a workflow that is a thin caller.
+# Reproduce a run's tag plan locally with
+#
+#   node scripts/push-release-tags.mjs --dry-run
+#
+# ── What this lane does NOT observe ─────────────────────────────────────────
+#
+# Whether the tags it pushes truly fire the downstream lanes, and whether all
+# three packages then become obtainable anonymously, is MOTIR-3967's to observe:
+# only a real merge can show it.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Never let two release runs overlap, and never cancel one in flight — the same
+# reasoning `release-sandbox.yml` records for its own group, and the same reason
+# `ci.yml` refuses to cancel on `main`: a half-cancelled run here can leave the
+# Version Packages pull request and the pushed tags disagreeing about what was
+# released, and the newest run does not contain the older one's work.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Nothing in this lane uses the automatic token: the App installation token does
+# the checkout, the pull request and the tag push. An empty block is the honest
+# expression of that, and it means a step added later that reaches for
+# `secrets.GITHUB_TOKEN` fails rather than quietly working with a credential that
+# triggers nothing.
+permissions: {}
+
+jobs:
+  release:
+    name: Version Packages, then tag what merged
+    runs-on: ubuntu-latest
+    # NO healthy run on record — this lane does not exist on `main` yet, so its
+    # first runs cannot be measured before it does. Its mechanical cost is a
+    # checkout, a workspace `pnpm install` and either a pull-request write or
+    # three tag pushes; `release-cli.yml` measured 1.2–1.4 min across four runs
+    # for the same checkout + install + node shape. So this takes the 10-minute
+    # short-job FLOOR the ceilings block in `ci.yml` states, as a stated floor
+    # rather than as a measurement. Re-derive it from
+    # `gh api .../actions/runs/<id>/jobs` once this lane has a week of runs.
+    timeout-minutes: 10
+    steps:
+      # Every later step uses THIS token, never `secrets.GITHUB_TOKEN` — see the
+      # header. The step id is `app-token` because MOTIR-3971 asserts on it.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          # ⚠️ Load-bearing. The tag step decides what to push by reading the
+          # tags this checkout holds, and a shallow clone holds none — which is
+          # byte-identical to "nothing has ever been released". The script
+          # REFUSES on an empty tag list rather than deriving every tag afresh,
+          # so getting this wrong is a red run, not a wrong push; it is still
+          # cheaper to fetch them.
+          fetch-depth: 0
+          # Persisted for the `git push` in the tag step below, which is the
+          # push that has to trigger the release lanes.
+          token: ${{ steps.app-token.outputs.token }}
+
+      # Bare, so the version comes from the root `packageManager` field — the
+      # same way every sibling release lane pins it.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `changesets/action` runs the version command with the repository's own
+      # package manager, so the workspace has to be installed first.
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+
+      - name: Keep the Version Packages pull request in sync
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # A `version` input and NO `publish` input: the three existing lanes
+          # publish, under trusted publishing, with provenance. See the header.
+          version: pnpm changeset:version
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      # `hasChangesets == 'false'` means the Version Packages pull request has
+      # just merged and the bumped versions are now on `main` — which is exactly
+      # when the tags are owed. While changesets are still accumulating the step
+      # is skipped, because the versions on `main` have not moved.
+      - name: Push the version tags
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        env:
+          # `actions/checkout` already persisted this credential for `git push`;
+          # it is set here as well so a reader of this step can see which token
+          # the push that must trigger the release lanes is made with.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: node scripts/push-release-tags.mjs
