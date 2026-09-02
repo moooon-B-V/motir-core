@@ -105,6 +105,42 @@ function kindOf(jobId: string): { kind: string; index: number } {
   return m ? { kind: m[1]!, index: Number(m[2]) } : { kind: 'unknown', index: 0 };
 }
 
+/**
+ * A side effect ANOTHER seam wants on a `POST /v1/jobs`, without intercepting it.
+ *
+ * ⚠️ THIS EXISTS BECAUSE TWO SEAMS CANNOT SHARE ONE UNDICI PATH (MOTIR-4137).
+ * `test-lessons-mock` used to register its own `/v1/jobs` interceptors on this
+ * same origin to record a lesson capture. undici matches interceptors in
+ * REGISTRATION ORDER and `instrumentation.ts` installs the lessons seam first,
+ * so with both flags on the lessons seam answered the whole jobs protocol —
+ * a constant `job_lessons_e2e` id and a `{ operations: [] }` result — and this
+ * seam's own replies were unreachable. The ask journey reads its outcome out of
+ * the job id and the settled `result`, so it went silent on every turn.
+ *
+ * An observer is the shape that cannot regress that way: it names the effect a
+ * neighbouring seam needs (the write) without claiming the reply (the protocol),
+ * so the two are no longer competing for the same interceptor.
+ */
+type JobSubmitObserver = (rawBody: string) => void;
+
+const submitObservers: JobSubmitObserver[] = [];
+
+/** Attach a side effect to every `POST /v1/jobs` this seam answers. */
+export function observeAiJobSubmit(observer: JobSubmitObserver): void {
+  submitObservers.push(observer);
+}
+
+function notifySubmitObservers(rawBody: string): void {
+  for (const observe of submitObservers) {
+    try {
+      observe(rawBody);
+    } catch {
+      // An observer is a neighbouring seam's bookkeeping — never fail the
+      // request (and never skip the remaining observers) over it.
+    }
+  }
+}
+
 export function installAiJobsBoundaryMock(agent: MockAgent): void {
   const origin = (process.env['MOTIR_AI_URL'] ?? '').replace(/\/+$/, '');
   if (!origin) return;
@@ -114,12 +150,14 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
   pool
     .intercept({ path: (p) => p === '/v1/jobs' || p.startsWith('/v1/jobs?'), method: 'POST' })
     .reply((req) => {
+      const rawBody = String(req.body ?? '{}');
       let kind = 'unknown';
       try {
-        kind = (JSON.parse(String(req.body ?? '{}')) as { jobKind?: string }).jobKind ?? 'unknown';
+        kind = (JSON.parse(rawBody) as { jobKind?: string }).jobKind ?? 'unknown';
       } catch {
         kind = 'unknown';
       }
+      notifySubmitObservers(rawBody);
       const index = recordSubmit(kind);
       return { statusCode: 202, data: { jobId: jobIdFor(kind, index) }, responseOptions: json };
     })
