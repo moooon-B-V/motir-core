@@ -281,11 +281,19 @@ describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)'
 });
 
 describe('the states (MOTIR-3239)', () => {
-  it('EMPTY — a plan that proposes nothing says what approving it would do', () => {
+  // ⚠️ AMENDED by MOTIR-4146, and the amendment is the point rather than a
+  // string update. This case read *"says what approving it would do"* and
+  // asserted *"Nothing will change if you approve it"* — a sentence about a
+  // control that, since MOTIR-4146, is not on the screen: the rail renders no
+  // Approve over an empty plan. Copy describing an absent button is how a
+  // reader is sent looking for one. What the pane owes now is the move that IS
+  // available, which is the same one the rail's own empty hint names.
+  it('EMPTY — a plan that proposes nothing names the move that is left', () => {
     renderWithIntl(<PlanProposalList items={[]} decided={false} />);
 
     expect(screen.getByText('No proposals')).toBeTruthy();
-    expect(screen.getByText(/Nothing will change if you approve it/)).toBeTruthy();
+    expect(screen.getByText(/Declining ends it/)).toBeTruthy();
+    expect(screen.queryByText(/if you approve it/)).toBeNull();
   });
 
   it('DECIDED — the list is a RECORD, in the past tense', () => {

@@ -143,6 +143,34 @@ export function PlanReviewRail({
   // already tells the two apart on the row, and this button is where a reader
   // learns which one they are doing.
   const generating = review.status === 'generating';
+  // ⚠️ THE PLAN PROPOSES NOTHING, SO THERE IS NOTHING TO APPROVE (MOTIR-4146).
+  //
+  // The gate below branches on DECIDED and has never branched on EMPTY, so an
+  // undecided plan holding zero proposals was handed the whole decide gate —
+  // primary control included, reading *"Approve — add 0 items to your backlog"*
+  // two inches under the pane's own *"Nothing will change if you approve it."*
+  // One surface offering an action and describing it as a no-op.
+  //
+  // MOTIR-4124 mounted this rail on the empty plan deliberately, and that was
+  // right: an empty plan was the ONE plan a reviewer could neither approve nor
+  // decline, and it went on pausing its project's cadence. What it did not ask
+  // is what the rail should OFFER once it arrived — removing a special case
+  // hands every downstream branch a state it has not seen, and this branch had
+  // only ever been written for a plan with something in it. The ENDING is the
+  // decision the rail was mounted for, and at zero it is the only one there is.
+  //
+  // ⚠️ NOT-RENDERED RATHER THAN `disabled`: a disabled primary is a control a
+  // reader hunts for the key to, and there is no key — no edit, no wait and no
+  // permission turns an empty plan into an approvable one.
+  //
+  // ⚠️ AND IT IS ONE RULE ACROSS ALL THREE UNDECIDED STATUSES, `generating`
+  // included. MOTIR-3240's disabled Approve beside the discard is a real
+  // treatment — while items are arriving, *Approve unlocks when generation
+  // completes* is true and the disabled control is what that sentence is about
+  // — but its LABEL spends the count, and at zero that label is the sentence
+  // this card exists to delete. So the count decides, not the status: a
+  // `generating` plan that HAS proposals keeps the shipped shape untouched.
+  const empty = review.itemCount === 0;
   const staleItems = review.items.filter((i) => i.stale);
 
   // ── THE REVISION (Part XII §A/§C) ────────────────────────────────────────
@@ -355,15 +383,17 @@ export function PlanReviewRail({
           <DecidedOutcome review={review} t={t} codeOutcome={codeOutcome ?? null} />
         ) : (
           <>
-            <Button
-              variant="primary"
-              onClick={onApprove}
-              disabled={!planned || busy || held}
-              loading={busy}
-              leftIcon={<Check className="size-4" aria-hidden="true" />}
-            >
-              {t('approveCta', { n: review.itemCount })}
-            </Button>
+            {empty ? null : (
+              <Button
+                variant="primary"
+                onClick={onApprove}
+                disabled={!planned || busy || held}
+                loading={busy}
+                leftIcon={<Check className="size-4" aria-hidden="true" />}
+              >
+                {t('approveCta', { n: review.itemCount })}
+              </Button>
+            )}
             {/* One control per state. While `generating` the discard is the only
                 LIVE control on the rail, so it takes the `secondary` variant — a
                 real affordance rather than a ghost that reads as disabled beside
@@ -436,15 +466,26 @@ export function PlanReviewRail({
             <p className="text-center text-xs text-(--el-text-secondary)">
               {held
                 ? t('approveHintRevising')
-                : planned
-                  ? review.stale
-                    ? t('approveHintStale', { n: review.staleCount })
-                    : t('approveHint')
-                  : generating
-                    ? t('discardHint')
-                    : stalePlan
-                      ? t('staleReviewHint')
-                      : t('reviewLocked')}
+                : // ⚠️ THE EMPTY ARM SITS DIRECTLY UNDER `held` AND ABOVE THE
+                  // STATUS CHAIN (MOTIR-4146). Every line below it describes
+                  // Approve — *Approve materializes the proposals*, *Approve is
+                  // unavailable*, *Review unlocks when generation completes* —
+                  // and on an empty plan there is no Approve for them to be
+                  // about. `generating` is the exception and keeps its own
+                  // hint: there, items are still arriving, so *Approve unlocks
+                  // when generation completes* is a true sentence about a
+                  // control that is coming.
+                  empty && !generating
+                  ? t('emptyHint')
+                  : planned
+                    ? review.stale
+                      ? t('approveHintStale', { n: review.staleCount })
+                      : t('approveHint')
+                    : generating
+                      ? t('discardHint')
+                      : stalePlan
+                        ? t('staleReviewHint')
+                        : t('reviewLocked')}
             </p>
           </>
         )}

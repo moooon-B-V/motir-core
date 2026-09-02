@@ -73,6 +73,7 @@ import {
   PlanNotGeneratingError,
   NoPlanForWorkItemError,
   PlanApproveTimedOutError,
+  PlanHasNoProposalsError,
   PlanItemFieldRejectedError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
@@ -1124,6 +1125,18 @@ async function assertNoRevisionInFlight(
 ): Promise<void> {
   const lease = revisionLeaseOf(await planRevisionRepository.listByPlan(planId, tx), new Date());
   if (lease) throw new PlanRevisionInFlightError(planId, lease.heldBy, lease.expiresAt);
+}
+
+/**
+ * A PLAN THAT PROPOSES NOTHING CANNOT BE APPROVED (MOTIR-4146).
+ *
+ * One line, given a name because `approvePlan` asks the question TWICE — once
+ * before the transaction opens and once on the fresh set under the plan lock —
+ * and because a check written inline twice is a check that will be corrected
+ * once.
+ */
+function assertPlanHasProposals(planId: string, proposals: readonly unknown[]): void {
+  if (proposals.length === 0) throw new PlanHasNoProposalsError(planId);
 }
 
 function assertPlanProposalsEditable(plan: Pick<Plan, 'id' | 'status'>): void {
@@ -3569,7 +3582,7 @@ export const plansService = {
       ctx.workspaceId,
     );
 
-    const { row, items } = await withWorkspaceContext(
+    const { row, items, ended } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
         const locked = await planRepository.lockById(planId, tx);
@@ -3621,9 +3634,68 @@ export const plansService = {
           },
           tx,
         );
-        return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
+
+        const remaining = await planItemRepository.findByPlan(planId, tx);
+
+        // ⚠️ THE WITHDRAWAL THAT EMPTIES A `planned` PLAN ENDS IT (MOTIR-4146),
+        // by exactly the route the CLOSE takes over an empty set: `declined`
+        // with `decisionReason: 'discarded'`, decided by nobody.
+        //
+        // MOTIR-4124 established that a plan proposing nothing must not wear
+        // `planned` — the status that says *a person is being asked to decide
+        // this* — and established it at the close alone. This is the door that
+        // then re-created the state: `assertPlanProposalsEditable` admits
+        // `planned`, so the last proposal can be taken off a queued plan and
+        // NOTHING re-asks the question the close had answered. The file already
+        // names this exact class one invariant earlier ("AMENDMENT 8 then opened
+        // two doors onto a `planned` plan … and neither re-asks the question the
+        // close answered", MOTIR-3936); this is its second instance.
+        //
+        // ⚠️ `generating` IS DELIBERATELY EXCLUDED, and the exclusion is the
+        // rule rather than an omission: a `generating` plan holding nothing is a
+        // producer that has not finished writing, which is precisely the state
+        // MOTIR-3193 relaxed the empty final batch to ESCAPE. Ending it here
+        // would decide a plan whose author is still typing.
+        //
+        // The LOSING BRANCH, named because it is the obvious one: refusing the
+        // last withdrawal. It makes the final withdrawal a special case with an
+        // error of its own, and lands the plan in the same terminal place
+        // anyway — by a route the author has to discover.
+        if (fresh.status === 'planned' && remaining.length === 0) {
+          const ended = await planRepository.update(
+            planId,
+            {
+              status: 'declined',
+              decidedAt: new Date(),
+              decidedById: null,
+              decisionReason: 'discarded',
+            },
+            tx,
+          );
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              changeKind: 'declined',
+              ...generationActor(fresh, ctx),
+              diff: { itemCount: 0, decisionReason: 'discarded' },
+            },
+            tx,
+          );
+          // The ending is an ADDITIONAL verb on the trail, not a replacement for
+          // the `withdrawn` recorded above it: the timeline has to say what the
+          // caller did AND what it caused.
+          return { row: ended, items: remaining, ended: true };
+        }
+
+        return { row: fresh, items: remaining, ended: false };
       },
     );
+    // A discarded plan is as terminal as a declined one, so it releases the
+    // planning-target locks the same way `markPlanned`'s empty close does — a
+    // `modify` withdrawn off a plan leaves its target leased otherwise, and that
+    // lease would sit out its expiry blocking a colleague. Post-commit and
+    // best-effort, exactly as it is there.
+    if (ended) await releasePlanTargetLocks(plan, ctx);
     return toPlanWithItemsDto(row, items);
   },
 
@@ -3755,6 +3827,29 @@ export const plansService = {
       const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         planItemRepository.findByPlan(planId, tx),
       );
+      // ⚠️ THERE IS NOTHING TO APPROVE (MOTIR-4146). Every gate below is a gate
+      // over a proposal SET, and over the EMPTY set each of them passes
+      // vacuously — which is exactly why the count is read here rather than
+      // trusted to them. It is `markPlanned`'s own reasoning at the other door:
+      // the emptiness rule was established where a plan is WRITTEN, and an
+      // invariant enforced at one door is a habit, not an invariant.
+      //
+      // Refused rather than discarded: an empty `planned` plan is a legacy row
+      // in front of a reviewer, and Decline is the ending they already have —
+      // deciding it for them from inside their own Approve click would be a
+      // different act than the one they asked for.
+      //
+      // ⚠️ IT ONLY SPEAKS FOR A PLAN THAT IS OTHERWISE APPROVABLE, and the
+      // `status` read is what keeps it from stealing the STATUS refusal. This
+      // pass runs BEFORE the transaction, and the status guard runs inside it —
+      // so an unguarded check here answers "holds no proposals" for a plan whose
+      // real problem is that it is still `generating`, which is the answer a
+      // caller branches on (`PlanNotInExpectedStatusError.actual` carries it as
+      // DATA for exactly that reason, MOTIR-3025) and the one the CLI prints
+      // while it waits for a planner. Emptiness is the second question; the
+      // status is the first, and the in-transaction check below asks this one
+      // again in the right order anyway.
+      if (plan.status === 'planned') assertPlanHasProposals(planId, preItems);
       await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
 
       // The proposed repo PINS (MOTIR-1884), normalized + validated against this
@@ -3871,6 +3966,13 @@ export const plansService = {
             // reads what changed, and approves the plan they asked for.
             await assertNoRevisionInFlight(planId, tx);
             const proposals = await planItemRepository.findByPlan(planId, tx);
+            // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
+            // (MOTIR-4146). Same placement and same reason as `assertRepoPins
+            // Unmoved` below: the pre-transaction pass is a SNAPSHOT, and a
+            // withdrawal committed between it and this lock would otherwise
+            // materialize nothing while recording an approval. The pre-pass is
+            // the courtesy; this one is the guarantee.
+            assertPlanHasProposals(planId, proposals);
             // THE GATE, under the plan lock + the targets' row locks, on the FRESH
             // proposal set — nothing has been written yet, so a rejection here rolls
             // back a transaction that touched no work-item row.

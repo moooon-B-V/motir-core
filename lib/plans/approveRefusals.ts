@@ -116,6 +116,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The role is a closed vocabulary and the proposal's own value, so the close decides it.",
   },
+  PLAN_HAS_NO_PROPOSALS: {
+    cause: 'plan-internal',
+    justification:
+      "How many proposals a plan holds is the plan alone, and the CLOSE already decides it: `plansService.markPlanned` discards an empty set rather than queueing it (MOTIR-4124). What reaches approve is a LEGACY row that closed before that rule existed — and, until MOTIR-4146, a `planned` plan whose last proposal had just been withdrawn. Both are properties of the plan's own contents.",
+  },
   PLAN_ITEM_FIELD_REJECTED: {
     cause: 'plan-internal',
     justification:

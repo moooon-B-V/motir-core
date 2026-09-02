@@ -1329,9 +1329,17 @@ export async function runWithdrawPlanProposal(
 ): Promise<CallToolResult> {
   const plan = await plansService.withdrawProposal(args.planId, args.planItemId, ctx);
 
+  // ⚠️ THE LAST WITHDRAWAL ENDS THE PLAN (MOTIR-4146), and the note has to SAY
+  // so. "0 proposals left on the plan" is true and reads as *the plan is still
+  // open and empty* — which is the state this fix removed. The status rides the
+  // structured payload either way; an agent reading the prose gets it here.
+  const ended = plan.status === 'declined';
+
   return toolOk(
     `Withdrew proposal ${args.planItemId} from plan ${plan.id}${attribution(plan)}. ` +
-      `${plan.items.length} proposal${plan.items.length === 1 ? '' : 's'} left on the plan. ` +
+      (ended
+        ? 'That was its last proposal, so the plan is now `declined` (`discarded`) — a plan proposing nothing is not something a person can be asked to decide. Open a new plan to propose again. '
+        : `${plan.items.length} proposal${plan.items.length === 1 ? '' : 's'} left on the plan. `) +
       PROPOSAL_GATE,
     derived(planPayload, presentMcpPlan(plan)),
   );
@@ -1493,7 +1501,11 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'referrer rather than leaving their refs pointing at nothing: correct or withdraw ' +
         'those first, then retry. Withdrawing a `modify` RELEASES its target work item, so you ' +
         'can append a corrected `modify` for that item where a second one was previously ' +
-        'refused as a duplicate target. This is NOT the `remove` op, which PROPOSES deleting an ' +
+        'refused as a duplicate target. Withdrawing the LAST proposal of a `planned` plan ENDS ' +
+        'that plan — it becomes `declined` with reason `discarded`, because a plan proposing ' +
+        'nothing is not something a person can be asked to decide; open a new plan to propose ' +
+        'again. On a `generating` plan it does not, since that pass has not finished writing. ' +
+        'This is NOT the `remove` op, which PROPOSES deleting an ' +
         'existing work item from the tree at approve — this takes a proposal off the plan and ' +
         'nothing in the tree is touched either way. Costs nothing and starts no job.',
       inputSchema: withdrawPlanProposalInputSchema,

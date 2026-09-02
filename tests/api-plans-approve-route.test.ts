@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PlanApproveTimedOutError, PlanNotFoundError } from '@/lib/plans/errors';
+import {
+  PlanApproveTimedOutError,
+  PlanHasNoProposalsError,
+  PlanNotFoundError,
+} from '@/lib/plans/errors';
 
 // Route-level transport test for POST /api/plans/[id]/approve — the P2028 arm
 // (MOTIR-3396).
@@ -93,5 +97,30 @@ describe('POST /api/plans/[id]/approve — a transaction timeout is a 503, not a
     const res = await callApprove('plan_x');
     expect(res.status).toBe(401);
     expect(approvePlan).not.toHaveBeenCalled();
+  });
+});
+
+// MOTIR-4146 — the plan holds NOTHING, so there is nothing to approve.
+//
+// The SERVICE half (the refusal itself, and that the row stays `planned`) is
+// proved against a real Postgres in
+// `tests/integration/plans/emptyPlanIsNotApprovable.test.ts`. What the ROUTE
+// owns is the status, and it is the same lesson every arm in this file records:
+// a refusal with no arm reaches the caller as a bare 500 with an empty body,
+// which reads as *something is broken* and gets the button pressed again.
+describe('POST /api/plans/[id]/approve — an EMPTY plan is a 409', () => {
+  it('maps PlanHasNoProposalsError to 409 and carries its code', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockRejectedValue(new PlanHasNoProposalsError('plan_empty'));
+
+    const res = await callApprove('plan_empty');
+
+    // 409 rather than 400: nothing about the REQUEST is malformed. The plan is
+    // in a state approve cannot act on — the same reading `PLAN_NOT_IN_
+    // EXPECTED_STATUS` gets one arm above.
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe('PLAN_HAS_NO_PROPOSALS');
+    expect(body.planId).toBe('plan_empty');
   });
 });

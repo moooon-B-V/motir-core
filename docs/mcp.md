@@ -2440,6 +2440,14 @@ plan you never asked to withdraw; blanking their refs would change what they mea
 `modify` for that work item where a second one was previously refused as a duplicate
 target. That was a dead end for the life of the plan.
 
+**Withdrawing the LAST proposal of a `planned` plan ENDS that plan** (MOTIR-4146) —
+it becomes `declined` with `decisionReason: "discarded"`, the same ending a
+generation that proposes nothing gets at the close. `planned` means _a person is
+being asked to decide this_, and there is nothing left to decide; leaving it queued
+would put an empty plan in the review queue with no decision to make. Open a new
+plan to propose again. On a `generating` plan the last withdrawal does **not** end
+it — that pass has not finished writing.
+
 Same statuses, same key, same freeze as `update_plan_proposal` above.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
