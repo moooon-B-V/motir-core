@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
 import { buildScope, MAX_SCOPE_TARGETS, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import type { PlanChangeScope } from '@/lib/planChange/scope';
@@ -93,6 +94,83 @@ const scopeInputSchema = {
   targetKeys: targetKeysField,
 };
 
+/**
+ * WHAT the caller wants built — the six-field requirement, in CANONICAL ORDER
+ * (Story MOTIR-3942 · MOTIR-4172).
+ *
+ * This is the WIRE for a value composed elsewhere: a dispatched agent that finds
+ * its card wrong is the only actor that knows what is wrong with it, and without
+ * this argument that knowledge dies in a comment while the planner is told a key
+ * and nothing else. Supplying it SATISFIES the planner's first phase, so the run
+ * starts knowing the problem instead of opening a conversation to ask about it.
+ *
+ * ⚠️ EVERY KEY IS OPTIONAL AND NOTHING HERE JUDGES THE CONTENT — no completeness
+ * check, no non-empty check, no length cap. A submit carrying a partial
+ * requirement, or none, is a LEGAL submit that simply does not settle that
+ * phase; the planner opens the conversation instead. Refusing a card must never
+ * become conditional on composing the WHAT well, so the validation lives at the
+ * far end, where a half-answer costs a question rather than a call.
+ *
+ * The per-field descriptions are the teaching surface — they are what an agent
+ * composing one actually reads — which is why they say what each field is FOR
+ * rather than restating its type.
+ */
+const requirementField = z
+  .object({
+    outcome: z
+      .string()
+      .optional()
+      .describe(
+        'REQUIRED, non-empty, at the far end. Who this is for, and what becomes ' +
+          'possible that is not possible today.',
+      ),
+    behaviour: z
+      .string()
+      .optional()
+      .describe(
+        'REQUIRED, non-empty, at the far end. The observable rules — input → ' +
+          'result, and the states that are not the happy path.',
+      ),
+    scopeEdge: z
+      .string()
+      .optional()
+      .describe(
+        'What is deliberately NOT included. May be "" — which says you considered ' +
+          'it and there is none, a different answer from never having asked.',
+      ),
+    constraints: z
+      .string()
+      .optional()
+      .describe('What BINDS the shape and is already decided. May be "" (see `scopeEdge`).'),
+    acceptance: z
+      .string()
+      .optional()
+      .describe(
+        'REQUIRED, non-empty, at the far end. How somebody will know it is done, ' +
+          'as an observation rather than a test name.',
+      ),
+    assumptions: z
+      .string()
+      .optional()
+      .describe('What you concluded that nobody confirmed. May be "" (see `scopeEdge`).'),
+  })
+  .optional()
+  .describe(
+    'OPTIONAL. WHAT you want built, as six named fields instead of prose — the ' +
+      'planner reads this INSTEAD of asking you what is wrong. Supply as much as ' +
+      'you actually know: nothing here is validated, and a partial requirement ' +
+      'submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be ' +
+      'present and non-empty for the planner to treat the requirement as settled; ' +
+      'short of that it simply opens the conversation, which is the same thing it ' +
+      'does when you omit this argument entirely.',
+  );
+
+const submitInputSchema = {
+  projectKey: projectKeyField,
+  targetKeys: targetKeysField,
+  requirement: requirementField,
+};
+
 const appendInputSchema = {
   projectKey: projectKeyField,
   targetKeys: targetKeysField,
@@ -110,6 +188,10 @@ interface ScopeArgs {
 
 interface AppendArgs extends ScopeArgs {
   body: string;
+}
+
+interface SubmitArgs extends ScopeArgs {
+  requirement?: SubmittedRequirement;
 }
 
 /** A project + the thread's scope, both resolved from the caller's arguments. */
@@ -253,13 +335,21 @@ export async function runAppendPlanTurn(
   );
 }
 
-/** The adapter: resolve the scope, submit the thread, return the ids. */
+/**
+ * The adapter: resolve the scope, submit the thread, return the ids.
+ *
+ * `requirement` is PASSED THROUGH untouched — no defaulting, no normalization,
+ * no trim. A trim or a cap anywhere on this chain silently clips the planner's
+ * only grounding, which is the quiet version of not sending it at all; and
+ * absence stays absence, so an omitted argument reaches the envelope as a
+ * missing key rather than as `null` or `{}`.
+ */
 export async function runSubmitPlanSession(
-  args: ScopeArgs,
+  args: SubmitArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const { pctx, scope } = await resolveTarget(args, ctx);
-  const result = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+  const result = await planChangeSessionsService.submit(pctx, scope.scopeKey, args.requirement);
   return toolOk(summarizeSubmit(result), derived(planSubmitPayload, presentMcpPlanSubmit(result)));
 }
 
@@ -328,8 +418,19 @@ export function registerPlanSession(server: McpServer, resolveContext: McpContex
         'approval happens in Motir, not here. Do not report proposed work as created. ' +
         'A thread with no turns yet is refused (add one first); a failed submit leaves the ' +
         'thread intact, so your turns are never lost. Runs on the AI credits of the token ' +
-        'owner.',
-      inputSchema: scopeInputSchema,
+        'owner. ' +
+        'OPTIONALLY pass `requirement` — WHAT you want built, as six named fields in this ' +
+        'order: `outcome`, `behaviour`, `scopeEdge`, `constraints`, `acceptance`, ' +
+        '`assumptions`. The planner reads it INSTEAD of opening a conversation to ask you ' +
+        'what is wrong, so a submit that carries one starts knowing the problem. Three of ' +
+        'the six (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for ' +
+        'it to count as settled; the other three may be `""`, which says you considered the ' +
+        'question and there is none. Nothing is validated here: a partial requirement, or ' +
+        'none at all, submits fine and simply opens the conversation instead. ' +
+        'IF THIS TOOL REJECTS YOUR ARGUMENTS, NOTHING HAPPENED — no job was created and no ' +
+        'credits were spent — so that ONE case is safe to retry, without the `requirement`. ' +
+        'It is the only exception to submitting exactly once.',
+      inputSchema: submitInputSchema,
     },
     async (args, extra) => {
       try {
