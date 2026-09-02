@@ -152,7 +152,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
             suspended={user.suspendedAt !== null}
           />
         ) : (
-          <p className="max-w-xs font-sans text-xs text-(--el-text-secondary)">
+          <p className="max-w-[20rem] font-sans text-xs text-(--el-text-secondary)">
             {t('users.action.readOnlyNotice')}
           </p>
         )}

@@ -21,7 +21,7 @@ inputs:
       Where `.next/` comes from. `download` (default) takes the artifact the
       `build` job of the same CI run published — the cheap path, available to
       any job in that workflow. `build` compiles it here, which the
-      acceptance-video workflow needs: it is a SEPARATE workflow (so its checks
+      acceptance-tests workflow needs: it is a SEPARATE workflow (so its checks
       can be absent rather than skipped), and a workflow cannot depend on
       another workflow's job or read its artifacts.
     required: false

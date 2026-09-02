@@ -78,6 +78,48 @@ async function seedItemWithBodies(
   return { id: dto.id, identifier: dto.identifier };
 }
 
+/**
+ * A target carrying every RAIL value (bug MOTIR-4143) — what a `modify` amends
+ * and a `remove` archives, on the fields the quick view's rail renders.
+ *
+ * ⚠️ `targetRepo` is written through `adminDb` rather than the service, on
+ * purpose: pinning a repo through the real path requires a CONNECTED repository
+ * row realized against the workspace, and none of these cases is about that
+ * validation — they are about which SIDE the review model reads. The column is
+ * what `planReviewService` reads, so the fixture writes the column.
+ */
+async function seedItemWithRail(
+  fx: WorkItemFixture,
+  title: string,
+  rail: {
+    type: 'code' | 'design' | 'test' | 'chore';
+    priority: 'low' | 'medium' | 'high' | 'highest';
+    storyPoints: number;
+    estimateMinutes: number;
+    executor: 'coding_agent' | 'human';
+    targetRepo: string;
+  },
+): Promise<{ id: string; identifier: string }> {
+  const dto = await workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind: 'task',
+      title,
+      type: rail.type,
+      priority: rail.priority,
+      storyPoints: rail.storyPoints,
+      estimateMinutes: rail.estimateMinutes,
+      executor: rail.executor,
+    },
+    fx.ctx,
+  );
+  await adminDb.workItem.update({
+    where: { id: dto.id },
+    data: { targetRepo: rail.targetRepo },
+  });
+  return { id: dto.id, identifier: dto.identifier };
+}
+
 /** One node of a real epic → story → task CHAIN, for the ancestor-trail cases. */
 async function seedChild(
   fx: WorkItemFixture,
@@ -352,6 +394,195 @@ describe('planReviewService.getPlanReview', () => {
     expect(item.changes.find((c) => c.field === 'explanation')?.from).toContain(
       'The WHY about to go.',
     );
+  });
+
+  // ── THE RAIL A PROPOSAL IS ASKING FOR (bug MOTIR-4143) ───────────────────
+  //
+  // The SAME defect as the bodies directly above, one field group over, and it
+  // survived that fix because that card wrote the rest down as add-only rather
+  // than leaving them unexamined. The argument was real — a rail row has no
+  // old→new affordance, and a change IS shown in the `changes` diff — and it is
+  // true of the LIST ROW, which renders that diff. `ProposalQuickView` renders
+  // no diff at all, and it is the only surface these fields reach: on a
+  // `modify` every one of them was null, so the rail collapsed to the single
+  // field that was never gated (`parentIdentifier`) and the surface a person
+  // approves from showed a re-scoped, re-typed, re-estimated card as one Parent
+  // row. Reported from the running app.
+  //
+  // Asserted PER FIELD, deliberately: the rail renders each row on its own
+  // non-null test and computes `hasRail` from the union, so a test that asserts
+  // the rail is present passes with one field restored and five still missing —
+  // which is exactly the state being fixed.
+  it('reports every RAIL field on a modify — the patch’s value, and the target’s where the patch is silent (MOTIR-4143)', async () => {
+    const fx = await makeWorkItemFixture();
+    const rescoped = await seedItemWithRail(fx, 'Invoice templates', {
+      type: 'code',
+      priority: 'low',
+      storyPoints: 2,
+      estimateMinutes: 30,
+      executor: 'coding_agent',
+      targetRepo: 'motir-core',
+    });
+    const untouched = await seedItemWithRail(fx, 'Dunning emails', {
+      type: 'design',
+      priority: 'high',
+      storyPoints: 5,
+      estimateMinutes: 45,
+      executor: 'human',
+      targetRepo: 'motir-ai',
+    });
+    const archived = await seedItemWithRail(fx, 'Legacy CSV export', {
+      type: 'chore',
+      priority: 'medium',
+      storyPoints: 1,
+      estimateMinutes: 15,
+      executor: 'coding_agent',
+      targetRepo: 'motir-core',
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Usage metering',
+            kind: 'task',
+            type: 'test',
+            priority: 'highest',
+            storyPoints: 8,
+            estimateMinutes: 65,
+            executor: 'coding_agent',
+          },
+        },
+        // (1) a RE-SCOPE — the shape a re-plan actually produces, and the one
+        //     the reviewer most needs to see before approving.
+        {
+          op: 'modify',
+          workItemId: rescoped.id,
+          patch: { type: 'test', priority: 'highest', storyPoints: 8, estimateMinutes: 65 },
+        },
+        // (2) a modify whose patch touches NO rail field. "This is not
+        //     changing" and "there is nothing here" are different facts.
+        { op: 'modify', workItemId: untouched.id, patch: { title: 'Dunning emails, revised' } },
+        // (3) the third op, which no assertion above reaches.
+        { op: 'remove', workItemId: archived.id },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const byTarget = (id: string) => review.items.find((i) => i.nodeId === id)!;
+
+    // The `add` arm, asserted beside the others so the fix cannot be a swap.
+    const added = review.items.find((i) => i.op === 'add')!;
+    expect({
+      type: added.type,
+      priority: added.priority,
+      storyPoints: added.storyPoints,
+      estimateMinutes: added.estimateMinutes,
+    }).toEqual({ type: 'test', priority: 'highest', storyPoints: 8, estimateMinutes: 65 });
+
+    // (1) the four fields the patch names report the PROPOSED value…
+    const changed = byTarget(rescoped.id);
+    expect({
+      type: changed.type,
+      priority: changed.priority,
+      storyPoints: changed.storyPoints,
+      estimateMinutes: changed.estimateMinutes,
+    }).toEqual({ type: 'test', priority: 'highest', storyPoints: 8, estimateMinutes: 65 });
+    // …and the two it does not name report what the card will KEEP. `executor`
+    // has no patch key at all — a plan cannot move work between an agent and a
+    // person — so the target's value is the only value it can have.
+    expect(changed.targetRepo).toBe('motir-core');
+    expect(changed.executor).toBe('coding_agent');
+
+    // (2) a patch that names no rail field leaves every one of them reporting
+    //     the target, rather than reporting nothing.
+    const same = byTarget(untouched.id);
+    expect({
+      type: same.type,
+      priority: same.priority,
+      storyPoints: same.storyPoints,
+      estimateMinutes: same.estimateMinutes,
+      targetRepo: same.targetRepo,
+      executor: same.executor,
+    }).toEqual({
+      type: 'design',
+      priority: 'high',
+      storyPoints: 5,
+      estimateMinutes: 45,
+      targetRepo: 'motir-ai',
+      executor: 'human',
+    });
+
+    // (3) a remove reports the target's — what the reviewer is being asked to
+    //     archive, which is the only thing that makes the archive legible.
+    const gone = byTarget(archived.id);
+    expect({
+      type: gone.type,
+      priority: gone.priority,
+      storyPoints: gone.storyPoints,
+      estimateMinutes: gone.estimateMinutes,
+    }).toEqual({ type: 'chore', priority: 'medium', storyPoints: 1, estimateMinutes: 15 });
+
+    // THE SEAM PRECONDITION, in the shape the component reads on: the rail
+    // mounts on the UNION of these fields being non-null, so what the defect
+    // rendered was one row. Assert the union is no longer one field wide.
+    for (const t of [rescoped, untouched, archived]) {
+      const item = byTarget(t.id);
+      const railFields = [
+        item.type,
+        item.priority,
+        item.storyPoints,
+        item.estimateMinutes,
+        item.targetRepo,
+        item.executor,
+      ];
+      expect(railFields.filter((v) => v != null)).toHaveLength(6);
+    }
+  });
+
+  it('a patch that CLEARS a rail field reports the clear, not the value it deletes (MOTIR-4143)', async () => {
+    // The presence-vs-nullishness case, on the rail this time: the patch is
+    // sparse, an explicit `null` UNSETS a field, and `?? target` would show the
+    // estimate approval is about to delete as the estimate it will keep.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItemWithRail(fx, 'Sized card', {
+      type: 'code',
+      priority: 'high',
+      storyPoints: 5,
+      estimateMinutes: 45,
+      executor: 'coding_agent',
+      targetRepo: 'motir-core',
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Unsize it' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { storyPoints: null, estimateMinutes: null },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const item = review.items.find((i) => i.nodeId === target.id)!;
+    expect({ storyPoints: item.storyPoints, estimateMinutes: item.estimateMinutes }).toEqual({
+      storyPoints: null,
+      estimateMinutes: null,
+    });
+    // The untouched half of the same card still reports the target — the clear
+    // is per key, not per card.
+    expect(item.priority).toBe('high');
+    expect(item.type).toBe('code');
   });
 
   it('leaves `changes` untouched — the fix ADDS a reading, it does not move one (MOTIR-4134)', async () => {

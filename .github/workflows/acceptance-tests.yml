@@ -1,14 +1,23 @@
-name: Acceptance video
+name: Acceptance tests
 
-# ── The acceptance-video lane, story-scoped (Story MOTIR-1627 · MOTIR-1949) ──
+# ── The acceptance-test lane, story-scoped (Story MOTIR-1627 · MOTIR-1949) ───
 #
-# The acceptance E2E + self-test dogfood (MOTIR-1638) and the per-story
-# acceptance specs (MOTIR-1700), CLOUD-ON + video:'on'. Its OWN Playwright lane
+# The acceptance E2E self-test dogfood (MOTIR-1638) and the per-story acceptance
+# specs (MOTIR-1700), CLOUD-ON + video:'on'. Its OWN Playwright lane
 # (playwright.acceptance.config.ts: MOTIR_CLOUD + the E2E_TEST_BILLING mock,
 # isolated ports 3200/8488) so the plan/toggle panel states are reachable and
-# each green run is recorded. testMatch: acceptance*.spec.ts catches the dogfood
-# AND the story-specific specs (planner rule MOTIR-1644); the main Playwright
-# config testIgnore's the same pattern.
+# each run is recorded. testMatch: acceptance*.spec.ts catches the dogfood AND
+# the story-specific specs (planner rule MOTIR-1644); the main Playwright config
+# testIgnore's the same pattern.
+#
+# ⚠️ THIS LANE RECORDS; IT DOES NOT PUBLISH (MOTIR-4096, 2026-09-01).
+# The recording is unchanged — Playwright still runs with `video: 'on'` and the
+# clips, traces and `chapters.json` sidecars still land in this lane's Playwright
+# report artifact. What LEFT is the CI uploader: the receipt is published by the
+# AGENT, through the Motir MCP surface, and no job here holds a Motir credential
+# any more. The lane's name says what it does — it runs the acceptance tests.
+# `docs/decisions/acceptance-video.md` AMENDMENT 2026-09-02 records the handover;
+# the receipt concept, its lifecycle and the review flow are untouched.
 #
 # ⚠️ WHY ITS OWN WORKFLOW, AND NOT A JOB IN ci.yml.
 # The requirement is that a PR which does not own an acceptance spec shows NO
@@ -17,7 +26,9 @@ name: Acceptance video
 # PR #1751 — `Playwright E2E (acceptance-video)  skipping`). A matrix leg cannot
 # be dropped by an expression either. The only mechanism that leaves no check
 # behind is a workflow that is never TRIGGERED — hence a separate file with a
-# `paths:` filter. No matching file → no run → nothing on the PR.
+# `paths:` filter. No matching file → no run → nothing on the PR. The rename in
+# MOTIR-4096 did not change this: it is still a separate `paths:`-filtered
+# workflow and must never become a job in `ci.yml`.
 #
 # Consequences of being a separate workflow, accepted deliberately:
 #   • It cannot `needs:` ci.yml's `build` job or read that run's artifacts, so it
@@ -26,12 +37,7 @@ name: Acceptance video
 #     PRs that own a spec, and only ONE regardless of the shard count.
 #   • It ALSO runs on `push: main`, but only while the lane actually holds a
 #     spec — the MAIN BASELINE, decided by MOTIR-2760 and described in its own
-#     section below. This REPLACES the older "there is deliberately no `push:`
-#     trigger" (`docs/decisions/acceptance-video.md`, amendments MOTIR-1937 /
-#     MOTIR-1949, superseded there by this card's amendment). The reason that
-#     clause gave — "re-publishing post-merge would only supersede the receipt
-#     with an identical clip" — was about PUBLISHING, and it still holds: the
-#     baseline never publishes. It only runs the tests.
+#     section below.
 #   • ⚠️ A CHANGE TO A PAGE AN ACCEPTANCE SPEC READS DOES NOT RUN THIS LANE, and
 #     that is deliberate (MOTIR-2620). The specs here assert against real product
 #     surfaces, so the `paths:` filter cuts between a page and the only test that
@@ -60,11 +66,11 @@ name: Acceptance video
 # count is DERIVED from the lane's membership (MOTIR-2908): min(specs, 4),
 # floored at 1 — see "SIZED TO THE LANE" below.
 #
-#   PR changing an `acceptance*.spec.ts`      lane runs (N legs) · PUBLISHES
-#   PR changing one of the 4 lane-definition  lane runs (N legs) · rehearses
-#     files below                               (no spec changed ⇒ nothing owned)
+#   PR changing an `acceptance*.spec.ts`      lane runs (N legs)
+#   PR changing one of the 4 lane-definition  lane runs (N legs)
+#     files below
 #   PR changing anything else                 NO RUN, NO CHECK  (MOTIR-1949)
-#   push to `main`, lane HAS ≥1 spec          lane runs (N legs) · NEVER publishes
+#   push to `main`, lane HAS ≥1 spec          lane runs (N legs)
 #   push to `main`, lane is EMPTY             gate job only (~10s), nothing else
 #
 # THE PROBLEM IT CLOSES. The `pull_request` filter is deliberately blind to the
@@ -106,13 +112,6 @@ name: Acceptance video
 # PR a check. On `pull_request` the gate is unconditionally `true` — the `paths:`
 # filter already decided, and a triggered PR run is never skipped.
 #
-# ⚠️ THE BASELINE TESTS; IT NEVER PUBLISHES. Two independent mechanisms, because
-# publishing SUPERSEDES a story's evidence and one guard is not enough for that:
-# the publish step is `if:`-gated to `pull_request`, AND the owned-specs step
-# emits an EMPTY list on `push` (there is no base ref to diff against), which the
-# uploader already fails closed on. A baseline run therefore rehearses — it
-# records and checks the clips and writes none of them anywhere.
-#
 # ⚠️ AND `cancel-in-progress` IS PR-ONLY. Cancelling superseded runs is right for
 # a PR (only the tip matters) and WRONG here: back-to-back merges would cancel
 # each other's baseline and destroy the per-merge attribution that is this
@@ -128,17 +127,17 @@ name: Acceptance video
 # ── A SPEC IN THIS LANE HAS A LIFECYCLE — IT DOES NOT LIVE HERE FOREVER ──────
 #   (Story MOTIR-2765 · `docs/decisions/acceptance-receipt-lifecycle.md`)
 #
-# The spec is a TEST. The video it publishes is a TEST EXECUTION — the record of
+# The spec is a TEST. The video it produces is a TEST EXECUTION — the record of
 # one run, at one moment. Their lifetimes are independent, and the spec's ends
 # first:
 #
-#   in review  the story's receipt is `pending`; every run re-records and
-#              supersedes it. This is correct — the reviewer must see current
-#              truth, and this lane is why the spec is here.
+#   in review  the story's receipt is `pending`; a fresh recording supersedes it.
+#              This is correct — the reviewer must see current truth, and this
+#              lane is why the spec is here.
 #   APPROVED   the receipt is FROZEN. A republish against it is REFUSED by the
-#              service (MOTIR-2764), the publisher reports the skip and exits 0
-#              (MOTIR-2768), and the spec has discharged the job it was written
-#              for.
+#              service (MOTIR-2764), the publisher reports the skip rather than
+#              failing (MOTIR-2768), and the spec has discharged the job it was
+#              written for.
 #   then       it LEAVES this lane, by exactly one of two routes — PROMOTE it
 #              into a lane that runs on every PR (keep every assertion, strip
 #              `chapter()` / `beat()` / `acceptanceStory()` and the pacing), or
@@ -160,7 +159,7 @@ name: Acceptance video
 #    off-cloud for a reason it is not testing (MOTIR-2601). See
 #    `docs/acceptance-lane-triage.md` for which spec goes where, and MOTIR-2849.
 #
-# ── SHARDED, AND WHY THE RECEIPTS SURVIVE IT (MOTIR-2600) ────────────────────
+# ── SHARDED (MOTIR-2600) ─────────────────────────────────────────────────────
 #
 # The lane used to run every acceptance spec in ONE serial job (`workers: 1`),
 # and it was lengthening with every story that added a spec: 22.2 → 23.1 → 26.7
@@ -168,29 +167,10 @@ name: Acceptance video
 # `next build`. MOTIR-2506 named sharding as the structural answer and MOTIR-2600
 # took it: one `build` job, then N legs each running `--shard=i/N`.
 #
-# ⚠️ THE PARALLELISM IS THE EASY HALF. The receipts are this lane's PRODUCT, and
-# the publish step has already been the source of two separate defects
-# (MOTIR-1734: one clip per run; MOTIR-1937: every PR republishing unrelated
-# stories). Splitting the job N ways means each leg holds a DIFFERENT subset of
-# the videos, so "every receipt still publishes, exactly once" has to hold across
-# legs, not just within one.
-#
-# It does, and by construction rather than by coordination — which is why each
-# shard still runs its own publish step instead of a fan-in job collecting
-# gigabytes of video:
-#   • `--shard` PARTITIONS the tests, so a given recording is produced by exactly
-#     ONE leg and exists in exactly ONE leg's `out/playwright-output-acceptance`.
-#     The uploader publishes what it finds there — so exactly once, globally.
-#   • Ownership is per RECORDING, not per run: `isOwnedRecording` matches the
-#     recording's own `specFile` sidecar against the changed-spec list. A leg that
-#     ran none of the changed specs finds nothing owned, logs "Nothing to
-#     publish", and exits 0 — it does not fail for a receipt that is another
-#     leg's to write. (`tests/acceptance-video-uploader.test.ts` asserts exactly
-#     this across two shard-shaped output dirs.)
-#
 # What sharding DOES require here is a distinct artifact name per leg — two jobs
 # uploading one name is a hard error in upload-artifact v4+, and it would have
-# cost the lane its reports rather than its receipts.
+# cost the lane its reports, which since MOTIR-4096 are the ONLY place this
+# lane's recordings survive for a reviewer or for the agent that publishes them.
 #
 # ── SIZED TO THE LANE, NOT FIXED AT FOUR (MOTIR-2908) ────────────────────────
 #
@@ -228,26 +208,19 @@ name: Acceptance video
 #     artifact path works). Zero legs would prove nothing, on precisely the PRs
 #     whose subject is this lane.
 #
-# It does NOT weaken the exactly-once publish argument above, and the reason is
-# that the argument never mentioned four: `--shard` partitions the suite at any
-# N, and ownership is decided per RECORDING inside the uploader, so each leg
-# still holds a disjoint subset and the subsets still cover it. Nor does it
-# collide with the artifact-name rule — `matrix.shard` is `1..N`, distinct within
-# any one run at every N.
+# Nor does it collide with the artifact-name rule — `matrix.shard` is `1..N`,
+# distinct within any one run at every N.
 #
 # ⚠️ THE LANE'S OWN DEFINITION IS ALSO A TRIGGER (MOTIR-2600). The spec glob was
-# the only path until this card, which meant a PR that RESTRUCTURED the lane —
+# the only path until that card, which meant a PR that RESTRUCTURED the lane —
 # this file, its Playwright config, its fixture harness — changed no acceptance
 # spec and so never ran it. That is how a lane change ships with no runtime
-# evidence at all, and it is not a hypothetical: THIS card's sharding would have
-# merged unexecuted.
+# evidence at all, and it is not a hypothetical: MOTIR-2600's own sharding would
+# have merged unexecuted.
 #
 # It does not weaken MOTIR-1949's requirement (a PR that does not own an
 # acceptance spec shows NO acceptance check): an ordinary feature PR touches none
-# of these four paths either. And a PR that touches only them changes no spec, so
-# `ACCEPTANCE_CHANGED_SPECS` is empty, so the run REHEARSES — it records and
-# checks every clip and publishes nothing, which is exactly the MOTIR-1937
-# behaviour and is what makes this safe.
+# of these four paths either.
 #
 # ⚠️ AND THIS IS NOT THE WIDENING MOTIR-2620 REJECTED — the two are different
 # axes, and the distinction is the whole reason both decisions can stand:
@@ -263,7 +236,7 @@ on:
   pull_request:
     paths:
       - 'tests/e2e/acceptance*.spec.ts'
-      - '.github/workflows/acceptance-video.yml'
+      - '.github/workflows/acceptance-tests.yml'
       - 'playwright.acceptance.config.ts'
       - 'tests/e2e/_helpers/acceptance-video.ts'
       - 'tests/e2e/_helpers/acceptance-diagnostics.ts'
@@ -304,6 +277,12 @@ on:
 # the ambiguity that destroys. Same expression, different product: that is why
 # the fix is scoped to this file.
 #
+# ⚠️ THE GROUP CARRIES `github.workflow`, WHICH IS THIS FILE'S `name:` — so the
+# MOTIR-4096 rename changed the group's literal prefix. That is harmless and was
+# checked rather than assumed: the group only ever has to distinguish runs of
+# THIS workflow from each other, and every run after the rename reads the same
+# new name. Nothing outside this file joins the group.
+#
 # Safe interpolation: github.workflow is a fixed workflow name; github.ref is a
 # validated git ref identifier and github.sha a 40-character commit id (neither
 # is user-controlled free-form input).
@@ -324,8 +303,8 @@ jobs:
   # ⚠️ On `pull_request` this is unconditionally `true`, and that is not a
   # shortcut. The `paths:` filter has ALREADY decided that a triggered PR run
   # should happen, and MOTIR-2600 deliberately wants a PR that only restructures
-  # the lane to REHEARSE against an empty membership. Returning anything but
-  # `true` here would reintroduce the greyed skipping check MOTIR-1949 removed.
+  # the lane to run against an empty membership. Returning anything but `true`
+  # here would reintroduce the greyed skipping check MOTIR-1949 removed.
   # The gate exists for `push`, where no filter has spoken and no PR is watching.
   membership:
     name: Does the lane hold a spec?
@@ -484,7 +463,7 @@ jobs:
           include-hidden-files: true
 
   acceptance:
-    name: Playwright E2E (acceptance-video) ${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
+    name: Playwright E2E (acceptance) ${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
     runs-on: ubuntu-latest
     # Observed 4.9–11.3 min per shard across four runs → 40 (~3.5x on the
     # worst). ⚠️ DERIVED FROM THIS LANE, NOT COPIED FROM `e2e`. The acceptance
@@ -511,13 +490,15 @@ jobs:
         # triaged the lane empty; four legs over ≤2 specs is not parallelism, it
         # is four copies of the setup. At ≥4 specs this is the same matrix again.
         shard: ${{ fromJSON(needs.membership.outputs.shards) }}
-    # Keyless acceptance-video publish (MOTIR-1650): the publish step requests a
-    # GitHub OIDC token, which needs `id-token: write`. `contents: read` keeps
-    # checkout working. (OIDC is NOT granted to fork PRs, so a fork falls back to
-    # the PAT / no-ops — see the publish step.)
+    # ⚠️ NO `id-token: write` — RETIRED WITH THE PUBLISHER (MOTIR-4096). This job
+    # carried it for the keyless-OIDC acceptance publish (MOTIR-1650); nothing in
+    # this workflow mints a token any more, so the grant has no consumer and is
+    # dropped rather than left standing. `contents: read` is what checkout needs.
+    # (`lib/github/oidcAuth.ts` and `lib/publishAuth/ciPublishAuth.ts` are
+    # UNTOUCHED — they are the SERVER side of that door, and it stays open for any
+    # external CI that publishes evidence over the HTTP route.)
     permissions:
       contents: read
-      id-token: write
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     #
@@ -562,135 +543,25 @@ jobs:
         with:
           next-build: download
 
-      # WHICH specs this PR owns. Computed per LEG (MOTIR-2600) — the diff is the
-      # same on every shard, and it must be, because ownership is decided per
-      # RECORDING inside the uploader: each leg publishes the intersection of
-      # "specs this PR changed" with "recordings this leg actually produced", and
-      # those intersections are disjoint and together cover the whole set.
-      #
-      # The `paths:` filter already guarantees at least
-      # one, but the uploader needs the LIST: publishing SUPERSEDES a story's
-      # current evidence and each recording targets its OWN declared story, so a
-      # run that published everything it recorded would replace the receipts of
-      # every other story with a chaptered spec (MOTIR-1937 — measured: the
-      # MOTIR-1781 PR republished seven). The uploader FAILS CLOSED, so if this
-      # step ever stops producing a list, the run rehearses instead of
-      # resurrecting that bug.
-      - name: Which acceptance specs does this run own?
-        id: owned-specs
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          # THE MAIN BASELINE OWNS NOTHING (MOTIR-2760). A `push` event has no
-          # base ref to diff against — `BASE_SHA` is empty — and the baseline
-          # must not publish anyway: the receipt was published by the PR while
-          # the story was in review, and a merge is not a new moment to record.
-          # Emitting an EMPTY list is exactly what the uploader fails closed on,
-          # so the run REHEARSES. (The publish step is also `if:`-gated to
-          # pull_request — two mechanisms, because a wrong answer here would
-          # SUPERSEDE a story's evidence.)
-          if [ -z "${BASE_SHA}" ]; then
-            echo "no base ref (event: ${GITHUB_EVENT_NAME}) — the baseline owns no specs and publishes nothing"
-            echo "specs=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # A pull_request checkout is the MERGE commit at depth 1, which carries
-          # both parents — so the base is normally already present. Fetch it if it
-          # is not, rather than paying `fetch-depth: 0` on every run.
-          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null ||
-            git fetch --depth=1 origin "${BASE_SHA}"
-          SPECS=$(git diff --name-only "${BASE_SHA}" HEAD -- 'tests/e2e/acceptance*.spec.ts' | tr '\n' ' ')
-          echo "owned acceptance specs: ${SPECS:-<none>}"
-          echo "specs=${SPECS}" >> "$GITHUB_OUTPUT"
-
       # `--shard=i/N` (MOTIR-2600). Playwright partitions the suite across the
-      # legs, so every recording is produced by exactly one of them — which is
-      # what makes the per-shard publish step below publish each receipt once.
+      # legs, so every spec is run by exactly one of them.
       # N is `needs.membership.outputs.legs` rather than a matrix key
       # (MOTIR-2908): the denominator has to be the SAME number the matrix was
       # built from, and reading both from the one output is what guarantees that.
-      # The partition argument is indifferent to N — `--shard` partitions at any
-      # leg count, and `isOwnedRecording` matches per recording — so exactly-once
-      # publishing holds at 1 leg exactly as it did at 4.
       # `--pass-with-no-tests` (MOTIR-2769): the lane's membership is now exactly
       # the stories currently IN REVIEW, so an EMPTY lane is a legitimate — and
       # after a triage, common — state rather than a misconfiguration. Playwright
       # exits non-zero on "no tests found" by default, which would red-light every
       # PR that touches this workflow or the config while no story is in flight.
       # A shard leg can also legitimately draw zero specs once the lane is small.
-      - name: Run E2E (acceptance-video)
+      - name: Run E2E (acceptance)
         run: pnpm test:e2e --config playwright.acceptance.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
 
-      # On a GREEN acceptance run, publish the recordings this PR owns to their
-      # OWN STORY's acceptance panel (BYOK). The lane carries one chaptered
-      # acceptance spec per user-facing story (MOTIR-1644 / MOTIR-1700), and
-      # MOTIR-1734 made the uploader publish them ALL — it used to take whichever
-      # recording `readdirSync` yielded first and silently drop the rest, so on a
-      # multi-story run only one story got its receipt (observed: PR #1620
-      # published MOTIR-811 and discarded MOTIR-1726's clip).
-      # MOTIR-1905 removed the SECOND way the lane lost every receipt: the
-      # watchability gate used to abort the whole run on the first sub-floor clip,
-      # so one unpaced spec cost every OTHER story its video too. An unwatchable
-      # clip now costs only its own story, and the step still exits non-zero.
-      # Auth is KEYLESS GitHub OIDC first (MOTIR-1650) — the moooon repo is
-      # App-connected, so no secret is needed; MOTIR_UPLOAD_TOKEN is the PAT
-      # fallback. The uploader no-ops when NEITHER is available (a fork PR gets no
-      # OIDC and no secret), so forks / unconfigured runs never fail here.
-      #
-      # TARGET STORY (MOTIR-1684): NO longer the hardcoded MOTIR-1627 constant.
-      # `resolveStoryKey` picks the target — the recording's self-declared story
-      # (the acceptance harness sidecar; the MOTIR-1638 dogfood pins itself to
-      # MOTIR-1627, so the self-test still publishes to its own panel and is never
-      # mis-attributed) → the PR's `MOTIR-<id>` (branch/title, the status-sync
-      # convention; the endpoint resolves a subtask key to its parent story) →
-      # the MOTIR-1627 dogfood FALLBACK.
-      #
-      # ⚠️ NO `continue-on-error` HERE — REMOVED BY MOTIR-2499, DO NOT PUT IT BACK.
-      #
-      # It rewrote this step's conclusion to `success` — on the checks UI, in
-      # `gh pr checks`, AND in the REST API — even when the script exited 1. The
-      # measured cost: from 2026-08-07 the publish failed on every run
-      # ("Published 0 of 2", two `##[error]` lines), the lane reported `pass`
-      # each time, and two stories lost their receipt with nothing anywhere
-      # saying so. A check that cannot fail is worse than no check.
-      #
-      # It was there so a side-effect could never gate a merge. Both cases that
-      # justified it are now handled INSIDE the uploader, which returns 0 for
-      # each — so removing the wrapper costs nothing it was actually buying:
-      #   • NO CREDENTIAL (a fork PR gets neither OIDC nor the secret) — the
-      #     script logs "BYOK is opt-in" and returns.
-      #   • A DEFECT IN A SPEC THIS RUN DOES NOT OWN — an unwatchable / over-cap
-      #     REHEARSED recording is reported, annotated as a `warning`, and
-      #     counted separately; only the specs this PR changed can fail it.
-      # What DOES fail the step is exactly what should: a story this PR owns
-      # ending the run without a published receipt.
-      #
-      # The `::error::` ANNOTATION and the job SUMMARY (MOTIR-1905) stay — they
-      # put the reason on the run page instead of 4,500 lines into the raw log.
-      # They are now a second channel rather than the only one.
-      #
-      # ⚠️ `pull_request` ONLY (MOTIR-2760). The MAIN BASELINE runs the specs and
-      # publishes nothing: the receipt belongs to the moment the story was in
-      # review, not to whatever merge happened to run the lane afterwards. This
-      # is the first of the two mechanisms enforcing that — the second is the
-      # empty owned-spec list the step above emits on `push`. Belt and braces, in
-      # the same spirit as the owned-set filter itself, because the failure mode
-      # is SUPERSEDING a story's evidence rather than merely wasting a run.
-      - name: Publish the acceptance video
-        if: success() && github.event_name == 'pull_request'
-        env:
-          MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
-          MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
-          ACCEPTANCE_PR_REF: ${{ github.head_ref }}
-          ACCEPTANCE_PR_TITLE: ${{ github.event.pull_request.title }}
-          ACCEPTANCE_FALLBACK_STORY_KEY: MOTIR-1627
-          ACCEPTANCE_PRODUCED_BY: MOTIR-1638
-          ACCEPTANCE_CHANGED_SPECS: ${{ steps.owned-specs.outputs.specs }}
-        run: node scripts/upload-acceptance-video.mjs
-      # Always upload the report — a green run's is the only place the recorded
-      # video and trace survive for a reviewer to check by hand, and a red one is
-      # how the lane is debugged at all (MOTIR-1706: the old hardcoded
+      # Always upload the report. Since MOTIR-4096 this is the ONLY thing the
+      # lane emits: a green run's report is where the recorded video, trace and
+      # `chapters.json` survive — for a reviewer to watch by hand, and for the
+      # AGENT to publish the receipt from over the Motir MCP surface — and a red
+      # one is how the lane is debugged at all (MOTIR-1706: the old hardcoded
       # `out/playwright-report` path matched nothing here, so a red acceptance leg
       # left no trace, screenshot or report behind).
       # ⚠️ The name is SHARD-SCOPED (MOTIR-2600). upload-artifact v4+ rejects a
@@ -699,12 +570,12 @@ jobs:
       # without the reports a red lane is read from. Still true at a DERIVED leg
       # count (MOTIR-2908): `matrix.shard` is `1..N` and distinct within a run at
       # every N, so the names stay distinct without depending on N being 4. It
-      # also carries the `client-diagnostics.json` this card's fixture attaches
+      # also carries the `client-diagnostics.json` MOTIR-2600's fixture attaches
       # on failure.
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-acceptance-video-shard-${{ matrix.shard }}
+          name: playwright-report-acceptance-shard-${{ matrix.shard }}
           path: out/playwright-report-acceptance
           retention-days: 7

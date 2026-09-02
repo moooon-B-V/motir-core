@@ -90,6 +90,15 @@ export const STRUCTURAL_GUARD_SPECS = [
   // nothing, and imports nothing from `lib/` or `app/`, so it carries no
   // coverage out of the merged report.
   'tests/theme/shellViewportUnits.test.ts',
+  // ── tests/theme/ — the named `max-w-*` guard (MOTIR-4084) ─────────────────
+  // The same shape as `shellViewportUnits` two entries up, and for a defect of
+  // the same family: a Tailwind utility whose name says one thing and whose
+  // emitted value says another, because a `@theme` namespace shadows the scale
+  // the class is named after. It walks `app/` + `components/` + the design
+  // system's `src/` and reads every file with comments stripped. It opens no
+  // database, renders nothing, and imports only `tests/helpers/importGraph`, so
+  // it carries no coverage into the merged report.
+  'tests/theme/namedMaxWidthUtilities.test.ts',
   // ── tests/legal/ — the EGRESS-MANIFEST guard (MOTIR-3631 · MOTIR-4008) ────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
   // read against `package.json` and `lib/legal/egressManifest.ts`.
@@ -307,6 +316,13 @@ export const BOUNDED_SCAN_MODULES: Readonly<Record<string, string>> = {
     'walks `packages/cli/src` to decide whether the CLI bundle needs rebuilding — a ' +
     'build STAMP over one package, not an answer about the repository. What makes ' +
     'its five importers slow is spawning the built CLI, which the lane cannot help.',
+  'tests/helpers/acceptanceLaneGuard.ts':
+    'reads `tests/e2e/` filtered to the `acceptance*.spec.ts` prefix — the LANE it ' +
+    'adjudicates, two dozen files, not a source root. Its two importers are the ' +
+    'membership guard itself and a Postgres-backed route suite (MOTIR-4144), and ' +
+    'neither can go in the lane: one does no whole-tree work and the other needs a ' +
+    'database. Declared here rather than split between the lane and ' +
+    'DATABASE_BOUND_GUARDS, because the true fact about both is the BOUND.',
   'tests/e2e/_helpers/harness-watchdog.ts':
     'reads `/proc` for the Playwright harness’s own child processes. Not the source ' +
     'tree at all, and its one vitest importer asserts on the watchdog’s parsing ' +

@@ -25,7 +25,7 @@ import {
 // or a settled navigation. There is no bare timeout in this file.
 //
 // ⚠️ THIS FILE IS MOTIR-2282'S RECEIPT, AND ONLY A PULL REQUEST TOUCHING IT CAN
-// RE-PUBLISH ONE. `acceptance-video.yml` triggers on `pull_request` + a `paths:`
+// RE-PUBLISH ONE. `acceptance-tests.yml` triggers on `pull_request` + a `paths:`
 // filter over `tests/e2e/acceptance*.spec.ts` (MOTIR-1949, deliberate). Since
 // MOTIR-2760 it ALSO runs on `push: main` while the lane holds a spec — but that
 // baseline publishes nothing by construction, so the claim this note rests on is

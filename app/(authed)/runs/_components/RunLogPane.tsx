@@ -244,7 +244,9 @@ function Silence({ kind, t }: { kind: SilenceKind; t: ReturnType<typeof useTrans
       <p className="text-[0.8125rem] font-semibold text-(--el-text)">
         {t(`logSilence.${kind}.title`)}
       </p>
-      <p className="max-w-xs text-xs text-(--el-text-secondary)">{t(`logSilence.${kind}.body`)}</p>
+      <p className="max-w-[20rem] text-xs text-(--el-text-secondary)">
+        {t(`logSilence.${kind}.body`)}
+      </p>
     </div>
   );
 }

@@ -169,6 +169,11 @@ const SELF_WALKING_MEMBERS = [
   // MOTIR-4089. It does its own `readdirSync` over `tests/` and imports only a
   // dependency-free helper, so — like the entries above — nothing derives it.
   'tests/timeout-budget-lane.test.ts',
+  // MOTIR-4084. It walks `app/`, `components/` and the design system's `src/`
+  // with its own `readdirSync`; the only thing it imports is `importGraph`'s
+  // `stripComments`, which parses text handed to it and reaches no filesystem
+  // of its own — so, like the entries above, nothing derives it.
+  'tests/theme/namedMaxWidthUtilities.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

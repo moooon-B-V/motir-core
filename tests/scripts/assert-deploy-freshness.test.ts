@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   DEFAULT_MAX_AGE_MINUTES,
   EXIT_BLIND_READ,
@@ -221,5 +223,36 @@ describe('the scheduled lane is wired to the script it claims to run', () => {
     // step, so the exit has to be explicit — the shape `ci-shell-assertion-traps`
     // records, where a pipeline's status silently replaces the assertion's.
     expect(workflow).toContain('exit "$code"');
+  });
+
+  it('prints a failing script report to the log and summary before preserving its red exit', () => {
+    // `shell: bash` starts GitHub steps with `-e -o pipefail`. Execute the
+    // workflow's own body under those flags with a real failing `node` command:
+    // a textual `set +e` assertion alone would not prove that `$report`, the
+    // summary, and `exit "$code"` are all reached.
+    const runBody = workflow.match(/        run: \|\n((?:          .*\n?)+)/)?.[1];
+    expect(runBody).toBeDefined();
+    const script = runBody!.replace(/^          /gm, '');
+    const dir = mkdtempSync(join(tmpdir(), 'motir-deploy-freshness-'));
+    const bin = join(dir, 'bin');
+    const summary = join(dir, 'summary.md');
+    const fakeNode = join(bin, 'node');
+    execFileSync('mkdir', ['-p', bin]);
+    writeFileSync(fakeNode, '#!/usr/bin/env bash\necho "STALE: behind by 13 hours"\nexit 1\n');
+    execFileSync('chmod', ['+x', fakeNode]);
+
+    let error: { status?: number; stdout?: Buffer } | undefined;
+    try {
+      execFileSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_STEP_SUMMARY: summary },
+        encoding: 'buffer',
+      });
+    } catch (caught) {
+      error = caught as { status?: number; stdout?: Buffer };
+    }
+
+    expect(error?.status).toBe(1);
+    expect(error?.stdout?.toString()).toContain('STALE: behind by 13 hours');
+    expect(readFileSync(summary, 'utf8')).toContain('STALE: behind by 13 hours');
   });
 });

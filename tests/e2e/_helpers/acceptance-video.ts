@@ -10,13 +10,19 @@ import {
   type DiagnosticEvent,
 } from './acceptance-diagnostics';
 
-// The acceptance-video test harness (Story MOTIR-1627 · Subtask MOTIR-1632).
+// The acceptance-recording test harness (Story MOTIR-1627 · Subtask MOTIR-1632).
 // Extends the Playwright test with a `chapter(label, body)` step that BOTH runs
 // a `test.step` (for the trace/report) AND records a `{ label, tSeconds }`
 // marker on the recording timeline. On teardown the markers are written to a
 // `chapters.json` sidecar in the test's outputDir + attached to the report, so
-// the uploader (`scripts/upload-acceptance-video.mjs`) can ship them to the
-// publish endpoint alongside the video.
+// whoever publishes the receipt can ship them to the publish endpoint alongside
+// the video.
+//
+// ⚠️ THAT USED TO BE A CI UPLOADER (`scripts/upload-acceptance-video.mjs`); since
+// MOTIR-4096 it is the AGENT, publishing over the Motir MCP surface. Nothing
+// about this file changed with it — the sidecar is still the contract, and the
+// lane's Playwright report artifact is where it is read from. The file keeps its
+// name because six specs import from it and the starter vendors it.
 //
 // The acceptance spec (MOTIR-1638) imports { test, expect } from here instead of
 // '@playwright/test' and wraps each user-visible phase in `chapter(...)`.

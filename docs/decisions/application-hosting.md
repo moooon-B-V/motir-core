@@ -251,11 +251,16 @@ The platform-injected middle rungs are not replaced by Fly equivalents; they are
 configured — is exactly what Q4 drops. A trailing slash is trimmed by the
 existing `resolveBaseUrlTrimmed`.
 
-**Why this name and not a new one.** `MOTIR_BASE_URL` is already this
-repository's name for this concept: `scripts/upload-acceptance-video.mjs` reads
-it, defaulting to `https://app.motir.co`, and `.github/workflows/acceptance-video.yml`
-sets it. Adopting the shipped name means one vocabulary rather than two, and the
-runtime and the acceptance workflow agree by construction. `BETTER_AUTH_URL` was
+**Why this name and not a new one.** `MOTIR_BASE_URL` was already this
+repository's name for this concept when this record was written:
+`scripts/upload-acceptance-video.mjs` read it, defaulting to
+`https://app.motir.co`, and `.github/workflows/acceptance-video.yml` set it.
+Adopting the shipped name meant one vocabulary rather than two. **⚠️ Both of those
+readers are retired (MOTIR-4096 — CI no longer publishes the acceptance
+recording), so the acceptance workflow no longer sets the variable.** That
+retires the ILLUSTRATION, not the decision: `MOTIR_BASE_URL` is still the
+runtime's own name for the deployment's public origin, and
+`resolveBaseUrlTrimmed` is still what reads it. `BETTER_AUTH_URL` was
 the incumbent first rung, but it is a library-specific name now governing email
 links, public-project URLs, Inngest registration and signed assets — the name
 would keep lying about its scope. Better-Auth's `baseURL` is supplied **in code**
@@ -569,19 +574,19 @@ here).
 
 ## Sources
 
-| Fact                                                                 | Source                                                                                                                 |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| The failure, and the eight measured levers                           | MOTIR-2371 (incident) — Vercel support's confirmation that `/tmp` is a fixed default                                   |
-| 374 MB vs 4,240 MB, 490 → 1 WASM copies, the boot at 200             | MOTIR-2383, branch `spike/fly-standalone`, PR #1922                                                                    |
-| `HOSTNAME=0.0.0.0`; 222 MB of `design/**` in the trace               | MOTIR-2383's `Dockerfile` comments and PR body                                                                         |
-| The release-command shape, region `iad`, the VM size                 | `motir-ai/fly.toml` — the working precedent                                                                            |
-| Fly's proxy never creates a machine; the count is an operator action | `motir-ai/fly.toml`'s `[http_service]` comment; planning bug MOTIR-2106, operator card MOTIR-2103, incident MOTIR-2102 |
-| $11.83/machine/month, $0.02/GB egress                                | fly.io/docs/about/pricing, read 2026-08-07                                                                             |
-| The signing flow being amended, the two-store model, the 300 s TTL   | `docs/decisions/attachment-access-control.md` §1–§5 and its 2026-07-07 amendment                                       |
-| The three `VERCEL_*` reads and their two call sites                  | `lib/baseUrl.ts`, `lib/auth/index.ts` on `origin/main`                                                                 |
-| `MOTIR_BASE_URL` already meaning this                                | `scripts/upload-acceptance-video.mjs`, `.github/workflows/acceptance-video.yml`                                        |
-| A stale Inngest app registry drops events silently                   | `.github/workflows/inngest-sync.yml`'s header (MOTIR-1970)                                                             |
-| Uninstalling the Vercel integration deletes the Neon organization    | Neon's documentation, cited on MOTIR-2391 and MOTIR-2396                                                               |
+| Fact                                                                 | Source                                                                                                                                                            |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The failure, and the eight measured levers                           | MOTIR-2371 (incident) — Vercel support's confirmation that `/tmp` is a fixed default                                                                              |
+| 374 MB vs 4,240 MB, 490 → 1 WASM copies, the boot at 200             | MOTIR-2383, branch `spike/fly-standalone`, PR #1922                                                                                                               |
+| `HOSTNAME=0.0.0.0`; 222 MB of `design/**` in the trace               | MOTIR-2383's `Dockerfile` comments and PR body                                                                                                                    |
+| The release-command shape, region `iad`, the VM size                 | `motir-ai/fly.toml` — the working precedent                                                                                                                       |
+| Fly's proxy never creates a machine; the count is an operator action | `motir-ai/fly.toml`'s `[http_service]` comment; planning bug MOTIR-2106, operator card MOTIR-2103, incident MOTIR-2102                                            |
+| $11.83/machine/month, $0.02/GB egress                                | fly.io/docs/about/pricing, read 2026-08-07                                                                                                                        |
+| The signing flow being amended, the two-store model, the 300 s TTL   | `docs/decisions/attachment-access-control.md` §1–§5 and its 2026-07-07 amendment                                                                                  |
+| The three `VERCEL_*` reads and their two call sites                  | `lib/baseUrl.ts`, `lib/auth/index.ts` on `origin/main`                                                                                                            |
+| `MOTIR_BASE_URL` already meaning this                                | ~~`scripts/upload-acceptance-video.mjs`, `.github/workflows/acceptance-video.yml`~~ — both retired by MOTIR-4096; the reading is unchanged, the CI reader is gone |
+| A stale Inngest app registry drops events silently                   | `.github/workflows/inngest-sync.yml`'s header (MOTIR-1970)                                                                                                        |
+| Uninstalling the Vercel integration deletes the Neon organization    | Neon's documentation, cited on MOTIR-2391 and MOTIR-2396                                                                                                          |
 
 ---
 

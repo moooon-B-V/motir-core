@@ -124,13 +124,62 @@ function proposedBody(
   proposed: PlanItemProposedFields | null,
   target: WorkItem | undefined,
 ): string | null {
-  if (item.op === 'add') return proposed?.[key] ?? null;
+  return proposedValue(key, item, proposed?.[key] ?? null, target?.[key] ?? null);
+}
+
+/**
+ * THE VALUE THIS PROPOSAL IS ASKING FOR — the rule {@link proposedBody} states
+ * at length, as one function, for every field that has one (bug MOTIR-4143).
+ *
+ * `add` → what the proposal proposes. `modify` → the patch's value when the
+ * patch CARRIES the key, else the target's live value. `remove` → the target's.
+ * The caller supplies both ends already narrowed, so each field keeps its own
+ * type and its own conversion (a `Decimal` target, a column that no longer
+ * exists) instead of this function knowing about any of them.
+ *
+ * ⚠️ PRESENCE (`!== undefined`), NOT NULLISHNESS. The patch is SPARSE and an
+ * explicit `null` CLEARS a field, so `??` would fall through to the value
+ * approval is about to DELETE and show it as the value approval will keep.
+ * `applyModify` and `buildChanges` test presence for the same reason.
+ *
+ * ⚠️ WHY THE RAIL FIELDS NOW COME THROUGH HERE, HAVING BEEN add-ONLY UNTIL NOW.
+ * The reason they were gated is written out in
+ * `tests/dto/planReviewFieldParity.test.ts` and it was a real one: these are
+ * RAIL rows, the rail has no old→new affordance, and a change to any of them IS
+ * shown to the approver — in the `changes` diff, which is built to show two
+ * sides at once. That argument holds for the LIST ROW, which renders the diff.
+ * It does not hold for `ProposalQuickView`, which renders NO diff at all and is
+ * the only surface these fields reach: on a `modify` the whole rail collapsed to
+ * the one field that was never gated (`parentIdentifier`), so the surface a
+ * person approves from showed a re-scoped, re-pinned, re-typed card as a single
+ * Parent row. Reported from the running app (MOTIR-4143).
+ *
+ * The accepted cost, stated rather than discovered: a rail row does not say
+ * whether the value it shows is proposed or unchanged. The card's header names
+ * the op and the list spells the diff — and *the value this card will have* is
+ * strictly more than the nothing it showed before.
+ */
+function proposedValue<T>(key: PatchedFieldKey, item: PlanItemDto, addValue: T, targetValue: T): T {
+  if (item.op === 'add') return addValue;
   if (item.op === 'modify') {
     const patched = item.patch?.[key];
-    if (patched !== undefined) return patched;
+    if (patched !== undefined) return patched as T;
   }
-  return target?.[key] ?? null;
+  return targetValue;
 }
+
+/** The patch keys that name a value a reviewer reads back off the proposal. */
+type PatchedFieldKey = Extract<
+  keyof PlanItemPatch,
+  | 'descriptionMd'
+  | 'explanationMd'
+  | 'priority'
+  | 'type'
+  | 'storyPoints'
+  | 'estimateMinutes'
+  | 'targetRepo'
+  | 'targetRepoRole'
+>;
 
 /** The OLD → NEW field changes a `modify` proposes (its diff overlay).
  *
@@ -685,10 +734,17 @@ export const planReviewService = {
               target?.title ??
               'Unavailable item'),
         kind: item.op === 'add' ? (proposed?.kind ?? 'task') : (target?.kind ?? 'task'),
-        // The add's editable proposed values (the inline edit form seeds from
-        // these); null for modify/remove — only an `add` is editable (7.21.6).
-        priority: item.op === 'add' ? (proposed?.priority ?? null) : null,
-        type: item.op === 'add' ? (proposed?.type ?? null) : null,
+        // THE RAIL, ON EVERY OP (bug MOTIR-4143) — the value the card will have
+        // if this proposal is approved, which is the question the quick view's
+        // rail is asked. See `proposedValue` for why these stopped being
+        // add-only and what that costs.
+        priority: proposedValue(
+          'priority',
+          item,
+          proposed?.priority ?? null,
+          target?.priority ?? null,
+        ),
+        type: proposedValue('type', item, proposed?.type ?? null, target?.type ?? null),
         // THE BODY THE PROPOSAL IS ASKING FOR, ON EVERY OP (bug MOTIR-4134) —
         // see `proposedBody` for why this is not `op === 'add' ? … : null`.
         descriptionMd: proposedBody('descriptionMd', item, proposed, target),
@@ -707,11 +763,42 @@ export const planReviewService = {
         // the old, which is the same class of false statement this bug is
         // about, pointing the other way.
         explanationSource: item.op === 'add' ? (proposed?.explanationSource ?? null) : null,
-        storyPoints: item.op === 'add' ? (proposed?.storyPoints ?? null) : null,
-        estimateMinutes: item.op === 'add' ? (proposed?.estimateMinutes ?? null) : null,
-        targetRepo: item.op === 'add' ? (proposed?.targetRepo ?? null) : null,
-        targetRepoRole: item.op === 'add' ? (proposed?.targetRepoRole ?? null) : null,
-        executor: item.op === 'add' ? (proposed?.executor ?? null) : null,
+        // ⚠️ The target's points are a Prisma `Decimal`; `buildChanges` converts
+        // the same column the same way, and the DTO is a number.
+        storyPoints: proposedValue(
+          'storyPoints',
+          item,
+          proposed?.storyPoints ?? null,
+          target?.storyPoints == null ? null : Number(target.storyPoints),
+        ),
+        estimateMinutes: proposedValue(
+          'estimateMinutes',
+          item,
+          proposed?.estimateMinutes ?? null,
+          target?.estimateMinutes ?? null,
+        ),
+        targetRepo: proposedValue(
+          'targetRepo',
+          item,
+          proposed?.targetRepo ?? null,
+          target?.targetRepo ?? null,
+        ),
+        // ⚠️ NO TARGET FALLBACK, and that is not an omission: `work_item.
+        // targetRepoRole` is RETIRED (Story MOTIR-2732 · MOTIR-3040), so a
+        // committed card HAS no role to report. A `modify` shows the role only
+        // when its own patch names one, which is the same rule with the target
+        // side empty — see `buildChanges`, which says so at its own row.
+        targetRepoRole: proposedValue(
+          'targetRepoRole',
+          item,
+          proposed?.targetRepoRole ?? null,
+          null,
+        ),
+        // ⚠️ `executor` HAS NO PATCH KEY — a plan cannot change who executes a
+        // card — so there is no proposed side for a `modify` and the target's
+        // live value IS the value the card will have. It does not go through
+        // `proposedValue` because that function's parameter is a patch key.
+        executor: item.op === 'add' ? (proposed?.executor ?? null) : (target?.executor ?? null),
         planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
         // Same rule, same source, same read (MOTIR-3160): a materialized `add`
         // has a live status because it is a live work item. Populating the
