@@ -104,6 +104,9 @@ jobs:
           set -uo pipefail
           args=()
           [ -n "${MAX_AGE_MINUTES:-}" ] && args+=(--max-age-minutes "$MAX_AGE_MINUTES")
+          # GitHub starts `shell: bash` with `-e`; retain the script's verdict
+          # long enough to print it into both reporting channels.
+          set +e
           report=$(node scripts/assert-deploy-freshness.mjs "${args[@]}" 2>&1)
           code=$?
           echo "$report"
