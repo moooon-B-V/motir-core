@@ -6,7 +6,7 @@ import {
 } from './_helpers/github-seed';
 import { E2E_REPO, E2E_REPO_SECOND } from './_helpers/github-const';
 import { signUp } from './_helpers/shell-session';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
 // A card delivered by MORE THAN ONE PULL REQUEST (Story MOTIR-3655 ·

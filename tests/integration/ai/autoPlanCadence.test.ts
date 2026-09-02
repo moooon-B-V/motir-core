@@ -126,14 +126,34 @@ async function makeDrainedProject(
   return { fx, stubKey: stub.identifier };
 }
 
-/** Seed a plan in a given lifecycle state directly (the gate reads status only). */
-async function seedPlan(fx: WorkItemFixture, status: PlanStatus): Promise<string> {
+/**
+ * Seed a plan in a given lifecycle state directly.
+ *
+ * ⚠️ IT CARRIES ONE PROPOSAL, and that is load-bearing (MOTIR-4124). The gate
+ * reads the status AND, for a closed plan, whether it proposes anything: a
+ * `planned` plan holding NOTHING is nobody's decision, so it no longer pauses
+ * cadence. Seeding a bare row would make every case below assert the gate's
+ * verdict for a reason the case is not about.
+ */
+async function seedPlan(
+  fx: WorkItemFixture,
+  status: PlanStatus,
+  opts: { items?: number } = {},
+): Promise<string> {
+  const count = opts.items ?? 1;
   const plan = await adminDb.plan.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
       status,
       sourceJobId: `job_seed_${status}`,
+      items: {
+        create: Array.from({ length: count }, (_, i) => ({
+          workspaceId: fx.workspaceId,
+          op: 'add' as const,
+          proposedFields: { title: `Proposed ${i}`, kind: 'task' },
+        })),
+      },
     },
   });
   return plan.id;
@@ -244,6 +264,17 @@ describe('Auto-plan cadence — the pending-proposal gate (MOTIR-916)', () => {
         status: 'planned',
         origin: 'user',
         sourceJobId: 'job_user_clicked',
+        // It proposes something — otherwise the gate reads past it for a reason
+        // that has nothing to do with `origin` (MOTIR-4124).
+        items: {
+          create: [
+            {
+              workspaceId: fx.workspaceId,
+              op: 'add',
+              proposedFields: { title: 'A proposed card', kind: 'task' },
+            },
+          ],
+        },
       },
     });
 
@@ -454,10 +485,9 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
 
   it('reports the waiting plan — its id, when it was planned, and how many items it proposes', async () => {
     const { fx } = await makeDrainedProject();
-    const planId = await seedPlan(fx, 'planned');
+    const planId = await seedPlan(fx, 'planned', { items: 3 });
     const plannedAt = new Date('2026-07-20T10:00:00.000Z');
     await adminDb.plan.update({ where: { id: planId }, data: { plannedAt } });
-    await seedItems(fx, planId, 3);
 
     const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
 
@@ -473,8 +503,7 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
 
   it('is paused by a still-GENERATING plan too — no plannedAt yet, and never stale', async () => {
     const { fx } = await makeDrainedProject();
-    const planId = await seedPlan(fx, 'generating');
-    await seedItems(fx, planId, 2);
+    const planId = await seedPlan(fx, 'generating', { items: 2 });
 
     const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
 
@@ -484,7 +513,9 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
 
   it('flags a DRIFTED waiting plan via planStalenessService — the count, not the reason list', async () => {
     const { fx } = await makeDrainedProject();
-    const planId = await seedPlan(fx, 'planned');
+    // `items: 0` here, because this case seeds its own — they need a parentRef
+    // that does not exist yet when the plan row is written.
+    const planId = await seedPlan(fx, 'planned', { items: 0 });
     // The proposal's parent is archived after the plan was drafted → the shipped
     // `parent_removed` rule fires. Real drift, computed by the shipped service.
     const parent = await makeItem(fx, { kind: 'story', title: 'Parent that goes away' });

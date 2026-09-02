@@ -89,6 +89,49 @@ function blankToNull(value: string | null | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
+/**
+ * A content BODY the proposal is ASKING FOR — on EVERY op (bug MOTIR-4134).
+ *
+ * This is the same question `title` answers (MOTIR-4018, its comment at the
+ * call site), applied to the two fields a reviewer actually reads. Both used to
+ * be `item.op === 'add' ? proposed : null`, which was COHERENT while the DTO fed
+ * only the canvas node and the list row: neither reads the flat bodies — a
+ * change is SPELLED through `changes[]` — so a flat field would have been a
+ * second, staler copy. It stopped being coherent when a list row became a door
+ * onto `ProposalQuickView`, which renders the flat bodies INLINE and has no diff
+ * rendering at all. A `modify` opened there read *"No description yet."* /
+ * *"No explanation yet."* over a patch carrying both, rewritten — on the one
+ * surface whose whole purpose is to be read before somebody presses Approve, and
+ * for the op the whole re-plan path is made of.
+ *
+ * ⚠️ THE TEST IS PRESENCE (`!== undefined`), NOT NULLISHNESS (`??`), and that is
+ * the one place this may NOT copy `title`. `PlanItemPatch.title` is `string`, so
+ * `?? target?.title` is exactly right there. Both bodies are `string | null`,
+ * and the patch is SPARSE with the two meanings `applyModify` and `buildChanges`
+ * already give it: absent leaves the body untouched, an explicit `null` CLEARS
+ * it. Under `??` an explicit `null` would fall through to the target's CURRENT
+ * body — showing the reviewer the text approval is about to DELETE, as the text
+ * approval is about to keep. That is this bug's own failure mode inverted, so it
+ * would ship as the fix for it.
+ *
+ * A `remove` reports the target's bodies, which are the only ones it has — the
+ * same rule `title` follows, and what makes the archive a reviewer is being
+ * asked to approve legible at all.
+ */
+function proposedBody(
+  key: 'descriptionMd' | 'explanationMd',
+  item: PlanItemDto,
+  proposed: PlanItemProposedFields | null,
+  target: WorkItem | undefined,
+): string | null {
+  if (item.op === 'add') return proposed?.[key] ?? null;
+  if (item.op === 'modify') {
+    const patched = item.patch?.[key];
+    if (patched !== undefined) return patched;
+  }
+  return target?.[key] ?? null;
+}
+
 /** The OLD → NEW field changes a `modify` proposes (its diff overlay).
  *
  *  `nameParent` renders a parent id as the reader's own word for it — the
@@ -646,12 +689,23 @@ export const planReviewService = {
         // these); null for modify/remove — only an `add` is editable (7.21.6).
         priority: item.op === 'add' ? (proposed?.priority ?? null) : null,
         type: item.op === 'add' ? (proposed?.type ?? null) : null,
-        descriptionMd: item.op === 'add' ? (proposed?.descriptionMd ?? null) : null,
+        // THE BODY THE PROPOSAL IS ASKING FOR, ON EVERY OP (bug MOTIR-4134) —
+        // see `proposedBody` for why this is not `op === 'add' ? … : null`.
+        descriptionMd: proposedBody('descriptionMd', item, proposed, target),
         // The rest of the proposed set (MOTIR-3084) — everything `materialize`
         // writes onto the created item, so the reviewer sees what approval will
         // make. Read off `proposed` rather than enumerated by hand anywhere else;
         // the parity test is what keeps this list honest as the type grows.
-        explanationMd: item.op === 'add' ? (proposed?.explanationMd ?? null) : null,
+        explanationMd: proposedBody('explanationMd', item, proposed, target),
+        // ⚠️ `explanationSource` stays add-ONLY, deliberately, and the op-axis
+        // guard in `tests/dto/planReviewFieldParity.test.ts` is where that is
+        // written down. `PlanItemPatch` has no `explanationSource` twin ON
+        // PURPOSE — a patch that could write it would let a plan forge
+        // provenance — and `applyModify` leaves the target's value alone. So a
+        // `modify` has nothing to say here: reporting the TARGET's source
+        // beside a REWRITTEN body would attribute the new text to whoever wrote
+        // the old, which is the same class of false statement this bug is
+        // about, pointing the other way.
         explanationSource: item.op === 'add' ? (proposed?.explanationSource ?? null) : null,
         storyPoints: item.op === 'add' ? (proposed?.storyPoints ?? null) : null,
         estimateMinutes: item.op === 'add' ? (proposed?.estimateMinutes ?? null) : null,

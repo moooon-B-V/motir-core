@@ -1,6 +1,6 @@
 import { projectsService } from '@/lib/services/projectsService';
 import { signUp } from './_helpers/shell-session';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
 // Story MOTIR-3908 — PUBLIC PROJECTS ARE A CLOUD CAPABILITY, watched in a

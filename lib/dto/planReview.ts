@@ -206,12 +206,44 @@ export interface PlanReviewItemDto {
   priority: string | null;
   /** The `add`'s proposed work-item TYPE (`code`/`design`/…) — `null` as above. */
   type: string | null;
-  /** The `add`'s proposed DESCRIPTION (Markdown) — `null` as above. */
+  /**
+   * The DESCRIPTION this proposal is asking for — **on every op** (bug
+   * MOTIR-4134), the same rule `title` states above and for the same reason.
+   *
+   * An `add` reports its proposed body; a `modify` reports `patch.descriptionMd`
+   * when the patch CARRIES the key and the target's live body when it does not;
+   * a `remove` reports the target's, which is the only one it has.
+   *
+   * ⚠️ CARRIES, not "is non-null". The patch is sparse and an explicit `null`
+   * CLEARS the body, so `planReviewService`'s `proposedBody` tests presence —
+   * the same `!== undefined` `applyModify` and `buildChanges` already test.
+   *
+   * ⚠️ IT USED TO BE `null` FOR EVERY OP BUT `add`, and this sentence is kept
+   * because the defect was in the COMPOSITION rather than in either half. That
+   * was coherent while the DTO fed the canvas node and the list row, neither of
+   * which reads it — a change is SPELLED through `changes[]`, and a flat field
+   * would have been a second, staler copy. It stopped being coherent when a
+   * list row became a door onto `ProposalQuickView`, which renders the flat
+   * bodies INLINE and has no diff rendering at all: a `modify` opened there read
+   * *"No description yet."* over a patch carrying a full rewritten body, on the
+   * surface a person approves from. The `changes` array is UNCHANGED and still
+   * carries a previewed old→new pair, exactly as with `title`: this field says
+   * what the card will BE and the diff says what it is leaving.
+   */
   descriptionMd: string | null;
   /**
    * EVERY remaining `PlanItemProposedFields` value that `materialize` writes onto
-   * the created work item (MOTIR-3084). All `null` for a `modify` / `remove`,
-   * which describe an existing item rather than propose a new one.
+   * the created work item (MOTIR-3084).
+   *
+   * ⚠️ CORRECTED (bug MOTIR-4134). This used to read *"All `null` for a `modify`
+   * / `remove`, which describe an existing item rather than propose a new one"*,
+   * and it was the DOCUMENTED intent behind the defect above, so it is corrected
+   * rather than left to be contradicted by the code. **`explanationMd` follows
+   * `descriptionMd`'s rule and is populated on every op**; the rest below are
+   * add-only, and their sole remaining exception is stated at
+   * `explanationSource`. The op axis is held field by field by
+   * `tests/dto/planReviewFieldParity.test.ts`, so which side a field is on is a
+   * decision somebody writes down rather than one a reader infers from here.
    *
    * They are here because the review surface is a stop on the seam and was
    * missing from it: `explanationMd` is carried on the proposal, diffed, and
@@ -227,6 +259,18 @@ export interface PlanReviewItemDto {
    * proposal and not to this model while the card to fix that was in the backlog.
    */
   explanationMd: string | null;
+  /**
+   * ⚠️ The one field that stays `add`-ONLY on purpose (bug MOTIR-4134), while
+   * the body directly above it moved to every op.
+   *
+   * `PlanItemPatch` has NO `explanationSource` twin, deliberately — that column
+   * is not the caller's to set, so a patch that could write it would let a plan
+   * forge provenance — and `applyModify` leaves the target's value alone. A
+   * `modify` therefore has nothing to say here, and reporting the TARGET's
+   * source beside a REWRITTEN explanation would attribute the new text to
+   * whoever wrote the old one: the same false statement MOTIR-4134 is about,
+   * pointing the other way.
+   */
   explanationSource: string | null;
   storyPoints: number | null;
   estimateMinutes: number | null;

@@ -139,7 +139,7 @@ async function seedPlan(
 }
 
 /** Move the generation Plan bound to `sourceJobId` to a terminal review status. */
-async function setPlanStatus(sourceJobId: string, status: 'planned' | 'approved') {
+async function setPlanStatus(sourceJobId: string, status: 'planned' | 'approved' | 'declined') {
   await adminDb.plan.updateMany({
     where: { sourceJobId },
     data: { status, plannedAt: new Date() },
@@ -594,6 +594,35 @@ describe('migrateOnboardingService — generate + review (plan status)', () => {
     dto = await migrateOnboardingService.advanceFromReview(run.id, fx.ctx);
     expect(dto.step).toBe('done');
     expect(dto.status).toBe('completed');
+  });
+
+  // ⚠️ THE GENERATE STEP EXITS ON A GENERATION THAT PROPOSED NOTHING TOO
+  // (MOTIR-4124). The exit read named `planned` / `approved`, which was a
+  // complete enumeration only while every close produced one of them. A close
+  // over an empty plan is now a DISCARD (`declined` / `discarded`), and under
+  // the old predicate this wizard would have sat on `generate` for ever waiting
+  // for a status nothing was going to write — the consumer the status change
+  // would otherwise have broken, silently, on the one path where a generation
+  // producing nothing is plausible in the first place.
+  it('exits the generate step when the generation was DISCARDED — not only when it was planned', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+    });
+
+    await expect(
+      migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
+    ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
+
+    await setPlanStatus('job-generate_tree', 'declined');
+    const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
+    expect(dto.step).toBe('review');
   });
 });
 

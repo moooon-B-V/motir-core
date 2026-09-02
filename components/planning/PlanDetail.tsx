@@ -1,14 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { AlertTriangle, List, Workflow } from 'lucide-react';
+import { List, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
@@ -295,25 +293,35 @@ export function PlanDetail({
 
   const discard = useCallback(() => void runAction(declinePlanRequest), [runAction]);
 
-  // Terminal EMPTY — a plan with no proposed content (and not still generating):
-  // hand off to the discovery chat to describe what to build (MOTIR-833).
-  // A DECIDED plan (approved/declined) is NEVER empty, and the `!decided`
-  // short-circuit stays — but its REASON has changed (MOTIR-3161). It was added
-  // because `declinePlan` DROPPED every PlanItem, so a declined plan fell into
-  // this empty state and SHADOWED the rail's declined outcome ("Plan declined —
-  // your tree was left untouched") — MOTIR-1377. MOTIR-3160 retains the rows, so
-  // a declined plan is no longer empty and the guard no longer covers for that.
-  // It is kept because a decided plan's outcome must reach the rail regardless of
-  // item count: a plan decided with genuinely zero proposals still has an outcome
-  // to state, and the discovery hand-off is the wrong thing to say about it.
+  // ⚠️ THE TERMINAL-EMPTY HAND-OFF IS GONE FROM THIS SURFACE (MOTIR-4124), and
+  // what replaced it is the RAIL. A `return` before the workspace was mounted
+  // took `PlanReviewRail` with it, so the one plan a reviewer could do nothing
+  // about — zero proposals — was also the one plan they were given no Approve
+  // and no Decline for. The Plans list offered none either (its row is a bare
+  // link), so an empty plan sitting in the queue could not be ended from the UI
+  // at all, and one undecided plan pauses that project's auto-plan cadence.
   //
-  // ⚠️ `stale` IS NOT DECIDED (MOTIR-3578, AMENDMENT 9 D6). The guard's job is to
-  // keep the discovery hand-off off a plan whose outcome the rail is stating,
-  // and a `stale` plan has no outcome yet — it is live, awaiting action, and its
-  // proposals are exactly what the reviewer needs to read. Widening this to
-  // *not planned* would put the empty state over a populated plan and shadow the
-  // rail's stale line, which is the failure shape the paragraph above records
-  // happening once already for `declined`.
+  // The narrow fix — exclude the two AWAITING-DECISION statuses — would have
+  // left a branch nothing can reach: `generating` was already excluded, decided
+  // plans were already excluded, and `planned` / `stale` are the rest of the
+  // vocabulary. So the branch goes, rather than being kept as a guard that can
+  // never fire. A plan with no items now renders exactly as the design of
+  // record draws a decided one with none (`design/ai-planning/design-notes.md`
+  // Part VIII): the pane holds the roadmap's own empty state, and the rail
+  // states the outcome or offers the decision.
+  //
+  // WHERE THE HAND-OFF LIVES INSTEAD — it was never only here. A generation
+  // that produces nothing settles `usePlanGeneration`'s own `empty` phase, and
+  // `GenerationFlow` draws that terminal with the same copy plus a Retry, on
+  // the surface the person is actually standing on. This surface is reached by
+  // opening a plan from the list, where "describe what you want to build" is
+  // not what a reader came for.
+  //
+  // MOTIR-833 / MOTIR-1377 / MOTIR-3161 / MOTIR-3578 are what this replaces:
+  // MOTIR-1377 stopped the empty state shadowing a DECLINED plan's outcome, and
+  // MOTIR-3578 kept `stale` out of `decided` for the same reason. Both were
+  // narrowing a branch whose real defect was that it could suppress the rail;
+  // `decided` survives because the CANVAS still reads it.
   const decided = review.status === 'approved' || review.status === 'declined';
   // The plan's decision, drawn on every node the plan contributes (MOTIR-3161).
   // WHICH BODY the pane shows. THE URL IS THE SINGLE SOURCE OF TRUTH (MOTIR-3239),
@@ -356,26 +364,6 @@ export function PlanDetail({
 
   const outcome: PlanItemOutcome | null =
     review.status === 'approved' ? 'accepted' : review.status === 'declined' ? 'declined' : null;
-  const isEmpty = review.items.length === 0 && review.status !== 'generating' && !decided;
-
-  if (isEmpty) {
-    return (
-      <EmptyState
-        icon={<AlertTriangle className="h-12 w-12" aria-hidden />}
-        title={t('emptyTitle')}
-        description={t('emptyDescription')}
-        action={
-          <Link
-            href="/direction"
-            className="inline-flex items-center rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-sm font-semibold text-(--el-accent-text) hover:bg-(--el-accent-pressed)"
-          >
-            {t('emptyCta')}
-          </Link>
-        }
-      />
-    );
-  }
-
   return (
     <>
       <PlanningWorkspace

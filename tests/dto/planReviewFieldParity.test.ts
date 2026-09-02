@@ -110,6 +110,175 @@ describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
   });
 });
 
+// ── The OP-AXIS guard (bug MOTIR-4134) ───────────────────────────────────────
+//
+// The parity guard above holds the review model against WHICH FIELDS an `add`
+// proposes. It is total over the field list and has no opinion about the second
+// axis every one of those fields also has: for WHICH OPS is it populated? That
+// blind spot is not incidental — it is the reason MOTIR-4134 shipped.
+//
+// ── What went wrong ─────────────────────────────────────────────────────────
+// `descriptionMd` and `explanationMd` were `item.op === 'add' ? proposed : null`,
+// and `lib/dto/planReview.ts` documented it as intended. That was COHERENT while
+// the DTO fed only the canvas node and the list row, which spell a change
+// through `changes[]` and never read the flat bodies. It stopped being coherent
+// when MOTIR-4022 made a list row a door onto `ProposalQuickView`, which renders
+// the flat bodies INLINE and has no diff rendering at all: a `modify` — the
+// whole of the re-plan path — opened as `New` / `not yet created` / "No
+// description yet." / "No explanation yet.", four false statements on the one
+// surface whose purpose is to be read before somebody presses Approve.
+//
+// ── Why THIS guard, and not the two above ───────────────────────────────────
+// The parity guard passed throughout: both fields were PRESENT on the review
+// model, carrying null. The change-row guard passed too: `buildChanges` emitted
+// correct description and explanation rows the whole time. Nothing was missing
+// and nothing was wrong — the defect lived in the COMPOSITION of a producer that
+// was right about its own contract and a consumer that was right about its own
+// design, which is the shape nothing in the suite was standing in a position to
+// see. So the ratchet this adds is the same one `DISPOSITION` below adds for
+// patch keys: the answer for a field may legitimately be "add only", but it has
+// to be WRITTEN DOWN rather than defaulted into by whoever types the ternary.
+describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
+  const proposed = interfaceKeys('lib/dto/plans.ts', 'PlanItemProposedFields');
+  const service = readFileSync(resolve(ROOT, 'lib/services/planReviewService.ts'), 'utf8');
+
+  /**
+   * The shape the defect is made of, matched literally:
+   *
+   *     priority: item.op === 'add' ? (proposed?.priority ?? null) : null,
+   *
+   * — a field whose value for every op but `add` is `null`, regardless of what
+   * the proposal or its target actually says. A field NOT written this way is
+   * populated on more than one op; the guard does not care how.
+   */
+  const addOnlyElseNull = (key: string) =>
+    new RegExp(`\\n\\s*${key}: item\\.op === 'add' \\? [^\\n]*: null,`);
+
+  /**
+   * Per proposed field: is it `add`-only, or does it reach every op — and WHY.
+   * The reason is the deliverable; the boolean is just what the guard can check.
+   */
+  type OpDisposition = { addOnly: string } | { everyOp: string };
+  const OP_AXIS: Record<string, OpDisposition> = {
+    title: {
+      everyOp:
+        'MOTIR-4018 — the title the proposal is ASKING for, so a plan renaming a card ' +
+        'stops drawing it under the name it is about to stop being called.',
+    },
+    kind: {
+      everyOp: "a modify / remove reports its TARGET's kind; the icon must draw something.",
+    },
+    descriptionMd: {
+      everyOp:
+        'MOTIR-4134 — the quick view renders this body INLINE and a modify is the whole ' +
+        'of the re-plan path.',
+    },
+    explanationMd: {
+      everyOp: 'MOTIR-4134 — the same, and the body MOTIR-3070 was filed about.',
+    },
+    explanationSource: {
+      addOnly:
+        'PlanItemPatch has NO explanationSource twin, on purpose — that column is not the ' +
+        "caller's to set, so a patch that could write it would let a plan forge provenance, " +
+        'and applyModify leaves the target value alone. Reporting the TARGET source beside a ' +
+        'REWRITTEN explanation would attribute the new text to whoever wrote the old.',
+    },
+    // ── The DECISION fields. Every one of these is a RAIL row, and the rail is
+    // a compact list of values with no old→new affordance — so on a `modify`
+    // they would render the target's live value indistinguishably from a
+    // proposed one. A change to any of them IS visible to the approver, in the
+    // `changes` diff, which is the surface built to show two sides at once.
+    // That is why they stay add-only, and it is a different answer from the
+    // bodies above for a concrete reason: the quick view renders a body INLINE
+    // and in full, and has nowhere else to show it.
+    priority: {
+      addOnly: 'a rail row; a re-prioritise is read from the changes diff (7.21.6 / MOTIR-1370).',
+    },
+    type: { addOnly: 'a rail row; a re-typing is read from the changes diff, as priority is.' },
+    storyPoints: {
+      addOnly: 'a rail row; a re-scope is read from the changes diff (MOTIR-1532 added the row).',
+    },
+    estimateMinutes: {
+      addOnly: 'a rail row; the other half of the sizing pair, and the same diff row.',
+    },
+    targetRepo: {
+      addOnly: 'a rail row; a re-pin is read from the changes diff, which MOTIR-3868 added.',
+    },
+    targetRepoRole: {
+      addOnly: 'a rail row; the role stands in for an unpinned name, and diffs beside it.',
+    },
+    executor: { addOnly: 'a rail row; a re-assignment is read from the changes diff.' },
+    planningProvenance: {
+      addOnly:
+        'WHO WROTE THE PROPOSAL, not a field of the card — a modify proposes no provenance ' +
+        'of its own, and the plan already records its own harness and model.',
+    },
+  };
+
+  it('states an op disposition for EVERY proposed field', () => {
+    // Total in both directions, so a field added to `PlanItemProposedFields`
+    // cannot reach the review model without somebody answering this question —
+    // and a disposition for a field that no longer exists cannot linger.
+    const undispositioned = [...proposed].filter((k) => !(k in OP_AXIS));
+    const stale = Object.keys(OP_AXIS).filter((k) => !proposed.has(k));
+    expect({ undispositioned, stale }).toEqual({ undispositioned: [], stale: [] });
+  });
+
+  it('every field matches the disposition it declares, in the service source', () => {
+    const wrong = Object.entries(OP_AXIS)
+      .map(([key, d]) => {
+        const isAddOnly = addOnlyElseNull(key).test(service);
+        if ('addOnly' in d && !isAddOnly) return `${key}: declared add-only, reaches every op`;
+        if ('everyOp' in d && isAddOnly) return `${key}: declared every-op, is add-only`;
+        return null;
+      })
+      .filter((x): x is string => x !== null);
+    expect({ wrong }).toEqual({ wrong: [] });
+  });
+
+  it('every disposition carries a REASON — the deliverable is the answer, not the flag', () => {
+    const unexplained = Object.entries(OP_AXIS).filter(
+      ([, d]) => ('addOnly' in d ? d.addOnly : d.everyOp).trim().length < 20,
+    );
+    expect(unexplained.map(([k]) => k)).toEqual([]);
+  });
+
+  it('the PATTERN it matches is real — a guard that matched nothing would pass vacuously', () => {
+    // Both arms must be non-empty, or the assertion above is a tautology in one
+    // direction: if the regex matched nothing the every-op fields would all pass
+    // for the wrong reason, and if it matched everything the add-only ones would.
+    const addOnly = Object.keys(OP_AXIS).filter((k) => addOnlyElseNull(k).test(service));
+    const everyOp = Object.keys(OP_AXIS).filter((k) => !addOnlyElseNull(k).test(service));
+    expect(addOnly.length).toBeGreaterThan(4);
+    expect(everyOp.length).toBeGreaterThan(2);
+    // And it reads the file it thinks it does.
+    expect(service).toContain('function proposedBody(');
+  });
+
+  it('would have caught the two bodies that shipped null for a modify', () => {
+    // The regression this guard is built from, asserted as itself: before the fix
+    // both matched the add-only shape while the quick view rendered them inline.
+    expect(addOnlyElseNull('descriptionMd').test(service)).toBe(false);
+    expect(addOnlyElseNull('explanationMd').test(service)).toBe(false);
+    // …and `priority` still does, so the assertion above is about these two
+    // fields rather than about the regex having stopped working.
+    expect(addOnlyElseNull('priority').test(service)).toBe(true);
+  });
+
+  it('holds the PRESENCE test that separates “unchanged” from “cleared”', () => {
+    // `??` and `!== undefined` are indistinguishable on every case except the one
+    // that matters: the patch is sparse, so an explicit `null` CLEARS a body. A
+    // `??` fallback would show the reviewer the text approval is about to DELETE
+    // as the text approval will keep — this bug's own failure mode inverted, and
+    // therefore the likeliest thing to ship as its fix.
+    const start = service.indexOf('function proposedBody(');
+    expect(start).toBeGreaterThan(-1);
+    const body = service.slice(start, service.indexOf('\n}', start));
+    expect(body).toContain('!== undefined');
+    expect(body).not.toMatch(/item\.patch\?\.\[key\] \?\?/);
+  });
+});
+
 // ── The EDGE-CARRIER guard (bug MOTIR-3366) ──────────────────────────────────
 //
 // The parity test above holds the review model against what an `add` PROPOSES.

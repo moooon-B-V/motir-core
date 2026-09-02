@@ -872,6 +872,90 @@
         clip: rect(0 0 0 0);
         white-space: nowrap;
       }
+
+      /* ── The AUTHED RAIL's bottom section (panel 14) ──────────────────────
+         Reproduced, not re-specified. `components/ui/Sidebar.tsx`'s row is a
+         36px (`--height-control`) flex row at `--radius-control` with
+         `--spacing-control-x` inline padding, an 18px icon in
+         `--el-icon-muted` and a 14px label in `--el-text-secondary`; the frame
+         is `--el-sidebar-bg` with an `--el-sidebar-border` hairline. The class
+         names are `design/settings/two-factor.mock.html`'s, so the two mocks
+         draw one rail rather than two. */
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border: 1px solid var(--el-sidebar-border);
+        border-radius: var(--radius-card);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp-sep {
+        border-top: 1px solid var(--el-sidebar-border);
+        margin: 2px 0 10px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        border: 1px solid transparent;
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-icon-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* The two rails sit side by side so the DIFFERENCE is one row, read in
+         one glance, rather than two panels a reader has to hold in memory. */
+      .railpair {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .railcap {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      /* ── An OFF-HOST link (panel 13) ──────────────────────────────────────
+         The shipped treatment, mirrored: lucide `external-link` at 14px beside
+         the label, in the link's own colour so it reads as part of the link
+         rather than as an adjacent control. `components/github/DevelopmentSection.tsx`
+         and `components/planning/repositories/RepositoryRow.tsx` are where it
+         ships today. */
+      .lnk-ext svg {
+        width: 13px;
+        height: 13px;
+        margin-left: 3px;
+        vertical-align: -1px;
+      }
     </style>
   </head>
   <body>
@@ -943,6 +1027,58 @@
       <g id="i-minus" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
         <path d="M8 12h8" />
+      </g>
+      <g
+        id="i-git-branch"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="6" x2="6" y1="3" y2="15" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M18 9a9 9 0 0 1-9 9" />
+      </g>
+      <g
+        id="i-scale"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 3v18" />
+        <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
+        <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
+        <path d="m5 8 3 8a5 5 0 0 1-6 0zV7" />
+        <path d="M7 21h10" />
+      </g>
+      <g
+        id="i-book-open"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 7v14" />
+        <path
+          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+        />
+      </g>
+      <g
+        id="i-external-link"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
       </g>
     </svg>
 
@@ -1719,6 +1855,277 @@
               </button>
               <span class="why">We'll ask again the next time you sign in.</span>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 12 · SIGN-UP, UNCONFIGURED ══════════ -->
+    <div class="panel-label">
+      12 · Sign-up · UNCONFIGURED — the notice is ABSENT, and the card foot closes up
+    </div>
+    <div class="panel-note">
+      <strong>The whole paragraph does not render.</strong> Not the sentence with its links turned
+      into plain text — <code>docs/decisions/public-surface-hosts.md</code> AMENDMENT 2 §D decided
+      that, and the reason is that <code>legal.signUpNotice</code> is a sentence entirely ABOUT two
+      documents:
+      <em>"By creating a Motir account you agree to our Terms of Service and Privacy Policy."</em>
+      Strip the links and it does not read as a weaker notice, it reads as a
+      <strong>false one</strong> — an assertion that the reader has agreed to documents nobody
+      published. A self-hoster has no Terms of Service on day one, and the honest sign-up form is
+      one that does not claim otherwise. <br /><br />
+      <strong>What to look at is the FOOT.</strong> The notice sat under a
+      <code>border-top</code> at <code>padding-top: 16px</code>, so removing it takes a hairline
+      away as well as a paragraph: the card now ends on the
+      <em>"Already have an account?"</em> line, with the body's own bottom padding as its only
+      closing space. That is the whole visible change, it is deliberate, and it needs no new copy
+      string — so <strong>no new <code>en</code> key and no <code>zh</code> twin</strong>, which is
+      the cheapest form this arm could take. <code>legal.signUpNotice</code> survives unchanged for
+      panel 2's case.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+              <use href="#i-brandmark" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Welcome to Motir!</h1>
+            <p>Sign up to turn any product idea into reality.</p>
+          </div>
+          <div class="ac-body">
+            <button class="btn btn-lg btn-block" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-google-color" /></svg>
+              Continue with Google
+            </button>
+            <div class="ordiv" role="separator" aria-label="or">
+              <span class="rule" aria-hidden="true"></span><span class="lbl">OR</span
+              ><span class="rule" aria-hidden="true"></span>
+            </div>
+            <div class="field">
+              <span class="input"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mail" /></svg
+                ><span class="ph">Email address</span></span
+              >
+              <span class="helper">We'll use this to sign you in.</span>
+            </div>
+            <button class="btn btn-primary btn-lg btn-block" type="button">Continue</button>
+            <p class="footlink" style="margin: 0">
+              Already have an account? <a class="lnk" href="/sign-in">Log in</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 13 · SIGN-UP, CONFIGURED OFF-HOST ══════════ -->
+    <div class="panel-label">13 · Sign-up · CONFIGURED — the links now LEAVE this application</div>
+    <div class="panel-note">
+      Panel 2's links are same-origin: <code>/legal/terms</code> is a page this application serves.
+      After this story they are
+      <strong>absolute URLs on whatever host the operator publishes</strong> — for the hosted
+      service, <code>motir.co</code>, which is a different application. So they get the shipped
+      external-link treatment: lucide <code>external-link</code> at 13px, inline after the label,
+      <strong>in the link's own colour</strong> rather than a muted one, so it reads as part of the
+      link and not as an adjacent control. That mirrors
+      <code>components/github/DevelopmentSection.tsx</code> and
+      <code>components/planning/repositories/RepositoryRow.tsx</code>, which is where it ships
+      today. <br /><br />
+      <strong>Why it is worth drawing rather than leaving to the build.</strong> The glyph is the
+      only thing on this screen that tells a reader the document is somebody else's page rather than
+      another screen of the product — and the decision is made ONCE here rather than three times in
+      three components. The anchors are plain <code>&lt;a&gt;</code>, not client-navigating links: a
+      cross-origin <code>next/link</code> looks identical until it is used.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+              <use href="#i-brandmark" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1>Welcome to Motir!</h1>
+            <p>Sign up to turn any product idea into reality.</p>
+          </div>
+          <div class="ac-body">
+            <button class="btn btn-lg btn-block" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-google-color" /></svg>
+              Continue with Google
+            </button>
+            <div class="ordiv" role="separator" aria-label="or">
+              <span class="rule" aria-hidden="true"></span><span class="lbl">OR</span
+              ><span class="rule" aria-hidden="true"></span>
+            </div>
+            <div class="field">
+              <span class="input"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mail" /></svg
+                ><span class="ph">Email address</span></span
+              >
+              <span class="helper">We'll use this to sign you in.</span>
+            </div>
+            <button class="btn btn-primary btn-lg btn-block" type="button">Continue</button>
+            <p class="footlink" style="margin: 0">
+              Already have an account? <a class="lnk" href="/sign-in">Log in</a>
+            </p>
+          </div>
+          <p class="legalnote">
+            By creating a Motir account you agree to our
+            <a class="lnk lnk-ext" href="https://motir.co/legal/terms"
+              >Terms of Service<svg viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-external-link" /></svg
+            ></a>
+            and
+            <a class="lnk lnk-ext" href="https://motir.co/legal/privacy"
+              >Privacy Policy<svg viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-external-link" /></svg></a
+            >.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 14 · THE RAIL, BOTH ARMS ══════════ -->
+    <div class="panel-label">
+      14 · The rail's bottom section — with the Legal row, and without it
+    </div>
+    <div class="panel-note">
+      <strong
+        >⚠️ This arm is drawn HERE rather than in <code>design/shell/</code>, and the reason is a
+        finding.</strong
+      >
+      The rail's bottom section is owned by <code>design/shell/desktop.pen</code> — and that asset
+      draws <em>Settings</em> and <em>Docs</em> and <strong>no Legal row at all</strong> (<code
+        >0</code
+      >
+      occurrences of the string in the file). It predates MOTIR-1134, which added the row. An asset
+      that never drew the row cannot draw its ABSENCE as a state, so re-specifying the rail inside a
+      stale source would make the two disagree twice over. The staleness is a defect in that asset
+      with an owner of its own — see the planning flag in the notes. <br /><br />
+      The panel is <strong>cropped to the last three rows of that section</strong> — Git, Docs,
+      Legal, in declaration order — because those are the rows the change is about; the section
+      carries Security and Job runs above them and neither moves. <br /><br />
+      The two rails are side by side because <strong>the difference is exactly one row</strong>, and
+      that is the whole specification. Nothing else about the section moves: it does not re-centre,
+      the separator above it stays, and the remaining rows keep their order and spacing. The row is
+      absent, not disabled and not empty-stated — the same line the rest of this epic draws for a
+      capability that is not configured. <br /><br />
+      <strong>If the section were to empty entirely</strong> — an operator with no manifest on a
+      build that also had no <code>/docs</code> — the section and its separator go with the last
+      row. A rail does not render an empty group with a hairline above it.
+    </div>
+    <div class="panel">
+      <div class="railpair">
+        <div>
+          <p class="railcap">Configured</p>
+          <div class="rail">
+            <div class="grp">
+              <div class="nav-row">
+                <span class="ni" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg></span
+                ><span class="nl">Git</span>
+              </div>
+              <div class="nav-row">
+                <span class="ni" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book-open" /></svg></span
+                ><span class="nl">Docs</span>
+              </div>
+              <div class="nav-row">
+                <span class="ni" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-scale" /></svg></span
+                ><span class="nl">Legal</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="railcap">Unconfigured — one row fewer</p>
+          <div class="rail">
+            <div class="grp">
+              <div class="nav-row">
+                <span class="ni" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg></span
+                ><span class="nl">Git</span>
+              </div>
+              <div class="nav-row">
+                <span class="ni" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book-open" /></svg></span
+                ><span class="nl">Docs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 15 · RE-CONSENT ROWS, UNCONFIGURED ══════════ -->
+    <div class="panel-label">
+      15 · Re-consent rows · UNCONFIGURED — a CLOUD MISCONFIGURATION, not a self-host state
+    </div>
+    <div class="panel-note">
+      <strong>⚠️ Read the label before the drawing.</strong> This screen is reachable only on a
+      cloud build: <code>lib/legal/reconsentGate.ts</code>'s <code>isMotirCloud()</code> returns
+      early otherwise, so a self-hosted deployment never renders it at all. A cloud build that is
+      holding a reader while its manifest carries no URL for the document is therefore
+      <strong>misconfigured</strong> — it is not the ordinary unconfigured state panels 12 and 14
+      draw, and it should not be drawn as one. <br /><br />
+      <strong
+        >The row keeps everything that identifies the change and loses only the way OUT.</strong
+      >
+      The name, the version delta and the author's sentence about what moved are all carried by the
+      manifest entry, so they render exactly as in panel 6; what is missing is
+      <code>url</code>, so the <em>"Read the new version →"</em> line is absent. That degradation is
+      the right one and it is also uncomfortable, which is the point of drawing it: a person is
+      being asked to agree to a change they cannot read.
+      <strong>The row does not invent a fallback link, and it does not say "unavailable"</strong> —
+      a legal notice that explains its own misconfiguration to the reader puts our operational
+      problem on their screen. <br /><br />
+      <strong>Where the operator is told instead:</strong> AMENDMENT 2 §C makes this a NAMED
+      condition — a manifest whose rejected entry is one of the three re-consent slugs is reported
+      as <em>faulted</em> by the deployment's own health surface, not as <em>unconfigured</em>. The
+      reader gets a row that still tells them what changed; the operator gets the alarm.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <span class="ac-brand"
+            ><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+              <use href="#i-brandmark" /></svg
+            ><span class="wm">Motir</span></span
+          >
+          <div class="ac-head">
+            <h1 class="sm">We've updated our Terms of Service</h1>
+            <p>
+              We won't treat carrying on in silence as agreement, so we're asking you to read what
+              changed and say yes. Nothing has been deleted and your subscription has not changed.
+            </p>
+          </div>
+          <div class="ac-body">
+            <div class="docs">
+              <div class="doc">
+                <span class="ic" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-file" /></svg
+                ></span>
+                <span class="txt">
+                  <span class="nm">Terms of Service <span class="ver">1.0.0 → 2.0.0</span></span>
+                  <span class="what"
+                    >Adds the hosted-agent execution service and what it may do in your
+                    repositories.</span
+                  >
+                </span>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-block" type="button">Agree and continue</button>
+          </div>
+          <div class="ac-foot">
+            <button class="btn btn-ghost" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logout" /></svg>
+              Not now — sign out
+            </button>
+            <span class="why">We'll ask again the next time you sign in.</span>
           </div>
         </div>
       </div>

@@ -72,6 +72,7 @@ const PORT = new URL(BASE_URL).port || '3100';
 // fails loud instead of silently escaping to a real network.
 const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
 const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-test-billing-fixture.json');
+const MOTIR_AI_JOBS_FIXTURE_PATH = path.resolve('/tmp/motir-cloud-ai-jobs-fixture.json');
 
 // ── The boundary fixtures the specs promoted by MOTIR-2849 drive ─────────────
 // Carried over from `playwright.acceptance.config.ts` verbatim in intent: each
@@ -110,6 +111,7 @@ process.env['E2E_JOB_WORKER'] ??= '1';
 // seed-side service reads see the same cloud state the server does.
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
+process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -160,7 +162,8 @@ export default defineConfig({
       // The main config's command has carried this since MOTIR-3427; this one did
       // not need it while the executor was a second `webServer`.
       command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
-      url: BASE_URL,
+      // The promoted public-redirect regression intentionally redirects `/`.
+      url: `${BASE_URL}/sign-in`,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       // Generous: now covers a full `next build` before the server binds.
       timeout: 600_000,
@@ -175,6 +178,9 @@ export default defineConfig({
         // set, but the boundary mock intercepts every call before it leaves.
         MOTIR_AI_SERVICE_TOKEN: 'e2e-billing-placeholder-token',
         MOTIR_AI_BILLING_FIXTURE_PATH,
+        E2E_TEST_AI_JOBS: '1',
+        MOTIR_AI_JOBS_FIXTURE_PATH,
+        MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
         // ── The prod-build harness (MOTIR-1682) ──
         // `next start` forces NODE_ENV=production; this re-relaxes ONLY the test
         // seams (Secure cookies / the `/api/_test` 404 gate / 'file' email — see

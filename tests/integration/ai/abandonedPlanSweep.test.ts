@@ -723,7 +723,23 @@ describe('the sweep — AC 2: the cadence starts again', () => {
     // `planned` proposal underneath it is still somebody's decision.
     const { fx } = await makeDrainedProject();
     const waiting = await adminDb.plan.create({
-      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, status: 'planned' },
+      // The proposal is what makes it "genuinely waiting" (MOTIR-4124): a
+      // `planned` plan holding nothing is a decision nobody owes, and the gate
+      // now reads past it too.
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        status: 'planned',
+        items: {
+          create: [
+            {
+              workspaceId: fx.workspaceId,
+              op: 'add',
+              proposedFields: { title: 'Still somebody’s decision', kind: 'task' },
+            },
+          ],
+        },
+      },
     });
     await seedGeneratingPlan(fx);
     jobIn('failed');

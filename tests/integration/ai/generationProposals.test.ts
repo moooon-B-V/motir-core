@@ -156,7 +156,15 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(plan!.status).toBe('planned');
   });
 
-  it('a final-only call (no proposals) marks the plan planned and echoes no ids', async () => {
+  it('a final-only call on a plan with NOTHING in it DISCARDS it, and says so in `planned`', async () => {
+    // ⚠️ REWRITTEN (MOTIR-4124). This read *"marks the plan planned and echoes
+    // no ids"* and asserted `planned: true` / `status: 'planned'` — the seam
+    // that put an empty plan in a reviewer's queue. A plan proposing nothing
+    // asks for a decision there is nothing to make, so the close records the
+    // ending instead; and `planned` is READ OFF the close rather than asserted,
+    // so the producer is never told its output reached a reviewer when it did
+    // not. The empty-batch close of a plan that HOLDS proposals — MOTIR-3193's
+    // titles-first ending — is unchanged and is covered below.
     const fx = await makeFixture();
     const jobId = 'job_gen_finalonly';
     const planId = await openPlan(fx, jobId);
@@ -167,7 +175,36 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.planItemIds).toEqual([]);
-    expect(body.planned).toBe(true);
+    expect(body.planned).toBe(false);
+    const plan = await adminDb.plan.findFirst({ where: { id: planId } });
+    expect(plan!.status).toBe('declined');
+    expect(plan!.decisionReason).toBe('discarded');
+    expect(plan!.plannedAt).toBeNull();
+  });
+
+  it('a final call on a plan that HOLDS proposals still queues it for review', async () => {
+    // The counterfactual for the case above, and MOTIR-3193's own shape: the
+    // discard is keyed on the plan being EMPTY, not on the batch being empty.
+    const fx = await makeFixture();
+    const jobId = 'job_gen_final_nonempty';
+    const planId = await openPlan(fx, jobId);
+
+    await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: {
+          jobId,
+          proposals: [{ op: 'add', proposedFields: { title: 'A real proposal', kind: 'task' } }],
+        },
+      }),
+    );
+    const res = await proposalsPOST(
+      proposalsReq({ bearer: SERVICE_SECRET, token: tokenFor(fx), body: { jobId, final: true } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).planned).toBe(true);
     const plan = await adminDb.plan.findFirst({ where: { id: planId } });
     expect(plan!.status).toBe('planned');
   });
@@ -187,7 +224,11 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(res.status).toBe(200);
     // The response shape is unchanged — productName is a Plan column, not echoed.
     const body = await res.json();
-    expect(body.planned).toBe(true);
+    // The plan held nothing, so the close DISCARDED it (MOTIR-4124) — which is
+    // what `planned: false` reports. The productName is what this case is
+    // about, and it rides the final append either way: the suggestion the
+    // generation produced is part of the record of that run, discarded or not.
+    expect(body.planned).toBe(false);
     expect(body.planItemIds).toEqual([]);
 
     const plan = await adminDb.plan.findFirstOrThrow({ where: { id: planId } });

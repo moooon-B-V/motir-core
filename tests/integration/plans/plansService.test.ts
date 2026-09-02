@@ -105,6 +105,79 @@ describe('plansService — lifecycle + proposals', () => {
     ).rejects.toBeInstanceOf(PlanNotGeneratingError);
   });
 
+  // ── THE EMPTY CLOSE IS A DECISION, NOT A REVIEW REQUEST (MOTIR-4124) ──────
+  //
+  // `planned` is the status that puts a plan in front of a person and hands
+  // them a button (MOTIR-3560). A plan proposing NOTHING asks for a decision
+  // there is nothing to make — and the detail rendered it with no Approve and
+  // no Decline at all, so it could not even be ended, while one undecided plan
+  // silences that project's auto-plan cadence for good.
+  it('markPlanned over a plan holding NO proposals DISCARDS it — it never reaches the review queue', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+
+    const closed = await plansService.markPlanned(plan.id, fx.ctx);
+
+    expect(closed.status).toBe('declined');
+    expect(closed.decisionReason).toBe('discarded');
+    expect(closed.itemCount).toBe(0);
+    // The frontier never became something a person was asked to read, which is
+    // the fact `plannedAt` records — so it stays unstamped, exactly as it does
+    // for the `declinePlan`-from-`generating` ending this reason is shared with.
+    expect(closed.plannedAt).toBeNull();
+    expect(closed.decidedAt).not.toBeNull();
+    // Nobody DECIDED it: the producer finished with nothing. Same shape the
+    // abandoned sweep writes, and what keeps the row from claiming a decider.
+    expect(closed.decidedById).toBeNull();
+
+    // It is CLOSED by the same rule a `planned` one is — the discard is an
+    // ending, not an escape back to `generating`.
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Late' } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(PlanNotGeneratingError);
+  });
+
+  it('a discarded close leaves the cadence gate nothing to wait on', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { sourceJobId: 'job_empty' }, fx.ctx);
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    await expect(autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx)).resolves.toBeNull();
+  });
+
+  it('a PRE-FIX empty `planned` row stops pausing cadence too — the predicate excludes it', async () => {
+    // The rows already in the tenant, written by the close this card changes.
+    // They cannot be produced any more, so the fixture writes the shape
+    // directly; nothing else in the system can move them, because the
+    // abandoned sweep only reaches `generating` plans.
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { sourceJobId: 'job_legacy' }, fx.ctx);
+    await adminDb.plan.update({
+      where: { id: plan.id },
+      data: { status: 'planned', plannedAt: new Date() },
+    });
+
+    await expect(autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx)).resolves.toBeNull();
+  });
+
+  it('…and a `planned` plan that PROPOSES something still pauses it — the exclusion did not widen', async () => {
+    // The counterfactual, against a fixed shape rather than a ratio: the gate
+    // exists to stop a second proposal stacking on an undecided one, and that
+    // is exactly what this row is.
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'A real proposal', kind: 'task' } },
+    ]);
+
+    await expect(
+      autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx),
+    ).resolves.toMatchObject({ id: planId });
+  });
+
   it('getPlan returns the bundle + lifecycle history; listPlans paginates newest-first', async () => {
     const fx = await makeWorkItemFixture();
     const first = await plansService.createPlan(fx.projectId, { title: 'first' }, fx.ctx);

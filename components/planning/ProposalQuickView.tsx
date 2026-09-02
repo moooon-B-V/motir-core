@@ -33,8 +33,18 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // render INLINE here, as two sibling sections.
 //
 // The head differs from the work-item peek only where the model has nothing to
-// put: no identifier and no status pill (a proposal has neither until it
-// materializes), and no "Open full page →".
+// put, and no "Open full page →" (there is no page).
+//
+// ⚠️ "NOTHING TO PUT" IS A TEST, NOT A CONSTANT (bug MOTIR-4134). This head
+// used to hard-code `New` / `not yet created`, which is true of an `add` and
+// FALSE of every other op — correct while a proposal quick view could only ever
+// be opened on an `add`, and wrong the moment MOTIR-4022 made a LIST ROW open
+// it, because the list's Updates and Archives sections are `modify`s and
+// `remove`s. A `modify` is the whole of the re-plan path, so the reviewer
+// opening the most consequential class of proposal was told it was a blank new
+// card. It carries a real key, and `identifier` is documented as null for
+// exactly one case — "an un-materialized `add`" — so the model already answers
+// the test the constant was standing in for.
 
 const KNOWN_KINDS = new Set<IssueType>(['epic', 'story', 'task', 'bug', 'subtask']);
 
@@ -54,6 +64,12 @@ export function ProposalQuickView({
   if (!item) return null;
 
   const kind = toKind(item.kind);
+  // An `add` says it does not exist yet; a `modify` / `remove` says what the
+  // plan will do to the card it names. `opAdd` is deliberately NOT used for the
+  // `add` arm: `not yet created` is the stronger statement, and it is the copy
+  // this head already shipped.
+  const opWord =
+    item.op === 'add' ? t('notYetCreated') : item.op === 'remove' ? t('opRemove') : t('opModify');
   const ExecutorGlyph = item.executor === 'human' ? User : Bot;
   const hasRail =
     item.type != null ||
@@ -85,10 +101,24 @@ export function ProposalQuickView({
       <div className="flex h-[min(82vh,680px)] flex-col" data-testid="proposal-quick-view">
         <QuickViewHeader>
           <IssueTypeIcon type={kind} className="h-[18px] w-[18px] shrink-0" />
-          {/* No identifier and no status: a proposal has neither until approve
-              materializes it. The node shows the same `new`. */}
-          <span className="font-mono text-xs text-(--el-text-secondary)">{t('newItem')}</span>
-          <span className="text-xs text-(--el-text-muted)">{t('notYetCreated')}</span>
+          {/* WHICH CARD THIS IS, and WHAT THE PLAN WILL DO TO IT.
+              An `add` has no key until approve materializes it — the node and
+              the list row show the same `New` — so it keeps saying so. Every
+              other op names its target, in the SAME `<identifier> · <title>`
+              identity the list row's accessible name already uses (design Part
+              XIII §7), and the second slot carries panel B's own op vocabulary
+              (`add` / `change` / `remove`) that the canvas badge and the list
+              chip already speak. No fourth language for the same three facts,
+              and no new copy key. */}
+          <span
+            data-testid="proposal-quick-view-identity"
+            className="font-mono text-xs text-(--el-text-secondary)"
+          >
+            {item.identifier ?? t('newItem')}
+          </span>
+          <span data-testid="proposal-quick-view-op" className="text-xs text-(--el-text-muted)">
+            {opWord}
+          </span>
           <span className="flex-1" />
           {/* No "Open full page" — there is no page for a proposal — and no edit
               affordance anywhere on this surface. */}
