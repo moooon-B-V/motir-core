@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {
+  collectLaneMembers,
+  fetchApprovedStories,
+  judgeLane,
+  LaneGuardReadError,
+  parseDeclaredStory,
+  resolveStatusSource,
+  type StatusSource,
+} from './helpers/acceptanceLaneGuard';
 
 // THE LANE-MEMBERSHIP GUARD (Story MOTIR-2765 · Subtask MOTIR-2770).
 //
@@ -41,135 +50,14 @@ import path from 'node:path';
 // it the wrong way because the wrong way was the obvious one. So the message
 // names the spec, the story, and BOTH legal remedies with the rule for choosing.
 
-const LANE_DIR = path.join(__dirname, 'e2e');
-const ACCEPTANCE_PREFIX = 'acceptance';
-
-export interface LaneMember {
-  /** The spec's basename, e.g. `acceptance-cadence.spec.ts`. */
-  file: string;
-  /** The story from its `acceptanceStory('MOTIR-<n>')` call, or null when absent. */
-  storyKey: string | null;
-}
-
-/** Every spec the acceptance lane's `testMatch` glob selects, with its declared
- *  story. Read from the FILESYSTEM, never a hard-coded list, so a spec added
- *  tomorrow is covered without editing this guard. */
-export function collectLaneMembers(dir: string = LANE_DIR): LaneMember[] {
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.startsWith(ACCEPTANCE_PREFIX) && f.endsWith('.spec.ts'))
-    .sort()
-    .map((file) => ({
-      file,
-      storyKey: parseDeclaredStory(fs.readFileSync(path.join(dir, file), 'utf8')),
-    }));
-}
-
-/** The `acceptanceStory('MOTIR-123')` argument, or null. Deliberately tolerant
- *  of either quote style and of whitespace, and deliberately NOT tolerant of a
- *  story named only in a comment: a header comment does not publish a receipt. */
-export function parseDeclaredStory(source: string): string | null {
-  const withoutComments = source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-  return /acceptanceStory\(\s*['"]([A-Z][A-Z0-9]*-\d+)['"]\s*\)/.exec(withoutComments)?.[1] ?? null;
-}
-
-export interface LaneVerdict {
-  ok: boolean;
-  /** The full failure text; empty when ok. */
-  message: string;
-}
-
-/** Judge the lane against the approved set. Pure, so the "can it fail" fixture
- *  below can drive it without a network. */
-export function judgeLane(members: LaneMember[], approved: ReadonlySet<string>): LaneVerdict {
-  const discharged = members.filter((m) => m.storyKey && approved.has(m.storyKey));
-  const undeclared = members.filter((m) => !m.storyKey);
-  if (discharged.length === 0 && undeclared.length === 0) return { ok: true, message: '' };
-
-  const lines: string[] = [];
-  if (discharged.length > 0) {
-    lines.push(
-      `${discharged.length} acceptance spec(s) have already produced an APPROVED receipt, so they`,
-      'have discharged their purpose and must leave the acceptance lane:',
-      '',
-      ...discharged.map((m) => `  · tests/e2e/${m.file}  →  ${m.storyKey} (accepted)`),
-      '',
-      'Pick ONE of the two legal remedies for each, once:',
-      '',
-      '  PROMOTE  the flow is worth protecting on EVERY PR. Rename it out of the',
-      '           `acceptance` prefix, swap its import to _helpers/promoted-regression',
-      '           (which no-ops the chaptering and pacing), and KEEP EVERY ASSERTION.',
-      '           If its subject is cloud-gated — billing, motir-ai, code-health, the',
-      '           GitHub provisioning seam — the destination is `cloud-<name>.spec.ts`',
-      '           (playwright.cloud.config.ts), NOT the main lane, where those flags',
-      '           are off and the assertion would pass for the wrong reason.',
-      '  RETIRE   the receipt exists and the flow is covered elsewhere. Delete it, and',
-      '           SAY WHERE the coverage now lives — a deletion that cannot name its',
-      '           cover is a coverage regression wearing a cleanup’s clothes.',
-      '',
-      'Do NOT edit the spec’s assertions to match how the product behaves today.',
-      'That is right for a regression test and backwards for a receipt: it edits',
-      'history to agree with the present.',
-      '',
-      'Why: docs/decisions/acceptance-receipt-lifecycle.md §3.',
-      'Precedent for both remedies: docs/acceptance-lane-triage.md.',
-    );
-  }
-  if (undeclared.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push(
-      `${undeclared.length} acceptance spec(s) declare NO story, so they can never publish a`,
-      'receipt — they are in this lane for no reason it can serve:',
-      '',
-      ...undeclared.map((m) => `  · tests/e2e/${m.file}  →  no acceptanceStory() call`),
-      '',
-      'Either add `acceptanceStory(‘MOTIR-<n>’)` to the recorded happy path, or move',
-      'the spec to a regression lane per the remedies above. A story key in a header',
-      'COMMENT does not count: the uploader reads the fixture, not the prose.',
-    );
-  }
-  return { ok: false, message: lines.join('\n') };
-}
-
-interface StatusSource {
-  baseUrl: string;
-  token: string;
-}
-
-/** The credential + origin the guard reads the product with, or null when this
- *  environment has none (a laptop, a fork's CI). */
-export function resolveStatusSource(env: Record<string, string | undefined>): StatusSource | null {
-  const baseUrl = env['MOTIR_GUARD_BASE_URL'] ?? env['MOTIR_BASE_URL'] ?? '';
-  const token = env['MOTIR_GUARD_TOKEN'] ?? env['MOTIR_UPLOAD_TOKEN'] ?? '';
-  return baseUrl && token ? { baseUrl: baseUrl.replace(/\/$/, ''), token } : null;
-}
-
-/** The subset of `storyKeys` whose CURRENT receipt is `approved`. A story the
- *  read cannot resolve is treated as NOT approved — the guard must never fail a
- *  spec on the strength of a 404 or a flaky hop. */
-export async function fetchApprovedStories(
-  storyKeys: readonly string[],
-  source: StatusSource,
-  fetchImpl: typeof fetch = fetch,
-): Promise<Set<string>> {
-  const approved = new Set<string>();
-  for (const key of storyKeys) {
-    try {
-      const res = await fetchImpl(`${source.baseUrl}/api/work-items/${key}/acceptance-evidence`, {
-        headers: { authorization: `Bearer ${source.token}` },
-      });
-      if (!res.ok) continue;
-      const body = (await res.json()) as { evidence?: { status?: string } | null };
-      if (body?.evidence?.status === 'approved') approved.add(key);
-    } catch {
-      // Unreachable for this key: not evidence of anything. Skip it.
-    }
-  }
-  return approved;
-}
+// ── WHERE THE LOGIC LIVES ───────────────────────────────────────────────────
+//
+// The guard's own functions are in `tests/helpers/acceptanceLaneGuard.ts`, not
+// in this file (MOTIR-4144). They moved for one reason: the criterion that would
+// have caught the missing route is a test that drives `fetchApprovedStories`
+// against the REAL handler, and that test needs a database — so it lives in
+// `tests/acceptance-evidence-status-route.test.ts`, which cannot import a spec
+// file without re-running its suite. One implementation, two callers.
 
 describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => {
   it('no spec in the lane has an approved receipt, and every one declares its story', async () => {
@@ -206,6 +94,8 @@ describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => 
 //
 // A guard nobody has watched fail is a guard nobody knows works. These drive the
 // same judgement the check above runs, on fixtures.
+
+const SOURCE: StatusSource = { baseUrl: 'https://motir.test', token: 't', authMode: 'bearer' };
 
 describe('the guard itself', () => {
   it('FAILS a spec whose story is already approved, naming it and both remedies', () => {
@@ -263,18 +153,80 @@ describe('the guard itself', () => {
     ]);
   });
 
-  it('treats a story the product cannot resolve as NOT approved', async () => {
-    const approved = await fetchApprovedStories(
-      ['MOTIR-1', 'MOTIR-2', 'MOTIR-3'],
-      { baseUrl: 'https://motir.test', token: 't' },
-      (async (url: string) => {
-        if (url.includes('MOTIR-1')) return { ok: false, status: 404 };
-        if (url.includes('MOTIR-2')) throw new Error('ECONNRESET');
-        return { ok: true, json: async () => ({ evidence: { status: 'approved' } }) };
-      }) as unknown as typeof fetch,
-    );
-    // Only the story the product actually answered `approved` for.
+  it('tolerates a TRANSPORT failure — a flaky hop is not evidence about a story', async () => {
+    // The half of the old fail-open policy that is CORRECT and stays: a spec on
+    // an unrelated PR must never go red because DNS wobbled.
+    const approved = await fetchApprovedStories(['MOTIR-2', 'MOTIR-3'], SOURCE, (async (
+      url: string,
+    ) => {
+      if (url.includes('MOTIR-2')) throw new Error('ECONNRESET');
+      return { ok: true, json: async () => ({ evidence: { status: 'approved' } }) };
+    }) as unknown as typeof fetch);
     expect([...approved]).toEqual(['MOTIR-3']);
+  });
+
+  it('reads a resolvable story with NO receipt as not approved — 200 + `evidence: null`', async () => {
+    // The ordinary in-flight state, and the answer that makes every non-2xx
+    // unambiguous enough to throw on.
+    const approved = await fetchApprovedStories(['MOTIR-1'], SOURCE, (async () => ({
+      ok: true,
+      json: async () => ({ evidence: null }),
+    })) as unknown as typeof fetch);
+    expect([...approved]).toEqual([]);
+  });
+
+  it.each([
+    [405, 'the route is not deployed — the MOTIR-4144 defect itself'],
+    [404, 'the key did not resolve for this credential'],
+    [401, 'the credential is missing or is the wrong arm'],
+    [403, 'the credential lacks project:browse'],
+  ])('THROWS on a route-level %i rather than folding it into "not approved"', async (status) => {
+    // The half MOTIR-4144 adds. A 405 was absorbed as "no approved receipt" for
+    // eleven weeks and the check stayed green the whole time.
+    await expect(
+      fetchApprovedStories(['MOTIR-1'], SOURCE, (async () => ({
+        ok: false,
+        status,
+      })) as unknown as typeof fetch),
+    ).rejects.toThrow(LaneGuardReadError);
+  });
+
+  it('names the story, the status and the URL when it throws — a reader can act', async () => {
+    let err: unknown;
+    try {
+      await fetchApprovedStories(['MOTIR-813'], SOURCE, (async () => ({
+        ok: false,
+        status: 405,
+      })) as unknown as typeof fetch);
+    } catch (caught) {
+      err = caught;
+    }
+
+    expect(err).toBeInstanceOf(LaneGuardReadError);
+    const read = err as LaneGuardReadError;
+    expect(read.storyKey).toBe('MOTIR-813');
+    expect(read.status).toBe(405);
+    expect(read.url).toBe('https://motir.test/api/work-items/MOTIR-813/acceptance-evidence');
+    // The message has to reach a developer who has never read this story.
+    expect(read.message).toContain("GUARD'S OWN WIRING");
+    expect(read.message).toContain('the route is not deployed on this origin');
+  });
+
+  it('sends the OIDC marker on the keyless arm, and only there', async () => {
+    // `scripts/upload-acceptance-video.mjs` has sent `x-motir-auth: github-oidc`
+    // since MOTIR-1650; this guard never did, so a keyless credential would have
+    // met the PAT arm and 401'd. The route and the fetch had to change together.
+    const seen: Array<Record<string, unknown>> = [];
+    const spy = (async (_url: string, init: { headers: Record<string, string> }) => {
+      seen.push(init.headers);
+      return { ok: true, json: async () => ({ evidence: null }) };
+    }) as unknown as typeof fetch;
+
+    await fetchApprovedStories(['MOTIR-1'], { ...SOURCE, authMode: 'github-oidc' }, spy);
+    await fetchApprovedStories(['MOTIR-1'], SOURCE, spy);
+
+    expect(seen[0]).toEqual({ authorization: 'Bearer t', 'x-motir-auth': 'github-oidc' });
+    expect(seen[1]).toEqual({ authorization: 'Bearer t' });
   });
 
   it('needs BOTH an origin and a token before it will claim to know anything', () => {
@@ -284,6 +236,18 @@ describe('the guard itself', () => {
     expect(resolveStatusSource({ MOTIR_BASE_URL: 'https://x/', MOTIR_UPLOAD_TOKEN: 't' })).toEqual({
       baseUrl: 'https://x',
       token: 't',
+      authMode: 'bearer',
     });
+  });
+
+  it('takes the auth ARM from the environment, never from the token’s shape', () => {
+    const env = { MOTIR_BASE_URL: 'https://x', MOTIR_GUARD_TOKEN: 'jwt.looking.token' };
+    expect(resolveStatusSource(env)?.authMode).toBe('bearer');
+    expect(resolveStatusSource({ ...env, MOTIR_GUARD_AUTH: 'github-oidc' })?.authMode).toBe(
+      'github-oidc',
+    );
+    // Anything else is the PAT arm — an unrecognised value must not silently
+    // become the keyless one.
+    expect(resolveStatusSource({ ...env, MOTIR_GUARD_AUTH: 'oidc' })?.authMode).toBe('bearer');
   });
 });

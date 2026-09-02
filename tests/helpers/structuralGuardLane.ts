@@ -302,6 +302,13 @@ export const BOUNDED_SCAN_MODULES: Readonly<Record<string, string>> = {
     'walks `packages/cli/src` to decide whether the CLI bundle needs rebuilding — a ' +
     'build STAMP over one package, not an answer about the repository. What makes ' +
     'its five importers slow is spawning the built CLI, which the lane cannot help.',
+  'tests/helpers/acceptanceLaneGuard.ts':
+    'reads `tests/e2e/` filtered to the `acceptance*.spec.ts` prefix — the LANE it ' +
+    'adjudicates, two dozen files, not a source root. Its two importers are the ' +
+    'membership guard itself and a Postgres-backed route suite (MOTIR-4144), and ' +
+    'neither can go in the lane: one does no whole-tree work and the other needs a ' +
+    'database. Declared here rather than split between the lane and ' +
+    'DATABASE_BOUND_GUARDS, because the true fact about both is the BOUND.',
   'tests/e2e/_helpers/harness-watchdog.ts':
     'reads `/proc` for the Playwright harness’s own child processes. Not the source ' +
     'tree at all, and its one vitest importer asserts on the watchdog’s parsing ' +
