@@ -776,6 +776,49 @@ jobs:
       GOOGLE_CLIENT_SECRET: ci-test-placeholder
       # Skip the husky install postinstall — CI has no .git/hooks to wire.
       HUSKY: '0'
+      # ── THE ACCEPTANCE-LANE GUARD'S CREDENTIAL (MOTIR-4093) ────────────────
+      #
+      # `tests/e2e-acceptance-lane-membership.test.ts` asks the PRODUCT which
+      # acceptance receipts are approved. Its own header said "It runs in CI"
+      # and it never did: no job in this directory set any of its variables, so it
+      # took its degraded branch on every run it ever had and reported green
+      # for eleven weeks. This is the job that runs it — `vitest.collect.config.ts`
+      # is `vitest.config.ts`'s `tests/**/*.test.{ts,tsx}` — so this is where
+      # the credential belongs.
+      #
+      # ⚠️ `MOTIR_GUARD_BASE_URL`, NOT `MOTIR_BASE_URL`, and that is not a
+      # naming preference. `MOTIR_BASE_URL` is the APPLICATION's own origin
+      # (`lib/baseUrl.ts` rung 1, whose header says "Nothing else may read the
+      # variable directly"). Setting it here would re-point every emailed link,
+      # Better-Auth `baseURL`, canonical and sitemap origin that the ~1360-file
+      # suite resolves, from the `http://localhost:3000` fallback those tests
+      # were written against to production — the whole lane's blast radius, paid
+      # for one read. `MOTIR_GUARD_BASE_URL` has exactly one reader
+      # (`resolveStatusSource`), so a job-level env cannot change what any other
+      # test in this lane sees. There is no `vars.MOTIR_BASE_URL` to copy an
+      # expression from either — MOTIR-4096 took the last occurrence of that
+      # name out of `.github/**` with the acceptance publisher — so the literal
+      # is written fresh, and it is the origin MOTIR-4162 AC 3 proved the token
+      # against.
+      MOTIR_GUARD_BASE_URL: https://app.motir.co
+      # A Motir PAT granted `project:browse` and nothing else — the read asks
+      # for `ACCEPTANCE_STATUS_READ_PERMISSION` and no more, so this credential
+      # can rewrite nothing. Minted and stored by MOTIR-4162, which recorded the
+      # 200 that proves the value behind the name; the keyless OIDC arm was
+      # considered and rejected there, because `authenticateCiPublisher` skips
+      # the permission check on that arm and `id-token: write` on THIS job would
+      # let any file in the suite authenticate as the workspace owner.
+      MOTIR_GUARD_TOKEN: ${{ secrets.MOTIR_GUARD_TOKEN }}
+      # ⚠️ WHICH RUNS ARE SUPPOSED TO BIND — the discriminator, and it CANNOT be
+      # `CI`. A fork's pull request sets `CI` too and is given no secrets, so
+      # keying the requirement on it would red-light exactly the runs whose
+      # degradation is the guard's stated design. Only the workflow knows, so
+      # the workflow says it: every run but a fork's pull request. On
+      # `merge_group` there is no `pull_request` object, the expression is
+      # `null != true`, and the answer is `true` — the merge queue has secrets
+      # and must bind. `requireStatusSource` FAILS rather than degrading
+      # wherever this is true and nothing resolves.
+      MOTIR_GUARD_REQUIRED: ${{ github.event.pull_request.head.repo.fork != true }}
     steps:
       - uses: actions/checkout@v6
       - name: Start Postgres

@@ -5,10 +5,14 @@ import path from 'node:path';
 import {
   collectLaneMembers,
   fetchApprovedStories,
+  GUARD_REQUIRED_VAR,
   judgeLane,
   LaneGuardReadError,
+  LaneGuardUnboundError,
   parseDeclaredStory,
+  requireStatusSource,
   resolveStatusSource,
+  statusSourceRequired,
   type StatusSource,
 } from './helpers/acceptanceLaneGuard';
 
@@ -42,6 +46,14 @@ import {
 // guard SKIPS, so it fires in CI and not on a laptop. It is never silent about
 // which of the two it did.
 //
+// ⚠️ AND THAT SENTENCE WAS FALSE FOR ELEVEN WEEKS (MOTIR-4093). No job set
+// either variable, so the guard took its degraded branch on every run it ever
+// had — printing "It runs in CI" while measuring nothing. The degradation is
+// still the design; what it now needs is an environment that DECLARES it must
+// bind (`MOTIR_GUARD_REQUIRED`), and `requireStatusSource` FAILS there instead
+// of degrading. `tests/ci-acceptance-lane-credential.test.ts` is what keeps the
+// declaration attached to the job that runs this guard.
+//
 // ── WHAT A DEVELOPER SEES ───────────────────────────────────────────────────
 //
 // This will fire months from now, on someone who has never read this story, in
@@ -60,8 +72,24 @@ import {
 // file without re-running its suite. One implementation, two callers.
 
 describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => {
+  // ⚠️ ITS OWN `it()`, AND THAT IS THE POINT (MOTIR-4093 AC 2). The obvious home
+  // for this assertion is inside the membership check below, and that is exactly
+  // where it would never fire: that check returns at `members.length === 0`
+  // BEFORE it ever resolves a source, and an empty lane is the lane's STEADY
+  // STATE after a triage. A binding assertion placed after that early return is
+  // shut only on the days it would not have mattered — which is this card's own
+  // defect, one level up. Asked of the ENVIRONMENT, it is independent of the
+  // lane's membership by construction.
+  it('BINDS where the environment declares it must — the hatch is shut where it counts', () => {
+    expect(() => requireStatusSource(process.env)).not.toThrow();
+  });
+
   it('no spec in the lane has an approved receipt, and every one declares its story', async () => {
+    // Resolved FIRST, above the empty-lane return, for the same reason the test
+    // above exists: a source read after that return is a source nobody reads.
+    const source = requireStatusSource(process.env);
     const members = collectLaneMembers();
+
     if (members.length === 0) {
       // A legitimate and, after a triage, common state: no story is in review.
       // Not a skip — an empty lane genuinely satisfies the rule.
@@ -69,17 +97,20 @@ describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => 
       return;
     }
 
-    const source = resolveStatusSource(process.env);
     if (!source) {
-      // The stated degradation. Never a silent pass: the reason is printed, and
-      // the undeclared-story half of the rule is checked anyway because it needs
-      // no credential at all.
+      // The stated degradation, and it is now reachable only where the
+      // environment has NOT declared that it must bind — a laptop, a fork's
+      // pull request. Never a silent pass: the reason is printed, and the
+      // undeclared-story half of the rule is checked anyway because it needs no
+      // credential at all.
       const verdict = judgeLane(members, new Set());
       expect(
         verdict.ok,
-        `${verdict.message}\n\n(The approved-receipt half of this guard was SKIPPED: no ` +
-          'MOTIR_GUARD_TOKEN/MOTIR_UPLOAD_TOKEN + MOTIR_BASE_URL in this environment, so the ' +
-          'product could not be asked which receipts are approved. It runs in CI.)',
+        `${verdict.message}\n\n(The approved-receipt half of this guard was SKIPPED: this ` +
+          `environment resolved no origin + token and did not set ${GUARD_REQUIRED_VAR}=true, so ` +
+          'the product could not be asked which receipts are approved. That is correct on a ' +
+          "laptop and on a fork's pull request. Every other environment declares itself and " +
+          'FAILS instead — see MOTIR-4093.)',
       ).toBe(true);
       return;
     }
@@ -240,6 +271,28 @@ describe('the guard itself', () => {
     });
   });
 
+  it('reads the ORIGIN from the guard-specific name first, and the app’s own name second', () => {
+    // The precedence that lets a job wire this guard without re-pointing
+    // `lib/baseUrl.ts` for the other ~1360 files in the same lane.
+    expect(
+      resolveStatusSource({
+        MOTIR_GUARD_BASE_URL: 'https://guard.test',
+        MOTIR_BASE_URL: 'https://app.test',
+        MOTIR_GUARD_TOKEN: 't',
+      })?.baseUrl,
+    ).toBe('https://guard.test');
+    // An EMPTY guard-specific value is SET, so it wins and resolves to no
+    // source — which is what makes `${{ secrets.MISSING }}` (which expands to
+    // '') fail closed rather than silently fall through to the app's origin.
+    expect(
+      resolveStatusSource({
+        MOTIR_GUARD_BASE_URL: '',
+        MOTIR_BASE_URL: 'https://app.test',
+        MOTIR_GUARD_TOKEN: 't',
+      }),
+    ).toBeNull();
+  });
+
   it('takes the auth ARM from the environment, never from the token’s shape', () => {
     const env = { MOTIR_BASE_URL: 'https://x', MOTIR_GUARD_TOKEN: 'jwt.looking.token' };
     expect(resolveStatusSource(env)?.authMode).toBe('bearer');
@@ -249,5 +302,87 @@ describe('the guard itself', () => {
     // Anything else is the PAT arm — an unrecognised value must not silently
     // become the keyless one.
     expect(resolveStatusSource({ ...env, MOTIR_GUARD_AUTH: 'oidc' })?.authMode).toBe('bearer');
+  });
+});
+
+// ── THE HATCH IS SHUT WHERE IT COUNTS (MOTIR-4093) ──────────────────────────
+//
+// `resolveStatusSource` returning null is not by itself a verdict: it is the
+// right answer on a laptop and on a fork's pull request, and it was the WRONG
+// answer on every CI run for eleven weeks. What tells the two apart is the
+// environment's own declaration, so these fixtures drive that decision directly
+// — a guard nobody has watched fail is a guard nobody knows works.
+
+describe('the binding requirement (MOTIR-4093)', () => {
+  const SOURCED = { MOTIR_GUARD_BASE_URL: 'https://x', MOTIR_GUARD_TOKEN: 't' };
+
+  it('reads the declaration from its own variable, exactly — never from `CI`', () => {
+    // A fork's pull request sets CI and gets no secrets, so CI cannot be the
+    // discriminator: keying on it would red-light exactly the runs whose
+    // degradation is the stated design.
+    expect(statusSourceRequired({ CI: 'true' })).toBe(false);
+    expect(statusSourceRequired({})).toBe(false);
+    expect(statusSourceRequired({ [GUARD_REQUIRED_VAR]: 'false' })).toBe(false);
+    // GitHub renders a boolean expression as the bare word, and a job that
+    // interpolates one into `env:` can leave whitespace around it.
+    expect(statusSourceRequired({ [GUARD_REQUIRED_VAR]: 'true' })).toBe(true);
+    expect(statusSourceRequired({ [GUARD_REQUIRED_VAR]: ' TRUE\n' })).toBe(true);
+    // Anything else is NOT a declaration. An unrecognised value must not
+    // silently become one, in either direction.
+    expect(statusSourceRequired({ [GUARD_REQUIRED_VAR]: '1' })).toBe(false);
+    expect(statusSourceRequired({ [GUARD_REQUIRED_VAR]: 'yes' })).toBe(false);
+  });
+
+  it('FAILS where the environment declares it must bind and nothing resolves', () => {
+    expect(() => requireStatusSource({ [GUARD_REQUIRED_VAR]: 'true' })).toThrow(
+      LaneGuardUnboundError,
+    );
+  });
+
+  it('names what is missing, how to check it, and what NOT to do', () => {
+    // It fires months from now on somebody who has never read this card, in the
+    // middle of an unrelated pull request — the same situation the lane guard's
+    // own message is written for.
+    let err: unknown;
+    try {
+      requireStatusSource({ [GUARD_REQUIRED_VAR]: 'true' });
+    } catch (caught) {
+      err = caught;
+    }
+    expect(err).toBeInstanceOf(LaneGuardUnboundError);
+    const message = (err as Error).message;
+    expect(message).toContain('MOTIR_GUARD_BASE_URL');
+    expect(message).toContain('MOTIR_GUARD_TOKEN');
+    expect(message).toContain('gh secret list');
+    expect(message).toContain('MOTIR-4162');
+    expect(message).toContain('Do NOT "fix" this by deleting the requirement');
+  });
+
+  it('DEGRADES where the environment has not declared it — the laptop and the fork', () => {
+    expect(requireStatusSource({})).toBeNull();
+    expect(requireStatusSource({ CI: 'true' })).toBeNull();
+    expect(requireStatusSource({ [GUARD_REQUIRED_VAR]: 'false' })).toBeNull();
+  });
+
+  it('returns the source when one resolves, declared or not — the requirement gates only the NULL', () => {
+    expect(requireStatusSource(SOURCED)).toEqual({
+      baseUrl: 'https://x',
+      token: 't',
+      authMode: 'bearer',
+    });
+    expect(requireStatusSource({ ...SOURCED, [GUARD_REQUIRED_VAR]: 'true' })).toEqual({
+      baseUrl: 'https://x',
+      token: 't',
+      authMode: 'bearer',
+    });
+  });
+
+  it('is INDEPENDENT of lane membership — the property the live assertion needs', () => {
+    // The defect this card is one level up from: an assertion placed after the
+    // membership check's `members.length === 0` return is checked only when the
+    // lane is non-empty, and the lane's steady state is empty. `collectLaneMembers`
+    // is not in this call path at all, which is the point.
+    expect(() => requireStatusSource({ [GUARD_REQUIRED_VAR]: 'true' })).toThrow();
+    expect(collectLaneMembers()).toBeInstanceOf(Array);
   });
 });
