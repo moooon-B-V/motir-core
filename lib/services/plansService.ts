@@ -3838,7 +3838,18 @@ export const plansService = {
       // in front of a reviewer, and Decline is the ending they already have —
       // deciding it for them from inside their own Approve click would be a
       // different act than the one they asked for.
-      assertPlanHasProposals(planId, preItems);
+      //
+      // ⚠️ IT ONLY SPEAKS FOR A PLAN THAT IS OTHERWISE APPROVABLE, and the
+      // `status` read is what keeps it from stealing the STATUS refusal. This
+      // pass runs BEFORE the transaction, and the status guard runs inside it —
+      // so an unguarded check here answers "holds no proposals" for a plan whose
+      // real problem is that it is still `generating`, which is the answer a
+      // caller branches on (`PlanNotInExpectedStatusError.actual` carries it as
+      // DATA for exactly that reason, MOTIR-3025) and the one the CLI prints
+      // while it waits for a planner. Emptiness is the second question; the
+      // status is the first, and the in-transaction check below asks this one
+      // again in the right order anyway.
+      if (plan.status === 'planned') assertPlanHasProposals(planId, preItems);
       await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
 
       // The proposed repo PINS (MOTIR-1884), normalized + validated against this

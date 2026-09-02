@@ -5,7 +5,12 @@ import * as plansModule from '@/lib/services/plansService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
-import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
+import {
+  PlanGrammarError,
+  PlanHasNoProposalsError,
+  PlanRefGraphError,
+  PlanTargetImmutableError,
+} from '@/lib/plans/errors';
 import { createTestProject, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -559,15 +564,21 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
     ).toBe(1);
   });
 
-  it('an empty plan stays a valid no-op that writes nothing — on the one row that can still reach approve', async () => {
-    // ⚠️ THE ROUTE TO THIS SHAPE CHANGED, AND THE PROMISE DID NOT (MOTIR-4124).
-    // `markPlanned` now DISCARDS a plan holding no proposals, so a fresh one
-    // cannot reach `planned` and cannot be approved at all. The shape is still
-    // reachable — by the rows written BEFORE that fix, which exist, and whose
-    // review rail now renders, so Approve is a button a person can press on
-    // one. The gate's promise over the empty set is therefore still owed, and
-    // the fixture writes the pre-fix row directly because nothing produces it
-    // any more.
+  it('an empty plan writes nothing — and is now REFUSED rather than approved', async () => {
+    // ⚠️ THE PROMISE IS THE SAME AND THE ROUTE TO IT CHANGED TWICE.
+    //
+    // MOTIR-4124 made `markPlanned` DISCARD a plan holding no proposals, so a
+    // fresh one cannot reach `planned`; the shape survives only in the rows
+    // written before that fix, which the fixture writes directly because
+    // nothing produces it any more. That much is unchanged.
+    //
+    // What this case asserted then was that approving one is *a valid no-op* —
+    // `approved`, nothing written. MOTIR-4146 made it a REFUSAL, because the
+    // no-op was not free: it recorded a decision saying a plan had been
+    // accepted into a backlog it never touched, with `itemCount: 0` on the
+    // revision. The half this file is about is untouched and still asserted:
+    // **the tree is byte-identical either way.** What moved is what the PLAN
+    // row then says about itself.
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Proposed' }, fx.ctx);
     expect((await plansService.markPlanned(plan.id, fx.ctx)).status).toBe('declined');
@@ -577,9 +588,14 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
     });
     const before = await treeSnapshot(fx);
 
-    const approved = await plansService.approvePlan(plan.id, fx.ctx);
-    expect(approved.status).toBe('approved');
+    await expect(plansService.approvePlan(plan.id, fx.ctx)).rejects.toBeInstanceOf(
+      PlanHasNoProposalsError,
+    );
+
     expect(await treeSnapshot(fx)).toEqual(before);
+    const row = await adminDb.plan.findUniqueOrThrow({ where: { id: plan.id } });
+    expect(row.status).toBe('planned');
+    expect(row.decidedAt).toBeNull();
   });
 
   it('applies identically however the plan was TRIGGERED — a cadence job and a user turn', async () => {
