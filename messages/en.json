@@ -164,7 +164,9 @@
     "retry": "Try again",
     "cancel": "Cancel",
     "save": "Save",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "checked": "Checked",
+    "notChecked": "Not checked"
   },
   "planReview": {
     "backToPlans": "Back to plans",

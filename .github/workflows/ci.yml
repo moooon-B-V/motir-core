@@ -2,6 +2,17 @@ name: CI
 
 on:
   pull_request:
+  # ── The MERGE QUEUE is where the composed tree is verified (MOTIR-4050) ─────
+  #
+  # ⚠️ WITHOUT THIS TRIGGER THE QUEUE EJECTS EVERY ENTRY. `protect-main` requires
+  # `CI complete`, and a merge-queue entry waits for that context to report
+  # against the `gh-readonly-queue/main/pr-<n>-<sha>` branch GitHub builds for
+  # it. A workflow that does not run on `merge_group` never reports, the entry
+  # times out on `check_response_timeout_minutes`, and the pull request is
+  # thrown out of the queue with no failing check to explain it. The trigger and
+  # the ruleset's `merge_queue` rule are one change and neither half works
+  # alone; `tests/ci-merge-queue.test.ts` asserts this half.
+  merge_group:
   push:
     branches: [main]
 
@@ -65,30 +76,48 @@ on:
 # (MOTIR-3902 / 3912 / 3913 / 3928 / 3950, all merged in the preceding 24 hours)
 # are what moved it.
 #
-# ⚠️ AND `deploy`'s `needs` LIST IS NOT A SECOND RUN OF THE PULL REQUEST'S
-# MATRIX. That reading is intuitive and it is wrong in the two places that decide
-# the answer:
+# ── ⛔ THE TWO REASONS THE PUSH LANE KEPT THE FULL MATRIX ARE BOTH SPENT NOW ───
+#                                                              (MOTIR-4050)
 #
-#   • `e2e-at-scale` does NOT run on an ordinary pull request at all — its `if:`
-#     takes `github.event_name == 'push'` OR an `e2e-at-scale` LABEL, so for most
-#     pull requests the push-to-`main` run is the FIRST and ONLY execution of the
-#     four at-scale legs. Dropping it from `needs` would not remove a duplicate;
-#     it would remove the check.
+# This block used to explain why `deploy`'s `needs` was NOT a second run of the
+# pull request's matrix, and it rested on two facts. A merge queue retires both,
+# so the matrix has LEFT this lane rather than being narrowed away:
+#
+#   • `e2e-at-scale` did not run on an ordinary pull request, so the
+#     push-to-`main` run was the first and only execution of the four at-scale
+#     legs. It still is not a pull-request lane — its `if:` now takes
+#     `merge_group` instead of `push`, which keeps MOTIR-3148's property exactly
+#     (those legs bill once per merge, never per pull request) and moves them
+#     one step EARLIER, to before the merge instead of after it.
 #   • `protect-main`'s `strict_required_status_checks_policy` is `false`, so a
-#     pull request merges while BEHIND `main` and its green describes a merge base
-#     that has moved. The push-to-`main` run is this repository's only
-#     verification of the merged SUM — the `both-green-main-red` class
-#     (MOTIR-2003) is what it defends against, and MOTIR-3106 records what
-#     happened the last time that run stopped finishing.
+#     pull request merged while BEHIND `main` and its green described a merge
+#     base that had moved — which made this run the only verification of the
+#     merged SUM (the `both-green-main-red` class, MOTIR-2003). ⚠️ THAT IS NOW
+#     THE MERGE QUEUE'S JOB, and it does it BEFORE the merge rather than after:
+#     the queue builds `main` ⊕ the entries ahead ⊕ this pull request, runs the
+#     whole matrix against it, and fast-forwards that exact commit. `strict` is
+#     still `false` on purpose — see the ADR: strict re-runs every OPEN pull
+#     request on every merge, which at this repository's merge rate does not
+#     converge, and the queue costs one run per MERGE instead.
 #
-# So the duplication is real for `lint` / `typecheck` / `build` / `test` /
-# `coverage` / `e2e` and NOT for the release path as a whole, and narrowing
-# `needs` trades a defence rather than a repetition. MOTIR-3760 weighed a merge
-# queue against it and did not take that either — a queue moves the same ~20
-# minutes from AFTER the merge to BEFORE it and adds a second full run per pull
-# request, so it is a correctness improvement rather than a latency one. The
-# decision, with the numbers and both rejections, is
-# `docs/decisions/ci-minutes-allowance.md` §J.5.
+# So `main` no longer re-runs what the queue just ran. What it keeps is a
+# tripwire — `lint`, `typecheck`, `build` (which carries the schema-drift and
+# NFT assertions a release actually depends on) — because ruleset 17227448 has a
+# bypass actor, and a bypassed merge reaches `main` without passing a queue at
+# all. `deploy` needs those three and has no `always()`, so the tripwire still
+# gates the release.
+#
+# ⚠️ AND THIS IS WHY THE BLOCK ABOVE MATTERS LESS THAN IT DID, NOT MORE. The
+# starvation MOTIR-3106 fixed needed ~35 minutes of clear air to reach `deploy`;
+# the push lane's gate is now ~4 minutes and the release ~7. The expression
+# below STAYS as it is — a shorter run is a smaller window, not no window, and
+# nothing here makes cancelling a release safe.
+#
+# The decision, with the numbers, the rejected alternatives and the ejection
+# cost a queue adds, is `docs/decisions/merge-queue.md`. It supersedes the merge-
+# queue rejection in `docs/decisions/ci-minutes-allowance.md` §J.5, which weighed
+# a queue as a LATENCY fix (it is not one) against a baseline that did not count
+# the full gate `main` was already running on every merge.
 #
 # ⚠️ WHAT DID CHANGE IS THAT THE WAIT IS NOW VISIBLE. The 2026-08-28 incident
 # cost three hours of production running a retired job engine, and its real cost
@@ -101,9 +130,14 @@ on:
 # — that lane reached the same conclusion for its own reason (a blanket cancel
 # destroys the per-merge baseline that tells you WHICH merge broke it), and one
 # idiom across the repo is worth more than a second way of saying it. This
-# workflow's only two triggers are a PR and a push to `main`, so "cancel iff
-# pull_request" and "cancel iff not the default branch" are the same predicate
-# here; the event form is the conservative one if a trigger is ever added.
+# workflow now has THREE triggers — a PR, a `merge_group` entry and a push to
+# `main` — so "cancel iff pull_request" and "cancel iff not the default branch"
+# have STOPPED being the same predicate, and the event form is the one that was
+# already right. A queue entry must never be cancelled: its run is the only
+# evidence the composed tree was ever tested, and GitHub ejects an entry whose
+# check does not report. Each entry carries its own
+# `gh-readonly-queue/main/pr-<n>-<sha>` ref, so no two of them share a group
+# either.
 #
 # Safe interpolation: github.workflow is a fixed workflow name; github.ref is a
 # validated git ref identifier (not user-controlled free-form input).
@@ -722,7 +756,7 @@ jobs:
     # The `changes` job computes this from the DIFF (MOTIR-3148); it used to be
     # read off the branch prefix, which let a `docs/…` branch carrying app code
     # skip this suite entirely. Every non-pull_request event runs it.
-    if: ${{ needs.changes.outputs.app == 'true' }}
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
     strategy:
       fail-fast: false
       matrix:
@@ -817,7 +851,7 @@ jobs:
     # Observed 1.1–1.3 min → 10 (~8x, the short-job floor). It only merges the
     # shards' reports; the measuring is done by `test`.
     timeout-minutes: 10
-    if: ${{ needs.changes.outputs.app == 'true' }}
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
     needs: [test, changes]
     env:
       # The merge step (`vitest --mergeReports`) does NOT run any tests, so it
@@ -949,7 +983,7 @@ jobs:
     # Playwright suite has nothing new to exercise. lint/typecheck/build/test
     # still run. The `changes` job computes this from the DIFF (MOTIR-3148);
     # the branch-prefix test it replaces was wrong in both directions.
-    if: ${{ needs.changes.outputs.app == 'true' }}
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
     # Wait for the build job — E2E is more expensive than a build failure
     # surfaces and there's no point burning Playwright minutes if `next
     # build` is red.
@@ -1134,8 +1168,12 @@ jobs:
   #
   # These four legs are self-seeding, cap-parameterised journeys that exercise
   # volume rather than behaviour, and they cost a runner each on every pull
-  # request. They now run on push-to-`main` (where they gate `deploy`) and on a
-  # pull request that opts in with the `e2e-at-scale` label.
+  # request. They run on a MERGE-QUEUE entry — where they gate the merge, against
+  # the composed tree that is about to become `main` — and on a pull request that
+  # opts in with the `e2e-at-scale` label. ⚠️ THEY USED TO RUN ON PUSH-TO-`main`,
+  # i.e. AFTER the merge, and MOTIR-4050 moved them one step earlier without
+  # changing what MOTIR-3148 bought: still once per merge, still never on an
+  # ordinary pull request.
   #
   # WHY A SEPARATE JOB rather than a condition on the legs: a matrix leg cannot
   # be dropped by an expression — the `matrix` context is not available to a
@@ -1157,7 +1195,7 @@ jobs:
     permissions:
       contents: read
     needs: [build, changes]
-    if: ${{ needs.changes.outputs.app == 'true' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'e2e-at-scale')) }}
+    if: ${{ needs.changes.outputs.app == 'true' && (github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, 'e2e-at-scale')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -1308,7 +1346,7 @@ jobs:
   sandbox:
     name: Sandbox images
     needs: changes
-    if: ${{ needs.changes.outputs.images == 'true' }}
+    if: ${{ needs.changes.outputs.images == 'true' && github.event_name != 'push' }}
     permissions:
       contents: read
     uses: ./.github/workflows/sandbox-images.yml
@@ -1337,7 +1375,7 @@ jobs:
   runner-image:
     name: Runner image
     needs: changes
-    if: ${{ needs.changes.outputs.images == 'true' }}
+    if: ${{ needs.changes.outputs.images == 'true' && github.event_name != 'push' }}
     permissions:
       contents: read
     uses: ./.github/workflows/runner-image.yml
@@ -1350,18 +1388,37 @@ jobs:
   # suite that exists is the gate, it is untouched by this job, and the deploy
   # follows it. Two conditions do that, and both are load-bearing:
   #
-  #   • `needs:` — every app-level gate above. A skipped or failed need makes
-  #     this job skip (there is deliberately no `always()` here), so a red
-  #     Vitest shard or a red E2E leg means nothing ships. The package lanes
-  #     (`design-system`, `cli`) and the image lanes (`sandbox`, `runner-image`)
-  #     are NOT in the list: each is released by its own tag and none of them is
-  #     part of this service's artifact — the same reasoning motir-ai's deploy
-  #     uses to exclude `indexer-image`. `design-guards` is out for that same
-  #     reason and not by oversight: `design/` is not in the standalone bundle,
-  #     so a stale mockup cannot reach the running service. (It used to be
-  #     PRUNED there; since MOTIR-3219 it is never traced in, and the Dockerfile
-  #     step asserts that rather than deleting it. Same guarantee, earlier.)
-  #     It still gates the MERGE — `ci-complete` needs it like everything else.
+  #   • `needs:` — the three jobs that still RUN on a push. A skipped or failed
+  #     need makes this job skip (there is deliberately no `always()` here), so a
+  #     red tripwire means nothing ships.
+  #
+  #     ⚠️ THE LIST SHRANK, AND THE GATE DID NOT (MOTIR-4050). It used to read
+  #     `[lint, typecheck, build, test, coverage, e2e, e2e-at-scale]`, because
+  #     the push lane ran the whole matrix. The matrix now runs in the MERGE
+  #     QUEUE, against the exact commit that becomes `main` — a stronger claim
+  #     than this job ever made, since it is checked BEFORE the merge rather than
+  #     after — and those four jobs are skipped on a push. A skipped `needs`
+  #     entry makes its dependents skip, so leaving them listed here would not
+  #     have been a conservative choice: it would have stopped the deploy
+  #     entirely. `tests/ci-merge-queue.test.ts` asserts that every job that left
+  #     this list runs on `merge_group`, which is the property that makes the
+  #     shrink safe.
+  #
+  #     `build` STAYS, and not for the artifact: it carries the schema-drift
+  #     assertion (`prisma migrate diff`) and the NFT trace guard, and a release
+  #     whose `release_command` is `prisma migrate deploy` is exactly the thing
+  #     that must not run against a datamodel the migrations disagree with.
+  #
+  #     The package lanes (`design-system`, `cli`) and the image lanes
+  #     (`sandbox`, `runner-image`) are NOT in the list: each is released by its
+  #     own tag and none of them is part of this service's artifact — the same
+  #     reasoning motir-ai's deploy uses to exclude `indexer-image`.
+  #     `design-guards` is out for that same reason and not by oversight:
+  #     `design/` is not in the standalone bundle, so a stale mockup cannot reach
+  #     the running service. (It used to be PRUNED there; since MOTIR-3219 it is
+  #     never traced in, and the Dockerfile step asserts that rather than
+  #     deleting it. Same guarantee, earlier.) They still gate the MERGE —
+  #     `ci-complete` needs them like everything else.
   #   • `if:` — the default branch, on a real push. A pull request's `github.ref`
   #     is `refs/pull/<n>/merge`, so a PR cannot deploy even by targeting main.
   #
@@ -1378,7 +1435,7 @@ jobs:
   deploy:
     name: Deploy to Fly
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, build, test, coverage, e2e, e2e-at-scale]
+    needs: [lint, typecheck, build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     # A release must NOT be cancelled mid-flight by a newer push — the
     # workflow-level `cancel-in-progress` is right for a test run and wrong for

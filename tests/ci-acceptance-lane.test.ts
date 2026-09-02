@@ -76,6 +76,157 @@ const ciJobs = jobsOf(ci);
 const acceptanceJob = jobsOf(acceptanceWorkflow).get('acceptance');
 const e2eBody = ciJobs.get('e2e');
 
+/**
+ * The workflow ABOVE `jobs:`, comments stripped — the triggers and the
+ * workflow-level `concurrency` block. Same idiom as `ciHeader` in
+ * `tests/ci-fly-deploy.test.ts`.
+ */
+const acceptanceHeader = codeOf(acceptanceWorkflow.split(/^jobs:\s*$/m)[0] ?? '');
+
+// ── MOTIR-4095: RESOLVING the concurrency group, not matching its text ───────
+//
+// `cancel-in-progress: false` protects the run that is EXECUTING. GitHub
+// separately holds only ONE PENDING run per group and evicts the queued one, so
+// a per-ref group on `push: main` silently dropped 23 of 100 baselines — every
+// one `cancelled` with zero jobs, at the instant the next merge's run was
+// created. The remedy is a group that varies per COMMIT on a push.
+//
+// That property is ARITHMETIC over a context, not a structure, so a regex is
+// the wrong instrument: any pattern loose enough to survive a rewrite is loose
+// enough to agree with a group that is constant across shas again. Same
+// reasoning, and the same remedy, as the MOTIR-2908 block below — extract what
+// the runner actually evaluates and evaluate it.
+//
+// The evaluator covers exactly the grammar these expressions use and THROWS on
+// anything else, deliberately: a partial evaluator that quietly returned
+// `undefined` would make every assertion below pass vacuously the first time
+// somebody reaches for a function call.
+
+type ExpressionValue = string | boolean;
+
+/** GitHub's falsiness: `false`, `0`, the empty string, `null`. */
+const isTruthy = (v: ExpressionValue): boolean => v !== false && v !== '';
+
+function tokenize(source: string): string[] {
+  const token = /\s*(github(?:\.[A-Za-z_][A-Za-z0-9_]*)+|'[^']*'|true|false|==|!=|&&|\|\||\(|\))/y;
+  const tokens: string[] = [];
+  let at = 0;
+  const trimmed = source.trim();
+  while (at < trimmed.length) {
+    token.lastIndex = at;
+    const match = token.exec(trimmed);
+    if (!match) {
+      throw new Error(`unsupported workflow expression near: ${trimmed.slice(at)}`);
+    }
+    tokens.push(match[1]!);
+    at = token.lastIndex;
+  }
+  return tokens;
+}
+
+/**
+ * Evaluate ONE `${{ … }}` body against a fabricated `github` context.
+ *
+ * `&&` and `||` return an OPERAND, not a boolean — that is what makes
+ * `a && b || c` GitHub's ternary, and it is the whole mechanism under test.
+ */
+function evaluateExpression(body: string, github: Record<string, string>): ExpressionValue {
+  const tokens = tokenize(body);
+  let cursor = 0;
+  const peek = (): string | undefined => tokens[cursor];
+  const take = (): string => {
+    const t = tokens[cursor];
+    if (t === undefined) throw new Error(`workflow expression ended early: ${body}`);
+    cursor += 1;
+    return t;
+  };
+
+  const primary = (): ExpressionValue => {
+    const t = take();
+    if (t === '(') {
+      const inner = or();
+      if (take() !== ')') throw new Error(`unbalanced parentheses: ${body}`);
+      return inner;
+    }
+    if (t === 'true') return true;
+    if (t === 'false') return false;
+    if (t.startsWith("'")) return t.slice(1, -1);
+    if (t.startsWith('github.')) {
+      const value = github[t];
+      if (value === undefined) throw new Error(`the fabricated context has no ${t}`);
+      return value;
+    }
+    throw new Error(`unsupported workflow operand \`${t}\`: ${body}`);
+  };
+
+  const comparison = (): ExpressionValue => {
+    const left = primary();
+    const op = peek();
+    if (op !== '==' && op !== '!=') return left;
+    take();
+    const right = primary();
+    return op === '==' ? left === right : left !== right;
+  };
+
+  const and = (): ExpressionValue => {
+    let left = comparison();
+    while (peek() === '&&') {
+      take();
+      const right = comparison();
+      left = isTruthy(left) ? right : left;
+    }
+    return left;
+  };
+
+  function or(): ExpressionValue {
+    let left = and();
+    while (peek() === '||') {
+      take();
+      const right = and();
+      left = isTruthy(left) ? left : right;
+    }
+    return left;
+  }
+
+  const result = or();
+  if (cursor !== tokens.length) throw new Error(`trailing tokens in workflow expression: ${body}`);
+  return result;
+}
+
+/** Substitute every `${{ … }}` in a workflow value, as the runner does. */
+function resolveTemplate(template: string, github: Record<string, string>): string {
+  let sawExpression = false;
+  const resolved = template.replace(/\$\{\{([^}]*(?:\}[^}][^}]*)*)\}\}/g, (_m, body: string) => {
+    sawExpression = true;
+    return String(evaluateExpression(body, github));
+  });
+  if (!sawExpression) throw new Error(`no \`\${{ }}\` to resolve in: ${template}`);
+  return resolved;
+}
+
+/** The workflow-level `concurrency:` block's two settings, verbatim. */
+function concurrencySetting(name: 'group' | 'cancel-in-progress'): string {
+  const block = /^concurrency:\s*\n((?: {2}.*\n|\s*\n)*)/m.exec(acceptanceHeader);
+  if (!block) throw new Error('no workflow-level `concurrency:` block');
+  const setting = new RegExp(`^ {2}${name}:\\s*(.+)$`, 'm').exec(block[1]!);
+  if (!setting) throw new Error(`the concurrency block declares no \`${name}\``);
+  return setting[1]!.trim();
+}
+
+/** A fabricated `github` context for one event. */
+const contextFor = (eventName: 'push' | 'pull_request', ref: string, sha: string) => ({
+  'github.workflow': 'Acceptance video',
+  'github.event_name': eventName,
+  'github.ref': ref,
+  'github.sha': sha,
+});
+
+const resolvedGroup = (eventName: 'push' | 'pull_request', ref: string, sha: string): string =>
+  resolveTemplate(concurrencySetting('group'), contextFor(eventName, ref, sha));
+
+const resolvedCancel = (eventName: 'push' | 'pull_request', ref: string, sha: string): string =>
+  resolveTemplate(concurrencySetting('cancel-in-progress'), contextFor(eventName, ref, sha));
+
 describe('the acceptance-video lane is story-scoped (MOTIR-1949)', () => {
   it('finds the jobs it is meant to guard', () => {
     // A parser regression (or a workflow restructure) would otherwise make every
@@ -359,10 +510,90 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
   it('cancels superseded runs on a PR but NEVER on main', () => {
     // The baseline's product is knowing WHICH merge broke the lane. Blanket
     // `cancel-in-progress: true` would have back-to-back merges cancel each
-    // other and hand back exactly the ambiguity this trigger removes.
+    // other and hand back exactly the ambiguity this trigger removes. Same
+    // expression, and the same assertion, as `tests/ci-fly-deploy.test.ts` —
+    // deliberately one idiom, not two.
     expect(codeOf(acceptanceWorkflow)).toMatch(
       /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
     );
+  });
+});
+
+// ── MOTIR-4095 ───────────────────────────────────────────────────────────────
+//
+// The guard above is necessary and was never sufficient. `cancel-in-progress`
+// governs the run that is EXECUTING; GitHub holds one PENDING run per group and
+// EVICTS the queued one when a third event arrives. Every push to `main` shares
+// `github.ref`, so a merge burst destroyed the middle baselines before they ran
+// a job — 23 of the last 100 `push: main` runs, all `cancelled`, all with zero
+// jobs, each at the instant the next merge's run was created.
+//
+// These assertions RESOLVE the shipped expression instead of describing it, for
+// the reason the MOTIR-2908 block gives: the group is arithmetic over a context,
+// and a regex that agrees with a per-commit group agrees just as happily with a
+// per-ref one. What has to be true is a PROPERTY of the resolved values.
+describe('a push is grouped per COMMIT, so no baseline is ever evicted (MOTIR-4095)', () => {
+  const FIRST = 'a9936655b1c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4';
+  const SECOND = 'deb99250c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6';
+
+  it('finds the workflow-level concurrency block it is meant to guard', () => {
+    // The negative control: a restructure that moved the block under a job, or
+    // dropped it, would otherwise make every assertion below pass vacuously.
+    expect(acceptanceHeader).toMatch(/^concurrency:\s*$/m);
+    expect(acceptanceHeader).not.toContain('jobs:');
+    expect(concurrencySetting('group')).toContain('${{');
+  });
+
+  it('puts two merges to main in DIFFERENT groups', () => {
+    // The defect, stated as a predicate. Two pushes at different shas sharing a
+    // group is exactly the condition under which GitHub queues the second and
+    // evicts it when a third arrives.
+    const main = 'refs/heads/main';
+    expect(resolvedGroup('push', main, FIRST)).not.toBe(resolvedGroup('push', main, SECOND));
+  });
+
+  it('varies a push group by the SHA and not by anything else', () => {
+    // Stronger than "they differ": the group must actually CARRY the commit, so
+    // a future rewrite cannot satisfy the test above with an unrelated varying
+    // value (a run id, a timestamp) that leaves two events at one sha apart.
+    const main = 'refs/heads/main';
+    expect(resolvedGroup('push', main, FIRST)).toContain(FIRST);
+    expect(resolvedGroup('push', main, FIRST)).toBe(resolvedGroup('push', main, FIRST));
+  });
+
+  it('leaves PR behaviour exactly as it was — one group per ref, newest wins', () => {
+    // The saving MOTIR-2760 wanted is per-REF on a pull request: two pushes to
+    // one PR branch share a group, and `cancel-in-progress` then supersedes the
+    // older run. `github.ref` is `refs/pull/<n>/merge` there, so a PR cancels
+    // only itself.
+    const pr = 'refs/pull/2501/merge';
+    expect(resolvedGroup('pull_request', pr, FIRST)).toBe(
+      resolvedGroup('pull_request', pr, SECOND),
+    );
+    expect(resolvedGroup('pull_request', pr, FIRST)).toContain(pr);
+    expect(resolvedCancel('pull_request', pr, FIRST)).toBe('true');
+    expect(resolvedCancel('push', 'refs/heads/main', FIRST)).toBe('false');
+  });
+
+  it('never lets a push and a pull request collide in one group', () => {
+    // The two arms are the same string on both events only if the expression
+    // has stopped distinguishing them, which is the fault this card fixed.
+    expect(resolvedGroup('push', 'refs/heads/main', FIRST)).not.toBe(
+      resolvedGroup('pull_request', 'refs/heads/main', FIRST),
+    );
+  });
+
+  it('refuses to evaluate an expression it does not understand', () => {
+    // The evaluator is the instrument, so its own failure mode is asserted: a
+    // silent `undefined` would make every group above compare equal-to-equal
+    // and the suite would go green on a workflow nobody had checked.
+    expect(() =>
+      resolveTemplate('${{ fromJSON(github.ref) }}', contextFor('push', 'r', 's')),
+    ).toThrow();
+    expect(() => resolveTemplate('${{ github.actor }}', contextFor('push', 'r', 's'))).toThrow(
+      /fabricated context/,
+    );
+    expect(() => resolveTemplate('no expression here', contextFor('push', 'r', 's'))).toThrow();
   });
 });
 

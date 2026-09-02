@@ -12,8 +12,17 @@ import { join } from 'node:path';
 //
 // Four things must hold, and each has a named failure behind it:
 //
-//   1. The gates run FIRST. `needs:` the Vitest and Playwright jobs, and NO
-//      `always()`, so a red suite means nothing ships (ADR §6 / Q5).
+//   1. The gates run FIRST — and since MOTIR-4050 they run in the MERGE QUEUE,
+//      not on the push. `needs:` the jobs that still execute on a push, and NO
+//      `always()`, so a red tripwire means nothing ships (ADR §6 / Q5).
+//      ⚠️ THIS POINT USED TO NAME `test` AND `e2e` DIRECTLY, and that assertion
+//      was inverted by the change rather than weakened by it. The whole matrix
+//      now runs against the composed tree BEFORE the merge — a stronger claim
+//      than a push-time run could make — and is skipped on the push. A skipped
+//      `needs` entry makes its dependents skip, so keeping them listed would
+//      have stopped the deploy outright. What still has to hold is that the
+//      matrix went somewhere and not nowhere, which is a property about the
+//      QUEUE and therefore lives in `tests/ci-merge-queue.test.ts`.
 //   2. Only the default branch deploys. A `push:`-triggered workflow that also
 //      runs on pull requests would otherwise ship from any branch.
 //   3. ⚠️ POINT 3 WAS THE FUNCTION-REGISTRATION SYNC, AND IT IS GONE
@@ -48,8 +57,15 @@ const DEPLOY_JOB = 'deploy';
 /** The pool guard the deploy step invokes (MOTIR-3570). */
 const POOL_GUARD = 'scripts/assert-machine-pool.mjs';
 const POOL_GUARD_PATH = join(process.cwd(), POOL_GUARD);
-/** The Vitest matrix and the Playwright matrix — "the existing gates". */
-const GATE_JOBS = ['test', 'e2e'];
+/**
+ * What the deploy must still wait for: the push lane's own tripwire. `build` is
+ * in the list for the schema-drift and NFT assertions it carries, not for its
+ * artifact — a release whose `release_command` is `prisma migrate deploy` must
+ * not run against a datamodel its migrations disagree with.
+ */
+const GATE_JOBS = ['lint', 'typecheck', 'build'];
+/** Moved to the merge queue by MOTIR-4050 — asserted there, forbidden here. */
+const QUEUE_JOBS = ['test', 'coverage', 'e2e', 'e2e-at-scale'];
 
 const ci = readFileSync(CI_PATH, 'utf8');
 const poolGuard = [POOL_GUARD, 'scripts/machinePool.mjs']
@@ -132,13 +148,21 @@ describe('the Fly deploy runs after the existing gates (MOTIR-2390)', () => {
     expect(deployCode).toMatch(/^\s*name:\s*Deploy to Fly\s*$/m);
   });
 
-  it('waits for the Vitest and Playwright jobs, and for jobs that exist', () => {
+  it('waits for the push lane\u2019s tripwire, and for jobs that exist', () => {
     // The whole point of the ordering: everything that can fail cheaply fails
     // before anything is shipped. A `needs` entry naming a job that no longer
     // exists is a workflow load error, so the second assertion is not pedantry.
     for (const gate of GATE_JOBS) expect(deployNeeds).toContain(gate);
     for (const need of deployNeeds) expect(ciJobs.has(need)).toBe(true);
     expect(deployNeeds).not.toContain(DEPLOY_JOB);
+  });
+
+  it('does NOT wait for a job that is skipped on a push', () => {
+    // Not a style preference — a skipped `needs` entry makes its dependents
+    // skip, so listing a queue-only job here stops the release entirely rather
+    // than gating it. This is the assertion that would have caught the obvious
+    // way to write MOTIR-4050 wrong: move the matrix and leave `needs` alone.
+    for (const queued of QUEUE_JOBS) expect(deployNeeds).not.toContain(queued);
   });
 
   it('is skipped — not run — when a gate fails', () => {

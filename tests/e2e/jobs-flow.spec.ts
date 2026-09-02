@@ -236,6 +236,7 @@ test('@smoke replay: an owner replays a dead-lettered send, which re-runs and su
 
 test('@smoke cross-workspace isolation: jobs from another workspace are not visible', async ({
   page,
+  baseURL,
 }) => {
   const owner = 'jf-iso-owner@example.com';
   await signUp(page, owner);
@@ -281,9 +282,11 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
   });
 
   // Activate workspace B (the RLS + explicit workspace filter must hide A's runs).
-  await page
-    .context()
-    .addCookies([{ name: 'workspace_id', value: workspaceB.id, url: 'http://localhost:3000' }]);
+  // ⚠️ THE ORIGIN COMES FROM THE LANE, not a literal (MOTIR-4137). `addCookies`
+  // needs an absolute URL, and a hard-coded one is only ever right for whichever
+  // port that lane happens to serve on — the defect that took `main` off deploy
+  // when a spec carrying `:3200` was promoted into the lane that serves `:3100`.
+  await page.context().addCookies([{ name: 'workspace_id', value: workspaceB.id, url: baseURL! }]);
   await gotoJobs(page);
   await expect(page.getByText('No job runs yet')).toBeVisible();
   await expect(page.getByText('email.send')).toHaveCount(0);
