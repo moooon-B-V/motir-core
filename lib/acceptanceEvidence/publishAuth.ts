@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
-import { ACCEPTANCE_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
+import {
+  ACCEPTANCE_PUBLISH_PERMISSION,
+  ACCEPTANCE_STATUS_READ_PERMISSION,
+} from '@/lib/tokens/grant';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
@@ -28,6 +31,45 @@ import {
 // shared helper rather than baked into it, so the second publisher can ask for
 // its own and neither can silently inherit the other's.
 
+/**
+ * Resolve a `MOTIR-7`-style identifier to the STORY an acceptance receipt hangs
+ * on, inside the caller's workspace. Returns the story, or a ready 404
+ * `Response` (finding #44 — a hidden / cross-workspace / missing item reads 404,
+ * never 403).
+ *
+ * Acceptance evidence is a STORY-level artifact (Principle #18 — review at the
+ * Story level). When the CI caller passes a non-story LEAF (a subtask / bug /
+ * task PR key — the PR-title status-sync convention leaves the subtask's own
+ * `MOTIR-<id>`, MOTIR-1684), resolve UP to its parent STORY so the video
+ * attaches to the story, not the leaf. A story key resolves to itself. This is
+ * the server-side, keyless-safe half of the PR-`MOTIR-<id>` → parent-story
+ * resolution (the CI job has no DB access); a non-story leaf with no story
+ * parent is left as-is → the caller rejects it NOT_A_STORY (422).
+ *
+ * ⚠️ SHARED BY THE PUBLISH AND THE STATUS READ, deliberately (MOTIR-4144). The
+ * guard reads the receipt at the SAME coordinate the publisher wrote it to; two
+ * copies of this hop would let the two disagree about which item's receipt is
+ * under discussion, and the disagreement would be silent — the read would answer
+ * "no receipt" for a story that has one.
+ */
+export async function resolveAcceptanceStory(
+  identifier: string,
+  ctx: { userId: string; workspaceId: string },
+): Promise<WorkItem | Response> {
+  const resolved = await resolveWorkItemByIdentifier(identifier, ctx);
+  if (resolved instanceof Response) return resolved;
+  const story: WorkItem = resolved;
+
+  if (story.kind !== 'story' && story.parentId) {
+    const parentId = story.parentId;
+    const parent = await withWorkspaceContext(ctx, (tx) =>
+      workItemRepository.findById(parentId, tx),
+    );
+    if (parent && parent.kind === 'story') return parent;
+  }
+  return story;
+}
+
 export interface AcceptancePublishGate {
   ctx: { userId: string; workspaceId: string };
   story: WorkItem;
@@ -46,25 +88,8 @@ export async function authorizeAcceptancePublish(
   const ctx = await authenticateCiPublisher(req, ACCEPTANCE_PUBLISH_PERMISSION);
   if (ctx instanceof Response) return ctx;
 
-  const resolved = await resolveWorkItemByIdentifier(identifier, ctx);
-  if (resolved instanceof Response) return resolved;
-  let story: WorkItem = resolved;
-
-  // Acceptance evidence is a STORY-level artifact (Principle #18 — review at the
-  // Story level). When the CI caller passes a non-story LEAF (a subtask / bug /
-  // task PR key — the PR-title status-sync convention leaves the subtask's own
-  // `MOTIR-<id>`, MOTIR-1684), resolve UP to its parent STORY so the video
-  // attaches to the story, not the leaf. A story key resolves to itself. This is
-  // the server-side, keyless-safe half of the PR-`MOTIR-<id>` → parent-story
-  // resolution (the CI job has no DB access); a non-story leaf with no story
-  // parent is left as-is → the service rejects it NOT_A_STORY (422).
-  if (story.kind !== 'story' && story.parentId) {
-    const parentId = story.parentId;
-    const parent = await withWorkspaceContext(ctx, (tx) =>
-      workItemRepository.findById(parentId, tx),
-    );
-    if (parent && parent.kind === 'story') story = parent;
-  }
+  const story = await resolveAcceptanceStory(identifier, ctx);
+  if (story instanceof Response) return story;
 
   // Eligibility gate (MOTIR-1630) — reject with the reason BEFORE any blob spend.
   const eligibility = await acceptanceVideoEligibilityService.resolve({
@@ -78,6 +103,44 @@ export async function authorizeAcceptancePublish(
       { status },
     );
   }
+
+  return { ctx, story };
+}
+
+/**
+ * Authenticate + resolve a receipt-STATUS READ (MOTIR-4144). Returns the
+ * resolved `{ ctx, story }`, or a ready error `Response` (401/403/404) the route
+ * returns verbatim.
+ *
+ * TWO DELIBERATE DIFFERENCES FROM {@link authorizeAcceptancePublish}, and both
+ * are the point of this function existing rather than the publish gate being
+ * reused:
+ *
+ * 1. **The permission is {@link ACCEPTANCE_STATUS_READ_PERMISSION}
+ *    (`project:browse`), not `work_item:edit`.** A read of one field of one work
+ *    item asks for what every other read of a work item asks for — the key
+ *    `get_work_item` and the rest of the MCP read surface assert. Requiring the
+ *    publish permission would mean a credential that can only LOOK at receipts
+ *    could also rewrite any work item in the project, which is the whole of what
+ *    least privilege is about; and the lane guard that consumes this route wants
+ *    exactly a read-only credential.
+ * 2. **NO eligibility gate.** `acceptanceVideoEligibilityService` answers
+ *    *"may this org publish an acceptance video?"* — an org toggle and a plan.
+ *    That is a question about a WRITE, and the receipt it guards may already
+ *    exist and be approved. Inheriting it would make an already-recorded receipt
+ *    unreadable the day a plan lapses, and the lane guard's answer would silently
+ *    change from "approved" to "not approved" for a reason that has nothing to do
+ *    with the story.
+ */
+export async function authorizeAcceptanceStatusRead(
+  req: Request,
+  identifier: string,
+): Promise<AcceptancePublishGate | Response> {
+  const ctx = await authenticateCiPublisher(req, ACCEPTANCE_STATUS_READ_PERMISSION);
+  if (ctx instanceof Response) return ctx;
+
+  const story = await resolveAcceptanceStory(identifier, ctx);
+  if (story instanceof Response) return story;
 
   return { ctx, story };
 }
