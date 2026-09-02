@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 import { proxy } from '@/proxy';
 
 // CROSS-ORIGIN ACCESS TO THE PUBLIC READ SURFACE (MOTIR-4114 ·
-// `public-surface-hosts.md` AMENDMENT 3 §D, the ANONYMOUS-DIRECT mechanism).
+// `public-surface-hosts.md` AMENDMENT 4 §D, the ANONYMOUS-DIRECT mechanism).
 //
 // ⚠️ THE ASSERTION THIS FILE EXISTS FOR IS A NEGATIVE ONE:
 // `Access-Control-Allow-Credentials` is never sent. Everything else here is
@@ -125,7 +125,7 @@ describe('what the CORS entry must NOT reach', () => {
 });
 
 describe('§4 — the session cookie is not widened, and this card did not widen it', () => {
-  // The condition the whole host split rests on. AMENDMENT 3 §B is why it is
+  // The condition the whole host split rests on. AMENDMENT 4 §B is why it is
   // asserted HERE as well as in the auth suite: this is the card where the
   // pressure to widen arrives, because it is the card making a button work from
   // a page that cannot see the session.

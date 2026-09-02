@@ -137,7 +137,7 @@ describe('every public read answers a missing subject with 404', () => {
 });
 
 describe('the two request WRITES, and where MOTIR-4114 decided they live', () => {
-  // AMENDMENT 3 §F decided this, and the decision has two halves. The first is a
+  // AMENDMENT 4 §F decided this, and the decision has two halves. The first is a
   // placement — they STAY outside `app/api/public/*` — which is only a decision
   // if something would otherwise drift; the second is the gate, which was
   // genuinely missing and is asserted by `cloud-gate-totality.test.ts` now that
@@ -162,7 +162,7 @@ describe('the two request WRITES, and where MOTIR-4114 decided they live', () =>
 
   it('are NOT in the public contract, and each says why in its own words', () => {
     // The other half of the decision. They are absent from the document because
-    // no consumer of it can call them: after AMENDMENT 3 nothing on motir.co
+    // no consumer of it can call them: after AMENDMENT 4 nothing on motir.co
     // does, and `sameSite: 'lax'` means nothing on motir.co could.
     const declared = PUBLIC_OPERATIONS.map((operation) => operation.path);
     expect(declared.some((path) => path.includes('public-requests'))).toBe(false);
@@ -170,7 +170,7 @@ describe('the two request WRITES, and where MOTIR-4114 decided they live', () =>
     for (const file of WRITES) {
       const prose = readFileSync(join(REPO_ROOT, file), 'utf8');
       expect(prose, `${file} must record WHY it stays outside the contract`).toContain(
-        'AMENDMENT 3',
+        'AMENDMENT 4',
       );
     }
   });

@@ -315,7 +315,7 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
       'The detail behind `/p/<identifier>/requests/<requestKey>` — the request body, the upvote ' +
       'tally, and the PUBLIC comment thread oldest first. Anonymous; `voted` is false without a ' +
       'session, which is the only state a cross-origin consumer can produce ' +
-      '(`public-surface-hosts.md` AMENDMENT 3 row 8). ⚠️ NOTE THE IDENTIFIER: this READ is keyed ' +
+      '(`public-surface-hosts.md` AMENDMENT 4 row 8). ⚠️ NOTE THE IDENTIFIER: this READ is keyed ' +
       "by the project key and the request's WORK-ITEM identifier, because that is the address in " +
       'a shared link; the WRITES beside it (`submitPublicRequest`, upvote, comment) are keyed by ' +
       'the global project id and the work-item id, because their caller has just read the ' +

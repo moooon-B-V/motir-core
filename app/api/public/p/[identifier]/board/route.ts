@@ -28,7 +28,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // for a non-public or unknown key — 404 with no existence leak, so a private
 // project carrying the same key in another workspace stays hidden.
 //
-// ⚠️ After AMENDMENT 3, `motir.co` is the caller and it is ALWAYS anonymous:
+// ⚠️ After AMENDMENT 4, `motir.co` is the caller and it is ALWAYS anonymous:
 // the session cookie is host-only on `app.motir.co` and `sameSite: 'lax'`
 // forecloses a credentialed cross-origin read regardless. `actorUserId` is
 // structurally `null` for every call this route serves from the public site,

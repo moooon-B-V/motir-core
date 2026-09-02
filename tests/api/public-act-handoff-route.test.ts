@@ -7,7 +7,7 @@ import { runAsCloudBuild } from '../helpers/cloudBuild';
 runAsCloudBuild();
 
 // `GET /act` — the HAND-OFF entry (MOTIR-4114 · `public-surface-hosts.md`
-// AMENDMENT 3 §D/§F).
+// AMENDMENT 4 §D/§F).
 //
 // Four properties, and the first two are the ones that matter:
 //

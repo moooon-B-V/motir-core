@@ -28,8 +28,8 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // answered an endpoint belonging to a feature it is not supposed to have.
 // Nobody planned that; it is where the namespace happened to fall.
 //
-// `public-surface-hosts.md` AMENDMENT 3 §F DECIDES it, and the decision is to
-// leave it here with the reason written down: after AMENDMENT 3 nothing on
+// `public-surface-hosts.md` AMENDMENT 4 §F DECIDES it, and the decision is to
+// leave it here with the reason written down: after AMENDMENT 4 nothing on
 // `motir.co` calls this route. Vote and comment are HAND-OFFS (rows 4 and 5) —
 // the visitor comes to THIS origin and acts under this application's own
 // session — so this is an application route serving the application's own act

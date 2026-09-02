@@ -1,7 +1,7 @@
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 
 // CROSS-ORIGIN ACCESS TO THE PUBLIC READ SURFACE (MOTIR-4114 ·
-// `public-surface-hosts.md` AMENDMENT 3 §D, row 3 and the ANONYMOUS-DIRECT
+// `public-surface-hosts.md` AMENDMENT 4 §D, row 3 and the ANONYMOUS-DIRECT
 // mechanism).
 //
 // ── Who needs this, and who does not ──────────────────────────────────────

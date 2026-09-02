@@ -1,11 +1,11 @@
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 
 // The HAND-OFF's return destination (MOTIR-4114 · `public-surface-hosts.md`
-// AMENDMENT 3 §F).
+// AMENDMENT 4 §F).
 //
 // ── What this exists for ──────────────────────────────────────────────────
 //
-// AMENDMENT 3 routes four affordances — follow, roadmap vote, request upvote,
+// AMENDMENT 4 routes four affordances — follow, roadmap vote, request upvote,
 // request comment, and the request intake — as a HAND-OFF: the control on
 // `motir.co` is a link, the act happens on `app.motir.co` under this
 // application's own session and CSRF posture, and the visitor is returned to the

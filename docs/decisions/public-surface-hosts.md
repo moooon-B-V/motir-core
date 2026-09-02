@@ -290,7 +290,7 @@ as part of MOTIR-3910's sweep, not here.
 | **MOTIR-3946** (the versioned contract)      | **BOUND by §3.** It must decide where the contract is published, and it must put the drift guard in `motir-core`'s CI rather than the consumer's.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **MOTIR-3881** (the origin split)            | **UNCHANGED in substance.** §2 is why one variable can no longer answer both questions. Its fallback-to-the-application-origin arm is what makes the split deployable before anything moves.                                                                                                                                                                                                                                                                                                                                                                             |
 | **MOTIR-3932** (the rendering move)          | **BOUND by §3 and §8.** Every read goes through the contract; `/docs` may not be a copied spec.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **MOTIR-3877** (`/p/*`)                      | **BOUND by §4 and by [AMENDMENT 3](#amendment-3--what-becomes-of-ps-session-aware-affordances-once-the-page-is-cross-origin-from-the-session-three-mechanisms-and-no-credential-crosses-motir-4108-2026-09-02).** The host-only cookie stops being a property to preserve and becomes an assertion it owns — and AMENDMENT 3 decides, per affordance, what the page does once no credential can cross to it.                                                                                                                                                             |
+| **MOTIR-3877** (`/p/*`)                      | **BOUND by §4 and by [AMENDMENT 4](#amendment-4--what-becomes-of-ps-session-aware-affordances-once-the-page-is-cross-origin-from-the-session-three-mechanisms-and-no-credential-crosses-motir-4108-2026-09-02).** The host-only cookie stops being a property to preserve and becomes an assertion it owns — and AMENDMENT 4 decides, per affordance, what the page does once no credential can cross to it.                                                                                                                                                             |
 | **MOTIR-3908** (the cloud gate)              | **BOUND by §5.** The gate is the capability, including `app/api/public/*` and the publish affordance — not the pages.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **MOTIR-3909** (`/legal`)                    | **⚠️ SUPERSEDED 2026-09-01 — was UNCHANGED, and is now BOUND by [AMENDMENT 2](#amendment-2--motir-core-keeps-the-legal-mechanism-and-loses-the-content-a-configured-document-manifest-an-absent-unconfigured-surface-and-a-subprocessor-seam-that-fails-on-divergence-motir-4004-2026-09-01).** §2 records why `/legal` MOVES rather than being gated, and that is still right; what this row missed is that `content/legal/*.md` is also an INPUT to the re-consent gate, so the move is a change of SOURCE and not a deletion. AMENDMENT 2 §A carries the measurement. |
 | **MOTIR-3910** (redirects and registrations) | **NARROWED, materially.** `motir.co`'s address records already point at the `motir-marketing` Fly app, so **there is no apex repoint and no new certificate.** What remains is the 301s, the external registrations and a live smoke.                                                                                                                                                                                                                                                                                                                                    |
@@ -886,7 +886,159 @@ table above carries it.
 
 ---
 
-## AMENDMENT 3 — what becomes of `/p/*`'s session-aware affordances once the page is cross-origin from the session: three mechanisms, and no credential crosses (MOTIR-4108, 2026-09-02)
+## AMENDMENT 3 — the subprocessor seam gets the assertion neither half makes: a LIVE comparison, on the deploy and on a schedule, red when it cannot be checked (MOTIR-4139, 2026-09-02)
+
+AMENDMENT 2 §E split the subprocessor guard at the repository line and stated the
+binding requirement as a PROPERTY rather than a pipe: **the seam must FAIL when
+the two sides diverge.** Both halves then shipped — and the property did not.
+
+| half                                                     | what it actually asserts                                                   | shipped    |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- | ---------- |
+| `motir-core` `tests/legal/egress-manifest-guard.test.ts` | the manifest matches **that tree's** signatures, both directions           | MOTIR-4008 |
+| `motir-marketing` `tests/legal/subprocessorSeam.test.ts` | the **parse** against the real pages, and the comparison **from fixtures** | MOTIR-4011 |
+
+One proves the manifest describes its own tree. The other proves the comparison
+**would** report a divergence if it were handed one — not that there is none.
+**Compose them and nothing anywhere compares the published page against the
+manifest `motir-core` is actually serving.** A vendor could be added to
+`motir-core`'s tree, land in its manifest, turn that repository's guard green,
+and never appear on the published page, with both suites green throughout —
+which is the state the whole mechanism was created to end.
+
+Neither card was wrong to stop where it did. MOTIR-4011's lane is offline by
+design, and the only way to compare the two sides from a test is to fetch a live
+deployment — the coupling §E's split exists to avoid. Choosing between the ways
+out of that is an architecture decision, and making it inside a test card would
+have been deciding it by accident.
+
+### §A — The decision
+
+**One mechanism, TWO TRIGGERS.** `motir-marketing` gains a lane
+(`pnpm test:seam`, `vitest.seam.config.mts` → `tests/seam/`) that fetches the
+served manifest and compares it with the real pages — no fixture on either side —
+and that lane is triggered from exactly two places:
+
+| trigger                                                   | the question it answers                                                              | what it bounds                                                               |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| **the DEPLOY job** (`ci.yml`, a `needs` gate on `deploy`) | _are we about to publish a page that disagrees with the manifest motir-core serves?_ | what this repository PUBLISHES — the site cannot deploy while it is lying    |
+| **a daily SCHEDULE** (`subprocessor-seam.yml`)            | _has the manifest changed under a page we already published?_                        | how long a divergence introduced by the OTHER repository can stand unnoticed |
+
+**They are not alternatives, and shipping one would have been the mistake.** The
+deploy gate is structurally blind to the second question: `motir-core` can add a
+dependency, update its manifest, turn its own guard green and deploy without this
+repository building anything at all, and the gate will not run again until
+somebody happens to land an unrelated change here. That is **precisely the
+two-failure window §E already writes down as a cost**, and the schedule is what
+bounds it — to roughly a day.
+
+**The transport is unchanged and was not this card's to choose.** §E decided _a
+SERVED, VERSIONED artifact the consumer FETCHES — never a committed copy_, and
+this consumes exactly that (`motir-marketing` `lib/legal/liveSeam.ts`), the same
+shape `lib/docs.ts` uses for the OpenAPI document. No copy of the manifest is
+committed in `motir-marketing`; a test there asserts it, as MOTIR-4046's does for
+the spec.
+
+### §B — Where it may be triggered from, which is the load-bearing half
+
+**NEVER on `pull_request`.** The seam lane reaches `app.motir.co`, so running it
+on pull requests would turn unrelated pull requests in `motir-marketing` red
+whenever `motir-core` restarts — the cross-repository CI coupling §E's split
+exists to avoid, re-introduced through the back door by the very card sent to
+close §E's gap.
+
+Three things hold that line, and the redundancy is deliberate because the
+tempting simplification is one line of YAML:
+
+1. `vitest.config.mts` **excludes** `tests/seam/**`, so the default `Test` job
+   cannot pick it up by growing a glob;
+2. the `ci.yml` job carries an `if` that **mirrors `deploy`'s exactly**, so the
+   two skip together on a pull request;
+3. both files carry the reason at the point of the exclusion, because a lane
+   excluded without one gets folded back in by the next person tidying configs.
+
+**`ci.yml`'s header note about having no path filtering is unaffected.** That
+note is about `design-guards` being reached by every diff, and it still is; this
+is an EVENT condition on one job, not a path filter.
+
+### §C — What an UNREACHABLE manifest does: it FAILS. It is never skipped.
+
+Required by the card, and the answer is the strict one.
+
+A fetch that fails is reported as **UNREACHABLE** and exits non-zero, in both
+lanes, after four attempts five seconds apart. The retries are for a transient
+deploy window — `motir-core` restarts on its own releases — not for an outage.
+
+**The rejected arm is the comfortable one:** pass when the fetch fails, so a
+`motir-core` outage never blocks a `motir-marketing` release. That arm publishes
+a legal representation nobody checked **and reports success**, and in the log it
+is indistinguishable from a check that ran and agreed. Not being ABLE to verify a
+disclosure is not permission to publish it.
+
+**UNREACHABLE and DIVERGED are rendered distinctly**, because they send a reader
+to different places: DIVERGED names the vendors and which side each is missing
+from, UNREACHABLE names the URL and says in as many words that it is _not_
+evidence about whether the pages are correct. A **shape** error — the document
+arrived and could not be read — is reported as UNREACHABLE with its reason,
+since the consequence for a reader is the same: the seam was not checked.
+
+**And an empty vendor list is a shape error, not an empty manifest.** A
+serialization change in `motir-core` would otherwise arrive as _"the manifest
+names nobody"_, and the seam would report every disclosed vendor as un-evidenced
+— a red check blaming the wrong repository — or a GREEN one if the page-side
+parse broke in the same window.
+
+### §D — Rejected alternatives
+
+| Alternative                                                             | Why rejected                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fetch inside the existing `pnpm test` suite**                         | The cheapest change and the one §E forbids: every pull request in `motir-marketing` would then depend on `app.motir.co`'s uptime. A check that goes red for reasons unrelated to the diff is a check that gets disabled.                                                                                                                                  |
+| **Fetch in the `/legal/subprocessors` PAGE RENDER, failing the render** | Puts a legal document behind another deployment's availability at READ time — a privacy reviewer gets an error page when the app restarts. The disclosure must stay readable even when the check cannot run.                                                                                                                                              |
+| **Publish the manifest as an INSTALLED npm artifact instead**           | Would give CI the manifest with no network, and §8's _"a published artifact the consumer installs does not rot"_ applies literally. But it CHANGES §E's decided transport, adds a package publish and a version to keep current for one JSON file, and re-introduces staleness as _"which version is pinned?"_. The fetch already satisfies the property. |
+| **The scheduled check ALONE, with no deploy gate**                      | Reports after the divergence has shipped. For a published legal representation the window between publishing and noticing is the one that matters.                                                                                                                                                                                                        |
+| **The deploy gate ALONE, with no schedule**                             | Blind to a divergence `motir-core` introduces after our last release — §E's own two-failure window, left open.                                                                                                                                                                                                                                            |
+| **Auto-file a GitHub issue from the scheduled run**                     | Needs `issues: write`, a dedup key and a close path — three moving parts guarding a once-a-day check whose resolution is a two-repository judgement a person makes by hand. A failed scheduled run already notifies the repository owner. If that proves insufficient, it is a card, not a quiet addition.                                                |
+
+### §E — What this changes about AMENDMENT 2 §E
+
+**Its cost note stands, narrowed.** §E says the two-failure window "is real and
+this record does not close it", because closing it would mean one repository's CI
+blocking on another's. That remains true and this amendment does not close it
+either — **it BOUNDS it**, to about a day, without adding the coupling.
+
+So the sentence §E asks nobody to misread is still the operative one, with one
+word changed: a green `motir-core` build is not evidence that a published legal
+document is accurate, and neither is a green `motir-marketing` pull request. What
+IS evidence is the seam lane's last run — and it now exists, names its own
+staleness, and goes red when it cannot speak.
+
+### §F — What this amendment deliberately does NOT decide
+
+- **The cadence.** Daily, on the argument that the window it bounds is measured
+  in days. Tightening it buys nothing until somebody has been paged by it.
+- **What `motir-core` does about a divergence.** Nothing changes on that side:
+  its guard is correct and complete about its own tree, and this card did not
+  touch it.
+- **Whether the marketing site should also verify the manifest at BUILD time**
+  (as distinct from in the deploy gate). The gate runs on the same commit and
+  the same origin the release is built against, so a build-time fetch would
+  measure the same thing twice while making `next build` depend on the network.
+
+### Sources
+
+- `motir-core` `origin/main` `8d80ac8db`, 2026-09-02 —
+  `lib/legal/egress-manifest.json`, `lib/legal/egressManifest.ts`,
+  `app/api/legal/egress-manifest/route.ts`,
+  `tests/legal/egress-manifest-guard.test.ts`
+- `motir-marketing` `origin/main` `031befd` — `lib/legal/subprocessorSeam.ts`,
+  `tests/legal/subprocessorSeam.test.ts`, `lib/docs.ts`,
+  `tests/docs/docs.test.ts`, `.github/workflows/ci.yml`, `vitest.config.mts`
+- `GET https://app.motir.co/api/legal/egress-manifest` → `200`,
+  `version: 1`, 21 vendors, 2026-09-02 — the artifact this seam consumes,
+  obtained as its consumer
+
+---
+
+## AMENDMENT 4 — what becomes of `/p/*`'s session-aware affordances once the page is cross-origin from the session: three mechanisms, and no credential crosses (MOTIR-4108, 2026-09-02)
 
 §9 lists four things this record deliberately does not decide. **This was not one
 of them, and it was not decided either** — it was simply open, which is the worse
@@ -894,13 +1046,24 @@ of the two states, because a question named as undecided has a trigger and an
 owner and an open question has neither. MOTIR-3877's own body says the ADR
 resolves it. It does not, and this amendment is that resolution.
 
-> **⚠️ THIS IS AMENDMENT 3, AND THE CARD THAT ORDERED IT SAID AMENDMENT 2.**
+> **⚠️ THIS IS AMENDMENT 4, AND THE CARD THAT ORDERED IT SAID AMENDMENT 2.**
 > MOTIR-4108 was authored on 2026-09-01 against a file whose last amendment was
-> AMENDMENT 1. MOTIR-4004's AMENDMENT 2 merged on 2026-09-02 at `8d80ac8db`,
-> between the authoring and the run. The ordinal is the only thing that moved;
-> the card's substance is discharged here in full, and the card is amended on the
-> record. Any sibling citing _"AMENDMENT 2"_ for the affordance table means this
-> section.
+> AMENDMENT 1. **The ordinal moved TWICE while this one was being written.**
+> MOTIR-4004's AMENDMENT 2 merged at `8d80ac8db`, between the authoring and the
+> run; MOTIR-4139's AMENDMENT 3 merged at `b615991c4`, while this section was
+> being drafted, and was found by the `git merge origin/main` before the pull
+> request opened. The substance is discharged here in full either way, and the
+> card is amended on the record. Any sibling citing _"AMENDMENT 2"_ or
+> _"AMENDMENT 3"_ for the affordance table means **this** section.
+>
+> **⚠️ AN ADR ORDINAL IS A SERIALIZED RESOURCE AND NOTHING SAYS SO.**
+> `lib/api/public/contractVersion.ts` states exactly this hazard for the contract
+> MINOR — _"every in-flight additive pull request claims the next one. Read this
+> file on `origin/main` before merging and renumber if a sibling has taken it"_ —
+> and the same is true of an amendment heading, with no note anywhere to say it.
+> Two independent passes took `3` on one afternoon. **Merge `origin/main` and
+> re-read the last heading before you open the pull request**; the renumber is
+> cheap there and expensive once a dozen cross-references point at it.
 
 ### §A — The measurement this amendment is built on, and the two errors it corrects
 

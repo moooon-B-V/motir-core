@@ -85,7 +85,7 @@ function publicSiteRedirect(request: NextRequest): NextResponse | null {
 
 /**
  * The PUBLIC READ SURFACE's cross-origin answer (MOTIR-4114 ·
- * `public-surface-hosts.md` AMENDMENT 3 §D).
+ * `public-surface-hosts.md` AMENDMENT 4 §D).
  *
  * `motir.co` renders `/p/*` server-side, and a server-side fetch needs no CORS.
  * What needs it is every fetch the RENDERED PAGE then makes from the browser —

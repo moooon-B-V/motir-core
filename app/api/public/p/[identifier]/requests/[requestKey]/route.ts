@@ -29,14 +29,14 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 //
 // The comment thread it returns is displayed here and POSTED elsewhere. What
 // becomes of those writes once the page is cross-origin from the session is
-// `public-surface-hosts.md` AMENDMENT 3's (rows 4 and 5: a hand-off), and
+// `public-surface-hosts.md` AMENDMENT 4's (rows 4 and 5: a hand-off), and
 // MOTIR-4114 ships it. Nothing here changes them.
 //
 // ── Posture: anonymous, 404-not-403 ───────────────────────────────────────
 //
 // NOT session-gated. The session resolves `actorUserId`, which personalises
 // `voted` and applies member-visibility — anonymously `voted` is always false,
-// which after AMENDMENT 3 is the only state `motir.co` can produce. A missing,
+// which after AMENDMENT 4 is the only state `motir.co` can produce. A missing,
 // cross-project, archived or epic-privacy-hidden request answers the same bare
 // `{ code }` 404 as a non-public project.
 //

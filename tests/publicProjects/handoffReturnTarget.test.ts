@@ -6,7 +6,7 @@ import {
 } from '@/lib/publicProjects/returnTarget';
 
 // The HAND-OFF's return destination (MOTIR-4114 · `public-surface-hosts.md`
-// AMENDMENT 3 §F) — the one piece of this card that takes a value from another
+// AMENDMENT 4 §F) — the one piece of this card that takes a value from another
 // origin and turns it into a redirect.
 //
 // ⚠️ THE HOSTILE CASES ARE THE POINT, and they are enumerated rather than

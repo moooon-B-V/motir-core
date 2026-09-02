@@ -39,7 +39,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // NOT session-gated on READ, both arms: a logged-out visitor or crawler reads a
 // public project's roadmap. The session resolves `actorUserId`, which
 // personalises `voted` on each card and applies member-visibility — anonymously
-// every card reads `voted: false`, which after AMENDMENT 3 is the only state
+// every card reads `voted: false`, which after AMENDMENT 4 is the only state
 // `motir.co` can produce. The service runs the anonymous public-browse gate (a
 // non-public / unknown project → ProjectNotFoundError → 404, no existence leak).
 //

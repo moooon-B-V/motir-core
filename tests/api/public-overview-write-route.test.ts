@@ -7,7 +7,7 @@ import { runAsCloudBuild } from '../helpers/cloudBuild';
 runAsCloudBuild();
 
 // `PATCH /api/projects/{key}/public-overview` (MOTIR-4114 ·
-// `public-surface-hosts.md` AMENDMENT 3 row 7) — the door
+// `public-surface-hosts.md` AMENDMENT 4 row 7) — the door
 // `publicProjectsService.setPublicOverview` has been without since MOTIR-3951
 // deleted the Server Action that was its only caller.
 //
@@ -155,10 +155,10 @@ describe('PATCH /api/projects/{key}/public-overview', () => {
   });
 
   it('lives OUTSIDE the public contract, deliberately', () => {
-    // AMENDMENT 3 makes this affordance ABSENT from motir.co, so no consumer of
+    // AMENDMENT 4 makes this affordance ABSENT from motir.co, so no consumer of
     // the public document can call it. Declaring an operation there would
     // document a capability that does not exist for its readers.
     expect(routeSrc).not.toContain('lib/api/public/openapi');
-    expect(routeSrc).toContain('AMENDMENT 3 row 7');
+    expect(routeSrc).toContain('AMENDMENT 4 row 7');
   });
 });

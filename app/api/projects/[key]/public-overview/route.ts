@@ -5,11 +5,11 @@ import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // The public OVERVIEW's write door (MOTIR-4114 · `public-surface-hosts.md`
-// AMENDMENT 3 row 7).
+// AMENDMENT 4 row 7).
 //
 // ── ⚠️ THIS IS AN APPLICATION ROUTE, NOT A PUBLIC ONE, AND THAT IS THE POINT ─
 //
-// AMENDMENT 3 routes in-place overview editing as ABSENT from `motir.co`: the
+// AMENDMENT 4 routes in-place overview editing as ABSENT from `motir.co`: the
 // public page shows no edit affordance, because a cross-origin page cannot know
 // who is looking, and because an overview edit is a long-form authoring act with
 // a preview and a save — routing that through a link-out-and-return is worse

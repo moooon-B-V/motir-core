@@ -4,11 +4,11 @@ import { publicProjectPath } from '@/lib/publicProjects/urls';
 import { resolveHandoffDestination } from '@/lib/publicProjects/returnTarget';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
-// THE HAND-OFF ENTRY (MOTIR-4114 · `public-surface-hosts.md` AMENDMENT 3 §D/§F).
+// THE HAND-OFF ENTRY (MOTIR-4114 · `public-surface-hosts.md` AMENDMENT 4 §D/§F).
 //
 // ── What arrives here, and why it is a LINK rather than a fetch ────────────
 //
-// AMENDMENT 3 routes follow, roadmap vote, request upvote, request comment and
+// AMENDMENT 4 routes follow, roadmap vote, request upvote, request comment and
 // the request intake as a HAND-OFF. The control on `motir.co` is an `<a href>`
 // to this route; the visitor is signed in here if they are not already, the act
 // happens on this origin under this application's own session and CSRF posture,
@@ -18,7 +18,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // CANNOT WORK, and that is a mechanical fact rather than a preference:
 // `lib/auth/index.ts` sets the session cookie `sameSite: 'lax'`, so no
 // credential is attached to a cross-site request at all. Making one work would
-// mean `sameSite: 'none'` — a widening §4 rejects, and the reason AMENDMENT 3 §B
+// mean `sameSite: 'none'` — a widening §4 rejects, and the reason AMENDMENT 4 §B
 // says the binding constraint is `SameSite` rather than the `Domain` everybody
 // names. Nothing here reads or needs a cookie from `motir.co`.
 //
@@ -31,7 +31,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // the application the visitor performs the act, carries the validated return
 // destination along, and stops there. The surface that performs it is
 // MOTIR-4119's on the public side and the application's own project surfaces on
-// this one; the pixels of the hand-off are MOTIR-4113's (AMENDMENT 3 §I).
+// this one; the pixels of the hand-off are MOTIR-4113's (AMENDMENT 4 §I).
 //
 // ── The return destination is ALLOW-LISTED, never reflected ───────────────
 //

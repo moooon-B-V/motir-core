@@ -28,7 +28,7 @@ import { stripSourceComments } from '../helpers/stripSourceComments';
 // work from a page that cannot see the session — which is exactly what
 // `app/act/route.ts` (MOTIR-4114) exists to make unnecessary.
 //
-// ── ⚠️ AND `SameSite` IS PART OF THE SAME PROMISE (AMENDMENT 3 §B) ────────
+// ── ⚠️ AND `SameSite` IS PART OF THE SAME PROMISE (AMENDMENT 4 §B) ────────
 //
 // `sameSite: 'lax'` is the constraint that actually forecloses a credentialed
 // cross-origin call, independently of `Domain` — a `fetch` from `motir.co` with

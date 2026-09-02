@@ -38,8 +38,8 @@ const PUBLIC_ROOT = join(REPO_ROOT, 'app', 'api', 'public');
  * namespace that predates the public contract — so this walk did not reach it,
  * and a self-hosted build answered its two write routes for the whole window.
  *
- * `public-surface-hosts.md` AMENDMENT 3 §F decides that they STAY there — after
- * AMENDMENT 3 nothing on `motir.co` calls them, so they are application routes
+ * `public-surface-hosts.md` AMENDMENT 4 §F decides that they STAY there — after
+ * AMENDMENT 4 nothing on `motir.co` calls them, so they are application routes
  * rather than entries in the public read contract — and that they carry the
  * gate. Adding the root here is what makes the second half of that decision a
  * guard rather than a sentence: the whole point of this file is that a rule
