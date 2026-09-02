@@ -59,6 +59,25 @@ async function seedItem(
   return { id: dto.id, identifier: dto.identifier };
 }
 
+/**
+ * A target that already CARRIES both bodies (bug MOTIR-4134) — what a `modify`
+ * amends and a `remove` archives. The text deliberately contains no
+ * `MOTIR-<n>`: `createWorkItem` normalizes a bare key into a link token, which
+ * would make an exact-match assertion about the WRONG thing.
+ */
+async function seedItemWithBodies(
+  fx: WorkItemFixture,
+  title: string,
+  descriptionMd: string,
+  explanationMd: string,
+): Promise<{ id: string; identifier: string }> {
+  const dto = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title, descriptionMd, explanationMd },
+    fx.ctx,
+  );
+  return { id: dto.id, identifier: dto.identifier };
+}
+
 /** One node of a real epic → story → task CHAIN, for the ancestor-trail cases. */
 async function seedChild(
   fx: WorkItemFixture,
@@ -182,6 +201,196 @@ describe('planReviewService.getPlanReview', () => {
     expect(byTarget(renamed.id).title).toBe('Invoice templates + branding');
     expect(byTarget(rescoped.id).title).toBe('Dunning emails');
     expect(byTarget(archived.id).title).toBe('Legacy CSV export');
+  });
+
+  // ── THE BODIES A PROPOSAL IS ASKING FOR (bug MOTIR-4134) ─────────────────
+  //
+  // The same field-means-two-things-by-op defect as MOTIR-4018 directly above,
+  // one axis over and with a sharper consumer. Both bodies were
+  // `op === 'add' ? proposed : null`, which was coherent while the DTO fed the
+  // canvas node and the list row — neither reads them — and stopped being so
+  // when MOTIR-4022 made a list row open `ProposalQuickView`, which renders the
+  // flat bodies INLINE and has no diff rendering at all. A `modify` opened there
+  // showed "No description yet." / "No explanation yet." over a patch carrying
+  // both, rewritten.
+  //
+  // ⚠️ THIS IS THE PRODUCER HALF OF A SEAM, and it is asserted as such. The
+  // component half (`tests/components/proposal-quick-view.test.tsx`) renders the
+  // DTO; neither half can see the defect alone, which is why it shipped. So the
+  // assertions below are written as the PRECONDITIONS that component reads on —
+  // a non-null `identifier` and two non-null bodies for a `modify` — rather than
+  // as free-standing facts about the service.
+  //
+  // All four cases together, because the defect is per-op AND per-body: a test
+  // covering only `descriptionMd` leaves the explanation regressing unseen,
+  // which is the exact history of this surface (MOTIR-3070).
+  it('reports BOTH bodies on every op — a modify’s patched, a modify’s untouched, and a remove’s (MOTIR-4134)', async () => {
+    const fx = await makeWorkItemFixture();
+    // The live bodies each `modify` is amending, and the `remove` is archiving.
+    const rewritten = await seedItemWithBodies(
+      fx,
+      'Invoice templates',
+      'The live WHAT of the rewritten card.',
+      'The live WHY of the rewritten card.',
+    );
+    const untouched = await seedItemWithBodies(
+      fx,
+      'Dunning emails',
+      'The live WHAT of the untouched card.',
+      'The live WHY of the untouched card.',
+    );
+    const archived = await seedItemWithBodies(
+      fx,
+      'Legacy CSV export',
+      'The live WHAT of the archived card.',
+      'The live WHY of the archived card.',
+    );
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Usage metering',
+            kind: 'story',
+            descriptionMd: 'The proposed WHAT.',
+            explanationMd: 'The proposed WHY.',
+          },
+        },
+        // (1) a modify that REWRITES both bodies — the reported case
+        {
+          op: 'modify',
+          workItemId: rewritten.id,
+          patch: {
+            descriptionMd: 'The rewritten WHAT.',
+            explanationMd: 'The rewritten WHY.',
+          },
+        },
+        // (2) a modify whose patch touches NEITHER body. "Nothing changes here"
+        //     and "there is nothing here" are different facts and only one is
+        //     true, so it reports the target's CURRENT bodies, not the empty
+        //     state.
+        { op: 'modify', workItemId: untouched.id, patch: { priority: 'high' } },
+        // (3) a remove — the third op, which no assertion above would reach, and
+        //     the one whose body is the only thing making the archive legible.
+        { op: 'remove', workItemId: archived.id },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const byTarget = (id: string) => review.items.find((i) => i.nodeId === id)!;
+
+    const added = review.items.find((i) => i.op === 'add')!;
+    expect(added.descriptionMd).toBe('The proposed WHAT.');
+    expect(added.explanationMd).toBe('The proposed WHY.');
+    // The `add` arm asserted beside the others so the fix cannot be a swap.
+    expect(added.identifier).toBeNull();
+
+    expect(byTarget(rewritten.id).descriptionMd).toBe('The rewritten WHAT.');
+    expect(byTarget(rewritten.id).explanationMd).toBe('The rewritten WHY.');
+
+    expect(byTarget(untouched.id).descriptionMd).toBe('The live WHAT of the untouched card.');
+    expect(byTarget(untouched.id).explanationMd).toBe('The live WHY of the untouched card.');
+
+    expect(byTarget(archived.id).descriptionMd).toBe('The live WHAT of the archived card.');
+    expect(byTarget(archived.id).explanationMd).toBe('The live WHY of the archived card.');
+
+    // THE SEAM PRECONDITION. `ProposalQuickView` shows the empty state on a null
+    // body and `New` / `not yet created` on a null identifier, so these three
+    // nulls ARE the rendered defect — asserted here, at the producer, because
+    // the component test cannot reach the producer and this is the half that was
+    // silently wrong.
+    for (const t of [rewritten, untouched, archived]) {
+      expect(byTarget(t.id).identifier).toBe(t.identifier);
+      expect(byTarget(t.id).descriptionMd).not.toBeNull();
+      expect(byTarget(t.id).explanationMd).not.toBeNull();
+    }
+  });
+
+  it('a patch that CLEARS a body reports the clear, not the body it deletes (MOTIR-4134)', async () => {
+    // ⚠️ The case `??` gets wrong and presence gets right, and it is this bug's
+    // own failure mode INVERTED — so it would ship as the fix for it. The patch
+    // is sparse with two meanings `applyModify` already honours: absent leaves
+    // the body alone, an explicit `null` CLEARS it. Under `?? target?.body` an
+    // explicit null falls through to the live body, and the reviewer is shown
+    // the text approval is about to DELETE as the text approval will keep.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItemWithBodies(
+      fx,
+      'Invoice templates',
+      'The body about to be deleted.',
+      'The WHY about to go.',
+    );
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { descriptionMd: null, explanationMd: null },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const item = review.items[0]!;
+    expect(item.descriptionMd).toBeNull();
+    expect(item.explanationMd).toBeNull();
+    // …and the DIFF still says what is being deleted, which is where a reviewer
+    // reads the outgoing side. The flat field says what the card will BE.
+    expect(item.changes.find((c) => c.field === 'description')?.from).toContain(
+      'The body about to be deleted.',
+    );
+    expect(item.changes.find((c) => c.field === 'explanation')?.from).toContain(
+      'The WHY about to go.',
+    );
+  });
+
+  it('leaves `changes` untouched — the fix ADDS a reading, it does not move one (MOTIR-4134)', async () => {
+    // The list row's existing diff rendering is what a reviewer reads to see
+    // what a `modify` is LEAVING. The quick view answers what the card will BE.
+    // Both must hold at once, so the old→new pairs are asserted beside the flat
+    // bodies rather than assumed to have survived.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItemWithBodies(
+      fx,
+      'Invoice templates',
+      'The outgoing WHAT.',
+      'The outgoing WHY.',
+    );
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Billing plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { descriptionMd: 'The incoming WHAT.', explanationMd: 'The incoming WHY.' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const item = (await planReviewService.getPlanReview(plan.id, fx.ctx)).items[0]!;
+    const description = item.changes.find((c) => c.field === 'description')!;
+    const explanation = item.changes.find((c) => c.field === 'explanation')!;
+    expect(description.from).toContain('The outgoing WHAT.');
+    expect(description.to).toContain('The incoming WHAT.');
+    expect(explanation.from).toContain('The outgoing WHY.');
+    expect(explanation.to).toContain('The incoming WHY.');
+    // The flat field carries the INCOMING side — the two readings coexist.
+    expect(item.descriptionMd).toBe('The incoming WHAT.');
+    expect(item.explanationMd).toBe('The incoming WHY.');
   });
 
   it('keeps BOTH sides of the rename in `changes` — the diff is untouched by MOTIR-4018', async () => {
