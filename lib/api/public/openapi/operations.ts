@@ -12,7 +12,9 @@ import {
   publicProjectOverviewSchema,
   publicRequestBodySchema,
   publicRequestResultSchema,
+  publicAtomDocumentSchema,
   publicBoardSchema,
+  publicProjectIndexPageSchema,
   publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
   publicRoadmapSchema,
@@ -208,6 +210,61 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
       {
         status: 404,
         description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/projects',
+    operationId: 'listPublicProjectIndex',
+    summary: 'The crawl ENUMERATION of every public project',
+    description:
+      'Identifier and last-updated for every public project, across every workspace, keyset-paged ' +
+      'in a STABLE order. It is not `listPublicProjects` (`/api/public/explore`): that one is the ' +
+      'human directory — ranked, with names, taglines, tags and demand stats, paged in ' +
+      'screenfuls. This one is the machine list a sitemap is built from, and its order is fixed ' +
+      'so that a walk over a mutating set cannot skip or duplicate a project. `updatedAt` is the ' +
+      '`<lastmod>`, not the sort key. Anonymous, and no session could change the answer: every ' +
+      "row is public by the read's own filter. A cursor past the tail is an empty page, not an " +
+      'error (MOTIR-4111).',
+    parameters: [
+      {
+        name: 'cursor',
+        in: 'query',
+        required: false,
+        description: "A previous page's `nextCursor`. Opaque — do not construct or parse one.",
+        schema: z.string(),
+      },
+    ],
+    response: publicProjectIndexPageSchema,
+    errors: [],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/changelog.xml',
+    operationId: 'getPublicProjectChangelogFeed',
+    summary: "A project's changelog as an ATOM feed",
+    description:
+      'The same shipped work `listPublicProjectChangelog` returns as JSON, serialised as an Atom ' +
+      '1.0 document — the anonymous follower tier, and the only one that stores nothing about the ' +
+      'person using it. ⚠️ THE ONLY OPERATION ON THIS SURFACE THAT DOES NOT ANSWER JSON: the ' +
+      "media type is `application/atom+xml; charset=utf-8` and the body's schema is a STRING, " +
+      'because there is no JSON structure to describe and describing one would tell a generated ' +
+      'client to parse XML as JSON. Cached five minutes with `stale-while-revalidate`. No session ' +
+      'is read — a feed is fetched by a daemon with no cookies, which is also what makes the ' +
+      'response cacheable. The extension is `.xml` and the payload is Atom; a file extension has ' +
+      'never been a media type, and there is deliberately no `.atom` alias, because a feed URL is ' +
+      'copied into readers and outlives every redirect (MOTIR-4111).',
+    parameters: [identifierParam],
+    response: publicAtomDocumentSchema,
+    responseMediaType: 'application/atom+xml',
+    errors: [
+      {
+        status: 404,
+        description:
+          'No PUBLIC project carries this key. The ERROR body is JSON `{ code }` even though the ' +
+          'success body is XML — one error shape across the whole surface.',
         schema: publicErrorSchema,
       },
     ],

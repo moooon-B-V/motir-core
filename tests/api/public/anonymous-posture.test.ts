@@ -47,6 +47,11 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getBoard: vi.fn(async () => ({ boardId: '', name: '', columns: [], cap: 0, truncated: false })),
     getWorkItemDetail: vi.fn(async () => ({})),
     getRequestDetail: vi.fn(async () => ({})),
+    getChangelogFeed: vi.fn(async () => ({
+      project: { identifier: 'ACME', name: 'Acme' },
+      entries: [],
+    })),
+    listPublicIndex: vi.fn(async () => ({ projects: [], nextCursor: null })),
     getRoadmap: vi.fn(async () => ({ columns: [] })),
     getRoadmapColumn: vi.fn(async () => ({ bucket: 'planned', cards: [], nextCursor: null })),
     getChangelog: vi.fn(async () => ({ entries: [], nextCursor: null })),
@@ -80,6 +85,8 @@ const items = await import('@/app/api/public/p/[identifier]/items/route');
 const board = await import('@/app/api/public/p/[identifier]/board/route');
 const itemDetail = await import('@/app/api/public/p/[identifier]/items/[key]/route');
 const requestDetail = await import('@/app/api/public/p/[identifier]/requests/[requestKey]/route');
+const feed = await import('@/app/api/public/p/[identifier]/changelog.xml/route');
+const projectIndex = await import('@/app/api/public/projects/route');
 const roadmap = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const changelog = await import('@/app/api/public/p/[identifier]/changelog/route');
 const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route');
@@ -145,6 +152,18 @@ const CASES: Case[] = [
       (requestDetail.GET as Handler)(get('/api/public/p/ACME/requests/ACME-7'), {
         params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-7' }),
       }),
+  },
+  {
+    file: 'p/[identifier]/changelog.xml/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () => (feed.GET as Handler)(get('/api/public/p/ACME/changelog.xml'), identifierCtx),
+  },
+  {
+    file: 'projects/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () => (projectIndex.GET as Handler)(get('/api/public/projects')),
   },
   {
     file: 'p/[identifier]/items/route.ts',
@@ -276,9 +295,9 @@ describe('the four GATED routes refuse, and are exceptions rather than omissions
   it('counts exactly four of them — a fifth is a decision, not a detail', () => {
     // The GATED number is the one that must not move by accident, and it has
     // not: four, unchanged. The ANONYMOUS number moves whenever a read is added,
-    // which is ordinary growth — MOTIR-4109's board took it from 8 to 9, MOTIR-4110's two detail reads to 11. Both
+    // which is ordinary growth — MOTIR-4109's board took it from 8 to 9, MOTIR-4110's two detail reads to 11, MOTIR-4111's feed and project index to 13. Both
     // are pinned so that either movement is a sentence somebody wrote.
     expect(CASES.filter((c) => c.gated)).toHaveLength(4);
-    expect(CASES.filter((c) => !c.gated)).toHaveLength(11);
+    expect(CASES.filter((c) => !c.gated)).toHaveLength(13);
   });
 });

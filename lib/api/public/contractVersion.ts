@@ -66,8 +66,15 @@
  *   service takes and what a shared link carries; the request WRITES beside
  *   them stay keyed by ids, and that asymmetry is declared rather than
  *   smoothed over.
+ * - `1.4.0` — MOTIR-4111 restores the CRAWL surface: `listPublicProjectIndex`
+ *   (the sitemap enumeration, keyset-paged on a stable order) and
+ *   `getPublicProjectChangelogFeed` (the Atom document whose builder had been
+ *   caller-less since the pages were deleted). Additive under §D — two new
+ *   operations. The feed is the FIRST operation here that does not answer JSON,
+ *   so the declaration gained a `responseMediaType`; every existing operation
+ *   defaults to `application/json` and none of their documents changed.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.3.0';
+export const PUBLIC_CONTRACT_VERSION = '1.4.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;

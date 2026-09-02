@@ -48,6 +48,11 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getBoard: vi.fn(async () => ({ boardId: '', name: '', columns: [], cap: 0, truncated: false })),
     getWorkItemDetail: vi.fn(async () => ({})),
     getRequestDetail: vi.fn(async () => ({})),
+    getChangelogFeed: vi.fn(async () => ({
+      project: { identifier: 'ACME', name: 'Acme' },
+      entries: [],
+    })),
+    listPublicIndex: vi.fn(async () => ({ projects: [], nextCursor: null })),
     getRoadmap: vi.fn(async () => ({ columns: [] })),
     getRoadmapColumn: vi.fn(async () => ({ bucket: 'planned', cards: [], nextCursor: null })),
     getChangelog: vi.fn(async () => ({ entries: [], nextCursor: null })),
@@ -81,6 +86,8 @@ const items = await import('@/app/api/public/p/[identifier]/items/route');
 const board = await import('@/app/api/public/p/[identifier]/board/route');
 const itemDetail = await import('@/app/api/public/p/[identifier]/items/[key]/route');
 const requestDetail = await import('@/app/api/public/p/[identifier]/requests/[requestKey]/route');
+const feed = await import('@/app/api/public/p/[identifier]/changelog.xml/route');
+const projectIndex = await import('@/app/api/public/projects/route');
 const roadmap = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const changelog = await import('@/app/api/public/p/[identifier]/changelog/route');
 const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route');
@@ -144,6 +151,16 @@ const CASES: Case[] = [
       (requestDetail.GET as Handler)(get('/api/public/p/ACME/requests/ACME-7'), {
         params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-7' }),
       }),
+  },
+  {
+    file: 'p/[identifier]/changelog.xml/route.ts',
+    method: 'GET',
+    call: () => (feed.GET as Handler)(get('/api/public/p/ACME/changelog.xml'), identifierCtx),
+  },
+  {
+    file: 'projects/route.ts',
+    method: 'GET',
+    call: () => (projectIndex.GET as Handler)(get('/api/public/projects')),
   },
   {
     file: 'p/[identifier]/roadmap/route.ts',

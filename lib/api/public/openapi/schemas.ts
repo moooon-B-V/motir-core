@@ -287,6 +287,45 @@ const publicBoardColumn = z
   .meta({ id: 'PublicBoardColumn' });
 
 /**
+ * One page of the public-project INDEX (MOTIR-4111) — the crawl enumeration.
+ *
+ * Two fields per row and nothing else: `identifier` is the URL, `updatedAt` is
+ * the sitemap's `<lastmod>`. The rich human directory is `listPublicProjects`
+ * (`/api/public/explore`), which is a different read for a different reader.
+ */
+export const publicProjectIndexPageSchema = z
+  .object({
+    projects: z.array(
+      z
+        .object({
+          identifier: z.string().meta({ description: "The project's key — the URL segment." }),
+          updatedAt: z.string().meta({ description: "ISO 8601 — the sitemap's `<lastmod>`." }),
+        })
+        .strict()
+        .meta({ id: 'PublicProjectIndexEntry' }),
+    ),
+    nextCursor: z
+      .string()
+      .nullable()
+      .meta({ description: 'Echo it back as `?cursor=`; null on the last page.' }),
+  })
+  .strict()
+  .meta({ id: 'PublicProjectIndexPage' });
+
+/**
+ * The changelog FEED's body: an Atom 1.0 document, as text (MOTIR-4111).
+ *
+ * ⚠️ A STRING IS THE HONEST SCHEMA. The response is XML, so there is no JSON
+ * structure to describe; declaring an object here would tell a generator to
+ * parse a document that is not JSON. What a consumer needs to know — that it is
+ * Atom — is carried by the operation's `responseMediaType`, which is where a
+ * media type belongs.
+ */
+export const publicAtomDocumentSchema = z
+  .string()
+  .meta({ id: 'PublicAtomDocument', description: 'An Atom 1.0 feed document.' });
+
+/**
  * One public COMMENT on a feature request (MOTIR-4110).
  *
  * The shared `CommentDTO` shape, restated here rather than imported from an

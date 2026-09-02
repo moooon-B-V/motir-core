@@ -8,6 +8,7 @@ import {
   publicProjectOverviewSchema,
   publicRequestResultSchema,
   publicBoardSchema,
+  publicProjectIndexPageSchema,
   publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
   publicRoadmapSchema,
@@ -43,6 +44,8 @@ const getProjectTreeLevel = vi.hoisted(() => vi.fn());
 const getWorkItems = vi.hoisted(() => vi.fn());
 const getBoard = vi.hoisted(() => vi.fn());
 const getWorkItemDetail = vi.hoisted(() => vi.fn());
+const getChangelogFeed = vi.hoisted(() => vi.fn());
+const listPublicIndex = vi.hoisted(() => vi.fn());
 const getRequestDetail = vi.hoisted(() => vi.fn());
 const getRoadmap = vi.hoisted(() => vi.fn());
 const getRoadmapColumn = vi.hoisted(() => vi.fn());
@@ -80,6 +83,8 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getBoard,
     getWorkItemDetail,
     getRequestDetail,
+    getChangelogFeed,
+    listPublicIndex,
     getRoadmap,
     getRoadmapColumn,
     getChangelog,
@@ -104,6 +109,8 @@ const { GET: getItemDetailRoute } =
   await import('@/app/api/public/p/[identifier]/items/[key]/route');
 const { GET: getRequestDetailRoute } =
   await import('@/app/api/public/p/[identifier]/requests/[requestKey]/route');
+const { GET: getFeedRoute } = await import('@/app/api/public/p/[identifier]/changelog.xml/route');
+const { GET: getProjectIndexRoute } = await import('@/app/api/public/projects/route');
 const { GET: getRoadmapRoute } = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const { GET: getChangelogRoute } = await import('@/app/api/public/p/[identifier]/changelog/route');
 const { POST: postFollow, DELETE: deleteFollow } =
@@ -425,6 +432,64 @@ describe('the published schema matches what the route actually returns', () => {
       params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-9' }),
     });
     expect(publicRequestDetailSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  // ── MOTIR-4111: the crawl surface ────────────────────────────────────────
+
+  it('GET /api/public/projects', async () => {
+    listPublicIndex.mockResolvedValue({
+      projects: [
+        { identifier: 'ACME', updatedAt: '2026-08-30T00:00:00.000Z' },
+        { identifier: 'OPEN-CORE', updatedAt: '2026-08-29T00:00:00.000Z' },
+      ],
+      nextCursor: 'cmt_last',
+    });
+    const res = await getProjectIndexRoute(url('/api/public/projects'));
+    expect(res.status).toBe(200);
+    expect(publicProjectIndexPageSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  it('the LAST page parses too — a null cursor is a declared value, not an absence', async () => {
+    listPublicIndex.mockResolvedValue({ projects: [], nextCursor: null });
+    const res = await getProjectIndexRoute(url('/api/public/projects?cursor=cmt_x'));
+    expect(publicProjectIndexPageSchema.parse(await res.json())).toBeTruthy();
+    expect(listPublicIndex).toHaveBeenCalledWith('cmt_x');
+  });
+
+  it('GET /api/public/p/{identifier}/changelog.xml is ATOM, not JSON', async () => {
+    // The one operation on this surface whose CONTENT TYPE is part of the
+    // contract. A drift guard that only parsed the body would pass on a route
+    // that had silently started answering JSON.
+    getChangelogFeed.mockResolvedValue({
+      project: { identifier: 'ACME', name: 'Acme & Co' },
+      entries: [
+        {
+          identifier: 'ACME-3',
+          key: 3,
+          title: 'Shipped <something>',
+          kind: 'task',
+          status: 'done',
+          priority: 'medium',
+          shippedAt: '2026-08-30T00:00:00.000Z',
+          epic: null,
+          descriptionMd: 'A body',
+        },
+      ],
+    });
+    const res = await getFeedRoute(url('/api/public/p/ACME/changelog.xml'), identifierParams);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/atom+xml; charset=utf-8');
+
+    const body = await res.text();
+    expect(body).toContain('<feed xmlns="http://www.w3.org/2005/Atom">');
+    // The escaping the builder exists for, driven through the ROUTE rather than
+    // through the builder's own unit test: an unescaped ampersand or angle
+    // bracket makes the document malformed, and a reader rejects the WHOLE feed
+    // rather than the one entry.
+    expect(body).toContain('Acme &amp; Co');
+    expect(body).toContain('Shipped &lt;something&gt;');
+    expect(body).not.toMatch(/<title>[^<]*&(?!amp;|lt;|gt;|quot;|apos;)/);
   });
 
   it('the board carries the epic-privacy MARKER, and the schema admits it', async () => {
