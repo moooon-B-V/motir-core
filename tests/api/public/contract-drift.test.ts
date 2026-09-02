@@ -8,9 +8,11 @@ import {
   publicProjectOverviewSchema,
   publicRequestResultSchema,
   publicBoardSchema,
+  publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
   publicRoadmapSchema,
   publicTreeLevelSchema,
+  publicWorkItemDetailSchema,
   publicWorkItemPageSchema,
 } from '@/lib/api/public/openapi/schemas';
 import { runAsCloudBuild } from '../../helpers/cloudBuild';
@@ -40,6 +42,8 @@ const getOverview = vi.hoisted(() => vi.fn());
 const getProjectTreeLevel = vi.hoisted(() => vi.fn());
 const getWorkItems = vi.hoisted(() => vi.fn());
 const getBoard = vi.hoisted(() => vi.fn());
+const getWorkItemDetail = vi.hoisted(() => vi.fn());
+const getRequestDetail = vi.hoisted(() => vi.fn());
 const getRoadmap = vi.hoisted(() => vi.fn());
 const getRoadmapColumn = vi.hoisted(() => vi.fn());
 const getChangelog = vi.hoisted(() => vi.fn());
@@ -74,6 +78,8 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getProjectTreeLevel,
     getWorkItems,
     getBoard,
+    getWorkItemDetail,
+    getRequestDetail,
     getRoadmap,
     getRoadmapColumn,
     getChangelog,
@@ -94,6 +100,10 @@ const { GET: getCategories } = await import('@/app/api/public/categories/route')
 const { GET: getTree } = await import('@/app/api/public/p/[identifier]/tree/route');
 const { GET: getItems } = await import('@/app/api/public/p/[identifier]/items/route');
 const { GET: getBoardRoute } = await import('@/app/api/public/p/[identifier]/board/route');
+const { GET: getItemDetailRoute } =
+  await import('@/app/api/public/p/[identifier]/items/[key]/route');
+const { GET: getRequestDetailRoute } =
+  await import('@/app/api/public/p/[identifier]/requests/[requestKey]/route');
 const { GET: getRoadmapRoute } = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const { GET: getChangelogRoute } = await import('@/app/api/public/p/[identifier]/changelog/route');
 const { POST: postFollow, DELETE: deleteFollow } =
@@ -280,6 +290,141 @@ describe('the published schema matches what the route actually returns', () => {
     const res = await getBoardRoute(url('/api/public/p/ACME/board'), identifierParams);
     expect(res.status).toBe(200);
     expect(publicBoardSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  // ── MOTIR-4110: the two detail reads ─────────────────────────────────────
+
+  it('GET /api/public/p/{identifier}/items/{key}', async () => {
+    getWorkItemDetail.mockResolvedValue({
+      id: 'wi_6',
+      identifier: 'ACME-6',
+      key: 6,
+      title: 'A work item',
+      kind: 'task',
+      status: 'in_progress',
+      statusLabel: 'In progress',
+      statusCategory: 'in_progress',
+      descriptionMd: '## Body',
+      parent: { identifier: 'ACME-1', key: 1, title: 'A parent', kind: 'epic' },
+      childrenHidden: false,
+      childCount: 2,
+      children: [
+        {
+          id: 'wi_7',
+          identifier: 'ACME-7',
+          key: 7,
+          title: 'A child',
+          kind: 'subtask',
+          status: 'todo',
+          statusCategory: 'todo',
+          priority: 'low',
+          parentId: 'wi_6',
+          hasChildren: false,
+        },
+      ],
+      childrenHasMore: true,
+    });
+    const res = await getItemDetailRoute(url('/api/public/p/ACME/items/ACME-6'), {
+      params: Promise.resolve({ identifier: 'ACME', key: 'ACME-6' }),
+    });
+    expect(res.status).toBe(200);
+    expect(publicWorkItemDetailSchema.parse(await res.json())).toBeTruthy();
+    // The route passes the segment through UNCHANGED — it does not rebuild the
+    // identifier from the project key and a number.
+    expect(getWorkItemDetail).toHaveBeenCalledWith('ACME', 'ACME-6', null);
+  });
+
+  it('a ROOT item and a HIDDEN epic both parse — null parent, and the marker', async () => {
+    getWorkItemDetail.mockResolvedValue({
+      id: 'wi_8',
+      identifier: 'ACME-8',
+      key: 8,
+      title: 'A private epic',
+      kind: 'epic',
+      status: 'todo',
+      statusLabel: 'To do',
+      statusCategory: 'todo',
+      descriptionMd: null,
+      parent: null,
+      childrenHidden: true,
+      childCount: 0,
+      children: [],
+      childrenHasMore: false,
+    });
+    const res = await getItemDetailRoute(url('/api/public/p/ACME/items/ACME-8'), {
+      params: Promise.resolve({ identifier: 'ACME', key: 'ACME-8' }),
+    });
+    expect(publicWorkItemDetailSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  it('GET /api/public/p/{identifier}/requests/{requestKey}', async () => {
+    getRequestDetail.mockResolvedValue({
+      id: 'wi_9',
+      identifier: 'ACME-9',
+      key: 9,
+      title: 'A feature request',
+      kind: 'task',
+      status: 'open',
+      statusLabel: 'Open',
+      statusCategory: 'todo',
+      descriptionMd: 'Please build this',
+      openedByName: 'A Reader',
+      createdAt: '2026-08-30T00:00:00.000Z',
+      voteCount: 12,
+      voted: false,
+      comments: [
+        {
+          id: 'c_1',
+          workItemId: 'wi_9',
+          parentCommentId: null,
+          author: { id: 'u_1', name: 'A Reader', image: null },
+          bodyMd: 'Me too',
+          editedAt: null,
+          createdAt: '2026-08-30T01:00:00.000Z',
+          mentionedUserIds: [],
+        },
+      ],
+    });
+    const res = await getRequestDetailRoute(url('/api/public/p/ACME/requests/ACME-9'), {
+      params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-9' }),
+    });
+    expect(res.status).toBe(200);
+    expect(publicRequestDetailSchema.parse(await res.json())).toBeTruthy();
+    expect(getRequestDetail).toHaveBeenCalledWith('ACME', 'ACME-9', null);
+  });
+
+  it('the request thread admits a REPLY — parentCommentId is not always null', async () => {
+    getRequestDetail.mockResolvedValue({
+      id: 'wi_9',
+      identifier: 'ACME-9',
+      key: 9,
+      title: 'A feature request',
+      kind: 'task',
+      status: 'open',
+      statusLabel: 'Open',
+      statusCategory: 'todo',
+      descriptionMd: null,
+      openedByName: 'A Reader',
+      createdAt: '2026-08-30T00:00:00.000Z',
+      voteCount: 0,
+      voted: false,
+      comments: [
+        {
+          id: 'c_2',
+          workItemId: 'wi_9',
+          parentCommentId: 'c_1',
+          author: { id: 'u_2', name: 'Someone', image: 'https://cdn.test/a.png' },
+          bodyMd: 'Agreed',
+          editedAt: '2026-08-30T02:00:00.000Z',
+          createdAt: '2026-08-30T01:30:00.000Z',
+          mentionedUserIds: [],
+        },
+      ],
+    });
+    const res = await getRequestDetailRoute(url('/api/public/p/ACME/requests/ACME-9'), {
+      params: Promise.resolve({ identifier: 'ACME', requestKey: 'ACME-9' }),
+    });
+    expect(publicRequestDetailSchema.parse(await res.json())).toBeTruthy();
   });
 
   it('the board carries the epic-privacy MARKER, and the schema admits it', async () => {

@@ -13,8 +13,10 @@ import {
   publicRequestBodySchema,
   publicRequestResultSchema,
   publicBoardSchema,
+  publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
   publicRoadmapSchema,
+  publicWorkItemDetailSchema,
   publicSubscribeBodySchema,
   publicTreeLevelSchema,
   publicWorkItemPageSchema,
@@ -206,6 +208,79 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
       {
         status: 404,
         description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/items/{key}',
+    operationId: 'getPublicProjectWorkItem',
+    summary: 'ONE work item, as the public surface shows it',
+    description:
+      'The detail behind `/p/<identifier>/items/<key>` — the public projection plus the body, ' +
+      'the resolved status label, the immediate parent, and the FIRST page of public-safe direct ' +
+      'children. `children` is a page, not the child set: read `childrenHasMore` and continue ' +
+      'through the tree operation. Anonymous; a session only applies member-visibility. FIVE ' +
+      'conditions answer the same 404 with no existence leak — an unknown key, an item in ' +
+      'another project, an archived item, a TRIAGE item (whose public surface is the request ' +
+      "detail, not this one), and a private epic's hidden descendant.",
+    parameters: [
+      identifierParam,
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description:
+          "The work item's FULL identifier — `ACME-42`, not the bare number. The segment is " +
+          'named `key` because that is the address the public URL has always used; the `key` ' +
+          'FIELD in the response is the bare number, and the two are not the same thing.',
+        schema: z.string(),
+      },
+    ],
+    response: publicWorkItemDetailSchema,
+    errors: [
+      {
+        status: 404,
+        description:
+          '`PROJECT_NOT_FOUND` when no PUBLIC project carries this key; ' +
+          '`PUBLIC_WORK_ITEM_NOT_FOUND` when the project is public and the item is not reachable.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/requests/{requestKey}',
+    operationId: 'getPublicProjectRequest',
+    summary: 'ONE feature request, with its public thread and its vote count',
+    description:
+      'The detail behind `/p/<identifier>/requests/<requestKey>` — the request body, the upvote ' +
+      'tally, and the PUBLIC comment thread oldest first. Anonymous; `voted` is false without a ' +
+      'session, which is the only state a cross-origin consumer can produce ' +
+      '(`public-surface-hosts.md` AMENDMENT 3 row 8). ⚠️ NOTE THE IDENTIFIER: this READ is keyed ' +
+      "by the project key and the request's WORK-ITEM identifier, because that is the address in " +
+      'a shared link; the WRITES beside it (`submitPublicRequest`, upvote, comment) are keyed by ' +
+      'the global project id and the work-item id, because their caller has just read the ' +
+      'resource and holds them.',
+    parameters: [
+      identifierParam,
+      {
+        name: 'requestKey',
+        in: 'path',
+        required: true,
+        description: "The request's FULL work-item identifier — `ACME-42`, not the bare number.",
+        schema: z.string(),
+      },
+    ],
+    response: publicRequestDetailSchema,
+    errors: [
+      {
+        status: 404,
+        description:
+          '`PROJECT_NOT_FOUND` when no PUBLIC project carries this key; ' +
+          '`PUBLIC_REQUEST_NOT_FOUND` when the request is missing, archived, in another ' +
+          'project, or hidden by the epic-privacy exclusion.',
         schema: publicErrorSchema,
       },
     ],

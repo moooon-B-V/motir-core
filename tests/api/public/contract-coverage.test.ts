@@ -118,7 +118,7 @@ describe('the public contract is TOTAL over the shipped route tree', () => {
     expect(disagreements, disagreements.join('; ')).toEqual([]);
   });
 
-  it('counts FOUR session-required operations and nine anonymous ones — the number, pinned', () => {
+  it('counts FOUR session-required operations and eleven anonymous ones — the number, pinned', () => {
     // Pinned because it is the fact the ADR got wrong: it read "exactly one".
     // Pinning it means a fifth gate, or a gate removed, is a decision somebody
     // states rather than a change nobody notices.
@@ -129,10 +129,11 @@ describe('the public contract is TOTAL over the shipped route tree', () => {
       'POST /api/public/p/{identifier}/follow',
       'POST /api/public/projects/{projectId}/requests',
     ]);
-    // 8 → 9: MOTIR-4109's `GET …/board`. The GATED list above is the half that
+    // 8 → 9 → 11: MOTIR-4109's `GET …/board`, then MOTIR-4110's two detail
+    // reads. The GATED list above is the half that
     // must not move by accident; the anonymous count moves with ordinary growth
     // and is pinned so that the growth is stated rather than noticed later.
-    expect(shippedMethods().filter((r) => !r.gated)).toHaveLength(9);
+    expect(shippedMethods().filter((r) => !r.gated)).toHaveLength(11);
   });
 
   it('names the route file in its failure — a guard nobody can act on is a guard nobody keeps', () => {

@@ -59,8 +59,15 @@
  *   both-absent case is the only new one — so no status an existing condition
  *   returns has moved. The `operationId` is deliberately NOT renamed: a
  *   generated client names its method after it.
+ * - `1.3.0` — MOTIR-4110 gives the two DETAIL reads their routes:
+ *   `getPublicProjectWorkItem` and `getPublicProjectRequest`. Additive under §D
+ *   — two new operations, no declared shape changed. Both are keyed by the
+ *   project key plus the target's WORK-ITEM identifier, which is what the
+ *   service takes and what a shared link carries; the request WRITES beside
+ *   them stay keyed by ids, and that asymmetry is declared rather than
+ *   smoothed over.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.2.0';
+export const PUBLIC_CONTRACT_VERSION = '1.3.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;

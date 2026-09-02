@@ -287,6 +287,134 @@ const publicBoardColumn = z
   .meta({ id: 'PublicBoardColumn' });
 
 /**
+ * One public COMMENT on a feature request (MOTIR-4110).
+ *
+ * The shared `CommentDTO` shape, restated here rather than imported from an
+ * internal schema: this is a published contract, and a public document that
+ * moved whenever an internal DTO grew a field would not be one. `.strict()`
+ * means a field ADDED to `CommentDTO` and returned by the request-detail read
+ * fails the drift guard in THIS repository rather than reaching `motir.co`
+ * undeclared — which is exactly what `public-surface-hosts.md` §3 asks the
+ * producing repository to own.
+ *
+ * `mentionedUserIds` is always EMPTY on this surface: public-request comments
+ * carry no mention scoping, and an empty array is the correct answer rather
+ * than a leak of an internal mention set.
+ */
+const publicRequestComment = z
+  .object({
+    id: z.string(),
+    workItemId: z.string(),
+    parentCommentId: z
+      .string()
+      .nullable()
+      .meta({ description: "Null on a root comment; the root's id on a single-level reply." }),
+    author: z
+      .object({ id: z.string(), name: z.string(), image: z.string().nullable() })
+      .strict()
+      .meta({ id: 'PublicCommentAuthor' }),
+    bodyMd: z.string(),
+    editedAt: z
+      .string()
+      .nullable()
+      .meta({ description: 'ISO 8601 — set on a body edit, null when never edited.' }),
+    createdAt: z.string().meta({ description: 'ISO 8601.' }),
+    mentionedUserIds: z
+      .array(z.string())
+      .meta({ description: 'Always empty here — public-request comments carry no mentions.' }),
+  })
+  .strict()
+  .meta({ id: 'PublicRequestComment' });
+
+/**
+ * ONE FEATURE REQUEST in full (MOTIR-4110) — the public projection plus the body,
+ * the upvote demand signal and the PUBLIC comment thread, oldest first.
+ *
+ * ⚠️ WHAT IS ABSENT IS THE POINT, as everywhere on this surface: no assignee, no
+ * estimate, no story points. `comments` is the request's `isPublic` thread ONLY —
+ * a work item's internal discussion is not in the shape at all.
+ */
+export const publicRequestDetailSchema = z
+  .object({
+    id: z.string(),
+    identifier: z.string().meta({ description: 'The work-item key, e.g. `ACME-42`.' }),
+    key: z.number().int(),
+    title: z.string(),
+    kind: workItemKind,
+    status: z.string().meta({ description: 'The workflow status KEY.' }),
+    statusLabel: z.string().meta({ description: "The status's display label." }),
+    statusCategory,
+    descriptionMd: z.string().nullable(),
+    openedByName: z
+      .string()
+      .meta({ description: 'The submitter\'s display name — the "opened by" meta.' }),
+    createdAt: z.string().meta({ description: 'ISO 8601 — when the request was opened.' }),
+    voteCount: z.number().int().meta({ description: 'Upvotes across every account.' }),
+    voted: z
+      .boolean()
+      .meta({ description: 'Whether the CURRENT viewer upvoted it; false anonymously.' }),
+    comments: z.array(publicRequestComment),
+  })
+  .strict()
+  .meta({ id: 'PublicRequestDetail' });
+
+/** The item's parent, for the detail page's breadcrumb and its sidebar link. */
+const publicWorkItemDetailParent = z
+  .object({
+    identifier: z.string(),
+    key: z.number().int(),
+    title: z.string(),
+    kind: workItemKind,
+  })
+  .strict()
+  .meta({ id: 'PublicWorkItemDetailParent' });
+
+/**
+ * ONE WORK ITEM in full (MOTIR-4110) — the public projection plus the body, the
+ * resolved status label, the immediate parent, and the FIRST page of public-safe
+ * direct children.
+ *
+ * ⚠️ `children` IS A FIRST PAGE, NOT THE CHILD SET. `childrenHasMore` says
+ * whether more exist, and the rest are loaded through the tree operation — the
+ * at-scale rule. A consumer that treats `children` as complete renders a
+ * truncated tree with no error anywhere.
+ *
+ * `childrenHidden` is the epic-privacy display signal, not its enforcement: when
+ * it is true the descendants have ALREADY been excluded server-side, so
+ * `children` is empty and `childCount` is 0.
+ */
+export const publicWorkItemDetailSchema = z
+  .object({
+    id: z.string(),
+    identifier: z.string().meta({ description: 'The work-item key, e.g. `ACME-42`.' }),
+    key: z.number().int(),
+    title: z.string(),
+    kind: workItemKind,
+    status: z.string(),
+    statusLabel: z.string(),
+    statusCategory,
+    descriptionMd: z.string().nullable(),
+    parent: publicWorkItemDetailParent
+      .nullable()
+      .meta({ description: 'Null at a root — an epic, or a parentless item.' }),
+    childrenHidden: z.boolean().meta({
+      description:
+        'True ONLY on a private epic seen by a non-member. The display signal; the exclusion ' +
+        'already happened server-side.',
+    }),
+    childCount: z
+      .number()
+      .int()
+      .meta({ description: 'Total public-safe DIRECT children; 0 when hidden.' }),
+    children: z.array(publicTreeRow),
+    childrenHasMore: z
+      .boolean()
+      .meta({ description: 'Whether more children exist past this first page.' }),
+  })
+  .strict()
+  .meta({ id: 'PublicWorkItemDetail' });
+
+/**
  * The public BOARD (MOTIR-4109) — the project's default board, bounded.
  *
  * ⚠️ BOUNDED, NOT PAGED, and that is a contract fact rather than an omission.
