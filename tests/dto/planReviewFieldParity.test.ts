@@ -183,31 +183,61 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
         'and applyModify leaves the target value alone. Reporting the TARGET source beside a ' +
         'REWRITTEN explanation would attribute the new text to whoever wrote the old.',
     },
-    // ── The DECISION fields. Every one of these is a RAIL row, and the rail is
-    // a compact list of values with no old→new affordance — so on a `modify`
-    // they would render the target's live value indistinguishably from a
-    // proposed one. A change to any of them IS visible to the approver, in the
-    // `changes` diff, which is the surface built to show two sides at once.
-    // That is why they stay add-only, and it is a different answer from the
-    // bodies above for a concrete reason: the quick view renders a body INLINE
-    // and in full, and has nowhere else to show it.
+    // ── The DECISION fields — FLIPPED TO EVERY-OP by bug MOTIR-4143, and the
+    // argument they were add-only under is kept because it was a good one and
+    // it is exactly half right.
+    //
+    // It read: every one of these is a RAIL row, the rail has no old→new
+    // affordance, so on a `modify` it would render the target's live value
+    // indistinguishably from a proposed one — while a change to any of them IS
+    // shown to the approver, in the `changes` diff, the surface built to show
+    // two sides at once.
+    //
+    // That is true of the LIST ROW, which renders the diff. It is false of
+    // `ProposalQuickView`, which renders no diff at all and is the ONLY surface
+    // these fields reach. So the premise "a change is visible elsewhere" held
+    // for the surface nobody was complaining about, and the surface a person
+    // approves from showed a `modify`'s whole rail as one Parent row — every
+    // other field null, the rail's own `hasRail` collapsing with them. Reported
+    // from the running app: *"the fields are not displaying. I only see parent
+    // on the right side."*
+    //
+    // The rail now answers what the card WILL BE, which is the sentence `title`
+    // and both bodies already carry on this DTO. The cost the old reason names
+    // is real and accepted: a rail row does not say whether its value is
+    // proposed or unchanged. Showing the value is strictly more than showing
+    // nothing, and the diff still spells the change one surface over.
     priority: {
-      addOnly: 'a rail row; a re-prioritise is read from the changes diff (7.21.6 / MOTIR-1370).',
+      everyOp:
+        'MOTIR-4143 — a rail row on the one surface with no diff; a modify reports its patch, ' +
+        'else the target it will keep (7.21.6 / MOTIR-1370 gave the diff, not the rail).',
     },
-    type: { addOnly: 'a rail row; a re-typing is read from the changes diff, as priority is.' },
+    type: {
+      everyOp: 'MOTIR-4143 — a rail row, patch-or-target, as priority is and for the same reason.',
+    },
     storyPoints: {
-      addOnly: 'a rail row; a re-scope is read from the changes diff (MOTIR-1532 added the row).',
+      everyOp:
+        'MOTIR-4143 — a re-scope is the most consequential thing a re-plan does to a card, and ' +
+        'the rail was the only place the quick view could have said so.',
     },
     estimateMinutes: {
-      addOnly: 'a rail row; the other half of the sizing pair, and the same diff row.',
+      everyOp: 'MOTIR-4143 — the other half of the sizing pair, and the same answer.',
     },
     targetRepo: {
-      addOnly: 'a rail row; a re-pin is read from the changes diff, which MOTIR-3868 added.',
+      everyOp:
+        'MOTIR-4143 — the pin routes dispatch; MOTIR-3868 made a re-pin visible in the diff, ' +
+        'and this makes the resulting value visible where it is read.',
     },
     targetRepoRole: {
-      addOnly: 'a rail row; the role stands in for an unpinned name, and diffs beside it.',
+      everyOp:
+        'MOTIR-4143 — patch-only in practice: `work_item.targetRepoRole` is RETIRED, so the ' +
+        'target side is empty and a modify reports the role only when its own patch names one.',
     },
-    executor: { addOnly: 'a rail row; a re-assignment is read from the changes diff.' },
+    executor: {
+      everyOp:
+        'MOTIR-4143 — and it has NO patch key, so a modify has no proposed side at all: the ' +
+        "target's live value IS the value the card will have, which is what the rail asks.",
+    },
     planningProvenance: {
       addOnly:
         'WHO WROTE THE PROPOSAL, not a field of the card — a modify proposes no provenance ' +
@@ -249,10 +279,17 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // for the wrong reason, and if it matched everything the add-only ones would.
     const addOnly = Object.keys(OP_AXIS).filter((k) => addOnlyElseNull(k).test(service));
     const everyOp = Object.keys(OP_AXIS).filter((k) => !addOnlyElseNull(k).test(service));
-    expect(addOnly.length).toBeGreaterThan(4);
+    // ⚠️ THE ADD-ONLY ARM IS DOWN TO TWO (MOTIR-4143 moved the six rail fields
+    // across), and a COUNT would now be a threshold nobody could defend. So it
+    // is asserted by NAME: these two are add-only for reasons about provenance
+    // rather than about the rail, they are stated at their own fields, and if a
+    // later change empties this arm the vacuity guard above it stops being real
+    // — which is the thing this case exists to notice.
+    expect(addOnly.sort()).toEqual(['explanationSource', 'planningProvenance']);
     expect(everyOp.length).toBeGreaterThan(2);
     // And it reads the file it thinks it does.
     expect(service).toContain('function proposedBody(');
+    expect(service).toContain('function proposedValue');
   });
 
   it('would have caught the two bodies that shipped null for a modify', () => {
@@ -260,9 +297,12 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // both matched the add-only shape while the quick view rendered them inline.
     expect(addOnlyElseNull('descriptionMd').test(service)).toBe(false);
     expect(addOnlyElseNull('explanationMd').test(service)).toBe(false);
-    // …and `priority` still does, so the assertion above is about these two
-    // fields rather than about the regex having stopped working.
-    expect(addOnlyElseNull('priority').test(service)).toBe(true);
+    // …and a field that IS still add-only does, so the assertion above is about
+    // these two fields rather than about the regex having stopped working.
+    // ⚠️ THE CONTROL USED TO BE `priority`, which MOTIR-4143 moved to every-op —
+    // so the control moved with it, to a field whose add-only answer is about
+    // PROVENANCE and does not move when a rail question is settled.
+    expect(addOnlyElseNull('explanationSource').test(service)).toBe(true);
   });
 
   it('holds the PRESENCE test that separates “unchanged” from “cleared”', () => {
@@ -271,7 +311,11 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // `??` fallback would show the reviewer the text approval is about to DELETE
     // as the text approval will keep — this bug's own failure mode inverted, and
     // therefore the likeliest thing to ship as its fix.
-    const start = service.indexOf('function proposedBody(');
+    // ⚠️ THE RULE MOVED, SO THE READ MOVED WITH IT (MOTIR-4143). `proposedBody`
+    // is now a two-line wrapper and `proposedValue` holds the presence test for
+    // every field that has one — so reading the wrapper would assert this of a
+    // function that no longer decides it, and pass while the rule was gone.
+    const start = service.indexOf('function proposedValue');
     expect(start).toBeGreaterThan(-1);
     const body = service.slice(start, service.indexOf('\n}', start));
     expect(body).toContain('!== undefined');
