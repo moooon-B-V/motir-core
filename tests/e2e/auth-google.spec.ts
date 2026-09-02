@@ -82,12 +82,18 @@ async function setSyntheticGoogleUser(profile: {
 // Intercept the browser's hop to accounts.google.com and 302 it directly
 // back to Better-Auth's callback. The `state` query param MUST be echoed
 // back unchanged — Better-Auth verifies it to prevent CSRF.
-async function installGoogleAuthorizeIntercept(page: Page): Promise<void> {
+async function installGoogleAuthorizeIntercept(page: Page, baseURL: string): Promise<void> {
   await page.route('**/accounts.google.com/**', async (route) => {
     const url = new URL(route.request().url());
     const state = url.searchParams.get('state') ?? '';
+    // ⚠️ THE FALLBACK ORIGIN IS THE LANE'S, not a literal (MOTIR-4137). Better-Auth
+    // always sends `redirect_uri`, so this arm is a guard rather than a path — but a
+    // hard-coded `:3000` is right for exactly one lane, and a spec promoted into
+    // another inherits a callback pointing at a port nothing listens on. That is the
+    // failure that took `main` off deploy for 13 hours.
     const redirectUri =
-      url.searchParams.get('redirect_uri') ?? 'http://localhost:3000/api/auth/callback/google';
+      url.searchParams.get('redirect_uri') ??
+      new URL('/api/auth/callback/google', baseURL).toString();
     const callback = new URL(redirectUri);
     callback.searchParams.set('code', `mock-auth-code-${Date.now()}`);
     callback.searchParams.set('state', state);
@@ -100,9 +106,9 @@ async function installGoogleAuthorizeIntercept(page: Page): Promise<void> {
   });
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, baseURL }) => {
   await resetDatabase();
-  await installGoogleAuthorizeIntercept(page);
+  await installGoogleAuthorizeIntercept(page, baseURL!);
 });
 
 test.afterAll(async () => {

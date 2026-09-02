@@ -16,8 +16,8 @@ import { signUp } from './_helpers/shell-session';
  * The redirect's destination is the config-driven public origin
  * (`lib/publicProjects/urls.ts` `publicSiteOrigin()` → `MOTIR_PUBLIC_SITE_URL`),
  * and it is gated on that origin DIFFERING from the application origin. The
- * acceptance lane sets `MOTIR_PUBLIC_SITE_URL` to a synthetic
- * `https://public.motir.e2e` (see playwright.acceptance.config.ts), so the
+ * cloud lane sets `MOTIR_PUBLIC_SITE_URL` to a synthetic
+ * `https://public.motir.e2e` (see playwright.cloud.config.ts), so the
  * redirect FIRES here and points at a host that need not be reachable — every
  * assertion reads the response's status and Location header without following
  * it, which is also what distinguishes a 308 from a 302 (they look identical
@@ -39,7 +39,13 @@ test('the moved public surfaces 308 off the application host', async ({
 }) => {
   acceptanceStory('MOTIR-3932');
 
-  const APP = 'http://localhost:3200';
+  // ⚠️ THE APPLICATION ORIGIN IS THE LANE'S OWN `baseURL`, NEVER A LITERAL PORT
+  // (MOTIR-4137). This spec was written for the acceptance lane and hard-coded
+  // that lane's 3200; MOTIR-4094 promoted it into the CLOUD lane, which serves
+  // on 3100, and every request then died `ECONNREFUSED` against a port nothing
+  // was listening on. A relative path resolves against `use.baseURL`, so the
+  // spec follows whichever lane runs it — and follows `E2E_BASE_URL` too, which
+  // a literal could never do.
   const PUBLIC = 'https://public.motir.e2e';
 
   // A clean tenant, so the sign-up in step 8 meets no duplicate-email state.
@@ -55,7 +61,7 @@ test('the moved public surfaces 308 off the application host', async ({
     ['a public project redirects', '/p/PROD', '/p/PROD'],
   ] as const) {
     await chapter(label, async () => {
-      const res = await request.get(`${APP}${path}`, { maxRedirects: 0 });
+      const res = await request.get(path, { maxRedirects: 0 });
       expect(res.status(), `${path} status`).toBe(308);
       expect(res.headers()['location'], `${path} location`).toBe(`${PUBLIC}${destination}`);
     });
