@@ -1,0 +1,230 @@
+# Two green pull requests may not merge into a red `main` — the merge queue, and what it costs
+
+**Status:** accepted · **Date:** 2026-09-02 · **Card:** Bug MOTIR-4050 (Epic MOTIR-3875) ·
+**Evidence pinned at:** `motir-core` `origin/main` @ `a42f2e22`, ruleset `17227448` as read
+2026-09-02, CI job durations from run `33623306489`, merge rate from the 200 most recently
+merged pull requests · **Supersedes:** the merge-queue rejection in
+[`ci-minutes-allowance.md`](./ci-minutes-allowance.md) §J.5 — see §7
+
+> The card asked for one thing above all: **that the setting be DECIDED and the reasoning
+> recorded, including — if the answer were "not worth the CI cost" — that answer with its
+> numbers.** §3 is the decision, §4 is the cost, §5 is the human half, and §6 is the
+> measurement that is still owed.
+
+---
+
+## §1 — The class, and the instance that produced this card
+
+On 2026-08-31 `main` was un-typecheckable for ~40 minutes, red-lighting the `TypeScript`
+check on every open pull request. Neither pull request involved was broken:
+
+|             |                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------- |
+| `11:40:02Z` | **#2480** (MOTIR-1789) goes green. `ProjectRoadmapCanvas` does not require `searchLabel` yet.      |
+| `12:09:16Z` | **#2486** (MOTIR-4016) merges, making `searchLabel` required whenever `searchable` is true.        |
+| `12:34:47Z` | **#2480** merges, on a **55-minute-old** green check taken against a `main` that no longer exists. |
+
+They touch different files, so git merges them cleanly and reports no conflict. The type
+error exists only in the composed tree. Every signal a reviewer looks at was honestly green.
+MOTIR-4047 / PR #2490 repaired it; **this decision is the control, not the patch.**
+
+The class is not rare here. It recurs whenever two pull requests touch opposite ends of one
+contract, which is routine on a repository with a shared component library and several
+concurrent agents. The global lesson _"Green on two branches is not green on their sum"_
+reached the same conclusion independently — _"the finding is a merge-order class and the
+remedy is a repository control, not a patch"_ — and this was its second recorded occurrence.
+
+**Nothing in the setup as it stood noticed.** A pull request's checks are computed against
+the `main` of the moment they ran, `protect-main`'s `strict_required_status_checks_policy`
+is `false`, and nothing re-computes anything at merge time. The push-to-`main` run found
+the breakage 25 minutes later, which is a detector, not a gate.
+
+## §2 — The three options the card named, measured
+
+Measured 2026-09-02. **`motir-core` is a public repository, so GitHub-hosted minutes are
+free** — every cost below is throughput and wall clock, never dollars. That is the right
+denominator anyway: the binding resource here is how fast a change can land, and how many
+agents are waiting behind it.
+
+**The traffic.** Merges to `main` per day over the preceding week: 25 · 50 · 54 · 21 · 23 ·
+11 · 10. Median ~25, peaks above 50. Open non-draft pull requests at the time of
+measurement: **4**.
+
+**The gate.** From run `33623306489` — 12 Vitest legs at ~8 min each, 10 Playwright legs at
+~5.5, four at-scale legs at 3.3–9.6, `Next.js build` 3.5, `Lint + Prettier` 4.1,
+`TypeScript` 2.7, `Structural guards` 2.2, `Vitest coverage` 1.4, the package lanes ~1.2
+each. **~183 runner-minutes, ~11–15 minutes of wall clock**, plus `Deploy to Fly` at 6.7.
+
+### §2.1 — Option 1, "require branches to be up to date": **REJECTED — it does not converge**
+
+`strict_required_status_checks_policy: true` invalidates every open pull request's check on
+every merge. The cost is O(merges × open pull requests): at the measured 25 × 4 that is
+**~100 extra full gates a day**, and on an 08-27-shaped day ~200.
+
+**But the cost is not the reason.** At 25 merges spread across eight hours a merge lands
+every ~19 minutes, against a gate of 11–15; on a 50-merge day, every ~10 minutes. A pull
+request that starts re-running is invalidated again before it finishes. Pull requests would
+merge by winning a race rather than by being green — and the more agents run concurrently,
+the worse it gets, which is precisely backwards for this repository.
+
+### §2.2 — Option 2, "require it only for the cheap, decisive checks": **REJECTED — it is not a saving**
+
+The card asked for this to be checked rather than assumed. It was, and it fails twice over.
+
+1. **There is nothing to scope.** `protect-main` requires exactly ONE context — `CI
+complete`, the aggregate job MOTIR-2008 introduced so that a shard rebalance could not
+   wedge a pull request. `strict_required_status_checks_policy` is one boolean over the
+   whole rule, not a per-check flag.
+2. **Even after splitting the aggregate, it saves nothing.** Strictness governs when the
+   merge button unlocks — not what runs when a branch is updated. `ci.yml` triggers `on:
+pull_request`, so any push to the branch re-runs the whole workflow, and the `changes`
+   job computes its filter over `base...head`, which an "Update branch" merge commit does
+   not change. Option 2 buys the full cost of option 1 for a fraction of the guarantee.
+
+### §2.3 — Option 3, a merge queue: **TAKEN**
+
+A queue builds a temporary `gh-readonly-queue/main/pr-<n>-<sha>` branch holding `main` ⊕ the
+entries ahead ⊕ this pull request, runs the required checks against **that**, and
+fast-forwards the tested commit onto `main`. Replayed against §1: whichever of #2480 / #2486
+queued second would have seen the other in its speculative tree and been ejected before the
+merge, with `main` never going red.
+
+Its cost is **O(merges)** — one run per entry, or per batch — and it does not touch open
+pull requests at all. That is the property that distinguishes it from §2.1, and it is the
+whole reason it survives this repository's merge rate.
+
+## §3 — The decision
+
+**Enable the merge queue on `main`, run the FULL gate inside it, and reduce the
+push-to-`main` lane to a tripwire plus the release.**
+
+| Lane               | What runs                                                                                                 | Why                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Pull request**   | the full gate, minus `e2e-at-scale`                                                                       | unchanged. A failure must be visible before queueing, or ejection becomes the normal feedback path |
+| **`merge_group`**  | the full gate, **including `e2e-at-scale`**                                                               | the composed tree is verified before it becomes `main`, which is the control this card exists for  |
+| **push to `main`** | `lint`, `typecheck`, `structural-guards`, `design-system`, `design-guards`, `cli`, `build`, then `deploy` | ~4 minutes of wall clock. It is what a BYPASSED merge meets                                        |
+
+Three things follow, and each is asserted in `tests/ci-merge-queue.test.ts`:
+
+- **`ci.yml` gains `on: merge_group`.** Without it `CI complete` never reports against a
+  queue entry, the entry times out on `check_response_timeout_minutes`, and the pull request
+  is ejected with **no failing check to explain it**. Nothing goes red; merges simply stop.
+- **`e2e-at-scale` moves from `push` to `merge_group`.** MOTIR-3148 put those four legs on
+  the push so they would bill once per merge instead of once per pull request. That property
+  is untouched — they still run once per merge, still never on an unlabelled pull request.
+  They now run one step earlier, where they gate the merge instead of reporting after it.
+- **`deploy`'s `needs` shrinks to `[lint, typecheck, build]`.** ⚠️ Not a relaxation — a
+  necessity. A skipped `needs` entry makes its dependents skip, so leaving `test` / `e2e` /
+  `coverage` / `e2e-at-scale` listed while they skip on a push would not have gated the
+  release conservatively; it would have **stopped releases entirely**, and
+  `deploy-freshness.yml` would have been the thing that eventually said so, 90 minutes
+  later. `build` stays for the schema-drift and NFT assertions it carries, not for its
+  artifact: a release whose `release_command` is `prisma migrate deploy` must not run
+  against a datamodel its migrations disagree with.
+
+**`strict_required_status_checks_policy` stays `false`**, and that is now a positive choice
+rather than an omission: §2.1 is what turning it on costs, and the queue supplies the
+guarantee it was the wrong way to buy.
+
+## §4 — What it costs, stated before it is discovered
+
+**Per merged change, in runner-minutes** (sandbox/runner-image excluded from both sides —
+they are gated on `images` and unchanged by this):
+
+|                                 | pull request | queue       | push       | total          |
+| ------------------------------- | ------------ | ----------- | ---------- | -------------- |
+| **Before**                      | 163          | —           | 190        | **353**        |
+| **After, unbatched**            | 163          | 184         | 23         | **370** (+5%)  |
+| **After, batched 3 to a group** | 163          | 61 ⁄ change | 8 ⁄ change | **232** (−34%) |
+
+So: **cost-neutral unbatched, materially cheaper batched**, because the second full gate is
+one this repository was already paying for on every merge — it moves from after the merge to
+before it rather than being added. Any framing that counts the queue's run as new cost is
+measuring against a baseline where `main` runs nothing, which was never the case here.
+
+**⚠️ It is NOT a latency improvement, and §J.5 was right about that.** Click-to-deployed
+becomes queue-gate (11–15) + tripwire (4) + release (6.7) ≈ **22–26 minutes**, against the
+14.5 + 6.75 ≈ 21 of the fastest measured run and the ~34 median. Roughly a wash. Anyone
+re-opening this for speed is re-opening the wrong card.
+
+**⚠️ The real variable cost is EJECTION CHURN**, and it is the number §6 asks for. With
+`max_entries_to_build` above 1, entries speculate on those ahead of them; one red entry
+invalidates every entry behind it and they rebuild. On a day with several failing entries
+this can exceed the table above, and no measurement here bounds it.
+
+**What is bought for that**, beyond the class in §1: the push-to-`main` lane drops from ~21
+minutes to ~11 before `deploy` is reached. MOTIR-3106's starvation needed ~35 minutes of
+clear air; the window in which a merge burst can starve a release shrinks by roughly half
+again. The workflow-level `cancel-in-progress` expression is unchanged — a shorter run is a
+smaller window, not no window.
+
+## §5 — The human half: the settings to apply
+
+**⚠️ No agent can make this change**, which is why MOTIR-4050 is `executor: human`. The
+`ci.yml` half is inert without it, and the two are one change.
+
+On `moooon-B-V/motir-core` → Settings → Rules → **`protect-main`** (ruleset `17227448`), add
+a **merge queue** rule. Intended parameters, recorded here so a later reader can tell a
+decision from a default:
+
+| Setting                     | Value             | Why                                                                              |
+| --------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| Merge method                | **squash**        | what the repository already merges with                                          |
+| Maximum PRs to build        | **3**             | speculation depth. Higher merges faster and wastes more on an ejection           |
+| Minimum PRs to merge / wait | **1** / **5 min** | the batching window — this is what turns a 25-merge morning into far fewer gates |
+| Maximum PRs to merge        | **5**             | caps a batch                                                                     |
+| Grouping                    | **all green**     | a batch merges only if every entry passes                                        |
+| Check response timeout      | **60 min**        | must exceed the gate plus queue wait, or healthy entries are ejected             |
+
+Leave **"Require branches to be up to date before merging" OFF** — §2.1.
+
+**Two things this deliberately does NOT do.** The ruleset's bypass actor stays: a queue that
+cannot be bypassed is an outage waiting for its first incident, and the push lane's tripwire
+is what covers the bypass. And nothing here restricts who may merge.
+
+## §6 — What is still owed
+
+The card asks for **the measured effect on merge throughput, quoted after a day**. This ADR
+cannot contain it — the setting is applied by hand after this merges — so the shape of the
+measurement is fixed here instead, against §4's estimates:
+
+1. **Merges per day** before and after, from the same source §2 used.
+2. **Ejections**: how many entries left the queue without merging, and how many rebuilds
+   they caused. This is the one number §4 could not bound.
+3. **Click-to-deployed**, median and worst, against the 21 / 34 baseline.
+4. **Whether `main` went red at all.** The primary claim. One red `main` from a composed
+   tree after this lands means the queue is not doing what §2.3 says it does.
+
+If (2) turns out to dominate, the lever is `max_entries_to_build` — lower it before
+concluding the queue is too expensive.
+
+## §7 — Relationship to `ci-minutes-allowance.md` §J.5
+
+§J.5 (2026-08-30, MOTIR-3760) re-opened a merge queue and rejected it, correctly, **as a
+latency fix**: _"it does not reduce merge→deployed time; it increases it."_ §4 agrees and
+measures the same wash. That section then closed by naming where the answer would be
+different — _"A merge queue is a **correctness** improvement here, and should be re-opened as
+one — under the both-green-main-red heading, sized against the second run per change"_ —
+which is this card, this heading, and §4's sizing.
+
+One thing §J.5 got wrong, and it is the reason its verdict inverts here rather than repeats:
+_"every change pays for a second full run rather than replacing one."_ Measured against what
+`main` was actually running on every merge, the second full run **was already being paid**.
+The queue relocates it. §J.5's two grounds for keeping the full matrix on the push —
+`e2e-at-scale` having no pull-request run, and the push being the only verification of the
+sum — are retired by §3's first two bullets respectively.
+
+`ci-minutes-allowance.md` §J is otherwise untouched: nothing here routes a job anywhere,
+sets `MOTIR_RUNNER`, or changes what `motir-core` runs on.
+
+## §8 — References
+
+- `.github/workflows/ci.yml` — the `merge_group` trigger, the lane split, `deploy`'s `needs`
+- `tests/ci-merge-queue.test.ts` — the three silent failure modes, asserted
+- `tests/ci-fly-deploy.test.ts` · `tests/ci-changed-paths-gate.test.ts` — the two guards this
+  change inverted, and why
+- [`ci-minutes-allowance.md`](./ci-minutes-allowance.md) §J.4–§J.6 — the prior weighing
+- [`application-hosting.md`](./application-hosting.md) §6 (Q5) — "the suite that exists is
+  the gate, and the deploy follows it", which still holds; the suite moved, the order did not
+- `motir-core` PRs #2480, #2486, #2490 — the instance, end to end
+- MOTIR-4047 (the patch) · MOTIR-2003, MOTIR-3106, MOTIR-3148, MOTIR-3760 (the lineage)
