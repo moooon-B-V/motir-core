@@ -6,19 +6,31 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
-// Bug MOTIR-2570 — THE DOCS DOOR.
+// MOTIR-2570 → MOTIR-4167 — THE DOCS DOOR, once the documentation lives
+// somewhere else.
 //
-// The rail's Docs row used to carry a hardcoded GitHub README URL, on a comment
-// that said there was no in-app docs route. There has been one since
-// `/docs/api` shipped, and the area now has a front door at `/docs`. Nothing
-// asserted the row's destination, which is why an entrance that pointed OUT of
-// the product survived three separate sweeps of the in-app doors: each of them
-// searched for the docs ROUTE, and this row never named it.
+// This file was written for MOTIR-2570, when the row escaped to a GitHub README
+// and the fix was to point it at the in-app documentation index. That index then
+// LEFT this repository — MOTIR-3932 moved the public reading surface to
+// motir-marketing — and the row kept its hard-coded app-relative path, so a
+// signed-in reader who clicked **Docs** got a 404. Nothing caught it, because
+// this file pinned the href to a string and no guard reads a `.tsx` href against
+// the route tree; the address guard over design assets recorded the dead route
+// eight times while the live row sat unexamined.
 //
-// So the assertion is deliberately two-sided. Pinning the href to `/docs`
-// catches a re-point at the wrong surface; asserting the row does not name
-// `github.com` catches a revert to an external URL, which a positive-only test
-// would let pass quietly the moment someone reinstated the constant.
+// So the row now takes the shape the `Legal` row beside it took for the same
+// split (MOTIR-4010): it renders from `docsIndexUrl`, the operator's own ABSOLUTE
+// url, and on a deployment that has configured none **there is no row at all**.
+//
+// ⚠️ THE ABSENT ARM IS THE ONE THIS FILE NOW EXISTS FOR. It is what every
+// self-hoster sees on day one, so it is the COMMON case for the open product
+// rather than an edge, and it is the floor arm
+// `design/shell/rail-bottom-section.mock.html` draws beside the complete one.
+// Absent, not disabled and not empty-stated: a door pointing nowhere is worse
+// than no door — which is the sentence the dead row was contradicting.
+//
+// The prop defaults to `null`, so a caller that forgets to thread it draws no
+// row — it fails closed, which is the direction that cannot mislead a reader.
 
 let pathname = '/dashboard';
 vi.mock('next/navigation', () => ({
@@ -41,9 +53,28 @@ const USER = { name: 'Yue', email: 'yue@example.com' };
 const ADMIN = [...BUILTIN_ROLE_PERMISSIONS.admin];
 const VIEWER = [...BUILTIN_ROLE_PERMISSIONS.viewer];
 
-function renderRail(permissions?: readonly PermissionKey[], project: ProjectDTO | null = PROJECT) {
+/** The hosted arrangement's value — an absolute url on the brand host. */
+const DOCS = 'https://motir.co/docs';
+
+function renderRail({
+  docsIndexUrl = DOCS,
+  legalIndexUrl = null,
+  permissions = ADMIN,
+  project = PROJECT,
+}: {
+  docsIndexUrl?: string | null;
+  legalIndexUrl?: string | null;
+  permissions?: readonly PermissionKey[];
+  project?: ProjectDTO | null;
+} = {}) {
   return renderWithIntl(
-    <SidebarNav activeProject={project} settingsPermissions={permissions} user={USER} />,
+    <SidebarNav
+      activeProject={project}
+      settingsPermissions={permissions}
+      user={USER}
+      docsIndexUrl={docsIndexUrl}
+      legalIndexUrl={legalIndexUrl}
+    />,
   );
 }
 
@@ -55,40 +86,64 @@ afterEach(() => {
 });
 
 describe('the Docs door in the app shell rail', () => {
-  it('points INTO the product, at the documentation area front door', () => {
-    renderRail(ADMIN);
-    expect(docsRow()?.getAttribute('href')).toBe('/docs');
+  it('points at the CONFIGURED url — an absolute url, not a path', () => {
+    renderRail();
+    expect(docsRow()?.getAttribute('href')).toBe(DOCS);
   });
 
-  it('does NOT link to github.com — leaving the product is the defect', () => {
-    renderRail(ADMIN);
+  it('does NOT point at `/docs` — this application no longer serves it', () => {
+    // The two-sided assertion this file established under MOTIR-2570, with the
+    // sides swapped by history: pinning the href catches a re-point at the wrong
+    // surface, and refusing the old path catches a revert to the route that
+    // 404s — which is what the row was doing when MOTIR-4167 was filed.
+    renderRail();
     const href = docsRow()?.getAttribute('href') ?? '';
+    expect(href).not.toBe('/docs');
+    expect(href.startsWith('/')).toBe(false);
+    // …and not back out to the README either, the defect BEFORE that one.
     expect(href).not.toContain('github.com');
-    // An internal route, not an absolute URL to anywhere else either.
-    expect(href.startsWith('/')).toBe(true);
   });
 
-  it('is not the API reference — `/docs`, not `/docs/api`', () => {
-    // Re-pointing the rail at one room of the area would re-introduce, one
-    // surface over, the very defect the index story exists to fix.
-    renderRail(ADMIN);
-    expect(docsRow()?.getAttribute('href')).not.toBe('/docs/api');
+  it('renders NO ROW when nothing is configured', () => {
+    renderRail({ docsIndexUrl: null });
+    expect(docsRow()).toBeNull();
+    // Absent, not disabled: no stand-in text either.
+    expect(screen.queryByText('Docs')).toBeNull();
+  });
+
+  it('renders no row when the prop is OMITTED — it fails closed', () => {
+    // Rendered directly rather than through the helper, whose default would
+    // configure the very prop this case leaves out.
+    renderWithIntl(<SidebarNav activeProject={PROJECT} settingsPermissions={ADMIN} user={USER} />);
+    expect(docsRow()).toBeNull();
+  });
+
+  it('leaves the rest of the section alone — the difference is exactly one row', () => {
+    // Nothing else about the bottom section moves when the row goes: the
+    // neighbouring doors keep their targets, which is what the asset's floor arm
+    // draws beside the complete one.
+    renderRail({ docsIndexUrl: null, legalIndexUrl: 'https://motir.co/legal' });
+    expect(screen.getByRole('link', { name: 'Job runs' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Git' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Legal' }).getAttribute('href')).toBe(
+      'https://motir.co/legal',
+    );
   });
 
   it('survives every role — documentation is not permission-gated', () => {
-    renderRail(VIEWER);
-    expect(docsRow()?.getAttribute('href')).toBe('/docs');
+    renderRail({ permissions: VIEWER });
+    expect(docsRow()?.getAttribute('href')).toBe(DOCS);
   });
 
   it('survives with no active project', () => {
-    renderRail(undefined, null);
-    expect(docsRow()?.getAttribute('href')).toBe('/docs');
+    renderRail({ permissions: undefined, project: null });
+    expect(docsRow()?.getAttribute('href')).toBe(DOCS);
   });
 
   it('keeps its place in the rail footer, below Job runs and Git', () => {
-    // The row's position is part of the shipped design; a re-point must not
+    // The row's position is part of the shipped design; the re-point must not
     // relocate it.
-    renderRail(ADMIN);
+    renderRail();
     const docs = screen.getByRole('link', { name: 'Docs' });
     for (const label of ['Settings', 'Job runs', 'Git']) {
       const row = screen.getByRole('link', { name: label });
@@ -99,12 +154,12 @@ describe('the Docs door in the app shell rail', () => {
     }
   });
 
-  it('carries no `aria-current`, on `/docs` as anywhere else', () => {
-    // `/docs` renders in the `(public)` group outside this shell, so the rail
-    // is never on screen there — an `active` arm could not fire, and adding one
-    // would be dead code that reads as a feature.
+  it('carries no `aria-current`, anywhere', () => {
+    // The destination is off-shell, so the rail is never on screen there — an
+    // `active` arm could not fire, and adding one would be dead code that reads
+    // as a feature.
     pathname = '/docs';
-    renderRail(ADMIN);
+    renderRail();
     expect(docsRow()?.getAttribute('aria-current')).toBeNull();
   });
 });
