@@ -4,16 +4,17 @@ The authed shell: the top bar, the persistent sidebar rail, the off-canvas drawe
 overlays the bar summons. This is the area's first `design-notes.md`; the five `.pen` assets beside it
 predate the three-file convention and are indexed below rather than rewritten.
 
-| Surface                                    | Asset                                                         | Card             | State                                                                                                |
-| ------------------------------------------ | ------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                                        | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
-| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                              | MOTIR-53         | Same                                                                                                 |
-| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                                  | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
-| ⌘K command palette                         | `cmd-k.pen` / `.png`                                          | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
-| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                                      | MOTIR-53         | Current                                                                                              |
-| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**                       | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                                      |
-| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`**               | **MOTIR-2555**   | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
-| **The navigation-pending grammar**         | **`navigation-pending.mock.html` / `navigation-pending.png`** | **MOTIR-3431**   | **The design of record for what the content area shows between the click and the arrival**           |
+| Surface                                    | Asset                                                           | Card             | State                                                                                                |
+| ------------------------------------------ | --------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                                          | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
+| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                                | MOTIR-53         | Same                                                                                                 |
+| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                                    | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
+| ⌘K command palette                         | `cmd-k.pen` / `.png`                                            | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
+| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                                        | MOTIR-53         | Current                                                                                              |
+| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**                         | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                                      |
+| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`**                 | **MOTIR-2555**   | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
+| **The navigation-pending grammar**         | **`navigation-pending.mock.html` / `navigation-pending.png`**   | **MOTIR-3431**   | **The design of record for what the content area shows between the click and the arrival**           |
+| **The rail's BOTTOM section**              | **`rail-bottom-section.mock.html` / `rail-bottom-section.png`** | **MOTIR-4130**   | **The design of record for every row that section renders, at all three widths, in both arms**       |
 
 ---
 
@@ -971,3 +972,138 @@ happy-dom drops a `background-image` whose value is a `linear-gradient()` over `
 pill's fill and its shimmer are restored verbatim from `PlanWithAILauncher.tsx`; and because every
 frame shares one document, the compiled `@media (width >= …)` blocks are re-emitted scoped to
 `[data-vw="…"]` so each frame resolves its own width. Both are properties of the board, not of the app.
+
+---
+
+## The rail's bottom section — every row it renders (MOTIR-4130)
+
+`rail-bottom-section.mock.html` / `.png` is **the design of record for the authed rail's bottom
+section**: the six rows it carries, at all three widths the shell draws, in both arms of every
+conditional row.
+
+### Why the area owed this
+
+The section grew one row at a time, and every row was added by a card that was about the
+DESTINATION rather than about the rail — a documentation index, a legal document set, an operator's
+job-runs surface, a workspace security policy. Adding a row to a nav is a two-line change at the end
+of such a card, and nothing in any of their worlds pointed back at an asset in a different area. So
+each asset stayed correct about the day it was drawn and quietly wrong about every day since.
+
+**The measurement, at `8d80ac8db`.** Fourteen rails across six assets draw this section, and **not one
+of them drew the `Legal` row or the `Security` row**:
+
+| Asset                          | Rails | The bottom section it draws             | Short by |
+| ------------------------------ | ----- | --------------------------------------- | -------- |
+| `desktop.pen`                  | 1     | Settings · Docs                         | **4**    |
+| `desktop-collapsed.pen`        | 1     | `settings` · `book-open` (icon-only)    | **4**    |
+| `mobile-drawer.pen`            | 1     | Settings · Docs                         | **4**    |
+| `navigation-pending.mock.html` | 4     | Settings · Job runs · Git · Docs        | **2**    |
+| `top-bar.mock.html`            | 1     | Settings · Job runs · Git · Docs        | **2**    |
+| `design/home/home.mock.html`   | 6     | Job runs · Git · Docs (Settings on one) | **2–3**  |
+
+Method: parse each `.pen` as JSON and walk to its `Nav Section Bottom` frame; load each `.mock.html`
+in Chromium and enumerate every `[data-surface="sidebar"]`'s rows. **The count is the section's, not
+a list of the rows anyone had in mind** — the card that filed this defect enumerated three rows where
+six ship, because it inventoried the rows whose provenance it already held rather than reading the
+section (MOTIR-4163).
+
+### What the section actually carries
+
+Declaration order, from `app/(authed)/_components/SidebarNav.tsx`'s `sections.push({ id: 'bottom' })`:
+
+| #   | Row          | Glyph          | Destination                                         | Rendered                                  |
+| --- | ------------ | -------------- | --------------------------------------------------- | ----------------------------------------- |
+| 1   | **Settings** | `settings`     | `/settings/project`, else the settings home         | CONDITIONAL — `showSettingsDoor`          |
+| 2   | **Security** | `shield-check` | `/settings/workspace/security`                      | CONDITIONAL — `workspaceTierRevealed`     |
+| 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                          | always                                    |
+| 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                        | always                                    |
+| 5   | **Docs**     | `book-open`    | `/docs` — ⚠️ **dead, see below**                    | always                                    |
+| 6   | **Legal**    | `scale`        | the operator's own ABSOLUTE url — `legalIndexUrl()` | CONDITIONAL — `legalIndexUrl` is non-null |
+
+**Three of the six are conditional, and the section's FLOOR is three rows** — Job runs · Git · Docs.
+That floor is the open product's common case, not an edge state, which is why the asset draws it
+beside the complete arm at every width rather than describing it.
+
+**Nothing marks an absent row.** The rows close up and the section is shorter; there is no disabled
+row, no tooltip and no empty state. `SidebarNav.tsx`'s own comment carries the reason and it is the
+rule for the whole section: _an entry point is a promise about a room, and a disabled row is a promise
+the product then refuses._
+
+**The `Legal` row's absent arm has TWO causes, and the second is easy to miss.** `legalIndexUrl()`
+derives the index from the configured documents' own urls: if every one is `<base>/<slug>` the index
+is `<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-service`,
+`legal.acme.com/privacy`) has no index for the row to point at, so **the row is absent rather than
+guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
+unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
+
+### ⚠️ The `Docs` row's destination does not exist — MOTIR-4167
+
+`/docs` left this repository when MOTIR-3932 moved the public reading surface to `motir-marketing`,
+and the rail row was not moved with it. Verified at `8d80ac8db`: no route under `app/**`, no
+`source: '/docs'` in `next.config.ts` (`DOCS_REDIRECTS` makes `/docs` a DESTINATION, never a source),
+no `rewrites()`, nothing in `middleware.ts`.
+
+**The asset draws the shipped href anyway**, because it is the design of record for what the rail
+DOES, and it carries a `KNOWN` entry in `tests/design-asset-addresses.test.ts` saying exactly that —
+distinct from that table's seven other `/docs` entries, which are point-in-time records of assets
+drawn before the move. **The row beside it is the fix**: `Legal` lost its destination to the same
+split and was rebuilt around a resolver returning `string | null`. MOTIR-4167 carries that work, and
+removes this asset's `KNOWN` entry when it lands.
+
+### The divergence ledger — which source wins for this element
+
+| #   | The older assets say                                                                                          | This asset says                                                                                                                                                                                                                                       | Since      |
+| --- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else       | **Six rows**, three of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                          | MOTIR-4130 |
+| 2   | The three `.pen` sources cannot be corrected in place                                                         | **They are not edited.** Pencil is not in this tree, so a `.pen` edit produces a source disagreeing with the `.png` every consumer opens — a second divergence, not a fix. The same call `design/auth/` made for its own legacy artboards.            | MOTIR-4130 |
+| 3   | `navigation-pending.mock.html`, `top-bar.mock.html` and `design/home/home.mock.html` draw four rows, or three | Those rails are **context for something else** — a pending grammar, a control budget, a landing surface — and are not the source for this section. They are re-exportable and may be swept, but a reader asking _what belongs here_ reads THIS asset. | MOTIR-4130 |
+
+**The toolchain question this card had to answer first, and its evidence.** No `.pen` renderer or
+exporter exists anywhere in the repository: the only files naming `.pen` are two guards, `CLAUDE.md`
+and `scripts/plan-seed/` data, and `package.json` carries no Pencil dependency and no design-export
+script. The one renderer present is `scripts/render-design-mock.mjs`, which takes `*.mock.html`. So
+the `.mock.html` route was not a preference — it was the only route with a working export.
+
+### Primitives and tokens
+
+The asset composes **no new primitive**. Every rail is `components/ui/Sidebar.tsx` — `SidebarNavItem`
+for a row (`--height-control`, `--radius-control`, `--spacing-control-x`, `--el-text-secondary` ink,
+`--el-icon-muted` glyph, `--el-sidebar-item-bg-hover`), the `role="separator"` div between sections
+(`--el-sidebar-border`), and the rail itself (`--el-sidebar-bg`, `data-surface="sidebar"` so a
+material style can frost it). The drawer chrome is `components/ui/SidebarDrawer.tsx`'s header row
+verbatim. Widths are the shipped ones: `AppLayout`'s grid column is **240px** expanded and **56px**
+collapsed, and `SidebarDrawer`'s default width is **300px**.
+
+Board chrome routes every colour through `--el-*` and takes `--el-text-secondary` for body ink rather
+than `--el-text-muted`, which fails AA on three of the four surfaces it could land on
+(`docs/decisions/design-board-chrome-aa.md`).
+
+### The access path
+
+The section has no entrance to draw: it IS an entrance, and it is always on screen wherever the
+authed shell is — beneath the primary section, above the collapse toggle. Below `md` it is reached
+through the hamburger, which opens the drawer the asset's Panel C draws.
+
+### How the render was produced
+
+Generated, not hand-drawn, so it cannot drift from the app:
+
+1. The real `Sidebar` is rendered through the repo's own vitest setup with `renderToStaticMarkup`, in
+   six states — expanded / collapsed / drawer × complete / floor. **Only the SECTION DATA is
+   authored**, and it is the six entries `SidebarNav.tsx` pushes, with the real `messages/en.json`
+   labels, the real hrefs and the real lucide glyphs.
+2. `tailwindcss`'s own `compile()` API runs `app/globals.css` over that markup, so the stylesheet is
+   the build's output rather than a retyped token block.
+3. The frames are measured after rendering: every row's box is asserted inside its frame, so no row
+   is clipped or scrolled out of view. **This caught a real defect** — at the first frame height the
+   `Legal` row, the one the card is named after, was scrolled out of all three complete arms and the
+   asset looked finished.
+
+One board property, named here so nobody reads it as design: the frames give the rail a fixed height
+so all ten rows fit, where the real rail is `h-full` in a viewport-height grid column.
+
+### What this asset does NOT draw
+
+The **primary** section (`desktop.pen` still owns it — the four rows above the separator are
+abbreviated context, not a specification), the rail **head** (`context-row.mock.html`), the collapse
+**toggle** in the footer, and the drawer's **utility strip** (`top-bar.mock.html` Panel D, MOTIR-2374).
