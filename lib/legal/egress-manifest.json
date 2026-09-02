@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "measuredIn": "motir-core",
+  "vendors": [
+    {
+      "vendor": "Fly.io",
+      "basis": "repository-evidence",
+      "evidence": ["host fly.io", "host api.machines.dev"]
+    },
+    {
+      "vendor": "Tigris",
+      "basis": "repository-evidence",
+      "evidence": ["package @aws-sdk/client-s3", "package @aws-sdk/s3-request-presigner"]
+    },
+    {
+      "vendor": "Resend",
+      "basis": "repository-evidence",
+      "evidence": ["host api.resend.com"]
+    },
+    {
+      "vendor": "Sentry",
+      "basis": "repository-evidence",
+      "evidence": ["package @sentry/nextjs"]
+    },
+    {
+      "vendor": "Google",
+      "basis": "repository-evidence",
+      "evidence": ["host accounts.google.com", "host oauth2.googleapis.com"]
+    },
+    {
+      "vendor": "Plausible",
+      "basis": "repository-evidence",
+      "evidence": ["host plausible.io"]
+    },
+    {
+      "vendor": "GitHub",
+      "basis": "repository-evidence",
+      "evidence": [
+        "host api.github.com",
+        "host github.com",
+        "host codeload.github.com",
+        "host token.actions.githubusercontent.com",
+        "host ghcr.io"
+      ]
+    },
+    {
+      "vendor": "GitLab",
+      "basis": "repository-evidence",
+      "evidence": ["host gitlab.com"]
+    },
+    {
+      "vendor": "Atlassian / Jira",
+      "basis": "repository-evidence",
+      "evidence": ["host api.atlassian.com", "host auth.atlassian.com"]
+    },
+    {
+      "vendor": "Linear",
+      "basis": "repository-evidence",
+      "evidence": ["host api.linear.app", "host linear.app"]
+    },
+    {
+      "vendor": "Plane",
+      "basis": "repository-evidence",
+      "evidence": ["host api.plane.so", "host app.plane.so"]
+    },
+    {
+      "vendor": "Neon",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached over the Postgres wire protocol via DATABASE_URL, not an HTTPS host or an SDK"
+    },
+    {
+      "vendor": "OpenAI",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core never names it"
+    },
+    {
+      "vendor": "Brave",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core never names it"
+    },
+    {
+      "vendor": "DeepSeek",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core names only the model IDS (lib/projectAiSettings/plannerModels.ts), never a host or an SDK"
+    },
+    {
+      "vendor": "Anthropic",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core never names it"
+    },
+    {
+      "vendor": "Alibaba Cloud",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core never names it"
+    },
+    {
+      "vendor": "Zhipu AI",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core never names it"
+    },
+    {
+      "vendor": "Moonshot AI",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "reached THROUGH the gateway; motir-core never names it"
+    },
+    {
+      "vendor": "Spaceship (Spacemail)",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "a mailbox, with no code path at all"
+    },
+    {
+      "vendor": "Stripe",
+      "basis": "not-evidenced-here",
+      "evidence": [],
+      "reason": "the `stripe` SDK and the checkout, portal, subscription, seat-sync and webhook routes are all in motir-ai; motir-core holds only the E2E billing mock"
+    }
+  ]
+}

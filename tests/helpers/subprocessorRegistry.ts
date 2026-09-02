@@ -1,4 +1,18 @@
-// MOTIR-3631 — the SIGNATURES that tie `content/legal/subprocessors.md` to code.
+// MOTIR-3631 — the SIGNATURES that tie the SUBPROCESSOR DISCLOSURE to code.
+//
+// ⚠️ THE PAGE LEFT; THIS FILE DID NOT (MOTIR-4008). `subprocessors.md` and
+// `model-providers.md` are published from `motir-marketing` now. **This file is
+// the EVIDENCE side and it can only live here** — run against a marketing
+// website's dependency tree it would measure nothing and pass forever. So it
+// stays, and `tests/legal/egress-manifest-guard.test.ts` reads it against
+// `lib/legal/egress-manifest.json` — the committed artifact this application
+// SERVES at `/api/legal/egress-manifest` for the other repository to assert its
+// page against (`docs/decisions/public-surface-hosts.md` AMENDMENT 2 §E).
+//
+// What that changes here: **nothing at all.** The four lists, their semantics
+// and their reasons are untouched. What changed is the SUBJECT the guard holds
+// them against — a manifest in this repository instead of a page that is no
+// longer in it.
 //
 // The page is a published legal representation whose rows are, for the most
 // part, facts about this repository: a dependency in `package.json`, an outbound
@@ -8,6 +22,14 @@
 // ⚠️ THE PAGE IS THE SOURCE OF TRUTH FOR WHAT WE DISCLOSE. This file is the
 // source of truth for WHAT COUNTS AS EVIDENCE. When they disagree the guard
 // fails and a person decides which was wrong — the guard never edits the page.
+//
+// After MOTIR-4008 that disagreement surfaces in TWO places rather than one, and
+// the split is deliberate: here, when the manifest stops matching this tree (red
+// on the pull request that adds the dependency, in the repository that added
+// it); and in `motir-marketing`, when the page stops matching the manifest.
+// Neither repository blocks on the other's CI — that coupling is what the split
+// exists to avoid — so a new vendor turns this red first and the page red next,
+// and AMENDMENT 2 §E writes that window down as a cost.
 //
 // ── ⚠️ THE PAGE DESCRIBES LAUNCH, NOT TODAY ─────────────────────────────────
 // Motir is not generally available, so no vendor is receiving customer data
