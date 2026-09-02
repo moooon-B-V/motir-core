@@ -1416,15 +1416,27 @@ about the manifest seam and are unaffected; MOTIR-4011 is `motir-marketing`'s.
 
 ### ⚠️ Planning flags for MOTIR-4006
 
-1. **`design/shell/`'s rail sources are two rows short of what ships — MOTIR-4130.**
-   Neither the `Git` row nor the `Legal` row is drawn by any of the three shell
-   assets, and a `Settings` row is drawn that the shipped bottom section does not
-   carry in that position. It is why panel 14 lives in this area. **That card must
-   answer a toolchain question before it edits anything**: this repository cannot
-   re-export a `.pen` (Pencil is not in the tree — see the divergence ledger at the
-   top of this file), so the fix is either a re-exportable source or the
-   `*.mock.html` route this area's own siblings already took. A `.pen` edit whose
-   `.png` cannot be regenerated is a second divergence, not a fix.
+1. **`design/shell/`'s rail sources were short of what ships — MOTIR-4130. ✅ RESOLVED
+   2026-09-02, and this flag's own count was wrong.**
+   The flag said _"two rows short"_ (`Git` and `Legal`), and said a `Settings` row was
+   drawn that the shipped bottom section does not carry in that position. **Both halves
+   were wrong, and in opposite directions.** Re-measured at `8d80ac8db`: the section
+   ships **six** rows — `Settings` · `Security` · `Job runs` · `Git` · `Docs` · `Legal` —
+   so the three `.pen` assets were **four** rows short, not two; and **`Settings` IS the
+   section's first row**, so the assets drawing it were right about that one. The
+   miscount is filed as MOTIR-4163: this flag enumerated the rows whose provenance it
+   already held rather than reading the section.
+   **The toolchain question is ANSWERED: the `.pen` route is closed.** No renderer or
+   exporter for `.pen` exists anywhere in the repository, and `package.json` carries no
+   Pencil dependency — the only renderer is `scripts/render-design-mock.mjs`, which takes
+   `*.mock.html`. So MOTIR-4130 took the `*.mock.html` route this area's siblings took,
+   and edited no `.pen`.
+   **The outcome:** `design/shell/rail-bottom-section.mock.html` is now the design of
+   record for that section, drawing all six rows at all three widths with every
+   conditional row in both arms. Its divergence ledger records which source wins.
+   **Panel 14 of `legal-agreement.mock.html` is SUPERSEDED for the rail's two arms** and
+   stands as this area's record of the sign-up and re-consent surfaces; a reader asking
+   what the rail's bottom section carries reads `design/shell/` now.
 
 ### Self-review
 
