@@ -2583,10 +2583,21 @@ export const plansService = {
   /**
    * ⚠️ `opts.revision` is AMENDMENT 10 D1's relaxation, and it is opt-in PER CALL.
    *
-   * Absent — every shipped caller — the gate is `generating` and this method is
-   * byte-identical to what it has always been. Present, the gate becomes
-   * `assertPlanProposalsEditable`: the same two-status gate `correctProposal`
-   * uses, so a REVISION may grow a `planned` plan's proposal set.
+   * Absent, the gate is `generating` and this method is byte-identical to what it
+   * has always been. Present, the gate becomes `assertPlanProposalsEditable`: the
+   * same two-status gate `correctProposal` uses, so a REVISION may grow a
+   * `planned` plan's proposal set.
+   *
+   * **TWO callers pass it now** (AMENDMENT 12, MOTIR-4153): the job seam
+   * (`aiGenerationService.appendProposals`, which this shipped for) and the MCP
+   * door (`add_plan_items { revision: true }`). The second is why the option is a
+   * per-call DECLARATION rather than a status the method could read for itself —
+   * D1's condition is that the append declares itself a revision, and the MCP
+   * caller is the one that has to type it.
+   *
+   * ⚠️ AND A REVISION RUNS ONE GATE AN ORDINARY APPEND DOES NOT — see the block
+   * in the body. It is the CLOSE's gate, owed because a revision is the only
+   * append with no close still coming.
    *
    * **The condition is VISIBILITY, not status.** The `generating` assertion was
    * never about generation — it is the guarantee that a plan under review does
@@ -2614,6 +2625,30 @@ export const plansService = {
     if (opts.revision) assertPlanProposalsEditable(plan);
     else if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
     proposals.forEach(validateProposal);
+
+    // ⚠️ THE CLOSE'S OWN GATE, FOR THE ONE APPEND THAT HAS NO CLOSE LEFT
+    // (MOTIR-4153). Read the append's own gate comment below: it deliberately
+    // omits the arm that needs `liveById` — a real work-item id resolving to
+    // nothing — "because the read is not free and a plan may legitimately
+    // reference an item created between the two". The two are the append and
+    // `markPlanned`, and that argument holds for exactly as long as a close is
+    // still coming. A REVISION appends to a plan that already closed, so the
+    // omitted arm would never run again and a `modify` naming a deleted work item
+    // would be met by whoever pressed Approve.
+    //
+    // This is MOTIR-3936's finding one door over, and it takes MOTIR-3936's own
+    // remedy rather than a second one: the same `assertCorrectionKeepsPlanApprovable`
+    // the correction doors run, on the same BEFORE/AFTER basis, so a plan that was
+    // ALREADY unapprovable can still be repaired by the append that repairs it.
+    //
+    // Resolved OUT HERE, and ONLY for a revision: `getTerminalStatusKeys` opens
+    // its own workspace context and Prisma cannot nest interactive transactions
+    // (the reason `markPlanned`, `approvePlan` and `correctProposal` all resolve
+    // it before their transactions open), and an ordinary append must pay nothing
+    // for a door it does not use.
+    const revisionTerminalStatusKeys = opts.revision
+      ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
+      : null;
 
     let result: { row: Plan; items: PlanItem[] };
     try {
@@ -2744,6 +2779,22 @@ export const plansService = {
             };
             await planItemRepository.create(data, tx);
           }
+
+          // The gate the header above argues for — after the inserts, so it
+          // judges the plan the reviewer would meet, and inside the transaction,
+          // so a throw rolls every one of them back and the plan is left byte-
+          // identical.
+          if (revisionTerminalStatusKeys) {
+            await assertCorrectionKeepsPlanApprovable(
+              existing,
+              await planItemRepository.findByPlan(planId, tx),
+              ctx,
+              revisionTerminalStatusKeys,
+              fresh.projectId,
+              tx,
+            );
+          }
+
           // ONE row for the whole batch, in the same transaction (MOTIR-3535).
           // An append is ONE ACT however many proposals it carries — the reader's
           // question is "what arrived, and who sent it", not "how many INSERTs
