@@ -21,6 +21,7 @@ import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
 import {
   EmptyPlanChangeIntentError,
@@ -674,10 +675,29 @@ export const planChangeSessionsService = {
    * so motir-ai (7.12.2 · MOTIR-908) classifies the turn against those items'
    * neighborhood. The thread's own scope decides that — there is no second submit
    * surface and no second job kind.
+   *
+   * `requirement` (Story MOTIR-3942 · MOTIR-4172) is the optional six-field WHAT
+   * the caller settled before submitting, riding through to `context.requirement`
+   * on the envelope. It is a PASS-THROUGH: this seam neither validates it,
+   * defaults it, nor persists it on the thread.
+   *
+   * ⚠️ BOTH ARMS OF THE FORK BELOW CARRY IT, stated rather than left to be read
+   * off the code. A dispatched agent's re-plan is always ANCHORED, so the
+   * contextual arm is the one that matters in practice and the augment arm is
+   * the one that would go unnoticed if it silently dropped the value — which is
+   * exactly why it does not. The two arms differ in what motir-ai classifies the
+   * turn AGAINST, never in what reaches the envelope.
+   *
+   * ⚠️ AND IT IS NOT WRITTEN ONTO THE THREAD. The prose turns are the thread's
+   * record and the marker turn's body stays byte-identical to the intent that
+   * went out; persisting the struct back onto the session is a different seam
+   * (MOTIR-4159), and writing it here would give the thread a second, silently
+   * divergent copy of the same value.
    */
   async submit(
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
+    requirement?: SubmittedRequirement,
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, scopeKey);
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
@@ -695,8 +715,8 @@ export const planChangeSessionsService = {
     // orphan row to clean up.
     const { jobId, planId } =
       session.targetKeys.length > 0
-        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx)
-        : await aiPlanEditsService.submitAugment(intent, pctx);
+        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx, requirement)
+        : await aiPlanEditsService.submitAugment(intent, pctx, requirement);
 
     const updated = await appendLocked(
       session,

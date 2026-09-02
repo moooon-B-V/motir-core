@@ -366,6 +366,72 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
   });
 });
 
+// ─── The composed WHAT on the wire (Story MOTIR-3942 · MOTIR-4172) ──────────
+// The service half of the carrier: `planChangeSessionsService.submit` hands the
+// requirement to ONE of two arms, and the envelope is the last place in this
+// repository where the value is observable.
+//
+// ⚠️ BOTH ARMS ARE ASSERTED, and that is the point rather than thoroughness. A
+// dispatched agent's re-plan is always ANCHORED, so `submitContextual` is the
+// arm that runs in production and `submitAugment` is the one that could drop
+// the value with nothing noticing.
+describe('aiPlanEditsService — the requirement rides both plan-edit submit arms', () => {
+  beforeEach(() => {
+    vi.mocked(plansService.createPlan).mockResolvedValue({ id: 'plan_req' } as PlanDto);
+    vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_req' });
+  });
+
+  const requirement = {
+    outcome: 'The planner starts knowing the problem.',
+    behaviour: 'A submit carrying a requirement lands it on the envelope.',
+    scopeEdge: '',
+    constraints: 'The producer validates nothing.',
+    acceptance: 'It reaches `context.requirement` unchanged.',
+    assumptions: '',
+  };
+
+  /** The context bag the one `submitJob` call went out with. */
+  const sentContext = () =>
+    vi.mocked(submitJob).mock.calls[0]![2] as unknown as Record<string, unknown>;
+
+  const arms = [
+    {
+      name: 'submitAugment',
+      run: (r?: typeof requirement) => aiPlanEditsService.submitAugment('prompt', ctx, r),
+    },
+    {
+      name: 'submitContextual',
+      run: (r?: typeof requirement) =>
+        aiPlanEditsService.submitContextual('prompt', ['MOTIR-100'], ctx, r),
+    },
+  ] as const;
+
+  for (const arm of arms) {
+    it(`${arm.name} carries it through to context.requirement, unchanged`, async () => {
+      await arm.run(requirement);
+      expect(sentContext().requirement).toEqual(requirement);
+    });
+
+    it(`${arm.name} OMITS the key when none is supplied — absence, not null`, async () => {
+      await arm.run();
+      // The `code` / `repositories` meaning of absence: nobody supplied one.
+      // `null` or `{}` would be a supplied-but-empty requirement, a third state
+      // neither side has a reading for — and this card's risk is precisely an
+      // optional field quietly becoming mandatory.
+      expect('requirement' in sentContext()).toBe(false);
+      expect(JSON.stringify(sentContext())).not.toContain('requirement');
+    });
+  }
+
+  it('the value is NOT normalized — the service is a wire, not a validator', async () => {
+    // A partial requirement the far side will refuse still goes out as sent: no
+    // key is filled in, no empty string is dropped, nothing is trimmed.
+    const partial = { outcome: '  ', behaviour: 'only two of six' };
+    await aiPlanEditsService.submitContextual('prompt', ['MOTIR-100'], ctx, partial);
+    expect(sentContext().requirement).toEqual(partial);
+  });
+});
+
 // ─── The AI-drafted-explanations opt-in on the wire (MOTIR-2110) ─────────────
 // The producer half of a two-repo contract: motir-ai reads the flag ONLY from
 // `context.generateExplanations` (never from motir-core config), so a submit

@@ -266,6 +266,61 @@ export interface JobContextBag {
   // DEFENSIVELY on the far side (`parseSprintPlanningInput`) — a malformed hole
   // falls back to defaults rather than failing the job.
   sprintPlanning?: SprintPlanningContext;
+  // WHAT THIS RUN IS BUILDING (Story MOTIR-3942 · MOTIR-4140 shape ↔ MOTIR-4082
+  // consumer ↔ MOTIR-4172 producer) — the six-field requirement PART 1 settled,
+  // never prose. motir-ai's `readSuppliedPart1` is what reads it: a present,
+  // well-formed value SATISFIES PART 1, so the run enters at PART 2 instead of
+  // opening a conversation to ask a question whose answer already existed.
+  //
+  // ⚠️ ABSENT MEANS NOBODY SUPPLIED ONE — the reserved-hole convention `code`,
+  // `repositories` and `planId` use, and deliberately NOT the `generateExplanations`
+  // / `recordPlanningMistakes` discipline directly above. Those two are SETTINGS
+  // whose absence the consumer must read as a default, so they are always sent;
+  // this one is a VALUE the caller either had or did not, and the consumer's
+  // answer to absence — open the conversation — is exactly right. So it is
+  // spread conditionally at the producer and never sent as `null` or `{}`.
+  //
+  // ⚠️ AND THE PRODUCER DOES NOT VALIDATE IT. Every key is optional here and on
+  // the MCP surface that fills it, because refusing a card must never become
+  // conditional on composing the WHAT well: a partial requirement is a legal
+  // submit that simply does not settle PART 1. motir-ai's `buildRequirement` is
+  // the only validator, and it runs where a half-answer can open a conversation
+  // rather than fail a call.
+  requirement?: SubmittedRequirement;
+}
+
+/**
+ * The `context.requirement` hole a plan-edit submit may fill — motir-ai's
+ * `SettledRequirement` (`src/jobs/conversation.ts`) as a PRODUCER states it.
+ *
+ * The six fields are in CANONICAL ORDER, the order a requirements document
+ * states them, and that order is part of the contract: it is what the tool's
+ * per-field descriptions teach an agent to compose in.
+ *
+ * ⚠️ EVERY FIELD IS OPTIONAL HERE AND REQUIRED THERE, and that asymmetry is the
+ * design rather than a gap. Three of them — `outcome`, `behaviour`, `acceptance`
+ * — must be present and non-empty for the far side to accept the requirement at
+ * all; the other three may be the empty string, which says *considered, and
+ * there is none* and is a different answer from never having asked. Neither
+ * check runs on this side.
+ *
+ * Typed structurally rather than as `unknown` (which is how motir-ai declares
+ * the hole) for the same reason `sprintPlanning` is: motir-core is the PRODUCER
+ * here, and the field names are the thing a producer can get wrong.
+ */
+export interface SubmittedRequirement {
+  /** Who it is for, and what becomes possible that is not possible today. */
+  outcome?: string;
+  /** The observable rules — input → result, and the states that are not the happy path. */
+  behaviour?: string;
+  /** What is deliberately NOT included. May be blank; blank is an answer. */
+  scopeEdge?: string;
+  /** What BINDS the shape and is already decided. May be blank. */
+  constraints?: string;
+  /** How somebody will know it is done, as an observation rather than a test name. */
+  acceptance?: string;
+  /** What was concluded that nobody confirmed. May be blank. */
+  assumptions?: string;
 }
 
 /** The `context.sprintPlanning` hole a `plan_sprint` submit fills (7.13.4). */

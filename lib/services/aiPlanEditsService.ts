@@ -7,7 +7,7 @@ import {
 } from '@/lib/ai/lessonCapture';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
-import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
+import type { JobContextBag, JobKind, JobStreamEvent, SubmittedRequirement } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
@@ -335,16 +335,39 @@ export const aiPlanEditsService = {
     };
   },
 
-  async submitAugment(prompt: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
+  /**
+   * Submit a project-wide planning turn — the `augment` floor, additions-only.
+   *
+   * `requirement` (Story MOTIR-3942 · MOTIR-4172) is the optional six-field WHAT
+   * the caller settled before submitting. It rides the context bag to
+   * `context.requirement`, where motir-ai's `readSuppliedPart1` reads it.
+   *
+   * ⚠️ SPREAD CONDITIONALLY, exactly like `code` and `repositories` and for
+   * exactly their meaning of absence: a missing key says NOBODY SUPPLIED ONE,
+   * which is the answer the consumer already handles by opening the
+   * conversation. Sending `null` or `{}` would be a supplied-but-empty
+   * requirement, a third state nothing on either side has a reading for. It is
+   * deliberately NOT the `generateExplanations` / `recordPlanningMistakes`
+   * discipline — those are settings whose absence must not be mistaken for a
+   * default, so they are always sent.
+   */
+  async submitAugment(
+    prompt: string,
+    ctx: ProjectContext,
+    requirement?: SubmittedRequirement,
+  ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    return submitPlanEditJob('augment', { prompt }, ctx);
+    return submitPlanEditJob('augment', { prompt, ...(requirement ? { requirement } : {}) }, ctx);
   },
 
   /**
    * Submit a CONTEXTUAL planning turn — a chat turn anchored at one or more work
    * items (7.12.3 · MOTIR-909), riding the SHIPPED 7.11 job contract.
    *
-   * Two things make this different from {@link submitAugment}, and only two:
+   * Two things make this different from {@link submitAugment}, and only two —
+   * `requirement` is carried identically by both (see {@link submitAugment}), and
+   * saying so is the point: a dispatched agent's re-plan is always ANCHORED, so
+   * the augment arm is the one that would drop the value unnoticed.
    *
    *  1. `context.targetKeys` carries the anchor SET. That flag is what turns the
    *     submit into a contextual turn on the motir-ai side (7.12.2 · MOTIR-908):
@@ -370,9 +393,14 @@ export const aiPlanEditsService = {
     prompt: string,
     targetKeys: readonly string[],
     ctx: ProjectContext,
+    requirement?: SubmittedRequirement,
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    return submitPlanEditJob('augment', { prompt, targetKeys: [...targetKeys] }, ctx);
+    return submitPlanEditJob(
+      'augment',
+      { prompt, targetKeys: [...targetKeys], ...(requirement ? { requirement } : {}) },
+      ctx,
+    );
   },
 
   /** The live channel for a contextual planning turn's job — the same 7.1.4 job
