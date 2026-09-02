@@ -137,6 +137,40 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
     // …and the pane still renders, with nothing in it, rather than being
     // replaced by a terminal state.
     expect(screen.getByTestId('plan-review-canvas').getAttribute('data-item-count')).toBe('0');
+
+    // ⚠️ EXTENDED IN PLACE by MOTIR-4146. Everything above is right and stays:
+    // the rail belongs on this plan. What it was never asked is what the rail
+    // OFFERS once it is here — and the answer it inherited was the whole decide
+    // gate, Approve included, reading *"Approve — add 0 items to your backlog"*
+    // two inches under a pane saying nothing will change if you approve it.
+    // The ending is the only decision there is, so it is the only one drawn.
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+    expect(screen.queryByText(/add 0 items/)).toBeNull();
+    // NOT-RENDERED rather than disabled: a disabled primary is a control a
+    // reader hunts for the key to, and there is no key.
+    expect((screen.getByRole('button', { name: /Decline/ }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  // The COUNTERFACTUAL for the case above (MOTIR-4146) — the suppression is
+  // about the empty set and nothing else. Without this, "renders no Approve"
+  // would be satisfied by a rail that renders no Approve on any plan at all.
+  it('a plan holding ONE item still renders Approve — the zero branch is the only thing that changed', () => {
+    renderWithIntl(
+      <PlanDetail
+        projectKey="PRJ"
+        initialReview={review({
+          status: 'planned',
+          itemCount: 1,
+          items: [planReviewItem({ planItemId: 'pi_1' })],
+        })}
+      />,
+    );
+
+    const approve = screen.getByRole('button', { name: /Approve/ }) as HTMLButtonElement;
+    expect(approve.disabled).toBe(false);
+    expect(approve.textContent).toContain('add 1 item');
   });
 
   // ── THE FIFTH STATUS (MOTIR-3578, AMENDMENT 9 D6) ────────────────────────
@@ -179,6 +213,35 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
 
     expect(screen.getByRole('button', { name: /Decline/ })).toBeTruthy();
     expect(screen.queryByText('This plan has no proposals')).toBeNull();
+
+    // …and, per MOTIR-4146, no Approve on this status either. `stale` is the
+    // OTHER undecided status, so it inherits the same gate and inherited the
+    // same defect — which is why both halves are asserted on both, rather than
+    // on the one that happened to be reported.
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+    expect(screen.queryByText(/add 0 items/)).toBeNull();
+    expect((screen.getByRole('button', { name: /Decline/ }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  // The THIRD undecided status (MOTIR-4146). `generating` already had its own
+  // ending — the Discard MOTIR-3240 gave it — and it kept a DISABLED Approve
+  // beside it whose label spends the count. At zero that label is the same
+  // sentence this card is removing, so the rule is one rule: no Approve control
+  // over an empty plan, whatever undecided status it wears. The ending stays.
+  it('an EMPTY generating plan offers its DISCARD and no Approve — one rule across the three undecided statuses', () => {
+    renderWithIntl(
+      <PlanDetail
+        projectKey="PRJ"
+        initialReview={review({ status: 'generating', plannedAt: null, items: [] })}
+      />,
+    );
+
+    const discard = screen.getByTestId('plan-discard') as HTMLButtonElement;
+    expect(discard.disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+    expect(screen.queryByText(/add 0 items/)).toBeNull();
   });
 
   it('shows the declined outcome ALONGSIDE the cards it decided about', () => {

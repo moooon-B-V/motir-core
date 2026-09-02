@@ -111,6 +111,33 @@ export class PlanNotInExpectedStatusError extends Error {
 }
 
 /**
+ * APPROVE WAS ASKED TO MATERIALIZE A PLAN THAT PROPOSES NOTHING (MOTIR-4146).
+ *
+ * `approvePlan`'s only status gate is `planned`, and `planned` is orthogonal to
+ * what the plan HOLDS — so an empty one approved: it materialized nothing and
+ * wrote a decision saying a plan had been accepted into a backlog it never
+ * touched, with `itemCount: 0` on the recorded revision. The vocabulary for what
+ * actually happened already exists (`declined` + `decisionReason: 'discarded'`,
+ * MOTIR-4124), and this refusal is what stops the record saying the other thing.
+ *
+ * MOTIR-4124 made the CLOSE discard an empty plan rather than queue it, so the
+ * only rows that can still reach here are the LEGACY ones it deliberately left
+ * unmigrated. That is why this is a refusal and not a discard of its own: the
+ * decision belongs to the reviewer standing in front of the plan, and Decline is
+ * the ending they already have. → 409
+ */
+export class PlanHasNoProposalsError extends Error {
+  readonly code = 'PLAN_HAS_NO_PROPOSALS' as const;
+  constructor(readonly planId: string) {
+    super(
+      `Plan ${planId} holds no proposals, so there is nothing to approve. ` +
+        'Approving it would record a decision about a backlog it never touched — decline it instead, which is what a plan that ended without proposing anything means.',
+    );
+    this.name = 'PlanHasNoProposalsError';
+  }
+}
+
+/**
  * A PlanItem references (parentRef / a blockedByRef) an intra-plan temp-ref
  * that does not resolve to a materialized add in the same plan, or a real
  * work-item id that does not exist.

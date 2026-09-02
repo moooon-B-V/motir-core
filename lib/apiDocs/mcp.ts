@@ -598,9 +598,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '3edbd458460d',
   },
   withdraw_plan_proposal: {
+    // The SUMMARY stands as written and MOTIR-4146 only re-pinned the
+    // fingerprint — the same split MOTIR-3194 recorded on `add_plan_items`
+    // above. What that card added to the description is what the LAST
+    // withdrawal does, which a caller meets after it has already chosen this
+    // tool and reads from the description; the line a reader picks the tool off
+    // is unchanged.
     summary:
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
-    descriptionFingerprint: 'b0245a956fa6',
+    descriptionFingerprint: 'dc5421fc3039',
   },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",

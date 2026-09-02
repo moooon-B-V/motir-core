@@ -5,6 +5,7 @@ import { plansService } from '@/lib/services/plansService';
 import {
   PlanApproveTimedOutError,
   PlanGrammarError,
+  PlanHasNoProposalsError,
   PlanItemFieldRejectedError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
@@ -63,6 +64,16 @@ export async function POST(
     }
     if (err instanceof PlanNotInExpectedStatusError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+    }
+    // The plan holds NOTHING (MOTIR-4146) — 409 for the same reason as the arm
+    // directly above: the request is well-formed and the PLAN is in a state
+    // approve cannot act on. Nothing was written; the reviewer's remaining move
+    // is Decline, which the message says and the rail is the surface for.
+    if (err instanceof PlanHasNoProposalsError) {
+      return NextResponse.json(
+        { code: err.code, planId: err.planId, error: err.message },
+        { status: 409 },
+      );
     }
     // The confirmation gate (7.12.5 · MOTIR-911) — the proposal set was rejected
     // BEFORE any write, so the tree is untouched. A malformed proposal is a 400
