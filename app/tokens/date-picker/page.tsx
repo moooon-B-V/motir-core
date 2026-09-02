@@ -32,22 +32,22 @@ export default function DatePickerSpecimenPage() {
         Home-End / Enter / Esc), <code>--el-*</code> themed.
       </p>
 
-      <section className="mt-8 flex max-w-xs flex-col gap-2">
+      <section className="mt-8 flex max-w-[20rem] flex-col gap-2">
         <SectionLabel>Trigger — empty (placeholder)</SectionLabel>
         <DatePicker aria-label="Empty date" value={empty} onChange={setEmpty} />
       </section>
 
-      <section className="mt-8 flex max-w-xs flex-col gap-2">
+      <section className="mt-8 flex max-w-[20rem] flex-col gap-2">
         <SectionLabel>Trigger — filled (with Clear)</SectionLabel>
         <DatePicker aria-label="Filled date" value={filled} onChange={setFilled} />
       </section>
 
-      <section className="mt-8 flex max-w-xs flex-col gap-2">
+      <section className="mt-8 flex max-w-[20rem] flex-col gap-2">
         <SectionLabel>Disabled</SectionLabel>
         <DatePicker aria-label="Disabled date" value="2026-06-04" onChange={() => {}} disabled />
       </section>
 
-      <section className="mt-8 flex max-w-xs flex-col gap-2 pb-80">
+      <section className="mt-8 flex max-w-[20rem] flex-col gap-2 pb-80">
         <SectionLabel>Open calendar (selected · today · roving focus)</SectionLabel>
         <DatePicker aria-label="Open date" value={open} onChange={setOpen} autoOpen />
       </section>

@@ -37,6 +37,14 @@ import { describe, expect, it } from 'vitest';
 // passes at 16px in a 16px box and is exactly the assertion this defect would
 // have survived.
 //
+// The number is not invented here either: `tests/e2e/workspace-flows.spec.ts`
+// already asserts `boundingBox().width > 300` on the Modal primitive, against
+// the SAME defect one surface over ("must render at its intended width, not
+// collapse to ~16px"). That spec is this measurement's browser-side twin — it
+// proves the arithmetic in a real layout engine, on one element, once per E2E
+// run; this file proves the input to that arithmetic for every capped block in
+// the tree, in milliseconds, on every shard.
+//
 // ── The counterfactual is asserted, not assumed ────────────────────────────
 // The last test pins the live behaviour of a NAMED step at under 40px. It is
 // what makes the passing measurements above mean something: if the shadowing

@@ -315,7 +315,7 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
   if (items.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-8">
-        <div className="max-w-sm text-center">
+        <div className="max-w-[24rem] text-center">
           <p className="text-sm font-semibold text-(--el-text)">{t('listEmptyTitle')}</p>
           <p className="mt-1 text-xs text-(--el-text-secondary)">{t('listEmptyBody')}</p>
         </div>

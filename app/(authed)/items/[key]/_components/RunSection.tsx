@@ -164,7 +164,9 @@ export function RunSection({
       <div className="flex flex-col items-center gap-2 py-6 text-center">
         <Bot className="size-5 text-(--el-text-faint)" aria-hidden="true" />
         <p className="font-sans text-sm text-(--el-text)">{t('empty.title')}</p>
-        <p className="max-w-md font-sans text-sm text-(--el-text-secondary)">{t('empty.body')}</p>
+        <p className="max-w-[28rem] font-sans text-sm text-(--el-text-secondary)">
+          {t('empty.body')}
+        </p>
       </div>
     );
   }
