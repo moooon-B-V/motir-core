@@ -591,6 +591,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/internal/ai/job-token/refresh`         | POST                  | serviceAuth + a LIVE job token (`authenticateAndLimitJobRequest`) | —          | no-gate  | R29 |
 | `/api/internal/ai/live-projects`             | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/ai/org-context`               | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/pending-plans`             | GET                   | `aiBoundaryService.readPendingPlans` (transitive)                 | —          | no-gate  | R29 |
 | `/api/internal/ai/plan-proposals`            | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/ai/plan-proposals/[itemId]`   | PATCH                 | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/ai/plan-tree`                 | GET                   | `aiBoundaryService.readPlanTree` (transitive)                     | —          | no-gate  | R29 |

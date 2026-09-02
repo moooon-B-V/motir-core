@@ -3,9 +3,11 @@ import type {
   PlanTreeSkeletonItem,
   BlockingEdge,
   OrgContextResponse,
+  PendingPlanRow,
   SearchResultRow,
   SimilarWorkItemRow,
 } from '@/lib/dto/ai';
+import type { PlanDto } from '@/lib/dto/plans';
 import type { WorkItemEmbeddingRankRow } from '@/lib/repositories/workItemEmbeddingRepository';
 import type { OrgFootprintDTO } from '@/lib/dto/organizations';
 
@@ -127,4 +129,25 @@ export function toOrgContextResponse(footprint: OrgFootprintDTO): OrgContextResp
     projectNames: footprint.projectNames,
     memberCount: footprint.memberCount,
   };
+}
+
+// Map the plan list rows to the AI boundary's PENDING-PLAN projection
+// (MOTIR-4106).
+//
+// ⚠️ FIELD-BY-FIELD, NOT A SPREAD, for the same reason `toSimilarWorkItemRows`
+// is: this is where the payload bound is ENFORCED. `PlanDto` carries a `summary`
+// (free prose a user wrote), a `sourceJobId`, the author triple and two
+// decider ids — none of which a planner needs to know that a plan is in flight,
+// and all of which would start crossing the open-core boundary the day somebody
+// adds a field to `PlanDto` for a perfectly good reason on the Plans page. A
+// constructed object means a new field is inert here until somebody adds it
+// deliberately.
+export function toPendingPlanRows(plans: PlanDto[]): PendingPlanRow[] {
+  return plans.map((p) => ({
+    id: p.id,
+    title: p.title,
+    status: p.status,
+    itemCount: p.itemCount,
+    createdAt: p.createdAt,
+  }));
 }

@@ -11,6 +11,7 @@ import type {
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
+import type { PlanStatusDto } from '@/lib/dto/plans';
 
 // One node of the plan-tree breadth projection: the cheap fields the planner
 // needs to reason over the tree, keyed by work-item identifier.
@@ -254,4 +255,98 @@ export interface OrgContextResponse {
   projectCount: number;
   projectNames: string[];
   memberCount: number;
+}
+
+// ── GET /api/internal/ai/pending-plans (MOTIR-4106) ───────────────────────────
+// WHAT IS ALREADY PROPOSED on the token's project. Every other read in this
+// family answers about the COMMITTED tree (`plan-tree`, `get-item`,
+// `get-subtree`, `search-work-items`), and `plan-proposals` answers about ONE
+// plan — the caller's own, resolved by `sourceJobId`. Neither answers "is
+// somebody else's plan already in flight here?", which is the input GATE 1 is
+// most likely to be changed by: a plan awaiting approval is work somebody
+// decided on and nobody has merged, so proposing beside it duplicates it, and
+// the duplicate arrives looking exactly like new work.
+
+/**
+ * The plan statuses that count as PENDING — a plan a person still has to decide
+ * about (MOTIR-4106).
+ *
+ * ⚠️ THE SET IS NAMED HERE, ONCE, AND NO CALLER CHOOSES IT. That is the point:
+ * "is this plan still in flight?" is one product decision, and a boundary that
+ * took a status filter would have every consumer answer it separately and
+ * differently.
+ *
+ * ⚠️ AND `stale` IS A MEMBER, WHICH IS NOT WHAT AN ENUMERATION OF THE OBVIOUS
+ * TWO WOULD SAY. `PlanStatus`'s own schema comment settles it: *"`stale` … is
+ * NOT terminal and NOT decided: the plan is live and awaiting action, and its
+ * exits are the drift reversing (back to `planned`) or a reviewer declining
+ * it."* A `stale` plan is a proposal sitting in front of a reviewer that cannot
+ * be approved until its drift is resolved — the strongest possible case of work
+ * already proposed and not yet merged, and precisely the plan a second proposal
+ * would duplicate. `plansService.findPendingPlanIdForJob` reaches the same
+ * answer from the other side, by EXCLUDING the decided pair rather than listing
+ * the pending ones.
+ *
+ * The complement is the whole of what is excluded and it is two values:
+ * `approved` (the proposals are the tree now) and `declined` (they are history).
+ * Stated as an exclusion in the assertion below, so adding a sixth status to
+ * `PlanStatus` fails a test rather than silently falling out of this set.
+ */
+export const AI_PENDING_PLAN_STATUSES = [
+  'generating',
+  'planned',
+  'stale',
+] as const satisfies readonly PlanStatusDto[];
+
+/** The statuses a pending read must NEVER return — the decided pair. Written as
+ *  its own list so the two together are TOTAL over `PlanStatusDto`, which is
+ *  what `tests/integration/ai/pendingPlansRoute.test.ts` asserts: a status added
+ *  to the vocabulary lands in neither list and turns that assertion red, instead
+ *  of being quietly treated as decided. */
+export const AI_DECIDED_PLAN_STATUSES = [
+  'approved',
+  'declined',
+] as const satisfies readonly PlanStatusDto[];
+
+/**
+ * How many pending plans the boundary will return, at most (MOTIR-4106).
+ *
+ * A BOUND, not a page size: this seam has no cursor and is not meant to grow
+ * one. Its answer goes into a prompt, where the useful fact is *there are plans
+ * in flight, and here is enough to name them* — a project holding forty
+ * undecided plans does not need forty rows to establish that, and
+ * `truncated` says the list was cut. Ten matches the Plans list's own page
+ * (`DEFAULT_PAGE_LIMIT`), so a planner and a reviewer see the same first screen.
+ */
+export const AI_PENDING_PLANS_LIMIT = 10;
+
+/**
+ * One pending plan, as the AI boundary reports it — deliberately NARROWER than
+ * `PlanDto`.
+ *
+ * The row carries what a planner needs to DECIDE whether to keep going (is
+ * there a plan, what is it called, how far along is it, how big is it, how old
+ * is it) and nothing else. `itemCount` rather than the items themselves is the
+ * whole shape of the bound: the proposals of an in-flight plan are exactly the
+ * unbounded payload a prompt must not swallow, and a caller that genuinely
+ * needs one plan's contents asks for that plan.
+ */
+export interface PendingPlanRow {
+  id: string;
+  title: string | null;
+  status: PlanStatusDto;
+  /** How many proposals the plan holds — the SIZE signal, never the items. */
+  itemCount: number;
+  createdAt: string;
+}
+
+export interface PendingPlansResponse {
+  plans: PendingPlanRow[];
+  /**
+   * TRUE when the project holds more pending plans than
+   * {@link AI_PENDING_PLANS_LIMIT} returned. Carried rather than left to be
+   * inferred from `plans.length === limit`, which is ambiguous at exactly the
+   * boundary and is the inference a consumer gets wrong.
+   */
+  truncated: boolean;
 }
