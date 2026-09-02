@@ -394,6 +394,20 @@ const proposalSchema = z.object({
  * takes), and it must not be answered with a silent success — an empty batch
  * with no `final` is a forgotten flag or a batch built from an empty list, and
  * both are worth telling the caller about.
+ *
+ * ⚠️ `revision` is AMENDMENT 12's opt-in, and it is the MCP half of AMENDMENT 10
+ * D1 (MOTIR-4153). The service relaxation already shipped —
+ * `plansService.addProposals` takes `opts.revision` and swaps its `generating`
+ * assertion for `assertPlanProposalsEditable`, the same two-status gate
+ * `correctProposal` uses — and this door is what was still holding an author to
+ * two of the three verbs on a plan AMENDMENT 8 declared editable.
+ *
+ * It is DECLARED rather than inferred from the status, which is D1's own
+ * condition: *"an append to a `planned` plan is permitted exactly when the append
+ * DECLARES itself part of a revision"*. Inferring it would make the SAME call
+ * mean *append to the tree I am writing* or *change a plan somebody is reading*
+ * depending on a status the caller may not have re-read — and the second of those
+ * is the one that should have to be typed.
  */
 const addPlanItemsInputSchema = {
   planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
@@ -409,8 +423,21 @@ const addPlanItemsInputSchema = {
     .optional()
     .describe(
       'Set true on the LAST batch to close the plan (`generating` → `planned`), which is what ' +
-        'puts it in front of a person for review. Appending after that is refused. Send it with ' +
-        'an EMPTY `proposals` array to close a plan you have nothing left to append to.',
+        'puts it in front of a person for review. After that, an append needs `revision: true`. ' +
+        'Send it with an EMPTY `proposals` array to close a plan you have nothing left to ' +
+        'append to.',
+    ),
+  revision: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set true to append to a plan you have ALREADY closed — a plan that is `planned` and in ' +
+        'the review queue. Without it such an append is refused. The plan does NOT re-open: it ' +
+        'is `planned` before, during and after, and the append is recorded on its timeline with ' +
+        'the harness and model that made it, so the reviewer can see a card arrived after they ' +
+        'started reading. It cannot be combined with `final` (the plan is already closed) and ' +
+        'requires at least one proposal (there is nothing else it could mean). On a `generating` ' +
+        'plan it is unnecessary and simply does nothing. `approved` and `declined` stay frozen.',
     ),
 };
 
@@ -620,6 +647,7 @@ interface AddPlanItemsArgs {
   planId: string;
   proposals: z.infer<typeof proposalSchema>[];
   final?: boolean;
+  revision?: boolean;
 }
 
 interface UpdatePlanItemArgs {
@@ -701,15 +729,43 @@ function summarizeClose(plan: PlanWithItemsDto): string {
     `Closed plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s) in total. ` +
       'Nothing was appended by this call.',
     '',
-    'It is in the review queue now and accepts no further proposals: `add_plan_items` and ' +
-      `\`${UPDATE_PLAN_ITEM_TOOL_NAME}\` are both refused from here. Read it back with ` +
+    'It is in the review queue now. `add_plan_items` is refused from here UNLESS it carries ' +
+      '`revision: true` — which appends to the plan where it stands, keeps it `planned`, and ' +
+      `records itself on the timeline; \`${UPDATE_PLAN_ITEM_TOOL_NAME}\` is refused outright ` +
+      `(\`update_plan_proposal\` is a landed plan's edit door). Read it back with ` +
       `\`${GET_PLAN_TOOL_NAME}\`.`,
     '',
     PROPOSAL_GATE,
   ].join('\n');
 }
 
-function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[]): string {
+/**
+ * ⚠️ THE THIRD ARM IS THE ONE THIS FUNCTION GAINED, AND THE OLD TWO WOULD BOTH
+ * HAVE LIED ABOUT IT (MOTIR-4153).
+ *
+ * Until a revision could append, `status === 'planned'` here meant exactly one
+ * thing — this call carried `final: true` and CLOSED the plan — so the line said
+ * *"accepts no further proposals"*, which was true of every way of reaching it. A
+ * revision reaches the same status having just disproved that sentence, so the
+ * arms split on WHICH act closed the gap rather than on the status alone.
+ */
+function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[], revision: boolean): string {
+  const closing = (): string => {
+    if (revision)
+      return (
+        'This plan is `planned` — it is in front of a reviewer, and this append is on its ' +
+        'timeline with the harness and model that made it, so they can see that a card arrived ' +
+        'after they started reading. It did NOT re-open: the plan was `planned` before this ' +
+        `call and is \`planned\` after it. Read it back with \`${GET_PLAN_TOOL_NAME}\`.`
+      );
+    if (plan.status === 'planned')
+      return (
+        'This plan is now `planned` — it is in the review queue. A further append needs ' +
+        `\`revision: true\`, which keeps it \`planned\` and records itself on the timeline. ` +
+        `Read it back with \`${GET_PLAN_TOOL_NAME}\`.`
+      );
+    return 'Still `generating` — send `final: true` on your last batch when the tree is complete.';
+  };
   return [
     `Appended ${planItemIds.length} proposal(s) to plan ${plan.id} — ${plan.status}, ` +
       `${plan.itemCount} proposal(s) in total.`,
@@ -720,10 +776,7 @@ function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[]): string 
     'Use `planItem:<id>` with any of those as a `parentRef` or `blockedByRefs` entry on a ' +
       'LATER batch, to hang children off these proposals before they exist as work items.',
     '',
-    plan.status === 'planned'
-      ? 'This plan is now `planned` — it is in the review queue and accepts no further ' +
-        `proposals. Read it back with \`${GET_PLAN_TOOL_NAME}\`.`
-      : `Still \`generating\` — send \`final: true\` on your last batch when the tree is complete.`,
+    closing(),
     '',
     PROPOSAL_GATE,
   ].join('\n');
@@ -1045,6 +1098,44 @@ export async function runAddPlanItems(
   args: AddPlanItemsArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
+  // The REVISION grammar (MOTIR-4153), same layer and same reason as the rule
+  // below: two cross-field rules a `ZodRawShape` has nowhere to hang, both about
+  // a call that would otherwise do something other than what it says.
+  //
+  // ⚠️ IT RUNS FIRST, and the order is the rule rather than tidiness. The
+  // empty-batch refusal below is written for a `generating` plan and sends its
+  // caller to `final: true`; reached by a REVISION it would answer an
+  // already-closed plan by telling it to close, which is the one instruction
+  // that pairing must never produce. First matching rule wins, so the more
+  // specific one goes above.
+  //
+  //   · `revision` + `final` — `final` CLOSES a plan, and a revision's plan is
+  //     already closed. `markPlanned` is deliberately NOT relaxed by AMENDMENT 10
+  //     D1 ("a revision does not re-open a plan"), so the composed call would
+  //     append and then throw from the close, having already written. Refusing it
+  //     here is the difference between a refusal and a half-applied call.
+  //   · `revision` + an EMPTY batch — a revision has no close to perform, so an
+  //     empty one is the whole call doing nothing. The rule above already refuses
+  //     empty-and-not-final, but its message is about `generating` and would send
+  //     the caller to `final: true`, which is the one thing this pairing must not
+  //     do.
+  if (args.revision && args.final) {
+    throw new InvalidProposalError(
+      '`revision: true` and `final: true` cannot be combined. `final` CLOSES a plan ' +
+        '(`generating` → `planned`), and a revision appends to a plan that is ALREADY closed — ' +
+        'it stays `planned` before, during and after. Send the batch with `revision: true` ' +
+        'alone; there is nothing left to close.',
+    );
+  }
+  if (args.revision && args.proposals.length === 0) {
+    throw new InvalidProposalError(
+      '`revision: true` with an empty `proposals` array would append nothing to a plan that is ' +
+        'already `planned`, and a revision has no close to perform. Send at least one proposal, ' +
+        'or use `update_plan_proposal` / `withdraw_plan_proposal` to change what the plan ' +
+        'already holds.',
+    );
+  }
+
   // The cross-field half of the argument grammar (MOTIR-3193). An EMPTY batch is
   // legal ONLY as a CLOSE; empty with no `final` would do nothing at all, and a
   // call that does nothing is a mistake the caller wants to hear about — a
@@ -1085,7 +1176,16 @@ export async function runAddPlanItems(
   // An EMPTY batch still goes through `addProposals`: it creates nothing, and it
   // is what re-reads the plan under its row lock and refuses a plan that has
   // already left `generating` — the same refusal a non-empty close would get.
-  const appended = await plansService.addProposals(args.planId, resolved, ctx);
+  //
+  // ⚠️ The option is passed through VERBATIM, not derived from the plan this
+  // adapter has already read (MOTIR-4153). `existing.status` is a PRE-lock read
+  // and the service re-takes the decision under the plan row lock; deriving the
+  // flag here would put a second, weaker status predicate in front of the real
+  // one — which is exactly the duplication AMENDMENT 10 D1 rejected a second
+  // append METHOD to avoid.
+  const appended = await plansService.addProposals(args.planId, resolved, ctx, {
+    revision: args.revision,
+  });
   const planItemIds = appended.items
     .slice(appended.items.length - resolved.length)
     .map((i) => i.id);
@@ -1098,7 +1198,9 @@ export async function runAddPlanItems(
     : appended;
 
   return toolOk(
-    args.proposals.length === 0 ? summarizeClose(plan) : summarizeAppend(plan, planItemIds),
+    args.proposals.length === 0
+      ? summarizeClose(plan)
+      : summarizeAppend(plan, planItemIds, args.revision === true),
     derived(planAppendPayload, presentMcpPlanAppend(plan, planItemIds)),
   );
 }
@@ -1276,7 +1378,13 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         '`blockedByRefs` entry to hang it under one of these, before any of them exists as a ' +
         'work item. So send a tree LAYER BY LAYER, parents before children, and set ' +
         '`final: true` on the last batch — that closes the plan (`generating` → `planned`) ' +
-        'and puts it in the review queue. Appending to an already-closed plan is refused. ' +
+        'and puts it in the review queue. Appending to an already-closed plan is refused ' +
+        'UNLESS the call carries `revision: true`: a REVISION appends to a `planned` plan ' +
+        'where it stands — the plan does not re-open, and the append is recorded on its ' +
+        'timeline with the harness and model that made it, so the reviewer sees that a card ' +
+        'arrived after they started reading. That is the door to reach when a correction needs ' +
+        'a card that is not there; `update_plan_proposal` and `withdraw_plan_proposal` change ' +
+        'and remove what the plan already holds. `approved` and `declined` stay frozen. ' +
         'A TITLES-FIRST pass — append the shape, then fill each card in with ' +
         `\`${UPDATE_PLAN_ITEM_TOOL_NAME}\` — has nothing left to append when it is done, so ` +
         'CLOSE it by calling this with `proposals: []` and `final: true`. An empty batch is ' +

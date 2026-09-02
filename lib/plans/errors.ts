@@ -51,13 +51,32 @@ export class PlanItemNotFoundError extends Error {
 
 /**
  * A proposal append was attempted on a plan that is no longer `generating`
- * (it has been planned/decided). Appending only makes sense while the producer
- * is still generating. → 409
+ * (it has been planned/decided), by a caller that did NOT declare itself a
+ * REVISION. → 409
+ *
+ * ⚠️ THE MESSAGE NAMES THE DOOR NOW, because it stopped being a dead end
+ * (MOTIR-4153). It used to end *"no more proposals can be appended"*, which was
+ * true of every caller when it was written and is now true only of the
+ * undeclared one: `addProposals`'s `revision` option — AMENDMENT 10 D1's
+ * relaxation, reachable over the MCP as `add_plan_items { revision: true }`
+ * (AMENDMENT 12) — appends to a `planned` plan and records itself on its
+ * timeline. A `planned` plan reaching this error is therefore a caller one flag
+ * away from what it wanted, and a refusal that does not say so costs it a whole
+ * second plan plus a hand decline. `approved` / `declined` are a different
+ * refusal entirely ({@link PlanNotEditableError}) and stay frozen.
  */
 export class PlanNotGeneratingError extends Error {
   readonly code = 'PLAN_NOT_GENERATING' as const;
   constructor(planId: string, status: string) {
-    super(`Plan ${planId} is ${status}, not generating — no more proposals can be appended.`);
+    super(
+      `Plan ${planId} is ${status}, not generating — this append was not declared a revision. ` +
+        (status === 'planned'
+          ? 'It is in the review queue: send the same batch with `revision: true` to append to ' +
+            'it where it stands. The plan stays `planned`, and the append lands on its timeline ' +
+            'with the harness and model that made it.'
+          : 'Only a `generating` plan takes an ordinary append, and only a `planned` one takes a ' +
+            'revision.'),
+    );
     this.name = 'PlanNotGeneratingError';
   }
 }
@@ -628,8 +647,9 @@ export class PlanItemFieldRejectedError extends Error {
 }
 
 /**
- * A CORRECTION or a WITHDRAW was attempted on a plan whose proposals are FROZEN
- * (Story MOTIR-3533 · Subtask MOTIR-3540).
+ * A CORRECTION, a WITHDRAW or a REVISION APPEND was attempted on a plan whose
+ * proposals are FROZEN (Story MOTIR-3533 · Subtask MOTIR-3540; the third verb
+ * MOTIR-4153).
  *
  * `generating` and `planned` are editable; `approved` and `declined` are not,
  * for two different reasons the message states rather than implies:
@@ -651,7 +671,8 @@ export class PlanNotEditableError extends Error {
     readonly status: string,
   ) {
     super(
-      `Plan ${planId} is \`${status}\` — its proposals can no longer be corrected or withdrawn. ` +
+      `Plan ${planId} is \`${status}\` — its proposals can no longer be corrected, withdrawn ` +
+        'or appended to. ' +
         (status === 'approved'
           ? 'Its proposals have materialized into work items, which are now the source of truth: edit the work item with `update_work_item` instead.'
           : 'A declined plan is a closed decision; author a new plan instead.') +

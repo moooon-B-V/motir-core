@@ -2250,3 +2250,143 @@ becomes true.**
 `UpdateProposalInput` and `update_plan_item` are untouched: D3's line still holds for a **deepen**, and
 a re-parent is not one. This widens the `modify` PATCH — an act whose whole content is "change this
 existing card" — not the turn that fills in a proposal's own body.
+
+---
+
+## AMENDMENT 12 — the APPEND is the third verb on a `planned` plan, and the MCP door declares itself (MOTIR-4153, 2026-09-02)
+
+AMENDMENT 8 drew a boundary — `generating` and `planned` are editable, `approved` and `declined` are
+frozen — and shipped **two** verbs against it. AMENDMENT 10 D1 then relaxed the append's own status
+gate and shipped it for **one caller**, closing its boundary with _"No widening of the MCP surface"_.
+So the surface an MCP author actually met was: a landed plan it may reshape and shrink, and may not
+grow.
+
+**That shape was never decided.** AMENDMENT 8 does not reject the appending door anywhere — not in
+D3, not in D4, not in _What this does NOT change_; its own framing lists append FIRST, as one of the
+four write doors an author already has, which is what made it read as part of the problem rather than
+as a candidate. AMENDMENT 10 then answered the question for the caller in front of it and said so
+honestly. Neither is wrong; between them a boundary formed that no sentence in either document
+argues for.
+
+> Every reading below was taken off `origin/main` at `436855df7` on 2026-09-02.
+
+### The cost, measured
+
+A re-plan of MOTIR-3942 closed its plan; the conversation then surfaced two further findings, each
+needing a card:
+
+|                                                              |       |
+| ------------------------------------------------------------ | ----- |
+| plans authored                                               | **4** |
+| plans the reviewer must DECLINE by hand                      | **3** |
+| proposals re-authored verbatim into the survivor             | **8** |
+| corrections `update_plan_proposal` absorbed in one call each | 2     |
+
+Every repair that fitted the correction door cost one call; every repair that needed a card cost a
+plan. One session is an anecdote about the rate and not about the shape — and the shape is what
+recurs, because a re-plan that discovers its second finding is the normal case rather than the
+unlucky one.
+
+### D1 — the remedy is (a), the append reaching `planned` — NOT a `reopen_plan`
+
+The bug named two candidates and deliberately picked neither: **(a)** `add_plan_items` accepts
+`planned`, or **(b)** a `reopen_plan` returning `planned → generating` with the append left
+`generating`-only.
+
+**Decision: (a).** Three reasons, in the order they settle it:
+
+1. **AMENDMENT 10 has already decided (b) against, in as many words.** Its own boundary reads _"a
+   revision does not re-open a plan, and the plan is `planned` before, during and after"_, and
+   `markPlanned` is the one thing D1 explicitly did NOT relax. A `reopen_plan` is that rejection
+   reimplemented as a tool.
+2. **(b) takes the plan OUT of the review queue to change it.** The property the `generating`
+   assertion protects — restated by D1 as _the proposal set of a `planned` plan may not change
+   INVISIBLY_ — is satisfied by a trail row, and (b) satisfies it by removing the plan from the
+   surface the reviewer is reading instead. That is strictly worse for the person the objection is
+   about: a plan that vanishes and comes back is harder to follow than one that gains a card on its
+   timeline.
+3. **(a) is already built.** `addProposals` has taken `opts.revision` since MOTIR-3596; what was
+   missing was a caller. (b) is a new verb, a new status transition and a new race with approve.
+
+### D2 — the MCP append DECLARES itself a revision; it is not inferred from the status
+
+`add_plan_items` gains one optional boolean, `revision`, passed through verbatim to the option
+AMENDMENT 10 D1 built. Absent, the call is byte-identical to what it has always been.
+
+**Why a declaration and not a status read.** D1's condition is precisely that _"an append to a
+`planned` plan is permitted exactly when the append DECLARES itself part of a revision"_. Inferring
+the flag from the plan's status would make one call mean either _append to the tree I am writing_ or
+_change a plan somebody is reading_ depending on a status the caller may not have re-read since it
+last looked — and the second of those is the one that should have to be typed. It would also put a
+second status predicate in front of the real one, which is the duplication D1 rejected a second
+append METHOD to avoid: the adapter's read is pre-lock, and the service re-takes the decision under
+the plan row lock.
+
+Two cross-field refusals ride with it, both in the adapter beside the existing empty-and-not-final
+rule:
+
+- **`revision` + `final` is refused.** `final` CLOSES a plan and a revision's plan is already closed;
+  `markPlanned` is un-relaxed, so the composed call would append and then throw from the close,
+  having already written. A refusal is not the same thing as a half-applied call.
+- **`revision` with an EMPTY batch is refused.** A revision has no close to perform, so an empty one
+  is the whole call doing nothing. The existing empty-batch refusal would have sent the caller to
+  `final: true`, which is the one thing this pairing must not do.
+
+### ⚠️ D3 — a revision append runs the CLOSE's gate, because it is the only append with no close coming
+
+`addProposals`' own comment says what it deliberately leaves out: the arm of the persist gate that
+needs `liveById` — a real work-item id that resolves to nothing — _"is left to `markPlanned` (the
+close), because the read is not free and a plan may legitimately reference an item created between
+the two"_. **That argument holds for exactly as long as a close is still coming.** A revision appends
+to a plan that already closed, so the omitted arm would never run again, and a `modify` naming a
+deleted work item would be met by whoever pressed Approve.
+
+This is MOTIR-3936's finding one door over, and it takes MOTIR-3936's own remedy rather than a second
+one: a revision append runs `assertCorrectionKeepsPlanApprovable` — the same helper, on the same
+BEFORE/AFTER basis — inside its own transaction, after the inserts, so a refusal rolls every one of
+them back. The BEFORE/AFTER shape is what keeps it a _do not make it worse_ check rather than a _must
+be perfect_ one: a plan that is ALREADY unapprovable is precisely the plan somebody is appending a
+card to in order to repair.
+
+An ordinary `generating` append pays nothing for it — the terminal-status read is taken only when the
+revision flag is set.
+
+### What this does NOT change
+
+- **`approved` and `declined` stay FROZEN**, through the same `assertPlanProposalsEditable` the
+  correction doors use — a DENY of the terminal states, not an ALLOW of two, so a fifth `PlanStatus`
+  member is still refused by default. No second status predicate ships.
+- **No re-open, no `PlanStatus` member, no migration.** The plan is `planned` before, during and
+  after a revision append, exactly as D1 says of a revision.
+- **The append's ref check is untouched on the new path.** `assertTempRefsResolvable`, the
+  self-consistency gate, the duplicate-target check and the re-parent gate all run exactly as they do
+  on a `generating` append; the resolvable set for a `planItem:` ref is still the plan's
+  already-persisted `add`s, which for a revision simply includes everything the authoring pass wrote.
+  A ref naming nothing is still refused AT THE CALL, leaving the plan byte-identical.
+- **No lease.** The MCP append is ONE transaction, so approve either sees it whole or does not see
+  it — the same reasoning that leaves the correction doors unleased (D2's own argument, and
+  `revisionStoryGate.test.ts` block 5 asserts it for those). Gating it would take a capability away
+  from a surface for a race it cannot lose.
+- **`CLI_TOKEN_GRANT` is NOT widened.** `add_plan_items` asserts `ai:view_plan` and the grant does not
+  carry it, so a sandboxed run still cannot author, correct, revise or append. Asserted from the
+  constant, so a later widening fails a test.
+- **No UI.** MOTIR-3084's removal of the proposal edit modal stands.
+- **Nothing about what approve MATERIALIZES**, the resolver, or `PlanItem`'s shape.
+
+### The residual, named rather than discovered
+
+An append landing between `approvePlan`'s pre-transaction pin snapshot and its transaction is
+D4's residual MCP-door case, unchanged in kind: a proposal whose pin ARRIVED in that window is caught
+by `assertRepoPinsUnmoved` (`before` is absent, `after` is a pin, and the approve refuses with
+nothing materialized); an UNPINNED one materializes with the rest. That is the same window a
+correction has had since AMENDMENT 8, it costs the reviewer a card they had not read rather than a
+card pinned wrongly, and the trail row is what tells them. **It is also the whole trade this
+amendment makes:** the alternative is not "the reviewer reads only what they started with" — it is a
+second plan they must decline by hand, which is two surfaces to read instead of one.
+
+### The corpus statement this falsifies
+
+`motir-meta` `prompts/_shared.md` states _"`final: true` on the LAST batch → … Appending after that
+is refused."_ Under this amendment that is false for a declared revision. **Nothing in `motir-meta`
+changes in this card's pull request** — one subtask is one repo — and the sweep is filed as its own
+sibling, MOTIR-4154, `blocked_by` this card.
