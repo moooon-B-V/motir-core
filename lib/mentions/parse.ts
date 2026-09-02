@@ -12,8 +12,16 @@
  * anything up to the closing bracket (names contain spaces/diacritics); the id
  * is the cuid character set. Defined with `/g` for `matchAll` (which clones
  * the regex per call, so the shared constant carries no lastIndex state).
+ *
+ * ⚠️ THE NAME CLASS EXCLUDES `[` AS WELL AS `]` (MOTIR-4202). With `[^\]]*`
+ * alone, a body of unclosed openers — `[@[@[@…` — made every `matchAll` start
+ * position scan to the end of the string before failing at `\]`, which is
+ * O(n²) in the body (5.2 s at 80k characters; CodeQL `js/polynomial-redos`,
+ * alert #1). Stopping the name at the next `[` bounds each attempt at the next
+ * token start. No mention picker emits a `[` inside a display name, so the
+ * accepted set is unchanged for every real token.
  */
-export const MENTION_TOKEN_RE = /\[@([^\]]*)\]\(mention:([A-Za-z0-9_-]+)\)/g;
+export const MENTION_TOKEN_RE = /\[@([^\]\[]*)\]\(mention:([A-Za-z0-9_-]+)\)/g;
 
 /**
  * Extract the mentioned user ids from a Markdown body, DEDUPED in first-seen
