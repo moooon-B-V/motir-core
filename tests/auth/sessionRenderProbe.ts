@@ -28,19 +28,38 @@ import { Writable } from 'node:stream';
  * `getSession()` reads `next/headers`, which throws outside a Next request
  * scope. Rather than reconstruct Next's internal async-storage stack — a
  * private shape that would rot on the next upgrade — swap the module for the
- * one thing the code under test asks of it: a `Headers`. This is the only
- * substitution in the harness; `@/lib/auth` and React are the real ones.
+ * one thing the code under test asks of it: a `Headers`.
+ *
+ * ⚠️ THERE IS A SECOND SUBSTITUTION NOW, AND IT IS A DIFFERENT KIND OF THING
+ * (MOTIR-3909). `server-only` is a build-time MARKER: Next resolves it to a
+ * no-op on the server and to a throw in a client bundle, and it has no runtime
+ * behaviour to stand in for. Plain Node cannot resolve it at all — it is in
+ * neither `package.json` nor `node_modules`, and the three Vitest configs each
+ * alias it to `tests/stubs/server-only.ts` for exactly this reason. This
+ * harness is the FOURTH environment that loads application code outside Vite
+ * and it had no such alias, so the first server-only module to enter the graph
+ * took the whole probe down with `Cannot find module 'server-only'` —
+ * `lib/legal/documents.ts`, reached through `legalAcceptanceService`, on the
+ * day it stopped reading `content/legal/` and started reading configuration.
+ * Stubbing it RESTORES the environment rather than replacing anything under
+ * test, which is why it does not weaken the claim below.
+ *
+ * `@/lib/auth` and React are still the real ones, and that is the claim that
+ * matters: nothing that participates in the MEASUREMENT is substituted.
  */
 const REQUEST_HEADERS = new Headers({ cookie: 'better-auth.session_token=probe-token' });
 const ANONYMOUS_HEADERS = new Headers();
 
 type Loader = (request: string, ...rest: unknown[]) => unknown;
 
-function installHeadersStub(headers: Headers): void {
+function installModuleStubs(headers: Headers): void {
   const moduleInternals = Module as unknown as { _load: Loader };
   const load = moduleInternals._load;
-  moduleInternals._load = function loadWithHeadersStub(request: string, ...rest: unknown[]) {
+  moduleInternals._load = function loadWithStubs(request: string, ...rest: unknown[]) {
     if (request === 'next/headers') return { headers: async () => headers };
+    // The marker, not a module: an empty object is what Next resolves it to on
+    // the server, and every consumer imports it for its side effect only.
+    if (request === 'server-only') return {};
     return load.call(this, request, ...rest);
   };
 }
@@ -79,7 +98,7 @@ function emit(result: Record<string, unknown>): void {
  * of one.
  */
 async function countSessionLookups(mode: 'memoized' | 'direct'): Promise<void> {
-  installHeadersStub(REQUEST_HEADERS);
+  installModuleStubs(REQUEST_HEADERS);
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');
@@ -128,7 +147,7 @@ async function countSessionLookups(mode: 'memoized' | 'direct'): Promise<void> {
  * actually unreachable.
  */
 async function probeAnonymous(mode: 'anonymous' | 'db-control'): Promise<void> {
-  installHeadersStub(ANONYMOUS_HEADERS);
+  installModuleStubs(ANONYMOUS_HEADERS);
 
   try {
     if (mode === 'anonymous') {
