@@ -67,20 +67,42 @@ describe('proxy config.matcher', () => {
     expect(missing).toEqual([]);
   });
 
-  it('lists nothing the signed-in route groups do not serve, except the moved public surfaces', async () => {
+  it('lists nothing the signed-in route groups do not serve, except the two deliberate classes', async () => {
     // The other direction of the same rule. An entry for a path no group serves
     // is either a segment that has since been deleted or a typo, and both make
-    // the list above look more complete than it is. The ONE deliberate class of
-    // extra entry is the moved public surfaces (MOTIR-3884) — `/`, `/explore`,
-    // `/docs`, `/legal`, `/p` — which the proxy 308s onto motir.co.
+    // the list above look more complete than it is. TWO classes of extra entry
+    // are deliberate, and each is enumerated here so that adding a third is a
+    // decision somebody writes down rather than a silent widening:
+    //
+    //   1. The moved public SURFACES (MOTIR-3884) — `/`, `/explore`, `/docs`,
+    //      `/legal`, `/p` — which the proxy 308s onto motir.co.
+    //   2. The public read API (MOTIR-4114) — `/api/public/*`, matched so the
+    //      proxy can answer the cross-origin preflight and attach the CORS
+    //      headers `motir.co`'s browser-side fetches need. It is matched for
+    //      THAT ONLY: `proxy()` answers it and returns before any of the page
+    //      logic, so no `/api/*` path takes the session bounce.
     const { config } = await import('@/proxy');
 
     const PUBLIC_REDIRECT_SEGMENTS = ['', 'explore', 'docs', 'legal', 'p'];
+    const CORS_ONLY_SEGMENTS = ['api'];
     expect(
       strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher).filter(
-        (segment) => !PUBLIC_REDIRECT_SEGMENTS.includes(segment),
+        (segment) =>
+          !PUBLIC_REDIRECT_SEGMENTS.includes(segment) && !CORS_ONLY_SEGMENTS.includes(segment),
       ),
     ).toEqual([]);
+  });
+
+  it('matches ONLY /api/public under /api — the bounce must not reach another API path', async () => {
+    // The hazard the entry above creates, closed where it is created. Every
+    // other `/api/*` route answers its own callers — the CLI, the MCP surface,
+    // the webhooks — and a matcher entry of `/api/:path*` would put the
+    // signed-in page bounce in front of all of them, turning a 401 that a client
+    // can read into a 307 to a sign-in page that it cannot.
+    const { config } = await import('@/proxy');
+
+    const apiEntries = config.matcher.filter((entry) => entry.startsWith('/api'));
+    expect(apiEntries).toEqual(['/api/public/:path*']);
   });
 
   it('excludes /admin — the 404-not-403 posture, `platform-staff-auth.md` §2', async () => {

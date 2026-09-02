@@ -290,7 +290,7 @@ as part of MOTIR-3910's sweep, not here.
 | **MOTIR-3946** (the versioned contract)      | **BOUND by §3.** It must decide where the contract is published, and it must put the drift guard in `motir-core`'s CI rather than the consumer's.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **MOTIR-3881** (the origin split)            | **UNCHANGED in substance.** §2 is why one variable can no longer answer both questions. Its fallback-to-the-application-origin arm is what makes the split deployable before anything moves.                                                                                                                                                                                                                                                                                                                                                                             |
 | **MOTIR-3932** (the rendering move)          | **BOUND by §3 and §8.** Every read goes through the contract; `/docs` may not be a copied spec.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **MOTIR-3877** (`/p/*`)                      | **BOUND by §4.** The host-only cookie stops being a property to preserve and becomes an assertion it owns.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **MOTIR-3877** (`/p/*`)                      | **BOUND by §4 and by [AMENDMENT 4](#amendment-4--what-becomes-of-ps-session-aware-affordances-once-the-page-is-cross-origin-from-the-session-three-mechanisms-and-no-credential-crosses-motir-4108-2026-09-02).** The host-only cookie stops being a property to preserve and becomes an assertion it owns — and AMENDMENT 4 decides, per affordance, what the page does once no credential can cross to it.                                                                                                                                                             |
 | **MOTIR-3908** (the cloud gate)              | **BOUND by §5.** The gate is the capability, including `app/api/public/*` and the publish affordance — not the pages.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **MOTIR-3909** (`/legal`)                    | **⚠️ SUPERSEDED 2026-09-01 — was UNCHANGED, and is now BOUND by [AMENDMENT 2](#amendment-2--motir-core-keeps-the-legal-mechanism-and-loses-the-content-a-configured-document-manifest-an-absent-unconfigured-surface-and-a-subprocessor-seam-that-fails-on-divergence-motir-4004-2026-09-01).** §2 records why `/legal` MOVES rather than being gated, and that is still right; what this row missed is that `content/legal/*.md` is also an INPUT to the re-consent gate, so the move is a change of SOURCE and not a deletion. AMENDMENT 2 §A carries the measurement. |
 | **MOTIR-3910** (redirects and registrations) | **NARROWED, materially.** `motir.co`'s address records already point at the `motir-marketing` Fly app, so **there is no apex repoint and no new certificate.** What remains is the 301s, the external registrations and a live smoke.                                                                                                                                                                                                                                                                                                                                    |
@@ -1035,3 +1035,261 @@ staleness, and goes red when it cannot speak.
 - `GET https://app.motir.co/api/legal/egress-manifest` → `200`,
   `version: 1`, 21 vendors, 2026-09-02 — the artifact this seam consumes,
   obtained as its consumer
+
+---
+
+## AMENDMENT 4 — what becomes of `/p/*`'s session-aware affordances once the page is cross-origin from the session: three mechanisms, and no credential crosses (MOTIR-4108, 2026-09-02)
+
+§9 lists four things this record deliberately does not decide. **This was not one
+of them, and it was not decided either** — it was simply open, which is the worse
+of the two states, because a question named as undecided has a trigger and an
+owner and an open question has neither. MOTIR-3877's own body says the ADR
+resolves it. It does not, and this amendment is that resolution.
+
+> **⚠️ THIS IS AMENDMENT 4, AND THE CARD THAT ORDERED IT SAID AMENDMENT 2.**
+> MOTIR-4108 was authored on 2026-09-01 against a file whose last amendment was
+> AMENDMENT 1. **The ordinal moved TWICE while this one was being written.**
+> MOTIR-4004's AMENDMENT 2 merged at `8d80ac8db`, between the authoring and the
+> run; MOTIR-4139's AMENDMENT 3 merged at `b615991c4`, while this section was
+> being drafted, and was found by the `git merge origin/main` before the pull
+> request opened. The substance is discharged here in full either way, and the
+> card is amended on the record. Any sibling citing _"AMENDMENT 2"_ or
+> _"AMENDMENT 3"_ for the affordance table means **this** section.
+>
+> **⚠️ AN ADR ORDINAL IS A SERIALIZED RESOURCE AND NOTHING SAYS SO.**
+> `lib/api/public/contractVersion.ts` states exactly this hazard for the contract
+> MINOR — _"every in-flight additive pull request claims the next one. Read this
+> file on `origin/main` before merging and renumber if a sibling has taken it"_ —
+> and the same is true of an amendment heading, with no note anywhere to say it.
+> Two independent passes took `3` on one afternoon. **Merge `origin/main` and
+> re-read the last heading before you open the pull request**; the renumber is
+> cheap there and expensive once a dozen cross-references point at it.
+
+### §A — The measurement this amendment is built on, and the two errors it corrects
+
+Read on `motir-core` `origin/main` `8d80ac8db`, 2026-09-02, by walking every
+`route.ts` under `app/api/public` and `app/api/public-requests` and classifying
+its session read and its capability gate:
+
+```
+for f in $(find app/api/public app/api/public-requests -name route.ts); do
+  grep -l 'requireCompliantSession()' $f        # requires a session
+  grep -l "code: 'UNAUTHENTICATED'" $f          # requires a session, by hand
+  grep -l 'publicSurfaceUnavailable()' $f       # carries the capability gate
+done
+```
+
+| class                                      | count | routes                                                                                                                                                          |
+| ------------------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| no session read at all                     | **2** | `public/explore`, `public/categories`                                                                                                                           |
+| optional `actorUserId ?? null` — anonymous | **6** | `public/p/[identifier]`, `…/items`, `…/tree`, `…/roadmap`, `…/changelog`, `…/subscribe`                                                                         |
+| **REQUIRES a session**                     | **5** | `public/p/[identifier]/follow`, `public/projects/[projectId]/requests`, `…/requests/duplicates`, `public-requests/[id]/upvote`, `public-requests/[id]/comments` |
+| **carries no `MOTIR_CLOUD` gate**          | **2** | `public-requests/[id]/upvote`, `public-requests/[id]/comments`                                                                                                  |
+
+**Two things the plan believed are false, and both are corrected here rather
+than absorbed.**
+
+1. **_"ONE of ten is session-gated (`follow`, a write)"_ — MOTIR-3877's re-scope
+   table, and MOTIR-4108's own affordance table after it. It is FIVE of
+   thirteen.** The count was taken over `app/api/public/p/*` and generalised to
+   the public write surface, which also contains the request intake and, in a
+   sibling directory, the two request writes.
+2. **_"submit a feature request … already anonymous"_ — it is not.**
+   `app/api/public/projects/[projectId]/requests/route.ts` calls
+   `requireCompliantSession()` and its own comment says so in terms: _"A
+   LOGGED-OUT caller is rejected 401 (sign-in-to-act — reading a public project
+   is anonymous, but every WRITE needs an account)."_ Its duplicate pre-check
+   carries the same gate. Reading a public project is anonymous; **posting to
+   one has never been.**
+
+The second error propagated: MOTIR-3877's verification recipe step 4 and
+MOTIR-4122's acceptance criteria both ask for an anonymous submission. Both are
+amended on the record by this pass. Filed as **MOTIR-4166**.
+
+### §B — The mechanical constraint that decides most of the table, and it is not the one everybody names
+
+§4 forbids widening the session cookie's `Domain`. That is the constraint this
+record is famous for, and **it is not the binding one here.** Read on
+`origin/main` at `lib/auth/index.ts:228`:
+
+```ts
+advanced: {
+  cookies: {
+    session_token: {
+      attributes: { httpOnly: true, sameSite: 'lax', secure: shouldUseSecureCookies() },
+    },
+  },
+},
+```
+
+**`sameSite: 'lax'` already forecloses every credentialed cross-origin write,
+independently of `Domain`.** A `fetch` from `motir.co` to `app.motir.co` with
+`credentials: 'include'` sends no session cookie under `lax`, and a cross-site
+form POST does not either. So the option _"call the existing session-gated route
+from the public page"_ is not a thing this amendment declines to do on principle
+— **it is a thing that does not work**, and making it work would mean
+`sameSite: 'none'`, which is a second widening §4 never had to name because the
+first one covered it.
+
+**So the normative sentence is stronger than §4's, and it is this: no credential
+of any kind crosses to `motir.co`.** Not by `Domain`, not by `SameSite`, not by
+a token minted for the public origin, not by `Access-Control-Allow-Credentials`.
+Every row below is a mechanism that holds without one, and no row requires the
+cookie configuration above to change by one attribute.
+
+### §C — The rung-1 reading, recorded rather than remembered
+
+| mirror           | what was observed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | source                                                                                                                                           |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Canny**        | A visitor must be identified before they can post, vote or comment. Absent SSO they make a **free Canny account** — the portal carries its own identity. With SSO, Canny sends them to the customer's own site with `redirect` and `companyID`; the customer authenticates them and redirects to `https://canny.io/api/redirects/sso` with `ssoToken`, `companyID` and `redirect`; the visitor lands back at the `redirect` URL. **This is the hand-off-and-return shape, with the return destination as an explicit parameter.** | https://help.canny.io/en/articles/1961021-setting-up-a-single-sign-on-sso-redirect · https://help.canny.io/en/articles/489272-single-sign-on-sso |
+| **Statuspage**   | Anyone visiting a public status page subscribes by clicking _Subscribe to updates_ and entering an email, phone number or webhook URL. **No account is created and there is no login on the public page.** RSS subscribers are not counted at all.                                                                                                                                                                                                                                                                                | https://support.atlassian.com/statuspage/docs/enable-subscribers/ · https://support.atlassian.com/statuspage/docs/how-are-subscribers-counted/   |
+| **Notion**       | The published-site help page documents exactly two things a web visitor does: **view** (_"Anyone on the web can view it"_, including toggling database views and opening nested pages) and, if the publisher enables it, **`Duplicate as template`**. It documents **no** commenting or editing affordance for a site visitor. **Recorded honestly: the article does not state that anonymous commenting is refused — it states an affordance set that does not contain it.**                                                     | https://www.notion.com/help/public-pages-and-web-publishing                                                                                      |
+| **GitHub Pages** | Static, and on a separate registrable domain (`github.io`, Public Suffix List) — already §4's evidence, unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                | GitHub, _"Yummy cookies across domains"_ (§4 Sources)                                                                                            |
+
+**Nothing in this set puts a write that needs the application's identity on the
+public origin.** The two shapes on offer are _carry your own identity there_
+(Canny without SSO) and _send them to the application and back_ (Canny with
+SSO). This amendment takes the second, and §G says why not the first.
+
+### §D — The decision: three mechanisms, and the affordance table
+
+Every affordance on `motir.co/p/*` is exactly one of:
+
+- **ANONYMOUS-DIRECT** — the browser on `motir.co` calls `app.motir.co` directly.
+  The route is anonymous, so **CORS allow-lists exactly `publicSiteOrigin()` and
+  `Access-Control-Allow-Credentials` is NOT set.** No credential can ride the
+  request, which is what makes the allow-list a convenience rather than a trust
+  boundary.
+- **HAND-OFF** — the control is a **link**, not a `fetch`. It sends the visitor
+  to `app.motir.co`, the act is performed there under the application's own
+  session and CSRF posture, and a **validated** `next` returns them to the page
+  they left. Canny's `redirect` parameter is the shape; `proxy.ts`'s
+  `CURRENT_PATH_HEADER` docstring is the warning that goes with it.
+- **ABSENT** — the affordance does not appear on `motir.co` at all. It lives in
+  the application, where the person who needs it already signs in.
+
+| #   | affordance                                   | mechanism            | what the visitor sees on `motir.co`                                                                                                                                                                                                       | mirror                                                                                      |
+| --- | -------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | account menu / sign-in dialog in the top bar | **ABSENT**           | No account menu and no modal. One plain **`Sign in`** link in the chrome, to `app.motir.co`, identical for every visitor. The page cannot know whether anyone is signed in, and does not pretend to.                                      | **Notion** — a published page's chrome is the publisher's, not the reader's account surface |
+| 2   | **follow** (`POST`/`DELETE …/p/{id}/follow`) | **HAND-OFF**         | A `Follow` link to `app.motir.co`, carrying the project and a `next` back to this page. The application signs the visitor in if needed, performs the follow, returns them. Comes back showing the new state.                              | **Canny SSO redirect**                                                                      |
+| 3   | **subscribe** (`POST …/p/{id}/subscribe`)    | **ANONYMOUS-DIRECT** | An email field and a button, on the page, working with no account. Answers 202 whatever happened (the route's own non-oracle rule, §7 of the follow ADR).                                                                                 | **Statuspage**                                                                              |
+| 4   | **roadmap vote** and **request upvote**      | **HAND-OFF**         | A vote control that is a link. The count is public and rendered anonymously; casting one leaves and returns.                                                                                                                              | **Canny SSO redirect**                                                                      |
+| 5   | **request comment**                          | **HAND-OFF**         | The thread renders in full, anonymously. The composer is a link that leaves and returns to the request.                                                                                                                                   | **Canny SSO redirect**                                                                      |
+| 6   | **submit a feature request**                 | **HAND-OFF**         | `Request a feature` is a link, not a form on this host — **because the intake has always required an account** (§A error 2). The duplicate-suggestion step happens in the application, where its pre-check is already gated the same way. | **Canny SSO redirect**                                                                      |
+| 7   | **in-place overview editing**                | **ABSENT**           | Nothing. No `Edit` affordance, no `canManage` on the public projection. A manager edits the public overview in the application, and this page is its output.                                                                              | **Notion** — you edit in Notion; the published page is what it produces                     |
+| 8   | **viewer-awareness on the reads**            | **ALWAYS ANONYMOUS** | `actorUserId` is structurally `null` for every read `motir.co` makes. §E states what that costs and what it buys.                                                                                                                         | **Statuspage / GitHub Pages** — one page, the same for everyone                             |
+
+**Rows 1 and 7 are the two the mirrors disagree about and the reasoning is not
+the same.** Row 1 is absent because a cross-origin page cannot compute the state
+the menu would display. Row 7 is absent because it _could_ have been a hand-off
+and should not be: an overview edit is a long-form authoring act with a preview
+and a save, and routing that through a link-out-and-return is worse than putting
+it where the author already works. **Absence here is a positive choice, and it
+deletes an entire write path from the public origin.**
+
+### §E — Row 8, stated as a cost and a gain
+
+**The cost.** `actorUserId: null` is now the only case `motir.co` can produce, so:
+
+- **The epic-privacy exclusion always applies at its most conservative.** A
+  member of the project reading `/p/<identifier>` sees exactly the public
+  projection a stranger sees. Today, on `app.motir.co`, they see more.
+- **_"You follow this"_ cannot render.** Row 2's control is stateless: it always
+  reads `Follow`, because the page cannot know. The state exists, and it is
+  visible in the application.
+- **Neither is recoverable by a token.** Any mechanism that told `motir.co` who
+  is reading would be a credential on the public origin, which §B forbids
+  outright.
+
+**The gain, and it is not a consolation.** Every `/p/*` response is identical for
+every visitor, so the whole surface is **cacheable at the edge without a
+`Vary: Cookie`**. §8 cost 1 — _"a network hop replaces a Prisma read"_ — is
+substantially repaid by exactly this property, and it is repaid only because
+row 8 went this way.
+
+### §F — What `motir-core` owes, by row (MOTIR-4114's specification)
+
+- **Rows 2, 4, 5, 6 (HAND-OFF)** — one application-side act entry point that
+  takes the intent, its subject and a `next`, requires a session (sending an
+  unauthenticated visitor to sign-in with itself as the return), performs or
+  presents the act, and then redirects to `next`. **`next` is validated against
+  `publicSiteOrigin()` and falls back to a fixed safe destination otherwise** —
+  never reflected. `proxy.ts`'s `CURRENT_PATH_HEADER` docstring already states
+  this obligation for the one existing consumer; this is the second.
+- **Row 3 (ANONYMOUS-DIRECT)** — CORS on the anonymous public routes the browser
+  calls cross-origin, allow-listing `publicSiteOrigin()` only, **without**
+  `Access-Control-Allow-Credentials`, and with the preflight answered.
+- **Row 7 (ABSENT)** — `publicProjectsService.setPublicOverview` has had **no
+  door at all** since MOTIR-3951 deleted the Server Action. It gets one in the
+  application, authorised by the same `canManage` the service already computes.
+- **The two ungated routes.** `app/api/public-requests/[id]/{upvote,comments}`
+  stay **outside** `app/api/public/*` — after this amendment nothing on
+  `motir.co` calls them, and they are application routes serving the
+  application's own act surface, not entries in the public contract. **But they
+  gain the `MOTIR_CLOUD` gate**, which they have never carried: public projects
+  are a cloud capability (§5), and a self-hosted single-tenant build answers
+  these two today. The reason for staying outside goes in each route's own
+  comment, so the next reader meets a decision rather than an omission.
+
+### §G — Rejected alternatives
+
+- **A per-tenant or portal identity on `motir.co`** (Canny without SSO). It is a
+  second identity system, a second set of accounts to support and secure, and it
+  puts credentials back on the origin that holds tenant content — the exact
+  thing §4 spent its length avoiding. Revisited only if MOTIR-3878 moves the
+  public surface to a separate registrable domain, which is §4's reversal
+  condition.
+- **`sameSite: 'none'` on the session cookie**, so the public page could call
+  the gated routes with credentials. This is a widening in effect and is
+  rejected on §4's own grounds; §B is why it is the option that first suggests
+  itself.
+- **A short-lived token minted for the public origin.** It is a credential on
+  `motir.co` however short its life, and an XSS on that origin — the risk §4's
+  deviation is about — reaches it.
+- **Forwarding row 3's write server-side through `motir-marketing`** instead of
+  CORS. It collapses every visitor to one source address, and
+  `publicFollowGuard` rate-limits per IP: the per-visitor ceiling would become a
+  global one. Trusting a forwarded-for header from the marketing app to fix that
+  is a trust relationship this arrangement does not need to create.
+
+### §H — What this amendment changes about §7 and §9
+
+- **§7's `MOTIR-3877` row** read _"BOUND by §4"_. It is now bound by §4 **and by
+  this amendment**, which is where the affordances are decided; the table above
+  is the specification MOTIR-4113 draws and MOTIR-4114 builds.
+- **§9 gains nothing and loses nothing.** The affordance question was never
+  listed there — that is §A's point — so there is no entry to strike. §9's
+  MOTIR-3878 row is where §G's rejected portal identity is revisited, and it
+  already says so.
+
+### §I — What this amendment deliberately does NOT decide
+
+- **The visual treatment of a hand-off** — what the link looks like, what the
+  visitor sees on return, whether there is an interstitial. **MOTIR-4113**, the
+  design card, which this amendment blocks.
+- **The exact shape of the act entry point** — one route with an `intent`
+  parameter, or one per act. **MOTIR-4114**, within §F's constraints.
+- **Whether a self-hoster ever gets public projects.** §5 is unchanged; the two
+  newly-gated routes join the capability, they do not re-open it.
+- **Per-tenant addressing and a separate registrable domain.** **MOTIR-3878**,
+  with §4's reversal condition and §G's first bullet as inputs.
+
+### Sources
+
+- `motir-core` `origin/main` `8d80ac8db`, 2026-09-02 — `app/api/public/**`
+  (eleven route files), `app/api/public-requests/[id]/{upvote,comments}/route.ts`,
+  `lib/auth/index.ts:228` (the cookie attributes), `lib/publicProjects/urls.ts`
+  (`publicSiteOrigin`), `lib/publicProjects/cloudGate.ts`, `proxy.ts`
+  (`CURRENT_PATH_HEADER`, `PUBLIC_REDIRECT_SEGMENTS`),
+  `lib/services/publicProjectsService.ts` (`setPublicOverview`, `getOverview`'s
+  `canManage`), `tests/api/public/cloud-gate-totality.test.ts` (its walk is
+  `app/api/public` only)
+- Canny — https://help.canny.io/en/articles/1961021-setting-up-a-single-sign-on-sso-redirect
+  (`redirect` / `companyID` out, `ssoToken` / `companyID` / `redirect` back to
+  `https://canny.io/api/redirects/sso`) ·
+  https://help.canny.io/en/articles/489272-single-sign-on-sso (identification is
+  required before posting, voting or commenting)
+- Statuspage — https://support.atlassian.com/statuspage/docs/enable-subscribers/ ·
+  https://support.atlassian.com/statuspage/docs/how-are-subscribers-counted/
+- Notion — https://www.notion.com/help/public-pages-and-web-publishing
+- MOTIR-4166 — the planning bug for §A's two measurement errors

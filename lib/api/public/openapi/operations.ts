@@ -12,7 +12,13 @@ import {
   publicProjectOverviewSchema,
   publicRequestBodySchema,
   publicRequestResultSchema,
+  publicAtomDocumentSchema,
+  publicBoardSchema,
+  publicProjectIndexPageSchema,
+  publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
+  publicRoadmapSchema,
+  publicWorkItemDetailSchema,
   publicSubscribeBodySchema,
   publicTreeLevelSchema,
   publicWorkItemPageSchema,
@@ -210,36 +216,204 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
   },
   {
     method: 'GET',
-    path: '/api/public/p/{identifier}/roadmap',
-    operationId: 'getPublicProjectRoadmapColumn',
-    summary: 'The next page of ONE roadmap column',
+    path: '/api/public/projects',
+    operationId: 'listPublicProjectIndex',
+    summary: 'The crawl ENUMERATION of every public project',
     description:
-      'The per-column "load more". Both parameters are REQUIRED and refused separately: an ' +
-      'unknown bucket is `INVALID_ROADMAP_BUCKET`, a missing cursor is `MISSING_ROADMAP_CURSOR`, ' +
-      'and a malformed one is refused by the decoder — a pager that silently restarted at the ' +
-      'top would be far harder to notice than an error.',
+      'Identifier and last-updated for every public project, across every workspace, keyset-paged ' +
+      'in a STABLE order. It is not `listPublicProjects` (`/api/public/explore`): that one is the ' +
+      'human directory — ranked, with names, taglines, tags and demand stats, paged in ' +
+      'screenfuls. This one is the machine list a sitemap is built from, and its order is fixed ' +
+      'so that a walk over a mutating set cannot skip or duplicate a project. `updatedAt` is the ' +
+      '`<lastmod>`, not the sort key. Anonymous, and no session could change the answer: every ' +
+      "row is public by the read's own filter. A cursor past the tail is an empty page, not an " +
+      'error (MOTIR-4111).',
+    parameters: [
+      {
+        name: 'cursor',
+        in: 'query',
+        required: false,
+        description: "A previous page's `nextCursor`. Opaque — do not construct or parse one.",
+        schema: z.string(),
+      },
+    ],
+    response: publicProjectIndexPageSchema,
+    errors: [],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/changelog.xml',
+    operationId: 'getPublicProjectChangelogFeed',
+    summary: "A project's changelog as an ATOM feed",
+    description:
+      'The same shipped work `listPublicProjectChangelog` returns as JSON, serialised as an Atom ' +
+      '1.0 document — the anonymous follower tier, and the only one that stores nothing about the ' +
+      'person using it. ⚠️ THE ONLY OPERATION ON THIS SURFACE THAT DOES NOT ANSWER JSON: the ' +
+      "media type is `application/atom+xml; charset=utf-8` and the body's schema is a STRING, " +
+      'because there is no JSON structure to describe and describing one would tell a generated ' +
+      'client to parse XML as JSON. Cached five minutes with `stale-while-revalidate`. No session ' +
+      'is read — a feed is fetched by a daemon with no cookies, which is also what makes the ' +
+      'response cacheable. The extension is `.xml` and the payload is Atom; a file extension has ' +
+      'never been a media type, and there is deliberately no `.atom` alias, because a feed URL is ' +
+      'copied into readers and outlives every redirect (MOTIR-4111).',
+    parameters: [identifierParam],
+    response: publicAtomDocumentSchema,
+    responseMediaType: 'application/atom+xml',
+    errors: [
+      {
+        status: 404,
+        description:
+          'No PUBLIC project carries this key. The ERROR body is JSON `{ code }` even though the ' +
+          'success body is XML — one error shape across the whole surface.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/items/{key}',
+    operationId: 'getPublicProjectWorkItem',
+    summary: 'ONE work item, as the public surface shows it',
+    description:
+      'The detail behind `/p/<identifier>/items/<key>` — the public projection plus the body, ' +
+      'the resolved status label, the immediate parent, and the FIRST page of public-safe direct ' +
+      'children. `children` is a page, not the child set: read `childrenHasMore` and continue ' +
+      'through the tree operation. Anonymous; a session only applies member-visibility. FIVE ' +
+      'conditions answer the same 404 with no existence leak — an unknown key, an item in ' +
+      'another project, an archived item, a TRIAGE item (whose public surface is the request ' +
+      "detail, not this one), and a private epic's hidden descendant.",
+    parameters: [
+      identifierParam,
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description:
+          "The work item's FULL identifier — `ACME-42`, not the bare number. The segment is " +
+          'named `key` because that is the address the public URL has always used; the `key` ' +
+          'FIELD in the response is the bare number, and the two are not the same thing.',
+        schema: z.string(),
+      },
+    ],
+    response: publicWorkItemDetailSchema,
+    errors: [
+      {
+        status: 404,
+        description:
+          '`PROJECT_NOT_FOUND` when no PUBLIC project carries this key; ' +
+          '`PUBLIC_WORK_ITEM_NOT_FOUND` when the project is public and the item is not reachable.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/requests/{requestKey}',
+    operationId: 'getPublicProjectRequest',
+    summary: 'ONE feature request, with its public thread and its vote count',
+    description:
+      'The detail behind `/p/<identifier>/requests/<requestKey>` — the request body, the upvote ' +
+      'tally, and the PUBLIC comment thread oldest first. Anonymous; `voted` is false without a ' +
+      'session, which is the only state a cross-origin consumer can produce ' +
+      '(`public-surface-hosts.md` AMENDMENT 4 row 8). ⚠️ NOTE THE IDENTIFIER: this READ is keyed ' +
+      "by the project key and the request's WORK-ITEM identifier, because that is the address in " +
+      'a shared link; the WRITES beside it (`submitPublicRequest`, upvote, comment) are keyed by ' +
+      'the global project id and the work-item id, because their caller has just read the ' +
+      'resource and holds them.',
+    parameters: [
+      identifierParam,
+      {
+        name: 'requestKey',
+        in: 'path',
+        required: true,
+        description: "The request's FULL work-item identifier — `ACME-42`, not the bare number.",
+        schema: z.string(),
+      },
+    ],
+    response: publicRequestDetailSchema,
+    errors: [
+      {
+        status: 404,
+        description:
+          '`PROJECT_NOT_FOUND` when no PUBLIC project carries this key; ' +
+          '`PUBLIC_REQUEST_NOT_FOUND` when the request is missing, archived, in another ' +
+          'project, or hidden by the epic-privacy exclusion.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/board',
+    operationId: 'getPublicProjectBoard',
+    summary: "The public project's BOARD tab",
+    description:
+      "The project's default board — its columns, the workflow statuses mapped into each, the " +
+      "public-safe cards, and each column's full count above the loaded set. BOUNDED rather than " +
+      'paged: the read stops at `cap` and reports `truncated`, because a board is a whole-shape ' +
+      'read and the items list beside it is the paged surface. A project with no default board ' +
+      'answers 200 with an empty board, not 404 — the project exists. Anonymous: a session, when ' +
+      "present, only applies member-visibility (a non-member never receives a private epic's " +
+      'descendants and sees that epic marked `childrenHidden`); it never authorises.',
+    parameters: [identifierParam],
+    response: publicBoardSchema,
+    errors: [
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/roadmap',
+    // ⚠️ THE ID DOES NOT CHANGE, THOUGH THE OPERATION GREW. `…RoadmapColumn` now
+    // describes only one of two arms and reads narrow — and an `operationId` is
+    // what a generated client names its METHOD after, so renaming it would break
+    // every consumer that generated one, which AMENDMENT 1 §D forbids without a
+    // new MAJOR. A slightly wrong name is the cheaper of the two, and this
+    // comment is where the next reader finds out it was a decision.
+    operationId: 'getPublicProjectRoadmapColumn',
+    summary: 'The roadmap tab, or the next page of ONE of its columns',
+    description:
+      'TWO arms on one path, chosen by the parameters. With NEITHER `bucket` nor `cursor` it ' +
+      'returns the whole tab — the four status-grouped columns in display order, each with its ' +
+      "total and its first page (`PublicRoadmap`). With BOTH it returns that column's next page " +
+      '(`PublicRoadmapColumnPage`) — the "load more". The arms are disjoint and the refusals are ' +
+      'unchanged: an unknown bucket is `INVALID_ROADMAP_BUCKET`, a bucket with no cursor is ' +
+      '`MISSING_ROADMAP_CURSOR`, and a malformed cursor is refused by the decoder — a pager that ' +
+      'silently restarted at the top would be far harder to notice than an error. So a request ' +
+      'that has an answer today keeps exactly that answer; only the both-absent case is new ' +
+      '(MOTIR-4109).',
     parameters: [
       identifierParam,
       {
         name: 'bucket',
         in: 'query',
-        required: true,
-        description: 'Which column: `submitted`, `planned`, `in_progress` or `done`.',
+        required: false,
+        description:
+          'Which column: `submitted`, `planned`, `in_progress` or `done`. Omit it — together ' +
+          'with `cursor` — for the whole tab.',
         schema: z.enum(['submitted', 'planned', 'in_progress', 'done']),
       },
       {
         name: 'cursor',
         in: 'query',
-        required: true,
-        description: "That column's `nextCursor` from the previous page.",
+        required: false,
+        description:
+          "That column's `nextCursor` from the previous page. Required WITH `bucket`; omit both " +
+          'for the whole tab.',
         schema: z.string(),
       },
     ],
-    response: publicRoadmapColumnPageSchema,
+    response: z
+      .union([publicRoadmapSchema, publicRoadmapColumnPageSchema])
+      .meta({ id: 'PublicRoadmapResponse' }),
     errors: [
       {
         status: 400,
-        description: 'An unknown bucket, a missing cursor, or a malformed one.',
+        description: 'An unknown bucket, a bucket with no cursor, or a malformed cursor.',
         schema: publicErrorSchema,
       },
       {

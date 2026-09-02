@@ -1313,6 +1313,32 @@ export default defineConfig({
         'lib/api/public/openapi/emit.ts',
         'app/api/openapi/public.json/route.ts',
         'app/api/public/p/[identifier]/route.ts',
+        // Story MOTIR-3877 · Subtask MOTIR-4120 — the reads and the act path
+        // this story added, joining the subject route above under the same rule.
+        //
+        // ⚠️ THEY WERE OUTSIDE THIS REPORT UNTIL THIS CARD MEASURED IT, and that
+        // is the finding rather than the fix: the entry above is a LITERAL path,
+        // so `…/p/[identifier]/route.ts` gates one file and its five new
+        // siblings inherited nothing. Every one of them shipped with route tests
+        // and none of them was under the 90 floor, which is exactly the state
+        // `tests/coverage-gate-globs.test.ts` exists to make visible — a gate
+        // that passes because it is measuring nothing.
+        //
+        // MEASURED FIRST, per this block's own rule, then pinned at the floor
+        // below.
+        'app/api/public/p/[identifier]/board/route.ts',
+        'app/api/public/p/[identifier]/roadmap/route.ts',
+        'app/api/public/p/[identifier]/items/[key]/route.ts',
+        'app/api/public/p/[identifier]/requests/[requestKey]/route.ts',
+        'app/api/public/p/[identifier]/changelog.xml/route.ts',
+        'app/api/public/projects/route.ts',
+        'app/api/projects/[key]/public-overview/route.ts',
+        'app/act/route.ts',
+        // The two modules the act path added. `returnTarget.ts` is the one that
+        // turns a value from another origin into a redirect, so it is the file
+        // on this list where a missed branch is a security branch.
+        'lib/publicProjects/returnTarget.ts',
+        'lib/publicProjects/cors.ts',
         // Story MOTIR-3908 · Subtask MOTIR-4037 — the PUBLIC-PROJECTS CAPABILITY
         // GATE. `isCloud()` is the cloud-vs-self-host predicate (MOTIR-4033) and
         // `publicSurfaceUnavailable()` is the one refusal every gated route
@@ -2352,6 +2378,47 @@ export default defineConfig({
         'lib/api/public/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/openapi/public.json/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/public/p/[identifier]/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3877 · Subtask MOTIR-4120 — the reads and the act path
+        // (the include block above carries the finding: they were outside this
+        // report entirely, because the sibling entry is a LITERAL path).
+        // MEASURED on this branch at 100/100/100 each, except `/act` (92.3
+        // branches) and the overview write (92.85), whose remaining arms are the
+        // capability gate's `false` side — driven in `cloud-gate.test.ts`, which
+        // is in a different run. Pinned at the floor, not at the measurement.
+        'app/api/public/p/[identifier]/board/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/public/p/[identifier]/roadmap/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/public/p/[identifier]/items/[key]/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/public/p/[identifier]/requests/[requestKey]/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/public/p/[identifier]/changelog.xml/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/public/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/projects/[key]/public-overview/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/act/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicProjects/returnTarget.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicProjects/cors.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-3908 · Subtask MOTIR-4037 — the capability gate (above).
         'lib/billing/availability.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/publicProjects/cloudGate.ts': { branches: 90, functions: 90, lines: 90 },

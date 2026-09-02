@@ -321,6 +321,38 @@ export const projectRepository = {
   },
 
   /**
+   * One PAGE of the same set {@link listPublic} returns — the crawl enumeration
+   * (MOTIR-4111), keyset-paginated on `id`.
+   *
+   * ⚠️ ORDERED BY `id`, NOT BY `updatedAt`, AND THAT IS THE WHOLE DESIGN. The
+   * consumer is a sitemap generator walking every page in sequence over a set
+   * that mutates while it walks. `updatedAt DESC` reshuffles under that walk: any
+   * project edited between page 1 and page 2 moves to the head, pushing a row the
+   * crawler has already passed onto a page it has not reached — so a project can
+   * be enumerated twice, or skipped entirely, and nothing reports it. `id` is a
+   * cuid: unique, immutable, and a deterministic TOTAL order, so a row's position
+   * in the walk cannot move. `updatedAt` is still RETURNED — it is the
+   * `<lastmod>` the sitemap writes — it just does not order the walk.
+   *
+   * Read-only cross-org path → the `db` singleton with the in-SQL
+   * `accessLevel = 'public'` filter, the same RLS-secondary posture the other
+   * anonymous public reads use (finding #26).
+   */
+  async listPublicIndexPage(options: {
+    take: number;
+    cursor?: string | undefined;
+  }): Promise<Array<Pick<Project, 'id' | 'identifier' | 'updatedAt'>>> {
+    const { take, cursor } = options;
+    return db.project.findMany({
+      where: { accessLevel: 'public', archivedAt: null },
+      select: { id: true, identifier: true, updatedAt: true },
+      orderBy: { id: 'asc' },
+      take,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
    * A RANKED page of the PROJECT SQUARE (Story 6.13 · Subtask 6.13.4) — the same
    * cross-org `public`, non-archived projects {@link listPublicDirectory}
    * returns, but ordered by one of the three demand ranks instead of creation

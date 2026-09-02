@@ -71,6 +71,25 @@ export interface PublicBoardColumnDto {
   totalCount: number;
 }
 
+/**
+ * One row of the public-project INDEX (MOTIR-4111) — the crawl enumeration
+ * `motir.co`'s sitemap is built from. Deliberately two fields: the identifier is
+ * the URL, `updatedAt` is the `<lastmod>`, and a sitemap needs nothing else. The
+ * rich human directory is `/api/public/explore`, which is a different read for a
+ * different reader.
+ */
+export interface PublicProjectIndexEntryDto {
+  identifier: string;
+  /** ISO 8601 — the sitemap's `<lastmod>`. */
+  updatedAt: string;
+}
+
+/** One page of the public-project index. `nextCursor` is null on the last page. */
+export interface PublicProjectIndexPageDto {
+  projects: PublicProjectIndexEntryDto[];
+  nextCursor: string | null;
+}
+
 /** The public board — columns of public-safe cards. Bounded (the at-scale cap). */
 export interface PublicBoardDto {
   boardId: string;
