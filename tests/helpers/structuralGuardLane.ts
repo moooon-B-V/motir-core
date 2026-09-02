@@ -90,6 +90,15 @@ export const STRUCTURAL_GUARD_SPECS = [
   // nothing, and imports nothing from `lib/` or `app/`, so it carries no
   // coverage out of the merged report.
   'tests/theme/shellViewportUnits.test.ts',
+  // ── tests/theme/ — the named `max-w-*` guard (MOTIR-4084) ─────────────────
+  // The same shape as `shellViewportUnits` two entries up, and for a defect of
+  // the same family: a Tailwind utility whose name says one thing and whose
+  // emitted value says another, because a `@theme` namespace shadows the scale
+  // the class is named after. It walks `app/` + `components/` + the design
+  // system's `src/` and reads every file with comments stripped. It opens no
+  // database, renders nothing, and imports only `tests/helpers/importGraph`, so
+  // it carries no coverage into the merged report.
+  'tests/theme/namedMaxWidthUtilities.test.ts',
   // ── tests/legal/ — the subprocessor-list guard (MOTIR-3631) ───────────────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
   // read against `content/legal/subprocessors.md`, `content/legal/model-providers.md`
