@@ -235,6 +235,83 @@ export const publicRoadmapColumnPageSchema = z
   .strict()
   .meta({ id: 'PublicRoadmapColumnPage' });
 
+/** One roadmap COLUMN as the tab first draws it: its total, its first page, its cursor. */
+const roadmapColumn = z
+  .object({
+    key: roadmapBucket,
+    totalCount: z.number().int().meta({
+      description: "The bucket's full card count — the header number, not `cards.length`.",
+    }),
+    cards: z.array(roadmapCard),
+    nextCursor: z
+      .string()
+      .nullable()
+      .meta({ description: 'Feed this back as `?bucket=<key>&cursor=<this>` for the next page.' }),
+  })
+  .strict()
+  .meta({ id: 'PublicRoadmapColumn' });
+
+/**
+ * The whole roadmap TAB — the four status-grouped columns in display order, each
+ * carrying its first page (MOTIR-4109).
+ *
+ * The counterpart of `PublicRoadmapColumnPage`: this is what the tab loads, that
+ * is what "Load more" appends. Both are served by `GET …/roadmap`, on disjoint
+ * parameter arms.
+ */
+export const publicRoadmapSchema = z
+  .object({ columns: z.array(roadmapColumn) })
+  .strict()
+  .meta({ id: 'PublicRoadmap' });
+
+/**
+ * One public BOARD column — its name, the workflow statuses mapped into it, its
+ * cards and its full count.
+ *
+ * `statusKeys` is what lets a column header say which statuses it holds without
+ * the consumer re-reading the workflow, which it has no endpoint for.
+ */
+const publicBoardColumn = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    statusKeys: z
+      .array(z.string())
+      .meta({ description: 'The workflow status KEYS mapped into this column.' }),
+    cards: z.array(publicWorkItem),
+    totalCount: z.number().int().meta({
+      description: "The column's full card count — the denominator above the loaded set.",
+    }),
+  })
+  .strict()
+  .meta({ id: 'PublicBoardColumn' });
+
+/**
+ * The public BOARD (MOTIR-4109) — the project's default board, bounded.
+ *
+ * ⚠️ BOUNDED, NOT PAGED, and that is a contract fact rather than an omission.
+ * The read stops at `cap` and reports `truncated` (`PUBLIC_BOARD_CAP`,
+ * MOTIR-2789); there is no cursor, because a board is a whole-shape read and the
+ * Items tab beside it is the paged surface. A project with no default board
+ * answers 200 with an empty `boardId`, an empty `name` and no columns — an empty
+ * board rather than a 404, because the PROJECT exists.
+ */
+export const publicBoardSchema = z
+  .object({
+    boardId: z.string(),
+    name: z.string(),
+    columns: z.array(publicBoardColumn),
+    cap: z
+      .number()
+      .int()
+      .meta({ description: 'The board-level load cap this response was bounded by.' }),
+    truncated: z
+      .boolean()
+      .meta({ description: 'True when the board\'s total exceeds `cap` — the "refine" hint.' }),
+  })
+  .strict()
+  .meta({ id: 'PublicBoard' });
+
 const changelogEntry = z
   .object({
     identifier: z.string(),

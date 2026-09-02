@@ -44,6 +44,8 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getOverview: vi.fn(async () => ({})),
     getProjectTreeLevel: vi.fn(async () => ({ rows: [], hasMore: false, total: 0 })),
     getWorkItems: vi.fn(async () => ({ items: [], nextCursor: null })),
+    getBoard: vi.fn(async () => ({ boardId: '', name: '', columns: [], cap: 0, truncated: false })),
+    getRoadmap: vi.fn(async () => ({ columns: [] })),
     getRoadmapColumn: vi.fn(async () => ({ bucket: 'planned', cards: [], nextCursor: null })),
     getChangelog: vi.fn(async () => ({ entries: [], nextCursor: null })),
     submitPublicRequest: vi.fn(async () => ({})),
@@ -73,6 +75,7 @@ vi.mock('@/lib/rateLimit/publicFollowGuard', () => ({
 const subject = await import('@/app/api/public/p/[identifier]/route');
 const tree = await import('@/app/api/public/p/[identifier]/tree/route');
 const items = await import('@/app/api/public/p/[identifier]/items/route');
+const board = await import('@/app/api/public/p/[identifier]/board/route');
 const roadmap = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const changelog = await import('@/app/api/public/p/[identifier]/changelog/route');
 const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route');
@@ -114,6 +117,12 @@ const CASES: Case[] = [
     method: 'GET',
     gated: false,
     call: () => (tree.GET as Handler)(get('/api/public/p/ACME/tree'), identifierCtx),
+  },
+  {
+    file: 'p/[identifier]/board/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () => (board.GET as Handler)(get('/api/public/p/ACME/board'), identifierCtx),
   },
   {
     file: 'p/[identifier]/items/route.ts',
@@ -243,7 +252,11 @@ describe('the four GATED routes refuse, and are exceptions rather than omissions
   }
 
   it('counts exactly four of them — a fifth is a decision, not a detail', () => {
+    // The GATED number is the one that must not move by accident, and it has
+    // not: four, unchanged. The ANONYMOUS number moves whenever a read is added,
+    // which is ordinary growth — MOTIR-4109's board took it from 8 to 9. Both
+    // are pinned so that either movement is a sentence somebody wrote.
     expect(CASES.filter((c) => c.gated)).toHaveLength(4);
-    expect(CASES.filter((c) => !c.gated)).toHaveLength(8);
+    expect(CASES.filter((c) => !c.gated)).toHaveLength(9);
   });
 });

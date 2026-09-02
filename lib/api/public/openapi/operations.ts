@@ -12,7 +12,9 @@ import {
   publicProjectOverviewSchema,
   publicRequestBodySchema,
   publicRequestResultSchema,
+  publicBoardSchema,
   publicRoadmapColumnPageSchema,
+  publicRoadmapSchema,
   publicSubscribeBodySchema,
   publicTreeLevelSchema,
   publicWorkItemPageSchema,
@@ -210,36 +212,76 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
   },
   {
     method: 'GET',
-    path: '/api/public/p/{identifier}/roadmap',
-    operationId: 'getPublicProjectRoadmapColumn',
-    summary: 'The next page of ONE roadmap column',
+    path: '/api/public/p/{identifier}/board',
+    operationId: 'getPublicProjectBoard',
+    summary: "The public project's BOARD tab",
     description:
-      'The per-column "load more". Both parameters are REQUIRED and refused separately: an ' +
-      'unknown bucket is `INVALID_ROADMAP_BUCKET`, a missing cursor is `MISSING_ROADMAP_CURSOR`, ' +
-      'and a malformed one is refused by the decoder — a pager that silently restarted at the ' +
-      'top would be far harder to notice than an error.',
+      "The project's default board — its columns, the workflow statuses mapped into each, the " +
+      "public-safe cards, and each column's full count above the loaded set. BOUNDED rather than " +
+      'paged: the read stops at `cap` and reports `truncated`, because a board is a whole-shape ' +
+      'read and the items list beside it is the paged surface. A project with no default board ' +
+      'answers 200 with an empty board, not 404 — the project exists. Anonymous: a session, when ' +
+      "present, only applies member-visibility (a non-member never receives a private epic's " +
+      'descendants and sees that epic marked `childrenHidden`); it never authorises.',
+    parameters: [identifierParam],
+    response: publicBoardSchema,
+    errors: [
+      {
+        status: 404,
+        description: 'No PUBLIC project carries this key.',
+        schema: publicErrorSchema,
+      },
+    ],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/p/{identifier}/roadmap',
+    // ⚠️ THE ID DOES NOT CHANGE, THOUGH THE OPERATION GREW. `…RoadmapColumn` now
+    // describes only one of two arms and reads narrow — and an `operationId` is
+    // what a generated client names its METHOD after, so renaming it would break
+    // every consumer that generated one, which AMENDMENT 1 §D forbids without a
+    // new MAJOR. A slightly wrong name is the cheaper of the two, and this
+    // comment is where the next reader finds out it was a decision.
+    operationId: 'getPublicProjectRoadmapColumn',
+    summary: 'The roadmap tab, or the next page of ONE of its columns',
+    description:
+      'TWO arms on one path, chosen by the parameters. With NEITHER `bucket` nor `cursor` it ' +
+      'returns the whole tab — the four status-grouped columns in display order, each with its ' +
+      "total and its first page (`PublicRoadmap`). With BOTH it returns that column's next page " +
+      '(`PublicRoadmapColumnPage`) — the "load more". The arms are disjoint and the refusals are ' +
+      'unchanged: an unknown bucket is `INVALID_ROADMAP_BUCKET`, a bucket with no cursor is ' +
+      '`MISSING_ROADMAP_CURSOR`, and a malformed cursor is refused by the decoder — a pager that ' +
+      'silently restarted at the top would be far harder to notice than an error. So a request ' +
+      'that has an answer today keeps exactly that answer; only the both-absent case is new ' +
+      '(MOTIR-4109).',
     parameters: [
       identifierParam,
       {
         name: 'bucket',
         in: 'query',
-        required: true,
-        description: 'Which column: `submitted`, `planned`, `in_progress` or `done`.',
+        required: false,
+        description:
+          'Which column: `submitted`, `planned`, `in_progress` or `done`. Omit it — together ' +
+          'with `cursor` — for the whole tab.',
         schema: z.enum(['submitted', 'planned', 'in_progress', 'done']),
       },
       {
         name: 'cursor',
         in: 'query',
-        required: true,
-        description: "That column's `nextCursor` from the previous page.",
+        required: false,
+        description:
+          "That column's `nextCursor` from the previous page. Required WITH `bucket`; omit both " +
+          'for the whole tab.',
         schema: z.string(),
       },
     ],
-    response: publicRoadmapColumnPageSchema,
+    response: z
+      .union([publicRoadmapSchema, publicRoadmapColumnPageSchema])
+      .meta({ id: 'PublicRoadmapResponse' }),
     errors: [
       {
         status: 400,
-        description: 'An unknown bucket, a missing cursor, or a malformed one.',
+        description: 'An unknown bucket, a bucket with no cursor, or a malformed cursor.',
         schema: publicErrorSchema,
       },
       {

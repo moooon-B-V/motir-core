@@ -7,7 +7,9 @@ import {
   publicFollowStateSchema,
   publicProjectOverviewSchema,
   publicRequestResultSchema,
+  publicBoardSchema,
   publicRoadmapColumnPageSchema,
+  publicRoadmapSchema,
   publicTreeLevelSchema,
   publicWorkItemPageSchema,
 } from '@/lib/api/public/openapi/schemas';
@@ -37,6 +39,8 @@ runAsCloudBuild();
 const getOverview = vi.hoisted(() => vi.fn());
 const getProjectTreeLevel = vi.hoisted(() => vi.fn());
 const getWorkItems = vi.hoisted(() => vi.fn());
+const getBoard = vi.hoisted(() => vi.fn());
+const getRoadmap = vi.hoisted(() => vi.fn());
 const getRoadmapColumn = vi.hoisted(() => vi.fn());
 const getChangelog = vi.hoisted(() => vi.fn());
 const submitPublicRequest = vi.hoisted(() => vi.fn());
@@ -69,6 +73,8 @@ vi.mock('@/lib/services/publicProjectsService', () => ({
     getOverview,
     getProjectTreeLevel,
     getWorkItems,
+    getBoard,
+    getRoadmap,
     getRoadmapColumn,
     getChangelog,
     submitPublicRequest,
@@ -87,7 +93,8 @@ const { GET: getExplore } = await import('@/app/api/public/explore/route');
 const { GET: getCategories } = await import('@/app/api/public/categories/route');
 const { GET: getTree } = await import('@/app/api/public/p/[identifier]/tree/route');
 const { GET: getItems } = await import('@/app/api/public/p/[identifier]/items/route');
-const { GET: getRoadmap } = await import('@/app/api/public/p/[identifier]/roadmap/route');
+const { GET: getBoardRoute } = await import('@/app/api/public/p/[identifier]/board/route');
+const { GET: getRoadmapRoute } = await import('@/app/api/public/p/[identifier]/roadmap/route');
 const { GET: getChangelogRoute } = await import('@/app/api/public/p/[identifier]/changelog/route');
 const { POST: postFollow, DELETE: deleteFollow } =
   await import('@/app/api/public/p/[identifier]/follow/route');
@@ -202,11 +209,112 @@ describe('the published schema matches what the route actually returns', () => {
       ],
       nextCursor: null,
     });
-    const res = await getRoadmap(
+    const res = await getRoadmapRoute(
       url('/api/public/p/ACME/roadmap?bucket=planned&cursor=abc'),
       identifierParams,
     );
     expect(publicRoadmapColumnPageSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  // ── MOTIR-4109: the board, and the roadmap's OTHER arm ────────────────────
+  //
+  // The roadmap operation now declares a UNION, so both arms are driven here.
+  // One arm passing proves nothing about the other — they are different service
+  // calls returning different shapes down one path, which is exactly the
+  // configuration a drift guard is for.
+
+  it('GET /api/public/p/{identifier}/roadmap — with NEITHER parameter, the whole tab', async () => {
+    getRoadmap.mockResolvedValue({
+      columns: [
+        {
+          key: 'planned',
+          totalCount: 4,
+          cards: [
+            {
+              id: 'wi_2',
+              identifier: 'ACME-2',
+              key: 2,
+              title: 'A card',
+              kind: 'task',
+              voteCount: 3,
+              voted: false,
+            },
+          ],
+          nextCursor: 'next',
+        },
+      ],
+    });
+    const res = await getRoadmapRoute(url('/api/public/p/ACME/roadmap'), identifierParams);
+    expect(res.status).toBe(200);
+    expect(publicRoadmapSchema.parse(await res.json())).toBeTruthy();
+    expect(getRoadmapColumn).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/public/p/{identifier}/board', async () => {
+    getBoard.mockResolvedValue({
+      boardId: 'board_1',
+      name: 'Delivery',
+      columns: [
+        {
+          id: 'col_1',
+          name: 'In progress',
+          statusKeys: ['in_progress'],
+          cards: [
+            {
+              id: 'wi_4',
+              identifier: 'ACME-4',
+              key: 4,
+              title: 'A board card',
+              kind: 'task',
+              status: 'in_progress',
+              statusCategory: 'in_progress',
+              priority: 'medium',
+            },
+          ],
+          totalCount: 12,
+        },
+      ],
+      cap: 200,
+      truncated: true,
+    });
+    const res = await getBoardRoute(url('/api/public/p/ACME/board'), identifierParams);
+    expect(res.status).toBe(200);
+    expect(publicBoardSchema.parse(await res.json())).toBeTruthy();
+  });
+
+  it('the board carries the epic-privacy MARKER, and the schema admits it', async () => {
+    // `childrenHidden` is optional and present only on a private epic's row seen
+    // by a non-member. A `.strict()` schema that forgot it would reject exactly
+    // the payload the public projection exists to produce.
+    getBoard.mockResolvedValue({
+      boardId: 'board_1',
+      name: 'Delivery',
+      columns: [
+        {
+          id: 'col_1',
+          name: 'To do',
+          statusKeys: ['todo'],
+          cards: [
+            {
+              id: 'wi_5',
+              identifier: 'ACME-5',
+              key: 5,
+              title: 'A private epic',
+              kind: 'epic',
+              status: 'todo',
+              statusCategory: 'todo',
+              priority: 'high',
+              childrenHidden: true,
+            },
+          ],
+          totalCount: 1,
+        },
+      ],
+      cap: 200,
+      truncated: false,
+    });
+    const res = await getBoardRoute(url('/api/public/p/ACME/board'), identifierParams);
+    expect(publicBoardSchema.parse(await res.json())).toBeTruthy();
   });
 
   it('GET /api/public/p/{identifier}/changelog', async () => {
