@@ -3700,15 +3700,15 @@ The shipped header, left to right:
 
 Proposal mode, per slot:
 
-| slot               | `add`                                                                                                            | `modify`                                                          | `remove`                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
-| kind glyph         | the PROPOSED kind                                                                                                | the target's kind                                                 | the target's kind                                                 |
-| identifier         | **`New`**, same mono slot, unlinked — `planReview.newItem`, the word the node crumb and the list row already use | the target's key, linked as `/items` links it                     | the target's key, linked                                          |
-| **status slot**    | the OP CHIP — `not yet created`                                                                                  | the OP CHIP — `change` — **then** the target's live `StatusValue` | the OP CHIP — `remove` — **then** the target's live `StatusValue` |
-| `Archived` pill    | absent                                                                                                           | rendered when the target is archived                              | rendered when the target is archived                              |
-| plan entrance      | **SUPPRESS** (§5)                                                                                                | **SUPPRESS**                                                      | **SUPPRESS**                                                      |
-| `Open full page →` | **ABSENT** (§7)                                                                                                  | present                                                           | present                                                           |
-| close              | ONE — the header's `QuickViewCloseButton`, with `hideClose` on the `Modal` (§7)                                  |                                                                   |                                                                   |
+| slot            | `add`                                                                                                            | `modify`                                                          | `remove`                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| kind glyph      | the PROPOSED kind                                                                                                | the target's kind                                                 | the target's kind                                                 |
+| identifier      | **`New`**, same mono slot, unlinked — `planReview.newItem`, the word the node crumb and the list row already use | the target's key, linked as `/items` links it                     | the target's key, linked                                          |
+| **status slot** | the OP CHIP — `not yet created`                                                                                  | the OP CHIP — `change` — **then** the target's live `StatusValue` | the OP CHIP — `remove` — **then** the target's live `StatusValue` |
+| `Archived` pill | absent                                                                                                           | rendered when the target is archived                              | rendered when the target is archived                              |
+| plan entrance   | **SUPPRESS** (§5)                                                                                                | **SUPPRESS**                                                      | **SUPPRESS**                                                      |
+| the link out    | **ABSENT** (§7)                                                                                                  | present                                                           | present                                                           |
+| close           | ONE — the header's `QuickViewCloseButton`, with `hideClose` on the `Modal` (§7)                                  |                                                                   |                                                                   |
 
 **The decision the card asks for: YES, the op word sits where `/items` puts the status.** A status
 answers _what state is this card in_; on a review surface the reader's question is _what will the plan
@@ -3734,7 +3734,7 @@ could arrive, and here it cannot.
 
 | section                       | `add`                        | `modify` / `remove`                   | why                                                                                                                                                                                                                                |
 | ----------------------------- | ---------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Development / delivery**    | SUPPRESS                     | SUPPRESS                              | a proposal delivers nothing. The target's pull requests are about the card as it STANDS; rendering them here would attribute delivery to the change, and `Open full page →` is the door to them                                    |
+| **Development / delivery**    | SUPPRESS                     | SUPPRESS                              | a proposal delivers nothing. The target's pull requests are about the card as it STANDS; rendering them here would attribute delivery to the change, and the link out (§7) is the door to them                                     |
 | **Comments / activity**       | SUPPRESS                     | SUPPRESS                              | the shipped peek never renders them either. What changes is that an `add` has nowhere to defer them TO — §6's foot sentence says so once                                                                                           |
 | **Children**                  | SUPPRESS                     | SUPPRESS                              | the shipped peek renders no child list. `hasChildren` exists only to pick the plan entrance's face, and that entrance is suppressed                                                                                                |
 | **Readiness banner**          | SUPPRESS                     | SUPPRESS                              | it answers _can I start this?_, moot before approval. A proposal's dependency story is the canvas's arrows (Part IX), where `blockedByNodeIds` and `blockedByRemovedNodeIds` are already drawn                                     |
@@ -3776,6 +3776,38 @@ navigates nowhere is worse than no control. **It is PRESENT for a `modify` / `re
 a page, and it is the only way to reach the delivery, comments and children this mode suppresses. Both
 are drawn.
 
+### ⚠️ AMENDED 2026-09-02 — WHAT IT OPENS, which the first draft of this section did not say
+
+**It opens `/items/<key>` in a NEW TAB, and that page shows the card AS IT STANDS.** Two facts,
+both read off shipped code rather than assumed:
+
+- `OpenFullPageLink` is `target="_blank" rel="noopener noreferrer"`
+  (`IssueQuickViewPanel.tsx:111-124`), so the peek is not dismissed — the proposal stays open behind
+  the new tab.
+- **The work-item detail page has no pending-plan affordance of any kind.** `ArchivedBanner`,
+  `CoreFieldsPanel`, `RelationshipsPanel`, `ChildPanel` and the late sections read no plan; nothing
+  on that page knows a proposal exists.
+
+**So the reviewer crosses a seam this story exists to close.** The peek says
+`PRIORITY · changed · ↑↑ Highest`; one click later the page says `↑ High`. On a rename it is sharper
+still — since [MOTIR-4018](motir:cmtgaukgt0002hwn8b22q8jsg) the peek's headline is the title the plan
+PROPOSES, so the two tabs carry two different names for one card, with nothing connecting them.
+**That is _one card described two different ways_, reappearing one click out of the surface that was
+built to stop it.**
+
+**The decision: KEEP the control, and CHANGE ITS LABEL so the tense is honest.** In proposal mode it
+reads **`Open the card as it stands →`** (`planReview.openTargetAsItStands`), not `Open full page`.
+
+| candidate                                                  | verdict                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SUPPRESS it on a `modify` / `remove` too**               | **Rejected.** Proposal mode suppresses Development / delivery, comments, children and readiness (§5), and on a real target those are decision-relevant — a `remove` of a card with an open pull request is a different decision. The link is the ONLY door; removing it makes proposal mode a dead end on a card that has a page |
+| **Keep it and re-label it** ✅                             | The smallest change that stops the surface asserting something false. The peek's question is _what will this BE_; the destination answers _what it IS_, and the label now says which. One copy key, no new surface, no new read                                                                                                  |
+| **Keep it and put a pending-plan banner on the item page** | **Right, and OUT of this story** — the boundary ENDS AT what the reviewer reads on the review surface. It is also a new read on every item-page render. Filed as [MOTIR-4197](motir:cmtkk86cq0001hvphojbe053t) rather than deferred to this paragraph                                                                            |
+
+**The label change is the whole of what this asset owes**, and it is deliberately not more: a
+re-labelled control tells the truth about where it goes, and the banner is what would make the
+destination itself agree. The two are independent, and the second is somebody else's card.
+
 **An `add` that HAS materialized is not this surface at all.** `PlanReviewCanvas.onView` already routes
 it to the committed peek (MOTIR-3161), because the proposal has become a card and carries a real
 identifier. That branch is UNCHANGED, and it is the one `op === 'add'` test that survives the collapse.
@@ -3791,16 +3823,16 @@ The op no other panel reaches on its own, and the one the shipped surface says l
 today it is **2 rail rows, no status, no strike, and nothing anywhere that says approving archives the
 card**.
 
-| element            | treatment                                                                                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| identity           | the TARGET's — kind glyph, key (linked), title                                                                                                                       |
-| the title          | the shipped `line-through` the list row already applies to a `remove` (`PlanProposalList.tsx:232`), so the two surfaces mark the same card the same way              |
-| op chip            | `remove`, `Pill tone="archived"` — `--el-archived-pill-bg` / `--el-archived-pill-text`, the dedicated pair, because archived is an inactive state and not a severity |
-| status pill        | the target's live status — a `remove` of an `In Review` card is a different decision from a `remove` of a `To Do` one                                                |
-| bodies             | the TARGET's. A `remove` carries no patch, so what is shown is exactly what will be archived                                                                         |
-| rail               | the target's, with **no marker on any row, ever** — a `remove` changes no field                                                                                      |
-| foot line          | `Approving this plan archives {key}.`                                                                                                                                |
-| `Open full page →` | present                                                                                                                                                              |
+| element      | treatment                                                                                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| identity     | the TARGET's — kind glyph, key (linked), title                                                                                                                       |
+| the title    | the shipped `line-through` the list row already applies to a `remove` (`PlanProposalList.tsx:232`), so the two surfaces mark the same card the same way              |
+| op chip      | `remove`, `Pill tone="archived"` — `--el-archived-pill-bg` / `--el-archived-pill-text`, the dedicated pair, because archived is an inactive state and not a severity |
+| status pill  | the target's live status — a `remove` of an `In Review` card is a different decision from a `remove` of a `To Do` one                                                |
+| bodies       | the TARGET's. A `remove` carries no patch, so what is shown is exactly what will be archived                                                                         |
+| rail         | the target's, with **no marker on any row, ever** — a `remove` changes no field                                                                                      |
+| foot line    | `Approving this plan archives {key}.`                                                                                                                                |
+| the link out | present, labelled `Open the card as it stands →` (§7)                                                                                                                |
 
 **`targetMissing`.** A `remove` whose target is already archived or hard-deleted (the DTO's own flag)
 shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
@@ -3824,19 +3856,20 @@ committed key is.
 
 ## 10. §10 · Copy — every string this Part introduces or re-points
 
-| key                                                    | string                                                                   | note                                                                                             |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `planReview.railChangedMark`                           | `changed`                                                                | NEW — the rail marker chip                                                                       |
-| `planReview.railChangeCount`                           | `This plan changes {n} of the {m} fields it can set.`                    | NEW — the pinned line, `modify`, n > 0                                                           |
-| `planReview.railChangeNone`                            | `This plan changes nothing in this rail — only the bodies.`              | NEW — `modify`, n = 0                                                                            |
-| `planReview.railAddAll`                                | `Every value here is what approval will create.`                         | NEW — `add`                                                                                      |
-| `planReview.railRemoveArchives`                        | `Approving this plan archives {key}.`                                    | NEW — `remove`                                                                                   |
-| `planReview.peekNoActivity`                            | `A proposal has no comments, children or activity until it is approved.` | NEW — the main column's foot sentence (the `<link>` arm carries the `modify` / `remove` variant) |
-| `planReview.newItem`                                   | `New`                                                                    | REUSED — the header's identifier slot                                                            |
-| `planReview.notYetCreated`                             | `not yet created`                                                        | REUSED — the `add` op chip                                                                       |
-| `planReview.opModify` / `opRemove`                     | `change` / `remove`                                                      | REUSED — the op chip                                                                             |
-| `planReview.aiDrafted`                                 | `AI-drafted`                                                             | REUSED — beside `Why this matters`                                                               |
-| `planReview.sectionDescription` / `sectionExplanation` | `Description` / `Why this matters`                                       | REUSED                                                                                           |
+| key                                                    | string                                                                   | note                                                                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `planReview.railChangedMark`                           | `changed`                                                                | NEW — the rail marker chip                                                                                               |
+| `planReview.railChangeCount`                           | `This plan changes {n} of the {m} fields it can set.`                    | NEW — the pinned line, `modify`, n > 0                                                                                   |
+| `planReview.railChangeNone`                            | `This plan changes nothing in this rail — only the bodies.`              | NEW — `modify`, n = 0                                                                                                    |
+| `planReview.railAddAll`                                | `Every value here is what approval will create.`                         | NEW — `add`                                                                                                              |
+| `planReview.railRemoveArchives`                        | `Approving this plan archives {key}.`                                    | NEW — `remove`                                                                                                           |
+| `planReview.openTargetAsItStands`                      | `Open the card as it stands`                                             | NEW — the link out, on a `modify` / `remove`; it REPLACES `issueViews.openFullPage` in proposal mode and only there (§7) |
+| `planReview.peekNoActivity`                            | `A proposal has no comments, children or activity until it is approved.` | NEW — the main column's foot sentence (the `<link>` arm carries the `modify` / `remove` variant)                         |
+| `planReview.newItem`                                   | `New`                                                                    | REUSED — the header's identifier slot                                                                                    |
+| `planReview.notYetCreated`                             | `not yet created`                                                        | REUSED — the `add` op chip                                                                                               |
+| `planReview.opModify` / `opRemove`                     | `change` / `remove`                                                      | REUSED — the op chip                                                                                                     |
+| `planReview.aiDrafted`                                 | `AI-drafted`                                                             | REUSED — beside `Why this matters`                                                                                       |
+| `planReview.sectionDescription` / `sectionExplanation` | `Description` / `Why this matters`                                       | REUSED                                                                                                                   |
 
 Both catalogs (`messages/en.json`, `messages/zh.json`) in the same change — a key added to one is a
 parity failure.
@@ -3849,7 +3882,7 @@ parity failure.
   _Priority changed_ — rather than as a loose chip a reader associates by position.
 - **The dialog is labelled by the proposal's title** (`Modal srTitle`), as both peeks already are.
 - **ONE control named `Close`** (§7).
-- **`Open full page →` is ABSENT rather than disabled on an `add`** — a disabled control in a dialog is
+- **The link out is ABSENT rather than disabled on an `add`** — a disabled control in a dialog is
   a tab stop that answers nothing.
 - The pinned foot line is a `<p>` in the rail column, outside the `<dl>` — so it is not announced as a
   term/definition pair, which it is not.
@@ -3869,7 +3902,7 @@ no route, no nav entry and no new modal host.
 | key                                        | gives / takes                                                                                                                                                     | action                                                                |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | **MOTIR-4183** (the projection)            | **GIVES** §2 — the merge table, the closed row set, and the marked-field set beside the payload; **and §3's denominator**, which is computed rather than constant | none; its criteria already ask for the projection and the CHANGED set |
-| **MOTIR-4184** (the panel's proposal mode) | **GIVES** §3–§8 — the header, the marker, the PINNED line, the inline explanation, every suppression, and the absent `Open full page`                             | none; its criteria already name all four                              |
+| **MOTIR-4184** (the panel's proposal mode) | **GIVES** §3–§8 — the header, the marker, the PINNED line, the inline explanation, every suppression, the RE-LABELLED link out, and its absence on an `add`       | none; its criteria already name all four                              |
 | **MOTIR-4185** (both doors)                | **GIVES** §9 — and CONFIRMS its boundary: neither door's look changes                                                                                             | none                                                                  |
 | **MOTIR-4186** (the vitest gate)           | **GIVES** §2's per-op table as the thing to derive assertions FROM, and §3's `n of m` as a computed value worth a test                                            | none                                                                  |
 | **MOTIR-4187** (the E2E)                   | **GIVES** the story's four verification reads a drawn expectation per op                                                                                          | none                                                                  |
