@@ -16,12 +16,18 @@ import { LegalDocumentRow } from './LegalDocumentRow';
  * has changed"* — at the moment they can still see it. Bouncing them to
  * `/sign-in` to read it would deliver the reassurance to nobody.
  *
- * ⚠️ AND THE DOCUMENT STAYS READABLE. `/legal/<slug>` is in the `(public)`
- * group, so it renders with no session — which is deliberate and load-bearing:
- * you cannot ask somebody to accept a document you will not let them open. The
- * row here is what makes that reachable from the one screen where it matters,
- * and it is the SAME `.doc` row the held screen draws, so the two halves of the
- * surface read as one.
+ * ⚠️ AND THE DOCUMENT STAYS READABLE — ⚠️ CORRECTED 2026-09-02 (MOTIR-4010).
+ * ~~`/legal/<slug>` is in the `(public)` group, so it renders with no session.~~
+ * That is no longer how it is readable: the documents left this repository
+ * (MOTIR-3909) and the row now links the manifest's ABSOLUTE url on the host the
+ * operator publishes, which needs no session because it is another application
+ * entirely. **The PROPERTY is unchanged and it is the load-bearing part** — you
+ * cannot ask somebody to accept a document you will not let them open — and this
+ * row is still what makes it reachable from the one screen where it matters,
+ * still the SAME `.doc` row the held screen draws.
+ *
+ * The comment is corrected rather than deleted because it named a mechanism a
+ * reader would otherwise go looking for and not find.
  *
  * ⚠️ IT SHOWS THE TERMS, NOT "what was outstanding", and it cannot do otherwise:
  * there is no session here, so there is nothing to look the reader's own
@@ -38,7 +44,7 @@ export function ReconsentDeferred({
   terms,
 }: {
   /** The published Terms, read off disk by the page — no session needed. */
-  terms: { slug: string; title: string; version: string } | null;
+  terms: { title: string; version: string; url: string | null } | null;
 }) {
   const t = useTranslations('legal.reconsent');
 
@@ -60,7 +66,7 @@ export function ReconsentDeferred({
             <LegalDocumentRow
               title={terms.title}
               versionLabel={terms.version}
-              slug={terms.slug}
+              url={terms.url}
               linkLabel={t('deferredReadLink')}
             />
           </ul>

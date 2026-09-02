@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -41,15 +41,27 @@ import { resolvePostAuthDestination } from '@/lib/navigation/landing';
  * signed in; only when the form is the right answer does it render this. Moved
  * here unchanged apart from the extraction.
  */
-export function SignUpCard() {
+/**
+ * The two absolute urls the legal notice links, or `null` when the deployment
+ * has configured no legal documents (MOTIR-4010). Resolved on the SERVER by
+ * `app/(auth)/sign-up/page.tsx` via `lib/legal/links.ts` and passed down,
+ * because the manifest is a server-side read and this is a client component.
+ *
+ * ⚠️ BOTH OR NEITHER — `signUpLegalLinks()` returns `null` unless both are
+ * configured, because this is ONE sentence naming TWO documents and a
+ * half-linked version of it asserts agreement to a document nobody published.
+ */
+export type LegalLinks = { termsUrl: string; privacyUrl: string } | null;
+
+export function SignUpCard({ legal }: { legal: LegalLinks }) {
   return (
-    <Suspense fallback={<SignUpShell />}>
-      <SignUpForm />
+    <Suspense fallback={<SignUpShell legal={legal} />}>
+      <SignUpForm legal={legal} />
     </Suspense>
   );
 }
 
-function SignUpShell() {
+function SignUpShell({ legal }: { legal: LegalLinks }) {
   const t = useTranslations('auth');
   return (
     <AuthShell headline={t('welcomeToMotir')} subhead={t('signUpSubhead')}>
@@ -57,12 +69,12 @@ function SignUpShell() {
       {/* The notice renders in the Suspense fallback too, so it is present from
           the first paint rather than appearing when the form resolves. It is the
           one element on this card that must never be missable. */}
-      <LegalNotice />
+      <LegalNotice legal={legal} />
     </AuthShell>
   );
 }
 
-function SignUpForm() {
+function SignUpForm({ legal }: { legal: LegalLinks }) {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -258,7 +270,7 @@ function SignUpForm() {
         </form>
       )}
 
-      <LegalNotice />
+      <LegalNotice legal={legal} />
     </AuthShell>
   );
 }
@@ -299,20 +311,43 @@ function SignUpForm() {
  * which is what makes the same string read correctly on step 1 where the Google
  * button is the subject. Do not add a second.
  */
-function LegalNotice() {
+function LegalNotice({ legal }: { legal: LegalLinks }) {
   const tLegal = useTranslations('legal');
+
+  // ⚠️ UNCONFIGURED ⇒ NOTHING RENDERS. Not the sentence with its links turned to
+  // plain text — `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D decided
+  // that, and the reason is the sentence itself: `legal.signUpNotice` is
+  // *"By creating a Motir account you agree to our Terms of Service and Privacy
+  // Policy."*, which is entirely ABOUT two documents. Unlinked it does not read
+  // as a weaker notice, it reads as a FALSE one — telling somebody they agreed
+  // to documents nobody published. A self-hoster has no Terms of Service, and
+  // the honest sign-up form is one that does not claim otherwise.
+  //
+  // Drawn in `design/auth/legal-agreement.mock.html` panel 12, which shows what
+  // the card's FOOT does without it: this paragraph carries the `border-t`, so
+  // its removal takes a hairline as well as a sentence and the card ends on the
+  // "Already have an account?" line.
+  if (!legal) return null;
+
   return (
     <p className="border-t border-(--el-border) pt-4 font-sans text-[13px] text-(--el-text-secondary)">
       {tLegal.rich('signUpNotice', {
+        // ⚠️ PLAIN ANCHORS, NOT `next/link`. These are ABSOLUTE urls on whatever
+        // host the operator publishes — another application — so prefetching and
+        // client navigation are wrong for them, and a cross-origin `next/link`
+        // looks identical until it is used. The external-link glyph is the
+        // shipped treatment, in the link's own colour (panel 13).
         terms: (chunks) => (
-          <Link href="/legal/terms" className="text-(--el-link) hover:underline">
+          <a href={legal.termsUrl} className="text-(--el-link) hover:underline">
             {chunks}
-          </Link>
+            <ExternalLink className="ml-0.5 inline h-3 w-3 align-[-1px]" aria-hidden />
+          </a>
         ),
         privacy: (chunks) => (
-          <Link href="/legal/privacy" className="text-(--el-link) hover:underline">
+          <a href={legal.privacyUrl} className="text-(--el-link) hover:underline">
             {chunks}
-          </Link>
+            <ExternalLink className="ml-0.5 inline h-3 w-3 align-[-1px]" aria-hidden />
+          </a>
         ),
       })}
     </p>

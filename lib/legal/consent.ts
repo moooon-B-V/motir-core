@@ -146,6 +146,17 @@ export interface OutstandingDocument {
   changeSummary: string | null;
   /** When the new version comes into force, or `null` while it is not yet set. */
   effectiveDate: string | null;
+  /**
+   * Where the reader goes to READ it — the manifest entry's absolute url
+   * (MOTIR-4010).
+   *
+   * ⚠️ It rides the outstanding row rather than being looked up again by the
+   * renderer, because a value that exists in the manifest and reaches no prop is,
+   * from the row's side, indistinguishable from one that was never configured —
+   * and the row's whole job is to let somebody read what they are being asked to
+   * agree to.
+   */
+  url: string;
 }
 
 /** What one person has already agreed to, as the gate reads it out of the table. */
@@ -201,6 +212,7 @@ export function outstandingReconsent(
       acceptedVersion: accepted?.version ?? null,
       changeSummary: document.changeSummary,
       effectiveDate: document.effectiveDate,
+      url: document.url,
     });
   }
   return outstanding;

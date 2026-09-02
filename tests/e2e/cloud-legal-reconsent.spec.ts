@@ -23,6 +23,15 @@ import { RECONSENT_DOCUMENT_SLUGS } from '@/lib/legal/consent';
 // assertion of the journey is that the reader IS at `/re-consent`, so running
 // this off-cloud fails loudly instead of passing quietly.
 //
+// ⚠️ THERE ARE TWO PROCESS-WIDE READS NOW, NOT ONE (MOTIR-4015). Since
+// MOTIR-4007 the documents come from `MOTIR_LEGAL_DOCUMENTS`, and an unset
+// manifest is a VALID state meaning "this operator published none" — on which
+// `outstandingReconsent` has nothing to compare and the gate holds nobody. That
+// is the same vacuity wearing different clothes, so the lane sets the manifest
+// too (`playwright.cloud.config.ts`, from `_helpers/legal-manifest.ts`) and the
+// journey below asserts the set is really there before it compares anything to
+// it. Both reads are the SERVER's; neither has a per-test override.
+//
 // ── WHAT THIS SPEC DELIBERATELY DOES NOT ASSERT ────────────────────────────
 //
 // **That a `model-providers.md` version bump prompts nobody.** It is the card's
@@ -57,6 +66,11 @@ test.afterAll(async () => {
 /** The versions published right now, by slug — the same read the service makes. */
 function publishedVersions(): Map<string, string> {
   return new Map(listLegalDocuments().map((document) => [document.slug, document.version]));
+}
+
+/** Where each document is published — the manifest's `url`, by slug. */
+function publishedUrlsBySlug(): Map<string, string> {
+  return new Map(listLegalDocuments().map((document) => [document.slug, document.url]));
 }
 
 /**
@@ -131,6 +145,13 @@ test('a reader behind the current version is held, records their agreement, and 
   await expect(agree).toBeVisible();
 
   const published = publishedVersions();
+  const publishedUrls = publishedUrlsBySlug();
+  // Not vacuous: an unconfigured build answers `[]` here, and every assertion
+  // below would then compare the screen against `undefined`.
+  expect(
+    [...published.keys()].sort(),
+    'the lane configured MOTIR_LEGAL_DOCUMENTS with the re-consent set',
+  ).toEqual(expect.arrayContaining([...RECONSENT_DOCUMENT_SLUGS]));
   for (const slug of RECONSENT_DOCUMENT_SLUGS) {
     // The delta chip — `{from} → {to}` — is what makes this a NOTICE rather
     // than a formality, so it is asserted rather than taken on trust.
@@ -139,7 +160,13 @@ test('a reader behind the current version is held, records their agreement, and 
       `${slug}'s version delta is not on the screen`,
     ).toBeVisible();
     // And the way to read what changed, per the design's own requirement.
-    await expect(page.locator(`a[href="/legal/${slug}"]`)).toBeVisible();
+    //
+    // ⚠️ AN ABSOLUTE URL NOW, NOT `/legal/<slug>` (MOTIR-4010). The documents
+    // left this repository and the row links to wherever the operator published
+    // them, so the href is the manifest's own `url` — read from the loader
+    // rather than rebuilt here, which is what makes this assert AGREEMENT
+    // between the screen and the configuration instead of restating a template.
+    await expect(page.locator(`a[href="${publishedUrls.get(slug)}"]`)).toBeVisible();
   }
 
   // ── 3. Agreeing records the CURRENT versions and lets them through ───────

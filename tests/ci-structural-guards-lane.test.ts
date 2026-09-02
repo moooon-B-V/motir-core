@@ -165,7 +165,7 @@ const SELF_WALKING_MEMBERS = [
   // self-walking half of this list exists.
   'tests/helpers/importGraph.test.ts',
   'tests/ci-structural-guards-lane.test.ts',
-  'tests/legal/subprocessor-list-guard.test.ts',
+  'tests/legal/egress-manifest-guard.test.ts',
   // MOTIR-4089. It does its own `readdirSync` over `tests/` and imports only a
   // dependency-free helper, so — like the entries above — nothing derives it.
   'tests/timeout-budget-lane.test.ts',

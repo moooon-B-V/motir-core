@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // route files' header + PRODECT_FINDINGS for the gory details.
 import * as workItemsRoute from '@/app/api/%5Ftest/work-items/route';
 import * as workItemLinksRoute from '@/app/api/%5Ftest/work-item-links/route';
+import * as legalManifestRoute from '@/app/api/%5Ftest/legal-manifest/route';
 import { productionGate } from '@/app/api/%5Ftest/_helpers';
+import { LEGAL_DOCUMENTS_ENV } from '@/lib/legal/documents';
 
 // Production-build gating for the throwaway `_test/*` route handlers (Subtask
 // 1.4.8). Every handler returns 404 (NOT 403/501) when NODE_ENV === 'production'
@@ -77,5 +79,83 @@ describe('productionGate — E2E production harness (MOTIR-1679)', () => {
   it('does NOT gate (null) in development', () => {
     vi.stubEnv('NODE_ENV', 'development');
     expect(productionGate()).toBeNull();
+  });
+});
+
+describe('_test/legal-manifest route — production gating and the door itself (MOTIR-4015)', () => {
+  const URL = 'http://localhost/api/_test/legal-manifest';
+
+  /** One valid entry — the shape `validateEntry` accepts, nothing more. */
+  const ENTRY = {
+    slug: 'terms',
+    title: 'Terms of Service',
+    version: '2.0.0',
+    effectiveDate: '2026-09-01',
+    changeSummary: null,
+    url: 'https://public.motir.e2e/legal/terms',
+  };
+
+  function put(body: unknown): Promise<Response> {
+    return legalManifestRoute.PUT(new Request(URL, { method: 'PUT', body: JSON.stringify(body) }));
+  }
+
+  it('returns 404 for PUT when NODE_ENV=production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_PROD_HARNESS', '');
+    // ⚠️ CAPTURED RATHER THAN ASSUMED UNSET, so this holds wherever the case
+    // sits in the file — the claim is that the handler changed NOTHING, not
+    // that the variable happened to be empty when this ran.
+    const before = process.env[LEGAL_DOCUMENTS_ENV];
+    const res = await put({ manifest: [ENTRY] });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code?: string }).code).toBe('NOT_FOUND');
+    // The gate is the first statement in the handler, so a 404 must also mean
+    // the environment is untouched — a door that 404s AFTER mutating would be
+    // gated in name only.
+    expect(process.env[LEGAL_DOCUMENTS_ENV]).toBe(before);
+  });
+
+  it('SETS the manifest and reports what the shipped loader made of it', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv(LEGAL_DOCUMENTS_ENV, '');
+    const res = await put({ manifest: [ENTRY] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      status: 'configured',
+      slugs: ['terms'],
+      faults: [],
+    });
+  });
+
+  it('UNSETS it for `null` — the self-hoster arm the acceptance spec starts on', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv(LEGAL_DOCUMENTS_ENV, JSON.stringify([ENTRY]));
+    const res = await put({ manifest: null });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'unconfigured', slugs: [], faults: [] });
+  });
+
+  it('reports a REFUSED entry as faulted rather than as a 200 that hid it', async () => {
+    // The mount check the acceptance spec asserts on is only worth asserting if
+    // a bad manifest reads back differently from a good one.
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv(LEGAL_DOCUMENTS_ENV, '');
+    const res = await put({ manifest: [{ ...ENTRY, version: 'v2' }] });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; slugs: string[] };
+    expect(body.status).toBe('faulted');
+    expect(body.slugs).toEqual([]);
+  });
+
+  it('refuses a body that is neither an array nor null', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const res = await put({ manifest: 'terms' });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses a body that is not JSON at all', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const res = await legalManifestRoute.PUT(new Request(URL, { method: 'PUT', body: 'not json' }));
+    expect(res.status).toBe(400);
   });
 });

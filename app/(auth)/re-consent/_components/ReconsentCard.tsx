@@ -214,7 +214,7 @@ function ChangedDocumentRow({ document }: { document: OutstandingDocument }) {
             t('versionNew', { version: document.currentVersion })
       }
       summary={document.changeSummary}
-      slug={document.slug}
+      url={document.url}
       linkLabel={t('readNewVersion')}
     />
   );

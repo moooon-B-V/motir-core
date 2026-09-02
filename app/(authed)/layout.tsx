@@ -16,6 +16,7 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloud, isCloudBilling } from '@/lib/billing/availability';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
+import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -195,6 +196,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // these two helpers; a shell that hides a door to a page that still renders is
   // the failure a second predicate would produce.
   const workspaceTierRevealed = isWorkspaceTierRevealed(scopedWorkspaceModels.length);
+  // Where the rail's `Legal` row points — `null` on a deployment that has
+  // configured no legal documents, and then the row does not render at all
+  // (MOTIR-4010). Resolved here because the manifest is a server-side read and
+  // `SidebarNav` is a client component. It is a synchronous parse of one
+  // environment value, so it joins no wave and costs no round trip.
+  const legalIndexUrl = resolveLegalIndexUrl();
 
   // Project data — only meaningful when there's an active workspace. Without
   // one the sidebar hides the project header + project-scoped nav, so skip
@@ -380,6 +387,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
                       workspaceTierRevealed={workspaceTierRevealed}
+                      legalIndexUrl={legalIndexUrl}
                     />
                   }
                 >
@@ -465,6 +473,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
                     workspaceTierRevealed={workspaceTierRevealed}
+                    legalIndexUrl={legalIndexUrl}
                   />
                 </SidebarDrawer>
 
