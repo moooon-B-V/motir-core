@@ -3,6 +3,8 @@
 **Status:** accepted · **Date:** 2026-08-19 · **Card:** MOTIR-3019 (story MOTIR-3017)
 **Q5 added** 2026-08-30 · MOTIR-3980 (story MOTIR-1789) — what the RUN RECORD says
 about a finding, now that a run has a record to say it in.
+**Q6 added** 2026-09-02 · MOTIR-4083 (story MOTIR-3942) — the submit is an MCP tool
+call, not a shell-out, and the agent composes the WHAT it carries.
 
 > **On the file name.** `docs/decisions/` is slug-named, not numbered — forty-three
 > files, none carrying an ordinal. MOTIR-3019 asked for "the next free number";
@@ -598,6 +600,103 @@ nothing when it did.
 
 ---
 
+## Q6 — The submit is a TOOL CALL, and the agent COMPOSES the WHAT (MOTIR-4083, 2026-09-02)
+
+Q2 and its amendments were written with the agent submitting its re-plan by
+shelling out — `motir plan --detach <KEY>` — and the two mentions above are kept
+as they were, because B1's anchoring argument does not depend on the door: the
+thread is anchored at exactly one key either way. What this section changes is
+the DOOR and what goes through it.
+
+### Decision: `append_plan_turn` + `submit_plan_session`, anchored at `targetKeys: [<KEY>]`
+
+The prompt's THE-CARD-IS-WRONG branch instructs five Motir MCP tools and, at
+exactly one line, a command line — step 5 of a branch whose step 4 is a
+`transition_status` call. `submit_plan_session` asserts `ai:plan`, which
+`CLI_TOKEN_GRANT` already carries, so the agent could always have called it. It
+now does: **step 5 appends the finding as a turn (`append_plan_turn`), step 6
+submits (`submit_plan_session`), both anchored at `targetKeys: [<KEY>]`** — the
+argument that replaces the old leading positional, carried on BOTH calls because
+two calls are two chances to drop it and an unanchored submit files a plan about
+one card's defect against the whole project.
+
+**The `motir plan` command is untouched.** It is a person's terminal command; the
+agent is an MCP client that happens to have a shell. `tests/mcp/submit-requirement-door.test.ts`
+asserts, by absence, that no `--requirement` option grew there (MOTIR-4172).
+
+### The WHAT is a STRUCT, composed by the agent — six fields, three required
+
+The retired command sent a key and nothing else: the evidence went into a comment
+a person reads, and the first thing a triggered re-plan did was open a
+conversation to ask what was wrong — a question whose answer existed and was
+discarded when the agent exited (MOTIR-4082 is the consumer that would rather not
+ask). The submit now carries motir-ai's `SettledRequirement` — `outcome`,
+`behaviour`, `scopeEdge`, `constraints`, `acceptance`, `assumptions`, in that
+order (`REQUIREMENT_FIELDS`), with the first, second and fifth required non-empty
+(`REQUIREMENT_REQUIRED_NON_EMPTY`) and the other three allowed to be `""`, which
+says _considered, and there is none_. The prompt teaches the fields by name and
+by what each is for; `assumptions` is translated for this actor (_what the agent
+concluded that nobody has confirmed_), since its conversation-shaped definition
+presumes a person present to not-correct it.
+
+Three obligations on the prompt, each asserted on the COMPOSED text:
+
+- **The agent gets ONE shot, and is told so.** Nothing goes back and asks it — it
+  has exited — so the turn is framed as a brief, not a note.
+- **A pointer is not a WHAT.** _"See my comment on the card"_ satisfies "pass your
+  evidence" and supplies nothing; the prompt names it as insufficient. The struct
+  is that rule made mechanical — a field a run must fill enforces what an
+  instruction can only ask for.
+- **The field names are motir-ai's, asserted against a fixture that mirrors
+  motir-ai's own list** (`tests/fixtures/settledRequirement.ts`). This seam
+  already failed once with both halves green (MOTIR-4168: the producer pinned
+  prose, the consumer expected the struct, nothing converted). A prompt asserted
+  only against itself is what let it.
+
+### What the prompt does NOT ask, and what a refusal never waits on
+
+- **No diagnosis of the planning rules.** Q3's reasoning holds one step over: an
+  agent asked to classify invents. It describes what is wrong with the CARD.
+- **A refusal is never conditional on writing well.** An agent that cannot
+  articulate the problem submits anyway, without `requirement`; the tool accepts a
+  partial or absent one and the planner opens a conversation instead (MOTIR-4082's
+  partial-supply arm, MOTIR-4172's pass-through).
+- **The comment stays.** The human-readable trail is not traded for the
+  machine-readable one — the turn carries the SAME text as the step-3 comment.
+  Composed once, delivered twice.
+
+### "Run it ONCE" now has two parts
+
+Appending costs nothing and starts no job; **submitting is the act that spends the
+token owner's credits.** The prompt says both, in its own voice, because an agent
+that thinks its append submitted stops having done nothing, and one that retries
+the submit pays twice for one finding. **One exception, new with the tool:** a
+`requirement` the tool's schema rejects is refused before the handler runs — no
+job, no credits — so that ONE case is re-submitted once, without the requirement.
+It is stated as its own sentence, apart from _never retry_, because collapsing the
+two is how _never retry_ becomes _retry freely_. (The CLI door had the opposite
+property: it had to swallow an unparseable file.)
+
+### What does not change
+
+`autoLoop`'s `replanned` outcome is read off the card's status (`planning`), not
+off the door, so it still fires and still stops the loop; its operator line —
+_review the submitted plan in Motir, then re-run it_ — still describes what is
+waiting. Q4's `--auto-approve-replan` bound (B1) is unchanged: the plan is derived
+from the conversation anchored at the card, and that conversation is exactly the
+one `targetKeys: [<KEY>]` names. Q5's recorder walks the same session back.
+
+### One product consequence, named rather than decided
+
+An `append_plan_turn` from a dispatched agent lands on the SAME thread the user's
+planning panel shows — one conversation, two surfaces. So an agent refusing a
+card injects a turn into a conversation the operator may be having. That is
+probably right (it is the run's own thread, and the operator is being sent there
+anyway), but nobody has chosen it, and it is the kind of thing that surprises
+someone the first time.
+
+---
+
 ## Comments the implementing cards must correct
 
 Left as they stand, the codebase argues with itself — a comment insisting
@@ -682,3 +781,5 @@ prompt.
 - **MOTIR-3026 / MOTIR-3027** — the documented protocol, in `motir-core` and in `motir-meta`.
 - **MOTIR-3981** — Q5's two event members and the two server-side appends.
 - **MOTIR-3982 / MOTIR-3983** — Q5's closing section, in the design and in the surface.
+- **MOTIR-4083** — Q6: the tool-call door, the composed WHAT, the one-shot framing and
+  the two-part _once_, in the prompt (MOTIR-4172 shipped the `requirement` argument it uses).
