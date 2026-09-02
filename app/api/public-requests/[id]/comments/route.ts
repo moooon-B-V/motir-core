@@ -5,6 +5,7 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { EmptyCommentBodyError } from '@/lib/comments/errors';
 import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
+import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
 // POST /api/public-requests/[id]/comments (Story 6.12 · Subtask 6.12.6) — add a
 // PUBLIC-visible comment to a public request, attributed to the signed-in
@@ -21,10 +22,38 @@ import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 //   ProjectAccessDeniedError                          → 403
 //   EmptyCommentBodyError                             → 422
 
+//
+// ── ⚠️ WHY THIS ROUTE STAYS OUTSIDE `app/api/public/*` (MOTIR-4114) ────────
+//
+// It sits in a namespace that predates the public CONTRACT, so
+// `tests/api/public/contract-coverage.test.ts` cannot see it, and until this
+// card `cloud-gate-totality` did not gate it either — a self-hosted build
+// answered an endpoint belonging to a feature it is not supposed to have.
+// Nobody planned that; it is where the namespace happened to fall.
+//
+// `public-surface-hosts.md` AMENDMENT 3 §F DECIDES it, and the decision is to
+// leave it here with the reason written down: after AMENDMENT 3 nothing on
+// `motir.co` calls this route. Vote and comment are HAND-OFFS (rows 4 and 5) —
+// the visitor comes to THIS origin and acts under this application's own
+// session — so this is an application route serving the application's own act
+// surface, not an entry in the public read contract. Declaring it there would
+// document an operation no consumer of that document can invoke: the session
+// cookie is `sameSite: \'lax\'`, so a cross-origin credentialed call is
+// impossible whatever the contract said.
+//
+// What WAS a real hole is closed below: the capability gate. Public projects are
+// a CLOUD capability (§5), and this route acts on one.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  // The CAPABILITY gate (MOTIR-4034 / MOTIR-4114) — FIRST, before the rate
+  // limit and before any session read, exactly as every `app/api/public/*`
+  // route does it: with `MOTIR_CLOUD` unset there are no public projects, so
+  // there is no public request to vote on or comment under.
+  const absent = publicSurfaceUnavailable();
+  if (absent) return absent;
+
   // The shared per-IP public-write ceiling (8.5.9 / MOTIR-1165), before the
   // session read — see `lib/rateLimit/publicWriteGuard.ts`.
   const limited = await enforcePublicWriteRateLimit(req);

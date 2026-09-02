@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
+import { publicCorsHeaders, publicCorsPreflightHeaders } from '@/lib/publicProjects/cors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
 // Optimistic cookie-presence check on every incoming request to a
@@ -82,7 +83,61 @@ function publicSiteRedirect(request: NextRequest): NextResponse | null {
   return NextResponse.redirect(destination, 308);
 }
 
+/**
+ * The PUBLIC READ SURFACE's cross-origin answer (MOTIR-4114 ·
+ * `public-surface-hosts.md` AMENDMENT 3 §D).
+ *
+ * `motir.co` renders `/p/*` server-side, and a server-side fetch needs no CORS.
+ * What needs it is every fetch the RENDERED PAGE then makes from the browser —
+ * paging an items list, expanding a tree level, loading the next roadmap column,
+ * subscribing by email. Handled here rather than in nine route files for one
+ * reason: a route added later inherits it. A per-route header is a rule in a
+ * comment, and `tests/api/public/cloud-gate-totality.test.ts` exists because
+ * that is what happens to those.
+ *
+ * ⚠️ NO `Access-Control-Allow-Credentials`, EVER. Nothing reachable this way
+ * requires a session, so the header set below is a convenience for the browser
+ * rather than a trust boundary: such a request carries no cookie (`sameSite:
+ * 'lax'` already guarantees that) and would be answered identically from
+ * `curl`. `lib/publicProjects/cors.ts` carries the reasoning.
+ *
+ * An origin that is not the public site gets NO cors headers and an ordinary
+ * response — the browser refuses it, which is where CORS is enforced. A caller
+ * that sends no `Origin` at all (a crawler, a feed reader, `curl`) is untouched.
+ */
+function publicSurfaceCors(request: NextRequest): NextResponse | null {
+  if (!request.nextUrl.pathname.startsWith('/api/public/')) return null;
+
+  const allow = publicCorsHeaders(request.headers.get('origin'));
+
+  // A PREFLIGHT is answered here and goes no further: it is a question about
+  // the NEXT request, so running it through a route handler would execute a
+  // read nobody asked for.
+  if (request.method === 'OPTIONS') {
+    const headers = { ...(allow ?? {}), ...(allow ? publicCorsPreflightHeaders() : {}) };
+    return new NextResponse(null, { status: 204, headers });
+  }
+
+  // ⚠️ AND IT ALWAYS TERMINATES, EVEN WITH NOTHING TO ALLOW. Returning `null`
+  // here — "no cors headers needed, carry on" — drops the request into the
+  // session bounce below, which 307s an ANONYMOUS API call to `/sign-in`. That
+  // is every caller with no `Origin` header: `curl`, a crawler, a feed reader,
+  // and `motir-marketing`'s own server-side fetches, which are how `motir.co`
+  // renders in the first place. The matcher entry is for CORS and for nothing
+  // else, so this branch owns every path under it.
+  const response = NextResponse.next();
+  for (const [name, value] of Object.entries(allow ?? {})) response.headers.set(name, value);
+  return response;
+}
+
 export function proxy(request: NextRequest) {
+  // The public READ API's cross-origin answer (MOTIR-4114) — first, because a
+  // preflight is answered here and never reaches a handler, and because these
+  // paths are an API rather than a page: none of the page logic below applies
+  // to them.
+  const cors = publicSurfaceCors(request);
+  if (cors) return cors;
+
   // The moved public surfaces leave this application first (MOTIR-3884): they
   // are answered on motir.co now, so the session bounce below is not theirs.
   const moved = publicSiteRedirect(request);
@@ -163,6 +218,11 @@ export const config = {
     // them onto motir.co. `/p/*` IS here: its move to motir.co was folded into
     // this redirect set (MOTIR-3877 renders the replacement; MOTIR-3951 deletes
     // the page here), so it must 308, not 404.
+    // The public READ API — matched for CORS only (MOTIR-4114). Everything
+    // below this line is a PAGE and takes the session bounce; this one is an
+    // API path and takes only the cross-origin answer, which `proxy()` handles
+    // before any of it.
+    '/api/public/:path*',
     '/',
     '/explore/:path*',
     '/docs/:path*',
