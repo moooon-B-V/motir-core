@@ -1,3 +1,4 @@
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 
 // The HAND-OFF's return destination (MOTIR-4114 · `public-surface-hosts.md`
@@ -48,8 +49,15 @@ import { publicSiteOrigin } from '@/lib/publicProjects/urls';
  * A FIXED path on this application, not a guess at where they came from: the
  * whole point of refusing a destination is that we do not trust it, and
  * salvaging a hostile URL into "something nearby" is trusting it a little.
+ *
+ * ⚠️ IT IS THE SIGNED-IN LANDING, TAKEN FROM ITS OWNER rather than re-typed
+ * (`home-scope.md` §2.3). A refused hand-off lands the visitor exactly where a
+ * fresh sign-in would, and that is not a coincidence to be maintained in two
+ * places: a literal here is the shape MOTIR-2921, MOTIR-3171 and MOTIR-3173
+ * each had to be repaired for, and `landing-owner-guard.test.ts` caught this
+ * one before it shipped.
  */
-export const HANDOFF_FALLBACK_PATH = '/home';
+export const HANDOFF_FALLBACK_PATH: string = AUTHED_LANDING_PATH;
 
 /**
  * Validate a return destination supplied by the public site.
