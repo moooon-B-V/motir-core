@@ -694,6 +694,32 @@ degraded** — the same line §5 draws for public projects, one document over.
 | **the re-consent gate**  | **HOLDS NOBODY**, and stays `MOTIR_CLOUD`-gated — see below                                                                                               |
 | **acceptance recording** | **WRITES NOTHING**, which is correct: there is no document to record an acceptance of                                                                     |
 
+**⚠️ AMENDED 2026-09-02 (MOTIR-4010) — what the rail row points at when it IS
+configured, which this section left open.** The table above answers the
+unconfigured arm, and §C's field set is per-DOCUMENT, so the manifest carries no
+index url — while the rail row is a door to the SET rather than to a document.
+The gap was found by building it.
+
+**DECIDED: the index is DERIVED from the urls the operator already supplied — if
+every configured url is `<base>/<slug>`, the index is `<base>` — and where that
+does not hold the row is ABSENT rather than guessed.** It holds for the hosted
+arrangement (`https://motir.co/legal/<slug>`) and for any operator who publishes
+a document set at one place, which is what having an index means. An operator
+publishing at unrelated addresses — `acme.com/terms-of-service`,
+`legal.acme.com/privacy` — genuinely has no index for the row to point at, and
+sending a reader to an invented one is worse than sending them nowhere. Sign-up
+and the re-consent rows still link each document directly, so nothing becomes
+unreachable; what is missing is a single door, which is exactly what is missing
+in reality. `lib/legal/links.ts`'s `legalIndexUrl()` is the implementation, and
+`tests/legal/legalLinks.test.ts` pins both arms.
+
+| Alternative                                         | Why rejected                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Add an `indexUrl` to the manifest**               | The cleanest answer, and it needs a SHAPE change: the manifest is a JSON array, so an index would make it an object. That widens the operator's configuration and re-opens a contract §C settled, for a row derivable from data they already supply. Worth revisiting if a second set-level value ever appears — one is not a shape. |
+| **Point the row at the first document**             | It is a door to the SET. Landing a reader on the Terms when they asked for _Legal_ is a wrong answer wearing a right one.                                                                                                                                                                                                            |
+| **Keep the row pointing at the old `/legal` route** | That route is deleted by the story after this one, so the row would 404 by design.                                                                                                                                                                                                                                                   |
+| **Drop the rail row entirely**                      | It is a shipped affordance and the hosted arrangement has a perfectly good index. Removing it for every operator to avoid deriving it for some is the wrong trade.                                                                                                                                                                   |
+
 **⚠️ The sign-up notice is ABSENT rather than re-flowed, and this reverses the
 form MOTIR-3909 was authored with.** The string is
 `legal.signUpNotice` — _"By creating a Motir account you agree to our

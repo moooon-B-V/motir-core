@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { resolvePostAuthDestination } from '@/lib/navigation/landing';
 import { SignUpCard } from './_components/SignUpCard';
+import { signUpLegalLinks } from '@/lib/legal/links';
 
 /**
  * `/sign-up` — a SERVER SHELL over the client card (MOTIR-3372), the same shape
@@ -30,5 +31,9 @@ export default async function SignUpPage({
     redirect(resolvePostAuthDestination({ next: params.next }));
   }
 
-  return <SignUpCard />;
+  // The legal notice links the CONFIGURED manifest's absolute urls, and renders
+  // nothing at all when the deployment has published none (MOTIR-4010). Resolved
+  // here because the manifest is a server-side read and the card is a client
+  // component — which also keeps the operator's document list out of the bundle.
+  return <SignUpCard legal={signUpLegalLinks()} />;
 }

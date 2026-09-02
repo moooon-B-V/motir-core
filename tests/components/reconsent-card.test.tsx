@@ -37,6 +37,8 @@ function outstanding(overrides: Partial<OutstandingDocument> = {}): OutstandingD
     acceptedVersion: '1.0.0',
     changeSummary: 'Adds the hosted-agent execution service.',
     effectiveDate: '12 October 2026',
+    // MOTIR-4010: the row links the manifest's ABSOLUTE url now, not `/legal/<slug>`.
+    url: 'https://motir.co/legal/terms',
     ...overrides,
   };
 }
@@ -55,8 +57,11 @@ describe('the re-consent interstitial', () => {
     ).toBeTruthy();
     expect(screen.getByText('1.0.0 → 2.0.0')).toBeTruthy();
     expect(screen.getByText(/adds the hosted-agent execution service/i)).toBeTruthy();
+    // ⚠️ AMENDED 2026-09-02 (MOTIR-4010): the row links the CONFIGURED manifest's
+    // absolute url, on the host the operator publishes — not a path this
+    // application serves.
     expect(screen.getByRole('link', { name: /read the new version/i }).getAttribute('href')).toBe(
-      '/legal/terms',
+      'https://motir.co/legal/terms',
     );
   });
 
@@ -217,7 +222,13 @@ describe('the deferred screen', () => {
     // sign back in to receive it — and you cannot ask somebody to accept a
     // document you will not let them open.
     renderWithIntl(
-      <ReconsentDeferred terms={{ slug: 'terms', title: 'Terms of Service', version: '2.0.0' }} />,
+      <ReconsentDeferred
+        terms={{
+          title: 'Terms of Service',
+          version: '2.0.0',
+          url: 'https://motir.co/legal/terms',
+        }}
+      />,
     );
 
     expect(screen.getByRole('heading', { name: /no problem — take your time/i })).toBeTruthy();
@@ -227,7 +238,7 @@ describe('the deferred screen', () => {
     expect(screen.getByText('Signed out')).toBeTruthy();
     expect(
       screen.getByRole('link', { name: /read it without signing in/i }).getAttribute('href'),
-    ).toBe('/legal/terms');
+    ).toBe('https://motir.co/legal/terms');
     expect(screen.getByRole('link', { name: /back to sign in/i }).getAttribute('href')).toBe(
       '/sign-in',
     );
@@ -244,5 +255,59 @@ describe('the deferred screen', () => {
     const { container } = renderWithIntl(<ReconsentDeferred terms={null} />);
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.querySelector('[aria-live]')).toBeNull();
+  });
+});
+
+// ── MOTIR-4010: the arm the manifest introduced ─────────────────────────────
+
+describe('a document whose url the manifest does not carry', () => {
+  // ⚠️ THIS IS A CLOUD MISCONFIGURATION, not a self-host state, and the drawing
+  // says so (`design/auth/legal-agreement.mock.html` panel 15). The gate is
+  // `MOTIR_CLOUD`-only, so a self-hosted deployment never renders this screen at
+  // all; a CLOUD build holding somebody over a document whose url is missing is
+  // a fault, and `/api/health/legal` is what tells the operator.
+  it('keeps everything that identifies the change and loses only the way OUT', () => {
+    renderWithIntl(
+      <ReconsentCard
+        documents={[outstanding({ url: null as unknown as string })]}
+        destination="/home"
+      />,
+    );
+
+    // The name, the delta and the author's sentence all come from the manifest
+    // entry and all still render — a person is told WHAT changed even when they
+    // cannot open it.
+    // The headline also names the document, so address the ROW's own copy — the
+    // version chip and the summary — rather than a loose text match.
+    expect(screen.getAllByText(/terms of service/i).length).toBeGreaterThan(1);
+    expect(screen.getByText('1.0.0 → 2.0.0')).toBeTruthy();
+    expect(screen.getByText(/adds the hosted-agent execution service/i)).toBeTruthy();
+
+    // And no link — which is uncomfortable on purpose.
+    expect(screen.queryByRole('link', { name: /read the new version/i })).toBeNull();
+  });
+
+  it('invents no fallback link and renders no "unavailable" string', () => {
+    // A legal notice that explains our operational problem to the reader has put
+    // the wrong thing on their screen. The operator is told elsewhere.
+    renderWithIntl(
+      <ReconsentCard
+        documents={[outstanding({ url: null as unknown as string })]}
+        destination="/home"
+      />,
+    );
+
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.queryByText(/unavailable|not available|missing/i)).toBeNull();
+  });
+
+  it('still offers the terminal act — the reader is not stuck', () => {
+    renderWithIntl(
+      <ReconsentCard
+        documents={[outstanding({ url: null as unknown as string })]}
+        destination="/home"
+      />,
+    );
+    expect(screen.getByRole('button', { name: /agree and continue/i })).toBeTruthy();
   });
 });
