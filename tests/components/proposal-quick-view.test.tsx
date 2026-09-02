@@ -189,6 +189,38 @@ describe('ProposalQuickView — a proposal about a card that ALREADY EXISTS', ()
     expect(screen.getByText(/What the archive deletes/)).toBeTruthy();
   });
 
+  it('renders the RAIL a modify will leave behind — every field, not just the parent (MOTIR-4143)', () => {
+    // ⚠️ THE REPORTED SHAPE, and the reason the assertion is per FIELD. The rail
+    // mounts on the UNION of these values being non-null and draws each row on
+    // its own test, so `getByTestId('proposal-quick-view')` finding a rail — or
+    // a single Parent row rendering — is exactly what the defect looked like:
+    // *"the fields are not displaying. I only see parent on the right side."*
+    renderWithIntl(
+      <ProposalQuickView
+        item={modified({
+          type: 'test',
+          priority: 'highest',
+          storyPoints: 8,
+          estimateMinutes: 65,
+          targetRepo: 'moooon-B-V/motir-core',
+          executor: 'coding_agent',
+          parentIdentifier: 'MOTIR-3942',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('test')).toBeTruthy();
+    expect(screen.getByText('highest')).toBeTruthy();
+    expect(screen.getByText('8')).toBeTruthy();
+    expect(screen.getByText('65 min')).toBeTruthy();
+    expect(screen.getByText('moooon-B-V/motir-core')).toBeTruthy();
+    expect(screen.getByText('Coding agent')).toBeTruthy();
+    // The one field that was NEVER gated, asserted beside the six that were —
+    // it is what made the empty rail render as a rail at all.
+    expect(screen.getByText('MOTIR-3942')).toBeTruthy();
+  });
+
   it('the `add` arm still says New · not yet created — the fix is not a swap', () => {
     // Guarded explicitly, because the cheapest way to make every assertion above
     // pass is to invert the constant rather than read the model.

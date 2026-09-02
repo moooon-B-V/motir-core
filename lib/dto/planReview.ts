@@ -201,10 +201,24 @@ export interface PlanReviewItemDto {
   title: string;
   /** The work-item kind (`epic`/`story`/`task`/`bug`/`subtask`); defaults `task`. */
   kind: string;
-  /** The `add`'s proposed PRIORITY — `null` for a `modify`/`remove` (only an
-   *  `add` is editable, 7.21.6 · MOTIR-1370) or an `add` with none set. */
+  /**
+   * The PRIORITY this proposal is asking for — **on every op** (bug
+   * MOTIR-4143), the rule `title` and both bodies already state above.
+   *
+   * An `add` reports its proposed value; a `modify` reports `patch.priority`
+   * when the patch CARRIES the key (presence, so an explicit `null` clears)
+   * and the target's live value when it does not; a `remove` reports the
+   * target's. `null` only when nobody has one.
+   *
+   * ⚠️ IT USED TO BE `null` FOR EVERY OP BUT `add`, on the ground that a rail
+   * has no old→new affordance while the `changes` diff does — which is true of
+   * the list row and false of `ProposalQuickView`, the only surface this field
+   * reaches and one with no diff at all. A `modify` opened there rendered its
+   * ENTIRE rail as a single Parent row.
+   */
   priority: string | null;
-  /** The `add`'s proposed work-item TYPE (`code`/`design`/…) — `null` as above. */
+  /** The work-item TYPE (`code`/`design`/…) this proposal is asking for — on
+   *  every op, the same rule and the same reason as `priority` above. */
   type: string | null;
   /**
    * The DESCRIPTION this proposal is asking for — **on every op** (bug
@@ -239,9 +253,13 @@ export interface PlanReviewItemDto {
    * / `remove`, which describe an existing item rather than propose a new one"*,
    * and it was the DOCUMENTED intent behind the defect above, so it is corrected
    * rather than left to be contradicted by the code. **`explanationMd` follows
-   * `descriptionMd`'s rule and is populated on every op**; the rest below are
-   * add-only, and their sole remaining exception is stated at
-   * `explanationSource`. The op axis is held field by field by
+   * `descriptionMd`'s rule and is populated on every op**, and so — since bug
+   * MOTIR-4143 — does every RAIL field below it: `storyPoints`,
+   * `estimateMinutes`, `targetRepo`, `targetRepoRole` and `executor` all report
+   * the value the card will HAVE, because the quick view that renders them has
+   * no diff to read the change out of. What remains add-only is
+   * `explanationSource` and `planningProvenance`, each stated at its own field
+   * and for the same reason: neither describes the CARD. The op axis is held field by field by
    * `tests/dto/planReviewFieldParity.test.ts`, so which side a field is on is a
    * decision somebody writes down rather than one a reader infers from here.
    *
