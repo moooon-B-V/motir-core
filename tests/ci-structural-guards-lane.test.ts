@@ -174,6 +174,10 @@ const SELF_WALKING_MEMBERS = [
   // `stripComments`, which parses text handed to it and reaches no filesystem
   // of its own — so, like the entries above, nothing derives it.
   'tests/theme/namedMaxWidthUtilities.test.ts',
+  // MOTIR-4230. Same shape as the entry above and the same reason nothing
+  // derives it: its own `readdirSync` over `app/`, `components/` and the design
+  // system's `src/`, importing no scanner at all.
+  'tests/theme/immersiveShellAtmosphere.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {
