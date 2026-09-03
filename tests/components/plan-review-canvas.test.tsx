@@ -195,6 +195,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     staleReasons: [],
     revised: false,
     targetMissing: false,
+    proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
     ...over,
   };
 }

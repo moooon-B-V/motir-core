@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PLAN_ITEM_PATCH_KEYS, type PlanItemPatchKey } from '@/lib/dto/plans';
-import { PLAN_ITEM_CHANGE_FIELDS, type PlanItemChangeField } from '@/lib/dto/planReview';
+import {
+  PLAN_ITEM_CHANGE_FIELDS,
+  PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  type PlanItemChangeField,
+} from '@/lib/dto/planReview';
 
 // The PARITY GUARD (MOTIR-3084 / bug MOTIR-3070).
 //
@@ -514,6 +518,48 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
   it('parses the interface — a guard that read nothing would pass vacuously', () => {
     expect(declared.size).toBeGreaterThan(10);
     expect(declared.has('targetRepo')).toBe(true);
+  });
+
+  // ── MOTIR-4183 · the OP AXIS now covers the PEEK's projection too ─────────
+  //
+  // This guard was written for the review MODEL's fields. The peek reads that
+  // model through a `proposal` envelope, so the axis it holds has one more
+  // consumer — and one field that stays `add`-only ON PURPOSE, which is exactly
+  // the shape this file exists to record rather than leave to be re-derived.
+
+  it('records `explanationSource` as add-ONLY, WITH the reason', () => {
+    // `PlanItemPatch` has no `explanationSource` twin, deliberately: that column
+    // is not the caller's to set, so a patch that could write it would let a
+    // plan forge provenance, and `applyModify` leaves the target's value alone.
+    // A `modify` therefore has nothing to say here, and reporting the TARGET's
+    // source beside a REWRITTEN explanation would attribute the new text to
+    // whoever wrote the old one — MOTIR-4134's own defect, pointing the other way.
+    expect(PLAN_ITEM_PATCH_KEYS).not.toContain('explanationSource' as PlanItemPatchKey);
+    // …and therefore not a field the peek's marker or its denominator can name.
+    expect(PLAN_ITEM_SETTABLE_RAIL_FIELDS).not.toContain(
+      'explanationSource' as PlanItemChangeField,
+    );
+  });
+
+  it('records `executor` as add-ONLY too — and this one was got WRONG in a design', () => {
+    // Part XIV's first draft marked `executor` changeable on a `modify`.
+    // `PlanItemPatch` has no key for it and `plansService.applyModify` never
+    // writes one; it is settable on an `add` and deepenable, and on every other
+    // op it is the TARGET's. Recorded here so the next reader of the op axis
+    // finds the answer rather than the assumption.
+    expect(PLAN_ITEM_PATCH_KEYS).not.toContain('executor' as PlanItemPatchKey);
+    expect(PLAN_ITEM_SETTABLE_RAIL_FIELDS).not.toContain('executor' as PlanItemChangeField);
+  });
+
+  it('every SETTABLE rail field is a patch key’s row — the denominator cannot outrun the patch', () => {
+    // The peek's count line reads "{n} of {m} fields it can set". If `m` could
+    // name a field no patch key produces, the line would promise the reviewer a
+    // field the plan cannot move.
+    const produced = new Set(
+      Object.values(DISPOSITION).flatMap((d) => ('row' in d ? [d.row as string] : [])),
+    );
+    const unproducible = PLAN_ITEM_SETTABLE_RAIL_FIELDS.filter((f) => !produced.has(f));
+    expect({ unproducible }).toEqual({ unproducible: [] });
   });
 
   it('would have caught the two keys that shipped invisible', () => {

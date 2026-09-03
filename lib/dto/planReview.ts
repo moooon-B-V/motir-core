@@ -23,6 +23,7 @@
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   PlanItemOpDto,
+  PlanItemPatch,
   PlanStatusDto,
   PlanDecisionReasonDto,
   StaleReason,
@@ -72,6 +73,103 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
 ] as const;
 
 export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];
+
+/**
+ * EVERY `PlanItemPatch` key, mapped to the rail row it moves — or `null` when it
+ * moves something that is not a rail row (MOTIR-4183, design Part XIV §3).
+ *
+ * ⚠️ `satisfies Record<keyof PlanItemPatch, …>` is the whole point: the map is
+ * TOTAL over the patch type, so a key added to `PlanItemPatch` is a COMPILE
+ * ERROR here until somebody dispositions it. The peek's count line reads
+ * *"{n} of {m} fields it can set"*, and `m` is derived from this map rather
+ * than written down — a denominator stated as a constant is one that drifts
+ * from what a plan can actually do, silently, the first time the patch grows.
+ *
+ * **Two keys, one row.** `targetRepo` and `targetRepoRole` both move the
+ * `Repositories` rail row, so the row set below de-duplicates to SIX.
+ *
+ * **`title` / `descriptionMd` / `explanationMd` are `null` here and that is not
+ * an oversight** — they are patchable, and they are marked in the peek's MAIN
+ * COLUMN. A line at the foot of the RAIL that counted them would answer about
+ * fields the reader cannot see from where it sits (Part XIV §3).
+ * `blockedByAdd` / `blockedByRemove` are edges: the canvas draws them (Part IX).
+ */
+const PATCH_KEY_RAIL_ROW = {
+  title: null,
+  descriptionMd: null,
+  explanationMd: null,
+  blockedByAdd: null,
+  blockedByRemove: null,
+  priority: 'priority',
+  type: 'type',
+  storyPoints: 'storyPoints',
+  estimateMinutes: 'estimateMinutes',
+  targetRepo: 'targetRepo',
+  targetRepoRole: 'targetRepo',
+  parentRef: 'parent',
+} satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
+
+/**
+ * The rail rows a `modify` CAN move — the denominator of the peek's count line.
+ * DERIVED from {@link PATCH_KEY_RAIL_ROW}, never listed.
+ *
+ * ⚠️ `executor` is deliberately absent, and it is the one a reader expects to
+ * find. `PlanItemPatch` has no `executor` key and `plansService.applyModify`
+ * never writes one: it is settable on an `add` and deepenable
+ * (`agent-authored-plans.md` AMENDMENT 4 D3a), and on every other op it is the
+ * TARGET's. Part XIV's first draft marked it changeable on a `modify` and was
+ * corrected against this type.
+ */
+export const PLAN_ITEM_SETTABLE_RAIL_FIELDS: readonly PlanItemChangeField[] = Array.from(
+  // `flatMap` rather than `filter` + a predicate: the map's value type is a
+  // NARROWER union than `PlanItemChangeField` (it holds only the rail rows), so
+  // a `row is PlanItemChangeField` predicate is not assignable to its own
+  // parameter. `flatMap` narrows by construction and needs no assertion.
+  new Set(Object.values(PATCH_KEY_RAIL_ROW).flatMap((row) => (row === null ? [] : [row]))),
+);
+
+/**
+ * What only a PROPOSAL has, carried BESIDE the payload the shipped quick view
+ * reads (MOTIR-4183, story MOTIR-4181).
+ *
+ * ⚠️ THE PAYLOAD ITSELF IS NOT HERE, AND THAT IS THE DECISION (Part XIV §2, as
+ * amended). A `modify` / `remove` names a real work item, and the shipped peek
+ * is ALREADY client-fetched by key from both hosts
+ * (`WorkItemQuickView.tsx:75`, `IssueQuickViewController.tsx:70`). Merging the
+ * target's `QuickViewData` in HERE would mean `workItemsService.getQuickView` —
+ * ~14 reads — once per proposal, on a plan-review read whose own header
+ * advertises ONE batched target read and no N+1: ~280 reads for a plan with
+ * twenty `modify`s, to serve a peek the reviewer opens at most one of.
+ *
+ * So the overlay happens ON OPEN, in the host, over the request it already
+ * makes. This envelope is what the plan read owes and all it owes.
+ */
+export interface PlanProposalPeekDto {
+  /** WHICH kind of change this is — the peek header's op chip. */
+  op: PlanItemOpDto;
+  /** The target's key, or `null` for an un-materialized `add`, which has none
+   *  until approve materializes it — the same rule `PlanReviewItemDto.identifier`
+   *  states, repeated here so a consumer of the envelope alone can tell whether
+   *  there is a payload to fetch at all. `null` IS the signal: no key, no fetch,
+   *  and the proposed values below are the whole of what can be shown. */
+  identifier: string | null;
+  /**
+   * The fields this plan MOVES — the key set `buildChanges` emits for the same
+   * proposal, not a second comparison.
+   *
+   * ⚠️ ONE SOURCE, deliberately. A marker computed from its own diff would be
+   * right the day it was written and would drift the first time a field was
+   * added to only one of them — and the drift would be invisible, because each
+   * surface would be self-consistent. Empty for an `add` (everything is
+   * proposed, which the count line says in words) and for a `remove` (which
+   * changes no field).
+   */
+  changedFields: PlanItemChangeField[];
+  /** The rail rows a patch CAN move — {@link PLAN_ITEM_SETTABLE_RAIL_FIELDS},
+   *  carried so an older client renders the denominator the SERVER's patch type
+   *  supports rather than the one its own bundle was built against. */
+  settableRailFields: readonly PlanItemChangeField[];
+}
 
 /** One field's OLD → NEW change in a `modify` proposal (the diff overlay). */
 export interface PlanItemChangeDto {
@@ -333,6 +431,14 @@ export interface PlanReviewItemDto {
   staleReasons: StaleReason[];
   /** `remove` / drifted `modify`: the live target is archived or hard-deleted. */
   targetMissing: boolean;
+  /**
+   * What only a PROPOSAL has, for the peek that reads it (MOTIR-4183).
+   *
+   * ⚠️ ADDITIVE. Every field above keeps its value and its meaning — the canvas
+   * node and the list row read none of this and are unchanged by it. The peek is
+   * a new READING of the same model, which is the whole shape of this story.
+   */
+  proposal: PlanProposalPeekDto;
 }
 
 /**
