@@ -447,6 +447,15 @@ describe('hostnameReservationHash', () => {
     // strips it, and so must this, or one path reserves a name the other cannot
     // test for.
     expect(hostnameReservationHash('acme.motir.example.')).toBe(canonical);
+    // EVERY trailing dot, not just one. The strip is a linear loop rather than
+    // `/\.+$/` (CodeQL `js/polynomial-redos`, high — an anchored `\.+` retries
+    // from every offset), and this is the assertion that pins the loop's
+    // behaviour to the regex's rather than only to the single-dot case.
+    expect(hostnameReservationHash('acme.motir.example....')).toBe(canonical);
+    expect(hostnameReservationHash(`acme.motir.example${'.'.repeat(5000)}`)).toBe(canonical);
+    // And a dot-only input degenerates to the empty string rather than looping
+    // off the front of the buffer.
+    expect(hostnameReservationHash('....')).toBe(hostnameReservationHash(''));
   });
 
   it('separates two hostnames that differ only in the label', () => {

@@ -49,6 +49,29 @@ import type { PublicAddressKind } from '@/generated/prisma/client';
 const RESERVATION_HASH_PREFIX = 'motir:public-hostname-reservation:v1:';
 
 /**
+ * Strip every trailing dot, in ONE linear pass.
+ *
+ * ⚠️ NOT `replace(/\.+$/, '')`, which is what this was and what CodeQL's
+ * `js/polynomial-redos` flagged at HIGH on the pull request. An anchored `\.+`
+ * has no way to fail early: the engine retries the quantifier from every
+ * starting offset, so a hostname of many dots costs O(n²). The two existing
+ * `/\.+$/` sites in this tree are not equivalent —`tenantBaseDomain` normalises
+ * a value read from `process.env`, which is operator configuration and not
+ * reachable from a request — but THIS one takes a hostname composed from a
+ * label a claimant typed, so the taint path is real and the alert is right.
+ *
+ * A length bound would also close it and is the worse fix: it makes the cost
+ * acceptable rather than removing it, and it puts a second, silent opinion
+ * about how long a hostname may be next to the one the label grammar already
+ * enforces.
+ */
+function stripTrailingDots(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 46 /* '.' */) end -= 1;
+  return value.slice(0, end);
+}
+
+/**
  * The digest a hostname is reserved under.
  *
  * Normalises the way `normaliseCustomHostname` and `tenantBaseDomain` both do —
@@ -57,7 +80,7 @@ const RESERVATION_HASH_PREFIX = 'motir:public-hostname-reservation:v1:';
  * same digest.
  */
 export function hostnameReservationHash(hostname: string): string {
-  const normalised = hostname.trim().toLowerCase().replace(/\.+$/, '');
+  const normalised = stripTrailingDots(hostname.trim().toLowerCase());
   return createHash('sha256').update(`${RESERVATION_HASH_PREFIX}${normalised}`).digest('hex');
 }
 
