@@ -804,6 +804,7 @@ function PublicShareSection({
   // mounts the route; MOTIR-4242 retargets the door). The `?edit=1` deep link
   // into the retired on-page editor is gone with the page that hosted it.
   const editPath = '/settings/project/public';
+  const publicAddressPath = '/settings/project/public-address';
 
   async function copyLink() {
     try {
@@ -854,6 +855,21 @@ function PublicShareSection({
           <Info className="mt-0.5 size-4 shrink-0 text-(--el-text-strong)" aria-hidden />
           <p className="font-sans text-xs text-(--el-text-strong)">{t('public.linkNote')}</p>
         </div>
+        {/* DOOR ② into the Public address room (Story MOTIR-3878 · MOTIR-4221,
+            design/projects/design-notes.md § *The access path*, entrance ②).
+            It sits UNDER the share link on purpose: this is the moment the
+            question occurs — somebody has just made a project public and is
+            looking at the address it got. Admin-gated exactly as the Hero &
+            overview door below is; a non-admin sees neither. */}
+        {canManage ? (
+          <a
+            href={publicAddressPath}
+            className="mt-3 inline-flex items-center gap-1.5 font-sans text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+          >
+            {t('public.setUpOwnAddress')}
+            <ArrowRight className="size-4" aria-hidden />
+          </a>
+        ) : null}
       </Card>
 
       {/* Hero & overview → the Public page room (MOTIR-4242, design

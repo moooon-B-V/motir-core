@@ -21,8 +21,27 @@ import { describe, expect, it } from 'vitest';
 // is imported, and half the ways Fly can leak (a hardcoded API host, an env var,
 // a `state === 'started'` string) are not imports at all.
 
-/** Where Fly may be named. Everything else in `lib/` must not know it exists. */
-const ADAPTER_DIR = join('lib', 'orchestrator', 'adapters', 'fly');
+/**
+ * Where Fly may be named. Everything else in `lib/` must not know it exists.
+ *
+ * ⚠️ TWO directories since MOTIR-4210, and the second is a DIFFERENT PORT rather
+ * than a widening of this one. `lib/publicAddresses/adapters/fly/` speaks to
+ * Fly's CERTIFICATES resource on the `motir-marketing` app, with its own token
+ * (`FLY_CERTS_TOKEN`), for the customer-domain lifecycle — it boots no
+ * container, meters nothing, and imports nothing from `lib/orchestrator/`.
+ *
+ * It is listed here rather than exempted per-file because this guard's REACH is
+ * deliberately all of `lib/` (a boundary narrowed to the directory it protects
+ * is one you evade by moving a file), so a second legitimate adapter has to be
+ * named somewhere. Its own boundary — that the certificate port's callers never
+ * name Fly — is asserted by `tests/publicAddresses/certificatePortBoundary.test.ts`,
+ * which is the same rule one port over. Neither guard covers the other, and
+ * that is why there are two.
+ */
+const ADAPTER_DIRS = [
+  join('lib', 'orchestrator', 'adapters', 'fly'),
+  join('lib', 'publicAddresses', 'adapters', 'fly'),
+];
 
 /**
  * The COMPOSITION ROOT — the one file outside the adapter that must name it.
@@ -57,7 +76,7 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
 ];
 
 /**
- * The TWO sanctioned exceptions, worth naming rather than hiding.
+ * The THREE sanctioned exceptions, worth naming rather than hiding.
  *
  * Each is scoped to ONE file AND ONE tell, so the exemption covers the line it
  * was argued for and nothing else: a second kind of leak in an excused file
@@ -97,6 +116,18 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
  *    `FLY_API_TOKEN` read in that file — the thing that would turn a passive
  *    identity accessor into a Fly API client — fails this guard, which is the
  *    whole point of scoping an exemption to a pattern instead of to a path.
+ *
+ * 3. `lib/publicAddresses/providers.ts` is the CERTIFICATE port's composition
+ *    root (MOTIR-4216) — the selector between `adapters/fly/` and the E2E fake,
+ *    which is to that port exactly what `lib/orchestrator/index.ts` is to this
+ *    one. It is registered here rather than as a second `COMPOSITION_ROOT`
+ *    because it is not THIS port's selector: it boots no container and imports
+ *    nothing from `lib/orchestrator/`, so it earns one narrow tell — the
+ *    certificate adapter's path — and nothing wider. A fleet import or a
+ *    `FLY_*` read in that file still fails here. Its own guard,
+ *    `tests/publicAddresses/certificatePortBoundary.test.ts`, is where it is
+ *    argued for as a selector; this entry only stops the two guards from
+ *    contradicting each other on the one file both must name.
  */
 const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
   {
@@ -108,6 +139,11 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     file: join('lib', 'deployment', 'identity.ts'),
     tell: /\bFLY_(APP_NAME|REGION|MACHINE_ID)\b/,
     why: "answers where the WEB PROCESS runs, for the console's hosting card — not the fleet's port",
+  },
+  {
+    file: join('lib', 'publicAddresses', 'providers.ts'),
+    tell: /publicAddresses\/adapters\/fly/,
+    why: "the CERTIFICATE port's composition root — it selects that adapter, not the fleet's",
   },
 ];
 
@@ -147,7 +183,7 @@ function violations(): Array<{ file: string; what: string; line: string }> {
       const rel = relative(root, file);
       // The adapter itself is where Fly lives; the selector is where it is
       // chosen. Those two, and nothing else.
-      if (rel.startsWith(ADAPTER_DIR + sep)) continue;
+      if (ADAPTER_DIRS.some((dir) => rel.startsWith(dir + sep))) continue;
       if (rel === COMPOSITION_ROOT) continue;
       const source = stripComments(readFileSync(file, 'utf8'));
       for (const { pattern, what } of FLY_TELLS) {

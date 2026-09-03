@@ -650,14 +650,19 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `member`
 
-| Operation                              | Verbs        | Gate today                                                          | Permission              | Decision | Why |
-| -------------------------------------- | ------------ | ------------------------------------------------------------------- | ----------------------- | -------- | --- |
-| `/api/projects/[key]/access`           | PATCH        | `projectMembersService.setAccessLevel` → `assertPermission`         | `project:manage_access` | existing | R18 |
-| `/api/projects/[key]/members`          | GET          | `projectMembersService.listMembers` → `assertPermission`            | `project:browse`        | existing | R27 |
-| `/api/projects/[key]/members`          | POST         | `projectMembersService.addMember` → `assertPermission`              | `member:manage`         | existing | R27 |
-| `/api/projects/[key]/members/[userId]` | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission` | `member:manage`         | existing | R27 |
-| `/api/projects/[key]/roles`            | POST         | `projectRoleDefinitionService.create` → `assertPermission`          | `project:manage_access` | existing | R51 |
-| `/api/projects/[key]/roles/[roleId]`   | PATCH/DELETE | `projectRoleDefinitionService.{update,delete}` → `assertPermission` | `project:manage_access` | existing | R51 |
+| Operation                                                  | Verbs        | Gate today                                                            | Permission              | Decision | Why |
+| ---------------------------------------------------------- | ------------ | --------------------------------------------------------------------- | ----------------------- | -------- | --- |
+| `/api/projects/[key]/access`                               | PATCH        | `projectMembersService.setAccessLevel` → `assertPermission`           | `project:manage_access` | existing | R18 |
+| `/api/projects/[key]/members`                              | GET          | `projectMembersService.listMembers` → `assertPermission`              | `project:browse`        | existing | R27 |
+| `/api/projects/[key]/members`                              | POST         | `projectMembersService.addMember` → `assertPermission`                | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/members/[userId]`                     | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission`   | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/roles`                                | POST         | `projectRoleDefinitionService.create` → `assertPermission`            | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/roles/[roleId]`                       | PATCH/DELETE | `projectRoleDefinitionService.{update,delete}` → `assertPermission`   | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses`                     | GET          | `customDomainService.list` → `assertPermission`                       | `project:browse`        | existing | R51 |
+| `/api/projects/[key]/public-addresses`                     | POST         | `customDomainService.add` → `assertPermission`                        | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses/[addressId]`         | DELETE       | `customDomainService.remove` → `assertPermission`                     | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses/[addressId]/verify`  | POST         | `customDomainService.verify` → `assertPermission`                     | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses/[addressId]/primary` | POST/DELETE  | `customDomainService.{makePrimary,clearPrimary}` → `assertPermission` | `project:manage_access` | existing | R51 |
 
 ### `project`
 
@@ -676,6 +681,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/public/categories`                               | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
 | `/api/public/explore`                                  | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
 | `/api/public/projects`                                 | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/hosts/[host]`                             | GET    | — none — anonymous; the CLOUD gate, then a hostname the store says is LIVE        | —                        | no-gate  | R33 |
 | `/api/public/p/[identifier]`                           | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/changelog`                 | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/changelog.xml`             | GET    | `resolvePublicProject` → `resolvePublicBrowse`                                    | `public_request:submit`  | new      | R33 |
@@ -872,24 +878,25 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `workspace`
 
-| Operation                                     | Verbs        | Gate today        | Permission | Decision         | Why |
-| --------------------------------------------- | ------------ | ----------------- | ---------- | ---------------- | --- |
-| `/api/invites/[token]`                        | GET          | — none —          | —          | workspace-scoped | R38 |
-| `/api/invites/[token]/accept`                 | POST         | session only      | —          | workspace-scoped | R38 |
-| `/api/onboarding/migrate`                     | POST         | session only      | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]`                | GET          | `assertCanBrowse` | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]/advance`        | POST         | workspace only    | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]/index-status`   | GET          | `assertCanBrowse` | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]/skip-import`    | POST         | `assertCanEdit`   | —          | workspace-scoped | R45 |
-| `/api/organizations/[orgId]`                  | PATCH        | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/billing`          | GET          | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/billing/checkout` | POST         | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/billing/portal`   | POST         | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/members`          | GET/POST     | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/members/[userId]` | DELETE/PATCH | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/usage`            | GET          | session only      | —          | workspace-scoped | R3  |
-| `/api/workspaces/[workspaceId]/invites`       | POST         | session only      | —          | workspace-scoped | R3  |
-| `/api/workspaces/current`                     | GET          | session only      | —          | workspace-scoped | R3  |
+| Operation                                        | Verbs        | Gate today                                                   | Permission | Decision         | Why |
+| ------------------------------------------------ | ------------ | ------------------------------------------------------------ | ---------- | ---------------- | --- |
+| `/api/invites/[token]`                           | GET          | — none —                                                     | —          | workspace-scoped | R38 |
+| `/api/invites/[token]/accept`                    | POST         | session only                                                 | —          | workspace-scoped | R38 |
+| `/api/onboarding/migrate`                        | POST         | session only                                                 | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]`                   | GET          | `assertCanBrowse`                                            | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]/advance`           | POST         | workspace only                                               | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]/index-status`      | GET          | `assertCanBrowse`                                            | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]/skip-import`       | POST         | `assertCanEdit`                                              | —          | workspace-scoped | R45 |
+| `/api/organizations/[orgId]`                     | PATCH        | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/billing`             | GET          | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/billing/checkout`    | POST         | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/billing/portal`      | POST         | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/members`             | GET/POST     | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/members/[userId]`    | DELETE/PATCH | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/usage`               | GET          | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/workspaces/[workspaceId]/invites`          | POST         | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/workspaces/[workspaceId]/public-subdomain` | GET/PUT      | workspace ROLE (`owner`/`admin`) → `SubdomainForbiddenError` | —          | workspace-scoped | R3  |
+| `/api/workspaces/current`                        | GET          | session only                                                 | —          | workspace-scoped | R3  |
 
 ### `'use server'` actions
 

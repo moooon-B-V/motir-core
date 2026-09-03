@@ -401,6 +401,26 @@ export default defineConfig({
         'lib/settings/projectNavAccess.ts',
         'app/**/_components/ProjectAccessProvider.tsx',
 
+        // Story MOTIR-3878 · Subtask MOTIR-4223 — customer-owned addresses, the
+        // whole surface the story's ten motir-core cards added. MEASURED first
+        // and pinned below, the sequence this block follows everywhere.
+        //
+        // ⚠️ `app/**/`, NOT `app/(authed)/`, for the reason the block above
+        // records: a route group's parentheses are extglob syntax to the
+        // matcher, so a literal path matches nothing and the file silently never
+        // enters the report.
+        'lib/publicAddresses/**',
+        'lib/repositories/publicAddressRepository.ts',
+        'lib/services/publicSubdomainService.ts',
+        'lib/services/customDomainService.ts',
+        'lib/services/publicAddressesService.ts',
+        'lib/services/publicAddressCertificatesService.ts',
+        'lib/jobs/definitions/publicAddressCertificateRefresh.ts',
+        'app/api/public/hosts/**/route.ts',
+        'app/api/workspaces/**/public-subdomain/route.ts',
+        'app/api/projects/**/public-addresses/**/route.ts',
+        'app/**/settings/project/public-address/_components/*.tsx',
+
         // Story MOTIR-1215 · Subtask MOTIR-3646 — the require-2FA control and
         // its Server Action. MEASURED at 100/100/100/100 each before being
         // pinned below, the sequence this block follows everywhere.
@@ -2094,6 +2114,42 @@ export default defineConfig({
         },
         'lib/mappers/permissionMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/settings/projectSettingsNav.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3878 · Subtask MOTIR-4223 — MEASURED on this branch over
+        // tests/publicAddresses + tests/settings + tests/api/public + tests/rls
+        // + tests/jobs, then pinned. These EIGHT clear the floor on all three
+        // metrics:
+        //
+        //   publicAddressCertificateRefresh  100 / 100 / 100
+        //   allowedOrigins                   100 /  95 / 100
+        //   certificateProvider              100 / 100 / 100
+        //   dnsResolver                      100 / 100 / 100
+        //   errorResponse                    100 / 100 / 100
+        //   reservedNames                    100 / 100 / 100
+        //   tenantDomain                     100 / 100 / 100
+        //   publicSubdomainService          98.1 / 90.9 / 100
+        //
+        // ⚠️ THE REST OF THE STORY'S SURFACE IS IN `include` AND DELIBERATELY
+        // NOT HERE, which is this file's own established pattern ("so CI
+        // publishes a number without gating on one") — and MOTIR-4223 records
+        // the shortfall rather than hiding it. What is missing is BRANCH
+        // coverage, on files whose LINES are already 85–100: the four lifecycle
+        // routes sit at 66.7% branches because each has three arms and the
+        // rethrow is exercised on one route rather than four, and the
+        // repository at 33.3% has an `InTx`/non-`InTx` pair per method. Both are
+        // real gaps and neither is a hole in the SHIPPED behaviour — every route
+        // now has a test where none had one before this card.
+        'lib/jobs/definitions/publicAddressCertificateRefresh.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/publicAddresses/allowedOrigins.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/certificateProvider.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/dnsResolver.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/reservedNames.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/tenantDomain.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/publicSubdomainService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2258 · Subtask MOTIR-2476 — both MEASURED before being
         // pinned, on this branch, with the story's own suites: the nav map at
         // 100/100/100 and the provider at 100/100/100.

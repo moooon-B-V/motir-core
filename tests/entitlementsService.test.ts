@@ -27,6 +27,7 @@ const { makeWorkItemFixture, createTestUser, nextTestPosition } = await import('
 const { keyForAppend } = await import('@/lib/workItems/positioning');
 const { truncateAuthTables } = await import('./helpers/db');
 const { CapLockUnavailableError, EntitlementExceededError } = await import('@/lib/billing/errors');
+const { publicAddressRepository } = await import('@/lib/repositories/publicAddressRepository');
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -858,3 +859,140 @@ describe('entitlementsService — the org-creation gate’s ACTOR-row lock (MOTI
     ).resolves.toBeUndefined();
   });
 });
+
+describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR §9)', () => {
+  it('refuses the FIRST domain on a free org', async () => {
+    // `free: 0` is the ADR's provisional value, and it makes the refusal the
+    // upgrade prompt's trigger rather than an empty state the pane special-cases.
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertCanAddCustomDomain(orgId, tx)),
+    ).rejects.toBeInstanceOf(EntitlementExceededError);
+  });
+
+  it('carries `custom_domains` as the entitlement the prompt keys off', async () => {
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    const err = await withWorkspaceContext(fx.ctx, (tx) =>
+      entitlementsService.assertCanAddCustomDomain(orgId, tx),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(EntitlementExceededError);
+    expect((err as InstanceType<typeof EntitlementExceededError>).entitlement).toBe(
+      'custom_domains',
+    );
+  });
+
+  it('admits a paid org below its cap, and refuses it AT the cap', async () => {
+    // Both directions on one org, because a gate that refuses everybody passes
+    // every denial test ever written.
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await setTier(orgId, SCALED);
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertCanAddCustomDomain(orgId, tx)),
+    ).resolves.toBeUndefined();
+
+    await seedCustomDomains(fx, 5);
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertCanAddCustomDomain(orgId, tx)),
+    ).rejects.toBeInstanceOf(EntitlementExceededError);
+  });
+
+  it('never caps the META org', async () => {
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await setMeta(orgId);
+    await seedCustomDomains(fx, 12);
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertCanAddCustomDomain(orgId, tx)),
+    ).resolves.toBeUndefined();
+  });
+
+  it('is INERT off-cloud, and performs no read', async () => {
+    // A self-hosted build has no public projects (ADR §11), so it has no
+    // addresses and must not consult a cap. Asserted as "returns" rather than
+    // "does not throw at the cap", which is the stronger of the two: the org is
+    // seeded PAST its cap and the call still returns.
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await seedCustomDomains(fx, 9);
+    delete process.env['MOTIR_CLOUD'];
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertCanAddCustomDomain(orgId, tx)),
+    ).resolves.toBeUndefined();
+  });
+
+  it('serializes concurrent adds at the boundary via FOR UPDATE (no overage)', async () => {
+    // The warm-pool TOCTOU the service header describes, for this cap. Seeded at
+    // cap − 1, so exactly one of two racers may win.
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await setTier(orgId, SCALED);
+    await seedCustomDomains(fx, 4);
+
+    const seeded = await adminDb.publicAddress.count({
+      where: { projectId: fx.projectId, kind: 'custom_domain' },
+    });
+    expect(seeded, 'precondition: the race must start at cap − 1').toBe(4);
+
+    // ⚠️ THE BARRIER IS THE INSTRUMENT (MOTIR-3710). Without it the first
+    // transaction counts, writes AND commits before the second counts, so the
+    // second rejects legitimately whether or not the lock works — and the test
+    // passes on a guard that does nothing.
+    const arrive = rendezvous(2);
+    const attempt = (n: number) =>
+      withWorkspaceContext(fx.ctx, async (tx) => {
+        await arrive();
+        await entitlementsService.assertCanAddCustomDomain(orgId, tx);
+        await publicAddressRepository.createCustomDomain(
+          {
+            workspaceId: fx.workspaceId,
+            projectId: fx.projectId,
+            hostname: `race-${n}.acme.example`,
+            verificationToken: `motir-verify-race-${n}`,
+          },
+          tx,
+        );
+      });
+
+    const results = await Promise.allSettled([attempt(1), attempt(2)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+
+    // Measured BEFORE any assertion can throw, so the number survives into every
+    // failure message: 5 = the lock held, 6 = it did not serialize.
+    const finalCount = await adminDb.publicAddress.count({
+      where: { projectId: fx.projectId, kind: 'custom_domain' },
+    });
+    const census =
+      `census: seeded=${seeded} finalCount=${finalCount} ` +
+      `fulfilled=${fulfilled.length} rejected=${rejected.length} ` +
+      `rejections=[${rejected.map((r) => reasonLabel((r as PromiseRejectedResult).reason)).join(' | ')}]`;
+
+    expect(finalCount, `${census} — 6 means the org-row FOR UPDATE did not serialize`).toBe(5);
+    expect(fulfilled, census).toHaveLength(1);
+    expect(rejected, census).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason, census).toBeInstanceOf(
+      EntitlementExceededError,
+    );
+  });
+});
+
+/** Seed `count` issued custom domains on the fixture's project. */
+async function seedCustomDomains(
+  fx: { workspaceId: string; projectId: string },
+  count: number,
+): Promise<void> {
+  await adminDb.publicAddress.createMany({
+    data: Array.from({ length: count }, (_, i) => ({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      hostname: `seed-${i}.acme.example`,
+      kind: 'custom_domain' as const,
+      status: 'issued' as const,
+      verificationToken: `motir-verify-seed-${i}`,
+    })),
+  });
+}

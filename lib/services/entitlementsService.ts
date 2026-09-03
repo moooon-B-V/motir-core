@@ -10,6 +10,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
+import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 // The §4 PM-core entitlement-cap ENFORCEMENT service (Story 8.1.11) — the
@@ -177,6 +178,42 @@ export const entitlementsService = {
     const current = await projectRepository.countByOrganization(organizationId, tx);
     if (current >= maxProjects) {
       throw new EntitlementExceededError('projects', { limit: maxProjects, usage: current });
+    }
+  },
+
+  /**
+   * Block the create of a CUSTOM DOMAIN past the org's cap (Story MOTIR-3878 ·
+   * `docs/decisions/public-tenant-addresses.md` §9).
+   *
+   * ⚠️ THE CALLER MUST RUN THIS INSIDE THE SAME TRANSACTION AS THE CREATE IT
+   * GUARDS — the same contract every sibling cap states, and for the same
+   * reason: the org row is locked here, and a lock released before the write it
+   * protects is not a lock. The lifecycle service (MOTIR-4216) is that caller.
+   *
+   * The TENANT SUBDOMAIN is not capped and never reaches this method: it is free
+   * on every tier (§9), so gating it here would be a cap the ADR does not have.
+   *
+   * `free: 0` means this refuses the FIRST domain rather than the sixth, which
+   * is deliberate — it makes `EntitlementExceededError('custom_domains', …)` the
+   * upgrade prompt's trigger instead of an empty state the pane special-cases.
+   */
+  async assertCanAddCustomDomain(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!isCloudBilling()) return;
+    await lockOrgRowOrRefuse(organizationId, tx);
+    const { maxCustomDomains } = entitlementsFor(await tierForOrgInTx(organizationId, tx));
+    if (maxCustomDomains === null) return;
+    const current = await publicAddressRepository.countCustomDomainsByOrganization(
+      organizationId,
+      tx,
+    );
+    if (current >= maxCustomDomains) {
+      throw new EntitlementExceededError('custom_domains', {
+        limit: maxCustomDomains,
+        usage: current,
+      });
     }
   },
 

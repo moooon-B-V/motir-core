@@ -39,6 +39,23 @@ vi.mock('@/lib/auth', () => ({ getSession }));
 // which runs before the service, so what the service would have said is noise.
 // `requireCompliantSession` is deliberately NOT stubbed — it is one of the two
 // gates under test, and it reads the same mocked `getSession`.
+vi.mock('@/lib/services/publicAddressesService', () => ({
+  // MOTIR-4217 — these guards test POSTURE (does the gate run, is a session
+  // read), not whether a fixture host exists. Unmocked, the route would answer
+  // its honest 404 for an unknown host and the guard would read that as a
+  // refusal — measuring the fixture instead of the property.
+  publicAddressesService: {
+    resolveHost: vi.fn(async () => ({
+      kind: 'workspace' as const,
+      workspace: { name: 'Acme' },
+      projects: [{ identifier: 'ACME', name: 'Acme' }],
+    })),
+  },
+  PublicHostNotFoundError: class PublicHostNotFoundError extends Error {
+    readonly code = 'NOT_FOUND' as const;
+  },
+}));
+
 vi.mock('@/lib/services/publicProjectsService', () => ({
   publicProjectsService: {
     getOverview: vi.fn(async () => ({})),
@@ -93,6 +110,7 @@ const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route'
 const follow = await import('@/app/api/public/p/[identifier]/follow/route');
 const explore = await import('@/app/api/public/explore/route');
 const categories = await import('@/app/api/public/categories/route');
+const hosts = await import('@/app/api/public/hosts/[host]/route');
 const requests = await import('@/app/api/public/projects/[projectId]/requests/route');
 const duplicates = await import('@/app/api/public/projects/[projectId]/requests/duplicates/route');
 
@@ -109,6 +127,7 @@ interface Case {
 
 const identifierCtx = { params: Promise.resolve({ identifier: 'ACME' }) };
 const projectCtx = { params: Promise.resolve({ projectId: 'proj_1' }) };
+const hostCtx = { params: Promise.resolve({ host: 'acme.motir.example' }) };
 const get = (path: string) => new Request(`https://app.motir.co${path}`);
 const send = (path: string, method: string, body?: unknown) =>
   new Request(`https://app.motir.co${path}`, {
@@ -202,6 +221,16 @@ const CASES: Case[] = [
     method: 'GET',
     gated: false,
     call: () => (explore.GET as Handler)(get('/api/public/explore')),
+  },
+  {
+    // MOTIR-4217 — the host resolver. Anonymous like every other READ here, and
+    // MORE so: it is called by another SERVER before a page exists, so there is
+    // no user for a session to belong to. The guard's own source check proves
+    // the file contains no `getSession` call.
+    file: 'hosts/[host]/route.ts',
+    method: 'GET',
+    gated: false,
+    call: () => (hosts.GET as Handler)(get('/api/public/hosts/acme.motir.example'), hostCtx),
   },
   {
     file: 'categories/route.ts',
@@ -298,6 +327,10 @@ describe('the four GATED routes refuse, and are exceptions rather than omissions
     // which is ordinary growth — MOTIR-4109's board took it from 8 to 9, MOTIR-4110's two detail reads to 11, MOTIR-4111's feed and project index to 13. Both
     // are pinned so that either movement is a sentence somebody wrote.
     expect(CASES.filter((c) => c.gated)).toHaveLength(4);
-    expect(CASES.filter((c) => !c.gated)).toHaveLength(13);
+    // 13 → 14: MOTIR-4217's `GET /api/public/hosts/{host}`. It joins the
+    // ANONYMOUS half, and more firmly than its neighbours — the others read a
+    // session to personalise, this one reads none at all, because it is called
+    // by another server before a page exists.
+    expect(CASES.filter((c) => !c.gated)).toHaveLength(14);
   });
 });

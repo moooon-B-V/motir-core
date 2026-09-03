@@ -1,4 +1,4 @@
-import { publicSiteOrigin } from '@/lib/publicProjects/urls';
+import { isRegisteredPublicOrigin } from '@/lib/publicAddresses/allowedOrigins';
 
 // CROSS-ORIGIN ACCESS TO THE PUBLIC READ SURFACE (MOTIR-4114 ·
 // `public-surface-hosts.md` AMENDMENT 4 §D, row 3 and the ANONYMOUS-DIRECT
@@ -57,8 +57,20 @@ const PREFLIGHT_MAX_AGE = '86400';
  * a crawler, a feed reader — which send no `Origin` and are entitled to the same
  * public data.
  */
-export function publicCorsHeaders(origin: string | null): Record<string, string> | null {
-  if (origin === null || origin !== publicSiteOrigin()) return null;
+export async function publicCorsHeaders(
+  origin: string | null,
+): Promise<Record<string, string> | null> {
+  // ⚠️ ASYNC SINCE MOTIR-4218, and the allow-list is now a SET rather than one
+  // origin: after Story MOTIR-3878 the public site answers on a workspace
+  // subdomain and on customer domains too, and a page on one of them paging an
+  // items list is an ordinary cross-origin read that used to be refused.
+  //
+  // What did NOT change, and must not: this is still a POSITIVE membership test
+  // on the whole ORIGIN — never a reflection, never a hostname suffix, never a
+  // `startsWith`. `isRegisteredPublicOrigin` compares parsed origins against
+  // rows, and it caches NEGATIVES as well as positives so an attacker-controlled
+  // header cannot turn this into one database read per request.
+  if (origin === null || !(await isRegisteredPublicOrigin(origin))) return null;
   return {
     'Access-Control-Allow-Origin': origin,
     // Without this, a shared cache can hand a response carrying one origin's

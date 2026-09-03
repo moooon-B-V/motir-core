@@ -8,6 +8,27 @@ import { db } from '@/lib/db';
 
 export const workspaceRepository = {
   /**
+   * Take the workspace row's `FOR UPDATE` lock, and report whether it matched.
+   *
+   * The serialization anchor for the subdomain claim/rename (Story MOTIR-3878 ·
+   * MOTIR-4215), mirroring `organizationRepository.lockByIdForUpdate` — a
+   * workspace subdomain is a workspace-level resource, so the workspace row is
+   * the single row all of one workspace's claims contend on.
+   *
+   * ⚠️ Returns `false` rather than throwing when the row matched NOTHING. A
+   * `SELECT … FOR UPDATE` over zero rows locks nothing and reports success, so a
+   * caller that ignores this has a guard that silently does not serialize —
+   * which is the failure `entitlementsService`'s `lockOrgRowOrRefuse` header
+   * describes at length. The service turns a `false` into a refusal.
+   */
+  async lockByIdForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "workspace" WHERE "id" = ${id} FOR UPDATE
+    `;
+    return rows.length > 0;
+  },
+
+  /**
    * BINDABLE (MOTIR-2789). `workspace` is a tenant-root table with no public arm, so a
    * caller that knows the workspace must be able to bind it — the public project
    * overview reads the project's own workspace and got null otherwise.

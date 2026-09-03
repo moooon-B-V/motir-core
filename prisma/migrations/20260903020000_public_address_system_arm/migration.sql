@@ -1,0 +1,47 @@
+-- ===========================================================================
+-- RLS: give `public_address` the `app.system_admin` arm the certificate sweep
+-- needs (Story MOTIR-3878 · MOTIR-4219).
+--
+-- `public_address` shipped one hour earlier (20260903010000) with TWO policies:
+-- a FOR ALL tenancy gate on `app.workspace_id`, and a FOR SELECT public arm for
+-- the anonymous host resolution. Both were right for the readers that existed
+-- then — every one of them was either inside a bound tenant context or was the
+-- context-less public read.
+--
+-- MOTIR-4219 adds the first reader that is NEITHER: `system.public-address-
+-- certificate-refresh` sweeps addresses ACROSS every workspace, because a
+-- certificate expires on the platform's clock and not inside anyone's request.
+-- It runs under `withSystemContext`, which binds `app.system_admin` and no
+-- workspace at all.
+--
+-- ⚠️ WITHOUT THIS ARM THE SWEEP READS AND CANNOT WRITE, WHICH IS THE WORST OF
+-- THE THREE POSSIBLE OUTCOMES — and it was found by a failing test rather than
+-- by review, which is the only reason this migration exists at all. The SELECT
+-- appeared to work: the public arm admits the row, because its project is
+-- public. The UPDATE then matched ZERO ROWS, because the FOR ALL policy compares
+-- `workspace_id` against an unset GUC, which is NULL, which hides every row.
+--
+-- So the sweep would have scanned a domain, asked Fly, learned it was issued —
+-- and written nothing, for ever, with no error. The settings pane would show
+-- `pending_certificate` on a live domain permanently, and `issued` on an expired
+-- one. `work_item_delivery`'s own system-arm migration (20260828120000) names
+-- this failure exactly: "not an error, it is a SILENT ZERO", and "by a wide
+-- margin the worse of the two failures". Here it was a silent zero on the WRITE,
+-- which is worse still: the read succeeded, so every log line and every summary
+-- said the sweep was working.
+--
+-- ⚠️ A SEPARATE POLICY, FOR ALL, rather than a widened tenancy clause. Postgres
+-- combines permissive policies as (p1 OR p2 OR ...) per COMMAND, so a second
+-- FOR ALL policy adds the system arm to SELECT/INSERT/UPDATE/DELETE together —
+-- which is what the sweep needs (it reads and writes) — while leaving the
+-- tenancy policy's own USING and WITH CHECK exactly as strong as they were. An
+-- ordinary tenant caller binds no `app.system_admin`, so nothing about their
+-- reach changes.
+--
+-- `app.system_admin` is a CROSS-TABLE, CROSS-TENANT flag `lib/workspaces/context.ts`
+-- documents as belonging to the jobs runtime and operator tooling only, never a
+-- request path fed user input — and this is a jobs-runtime caller.
+CREATE POLICY "public_address_system" ON "public_address"
+  FOR ALL
+  USING (current_setting('app.system_admin', true) = 'true')
+  WITH CHECK (current_setting('app.system_admin', true) = 'true');
