@@ -301,7 +301,14 @@
     "searchLabel": "搜索本计划",
     "showChangesAll": "此层级的每一项都来自本计划",
     "locateChange": "定位到本计划的下一项",
-    "rowOpenAria": "打开 {name}"
+    "rowOpenAria": "打开 {name}",
+    "openTargetAsItStands": "查看工作项的当前状态",
+    "railChangedMark": "将变更",
+    "railChangeCount": "此计划将变更它可设置的 {m} 个字段中的 {n} 个。",
+    "railChangeNone": "此计划不变更这些字段，只变更描述与说明。",
+    "railAddAll": "此处的每个值都是批准后将创建的内容。",
+    "railRemoveArchives": "批准此计划将归档 {key}。",
+    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。"
   },
   "planEdits": {
     "submitting": "提交中…",

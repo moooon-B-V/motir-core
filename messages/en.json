@@ -301,7 +301,14 @@
     "searchLabel": "Search this plan",
     "showChangesAll": "Every item on this level is this plan's",
     "locateChange": "Locate the next of this plan's items",
-    "rowOpenAria": "Open {name}"
+    "rowOpenAria": "Open {name}",
+    "openTargetAsItStands": "Open the work item as it stands",
+    "railChangedMark": "changed",
+    "railChangeCount": "This plan changes {n} of the {m} fields it can set.",
+    "railChangeNone": "This plan changes none of these fields — only the description and the explanation.",
+    "railAddAll": "Every value here is what approval will create.",
+    "railRemoveArchives": "Approving this plan archives {key}.",
+    "peekNoActivity": "A proposal has no comments, children or activity until it is approved."
   },
   "planEdits": {
     "submitting": "Submitting…",
