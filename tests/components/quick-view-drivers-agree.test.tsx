@@ -57,6 +57,7 @@ const DATA: QuickViewData = {
   statusLabel: 'To Do',
   statusCategory: 'todo',
   descriptionMd: 'Sign in with email and password.',
+  explanationMd: null,
   type: 'code',
   executor: 'coding_agent',
   assigneeName: null,

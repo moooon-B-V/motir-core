@@ -623,6 +623,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/internal/ai/search-work-items`         | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/ai/similar-work-items`        | POST                  | `aiBoundaryService.findSimilarWorkItems` (transitive)             | —          | no-gate  | R29 |
 | `/api/internal/ai/skeleton`                  | GET                   | `aiBoundaryService.readPlanTree` (transitive)                     | —          | no-gate  | R29 |
+| `/api/internal/ai/terminal-statuses`         | GET                   | `aiBoundaryService.readTerminalStatuses` (transitive)             | —          | no-gate  | R29 |
 | `/api/internal/ai/validate-plan`             | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/ai/validate-plan-forest`      | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/ai/validate-plan-sprint`      | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |

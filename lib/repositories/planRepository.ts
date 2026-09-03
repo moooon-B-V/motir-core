@@ -57,8 +57,27 @@ export const planRepository = {
   /**
    * The project's UNDECIDED plan, if it has one — the read behind the
    * pending-proposal GATE (MOTIR-916). "Undecided" is `generating` (the engine
-   * is still producing it) or `planned` (it is sitting in the human review
-   * queue); `approved` / `declined` are decided and do not gate anything.
+   * is still producing it), `planned` (it is sitting in the human review queue)
+   * or `stale` (a reviewer is holding it and cannot approve it yet);
+   * `approved` / `declined` are decided and do not gate anything.
+   *
+   * ⚠️ `stale` IS IN THE LIST, AND IT IS THE SECOND HALF OF AMENDMENT 9's OWN
+   * WIDENING (MOTIR-4129). `PlanStatus`'s schema comment states the rule this
+   * predicate has to follow: `stale` "is NOT terminal and NOT decided: the plan
+   * is live and awaiting action", and it is reachable only from `planned` — so
+   * a plan wearing it has BY CONSTRUCTION already reached a reviewer. Leaving it
+   * out read that plan as decided, which fired a second expand beside a proposal
+   * somebody was already holding: the exact saturation this gate exists to
+   * prevent, and the MIRROR of MOTIR-3051 / MOTIR-3064 / MOTIR-3189, each of
+   * which took a plan that gated when it should NOT have.
+   *
+   * AMENDMENT 9 argued the principle for the other consumer and stopped at the
+   * one instance in front of it: "the guard's predicate was a proxy for *is this
+   * plan still awaiting a decision?*, and adding a fifth status is what makes
+   * the proxy and the intent come apart." `computePlanStaleness` widened;
+   * this one was not named, and the enum-growth checklist (MOTIR-3574 AC 7)
+   * enumerated DISPLAY surfaces only — a predicate keeps compiling and keeps
+   * returning a plausible answer, so nothing went red.
    *
    * WHO started it is deliberately NOT part of the predicate: a user-clicked
    * expand saturates the reviewer exactly as much as a cadence-fired one, and a
@@ -102,6 +121,17 @@ export const planRepository = {
    * misread, and a plan proposing nothing is a decision nobody owes. The close
    * no longer writes that shape; the rows that predate it still exist.
    *
+   * ⚠️ NEITHER EXCLUSION INTERACTS WITH `stale`, AND THAT IS STATED HERE RATHER
+   * THAN RE-DERIVED AT EACH READING (MOTIR-4129). The MOTIR-3051 arm is about a
+   * `generating` plan with no producer; `stale` is reachable only from
+   * `planned`, so the two sets are disjoint by the transition table (AMENDMENT 9
+   * D4) and the arm is untouched. The MOTIR-4124 arm needs no `stale` twin
+   * either: both writers of the status — `planDriftService`'s listener and
+   * `approvePlan`'s `PlanTargetImmutableError` backstop — are keyed on a
+   * `modify` / `remove` PROPOSAL whose target went terminal, so a plan holding
+   * zero proposals can never reach `stale` at all. An arm for it would guard a
+   * row no shipped path can write.
+   *
    * ⚠️ AND IT IS A WHERE CLAUSE, NOT A CALLER-SIDE FILTER. This returns ONE row,
    * newest first: dropping the orphan after the read would answer "not paused"
    * for a project whose real `planned` proposal sits one row down — trading a
@@ -132,7 +162,7 @@ export const planRepository = {
       where: {
         projectId,
         workspaceId,
-        status: { in: ['generating', 'planned'] },
+        status: { in: ['generating', 'planned', 'stale'] },
         AND: [
           { NOT: { status: 'generating', sourceJobId: null, items: { none: {} } } },
           // ⚠️ A CLOSED plan holding NOTHING is nobody's decision either

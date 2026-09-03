@@ -3541,6 +3541,38 @@ sources, and the op decides which exist:
 | **`modify`**                | the TARGET's live `QuickViewData` | the patch's own fields                  | the card as it will stand, with the changed fields MARKED                      |
 | **`remove`**                | the TARGET's live `QuickViewData` | none — a `remove` carries no patch      | the card as it stands, marked nowhere, plus the archive statement              |
 
+### ⚠️ AMENDED 2026-09-02, WHILE BUILDING MOTIR-4183 — the merge is RIGHT and its OWNER was wrong
+
+The table above says the projection's base is the target's live `QuickViewData`. **The rendered result
+it describes is correct and unchanged; where that merge HAPPENS is not.** Measured before implementing:
+
+|                                         |                                                                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `planReviewService.getPlanReview` today | reads every `modify` / `remove` target in **ONE batched, workspace-scoped read** — its own header comment says _"no N+1"_                 |
+| `workItemsService.getQuickView`         | **~14 reads per item** (the detail aggregate, members, sprints, components, estimation config, the sprint name, the refs, the deliveries) |
+
+So building the merge inside `getPlanReview` puts **~14 × N reads on the plan-review load** — roughly
+280 for a plan with twenty `modify`s — to serve a peek the reviewer opens at most one of. That is a
+surface whose no-N+1 property is stated in code, traded away for a panel that is closed.
+
+**The merge therefore happens where the shipped peek already fetches: ON OPEN, in the client.**
+
+| op                    | on open                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modify` / `remove`   | the host fetches the TARGET's payload from `GET /api/work-items/peek?key=<identifier>` — the request `WorkItemQuickView.tsx:75` and `IssueQuickViewController.tsx:70` already make — and overlays the proposal envelope |
+| un-materialized `add` | **no key, so no fetch.** The envelope IS the payload; the short rail in §2's table is what that produces                                                                                                                |
+
+**One request per opened proposal, which is what opening any work item costs today**, and the
+plan-review read gains nothing but the envelope. §2's row-by-row table is unchanged — it describes what
+the reader SEES, and they see the same thing either way.
+
+**The boundary this moves:** MOTIR-4183 emits the **envelope** (`op`, the target's `identifier`, the
+proposed values, `changedFields`, `settableFields`) and adds `explanationMd` to the payload — which is
+what its own criteria already say, _"a small `proposal` envelope carrying what only a proposal has"_.
+**MOTIR-4184 owns the overlay**, because the overlay is a render-time composition of two payloads and
+that card is the one that mounts them. Neither card gains scope it did not have; the design had put the
+join in the wrong half.
+
 **Why a merge and not the proposal's fields alone.** Today a `modify` opened from the CANVAS renders
 `WorkItemQuickView` — the target's full rail. A proposal mode built only from
 `PlanItemProposedFields` would take `Assignee`, `Reporter`, `Labels`, `Components`, `Due date`,
@@ -3599,11 +3631,36 @@ the rail's other mounted components — none of which belongs in a design card o
 surface is painted in a third module), which is why the tree is green and why a design pass is what
 found it.
 
-**Nine markable fields**, and that number is the denominator §3's foot line names: `targetRepo` /
-`targetRepoRole` (one row), `type`, `executor`, `priority`, `parent`, `storyPoints`,
-`estimateMinutes`, plus `title` and the two bodies, which are marked in the main column rather than in
-the rail. The rail's own denominator is therefore **9** as drawn; a build that changes
-`PlanItemProposedFields` changes it, which is why the line computes it rather than stating a constant.
+**⚠️ AMENDED 2026-09-02, WHILE BUILDING MOTIR-4183 — the first draft of this paragraph said NINE and
+was wrong twice.** It counted `executor`, which a `modify` cannot patch, and it mixed rail fields with
+body fields under a number the rail's own foot line reads. Both were settled by reading the TYPE and
+`plansService.applyModify`, not the DTO's field list:
+
+- **`PlanItemPatch` has no `executor` key** and `applyModify` never writes one. `executor` is settable
+  on an `add` (`PlanItemProposedFields`, deepenable since `agent-authored-plans.md` AMENDMENT 4 D3a)
+  and is the TARGET's on every other op. The row above is corrected to `add`-ONLY.
+- **`targetRepo` / `targetRepoRole` ARE patchable** — and a grep for `patch.targetRepo` inside
+  `applyModify` returns NOTHING, because they are applied through `repoPins`. A reader checking this
+  the obvious way concludes the opposite of the truth, which is why it is recorded here.
+
+**So the rail's denominator is SIX** — the rail rows a patch can move:
+
+| #   | rail row     | patch key                                           |
+| --- | ------------ | --------------------------------------------------- |
+| 1   | Repositories | `targetRepo` / `targetRepoRole` (one row, two keys) |
+| 2   | Type         | `type`                                              |
+| 3   | Priority     | `priority`                                          |
+| 4   | Parent       | `parentRef`                                         |
+| 5   | Story points | `storyPoints`                                       |
+| 6   | Estimate     | `estimateMinutes`                                   |
+
+`title`, `descriptionMd` and `explanationMd` are patchable too and are **excluded on purpose**: they
+are marked in the MAIN COLUMN, and a line at the foot of the rail that counted them would answer about
+fields the reader cannot see from where the line sits. `blockedByAdd` / `blockedByRemove` are edges and
+belong to the canvas (Part IX).
+
+**The line therefore reads `2 of 6`.** It is COMPUTED from the patch key set rather than stated as a
+constant, so a key added to `PlanItemPatch` moves it with no edit here — MOTIR-4183's criterion 9.
 
 ## 3. §3 · The CHANGED marker — `--el-diff-moved` — and the PINNED line that reads the silence
 
@@ -3665,7 +3722,7 @@ marker on fourteen rows. **So the rail does not try; one line at the rail's foot
 | **`modify`**, n = 0 | `This plan changes none of these fields — only the description and the explanation.` |
 | **`remove`**        | `Approving this plan archives {key}.`                                                |
 
-**Naming the DENOMINATOR is what makes the silence readable.** `2 of 9` says both that seven settable
+**Naming the DENOMINATOR is what makes the silence readable.** `2 of 6` says both that four settable
 fields are untouched and that everything outside the nine is beyond the plan's reach — which is what
 the `add` arm's short rail and the `modify` arm's never-marked rows are each half of.
 

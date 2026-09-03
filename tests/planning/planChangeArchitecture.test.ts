@@ -397,13 +397,19 @@ describe('retiring “Augment from prompt” left no dangling key or import', ()
     const offenders = SOURCE_FILES.filter((file) => /AugmentPromptButton/.test(read(file))).map(
       (f) => relative(ROOT, f),
     );
-    // The only surviving mention is the NOTE in the launcher recording why the
-    // door was retired — a breadcrumb, not an import.
-    expect(offenders).toEqual([join('components', 'planning', 'PlanEditsLauncher.tsx')]);
+    // The only surviving mention is the NOTE recording why the door was retired
+    // — a breadcrumb, not an import. It sat in `PlanEditsLauncher.tsx` until
+    // MOTIR-4258 deleted that file with the ⋯ menu that mounted it, and moved to
+    // `WorkItemPlanEntrance` — the door that REPLACED both retired ones, and so
+    // the file a reader asking "why is there only one?" actually opens. The
+    // assertion is pinned to exactly one carrier on purpose: a breadcrumb in two
+    // places is a breadcrumb that can rot in one of them.
+    const carrier = join('components', 'planning', 'WorkItemPlanEntrance.tsx');
+    expect(offenders).toEqual([carrier]);
 
-    const launcher = read(join(ROOT, 'components/planning/PlanEditsLauncher.tsx'));
-    expect(launcher).not.toMatch(/^import[^\n]*AugmentPromptButton/m);
-    expect(launcher).not.toMatch(/<AugmentPromptButton/);
+    const entrance = read(join(ROOT, carrier));
+    expect(entrance).not.toMatch(/^import[^\n]*AugmentPromptButton/m);
+    expect(entrance).not.toMatch(/<AugmentPromptButton/);
   });
 
   it('the surfaces it was mounted on no longer reference it', () => {

@@ -239,7 +239,9 @@ test('the plan detail, refined — the story’s verification recipe', async ({
 
     // THE POINTER PATH.
     await row.click();
-    const peek = page.getByTestId('proposal-quick-view');
+    // `proposal-peek`, not `proposal-quick-view`: MOTIR-4185 replaced the second
+    // surface with ONE peek that both doors open, and this row is the LIST door.
+    const peek = page.getByTestId('proposal-peek');
     await expect(peek).toBeVisible();
     // ONE close affordance. The shipped modal rendered two, 40px apart, with the
     // identical accessible name.
@@ -256,9 +258,9 @@ test('the plan detail, refined — the story’s verification recipe', async ({
     await row.focus();
     await expect(row).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('proposal-quick-view')).toBeVisible();
+    await expect(page.getByTestId('proposal-peek')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('proposal-quick-view')).toBeHidden();
+    await expect(page.getByTestId('proposal-peek')).toBeHidden();
     await expect(row).toBeFocused();
   });
 
