@@ -15,6 +15,7 @@ import {
   NotACustomerDomainError,
   PublicAddressesUnavailableError,
 } from '@/lib/publicAddresses/errors';
+import { pointingRecordsFor } from '@/lib/publicAddresses/pointingRecords';
 import {
   certificateProvider,
   dnsResolver,
@@ -358,7 +359,25 @@ function toDto(
   },
   primaryAddressId: string | null,
 ): PublicAddressDto {
-  const dns: DnsInstructionDto[] = [];
+  // ⚠️ TWO KINDS OF RECORD, AND THE POINTING ONE COMES FIRST (MOTIR-4278).
+  //
+  // The record that POINTS the hostname at us — a `CNAME` for a subdomain,
+  // `A` + `AAAA` for an apex (ADR §5's table) — is configuration, so it is the
+  // same for every customer and is derivable with no provider reading. It is
+  // listed first because it is the record that makes the address WORK, and
+  // because that is the order `design/projects/public-address.mock.html`
+  // panel 4 draws.
+  //
+  // It is NOT dropped once the certificate issues, unlike the ownership record
+  // below: it describes the live configuration rather than an outstanding task,
+  // and a customer auditing their zone months later is the reader it is for.
+  //
+  // Only a CUSTOMER domain has one. A workspace subdomain is a name under our
+  // own base, already served and already covered by the wildcard (ADR §6) — the
+  // customer creates nothing for it.
+  const dns: DnsInstructionDto[] =
+    row.kind === 'custom_domain' ? pointingRecordsFor(row.hostname) : [];
+
   // The ownership record is shown while it still has to be created, and dropped
   // once the certificate is live — a record a customer no longer needs is
   // clutter that reads like an outstanding task.
