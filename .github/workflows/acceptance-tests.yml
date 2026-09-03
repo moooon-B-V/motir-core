@@ -244,6 +244,37 @@ on:
   # lane holds a spec, ANY merge could be the one that breaks it, and which
   # sources it reads is precisely what the filter cannot know. The `membership`
   # gate below is what keeps that affordable — see the header section.
+  # ── THE MERGE QUEUE IS WHERE THIS LANE BELONGS (MOTIR-4257) ────────────────
+  #
+  # ⚠️ WITHOUT THIS THE TRUNK CAN GO RED AND NOTHING PREVENTS IT, which is the
+  # one thing a merge queue exists to make impossible. The queue's contract is
+  # that nothing lands unless the MERGED RESULT passes the required checks — so
+  # a check that runs on `push: main` and NOT in the queue is, by construction,
+  # a check that can break `main`, with no gate anywhere upstream of it.
+  #
+  # The `pull_request:` filter above cannot close that: it selects on the files
+  # a change TOUCHES, and this lane's specs read the whole app. The worked
+  # example is the merge that prompted this card — `e055b6b23` (#2530) made the
+  # rail's Docs row conditional on `MOTIR_DOCS_URL`, touched ZERO of the paths
+  # above, ran no acceptance check, passed the queue, and turned the baseline
+  # red on the next push. That is not a queue failure; the queue was never
+  # asked.
+  #
+  # ⚠️ THE TRIGGER AND THE RULESET ARE ONE CHANGE AND NEITHER HALF WORKS ALONE —
+  # the same pairing `ci.yml` documents for `CI complete`. A `merge_group` run
+  # whose context is not REQUIRED executes and is ignored, which is worse than
+  # today because it looks fixed; a required context with no `merge_group`
+  # trigger never reports, and the entry is EJECTED on
+  # `check_response_timeout_minutes` with no failing check to explain it.
+  # `Acceptance complete` (below) is the context to require.
+  merge_group:
+  # The MAIN BASELINE (MOTIR-2760) — KEPT as belt-and-braces, and no longer the
+  # primary signal. It is the lossy one: every push shares `github.ref`, GitHub
+  # holds one pending run per group, and a merge burst evicts the queued ones
+  # (23 of 100 runs cancelled with zero jobs, measured in the header above). A
+  # detector that misses one merge in four is a poor substitute for a gate, and
+  # with `merge_group:` above it is now a second opinion rather than the only
+  # one. Retiring it is a separate decision.
   push:
     branches: [main]
 
@@ -579,3 +610,54 @@ jobs:
           name: playwright-report-acceptance-shard-${{ matrix.shard }}
           path: out/playwright-report-acceptance
           retention-days: 7
+
+  # ── THE REQUIRED CONTEXT (MOTIR-4257) ───────────────────────────────────────
+  #
+  # One aggregate the ruleset can name, for the same reason `ci.yml` has
+  # `CI complete`: this lane's shards are a MATRIX, so their check names carry
+  # `1/N` and change with the derived leg count (MOTIR-2908). A ruleset cannot
+  # require a context whose name moves, and requiring one leg would gate on a
+  # shard rather than on the lane.
+  #
+  # ⚠️ `always()` AND the explicit result assertion — neither works alone, and
+  # `ci-complete` carries the same pair for the same reasons:
+  #   • without `always()` this job SKIPS whenever a need skips (a skipped need
+  #     makes its dependents skip, not fail), so a queue entry whose lane held
+  #     no spec would leave the required context ABSENT — and an absent-because-
+  #     skipped required check counts as satisfied, so the gate would also pass
+  #     over a red lane;
+  #   • `always()` ALONE removes the implicit all-needs-succeeded condition, so
+  #     this job would run and go GREEN beside a FAILED shard. The step below is
+  #     what turns `failure` / `cancelled` into a red gate.
+  acceptance-complete:
+    name: Acceptance complete
+    if: always()
+    needs: [membership, build, acceptance]
+    runs-on: ubuntu-latest
+    # It reads the `needs` context and exits; the clock starts when the job
+    # starts, so waiting on the shards costs it nothing.
+    timeout-minutes: 10
+    # Reads nothing, writes nothing.
+    permissions: {}
+    steps:
+      - name: Assert every needed job succeeded or was skipped
+        # `toJSON(needs)` travels through the environment rather than being
+        # spliced into the script, so no job name or result can be read as shell.
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$NEEDS"
+          # Capture first, THEN test: under `pipefail` a `jq | grep` pipeline
+          # reports the wrong command's status when the interesting command is
+          # the one allowed to find nothing.
+          bad=$(jq -r 'to_entries[]
+                       | select(.value.result != "success" and .value.result != "skipped")
+                       | "\(.key)=\(.value.result)"' <<<"$NEEDS")
+          if [ -n "$bad" ]; then
+            while read -r line; do
+              echo "::error::Acceptance incomplete — job ${line%%=*} finished as ${line#*=}"
+            done <<<"$bad"
+            exit 1
+          fi
+          echo "Every job in this workflow succeeded or was skipped."
