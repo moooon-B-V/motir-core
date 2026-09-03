@@ -46,6 +46,75 @@ const publicProjectLinks = z
   });
 
 /** The SUBJECT of `/p/{identifier}` — the endpoint MOTIR-3945 added. */
+/**
+ * A project's canonical address and its alternates (Story MOTIR-3878 · the ADR §7).
+ *
+ * `primary` is what a renderer names in `<link rel="canonical">`, `og:url`, the
+ * JSON-LD `@id`, its sitemap entry and its feed. `alternates` is every OTHER
+ * live address for the same project, each of which 301s to the primary — so a
+ * consumer never has to decide which of two addresses is canonical, and two
+ * addresses for one page can never compete.
+ */
+/**
+ * What `GET /api/public/hosts/{host}` answers (Story MOTIR-3878 · MOTIR-4217).
+ *
+ * A DISCRIMINATED UNION on `kind`, not one shape with nullable halves. The three
+ * cases share nothing but the discriminator, and a consumer that has to check
+ * which fields are present is a consumer that will one day check the wrong one.
+ */
+export const publicHostResolutionSchema = z
+  .discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('workspace'),
+        workspace: z.object({ name: z.string() }).strict(),
+        projects: z.array(z.object({ identifier: z.string(), name: z.string() }).strict()).meta({
+          description:
+            "Every public project under this workspace's subdomain, freshest first. MAY BE " +
+            'EMPTY — a workspace whose projects have all gone private still holds the address, ' +
+            'and an empty list is the honest answer to a visitor who followed a valid link.',
+        }),
+      })
+      .strict()
+      .meta({ id: 'PublicHostWorkspace' }),
+    z
+      .object({
+        kind: z.literal('alias'),
+        redirectTo: z.string().meta({
+          description:
+            'The live hostname to 301 to. This is the ADR §8 never-released promise made ' +
+            'observable: a renamed-away-from subdomain keeps answering, for ever.',
+        }),
+      })
+      .strict()
+      .meta({ id: 'PublicHostAlias' }),
+    z
+      .object({
+        kind: z.literal('project'),
+        project: z.object({ identifier: z.string(), name: z.string() }).strict(),
+        primary: z.boolean().meta({
+          description: "Whether this address is the project's canonical one (ADR §7).",
+        }),
+      })
+      .strict()
+      .meta({ id: 'PublicHostProject' }),
+  ])
+  .meta({ id: 'PublicHostResolution' });
+
+export const publicProjectAddressesSchema = z
+  .object({
+    primary: z.string().meta({
+      description:
+        'The ONE canonical absolute URL. Always present: a project with no claimed address ' +
+        'still has `motir.co/p/<identifier>`.',
+    }),
+    alternates: z.array(z.string()).meta({
+      description: 'Every other live address for this project. Each redirects to `primary`.',
+    }),
+  })
+  .strict()
+  .meta({ id: 'PublicProjectAddresses' });
+
 export const publicProjectOverviewSchema = z
   .object({
     id: z.string().meta({ description: 'The global id the public WRITE endpoints take.' }),
@@ -60,6 +129,7 @@ export const publicProjectOverviewSchema = z
     viewerCanManage: z.boolean().meta({
       description: 'Always false for an anonymous caller; the session only personalises.',
     }),
+    addresses: publicProjectAddressesSchema,
   })
   .strict()
   .meta({ id: 'PublicProjectOverview' });
@@ -300,6 +370,12 @@ export const publicProjectIndexPageSchema = z
         .object({
           identifier: z.string().meta({ description: "The project's key — the URL segment." }),
           updatedAt: z.string().meta({ description: "ISO 8601 — the sitemap's `<lastmod>`." }),
+          primaryHost: z.string().meta({
+            description:
+              "The HOST the project's canonical address lives on. A sitemap may list only " +
+              "URLs on its own host, so `motir.co`'s sitemap omits a project whose canonical " +
+              "has moved to a tenant or customer host, and that host's own sitemap lists it.",
+          }),
         })
         .strict()
         .meta({ id: 'PublicProjectIndexEntry' }),

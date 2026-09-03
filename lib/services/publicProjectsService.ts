@@ -1,4 +1,6 @@
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { publicAddressesService } from '@/lib/services/publicAddressesService';
+import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -439,10 +441,18 @@ export const publicProjectsService = {
     });
     const hasMore = rows.length > PUBLIC_PROJECT_INDEX_PAGE_SIZE;
     const page = hasMore ? rows.slice(0, PUBLIC_PROJECT_INDEX_PAGE_SIZE) : rows;
+    // The canonical HOST per row (Story MOTIR-3878 · the ADR §7). Resolved for
+    // the page rather than per request: a sitemap builder asks for one page and
+    // needs every row's host, so N sequential lookups would be the shape
+    // `getOverview`'s own twenty-nine-await problem took.
+    const hosts = await publicAddressesService.primaryHostsForProjects(
+      page.map((row) => ({ id: row.id, workspaceId: row.workspaceId, identifier: row.identifier })),
+    );
     return {
       projects: page.map((row) => ({
         identifier: row.identifier,
         updatedAt: row.updatedAt.toISOString(),
+        primaryHost: hosts.get(row.id) ?? new URL(publicSiteOrigin()).host,
       })),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
     };
@@ -463,14 +473,23 @@ export const publicProjectsService = {
     // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
     // `resolvePublicProject` gated this read above; neither the workspace read
     // nor `computeStats` refuses.
-    const [workspace, stats] = await Promise.all([
+    const [workspace, stats, addresses] = await Promise.all([
       // `workspace` has no public arm either; the project's own workspace is known here.
       withWorkspaceServiceContext(project.workspaceId, (tx) =>
         workspaceRepository.findById(project.workspaceId, tx),
       ),
       computeStats(project.id, project.workspaceId, hiddenIds),
+      // The project's canonical address and its alternates (Story MOTIR-3878 ·
+      // the ADR §7). In the SAME `Promise.all` rather than awaited after it: it
+      // is a peer read with no dependency on the other two, and the renderer
+      // needs it on the first paint to emit a canonical.
+      publicAddressesService.addressesForProject(
+        project.id,
+        project.workspaceId,
+        project.identifier,
+      ),
     ]);
-    return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats, canManage);
+    return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats, canManage, addresses);
   },
 
   /**

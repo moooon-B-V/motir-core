@@ -52,6 +52,39 @@ export const publicAddressRepository = {
     return tx.publicAddress.findUnique({ where: { hostname } });
   },
 
+  /**
+   * The workspace's LIVE subdomain, read ANONYMOUSLY — the alias-redirect half
+   * of host resolution (MOTIR-4217).
+   *
+   * Separate from {@link findLiveSubdomainForWorkspace}, which takes a `tx`
+   * because it guards a write. This one answers a public request that has no
+   * workspace bound at all, so it goes through the `db` singleton and is
+   * admitted by the migration's `public_address_public_read` arm — which means
+   * a workspace holding no public project resolves to `null` here rather than
+   * leaking that it has a subdomain.
+   */
+  async findLiveSubdomainForWorkspacePublic(workspaceId: string): Promise<PublicAddress | null> {
+    return db.publicAddress.findFirst({
+      where: { workspaceId, kind: 'workspace_subdomain' },
+    });
+  },
+
+  /**
+   * Every address across SEVERAL workspaces, in one query — the batched read
+   * behind the crawl index's per-row canonical host (MOTIR-4217).
+   *
+   * A page of the index is up to a hundred projects, and asking per project
+   * would be a hundred sequential round trips to answer one sitemap build. One
+   * `IN` is the whole cost.
+   */
+  async listForWorkspaces(workspaceIds: readonly string[]): Promise<PublicAddress[]> {
+    if (workspaceIds.length === 0) return [];
+    return db.publicAddress.findMany({
+      where: { workspaceId: { in: [...workspaceIds] } },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
   /** Every address belonging to one project (its customer domains). */
   async listForProject(projectId: string): Promise<PublicAddress[]> {
     return db.publicAddress.findMany({

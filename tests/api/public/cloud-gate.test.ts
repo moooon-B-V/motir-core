@@ -40,6 +40,23 @@ vi.mock('@/lib/auth/requireCompliantSession', () => ({ requireCompliantSession }
 // Every service is stubbed: this suite is about the GATE, which runs before the
 // service, so what the service would have said is noise. On the CLOUD arm the
 // stubs are what let each handler reach a non-404 answer at all.
+vi.mock('@/lib/services/publicAddressesService', () => ({
+  // MOTIR-4217 — these guards test POSTURE (does the gate run, is a session
+  // read), not whether a fixture host exists. Unmocked, the route would answer
+  // its honest 404 for an unknown host and the guard would read that as a
+  // refusal — measuring the fixture instead of the property.
+  publicAddressesService: {
+    resolveHost: vi.fn(async () => ({
+      kind: 'workspace' as const,
+      workspace: { name: 'Acme' },
+      projects: [{ identifier: 'ACME', name: 'Acme' }],
+    })),
+  },
+  PublicHostNotFoundError: class PublicHostNotFoundError extends Error {
+    readonly code = 'NOT_FOUND' as const;
+  },
+}));
+
 vi.mock('@/lib/services/publicProjectsService', () => ({
   publicProjectsService: {
     getOverview: vi.fn(async () => ({})),
@@ -94,6 +111,7 @@ const subscribe = await import('@/app/api/public/p/[identifier]/subscribe/route'
 const follow = await import('@/app/api/public/p/[identifier]/follow/route');
 const explore = await import('@/app/api/public/explore/route');
 const categories = await import('@/app/api/public/categories/route');
+const hosts = await import('@/app/api/public/hosts/[host]/route');
 const requests = await import('@/app/api/public/projects/[projectId]/requests/route');
 const duplicates = await import('@/app/api/public/projects/[projectId]/requests/duplicates/route');
 
@@ -108,6 +126,7 @@ interface Case {
 
 const identifierCtx = { params: Promise.resolve({ identifier: 'ACME' }) };
 const projectCtx = { params: Promise.resolve({ projectId: 'proj_1' }) };
+const hostCtx = { params: Promise.resolve({ host: 'acme.motir.example' }) };
 const get = (path: string) => new Request(`https://app.motir.co${path}`);
 const send = (path: string, method: string, body?: unknown) =>
   new Request(`https://app.motir.co${path}`, {
@@ -200,6 +219,14 @@ const CASES: Case[] = [
     file: 'explore/route.ts',
     method: 'GET',
     call: () => (explore.GET as Handler)(get('/api/public/explore')),
+  },
+  {
+    // MOTIR-4217 — the host resolver. Off-cloud there are no tenant addresses
+    // at all (the ADR §11), so the gate runs first here exactly as everywhere
+    // else on this surface.
+    file: 'hosts/[host]/route.ts',
+    method: 'GET',
+    call: () => (hosts.GET as Handler)(get('/api/public/hosts/acme.motir.example'), hostCtx),
   },
   {
     file: 'categories/route.ts',

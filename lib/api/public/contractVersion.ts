@@ -73,8 +73,19 @@
  *   operations. The feed is the FIRST operation here that does not answer JSON,
  *   so the declaration gained a `responseMediaType`; every existing operation
  *   defaults to `application/json` and none of their documents changed.
+ * - `1.5.0` — MOTIR-4217 gives the tenant-address surface its producer end:
+ *   `resolvePublicHost` (`/api/public/hosts/{host}`), the one read a second
+ *   renderer makes to turn a `Host` header into a subject. Two existing
+ *   documents also GAIN a field — `PublicProjectOverview.addresses` (the
+ *   canonical URL and its alternates) and `PublicProjectIndexEntry.primaryHost`
+ *   (the host a project's canonical lives on, so a sitemap can list only its
+ *   own host's URLs). Additive under §D: one new operation and two added
+ *   response properties. **No existing property changed type, went optional, or
+ *   moved**, and every request that has a defined answer today keeps exactly
+ *   that answer — a project with no claimed address reports its `motir.co`
+ *   URL as `primary`, which is the address it already had.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.4.0';
+export const PUBLIC_CONTRACT_VERSION = '1.5.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;
