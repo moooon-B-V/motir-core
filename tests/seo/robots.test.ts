@@ -67,6 +67,34 @@ describe('robots policy', () => {
     }
   });
 
+  it('does not DISALLOW /legal either — the case that replaced the two removed above', () => {
+    // ⚠️ MOTIR-4104. The two entries the comment above describes came OFF the
+    // allow list and nothing took their place, which left the policy with no
+    // recorded opinion about `/legal` at all — and "no opinion" and "we checked,
+    // and the answer is nothing" are the same empty diff.
+    //
+    // What replaced them is this: `/legal` must stay OUT of the disallow set.
+    // `proxy.ts`'s `PUBLIC_REDIRECT_SEGMENTS` holds `legal`, so the address 308s
+    // onto `motir.co/legal`, and a `Disallow` on this host would stop a crawler
+    // ever following that redirect to the page that does render — the exact
+    // reasoning that keeps `/explore`, `/docs`, `/p/*` and `/` on the allow list.
+    // What it must NOT do is claim `/legal` is a crawlable surface HERE, because
+    // nothing in this repository serves one any more (`content/legal/` and
+    // `app/(public)/legal/` are deleted).
+    //
+    // So the assertion is two-sided, and both sides are the point: absent from
+    // the deny set, and absent from the served body. The failure mode of a
+    // robots file is silently de-indexing the surface it was meant to help, and
+    // adding `/legal` to `SIGNED_IN_SEGMENTS` or `AUTH_SEGMENTS` by reflex — it
+    // is neither — would do exactly that to a document set we publish.
+    const denied = disallowedPaths();
+    expect(
+      denied.some((d) => '/legal' === d || '/legal'.startsWith(d.endsWith('/') ? d : `${d}/`)),
+      '/legal must not be disallowed — it 308s to motir.co/legal',
+    ).toBe(false);
+    expect(JSON.stringify(buildRobots('https://example.test'))).not.toContain('/legal');
+  });
+
   it('does NOT disallow the ?rank= facets — they are self-canonical indexable states', () => {
     // `app/(public)/explore/(square)/page.tsx` builds `alternates.canonical`
     // from the query it was handed, so `?rank=popular` canonicalises to
