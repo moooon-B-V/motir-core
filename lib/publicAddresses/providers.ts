@@ -3,6 +3,7 @@ import {
   type CertificateState,
 } from '@/lib/publicAddresses/certificateProvider';
 import { type DnsResolver, nodeDnsResolver } from '@/lib/publicAddresses/dnsResolver';
+import { isE2EProdHarness } from '@/lib/e2eProdHarness';
 
 // THE PROVIDER FACTORY — Story MOTIR-3878 · Subtask MOTIR-4216.
 //
@@ -27,9 +28,26 @@ import { type DnsResolver, nodeDnsResolver } from '@/lib/publicAddresses/dnsReso
 
 const FAKE_FLAG = 'MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS';
 
-/** Are the in-memory bindings armed? Never true in a production build. */
+/**
+ * Are the in-memory bindings armed? Never true in a REAL production build.
+ *
+ * ⚠️ THE SECOND CONDITION IS `isE2EProdHarness()`, AND IT IS NOT A WEAKENING —
+ * added by MOTIR-4225, which found the guard shut the door on the only lane that
+ * needs it. The acceptance and cloud Playwright lanes serve a `next build`, so
+ * `NODE_ENV` is `production` there: a raw check makes the flag INERT in exactly
+ * the place a browser walk has to reach `issued`, and the walk would then film
+ * an unreachable state or assert nothing. `lib/e2eProdHarness.ts` is the seam
+ * this repository already uses for that collision — the same one that decides
+ * whether a session cookie is `Secure`.
+ *
+ * The safety property is unchanged in substance: arming the fakes in a real
+ * deployment now takes TWO deliberate misconfigurations rather than one, and
+ * `E2E_PROD_HARNESS` is set by a Playwright config and by nothing else. The cost
+ * of getting it wrong is what the original comment says — customer domains
+ * reported live with no certificate — so the bar stays high and stays asserted.
+ */
 export function usingFakePublicAddressProviders(): boolean {
-  if (process.env.NODE_ENV === 'production') return false;
+  if (process.env.NODE_ENV === 'production' && !isE2EProdHarness()) return false;
   return process.env[FAKE_FLAG] === '1';
 }
 

@@ -15,7 +15,12 @@ import {
   NotACustomerDomainError,
   PublicAddressesUnavailableError,
 } from '@/lib/publicAddresses/errors';
-import { certificateProvider, dnsResolver } from '@/lib/publicAddresses/providers';
+import {
+  certificateProvider,
+  dnsResolver,
+  seedFakeTxt,
+  usingFakePublicAddressProviders,
+} from '@/lib/publicAddresses/providers';
 import { isTenantDomainConfigured, tenantBaseDomain } from '@/lib/publicAddresses/tenantDomain';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -119,7 +124,24 @@ export const customDomainService = {
           },
           tx,
         );
-        return toDto(row, project.primaryAddressId);
+        const dto = toDto(row, project.primaryAddressId);
+        // ⚠️ THE FAKE RESOLVER IS SEEDED HERE, AND ONLY HERE (MOTIR-4225).
+        // `providers.ts` says the lane "seeds it through `seedFakeTxt` as the
+        // address is created, so the verify step reads back the token the
+        // service just minted — which is what the real flow does, with the
+        // customer in between". Nothing did: `seedFakeTxt` had NO caller
+        // anywhere in the product, so the in-memory resolver always answered
+        // `[]` and no browser lane could drive a domain past `unverified` — the
+        // seam existed and was inert, which is the shape that keeps a lane
+        // permanently green about a state it never reaches.
+        //
+        // It is guarded on the SAME predicate that binds the fakes, so a real
+        // deployment never reaches this line: the production resolver reads
+        // public DNS and there is nothing to seed.
+        if (usingFakePublicAddressProviders() && dto.verification) {
+          seedFakeTxt(dto.verification.name, [dto.verification.value]);
+        }
+        return dto;
       },
     );
   },

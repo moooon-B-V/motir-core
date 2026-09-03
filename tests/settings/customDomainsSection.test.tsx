@@ -139,14 +139,26 @@ describe('panel 6 — primary', () => {
 });
 
 describe('panel 4 — the records the customer has to create', () => {
-  it('shows the pointing record AND the ownership TXT, each copyable', () => {
-    render([domain({ status: 'unverified' })]);
+  it('renders every record the DTO carries, each copyable', () => {
+    // ⚠️ AND TODAY THE DTO CARRIES ONLY THE OWNERSHIP TXT. This case used to
+    // hand in a `dns: [CNAME]` alongside a `verification` and assert both — a
+    // shape `customDomainService`'s mapper never produces, so it asserted a
+    // screen the product cannot render. The pointing record is parsed by the Fly
+    // adapter and dropped at the mapper: **MOTIR-4278**. Corrected to the real
+    // shape rather than left describing a fiction.
+    render([
+      domain({
+        status: 'unverified',
+        dns: [
+          { type: 'TXT', name: '_motir-verify.roadmap.acme.com', value: 'motir-verify=abc123' },
+        ],
+      }),
+    ]);
     fireEvent.click(screen.getByRole('button', { name: 'Show DNS records' }));
 
-    expect(screen.getByText('CNAME')).toBeTruthy();
-    expect(screen.getByText('motir-marketing.fly.dev')).toBeTruthy();
+    expect(screen.getByText('TXT')).toBeTruthy();
     expect(screen.getByText('motir-verify=abc123')).toBeTruthy();
-    expect(screen.getAllByLabelText('Copy value')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Copy value')).toHaveLength(1);
   });
 
   it('explains the apex pinning only when the records ARE an apex’s', () => {

@@ -146,7 +146,17 @@ export function PublicSubdomainCard({
           <Input
             label={t('subdomain.label')}
             value={label}
-            onChange={(e) => setLabel(e.target.value)}
+            // ⚠️ THE REFUSAL IS CLEARED ON EDIT, and that is not tidiness. The
+            // `Input` renders `error` INSTEAD of `helperText`, so a refusal that
+            // survived typing would take the LIVE PREVIEW away — the customer
+            // would fix the label and still be looking at the old complaint,
+            // with no sight of the address they are about to own. Caught by the
+            // acceptance walk (MOTIR-4225), which is the only test that types
+            // twice.
+            onChange={(e) => {
+              setLabel(e.target.value);
+              if (error) setError(null);
+            }}
             addonEnd={
               <span className="font-mono text-[13px] text-(--el-text-secondary)">
                 .{baseDomain}
@@ -192,7 +202,10 @@ export function PublicSubdomainCard({
           <Input
             label={t('subdomain.label')}
             value={label}
-            onChange={(e) => setLabel(e.target.value)}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              if (error) setError(null);
+            }}
             addonEnd={
               <span className="font-mono text-[13px] text-(--el-text-secondary)">
                 .{baseDomain}

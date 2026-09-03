@@ -102,6 +102,26 @@ describe('panel 1 — no subdomain claimed', () => {
     await waitFor(() => expect(screen.getByText(/Lowercase letters/)).toBeTruthy());
   });
 
+  it('CLEARS the refusal as soon as the label is edited, so the preview comes back', async () => {
+    // ⚠️ THE `Input` RENDERS `error` INSTEAD OF `helperText`, so a refusal that
+    // survived typing takes the LIVE PREVIEW away — the customer fixes the label
+    // and is still looking at the old complaint, with no sight of the address
+    // they are about to own. Found by the acceptance walk, which is the only
+    // test that types twice.
+    fetchMock.mockResolvedValue({
+      ok: false,
+      json: async () => ({ code: 'RESERVED_LABEL', refusal: 'reserved' }),
+    });
+    render();
+    fireEvent.change(screen.getByLabelText('Subdomain'), { target: { value: 'admin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Claim subdomain' }));
+    await waitFor(() => expect(screen.getByText(/is reserved/)).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText('Subdomain'), { target: { value: 'acme' } });
+    expect(screen.queryByText(/is reserved/)).toBeNull();
+    expect(screen.getByText(/acme\.motir\.site\/ROADMAP/)).toBeTruthy();
+  });
+
   it('explains a TAKEN name as a fact about somebody else, alias included', async () => {
     // The second sentence exists because *taken* and *taken by a retired alias*
     // are indistinguishable to the claimer, and the honest answer is to say so.

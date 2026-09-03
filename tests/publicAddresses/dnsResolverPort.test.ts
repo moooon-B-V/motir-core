@@ -110,4 +110,21 @@ describe('the composition root', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it('but ARMS under the production HARNESS, which is the only lane that needs it', () => {
+    // MOTIR-4225: the acceptance and cloud Playwright lanes serve a `next build`,
+    // so `NODE_ENV` is production there and a raw check makes the flag inert in
+    // exactly the place a browser walk has to reach `issued`. `E2E_PROD_HARNESS`
+    // is the seam this repository already uses for that collision — it is set by
+    // a Playwright config and by nothing else, so arming the fakes in a real
+    // deployment now takes TWO deliberate misconfigurations rather than one.
+    process.env['MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS'] = '1';
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_PROD_HARNESS', '1');
+    try {
+      expect(providersModule.usingFakePublicAddressProviders()).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

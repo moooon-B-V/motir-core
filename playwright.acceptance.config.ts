@@ -275,6 +275,23 @@ export default defineConfig({
         MOTIR_DOCS_URL: 'https://motir.co/docs',
         // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
         MOTIR_CLOUD: 'true',
+        // ── The public-address story's two seams (MOTIR-3878 · MOTIR-4225) ──
+        //
+        // ⚠️ WITHOUT THESE THE SPEC CANNOT REACH THE STATES IT ASSERTS, and
+        // `plan-rules/type-test.md` tell (d) is exactly that: a lane that cannot
+        // reach the asserted state stays green for ever.
+        //
+        // The BASE DOMAIN, because the pane renders an operator explanation and
+        // no claim field when it is unset — the walk would film that instead of
+        // the room.
+        MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
+        // The two PORTS the flow crosses that leave this machine: the certificate
+        // platform and public DNS. `lib/publicAddresses/providers.ts` binds
+        // in-memory versions on this flag — and REFUSES to, whatever the flag
+        // says, when `NODE_ENV === 'production'`, which is what makes an env var
+        // an operator could set by accident harmless. Asserted in
+        // `tests/publicAddresses/dnsResolverPort.test.ts`.
+        MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS: '1',
         E2E_TEST_BILLING: '1',
         MOTIR_AI_URL,
         E2E_TEST_CODE_HEALTH: '1',

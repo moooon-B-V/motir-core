@@ -32,7 +32,13 @@ vi.mock('@/lib/publicAddresses/providers', () => ({
   }),
   dnsResolver: () => ({ resolveTxt }),
   certificatesConfigured: () => true,
-  usingFakePublicAddressProviders: () => true,
+  // ⚠️ `false`, SO THE SERVICE TAKES THE PRODUCTION PATH. `add` seeds the fake
+  // resolver when the fakes are armed (MOTIR-4225); here the DNS port is stubbed
+  // directly by `resolveTxt` above, so arming them too would mean the seam read
+  // back a value the SEED wrote rather than one this test chose.
+  usingFakePublicAddressProviders: () => false,
+  seedFakeTxt: () => {},
+  resetFakeTxt: () => {},
 }));
 
 const { db } = await import('@/lib/db');

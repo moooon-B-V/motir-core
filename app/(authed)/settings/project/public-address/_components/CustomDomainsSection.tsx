@@ -382,10 +382,18 @@ function DnsTable({
   dns: readonly DnsInstructionDto[];
 }) {
   const t = useTranslations('settings.publicAddress.domains');
-  const rows: DnsInstructionDto[] = [
-    ...dns,
-    ...(verification ? [{ type: 'TXT' as const, ...verification }] : []),
-  ];
+  // ⚠️ `dns` ALREADY CONTAINS THE OWNERSHIP RECORD. `customDomainService`'s
+  // mapper pushes `verification` into the array and also exposes it on its own
+  // field, so concatenating the two rendered the same TXT TWICE — a customer
+  // reading "create these two records" and seeing one record listed twice would
+  // reasonably create it twice, or go looking for the difference. Found by the
+  // acceptance walk (MOTIR-4225); `verification` survives here only as the
+  // fallback for a payload that carries the token and an empty array.
+  const rows: DnsInstructionDto[] = dns.length
+    ? [...dns]
+    : verification
+      ? [{ type: 'TXT' as const, ...verification }]
+      : [];
   if (rows.length === 0) return null;
 
   return (
