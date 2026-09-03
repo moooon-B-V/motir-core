@@ -88,7 +88,28 @@ export function UserMenu({
           {initial}
         </button>
       </Popover.Trigger>
-      <Popover.Content align="end" width={240} className="py-1">
+      {/* 336px is DERIVED from the widest row, not chosen (MOTIR-4270). The
+          `Platform admin` row is the only one carrying a hint line, and its
+          pill is a flex sibling of the whole label+hint stack, so it reserves
+          its width down the row's FULL height — the hint can never use it:
+
+            hint `Operator console · the whole estate` @ 12px Inter 400   200px
+            `Staff only` Pill                                             78px
+            row chrome: px-1 (8) + px-2 (16) + glyph (16) + 2 gaps (16)    56px
+                                                                         -----
+                                                                         334px
+
+          This shipped at `width={240}` from 1.2.6 (when every row was one
+          line) through MOTIR-2896 (which added the hint row and did not
+          re-derive it), so the hint wrapped to two lines — a 68px row where
+          `design/shell/account-menu.mock.html` draws 52px.
+
+          ⚠️ Measure in INTER before changing this. That asset's frames are
+          319px because it renders without `--font-sans-source`, and the
+          fallback face needs only 320px; Inter needs 336. A row added here,
+          or a longer `platformAdminHint`, re-derives the number — happy-dom
+          component tests have no layout engine and will not catch a wrap. */}
+      <Popover.Content align="end" width={336} className="py-1">
         <div className="border-(--el-border) mb-1 border-b px-3 pb-2 pt-2">
           <p className="truncate font-sans text-sm font-medium text-(--el-text)">{name || email}</p>
           {name ? (
