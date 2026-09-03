@@ -45,9 +45,14 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // live inside its `server.registerTool(...)` call and are not data anywhere.
 //
 // Each authored summary carries a FINGERPRINT of the shipped `title` +
-// `description` it was written against. The story's vitest gate (MOTIR-2330)
+// `description` it was written against. `tests/mcp/tool-doc-truth.test.ts`
 // recomputes it from a live `tools/list` and fails when they diverge, naming the
-// tool. It does not prove a summary is good — no test can. It proves the summary
+// tool and both values. (It was the story's own gate, MOTIR-2330, in
+// `tests/api-docs/` — a directory whose every other member walked one of the
+// public docs pages, so MOTIR-3951 deleted it along with them and nothing
+// recomputed a fingerprint for two days. MOTIR-4165 restored it to a home that
+// imports no route and no page, which is the whole point of the move.)
+// It does not prove a summary is good — no test can. It proves the summary
 // was written against the text the server currently ships, which is exactly the
 // property Amendment 9 Q2's second limb asks for, on the one surface Amendment 7
 // explicitly licenses to churn.
@@ -384,13 +389,20 @@ export interface McpToolSummary {
  * them. The gate caught all nine, which is the system working; the lesson is
  * that the only trustworthy source for this value is the same one the gate
  * reads. Get it from a `tools/list` handshake (the pattern in
- * `tests/api-docs/mcp-truth.test.ts`) and copy the result.
+ * `tests/mcp/tool-doc-truth.test.ts`) and copy the result.
  *
  * The stored fingerprints are computed by `fingerprintToolText` in
  * `lib/apiDocs/mcpFingerprint.ts` — which lives in its OWN module because it
- * needs `node:crypto`, and nothing a public page imports may. The story's vitest
- * gate (MOTIR-2330) imports it, recomputes each fingerprint from a live
- * `tools/list`, and fails when one diverges.
+ * needs `node:crypto`, and nothing a public page imports may.
+ * `tests/mcp/tool-doc-truth.test.ts` imports it, recomputes each fingerprint from
+ * a live `tools/list`, and fails when one diverges.
+ *
+ * ⚠️ AND WHEN IT FAILS, THE FINGERPRINT IS THE LAST THING YOU MOVE. Re-read the
+ * tool's shipped text, decide whether the summary still says what a reader
+ * choosing between two adjacent tools needs, change it if it does not, and only
+ * then re-pin. Moving the pin alone converts the one signal that a summary is
+ * owed a re-read into a green check — which is the failure the gate exists for,
+ * not a step in clearing it.
  */
 
 /**
@@ -587,16 +599,23 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '7c51786d65d6',
   },
   add_plan_items: {
-    // The SUMMARY is MOTIR-3193's and stays exactly as that story wrote it: the
-    // empty-final-batch close is a CAPABILITY, which is the kind of thing a
-    // reader picks a tool off this line for. MOTIR-3194 then re-pinned the
-    // fingerprint WITHOUT touching it, because what that card added to the
-    // description is the ONE-PROPOSAL-PER-TARGET rule — a refusal a caller meets
-    // after it has already chosen this tool, and read from the description.
+    // The SUMMARY is MOTIR-3193's, and the empty-final-batch close is on it
+    // because it is a CAPABILITY — the kind of thing a reader picks a tool off
+    // this line for. MOTIR-3194 then re-pinned the fingerprint WITHOUT touching
+    // it, because what that card added to the description is the
+    // ONE-PROPOSAL-PER-TARGET rule — a refusal a caller meets after it has
+    // already chosen this tool, and read from the description.
+    //
+    // ⚠️ MOTIR-4153 falls on the OTHER side of that same test, which is why this
+    // line moved for the first time (re-pinned by MOTIR-4165). `revision: true`
+    // appends to a plan you have ALREADY CLOSED. Before it the answer to "my plan
+    // is `planned` and needs one more card" was that there is no such call — so
+    // it is not a refusal met after choosing this tool, it is the fact that
+    // decides whether this is the tool. Same test as the close, same verdict.
     summary:
-      'Append proposals to a plan — or close it with an empty final batch; ids come back in order, so the next batch can hang children off them.',
+      'Append proposals to a plan — close it with an empty final batch, or add to one you already closed with `revision: true`; ids come back in order, so the next batch can hang children off them.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'ae3fc99f33f6',
+    descriptionFingerprint: 'd75174c32f83',
   },
   update_plan_item: {
     summary:
@@ -681,8 +700,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'b1ad0d0eb3f9',
   },
   submit_plan_session: {
+    // Re-pinned by MOTIR-4165 with the summary UNTOUCHED, which is the
+    // `add_plan_items` / MOTIR-3194 disposition rather than the one directly
+    // above. MOTIR-4172 gave the description a paragraph on the optional
+    // `requirement` argument — the six-field WHAT a caller may compose so the
+    // planner starts knowing the problem. That is read AFTER a caller has chosen
+    // this tool: it changes how you call it, never whether this is the call. The
+    // line still says what the tool is for, and it is the only thing it owes.
     summary: "Send the conversation's accumulated intent to the planner as one change set.",
-    descriptionFingerprint: '2191f35e198e',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'da07e05ffb16',
   },
   link_work_items: {
     summary:
