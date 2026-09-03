@@ -131,6 +131,23 @@ describe('contract: jobKind enum (§2.3)', () => {
     expect([...JOB_KINDS].sort()).toEqual([...CANONICAL_JOB_KINDS].sort());
   });
 
+  // ⚠️ EQUALITY ALONE CANNOT SAY THIS (MOTIR-4310). The case above passes if BOTH
+  // lists carry a retired kind — they would still be equal, and the mirror would
+  // still name values motir-ai refuses. This is the half that says what they must
+  // NOT contain.
+  it('neither list carries a RETIRED planning kind — the five are gone from both', () => {
+    for (const kind of ['generate_tree', 'expand_item', 'augment', 'replan', 'revise_plan']) {
+      expect([...JOB_KINDS], `JOB_KINDS still carries ${kind}`).not.toContain(kind);
+      expect([...CANONICAL_JOB_KINDS], `CANONICAL_JOB_KINDS still carries ${kind}`).not.toContain(
+        kind,
+      );
+    }
+    // …and the one that replaced them is in both, so "not containing" cannot be
+    // achieved by emptying the planning half altogether.
+    expect([...JOB_KINDS]).toContain('plan');
+    expect([...CANONICAL_JOB_KINDS]).toContain('plan');
+  });
+
   it('ENVELOPE_VERSION matches the canonical version', () => {
     expect(ENVELOPE_VERSION).toBe('v1');
   });
