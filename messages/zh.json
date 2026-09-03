@@ -2148,7 +2148,53 @@
     },
     "publicPage": {
       "title": "公开页面",
-      "subtitle": "<strong>{projectName}</strong> 公开页面上的标语、标签和 README。"
+      "subtitle": "<strong>{projectName}</strong> 公开页面上的标语、标签和 README。",
+      "card": {
+        "title": "横幅与 README",
+        "subtitle": "一起保存。保存后立即在公开页面生效。"
+      },
+      "viewPublicPage": "查看公开页面",
+      "tagline": {
+        "label": "标语",
+        "placeholder": "用一句话介绍这个项目",
+        "help": "显示在项目名称下方。最多 {max} 个字符。"
+      },
+      "tags": {
+        "label": "标签",
+        "help": "最多 {maxCount} 个标签，每个最多 {maxLength} 个字符。",
+        "count": "{count} / {maxCount} 个标签",
+        "add": "添加标签",
+        "addPlaceholder": "新标签",
+        "empty": "暂无标签",
+        "remove": "移除{tag}"
+      },
+      "readme": {
+        "label": "README",
+        "help": "Markdown 格式，最多 {max, number} 个字符。你在这里看到的就是访客看到的。",
+        "emptyHelp": "尚未撰写。在你写 README 之前，公开页面会显示一段简短的自动介绍。"
+      },
+      "footer": {
+        "dirty": "有未保存的更改",
+        "saving": "正在保存…",
+        "saved": "已保存",
+        "invalid": "请修正标出的字段后再保存",
+        "save": "保存更改"
+      },
+      "error": {
+        "taglineTooLong": "太长了——最多 {max} 个字符。",
+        "tagsInvalid": "每个标签不能超过 {maxLength} 个字符，且最多 {maxCount} 个。",
+        "overviewTooLong": "太长了——最多 {max, number} 个字符。",
+        "saveFailed": "无法保存公开页面，请重试。"
+      },
+      "notPublic": {
+        "lead": "尚未公开构建。",
+        "body": "你在这里保存的内容会被保留，并在你于<link>成员与访问</link>中开始公开构建时立即生效。"
+      },
+      "discard": {
+        "title": "放弃未保存的更改？",
+        "keep": "继续编辑",
+        "discard": "放弃"
+      }
     },
     "codeAccess": {
       "title": "代码访问",

@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  NotProjectAdminError,
+  ProjectNotFoundError,
+  ProjectOverviewTooLongError,
+  ProjectTaglineTooLongError,
+  ProjectTagsInvalidError,
+} from '@/lib/projects/errors';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
 
 runAsCloudBuild();
@@ -100,6 +106,44 @@ describe('PATCH /api/projects/{key}/public-overview', () => {
 
     setPublicOverview.mockRejectedValueOnce(new ProjectNotFoundError('PROD'));
     expect((await PATCH(patch({ publicTags: ['a'] }), params('PROD'))).status).toBe(404);
+  });
+
+  describe('maps the service’s three FIELD refusals to a 422 naming the field (MOTIR-4171)', () => {
+    // The Public page room lands each refusal under the field it names — the
+    // AI-settings 422 idiom. Until MOTIR-4171 the three were unmapped by
+    // `projectErrorResponse`, so the one route that reaches them answered 500.
+    const CASES: Array<[string, Error, string, string]> = [
+      [
+        'tagline too long',
+        new ProjectTaglineTooLongError(500),
+        'PROJECT_TAGLINE_TOO_LONG',
+        'publicTagline',
+      ],
+      [
+        'tags invalid',
+        new ProjectTagsInvalidError('tag_too_long', 'A tag is too long.'),
+        'PROJECT_TAGS_INVALID',
+        'publicTags',
+      ],
+      [
+        'overview too long',
+        new ProjectOverviewTooLongError(50_000),
+        'PROJECT_OVERVIEW_TOO_LONG',
+        'publicOverviewMd',
+      ],
+    ];
+
+    for (const [name, err, code, field] of CASES) {
+      it(name, async () => {
+        getSession.mockResolvedValue({ user: { id: 'user_1' } });
+        setPublicOverview.mockRejectedValueOnce(err);
+
+        const res = await PATCH(patch({ publicTagline: 'x' }), params('PROD'));
+
+        expect(res.status).toBe(422);
+        expect(await res.json()).toMatchObject({ code, field });
+      });
+    }
   });
 
   describe('refuses a malformed field rather than dropping it', () => {

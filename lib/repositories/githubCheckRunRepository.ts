@@ -79,6 +79,31 @@ export const githubCheckRunRepository = {
     });
   },
 
+  /**
+   * Record rows for checks the host reports and we have NOT recorded — and only
+   * those (MOTIR-4199).
+   *
+   * ⚠️ IT CREATES, IT NEVER UPDATES, AND THAT IS THE WHOLE OF ITS SAFETY.
+   * `upsert` above refreshes a row's conclusion, which is right for a delivery
+   * about that check and wrong for a reconcile: the reconcile's snapshot was
+   * taken before the write, so a delivery that landed in between would be
+   * overwritten by a staler answer read from a different transport. `createMany`
+   * with `skipDuplicates` makes the unique key itself the arbiter — a row that
+   * exists wins, whatever this call believed about it — so the reconcile can run
+   * with no lock of its own.
+   *
+   * Returns how many rows it actually created, which is what a caller reports:
+   * zero means the recorded set was already whole.
+   */
+  async createMissing(
+    inputs: UpsertGithubCheckRunInput[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (inputs.length === 0) return 0;
+    const { count } = await tx.githubCheckRun.createMany({ data: inputs, skipDuplicates: true });
+    return count;
+  },
+
   /** Create-or-refresh a check row, keyed on the unique
    *  `(pull_request_id, commit_sha, check_name, check_suite_id)`. Refreshes
    *  `conclusion` so a REDELIVERY of one run's check converges on one row —
