@@ -101,20 +101,30 @@ function errorMessage(err: unknown): string {
  * (MOTIR-1740), via the SHIPPED `planStalenessService` (MOTIR-1340) — never a
  * second drift derivation.
  *
- * Only a `planned` plan can be stale: a `generating` one has no `plannedAt` to
- * measure drift against and is seconds old. Mirrors the Plans list's
- * `staleCountFor` (`app/(authed)/plans/planRowView.ts`), including its graceful
- * degradation — a staleness read that fails costs the indicator its drift line,
- * it does not fail the settings page that is only asking whether cadence is
- * paused.
+ * Only an UNDECIDED, CLOSED plan can be stale: a `generating` one has no
+ * `plannedAt` to measure drift against and is seconds old. Mirrors the Plans
+ * list's `staleCountFor` (`app/(authed)/plans/planRowView.ts`), including its
+ * graceful degradation — a staleness read that fails costs the indicator its
+ * drift line, it does not fail the settings page that is only asking whether
+ * cadence is paused.
  *
  * ⚠️ `computePlanStaleness` OWNS the `planned`-only rule (MOTIR-3165) and
  * returns all-clear for a decided plan on its own. The `status` guard below is
  * kept as an OPTIMISATION — this caller already holds a `PlanDto`, so it spares
  * a plan read — not as a second source of truth.
+ *
+ * ⚠️ IT ADMITS `stale` TOO (MOTIR-4129), which is what makes the sentence above
+ * — *mirrors the Plans list's `staleCountFor`* — true again. That mirror widened
+ * with AMENDMENT 9 D3 and this copy did not, and the divergence was
+ * UNREACHABLE while `findUndecidedByProject` could never hand this consumer a
+ * `stale` plan: fixing that predicate is what made this one live. Left narrow it
+ * would report the project paused and its drift as ZERO, on the plan MOST likely
+ * to carry some — the same *`planned` standing in for undecided* substitution,
+ * one call site over, which is why the fix swept for it rather than stopping at
+ * the predicate it came for.
  */
 async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number> {
-  if (plan.status !== 'planned') return 0;
+  if (plan.status !== 'planned' && plan.status !== 'stale') return 0;
   try {
     const verdict = await planStalenessService.computePlanStaleness(plan.id, ctx);
     return verdict.items.filter((item) => item.stale).length;
@@ -131,8 +141,12 @@ export const autoPlanCadenceService = {
    * SHOW the user that cadence is paused and why. Two consumers, one query, so
    * the indicator and the trigger can never disagree.
    *
-   * Returns the undecided plan (`generating` / `planned`) when one exists, else
-   * null. WHO started that plan is deliberately not part of the predicate — see
+   * Returns the undecided plan (`generating` / `planned` / `stale`) when one
+   * exists, else null. `stale` is in that set because the plan is live and
+   * awaiting action — a reviewer is holding it and cannot approve it — so it
+   * pauses cadence exactly as `planned` does (MOTIR-4129; the predicate itself
+   * carries the full reasoning). WHO started that plan is deliberately not part
+   * of the predicate — see
    * `planRepository.findUndecidedByProject`, which also carries the ONE shape
    * that is NOT a pending proposal: a `generating` plan with no producer and no
    * proposals is nobody's decision, so it no longer pauses anything
