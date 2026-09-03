@@ -634,8 +634,10 @@ jobs:
     if: always()
     needs: [membership, build, acceptance]
     runs-on: ubuntu-latest
-    # It reads the `needs` context and exits; the clock starts when the job
-    # starts, so waiting on the shards costs it nothing.
+    # Observed <0.1 min → 10 (the short-job floor) — MEASURED on this lane's
+    # first run, not copied from `ci-complete`: 04:05:41 → 04:05:43, two
+    # seconds. It reads the `needs` context and exits, and the clock starts when
+    # the JOB starts, so waiting on the shards costs it nothing.
     timeout-minutes: 10
     # Reads nothing, writes nothing.
     permissions: {}
