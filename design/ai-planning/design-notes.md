@@ -3541,6 +3541,38 @@ sources, and the op decides which exist:
 | **`modify`**                | the TARGET's live `QuickViewData` | the patch's own fields                  | the card as it will stand, with the changed fields MARKED                      |
 | **`remove`**                | the TARGET's live `QuickViewData` | none — a `remove` carries no patch      | the card as it stands, marked nowhere, plus the archive statement              |
 
+### ⚠️ AMENDED 2026-09-02, WHILE BUILDING MOTIR-4183 — the merge is RIGHT and its OWNER was wrong
+
+The table above says the projection's base is the target's live `QuickViewData`. **The rendered result
+it describes is correct and unchanged; where that merge HAPPENS is not.** Measured before implementing:
+
+|                                         |                                                                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `planReviewService.getPlanReview` today | reads every `modify` / `remove` target in **ONE batched, workspace-scoped read** — its own header comment says _"no N+1"_                 |
+| `workItemsService.getQuickView`         | **~14 reads per item** (the detail aggregate, members, sprints, components, estimation config, the sprint name, the refs, the deliveries) |
+
+So building the merge inside `getPlanReview` puts **~14 × N reads on the plan-review load** — roughly
+280 for a plan with twenty `modify`s — to serve a peek the reviewer opens at most one of. That is a
+surface whose no-N+1 property is stated in code, traded away for a panel that is closed.
+
+**The merge therefore happens where the shipped peek already fetches: ON OPEN, in the client.**
+
+| op                    | on open                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modify` / `remove`   | the host fetches the TARGET's payload from `GET /api/work-items/peek?key=<identifier>` — the request `WorkItemQuickView.tsx:75` and `IssueQuickViewController.tsx:70` already make — and overlays the proposal envelope |
+| un-materialized `add` | **no key, so no fetch.** The envelope IS the payload; the short rail in §2's table is what that produces                                                                                                                |
+
+**One request per opened proposal, which is what opening any work item costs today**, and the
+plan-review read gains nothing but the envelope. §2's row-by-row table is unchanged — it describes what
+the reader SEES, and they see the same thing either way.
+
+**The boundary this moves:** MOTIR-4183 emits the **envelope** (`op`, the target's `identifier`, the
+proposed values, `changedFields`, `settableFields`) and adds `explanationMd` to the payload — which is
+what its own criteria already say, _"a small `proposal` envelope carrying what only a proposal has"_.
+**MOTIR-4184 owns the overlay**, because the overlay is a render-time composition of two payloads and
+that card is the one that mounts them. Neither card gains scope it did not have; the design had put the
+join in the wrong half.
+
 **Why a merge and not the proposal's fields alone.** Today a `modify` opened from the CANVAS renders
 `WorkItemQuickView` — the target's full rail. A proposal mode built only from
 `PlanItemProposedFields` would take `Assignee`, `Reporter`, `Labels`, `Components`, `Due date`,
