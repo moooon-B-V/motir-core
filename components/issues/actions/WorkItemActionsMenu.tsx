@@ -2,22 +2,9 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  Archive,
-  Copy,
-  Goal,
-  Maximize2,
-  MoreHorizontal,
-  Pencil,
-  Repeat,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react';
+import { Archive, Copy, Goal, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { planEntranceFace } from '@/lib/planning/planEntranceVisibility';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { useToast } from '@/components/ui/Toast';
 import { DeleteWorkItemDialog } from './DeleteWorkItemDialog';
 import {
@@ -52,6 +39,24 @@ import {
 // confirm dialog (2.9.10 — no Archive escape-hatch + the live-descendant
 // warning). Defaults to `false`, so the active surfaces are byte-for-byte
 // unchanged. The host surface passes `archived` from its read.
+//
+// ⚠️ THIS MENU CARRIES NO PLAN DOORS ANY MORE (MOTIR-4258). It used to take a
+// `planEdits` bundle and draw an `Expand` / `Re-plan` row from the shared
+// `planEntranceFace` rule (MOTIR-903 · MOTIR-2097), opening the IN-PLACE
+// plan-edits dock. Exactly ONE of this menu's five mounts ever passed that
+// bundle — the `/items` row's own actions cell — and MOTIR-4258 removed
+// that row's ⋯ entirely, which left the prop, the face derivation and both rows
+// reachable from nowhere. They are deleted rather than kept warm: an optional
+// prop no host passes is indistinguishable from a live one to the next reader.
+//
+// The per-item plan door that SURVIVES is `WorkItemPlanEntrance`
+// (`components/planning/WorkItemPlanEntrance.tsx`, MOTIR-910) — the Plan /
+// Re-plan pill on the detail-page header and the quick-view peek, which reads
+// the SAME `planEntranceFace` rule and opens the universal planning workspace.
+// That is the direction the product had already chosen when MOTIR-1731 retired
+// the one-shot `Augment from prompt` button: changing a plan is a CONVERSATION,
+// so the entrance is the workspace, not a per-surface control. What has no
+// entrance left at all is the in-place dock's RE-PLAN job — see MOTIR-4261.
 
 export const ITEM_CLASS =
   'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none disabled:opacity-50';
@@ -82,7 +87,6 @@ export function WorkItemActionsMenu({
   editHref,
   align = 'end',
   triggerClassName,
-  planEdits,
 }: {
   itemId: string;
   /** The `PROD-N` key — used for the link, the menu label, and toasts. */
@@ -150,34 +154,8 @@ export function WorkItemActionsMenu({
   align?: 'start' | 'center' | 'end';
   /** Override the trigger button styling for a given surface's placement. */
   triggerClassName?: string;
-  /**
-   * The per-item plan-edits doors (Expand / Re-plan, MOTIR-903). Supply the
-   * WHOLE object or none of it: WHICH door shows — and whether either does — is
-   * decided by the shared Plan / Re-plan rule (`planEntranceFace`), so a host
-   * cannot offer these actions without stating the item's plannability.
-   *
-   * That bundling is the point (MOTIR-2097). These were four loose optional
-   * props gated inline on `canEdit && !archived && kind`, which is how this
-   * surface came to offer Re-plan on a DONE epic (no status gate at all) and on
-   * a CHILDLESS one (no `hasChildren` gate) while the detail page and the peek
-   * had already been fixed twice.
-   */
-  planEdits?: {
-    kind: WorkItemKindDto;
-    /** Does the item have children? The CONTAINER face (rule 3). */
-    hasChildren: boolean;
-    /** Does the item have a non-empty description? The LEAF face (rule 2). */
-    hasDescription: boolean;
-    /** The item's status CATEGORY — a `done`-category item offers neither door. */
-    statusCategory: StatusCategoryDto | null;
-    /** Triggered by "Expand" (the `plan` face). */
-    onExpand: () => void;
-    /** Triggered by "Re-plan" (the `replan` face). */
-    onReplan: () => void;
-  };
 }) {
   const t = useTranslations('workItemActions');
-  const te = useTranslations('planEdits');
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -187,20 +165,6 @@ export function WorkItemActionsMenu({
 
   const href = editHref ?? `/items/${identifier}/edit`;
   const menuLabel = t('menuLabel', { key: identifier });
-
-  // WHICH plan-edits door this item gets — the SAME rule the detail page and the
-  // quick-view peek ask (MOTIR-2097), so the three surfaces cannot drift again.
-  // `null` (no capability, archived, or a done-category item) draws neither.
-  const planFace = planEdits
-    ? planEntranceFace({
-        canPlan: canEdit,
-        archived,
-        statusCategory: planEdits.statusCategory,
-        kind: planEdits.kind,
-        hasChildren: planEdits.hasChildren,
-        hasDescription: planEdits.hasDescription,
-      })
-    : null;
 
   async function copyLink() {
     setOpen(false);
@@ -313,43 +277,6 @@ export function WorkItemActionsMenu({
                 <Pencil className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
                 {t('editDetails')}
               </a>
-            ) : null}
-
-            {/* Expand — MOTIR-903: the `plan` face of the shared rule. Nothing
-                to re-plan yet (a childless container, or a leaf with no
-                description), so the door generates the plan rather than editing
-                one. */}
-            {planFace === 'plan' && planEdits ? (
-              <button
-                type="button"
-                role="menuitem"
-                className={ITEM_CLASS}
-                onClick={() => {
-                  setOpen(false);
-                  planEdits.onExpand();
-                }}
-              >
-                <Maximize2 className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-                {te('expandAction')}
-              </button>
-            ) : null}
-
-            {/* Re-plan — MOTIR-903: the `replan` face. There IS an existing plan
-                (a container's children, a leaf's description) to edit, and
-                completed work is left untouched. */}
-            {planFace === 'replan' && planEdits ? (
-              <button
-                type="button"
-                role="menuitem"
-                className={ITEM_CLASS}
-                onClick={() => {
-                  setOpen(false);
-                  planEdits.onReplan();
-                }}
-              >
-                <Repeat className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-                {te('replanAction')}
-              </button>
             ) : null}
 
             {/* Add to active sprint (2.4.14) — after Edit details. Enabled when an

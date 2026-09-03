@@ -334,10 +334,6 @@
     "actionError": "Something went wrong. Please try again.",
     "immutableRejection": "One or more items are in a terminal status and cannot be changed. They've been locked in the review.",
     "decidedRejection": "This proposal has already been decided — nothing was changed.",
-    "expandAction": "Expand",
-    "expandTooltip": "Generate children for this work item",
-    "replanAction": "Re-plan",
-    "replanTooltip": "Re-plan this epic/story — completed work stays untouched",
     "creditsError": "You're out of planning credits",
     "emptyError": "No proposals came back — try a more specific prompt or target",
     "failedError": "The job didn't finish. Your backlog is untouched."
@@ -591,7 +587,6 @@
       "estimate": "Est.",
       "points": "Points",
       "status": "Status",
-      "actions": "Actions",
       "unassigned": "Unassigned"
     },
     "list": {

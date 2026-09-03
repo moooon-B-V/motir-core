@@ -334,10 +334,6 @@
     "actionError": "出了点问题，请重试。",
     "immutableRejection": "一个或多个工作项处于终止状态，无法更改。这些项在审阅中已被锁定。",
     "decidedRejection": "该提案已被处理，未做任何更改。",
-    "expandAction": "展开",
-    "expandTooltip": "为此工作项生成子项",
-    "replanAction": "重新规划",
-    "replanTooltip": "重新规划此 epic/story — 已完成的工作保持不变",
     "creditsError": "你的 AI 积分已用尽",
     "emptyError": "没有返回建议 — 请尝试更具体的提示或目标",
     "failedError": "任务未完成。你的待办列表未受影响。"
@@ -591,7 +587,6 @@
       "estimate": "预估",
       "points": "故事点",
       "status": "状态",
-      "actions": "操作",
       "unassigned": "未分配"
     },
     "list": {
