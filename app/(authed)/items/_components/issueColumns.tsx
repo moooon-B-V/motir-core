@@ -67,7 +67,9 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       cell: (r) => (
         <span className="flex min-w-0 items-center gap-2">
           <IssueTypeIcon type={r.kind} className="h-4 w-4 shrink-0" />
-          <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{r.identifier}</span>
+          <span className="shrink-0 font-mono text-xs text-(--el-text-identifier)">
+            {r.identifier}
+          </span>
           <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
             {r.title}
           </span>

@@ -1666,3 +1666,252 @@ Playwright chromium export, light, `deviceScaleFactor: 2`, 1200 px wide);
 `ai-callout-menu.mock.html` (MOTIR-1811); bound by
 `docs/decisions/conversation-turn-intent.md` (MOTIR-1816); gates the code subtask
 **MOTIR-1820**.
+
+---
+
+## ⭐ The run surface while it is RUNNING — a live composer, a stop, and a run that ended on purpose (MOTIR-4066, 2026-09-03)
+
+**Amendment to this asset set, for `MOTIR-4066`.** The rail shipped by
+`MOTIR-2226` draws a run that is **watched**. Story `MOTIR-4054` makes it a run
+that is **participated in**, and that is a different surface: the composer stays
+live while the planner works, a control can end the run, and a run can now finish
+in a state that is neither success nor failure. None of those had a drawing. The
+three cards under that story — **MOTIR-4067** (the mailbox), **MOTIR-4068** (the
+stop), **MOTIR-4069** (the rail narrates every act) — consume this asset; none of
+them decides what it shows.
+
+**Asset:** `plan-change-run-live.mock.html` (source) + `plan-change-run-live.png`.
+A five-sheet board: the entrance, the four states against one layout, the act-kind
+table, the anatomy + token map (light and the real dark flip), and the measured
+viewport table.
+
+| Sheet | What it shows                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | **The entrance** — where the **Stop** lives, and why it is reachable at the moment it is wanted                                |
+| **2** | **The four states against ONE 22rem rail**: running · running-and-typed · stopping · stopped, plus the queued-vs-consumed pair |
+| **3** | **The act rail** — every frame kind the contract carries, `retrieval` beside them, and the LOUD unknown                        |
+| **4** | **Anatomy + the token map**, and the stopped state asserted **by absence** — what it may not use                               |
+| **5** | **Measured** — how many act lines fit at each viewport, and what follows from the answer                                       |
+
+### ⭐ Drawn against SHIPPED REALITY — rendered before drawn
+
+Every rail fragment on the board is the **real emitted markup** of the shipped
+`components/planning/PlanChangeRail.tsx` + `PlanChangeComposer.tsx`, captured by a
+headless render of the actual components in the `streaming` phase (the repo's own
+`tests/helpers/renderWithIntl` harness → `container.innerHTML`) at the rail's real
+`22rem`. Five things the render corrected, versus what reading the `.tsx` alone
+would have suggested — and the first is the largest thing on this board:
+
+- **THE COMPOSER IS `disabled` FOR THE WHOLE RUN.** `busy = state.phase === 'streaming'`
+  reaches the `@` trigger, the text input **and** Send; all three carry a real
+  `disabled` attribute in the emitted markup. _"The composer stays live"_ is
+  therefore a **behaviour** change, not a styling one.
+- **THE PROGRESS REGION IS ONE REPLACING LINE, not a rail.** A single
+  `aria-live="polite"` div (`data-testid="plan-change-progress"`) holding a spinner
+  and the current narration, overwritten on every frame. **A run's whole history is
+  one sentence long today.**
+- **THE MARKER LINE IS `--el-text-secondary`**, not `--el-text-faint` as the
+  MOTIR-2225 section above states. The notes drifted from the component; the render
+  is the truth, and the two new marker lines here follow the component.
+- **THE USER BUBBLE IS `--el-chat-bubble-user`** with a `--el-muted` avatar (the
+  MOTIR-2225 section says "accent fill"), and the `label` slot
+  (`font-mono text-[10px] uppercase opacity-80`) renders **inside** the bubble —
+  which is why the `queued` state fills that slot rather than inventing a header.
+- **THERE IS NO STOP CONTROL ANYWHERE**, at any phase, in any of the three
+  components.
+
+### ⭐ The load-bearing decision: a stop is a DECISION, not a failure
+
+The whole card turns on this, and it is expressible as a prohibition rather than a
+treatment:
+
+> **The stopped state borrows nothing from the error state.**
+
+If stopping reads as throwing work away, people will not stop runs — they will wait
+them out, and the control is decorative. That is a product failure with no error to
+trace. So the stopped state is asserted **by absence**, and sheet 4 lists what it
+may not use so a reviewer checks a claim rather than an impression:
+
+| not used                                        | why it would be wrong                                                                                                   |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--el-tint-rose` + `role="alert"`               | the rail's OWN error affordance (`PlanChangeRail`'s error block). Absent from every stopped frame                       |
+| `--el-warning-surface` / `--el-warning-text`    | spoken for by the **asking** state (MOTIR-2225); two warm pending-ish states one scroll apart are less legible than one |
+| `--el-destructive`                              | nothing is destroyed — the plan survives a stop intact                                                                  |
+| `triangle-alert` · `circle-x` · `octagon-alert` | no failure iconography anywhere                                                                                         |
+| dimming, strike-through, grey-out               | a stopped run's proposals are worth what they were worth a second earlier                                               |
+
+**And the reviewability is drawn by REUSE, not by a new element:** the stopped rail
+carries the shipped `plan-change-review` block — `--el-accent` border, _"Nothing is
+saved yet."_, Discard + Approve — **live**. That is the strongest available way to
+say the plan still stands: it is literally the same block a completed run shows.
+
+### The states (A–D, sheet 2)
+
+| State | What it is                       | How it is drawn                                                                                                                                                                                                                                                                                                      |
+| ----- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** | **RUNNING — nothing said**       | The composer is live and empty. The act rail accumulates; the newest line carries the spinner and is the one line at full `--el-text` ink. The **running bar** sits pinned above the composer input with the live line and **Stop**                                                                                  |
+| **B** | **RUNNING — the user has typed** | The turn is an ordinary user bubble — **not re-tinted** — whose `label` slot reads `queued` with a `clock` glyph, plus a marker line: _"Queued — Motir AI reads this when it finishes the card it is writing."_                                                                                                      |
+| **C** | **STOPPING**                     | The click is not the stop: the walk reads the flag at its next phase boundary, which can be a whole authoring session away. The bar keeps spinning, **Stop** becomes `disabled` and relabelled **Stopping…**, and the act rail gains a `stopping` line. The surface never claims a terminal state it has not reached |
+| **D** | **STOPPED**                      | A `stopped` act line at full ink, one centred marker (_"You stopped this run."_), and the shipped review block live underneath it                                                                                                                                                                                    |
+
+**B, one boundary later.** The queued and the delivered-and-acted-on states are
+visibly distinct, and the distinction is **textual and structural rather than
+chromatic** — four cues, none of them colour: the label slot changes
+(`queued` → `turn 2`), the clock glyph goes, the marker line is replaced with
+_"Read at the boundary — folded into this run."_, and a `folded` act line appears
+in the rail saying what the run did with it.
+
+**Why the queued bubble is not re-tinted.** The obvious move is a warm tint on the
+pending turn, and it is wrong here: `--el-warning-surface` already carries the
+planner's **asking** state on this exact surface, and two warm pending-ish states
+one scroll apart are less legible than one — the same reasoning MOTIR-2225 used to
+keep the report bubble ordinary.
+
+### ⚠️ THE ENTRANCE — the pinned footer, and only there
+
+The moment a stop is wanted is the moment the run is visibly going wrong and the
+user is already annoyed. So it may not be on hover, and it may not be below a
+scroll. The rail has exactly one region that is always on screen: the **pinned
+composer footer**, outside the `overflow-y-auto` transcript. MOTIR-2225 put the
+answer bar there for the same reason and measured why — at `22rem` the header row
+already carries the status dot, `Motir AI` and the mode chip, and a fourth element
+truncates. **The running bar takes that slot**, on the same fill the shipped
+progress row already uses.
+
+**No second door.** A keyboard shortcut, a canvas-bar stop and a context-menu entry
+were considered and rejected: three entrances to one control is three things to
+keep in sync, and the pinned one already answers the question. If a second is ever
+wanted it belongs beside `Esc`-closes in the workspace shell, not in this rail.
+
+### The ACT RAIL — one replacing line becomes a record
+
+The shipped surface renders **one replacing line**. The rail here is an
+**accumulating ordered list**, three columns — glyph · mono act label · line —
+because the user is now making a decision against it (whether to stop), and a
+decision needs the record rather than the latest word.
+
+**The skim axis is the middle column, not colour.** Every act line is the same ink;
+what a reader runs their eye down is a fixed-width column of short mono words, with
+the glyph as a second, non-textual cue. Deliberate: the rail already carries three
+coloured states (assistant, user, the accent review block) and a fourth hue would
+compete with them rather than help.
+
+| frame                                 | glyph                      | the line                                                          |
+| ------------------------------------- | -------------------------- | ----------------------------------------------------------------- |
+| `submitted`                           | `send`                     | Sending the conversation to Motir AI…                             |
+| `reading`                             | `scan-search`              | Reading your request…                                             |
+| `redirected`                          | `corner-down-right`        | Working on the proposal…                                          |
+| **`retrieval`**                       | **`book-open-text`**       | **Read the plan tree · code graph · code health · web · lessons** |
+| **`retrieval` (blocked)**             | **`ban`**                  | **Out of lookups — carrying on with what it has.**                |
+| `search`                              | `search`                   | Reading your plan…                                                |
+| `drill`                               | `list-tree`                | Working through the tree…                                         |
+| `pass` · `planned` · `level_complete` | `sparkles`                 | N items proposed so far…                                          |
+| `validated` · `validation_skipped`    | `shield-check`             | Checking the proposal against your plan…                          |
+| **anything else**                     | **`circle-question-mark`** | **`frame: <the raw kind>`**                                       |
+
+`retrieval` is the frame this card exists for: the planner emits it on every graph
+lookup carrying `{ tool, family }` over five families — `plan_tree`, `code_graph`,
+`code_health`, `web`, `lessons` — plus a `blocked: true` variant when the per-job
+retrieval budget is spent, and nothing renders any of it.
+
+**The last row is the point, not a footnote.** Adding a `retrieval` arm fixes
+today's symptom and leaves the mechanism: `default: return null` means every frame
+kind added upstream is invisible, with no signature — nothing throws, nothing logs,
+the rail just says less than the run did. So the unknown kind gets a drawn line of
+its own, loud enough that a developer sees it and quiet enough that it is not an
+error for a user, because it is not one.
+
+**Ordering, and the one thing the rail must not do.** Act lines append. They are
+never re-ordered, never collapsed and never de-duplicated: two `retrieval` lines in
+a row mean the planner made two lookups, and a rail that folds them into "2
+lookups" has turned a record into a summary. The _only_ line that changes after it
+is written is the live one, which loses its spinner when the next act arrives.
+
+### ⭐ MEASURED — and the number decides the layout
+
+Measured in chromium against the shipped rail markup inside the real two-pane
+shell, act lines added until the transcript overflows. Not estimated.
+
+| viewport                   | usable px (−~120 chrome) | act lines, rail alone | act lines, after the ordinary opening |
+| -------------------------- | ------------------------ | --------------------- | ------------------------------------- |
+| **1366 × 768** (the floor) | 648                      | 17                    | **9**                                 |
+| 1280 × 800                 | 680                      | 18                    | **10**                                |
+| 1440 × 900                 | 780                      | 23                    | **15**                                |
+| 1512 × 982                 | 862                      | 27                    | **19**                                |
+
+**The finding is nine.** With the ordinary opening above it — the assistant opener,
+one user turn, the _Sent to Motir AI_ marker — nine act lines fit at the floor
+before the transcript scrolls, and a real planning run emits several times that. So
+the rail **will** scroll, on the most common laptop, in the first thirty seconds.
+The question was never whether to prevent that but what has to remain visible when
+it happens, and two things follow — both drawn: the live line is **duplicated into
+the pinned bar**, and **Stop** lives in the pinned footer rather than beside the act
+it would end.
+
+**The invariant, for the cards that build it:** the transcript scrolls and the
+footer does not. The running bar, the composer and the **Stop** button are never
+inside the scroll region — at any viewport, at any run length. A build that puts the
+bar in the transcript passes every unit test and breaks the only claim sheet 1
+makes. **And the rail auto-scrolls to the newest act while the user has not scrolled
+away**; a reader who scrolled up to re-read an earlier act is reading deliberately,
+and the pinned bar is what makes leaving them alone safe.
+
+### Primitives composed (no hand-rolling)
+
+| Element                                      | Built from                                                                                                                                                                            | Colour                                       | Shape                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------- |
+| the rail, header, bubbles, markers, composer | the shipped `PlanChangeRail` / `PlanChangeComposer` — real emitted markup                                                                                                             | as shipped                                   | as shipped                        |
+| **act rail**                                 | NEW — an `<ol>` in the transcript, replacing the one-line `plan-change-progress` region                                                                                               | `--el-surface-soft` (that region's own fill) | `--radius-card`                   |
+| **act line, past**                           | glyph + mono label + line                                                                                                                                                             | `--el-text-secondary`                        | —                                 |
+| **act line, live / outcome**                 | the same row, spinner in the glyph slot                                                                                                                                               | `--el-text`                                  | —                                 |
+| **act label column**                         | the shipped label-slot type                                                                                                                                                           | `--el-text-secondary`                        | `font-mono text-[10px] uppercase` |
+| **running bar**                              | NEW — a sibling in `PlanChangeComposer`, in the answer bar's slot                                                                                                                     | `--el-surface-soft` / `--el-text-secondary`  | `--radius-card`                   |
+| **Stop**                                     | `Button variant="secondary" size="sm"` + `circle-stop` — **not** destructive                                                                                                          | `--el-surface` / `--el-border` / `--el-text` | `--radius-btn`, `--height-btn-sm` |
+| **queued label**                             | the shipped `label` span, filled, + `clock`                                                                                                                                           | inherits the bubble ink at `opacity-80`      | `font-mono text-[10px] uppercase` |
+| **queued / folded / stopped markers**        | the shipped `plan-change-marker` line                                                                                                                                                 | `--el-text-secondary`                        | `text-center text-xs`             |
+| the surviving proposal                       | the shipped `plan-change-review` block, reused whole                                                                                                                                  | `--el-accent` border                         | `--radius-card`                   |
+| icons                                        | lucide-react — `circle-stop`, `clock`, `book-open-text`, `ban`, `scan-search`, `corner-down-right`, `list-tree`, `shield-check`, `sparkles`, `search`, `send`, `circle-question-mark` | —                                            | —                                 |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*`. The mock's stylesheet is lifted verbatim from
+  `plan-change-planner-speaks.mock.html` — Tailwind's real output for this surface
+  over `packages/design-system/theme.css` — so the Tier-0 `--color-*`, the
+  `[data-theme='dark']` flip and the Tier-3 `--el-*` layer are the shipped values.
+  **No retyped hex, no invented hue, and no missing token was found.** A short
+  supplemental block adds only the utilities Tailwind emits for the new markup
+  (`truncate`, `size-3.5`, `w-16`, `mt-px`, the spinner's four) — none of them
+  carries a colour.
+- **Shape** strictly via element-semantic tokens (`--radius-card|control|input|btn|badge`,
+  `--spacing-chip-x/y`, `--spacing-control-x/y`, `--spacing-icon-btn`,
+  `--height-btn-sm`, `--height-input`), so a `data-style` swap reshapes the running
+  bar exactly as it reshapes the bubbles.
+- **Not colour alone** — every new state pairs its treatment with a word AND a
+  glyph: `queued` + `clock`, **Stopping…** + a disabled control, `stopped` +
+  `circle-stop`, and a marker line in every case. **No dashed or dotted border
+  carries a state**, which would fight the `data-style` axis and collide with the
+  canvas's proposed-node language.
+- **Dark** is the real token flip (`data-theme="dark"` **plus**
+  `data-appearance-scope`, since the Tier-3 layer is declared on
+  `:root,[data-appearance-scope]` and a nested subtree must re-emit it). The states
+  stay distinguishable in both themes for the same reason they do in light — the
+  distinction never rested on a hue.
+- **A11y** — the act rail is the `aria-live="polite"` region the shipped progress
+  line already was, so the newest act is announced without a second live region
+  competing with the transcript's `role="log"`. **Stop** is a real `<button>` with a
+  visible label (never an icon-only control), and its `disabled` **Stopping…** state
+  keeps the label in text so the interval is announced rather than only shown.
+  Decorative glyphs are `aria-hidden`; the spinner keeps its shipped
+  `role="status"`.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
+(this section) · `plan-change-run-live.mock.html` (source) ·
+`plan-change-run-live.png` (full-page Playwright chromium export, light,
+`deviceScaleFactor: 2`, 1580 px wide); `prettier --check` clean. Composes
+`plan-change-planner-speaks.mock.html` (MOTIR-2225) +
+`plan-change-conversation.mock.html` (MOTIR-1727) and the shipped
+`PlanChangeRail` / `PlanChangeComposer`; grounded in the consumer half already
+merged in `motir-ai` (**MOTIR-4060**'s boundary mailbox); gates **MOTIR-4067**,
+**MOTIR-4068** and **MOTIR-4069**.
