@@ -289,12 +289,12 @@ Each gets the same treatment §1 gives the original ten: a one-line authoritativ
 gloss, plus the boundary against its nearest neighbour — the sentence that tells
 a planner which of the two to pick.
 
-| Member         | Authoritative gloss                                                                                                                            | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                                                                                     |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `copy`         | Product-facing WORDS — UI strings, labels, empty states, error messages, marketing body copy, and their i18n keys.                             | vs `content`: `copy` is the words rendered **inside the product**, reviewed against the design and tone. `content` is documentation **about** the system. If it lands in `messages/*.json` or a component string, it is `copy`.                                                                                                                         |
-| `translate`    | A LOCALE twin of existing copy — moving already-authored strings into another language against a style guide.                                  | vs `copy`: `translate` authors **no new meaning**; the source strings already exist. New `en` wording is `copy`; its `zh` twin is `translate`.                                                                                                                                                                                                          |
-| `legal`        | A legal artifact — terms of service, privacy policy, licence, DPA — and the requirement it satisfies.                                          | vs `content`/`decision`: a `legal` card produces a document that **binds the company** and needs a human signatory. A decision **about** legal posture with no artifact is `decision`.                                                                                                                                                                  |
-| `verification` | Establishing that a stated FACT is true, and producing the evidence — a precondition, a published artifact, a config value, a claim on a card. | vs `review`: `review` judges a finished **deliverable** against its acceptance criteria and ends in a person's sign-off. `verification` checks a **claim** and ends in evidence (a pull, a grep, a command's output). vs `test`: a `test` card ships automated tests that run in CI; a `verification` card runs a check once and records what it found. |
+| Member         | Authoritative gloss                                                                                                                                 | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                                                                                               |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `copy`         | Product-facing WORDS — UI strings, labels, empty states, error messages, marketing body copy, and their i18n keys.                                  | vs `content`: `copy` is the words rendered **inside the product**, reviewed against the design and tone. `content` is documentation **about** the system. If it lands in `messages/*.json` or a component string, it is `copy`.                                                                                                                                   |
+| `translate`    | A LOCALE twin of existing copy — moving already-authored strings into another language against a style guide.                                       | vs `copy`: `translate` authors **no new meaning**; the source strings already exist. New `en` wording is `copy`; its `zh` twin is `translate`.                                                                                                                                                                                                                    |
+| `legal`        | A legal artifact — terms of service, privacy policy, licence, DPA — and the requirement it satisfies.                                               | vs `content`/`decision`: a `legal` work item produces a document that **binds the company** and needs a human signatory. A decision **about** legal posture with no artifact is `decision`.                                                                                                                                                                       |
+| `verification` | Establishing that a stated FACT is true, and producing the evidence — a precondition, a published artifact, a config value, a claim on a work item. | vs `review`: `review` judges a finished **deliverable** against its acceptance criteria and ends in a person's sign-off. `verification` checks a **claim** and ends in evidence (a pull, a grep, a command's output). vs `test`: a `test` work item ships automated tests that run in CI; a `verification` work item runs a check once and records what it found. |
 
 **`content` is narrowed, and the specific beats the general.** With `copy` and
 `translate` lifted out, §1's `content` gloss is amended to:
@@ -440,3 +440,62 @@ resolution is the minimum needed to build, labelled as placeholder in that PR.
 - MOTIR-2622 (the story), MOTIR-2629 (this amendment), MOTIR-2631 (design),
   MOTIR-2632 (enum + contracts), MOTIR-2633 (presentation), MOTIR-2630 (the
   playbook's missing bars).
+
+---
+
+## Amendment 2 (2026-09-03) — the `verification` and `legal` glosses say **work item**, not "card"
+
+> **Written by MOTIR-4298**, under epic MOTIR-3937. It changes WORDING only: no
+> member is admitted or removed, no executor default moves, no boundary between
+> two members shifts. §1's ten, §1a's four, §1b's canonical order, §2's
+> leaf-only rule, §3/§3a's default map, §4's Jira deviation and the closedness
+> of the enum all stand exactly as written.
+>
+> **Numbered 2** — verified before numbering: no open pull request in this
+> repository touches `docs/decisions/work-item-type-taxonomy.md`, and
+> `origin/main` carries Amendment 1 only, so no sibling is racing an
+> Amendment 2 to this ADR.
+
+**Amends §1a** — two rows of the four-admitted-members table, in three fields:
+
+| Row            | Field                | Was                                                        | Now                                                                  |
+| -------------- | -------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| `verification` | Authoritative gloss  | … a config value, a claim on a **card**.                   | … a config value, a claim on a **work item**.                        |
+| `verification` | Boundary (vs `test`) | a `test` **card** ships … a `verification` **card** runs … | a `test` **work item** ships … a `verification` **work item** runs … |
+| `legal`        | Boundary             | a `legal` **card** produces a document that binds …        | a `legal` **work item** produces a document that binds …             |
+
+**Why an ADR amendment for four words.** "card" is authoring-voice shorthand.
+The product's noun for a tracked unit is **work item**, and `plan-rules/core.md`
+already forbids emitting the shorthand into a work item's own copy — but this
+ADR's §1a table is not ordinary documentation prose. It is **mirrored verbatim**
+into `motir-ai` `src/llm/workItemTypes.ts`'s `WORK_ITEM_TYPE_GLOSSES`, which
+`THE_TYPE_VOCABULARY` (tag `core`) interpolates into **every legal planning
+cell** — so these four words are composed into the text a planning model is
+actually handed, on every turn, and they taught it the banned word. That is the
+discriminator, and it is why this amendment is narrow: the ADR's OTHER uses of
+"card" — in Context, in Consequences, in the §1c precedence note at the blockquote
+below §1a — are authoring voice that reaches no composed prompt, and are
+deliberately left alone.
+
+**The mirror moves in the same change, and it is a two-repository contract.**
+`motir-ai` cannot import, read or reach this file, so it substitutes a drift
+guard for a build-time import: `tests/workItemTypeVocabulary.test.ts` holds an
+INDEPENDENTLY TYPED transcription of the table above (`ADR_SCOPE` /
+`ADR_BOUNDARY`) and asserts `WORK_ITEM_TYPE_GLOSSES` matches it verbatim.
+
+> ⚠️ **Amending only the mirror would have SILENCED that guard rather than
+> satisfied it.** Rewording `workItemTypes.ts` plus its local transcription,
+> leaving this document saying "card", makes the two agree with each other and
+> disagree with the authority they exist to mirror — manufacturing the exact
+> drift the guard was built to catch. **This document is therefore the first
+> edit, and the mirror follows it.** MOTIR-4298 was filed and halted for
+> precisely this reason rather than taking the four-sentence sweep.
+
+### References added by this amendment
+
+- `motir-ai` `src/llm/workItemTypes.ts` — `WORK_ITEM_TYPE_GLOSSES`, the mirror.
+- `motir-ai` `tests/workItemTypeVocabulary.test.ts` — `ADR_SCOPE` /
+  `ADR_BOUNDARY`, the transcription that pins the mirror to this table.
+- `motir-ai` `tests/cardTerminologyGuard.test.ts` — THE GUARD (MOTIR-4288) that
+  found this, and whose `KNOWN_UPSTREAM_STRAGGLERS` exemption MOTIR-4298 removes.
+- MOTIR-4201 (the parent sweep), MOTIR-4288 (the guard), MOTIR-4298 (this).
