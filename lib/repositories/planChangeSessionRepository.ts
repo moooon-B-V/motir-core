@@ -1,6 +1,13 @@
 import { Prisma, type PlanChangeSession } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
+/**
+ * The `PlanChangeSession` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.PlanChangeSessionUncheckedUpdateInput` itself is named only here.
+ */
+export type PlanChangeSessionUpdateInput = Prisma.PlanChangeSessionUncheckedUpdateInput;
+
 // Single Prisma operations on the `plan_change_session` table (Story 7.30 ·
 // MOTIR-1728). Writes require `tx` (a compile-time guarantee they run in a
 // transaction); reads take an optional `tx` so an append's locked re-read joins
@@ -80,7 +87,7 @@ export const planChangeSessionRepository = {
 
   async update(
     id: string,
-    data: Prisma.PlanChangeSessionUncheckedUpdateInput,
+    data: PlanChangeSessionUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeSession> {
     return tx.planChangeSession.update({ where: { id }, data });

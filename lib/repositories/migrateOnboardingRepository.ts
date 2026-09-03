@@ -5,6 +5,13 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
+/**
+ * The `MigrateOnboarding` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.MigrateOnboardingUncheckedUpdateInput` itself is named only here.
+ */
+export type MigrateOnboardingUpdateInput = Prisma.MigrateOnboardingUncheckedUpdateInput;
+
 // Single Prisma operations on the `migrate_onboarding` table (Story 7.15 ·
 // MOTIR-1499). Writes require `tx` (a compile-time guarantee they run in a
 // transaction); reads take an optional `tx` so a transition's locked re-read
@@ -132,7 +139,7 @@ export const migrateOnboardingRepository = {
 
   async update(
     id: string,
-    data: Prisma.MigrateOnboardingUncheckedUpdateInput,
+    data: MigrateOnboardingUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<MigrateOnboarding> {
     return tx.migrateOnboarding.update({ where: { id }, data });

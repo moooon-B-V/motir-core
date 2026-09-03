@@ -21,6 +21,20 @@ import {
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
+
+/**
+ * The `WorkItem` create shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.WorkItemUncheckedCreateInput` itself is named only here.
+ */
+export type WorkItemCreateInput = Prisma.WorkItemUncheckedCreateInput;
+
+/**
+ * The `WorkItem` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.WorkItemUncheckedUpdateInput` itself is named only here.
+ */
+export type WorkItemUpdateInput = Prisma.WorkItemUncheckedUpdateInput;
 import {
   CrossProjectParentError,
   DepthLimitExceededError,
@@ -3544,10 +3558,7 @@ export const workItemRepository = {
    * kind-parent matrix + depth on insert; their SQLSTATE-23514 rejections and
    * a P2002 unique violation are translated to typed errors here.
    */
-  async create(
-    data: Prisma.WorkItemUncheckedCreateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<WorkItem> {
+  async create(data: WorkItemCreateInput, tx: Prisma.TransactionClient): Promise<WorkItem> {
     try {
       return await tx.workItem.create({ data });
     } catch (err) {
@@ -3906,7 +3917,7 @@ export const workItemRepository = {
    */
   async update(
     id: string,
-    patch: Prisma.WorkItemUncheckedUpdateInput,
+    patch: WorkItemUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<WorkItem> {
     try {

@@ -1,6 +1,13 @@
 import { Prisma, type WorkflowStatus, type WorkflowTransition } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
+/**
+ * The `WorkflowStatus` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.WorkflowStatusUncheckedUpdateInput` itself is named only here.
+ */
+export type WorkflowStatusUpdateInput = Prisma.WorkflowStatusUncheckedUpdateInput;
+
 // Data access for the per-project status-workflow tables (Story 2.2 · Subtask
 // 2.2.3). Single-Prisma-op leaves per CLAUDE.md — no business logic, no DTO
 // mapping, no transactions. The reads on the `project` table (its
@@ -144,7 +151,7 @@ export const workflowsRepository = {
 
   async updateStatus(
     statusId: string,
-    data: Prisma.WorkflowStatusUncheckedUpdateInput,
+    data: WorkflowStatusUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<WorkflowStatus> {
     return tx.workflowStatus.update({ where: { id: statusId }, data });

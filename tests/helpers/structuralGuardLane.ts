@@ -107,6 +107,15 @@ export const STRUCTURAL_GUARD_SPECS = [
   // It opens no database, renders nothing, and imports only `node:fs` /
   // `node:path`, so it carries no coverage into the merged report.
   'tests/theme/immersiveShellAtmosphere.test.ts',
+  // ── tests/prisma/ — the Prisma TYPE BOUNDARY (MOTIR-4296) ────────────────
+  // The same shape as the three `tests/theme/` entries above, one layer over: a
+  // comment-stripped text walk of `lib/` + `app/` + `components/` asserting that
+  // the generated client's payload and input generics are named only under
+  // `lib/repositories/**`. It opens no database, renders nothing, and imports
+  // only `node:fs` / `node:path`, so it carries no coverage into the merged
+  // report — and its cost is a function of the tree rather than of what else
+  // happens to be running, which is what this lane is for.
+  'tests/prisma/typeBoundary.test.ts',
   // ── tests/legal/ — the EGRESS-MANIFEST guard (MOTIR-3631 · MOTIR-4008) ────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
   // read against `package.json` and `lib/legal/egressManifest.ts`.

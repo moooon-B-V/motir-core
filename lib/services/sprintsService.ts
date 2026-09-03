@@ -1,5 +1,5 @@
 import { Prisma, type SprintState } from '@/generated/prisma/client';
-import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { sprintRepository, type SprintUpdateInput } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -265,7 +265,7 @@ export const sprintsService = {
     await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
     if (existing.state === 'complete') throw new CannotModifyCompletedSprintError(id);
 
-    const data: Prisma.SprintUncheckedUpdateInput = {};
+    const data: SprintUpdateInput = {};
     if (patch.name !== undefined) data.name = validateName(patch.name);
     if (patch.goal !== undefined) data.goal = patch.goal;
 
@@ -462,7 +462,7 @@ export const sprintsService = {
           tx,
         );
 
-        const data: Prisma.SprintUncheckedUpdateInput = {
+        const data: SprintUpdateInput = {
           state: 'active',
           startDate,
           endDate,

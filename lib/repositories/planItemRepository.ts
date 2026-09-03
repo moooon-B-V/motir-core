@@ -1,14 +1,25 @@
 import { Prisma, type PlanItem } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
+/**
+ * The `PlanItem` create shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.PlanItemUncheckedCreateInput` itself is named only here.
+ */
+export type PlanItemCreateInput = Prisma.PlanItemUncheckedCreateInput;
+
+/**
+ * The `PlanItem` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.PlanItemUncheckedUpdateInput` itself is named only here.
+ */
+export type PlanItemUpdateInput = Prisma.PlanItemUncheckedUpdateInput;
+
 // PlanItem repository — single Prisma operations on the `plan_item` table
 // (Story 7.21 · MOTIR-1336). Writes require `tx`; pure reads use the `db`
 // singleton. No business logic, no transactions, no DTO mapping.
 export const planItemRepository = {
-  async create(
-    data: Prisma.PlanItemUncheckedCreateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<PlanItem> {
+  async create(data: PlanItemCreateInput, tx: Prisma.TransactionClient): Promise<PlanItem> {
     return tx.planItem.create({ data });
   },
 
@@ -83,7 +94,7 @@ export const planItemRepository = {
    *  `planned`. A write, so `tx` is required. */
   async update(
     id: string,
-    data: Prisma.PlanItemUncheckedUpdateInput,
+    data: PlanItemUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<PlanItem> {
     return tx.planItem.update({ where: { id }, data });

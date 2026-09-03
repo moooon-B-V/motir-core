@@ -1,6 +1,13 @@
 import { Prisma, type Component } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
+/**
+ * The `Component` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.ComponentUncheckedUpdateInput` itself is named only here.
+ */
+export type ComponentUpdateInput = Prisma.ComponentUncheckedUpdateInput;
+
 // Component repository — single Prisma operations on the `component` table
 // (Story 5.4 · Subtask 5.4.1). The persistence leaf under componentsService
 // (5.4.3), which owns the admin gate (the 6.4 two-tier check), name
@@ -129,7 +136,7 @@ export const componentRepository = {
 
   async update(
     id: string,
-    patch: Prisma.ComponentUncheckedUpdateInput,
+    patch: ComponentUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<Component> {
     return tx.component.update({ where: { id }, data: patch });

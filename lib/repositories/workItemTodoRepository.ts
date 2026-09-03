@@ -2,6 +2,13 @@ import { Prisma, type WorkItemTodo } from '@/generated/prisma/client';
 import type { WorkItemTodoRow } from '@/lib/mappers/workItemTodoMappers';
 
 /**
+ * The `WorkItemTodo` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.WorkItemTodoUncheckedUpdateInput` itself is named only here.
+ */
+export type WorkItemTodoUpdateInput = Prisma.WorkItemTodoUncheckedUpdateInput;
+
+/**
  * The `doneBy` selection every read carries — the two fields the wire DTO
  * needs and nothing else, so a to-do read can never become a door onto a user
  * record.
@@ -70,7 +77,7 @@ export const workItemTodoRepository = {
 
   async update(
     id: string,
-    patch: Prisma.WorkItemTodoUncheckedUpdateInput,
+    patch: WorkItemTodoUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<WorkItemTodoRow> {
     return tx.workItemTodo.update({

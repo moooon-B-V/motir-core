@@ -60,6 +60,20 @@ operations. Repositories never contain business logic or transactions.**
      checker). `tests/rls/`'s scanners read both names, and their fixtures pin
      that in both directions.
 
+   - **⚠️ The generated client's PROJECTION types are named ONLY in this layer**
+     (`Prisma.<Model>CreateInput` / `UpdateInput` / `GetPayload` / `Select` /
+     `Include` / `WhereInput` / `…Args`). A repository that takes one in a
+     signature EXPORTS it under its own name — `WorkItemUpdateInput`,
+     `PlanItemCreateInput` — and callers above build their payload against
+     THAT. The layering rule already says a service does not QUERY; this is the
+     same boundary for the TYPES, and it is what lets a repository narrow its
+     input later (to a `Pick`, to a real DTO) without touching a caller.
+     **Model types and enums are free** (`import type { WorkItem, WorkItemKind }`
+     — 333 files use them), and so is `Prisma.TransactionClient`; both are
+     pinned as innocent by the guard. Enforced at zero over `lib/`, `app/` and
+     `components/` by `tests/prisma/typeBoundary.test.ts` (MOTIR-4296), which
+     names the file, the line and the tell.
+
 2. **Service** (`lib/services/*.ts`) — Business logic. Orchestrates
    repositories. Owns **all `prisma.$transaction(...)` calls**. Owns
    validation. Owns the JSON shape of what crosses the API boundary

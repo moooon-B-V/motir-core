@@ -1,6 +1,13 @@
 import { Prisma, type Sprint, type SprintState } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
+/**
+ * The `Sprint` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.SprintUncheckedUpdateInput` itself is named only here.
+ */
+export type SprintUpdateInput = Prisma.SprintUncheckedUpdateInput;
+
 // Data access for the `sprint` table (Story 4.1 · Subtask 4.1.2). Single-
 // Prisma-op leaves per CLAUDE.md — no business logic, no DTO mapping, no
 // transactions. Named by its primary entity (`sprint`), not by call site.
@@ -186,11 +193,7 @@ export const sprintRepository = {
    * REQUIRED; the caller (sprintsService) has already tenant-gated the sprint by
    * id + workspaceId, so this is a plain id-keyed update.
    */
-  async update(
-    id: string,
-    data: Prisma.SprintUncheckedUpdateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<Sprint> {
+  async update(id: string, data: SprintUpdateInput, tx: Prisma.TransactionClient): Promise<Sprint> {
     return tx.sprint.update({ where: { id }, data });
   },
 

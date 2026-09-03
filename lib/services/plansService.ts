@@ -23,10 +23,18 @@ import {
 } from '@/lib/services/planRevisionsService';
 
 import { planRepository } from '@/lib/repositories/planRepository';
-import { planItemRepository } from '@/lib/repositories/planItemRepository';
+import {
+  planItemRepository,
+  type PlanItemCreateInput,
+  type PlanItemUpdateInput,
+} from '@/lib/repositories/planItemRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type WorkItemCreateInput,
+  type WorkItemUpdateInput,
+} from '@/lib/repositories/workItemRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -1308,7 +1316,7 @@ async function materialize(
     );
     const backlogRank = keyForAppend(lastRank);
 
-    const data: Prisma.WorkItemUncheckedCreateInput = {
+    const data: WorkItemCreateInput = {
       workspaceId: ctx.workspaceId,
       projectId: plan.projectId,
       parentId,
@@ -1327,14 +1335,11 @@ async function materialize(
       ...(typeof normalizedExplanationMd === 'string' && normalizedExplanationMd.trim() !== ''
         ? {
             explanationSource:
-              (pf.explanationSource as Prisma.WorkItemUncheckedCreateInput['explanationSource']) ??
-              'ai_draft',
+              (pf.explanationSource as WorkItemCreateInput['explanationSource']) ?? 'ai_draft',
           }
         : {}),
       status: statusKey,
-      ...(pf.priority
-        ? { priority: pf.priority as Prisma.WorkItemUncheckedCreateInput['priority'] }
-        : {}),
+      ...(pf.priority ? { priority: pf.priority as WorkItemCreateInput['priority'] } : {}),
       reporterId: ctx.userId,
       // PLANNING provenance (Story MOTIR-1685; the PIN LIFTED by MOTIR-2990,
       // docs/decisions/work-item-provenance.md Decision 5 as amended 2026-08-18
@@ -1368,11 +1373,11 @@ async function materialize(
       // therefore shows the model the agent self-reported, which is what Decision 5
       // already prescribed ("MCP/BYOK keep + expose their model").
       planningSource: (pf.planningProvenance?.source ??
-        'native') as Prisma.WorkItemUncheckedCreateInput['planningSource'],
+        'native') as WorkItemCreateInput['planningSource'],
       planningHarness: pf.planningProvenance?.harness ?? 'Motir',
       planningModel: pf.planningProvenance?.model ?? null,
-      type: (pf.type as Prisma.WorkItemUncheckedCreateInput['type']) ?? null,
-      executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null,
+      type: (pf.type as WorkItemCreateInput['type']) ?? null,
+      executor: (pf.executor as WorkItemCreateInput['executor']) ?? null,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
       // onto the created item so the estimation gate satisfied on the proposal
       // survives materialize (Prisma accepts a number for the Decimal(6,2)
@@ -1591,7 +1596,7 @@ async function materialize(
         `[plansService.materialize] plan ${plan.id}: intra-plan ref planItem:${ref} in ${created.identifier} resolved to no item — left inert`,
       );
     }
-    const bodyUpdate: Prisma.WorkItemUncheckedUpdateInput = {};
+    const bodyUpdate: WorkItemUpdateInput = {};
     if (rewrittenDescription !== (created.descriptionMd ?? '')) {
       bodyUpdate.descriptionMd = rewrittenDescription;
     }
@@ -1817,7 +1822,7 @@ async function applyModify(
   if (!current) throw new PlanItemTargetMissingError(item.workItemId);
 
   const patch = (item.patch ?? {}) as unknown as PlanItemPatch;
-  const update: Prisma.WorkItemUncheckedUpdateInput = {};
+  const update: WorkItemUpdateInput = {};
   // Holds per-field { from, to } cells AND the `links` edge-change cell
   // ({ added, removed }) — the work-item revision diff is a heterogeneous map.
   const diff: Record<string, unknown> = {};
@@ -1894,11 +1899,11 @@ async function applyModify(
     diff.explanationMd = { from: current.explanationMd, to: normalizedExplanationMd };
   }
   if (patch.priority !== undefined && patch.priority !== current.priority) {
-    update.priority = patch.priority as Prisma.WorkItemUncheckedUpdateInput['priority'];
+    update.priority = patch.priority as WorkItemUpdateInput['priority'];
     diff.priority = { from: current.priority, to: patch.priority };
   }
   if (patch.type !== undefined && patch.type !== current.type) {
-    update.type = patch.type as Prisma.WorkItemUncheckedUpdateInput['type'];
+    update.type = patch.type as WorkItemUpdateInput['type'];
     diff.type = { from: current.type, to: patch.type };
   }
   // Leaf sizing re-scope (MOTIR-1532) — the SAME point/estimate columns the `add`
@@ -2775,7 +2780,7 @@ export const plansService = {
               if (existing) throw new DuplicatePlanTargetError(p.workItemId, existing, p.op);
               claimed.set(p.workItemId, p.op);
             }
-            const data: Prisma.PlanItemUncheckedCreateInput = {
+            const data: PlanItemCreateInput = {
               workspaceId: ctx.workspaceId,
               planId,
               op: p.op,
@@ -3393,7 +3398,7 @@ export const plansService = {
         const item = all.find((i) => i.id === planItemId);
         if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
 
-        const data: Prisma.PlanItemUncheckedUpdateInput = {};
+        const data: PlanItemUpdateInput = {};
         const touched: string[] = [];
 
         if (item.op === 'add') {
