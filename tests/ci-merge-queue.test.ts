@@ -74,8 +74,51 @@ const codeOf = (text: string): string =>
     .join('\n');
 
 const ciJobs = jobsOf(ci);
+// ── THE ACCEPTANCE LANE IS IN THE QUEUE TOO (MOTIR-4257) ────────────────────
+//
+// It is a SECOND workflow with the same two-part contract, and it had neither
+// half: no `merge_group:` trigger and no required context. So a change that
+// touched none of its `pull_request` paths — `e055b6b23` (#2530) making the
+// rail's Docs row conditional — ran no acceptance check, passed the queue, and
+// turned the `push: main` baseline red. A merge queue exists so that cannot
+// happen; a lane outside it is a lane that can break the trunk by construction.
+const ACCEPTANCE_PATH = join(process.cwd(), '.github/workflows/acceptance-tests.yml');
+const acceptance = readFileSync(ACCEPTANCE_PATH, 'utf8');
+const acceptanceJobs = jobsOf(acceptance);
+const acceptanceHeader = codeOf(acceptance.split(/^jobs:\s*$/m)[0] ?? '');
 const jobCode = (id: string): string => codeOf(ciJobs.get(id) ?? '');
 const header = codeOf(ci.split(/^jobs:\s*$/m)[0] ?? '');
+
+/**
+ * The same two reads, against ANY of the repo's workflows (MOTIR-4257) — the
+ * acceptance lane is a second file with the same contract, so the parser is
+ * pointed at it rather than copied for it.
+ */
+function jobIfIn(source: string, id: string): string | null {
+  const m = /^ {4}if:(.*)$/m.exec(codeOf(jobsOf(source).get(id) ?? ''));
+  return m ? m[1]!.trim() : null;
+}
+
+/** A job's `needs:`, from either the inline-array or the block form. */
+function needsOfIn(source: string, id: string): Set<string> {
+  const code = codeOf(jobsOf(source).get(id) ?? '');
+  const inline = /^ {4}needs:\s*\[([^\]]*)\]/m.exec(code);
+  if (inline) {
+    return new Set(
+      inline[1]!
+        .split(',')
+        .map((n) => n.trim())
+        .filter(Boolean),
+    );
+  }
+  const block = /^ {4}needs:\s*\n((?: {6}- .*\n)+)/m.exec(code);
+  return new Set(
+    (block?.[1] ?? '')
+      .split('\n')
+      .map((l) => l.replace(/^ {6}- /, '').trim())
+      .filter(Boolean),
+  );
+}
 
 /** The JOB-level `if:` — four spaces exactly (`jobs:` → id → key). */
 function jobIf(id: string): string | null {
@@ -337,5 +380,39 @@ describe('the release is still gated, and can still be reached', () => {
     // from one would release a commit that never became `main`.
     expect(runsOn('deploy', 'merge_group')).toBe(false);
     expect(runsOn('deploy', 'push')).toBe(true);
+  });
+});
+
+describe('the ACCEPTANCE lane is gated by the queue, not discovered after it (MOTIR-4257)', () => {
+  it('finds the workflow it is meant to guard', () => {
+    // A parser regression would make every assertion below vacuous.
+    expect(acceptanceJobs.size).toBeGreaterThan(2);
+    expect(acceptanceJobs.has('acceptance')).toBe(true);
+    expect(acceptanceJobs.has('acceptance-complete')).toBe(true);
+  });
+
+  it('triggers on `merge_group` — the half without which the trunk can go red', () => {
+    // The `pull_request:` filter selects on the files a change TOUCHES, and
+    // this lane's specs read the whole app. Only the queue closes that.
+    expect(acceptanceHeader).toMatch(/^ {2}merge_group:\s*$/m);
+    expect(acceptanceHeader).toMatch(/^ {2}pull_request:\s*$/m);
+  });
+
+  it('reports ONE aggregate context on a queue entry, and it is `always()`', () => {
+    // The ruleset cannot require a matrix leg: the shard names carry `1/N` and
+    // N is derived (MOTIR-2908). It requires this aggregate instead — and the
+    // pair of `always()` plus an explicit result assertion is what stops a
+    // skipped need reading as a satisfied gate. `ci-complete` carries the same.
+    expect(acceptanceJobs.has('acceptance-complete')).toBe(true);
+    expect(jobIfIn(acceptance, 'acceptance-complete')).toBe('always()');
+  });
+
+  it('the aggregate NEEDS every job in the lane — an unlisted job gates nothing', () => {
+    // The failure this catches is silent: a job added later and left out of
+    // `needs` runs, fails, and the required context still goes green. Derived
+    // from the workflow's own job list rather than a written-down copy of it.
+    const needs = needsOfIn(acceptance, 'acceptance-complete');
+    const others = [...acceptanceJobs.keys()].filter((j) => j !== 'acceptance-complete');
+    expect([...needs].sort()).toEqual(others.sort());
   });
 });

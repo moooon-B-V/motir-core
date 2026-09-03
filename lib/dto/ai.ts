@@ -350,3 +350,28 @@ export interface PendingPlansResponse {
    */
   truncated: boolean;
 }
+
+// ── The project's TERMINAL STATUS KEYS (MOTIR-4158) ──────────────────────────
+//
+// `GET /api/internal/ai/terminal-statuses` — the narrowest read on this
+// boundary: no subtree, no closure, no plan state, just the set of status keys
+// that mean FINISHED for the token's project.
+//
+// ⚠️ IT IS A SET DERIVED FROM `category = 'done'`, NEVER A LITERAL PAIR. The
+// whole reason this crosses the wire is that `motir-ai` had been answering the
+// question with a hardcoded `'done'`, which silently excludes `cancelled` — a
+// status the DEFAULT workflow ships — and excludes outright whatever else a
+// customer has configured as terminal. `workflowsService.getTerminalStatusKeys`
+// is the one place that predicate lives, and it is the same set
+// `lib/plans/validateProposals.ts` step 4 already refuses `modify` / `remove`
+// against, so the persistence guard and any consumer of this read cannot
+// disagree.
+export interface TerminalStatusesResponse {
+  /**
+   * Every status key in the project whose category is `done` — `done` AND
+   * `cancelled` out of the box, plus any the project defines. SORTED, so the
+   * wire shape is stable across reads and a consumer may compare two answers
+   * directly; a consumer that wants membership builds its own `Set`.
+   */
+  terminalStatusKeys: string[];
+}

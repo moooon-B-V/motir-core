@@ -975,11 +975,21 @@ frame shares one document, the compiled `@media (width >= …)` blocks are re-em
 
 ---
 
-## The rail's bottom section — every row it renders (MOTIR-4130)
+## The rail's bottom section — every row it renders (MOTIR-4130 · MOTIR-4254)
 
 `rail-bottom-section.mock.html` / `.png` is **the design of record for the authed rail's bottom
-section**: the six rows it carries, at all three widths the shell draws, in both arms of every
+section**: the four rows it carries, at all three widths the shell draws, in both arms of every
 conditional row.
+
+**⚠️ It carried SIX until MOTIR-4254, and two of them LEFT rather than changed.** `Docs` and `Legal`
+moved to the shell's **Help menu** — MOTIR-4238's asset in this area is the design of record for both
+doors now,
+and **their absent-arm reasoning moved with them**, because it describes those rows rather than this
+section. **The FLOOR did not move**: it was _Job runs · Git_ before and after, since both departing
+rows were already conditional — so what shortened is the COMPLETE arm, and a deployment that
+configures neither url loses nothing. The measurement in the next block is left as it was TAKEN, at
+`8d80ac8db`, when six rows shipped: it is the record of the defect this asset was created to fix, and
+re-writing it to today's count would destroy the evidence for it.
 
 ### Why the area owed this
 
@@ -1011,68 +1021,49 @@ section (MOTIR-4163).
 
 Declaration order, from `app/(authed)/_components/SidebarNav.tsx`'s `sections.push({ id: 'bottom' })`:
 
-| #   | Row          | Glyph          | Destination                                         | Rendered                                  |
-| --- | ------------ | -------------- | --------------------------------------------------- | ----------------------------------------- |
-| 1   | **Settings** | `settings`     | `/settings/project`, else the settings home         | CONDITIONAL — `showSettingsDoor`          |
-| 2   | **Security** | `shield-check` | `/settings/workspace/security`                      | CONDITIONAL — `workspaceTierRevealed`     |
-| 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                          | always                                    |
-| 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                        | always                                    |
-| 5   | **Docs**     | `book-open`    | the operator's own ABSOLUTE url — `docsIndexUrl()`  | CONDITIONAL — `docsIndexUrl` is non-null  |
-| 6   | **Legal**    | `scale`        | the operator's own ABSOLUTE url — `legalIndexUrl()` | CONDITIONAL — `legalIndexUrl` is non-null |
+| #   | Row          | Glyph          | Destination                                 | Rendered                              |
+| --- | ------------ | -------------- | ------------------------------------------- | ------------------------------------- |
+| 1   | **Settings** | `settings`     | `/settings/project`, else the settings home | CONDITIONAL — `showSettingsDoor`      |
+| 2   | **Security** | `shield-check` | `/settings/workspace/security`              | CONDITIONAL — `workspaceTierRevealed` |
+| 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                  | always                                |
+| 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                | always                                |
 
-**Four of the six are conditional, and the section's FLOOR is two rows** — Job runs · Git. That
-floor is the open product's common case, not an edge state, which is why the asset draws it beside
-the complete arm at every width rather than describing it. (It was three rows in this asset's first
-revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below.)
+**Two of the four are conditional, and the section's FLOOR is two rows** — Job runs · Git. That floor
+is the open product's common case, not an edge state, which is why the asset draws it beside the
+complete arm at every width rather than describing it. (It was three rows in this asset's first
+revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below; and six until
+MOTIR-4254 moved two of them to the Help menu.)
+
+**The floor is where the whole move is cheap, and it is worth stating as arithmetic rather than as
+reassurance.** Both departing rows were CONDITIONAL, so neither was in the floor to begin with. A
+deployment that configured neither url saw two rows before this change and sees two after; a
+deployment that configured both loses two rows here and gains them in a menu that is on screen at
+every width the product supports.
 
 **Nothing marks an absent row.** The rows close up and the section is shorter; there is no disabled
 row, no tooltip and no empty state. `SidebarNav.tsx`'s own comment carries the reason and it is the
 rule for the whole section: _an entry point is a promise about a room, and a disabled row is a promise
 the product then refuses._
 
-**The `Legal` row's absent arm has TWO causes, and the second is easy to miss.** `legalIndexUrl()`
-derives the index from the configured documents' own urls: if every one is `<base>/<slug>` the index
-is `<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-service`,
-`legal.acme.com/privacy`) has no index for the row to point at, so **the row is absent rather than
-guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
-unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
+**Both departing rows' absent-arm reasoning MOVED to § _The Help menu_ (MOTIR-4254).** The `Legal`
+row's two-cause absent arm — the second cause being an operator who publishes at unrelated addresses,
+so there is no index to point at and the row is absent rather than guessed — and the `Docs` row's
+MOTIR-4167 history are both properties of those ROWS, not of this section, so they travel with them.
+They are **moved, not copied**: a second copy here would be the divergence this area's own ledger
+exists to prevent, and the next reader would have no way to tell which was authoritative.
 
-### The `Docs` row reads configuration — MOTIR-4167
-
-The row used to carry a hard-coded app-relative path to the documentation index, and that page left
-this repository when MOTIR-3932 moved the public reading surface to `motir-marketing`; the row was
-not moved with it. Verified at `8d80ac8db`: no route under `app/**`, no redirect source for the docs
-path in `next.config.ts` (`DOCS_REDIRECTS` makes it a DESTINATION, never a source), no `rewrites()`,
-nothing in `middleware.ts` — so `app.motir.co/docs` answered **404** while `motir.co/docs` answered
-**200**. This asset's first revision drew the dead href anyway, because it is the design of record
-for what the rail DOES, and parked the address in `tests/design-asset-addresses.test.ts`'s `KNOWN`
-table with a reason naming the defect — distinct from that table's seven other entries for the same
-address, which are point-in-time records of assets drawn before the move and are left alone.
-
-**The row beside it was the fix, and it is now the same row.** `Legal` lost its destination to the
-same split and was rebuilt around `legalIndexUrl()` — a resolver returning `string | null`, resolved
-in `app/(authed)/layout.tsx` and threaded to the client component as a prop, with the row spread in
-conditionally. `Docs` takes exactly that shape: `lib/docs/links.ts`'s `docsIndexUrl()` reads
-**`MOTIR_DOCS_URL`**, the operator's own ABSOLUTE url of the published documentation
-(`https://motir.co/docs` on the hosted deployment), and answers `null` when it is unset — or when the
-value is not an absolute `http(s)` url, because a relative path is precisely the defect, so it is
-refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
-dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D (its MOTIR-4167 amendment) is the
-record, with the alternatives it rejected; `tests/components/SidebarNav-docs-door.test.tsx` pins both
-arms of the row and `tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal.
-
-**So the floor moved.** With four conditional rows the section's floor is **two** — Job runs · Git —
-and that is what the floor arms now draw at all three widths; the complete arms draw the row at its
-configured absolute url. The two `KNOWN` entries this asset and these notes carried for the dead
-address went with the defect.
+**What stays here is the fact about THIS section**: it is four rows, two of them conditional, and its
+floor did not move.
 
 ### The divergence ledger — which source wins for this element
 
 | #   | The older assets say                                                                                          | This asset says                                                                                                                                                                                                                                       | Since      |
 | --- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else       | **Six rows**, three of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                          | MOTIR-4130 |
+| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else       | **Four rows**, two of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                           | MOTIR-4130 |
 | 2   | The three `.pen` sources cannot be corrected in place                                                         | **They are not edited.** Pencil is not in this tree, so a `.pen` edit produces a source disagreeing with the `.png` every consumer opens — a second divergence, not a fix. The same call `design/auth/` made for its own legacy artboards.            | MOTIR-4130 |
 | 3   | `navigation-pending.mock.html`, `top-bar.mock.html` and `design/home/home.mock.html` draw four rows, or three | Those rails are **context for something else** — a pending grammar, a control budget, a landing surface — and are not the source for this section. They are re-exportable and may be swept, but a reader asking _what belongs here_ reads THIS asset. | MOTIR-4130 |
+
+| 4 | **This asset's own earlier revisions** drew `Docs` and `Legal` as rail rows, and carried their absent-arm reasoning | **Both rows are GONE from this section, and so is that reasoning** — they moved to the **Help menu**, whose asset (MOTIR-4238) is the design of record for both doors now. A rail answers _where inside this project can I go today_; neither door is a daily-work destination. Nothing else moved: the other four rows keep their destinations and their order, and the floor is unchanged at two. | MOTIR-4254 |
 
 **The toolchain question this card had to answer first, and its evidence.** No `.pen` renderer or
 exporter exists anywhere in the repository: the only files naming `.pen` are two guards, `CLAUDE.md`
@@ -1114,7 +1105,8 @@ Generated, not hand-drawn, so it cannot drift from the app:
 
 1. The real `Sidebar` is rendered through the repo's own vitest setup with `renderToStaticMarkup`, in
    six states — expanded / collapsed / drawer × complete / floor. **Only the SECTION DATA is
-   authored**, and it is the six entries `SidebarNav.tsx` pushes, with the real `messages/en.json`
+   authored**, and it is the entries `SidebarNav.tsx` pushes — six when this asset was generated, four
+   since MOTIR-4254 — with the real `messages/en.json`
    labels, the real hrefs and the real lucide glyphs.
 2. `tailwindcss`'s own `compile()` API runs `app/globals.css` over that markup, so the stylesheet is
    the build's output rather than a retyped token block.
@@ -1125,6 +1117,16 @@ Generated, not hand-drawn, so it cannot drift from the app:
 
 One board property, named here so nobody reads it as design: the frames give the rail a fixed height
 so all ten rows fit, where the real rail is `h-full` in a viewport-height grid column.
+
+**Revised by MOTIR-4254 without re-running the generator either**, for the reason the MOTIR-4167 note
+below gives: the change is entirely SECTION DATA — two rows removed from the three complete arms,
+absent from the three floor arms already — so every rail in the asset is still the real `Sidebar`
+output, edited in the six places the generator's data would have moved. **The frames were re-measured
+in a browser rather than assumed**: every drawn row's box asserted inside its frame at all three
+widths in both arms (7 rows complete / 5 at the floor per width, the abbreviated primary section
+included). Removing rows can only shorten the content, and _"can only"_ is exactly the reasoning that
+produced the defect the measure step exists for. `prettier --write` then
+`scripts/render-design-mock.mjs` re-exported the `.png`.
 
 **Revised by MOTIR-4167 without re-running the generator.** The generator was a temporary harness
 (deleted with MOTIR-4130's run, as the design lane's own rule requires), and the revision changes

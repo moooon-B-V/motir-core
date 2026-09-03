@@ -22,6 +22,10 @@ vi.mock('next/navigation', () => ({
 
 const SELF = 'u-self';
 
+// What `publicProjectUrl('PROD')` answers once `MOTIR_PUBLIC_SITE_URL` is
+// configured — the value the server page threads in (MOTIR-4242).
+const PUBLIC_PAGE_URL = 'https://motir.co/p/PROD';
+
 const members: ProjectMemberDTO[] = [
   { userId: SELF, name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'admin', roleDefinition: null },
   {
@@ -110,6 +114,11 @@ function renderAdmin(overrides: Partial<React.ComponentProps<typeof ProjectMembe
         // The cloud arm by default (MOTIR-4035) — this file's subject is the
         // 6.4.5 control, and the build gate is `cloud-gate-selector.test.tsx`'s.
         publicAccessAvailable
+        // The PUBLIC SITE's address for this project, resolved on the server
+        // page by `publicProjectUrl()` (MOTIR-4242). A literal here on purpose:
+        // this file asserts what the room DOES with the value, and what the
+        // value IS is `tests/hosting/appUrlSeam.test.ts`'s subject.
+        publicPageUrl={PUBLIC_PAGE_URL}
         {...overrides}
       />
     </ToastProvider>,
@@ -376,21 +385,60 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 
-  it('public + admin: the Hero & overview entry links to the on-page editor (?edit=1), with no embedded editor (6.16.6)', () => {
+  it('public + admin: the Hero & overview entry opens the Public page ROOM, with no embedded editor (MOTIR-4242)', () => {
     renderAdmin({ accessLevel: 'public', members: [members[0]!] });
     // The in-settings split editor is GONE — there is a single editing surface,
-    // on the public page itself.
+    // and since MOTIR-4171 it is the Public page room rather than the public
+    // page, which motir-core no longer serves (MOTIR-3951).
     expect(screen.queryByRole('button', { name: 'Edit overview' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Project overview Markdown' })).toBeNull();
-    // The entry point is an "Edit on the public page" link deep-linking into
-    // edit mode (`?edit=1`).
-    const link = screen.getByRole('link', { name: /Edit on the public page/ });
-    expect(link.getAttribute('href')).toBe('/p/PROD?edit=1');
+    // The entry point is an in-app link to the room. Its old target was
+    // `/p/PROD?edit=1` — a 404 on this host once the public pages were deleted.
+    const link = screen.getByRole('link', { name: /Edit the public page/ });
+    expect(link.getAttribute('href')).toBe('/settings/project/public');
   });
 
   it('public + non-admin: the Hero & overview entry hides the edit link (6.16.6)', () => {
     renderAdmin({ accessLevel: 'public', canManage: false, members: [members[0]!] });
-    expect(screen.queryByRole('link', { name: /Edit on the public page/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Edit the public page/ })).toBeNull();
+  });
+
+  // ── MOTIR-4242 — the three addresses this room hands out ──────────────────
+  //
+  // All three used to be built from the APPLICATION host, and `app/(public)/p/`
+  // was deleted by MOTIR-3951, so all three 404'd. The third is the one the
+  // bug's own predecessor could not see: MOTIR-4171's criteria counted two
+  // LINKS and its sweep reads `href`s, and the copied value is neither.
+
+  it('public: View public page links to the PUBLIC site, and the mono path shows its host', () => {
+    renderAdmin({ accessLevel: 'public', members: [members[0]!] });
+    const link = screen.getByRole('link', { name: 'View public page' });
+    expect(link.getAttribute('href')).toBe(PUBLIC_PAGE_URL);
+    // The scheme is dropped in the displayed path, per Panel A frame 3 — the
+    // reader sees WHICH SITE the link goes to.
+    expect(screen.getByText('motir.co/p/PROD')).toBeTruthy();
+  });
+
+  it('public: the share field SHOWS the public site’s absolute URL', () => {
+    renderAdmin({ accessLevel: 'public', members: [members[0]!] });
+    expect(screen.getByText(PUBLIC_PAGE_URL)).toBeTruthy();
+  });
+
+  it('public: Copy WRITES the public site’s URL — asserted on the copied value, not the markup', async () => {
+    // The assertion the href sweep structurally cannot make. Before MOTIR-4242
+    // this wrote `window.location.origin + /p/PROD`; in happy-dom that is
+    // `http://localhost:3000/p/PROD`, and in production `https://app.motir.co/p/PROD`
+    // — the URL a customer pastes into a tweet, and a 404 either way.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    renderAdmin({ accessLevel: 'public', members: [members[0]!] });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(PUBLIC_PAGE_URL));
+    const copied = writeText.mock.calls[0]![0] as string;
+    expect(copied).not.toContain('localhost');
+    expect(copied).not.toContain('app.motir.co');
   });
 
   it('non-admins get a read-only view (no edit affordances, role chips only)', () => {

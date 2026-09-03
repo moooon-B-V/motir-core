@@ -131,7 +131,10 @@ describe('⌘K settings deep links follow the registry (MOTIR-2468)', () => {
       join(process.cwd(), 'app/(authed)/_components/AppCommandPalette.tsx'),
       'utf8',
     );
-    expect(source).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES)');
+    // A PREFIX since MOTIR-4243: the registry took a second axis (what this
+    // BUILD has), so the call grew a third argument. The claim here is that the
+    // palette reads the registry rather than keeping its own list — unchanged.
+    expect(source).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES, {');
     // No settings route spelled out by hand anywhere in the palette.
     for (const entry of PROJECT_SETTINGS_ROUTES) {
       expect(source, `${entry.href} is hard-coded in the palette`).not.toContain(`'${entry.href}'`);

@@ -195,6 +195,13 @@ const EXPECTED: Record<ProjectAccessLevel, Record<Role, { browse: boolean; manag
   },
 };
 
+// The registry's SECOND axis (MOTIR-4243), and this matrix is about the FIRST:
+// it walks the real resolved permission set for every seeded role, so it asks
+// its questions on a build where every room exists. The deployment axis has its
+// own coverage in `tests/settings/projectSettingsNav.test.ts`, where it costs no
+// database.
+const ON_CLOUD = { publicProjectsAvailable: true };
+
 const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
 const ROLES: Role[] = ['owner', 'wsAdmin', 'plainMember', 'viewer', 'member', 'admin', 'nonMember'];
 
@@ -237,7 +244,7 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
             scenario.projectId,
             scenario.ctxs[role],
           );
-          const visible = visibleSettingsNav(held);
+          const visible = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, ON_CLOUD);
           const visibleIds = new Set(visible.map((e) => e.id));
 
           // Drift-proof: assert PER entry that visibility === whether the actor
@@ -253,7 +260,7 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
             scenario.projectId,
             scenario.ctxs[role],
           );
-          const visible = visibleSettingsNav(held);
+          const visible = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, ON_CLOUD);
 
           // ⚠️ THE SPLIT MOVED (MOTIR-2468). It used to be browse-vs-manage: a
           // non-admin browser saw every entry except Automation. Every entry now
@@ -269,7 +276,7 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
 
           // And the DOOR agrees with the ROWS — an actor is never handed a link
           // into an area that renders an empty rail (design panel 1).
-          expect(hasVisibleSettingsArea(held)).toBe(visible.length > 0);
+          expect(hasVisibleSettingsArea(held, ON_CLOUD)).toBe(visible.length > 0);
         });
       }
     });
