@@ -1822,25 +1822,38 @@ export default defineConfig({
         // gate to make a build pass.
         'app/**/_components/HelpMenu.tsx',
         'app/**/_components/CommandPaletteProvider.tsx',
-        // ⚠️ `SidebarNav.tsx` is REPORT-ONLY — it is in `include` and
-        // deliberately NOT in `thresholds`, and the reason is a FINDING rather
-        // than a gap to close later. MEASURED across every component spec that
-        // reaches it (292 files, 3 405 tests, on this branch):
+        // `SidebarNav.tsx` — GATED on three axes, report-only on the fourth, and
+        // the split is the whole story of MOTIR-4324.
         //
-        //   SidebarNav.tsx  97.22 stmts · 84 branch · 88.88 fn · 97.22 lines
+        // ⚠️ WHAT THIS COMMENT SAID UNTIL MOTIR-4324, kept because the number it
+        // quotes is the before half of this card's evidence: the file was
+        // report-only at 97.22 stmts · 84 branch · 88.88 fn · 97.22 lines (292
+        // component specs, 3 405 tests), and the ONE uncovered function was
+        // `SoonChip` — a badge that rendered only for a settings-nav entry
+        // carrying a reserved-slot flag no registry set any more. Covering it
+        // meant fabricating a registry entry no shipped surface has, so the
+        // number stood as a finding rather than a bar to lower.
         //
-        // The one uncovered function is `SoonChip`, the Automation slot's
-        // placeholder badge. It renders only for a registry entry carrying
-        // `placeholder: true`, and `grep -rn 'placeholder: true' lib/ app/
-        // components/` returns NOTHING — both settings registries have since
-        // flipped every placeholder they reserved into a real entry. So the
-        // function is unreachable from the product, and the only way to a 90%
-        // function figure is to fabricate a registry entry no shipped surface
-        // has, which asserts the fixture rather than the code. A number below
-        // the floor is a finding to state, not a bar to lower, and it is not
-        // MOTIR-4237's to close: this story edited the file by DELETION (the
-        // `Docs` and `Legal` rows left for the Help menu) and added nothing to
-        // it. Filed as its own bug.
+        // MOTIR-4324 retired that branch instead of covering it: `SoonChip`, the
+        // reserved-slot flag on both nav registries, the filters it fed and its
+        // two `Soon` catalog strings are gone. MEASURED AFTER, over the fourteen
+        // specs that reach this file — a LOWER BOUND on the full-suite number,
+        // since coverage over more specs can only rise:
+        //
+        //   vitest run --coverage \
+        //     --coverage.include='app/**/_components/SidebarNav.tsx' \
+        //     <the 14 specs naming SidebarNav / the authed layout>
+        //   SidebarNav.tsx  100 stmts · 86.95 branch · 100 fn · 100 lines
+        //
+        // Statements, functions and lines are at 100 and GATED at the 90 floor in
+        // `thresholds` below. BRANCHES is not, and the remaining cause is a
+        // different one from the one this card closed: the two uncovered arms are
+        // the DRAWER variant of the account-settings and project-settings rails
+        // (`collapsed={isDrawer ? false : undefined}` at both settings returns),
+        // plus the five-clause `active:` predicate on the workspace-settings row.
+        // Those are reachable, real, and untested — a coverage gap, not dead
+        // code — so they are neither this card's to write nor a bar to lower.
+        // Filed as its own bug: MOTIR-4368.
         'app/**/_components/SidebarNav.tsx',
       ],
       reporter: ['text', 'text-summary'],
@@ -3525,8 +3538,19 @@ export default defineConfig({
         // rather than at the measured 100, so a later refactor has room without
         // anyone loosening a gate to make a build pass.
         //
-        // ⚠️ `SidebarNav.tsx` is NOT here, on purpose — it is report-only, for
-        // the reason its `include` entry states.
+        // ⚠️ `SidebarNav.tsx` IS here since MOTIR-4324, and on THREE axes rather
+        // than four — statements / functions / lines, each MEASURED at 100 after
+        // the dead "Soon" badge was retired. `branches` is deliberately absent:
+        // at 86.95 it is under the floor for a cause that is not this file's
+        // dead code (the untested drawer arm of both settings rails), and an axis
+        // is left off rather than pinned below 90, which would be lowering a bar
+        // to make a build pass. Its `include` entry carries the numbers and the
+        // bug. Same shape as `lib/github/checkSuites.ts` above, which pins three.
+        'app/**/_components/SidebarNav.tsx': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
         'app/**/_components/HelpMenu.tsx': {
           lines: 90,
           functions: 90,

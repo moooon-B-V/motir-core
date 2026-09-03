@@ -62,20 +62,21 @@ describe('accountSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('has no reserved "Soon" placeholders — every slot is now a real route (Tokens 7.8.3, Appearance 7.3.58, Profile 8.8.24)', () => {
-    const placeholders = ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder).map((e) => e.id);
-    expect(placeholders).toEqual([]);
-    // Every entry is a real route with a non-empty href in the real-route set.
+  it('every entry is a real route — the destination set IS the registry', () => {
+    // ⚠️ This case USED to assert that the reserved-slot ("Soon") set was empty,
+    // and that a re-added reserved slot would carry no route. MOTIR-4324 retired
+    // that mechanism outright — the last slot flipped to a real entry in 8.8.24
+    // (Tokens 7.8.3, Appearance 7.3.58 before it), leaving the flag, its rail
+    // rendering and the filter it fed unreachable from the product. The
+    // assertions that SURVIVE the retirement are the two that were always about
+    // the registry rather than about the flag: every entry has a route, and the
+    // destination set the totality guard and the command palette read is the
+    // whole registry.
     for (const entry of ACCOUNT_SETTINGS_NAV) {
       expect(entry.href).not.toBe('');
       expect(ACCOUNT_SETTINGS_ROUTES).toContainEqual(entry);
     }
-    // A placeholder, were one re-added, must still carry no route (the contract
-    // the totality guard relies on).
-    for (const entry of ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder)) {
-      expect(entry.href).toBe('');
-      expect(ACCOUNT_SETTINGS_ROUTES).not.toContainEqual(entry);
-    }
+    expect(ACCOUNT_SETTINGS_ROUTES).toHaveLength(ACCOUNT_SETTINGS_NAV.length);
   });
 });
 
@@ -122,11 +123,15 @@ describe('accountSettingsNav registry — active detection', () => {
     expect(isAccountSettingsEntryActive(profile, '/settings/account')).toBe(false);
   });
 
-  it('an entry with no href (a future placeholder) is never active', () => {
+  it('an entry with no href is never active', () => {
+    // The fixture carried `placeholder: true` until MOTIR-4324 retired that flag.
+    // The ASSERTION is untouched and was never about the flag: an empty `href`
+    // must not match the area root by prefix, which is a property of
+    // `isAccountSettingsEntryActive` alone.
     const base = ACCOUNT_SETTINGS_NAV.find((e) => e.id === 'profile')!;
-    const placeholder = { ...base, href: '', placeholder: true };
-    expect(isAccountSettingsEntryActive(placeholder, '/settings/account')).toBe(false);
-    expect(isAccountSettingsEntryActive(placeholder, '/settings/account/profile')).toBe(false);
+    const hrefless = { ...base, href: '' };
+    expect(isAccountSettingsEntryActive(hrefless, '/settings/account')).toBe(false);
+    expect(isAccountSettingsEntryActive(hrefless, '/settings/account/profile')).toBe(false);
   });
 });
 

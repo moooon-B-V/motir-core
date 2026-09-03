@@ -5,9 +5,10 @@ import { AppearanceCard } from '../_components/AppearanceCard';
 
 // The Appearance pane of the account-settings area (Story 7.3 · Subtask 7.3.58) —
 // Motir's three-axis design system (theme × style × palette × type) turned on
-// itself: the signed-in user themes the Motir app, live. Flipping the reserved
-// `appearance` "Soon" slot (7.8.2) to a real route here keeps the route↔registry
-// totality test green by construction (the entry drops its `placeholder`).
+// itself: the signed-in user themes the Motir app, live. Flipping the slot 7.8.2
+// had reserved for `appearance` into a real route here keeps the route↔registry
+// totality test green by construction (the entry has an on-disk route now). The
+// reservation mechanism itself is retired — MOTIR-4324.
 //
 // A server component (session gate only); the AppearanceCard is the client island
 // that reads/writes the ThemeProvider — picking re-skins instantly via

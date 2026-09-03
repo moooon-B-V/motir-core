@@ -1590,7 +1590,6 @@
     "nav": {
       "eyebrow": "Project settings",
       "backToProject": "Back to {projectName}",
-      "soon": "Soon",
       "group": {
         "general": "General",
         "access": "Access",
@@ -2552,8 +2551,7 @@
         "appearance": "Appearance",
         "twoFactor": "Two-factor",
         "apiTokens": "Tokens",
-        "data": "Data & privacy",
-        "soon": "Soon"
+        "data": "Data & privacy"
       },
       "data": {
         "title": "Data & privacy",
