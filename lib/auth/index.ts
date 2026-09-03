@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { betterAuth } from 'better-auth';
+import { betterAuth, type Auth, type BetterAuthOptions } from 'better-auth';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { passkey } from '@better-auth/passkey';
 import { nextCookies } from 'better-auth/next-js';
@@ -70,7 +70,40 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-export const auth = betterAuth({
+// ⚠️ THE OPTIONS ARE A NAMED, ANNOTATED CONST, AND THE ANNOTATION IS
+// LOAD-BEARING (MOTIR-4293). Do not inline this object back into the
+// `betterAuth(...)` call, and do not delete the annotation.
+//
+// The app is a COMPOSITE TypeScript project now (`tsconfig.app.json`): it emits
+// `.d.ts` for the tests and scripts projects to consume, which is what takes
+// the whole-repository type-check off the one-program heap cliff. A declaration
+// can only NAME types the emitting file references, and Better-Auth's INFERRED
+// instance type reaches three transitive packages this module does not import
+// (`zod/v4/core`, `better-call`, `@simplewebauthn/server`). Left inferred, `tsc`
+// answers TS2742 three times and emits NOTHING for this module — which surfaces
+// downstream as `.tsout/app/lib/auth/index.d.ts has not been built` in 59 test
+// files, nowhere near the cause.
+//
+// So both halves are written down out of types this file already imports:
+//  · `authOptions` carries `BetterAuthOptions & { plugins: [...] }` — the
+//    intersection keeps the object literal contextually typed (its hooks and
+//    callbacks infer their parameters from it, so nothing becomes `any`) while
+//    naming the plugin TUPLE, which is the part `Auth<O>` is invariant in;
+//  · `auth` is then `Auth<typeof authOptions>` — one nameable type expression.
+//
+// The cost is real and small: `auth.options` now reads as `BetterAuthOptions`
+// rather than as this literal, so a caller reaching into a specific hook sees
+// its declared arity rather than ours (`tests/auto-workspace-on-signup.test.ts`
+// is the one such caller). The alternative was for `pnpm typecheck` to keep
+// needing `--max-old-space-size`.
+export const authOptions: BetterAuthOptions & {
+  plugins: [
+    ReturnType<typeof nextCookies>,
+    ReturnType<typeof deviceAuthorization>,
+    ReturnType<typeof twoFactor>,
+    ReturnType<typeof passkey>,
+  ];
+} = {
   database: prismaAdapter(db, { provider: 'postgresql' }),
 
   secret: requiredEnv('BETTER_AUTH_SECRET'),
@@ -569,7 +602,9 @@ export const auth = betterAuth({
       },
     }),
   ],
-});
+};
+
+export const auth: Auth<typeof authOptions> = betterAuth(authOptions);
 
 /**
  * Server-side helper for reading the current session from a React Server

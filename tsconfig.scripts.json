@@ -1,0 +1,33 @@
+{
+  // ── The SCRIPTS project (MOTIR-4293) ────────────────────────────────────────
+  //
+  // 116 files under `scripts/` plus `prisma.config.ts` (the Prisma CLI's entry).
+  //
+  // ⚠️ `scripts/worker.ts` is a RUNTIME entry — `fly.toml`'s `worker` process runs
+  // it — not a dev script. It is type-checked HERE and must stay so; moving it out
+  // of a checked project would take a production entry point out of the gate.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/scripts",
+    "tsBuildInfoFile": ".tsout/scripts/tsconfig.tsbuildinfo"
+  },
+  // `.mts` and `.mjs` are listed because `allowJs` puts them in the program and a
+  // composite project must list every file it compiles (TS6307): `scripts/brand/*.mts`
+  // and the `scripts/*.mjs` helpers are imported by name from `tests/`.
+  "include": [
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx",
+    "scripts/**/*.mts",
+    "scripts/**/*.mjs",
+    "scripts/**/*.js",
+    "prisma.config.ts"
+  ],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  "references": [{ "path": "./tsconfig.app.json" }]
+}

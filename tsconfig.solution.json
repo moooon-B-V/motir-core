@@ -1,0 +1,16 @@
+{
+  // ── The SOLUTION file (MOTIR-4293) ──────────────────────────────────────────
+  //
+  // `pnpm typecheck` is `tsc -b tsconfig.solution.json`. It owns no files of its
+  // own; it names the projects and lets `tsc -b` order them by their references.
+  //
+  // ⚠️ EVERY `composite` project in the repository belongs on this list, and
+  // `tests/typecheck-program.test.ts` asserts exactly that — a project added later
+  // and left off would simply stop being type-checked, silently and greenly.
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.tests.json" },
+    { "path": "./tsconfig.scripts.json" }
+  ]
+}

@@ -395,8 +395,17 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
-    # Observed 2.0–2.6 min → 10 (~4x, the short-job floor).
-    timeout-minutes: 10
+    # Observed 2.0–2.6 min for the old single `tsc --noEmit`. `tsc -b` also
+    # EMITS the app project's declarations, which is what the tests and scripts
+    # projects consume: measured locally at 151 s cold against 68 s for the old
+    # command on the same box (2.2x), so the same job should land near 4.5–5.7
+    # min. Ceiling raised 10 → 15 to keep ~2.6x headroom over that estimate
+    # rather than ~1.7x over a number nobody has observed yet (MOTIR-4293).
+    # ⚠️ RE-DERIVE THIS FROM THE FIRST GREEN RUNS: the durations above are a
+    # projection from one box, and MOTIR-3569's bar asks for the job's own
+    # observed range. A ceiling is not a performance target — if this lane hits
+    # 15 minutes, ask whether the work grew or the runner wedged.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -423,19 +432,45 @@ jobs:
       # Prisma client is generated, not committed — typecheck needs it.
       - run: pnpm prisma generate
         if: steps.cache-prisma-typecheck.outputs.cache-hit != 'true'
-      # ⚠️ THE HEAP IS RAISED IN THE `typecheck` SCRIPT (MOTIR-3878, 2026-09-03),
-      # for the reason the `build` job's comment below gives for `next build`,
-      # and this job crossed the same edge a story later. Measured on one box,
-      # same toolchain, same node_modules, `tsc --noEmit --extendedDiagnostics`
-      # used 4.19GB on `main` — node's default old-space is ~4.1GB — and 5.08GB
-      # with MOTIR-3878 on top: ONE Prisma model and 52 files, whose own check
-      # time is 1.7s of 98s. The tree had grown to the edge; the next story to
-      # add a model would have crossed it whichever one that was. The failure
-      # reads `Ineffective mark-compacts near heap limit` with no file named —
-      # a real type error prints the file and the diagnostic. Set in the script
-      # rather than as `env:` here so a local `pnpm typecheck` gets it too;
-      # package.json cannot carry a comment, which is why the reasoning lives
-      # at this call site.
+      # ⚠️ THE HEAP BUMP IS GONE FROM THIS LANE (MOTIR-4293, 2026-09-03), AND
+      # THAT IS THE MEASUREMENT — a split that still needed the bump would have
+      # proven nothing. `pnpm typecheck` is now `tsc -b tsconfig.solution.json`:
+      # three project references — an app project (what `next build` reads), a
+      # tests project and a scripts project — so the ceiling is the LARGEST
+      # project rather than the sum of all of them.
+      #
+      # ── The two readings, one box, same toolchain, same node_modules ────────
+      # BEFORE, as ONE `tsc --noEmit` program (`--extendedDiagnostics`):
+      #   4.19 GB on `main` at `8ebc62f0d`, 5.08 GB with MOTIR-3878's branch on
+      #   top at `f6f8695c7`, and 4.42 GB at `9c077d4c1` (that story merged).
+      #   Node 22's default old-space on the same box is ~4.05 GB, so the last
+      #   of those was ALREADY over the line — which is why MOTIR-3878's own
+      #   pull request died here with `Ineffective mark-compacts near heap
+      #   limit` and no file named (a real type error prints the file).
+      # AFTER, as `tsc -b tsconfig.solution.json --extendedDiagnostics` with
+      # NODE_OPTIONS unset, per project (one cold build, 102 s):
+      #   app      5520 files   2.72 GB   67% of the default
+      #   scripts  1999 files   1.95 GB   48%
+      #   tests    7149 files   3.59 GB   89%   ← the ceiling
+      # The tests project reads the app through its EMITTED DECLARATIONS
+      # (`.tsout/app/**/*.d.ts`), which is why 1814 test files cost less than
+      # the bodies they exercise. See `tsconfig.base.json` for the shape.
+      #
+      # ⚠️ THE TESTS PROJECT IS UNDER THE DEFAULT HEAP BUT NOT COMFORTABLY —
+      # 89%, and MOTIR-4294's headroom tripwire fails at 80%. That gap is the
+      # NEXT two subtasks' work, not slack: MOTIR-4295 gives the repositories
+      # explicit row types and MOTIR-4296 confines Prisma's payload/input
+      # generics to `lib/repositories/**`, and BOTH land in the app project's
+      # emitted declarations — which is the 1.95 GB every other project pays
+      # before it reads a file of its own (the scripts project is 116 files and
+      # 5.6M instantiations, and that is where they come from). If the ceiling
+      # is still over 80% once those have landed, the answer is another project
+      # boundary inside `tests/`, and it is measured before it is drawn.
+      #
+      # ⚠️ EVERY FURTHER BUMP MOVES THE CLIFF; NONE REMOVES IT. Two jobs in this
+      # file took one within a fortnight (`build` at MOTIR-1789, this one at
+      # MOTIR-3878). If this lane is ever short of heap again, the answer is
+      # another project boundary — not a bigger number.
       - run: pnpm typecheck
 
   design-system:
@@ -649,15 +684,25 @@ jobs:
       # 54 added files. The tree had simply grown to the edge, and the next story
       # to land would have crossed it whichever one that was.
       #
-      # The `typecheck` job above WAS the tell: it runs the SAME `tsc --noEmit`
-      # and passed, because it pays for the type check alone. Only the build
-      # paid for both, so only the build needed the ceiling raised — until
-      # MOTIR-3878 (2026-09-03), when the check alone reached the default heap
-      # and that job's script took the same ceiling; its comment carries the
-      # numbers. It is set in the `build` script rather than as `env:` here so
-      # that Vercel — which runs that script too — gets it as well;
-      # package.json cannot carry a comment, which is why the reasoning lives
-      # at this call site.
+      # The `typecheck` job above WAS the tell: it runs the SAME type check and
+      # passed, because it pays for the check alone. Only the build paid for
+      # both, so only the build needed the ceiling raised — until MOTIR-3878
+      # (2026-09-03), when the check alone reached the default heap and that
+      # job's script took the same ceiling.
+      #
+      # ⚠️ THAT JOB HAS SINCE GIVEN THE CEILING BACK (MOTIR-4293, the same day).
+      # It no longer runs one `tsc` over the whole repository: `pnpm typecheck`
+      # builds `tsconfig.solution.json`, three project references whose largest
+      # member measures 3.50 GB against a ~4.05 GB default. Its comment carries
+      # the per-project numbers. THIS bump stays, and the asymmetry is the point
+      # — `next build` runs TypeScript in a build WORKER on top of the compile,
+      # in one process, over the app project alone. Splitting the program did
+      # not split that worker.
+      #
+      # It is set in the `build` script rather than as `env:` here so that
+      # Vercel — which runs that script too — gets it as well; package.json
+      # cannot carry a comment, which is why the reasoning lives at this call
+      # site.
       - run: pnpm build
       # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
       # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly

@@ -1,38 +1,77 @@
 {
+  // ── NEXT's file, and the PRODUCT program (MOTIR-4293) ───────────────────────
+  //
+  // This used to be the repository's ONE `tsc` program — `include: ["**/*.ts",
+  // "**/*.tsx", …]`, `exclude: ["node_modules", "packages"]` — so app code, 1814
+  // test files, 116 scripts and the 113-file generated Prisma client were checked
+  // together and each paid for the others' types. `tsconfig.base.json` carries the
+  // reasoning and the numbers.
+  //
+  // It stays NEXT'S file, deliberately. Next reads `tsconfig.json` by name and
+  // REWRITES it when a required option is missing, and three other readers extend
+  // it (`tsconfig.node.json`, and `tsconfig.app.json` beside it). Pointing Next at
+  // a differently-named file would multiply the places that can drift; layering
+  // the composite project on top by `extends` keeps ONE include set.
+  //
+  // ⚠️ `noEmit` and the `next` plugin are restated here rather than left to the
+  // base: Next requires both, checks the RESOLVED config, and writing them at this
+  // level is what makes that obvious to the next person who reads only this file.
+  //
+  // The include set is the PRODUCT set. `tests/`, `scripts/` and `prisma.config.ts`
+  // now live in `tsconfig.tests.json` / `tsconfig.scripts.json`; `.tsout/` is the
+  // declaration output the three composite projects write.
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
     "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
     "plugins": [
       {
         "name": "next"
       }
-    ],
-    "paths": {
-      "@/*": ["./*"]
-    }
+    ]
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "i18n/**/*.ts",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "lib/**/*.json",
+    "generated/**/*.ts",
+    "messages/*.json",
+    "instrumentation.ts",
+    "instrumentation-client.ts",
+    "proxy.ts",
+    "next.config.ts",
+    "sentry.edge.config.ts",
+    "sentry.server.config.ts",
+    "packages/cli/src/**/*.ts",
+    "packages/cli/package.json",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "packages"]
+  // ⚠️ `packages` is NOT excluded wholesale, and the include list above names
+  // `packages/cli/src` on purpose. `lib/apiDocs/{cli,sandbox}.ts` import the CLI's
+  // `commandCatalog` / `agentProfiles` / `package.json` by relative path, so those
+  // files were ALREADY in the one program — an `exclude` never kept an imported
+  // file out, it only filters the include globs. A composite project must LIST
+  // every file it compiles (TS6307), so what was implicit is now written down.
+  // The CLI's own `test/` and `sandbox/` stay out; `packages/cli/tsconfig.json` and
+  // the `cli` CI job own those.
+  "exclude": [
+    "node_modules",
+    "tests",
+    "scripts",
+    ".tsout",
+    "packages/brand",
+    "packages/design-system",
+    "packages/cli/test",
+    "packages/cli/sandbox",
+    "packages/cli/dist",
+    "packages/cli/node_modules"
+  ]
 }

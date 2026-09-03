@@ -1,0 +1,30 @@
+{
+  // ── The APP project, as a COMPOSITE project reference (MOTIR-4293) ───────────
+  //
+  // `tsconfig.json` next door is Next's file and must stay `noEmit` (Next
+  // requires it, and rewrites the file when it is missing). A referenced project
+  // must EMIT DECLARATIONS or the referencing project cannot resolve its imports
+  // under `tsc -b` — a `noEmit` reference does not resolve. So the composite
+  // project is a thin layer ON TOP of Next's file rather than a copy of it:
+  // `extends` inherits the include/exclude set, and nothing here restates it.
+  //
+  // The tests and scripts projects reference THIS file. They consume the app
+  // through `.tsout/app/**/*.d.ts` — declarations, which are far cheaper to check
+  // than bodies — so the ceiling becomes the largest project rather than the sum.
+  //
+  // `emitDeclarationOnly` keeps the JavaScript unwritten: nothing runs from
+  // `.tsout/`, and Next / vitest / tsx each compile from source as before. The
+  // directory is git-ignored and holds the per-project `.tsbuildinfo` too, so no
+  // build state lands beside the sources.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/app",
+    "tsBuildInfoFile": ".tsout/app/tsconfig.tsbuildinfo"
+  }
+}

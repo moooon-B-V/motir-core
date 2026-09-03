@@ -170,6 +170,11 @@ const eslintConfig = defineConfig([
     // Project additions:
     'node_modules/**',
     'prisma/migrations/**',
+    // The project-references declaration output (MOTIR-4293). `tsc -b
+    // tsconfig.solution.json` writes one `.d.ts` tree per project here; it is
+    // git-ignored build state, and linting it would make `pnpm lint` depend on
+    // whether a type-check has been run in this working tree.
+    '.tsout/**',
     // Workspace-package BUILD output only — the bundled binary, not source.
     // The package SOURCE is linted by the shared config (Subtask 7.9.1; 7.9.5
     // wires the CLI's own coverage gate).

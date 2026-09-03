@@ -89,9 +89,13 @@ describe('Google new-user sign-up (same databaseHook, OAuth path)', () => {
 
     const afterHook = auth.options.databaseHooks?.user?.create?.after;
     expect(afterHook).toBeTypeOf('function');
-    // Better-Auth's options type infers the after-hook as (user) => …; at
-    // runtime it's also passed the endpoint context, which our hook ignores.
-    await afterHook!(gUser as never);
+    // Better-Auth passes the after-hook a second argument — the endpoint
+    // context — which our hook ignores. Both are supplied here because
+    // `auth.options` is now typed by `BetterAuthOptions` (MOTIR-4293 gave the
+    // instance an explicit type so the app project can emit its declaration),
+    // and that type declares the hook's real two-argument arity. The call is
+    // unchanged in what it exercises: the hook reads only its first argument.
+    await afterHook!(gUser as never, undefined as never);
 
     const memberships = await workspacesForUser(gUser.id);
     expect(memberships).toHaveLength(1);
