@@ -6048,7 +6048,11 @@
       "correcting": "正在重新理解……",
       "correctedToPlan": "已改按计划变更理解",
       "correctedToAsk": "已改按提问理解",
-      "handoff": "按计划变更理解 — 正在生成方案"
+      "handoff": "按计划变更理解 — 正在生成方案",
+      "stop": "停止",
+      "stoppingAction": "正在停止…",
+      "stopping": "正在停止 —— 先完成当前这张卡片。",
+      "stopped": "你停止了这次运行。"
     },
     "targets": {
       "sectionLabel": "工作项",

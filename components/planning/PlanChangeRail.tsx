@@ -103,6 +103,12 @@ export interface PlanChangeRailProps {
   onCorrectTurn: (turnId: string) => void;
   onApprove: () => void;
   onDiscard: () => void;
+  /**
+   * END the run (Story MOTIR-4054 · MOTIR-4068). Optional so every shipped call
+   * site that does not offer a stop keeps compiling and simply renders no bar —
+   * the rail is presentational and the host owns the conversation.
+   */
+  onStop?: () => void;
 }
 
 export function PlanChangeRail({
@@ -118,6 +124,7 @@ export function PlanChangeRail({
   onCorrectTurn,
   onApprove,
   onDiscard,
+  onStop,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tc = useTranslations('planningWorkspace.conversation');
@@ -339,6 +346,27 @@ export function PlanChangeRail({
           ) : null}
         </div>
 
+        {/* STOPPED — a MARKER, not an alert (MOTIR-4068).
+            It uses the shipped `system`-marker line verbatim: centred,
+            `text-xs`, `--el-text-secondary`. Deliberately NOT the error block
+            below it — no `role="alert"`, no `--el-tint-rose`, no failure glyph,
+            nothing dimmed or struck through. A stopped run is a DECISION, and
+            `design/ai-chat/plan-change-run-live.mock.html` sheet 4 lists the
+            affordances it may not borrow, so a reviewer checks a claim rather
+            than an impression.
+
+            The review block ABOVE stays live: what was proposed before the stop
+            is worth exactly what it was worth a second earlier, and Approve /
+            Discard are both reachable from here. That is the whole card. */}
+        {state.stopped ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-change-stopped"
+          >
+            {tc('stopped')}
+          </p>
+        ) : null}
+
         {state.errorCode ? (
           <div className="flex flex-col items-start gap-2">
             <p
@@ -381,6 +409,22 @@ export function PlanChangeRail({
         // measured at the rail's real 22rem the header row is already full, and
         // the bar belongs beside the control whose behaviour actually changed.
         awaitingQuestion={question?.question ?? null}
+        // THE RUNNING BAR — present exactly while a run is in flight, and gone
+        // the moment it is not. `onStop` is what makes it offerable: a caller
+        // that does not supply one gets the shipped composer unchanged.
+        running={
+          state.phase === 'streaming' && onStop
+            ? {
+                line: state.progress
+                  ? tc(`progress.${state.progress.kind}`, {
+                      count: state.progress.kind === 'proposed' ? state.progress.count : 0,
+                    })
+                  : tc('progress.submitted'),
+                stopping: state.stopping,
+                onStop,
+              }
+            : null
+        }
         onSeeQuestion={() => {
           // The pending question is the ONE element carrying this id (only one
           // question can be pending), so a lookup is exact — and focusing it,

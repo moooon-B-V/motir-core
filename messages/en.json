@@ -6052,7 +6052,11 @@
       "correcting": "Re-reading…",
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
-      "handoff": "Reading it as a plan change — working on the proposal"
+      "handoff": "Reading it as a plan change — working on the proposal",
+      "stop": "Stop",
+      "stoppingAction": "Stopping…",
+      "stopping": "Stopping — finishing this card first.",
+      "stopped": "You stopped this run."
     },
     "targets": {
       "sectionLabel": "Work items",

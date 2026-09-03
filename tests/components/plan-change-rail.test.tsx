@@ -96,6 +96,8 @@ const BASE: PlanChangeConversationState = {
   approved: null,
   errorCode: null,
   outOfCredits: false,
+  stopping: false,
+  stopped: false,
 };
 
 const handlers = {

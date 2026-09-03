@@ -13,6 +13,7 @@ import {
   settleAskJob,
   submitAskTurn,
   submitContextualPlan,
+  stopPlanChangeRun,
   submitPlanChange,
   type AskRedirectResponse,
   type AskSubmitResponse,
@@ -154,6 +155,29 @@ export interface PlanChangeConversationState {
   errorCode: string | null;
   /** The metered-AI refusal — a distinct state, not an error (design panel 6). */
   outOfCredits: boolean;
+  /**
+   * The user has asked for a stop and the walk has not reached its boundary yet
+   * (Story MOTIR-4054 · MOTIR-4068).
+   *
+   * ⚠️ IT IS NOT A TERMINAL STATE, and keeping it separate from {@link stopped}
+   * is the whole point. The click is not the stop: `runWalk` reads the flag at
+   * its NEXT phase boundary, which can be a whole authoring session away, so
+   * there is a real interval in which the run is still narrating and the user has
+   * already asked it to end. A surface that collapses the two claims the run is
+   * over while it is visibly still working, which is worse than a slow stop.
+   */
+  stopping: boolean;
+  /**
+   * The run ENDED because the user ended it.
+   *
+   * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
+   * one. A stopped run proposes nothing NEW at the moment it ends, which is
+   * exactly the shape the settle path reads as `EMPTY` — so without this flag the
+   * honest outcome of a deliberate act would surface as a failure the user has to
+   * dismiss. `errorCode` stays null and `review` survives: what was proposed
+   * before the stop is worth exactly what it was worth a second earlier.
+   */
+  stopped: boolean;
 }
 
 const INITIAL: PlanChangeConversationState = {
@@ -167,6 +191,8 @@ const INITIAL: PlanChangeConversationState = {
   approved: null,
   errorCode: null,
   outOfCredits: false,
+  stopping: false,
+  stopped: false,
 };
 
 const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits']);
@@ -255,6 +281,17 @@ export function usePlanChangeConversation({
    *  re-runs THAT turn (no second user turn — ADR §3), and the correction
    *  affordance flips it. Null whenever the last run was a plan-change one. */
   const lastAskTurnRef = useRef<string | null>(null);
+  /**
+   * A stop is IN FLIGHT — the re-entry guard for {@link stop} (MOTIR-4068).
+   *
+   * ⚠️ A REF, NOT `state.stopping`, and the difference is the whole guard.
+   * `stateRef` is written in an EFFECT (see its own comment below), so two clicks
+   * in the SAME tick — which is exactly what a double-click is — both read the
+   * pre-click value and both raise. This is set synchronously, inside the call,
+   * before anything awaits, which is the shape `abortRef` already uses to keep a
+   * second Enter from firing a second turn.
+   */
+  const stoppingRef = useRef(false);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -409,7 +446,14 @@ export function usePlanChangeConversation({
           review: pending,
           progress: null,
           errorCode: null,
+          // THE PLAN SURVIVES A STOP. A run stopped after it had appended a level
+          // settles here, with `pending` holding exactly what it proposed before
+          // the stop — so the review block is live and Approve / Discard are both
+          // reachable from the stopped state. That is the card's whole point: if
+          // stopping threw the work away, nobody would stop a run.
+          ...(s.stopping ? { stopping: false, stopped: true } : {}),
         }));
+        stoppingRef.current = false;
       } else {
         // Nothing came back. The thread stays; the previous proposal (if any) too.
         //
@@ -421,8 +465,19 @@ export function usePlanChangeConversation({
           ...s,
           phase: s.review ? 'review' : 'idle',
           progress: null,
-          errorCode: asked ? null : 'EMPTY',
+          // ⚠️ A STOPPED RUN IS THE THIRD REASON NOTHING CAME BACK, and without
+          // this arm it would surface as `EMPTY` — a failure banner on the one
+          // outcome the user chose deliberately (MOTIR-4068). The three are:
+          // the planner ASKED and is waiting (`asked`); the user STOPPED it
+          // (`s.stopping`); or the run genuinely proposed nothing, which is the
+          // only one that is an error.
+          errorCode: asked || s.stopping ? null : 'EMPTY',
+          // The interval closes HERE and only here: the stream has ended, so the
+          // walk reached its boundary and read the flag. Until this moment the
+          // bar says "stopping", which is the honest thing to say.
+          ...(s.stopping ? { stopping: false, stopped: true } : {}),
         }));
+        stoppingRef.current = false;
       }
     },
     [],
@@ -480,7 +535,14 @@ export function usePlanChangeConversation({
           progress: { kind: 'submitted' },
           errorCode: null,
           outOfCredits: false,
+          // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
+          // flags are per-RUN: leaving them set would carry a previous run's
+          // ending onto the one just started, which is the mirror of the bug
+          // this state exists to prevent.
+          stopping: false,
+          stopped: false,
         }));
+        stoppingRef.current = false;
 
         await finishPlanRun(jobId, planId, anchor, controller);
       } catch (err) {
@@ -556,7 +618,10 @@ export function usePlanChangeConversation({
             progress: { kind: 'submitted' },
             errorCode: null,
             outOfCredits: false,
+            stopping: false,
+            stopped: false,
           }));
+          stoppingRef.current = false;
           await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
           return;
         }
@@ -577,7 +642,14 @@ export function usePlanChangeConversation({
           progress: { kind: 'reading' },
           errorCode: null,
           outOfCredits: false,
+          // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
+          // flags are per-RUN: leaving them set would carry a previous run's
+          // ending onto the one just started, which is the mirror of the bug
+          // this state exists to prevent.
+          stopping: false,
+          stopped: false,
         }));
+        stoppingRef.current = false;
 
         let failed = false;
         await streamAskJob(
@@ -679,7 +751,14 @@ export function usePlanChangeConversation({
           progress: { kind: 'submitted' },
           errorCode: null,
           outOfCredits: false,
+          // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
+          // flags are per-RUN: leaving them set would carry a previous run's
+          // ending onto the one just started, which is the mirror of the bug
+          // this state exists to prevent.
+          stopping: false,
+          stopped: false,
         }));
+        stoppingRef.current = false;
         await run(anchor, (signal) =>
           submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal, isAnswer),
         );
@@ -701,7 +780,13 @@ export function usePlanChangeConversation({
         progress: { kind: 'submitted' },
         errorCode: null,
         outOfCredits: false,
+        // Per-RUN, like every other start reducer (MOTIR-4068). The ONE DOOR is
+        // still a new run even though it may turn out to be an ask, so a
+        // previous run's ending must not be painted onto it.
+        stopping: false,
+        stopped: false,
       }));
+      stoppingRef.current = false;
       await runAsk((signal) => submitAskTurn(body, signal, isAnswer));
     },
     [run, runAsk],
@@ -854,5 +939,47 @@ export function usePlanChangeConversation({
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
   }, []);
 
-  return { state, send, retry, correctTurn, approve, discard, dismissError };
+  /**
+   * END the run (Story MOTIR-4054 · MOTIR-4068).
+   *
+   * ⚠️ IT DOES NOT END ANYTHING BY ITSELF, and everything about this callback
+   * follows from that. It raises a flag in the boundary mailbox; `runWalk` reads
+   * it at its NEXT phase boundary and opens no further phase. Between the two the
+   * run is still narrating, so this sets `stopping` and nothing else — the
+   * terminal `stopped` is written by the SETTLE, when the stream actually ends,
+   * which is the only moment the run really is over.
+   *
+   * The optimistic alternative — flipping straight to `stopped` — is the defect
+   * the card names outright: a rail that keeps narrating under a surface that
+   * says the run finished is worse than a slow stop.
+   *
+   * ⚠️ AND IT IS SAFE WHERE THE CLICK IS REDUNDANT. Stopping an already-finished
+   * or already-stopped run is a no-op the server answers cleanly, so a run that
+   * settles between render and click costs nothing. The one thing this guards is
+   * a SECOND raise: `stopping` gates re-entry, and the key is minted per click so
+   * a retry of the same click still delivers once.
+   */
+  const stop = useCallback(async () => {
+    const { jobId, phase } = stateRef.current;
+    // Nothing to stop, or a stop already in flight. Not an error and not
+    // reported as one: the control stays reachable in both states by design.
+    if (!jobId || phase !== 'streaming' || stoppingRef.current) return;
+
+    stoppingRef.current = true;
+    setState((s) => ({ ...s, stopping: true }));
+    try {
+      await stopPlanChangeRun(jobId, `stop:${jobId}`);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!mountedRef.current) return;
+      // The RAISE failed — the run is NOT stopping, and saying so is the honest
+      // answer. Leaving the bar in its stopping state would tell the user their
+      // click landed when it did not, and they would wait instead of clicking
+      // again. The run itself is untouched, so nothing else changes.
+      stoppingRef.current = false;
+      setState((s) => ({ ...s, stopping: false }));
+    }
+  }, []);
+
+  return { state, send, retry, correctTurn, approve, discard, dismissError, stop };
 }

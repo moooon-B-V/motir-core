@@ -121,6 +121,49 @@ export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChange
   return post<PlanChangeSubmitResponse>('/api/ai/plan-change/session/submit', undefined, signal);
 }
 
+// ─── The BOUNDARY MAILBOX — reaching a run that is already going ─────────────
+//
+// The submit door above STARTS a run. These reach one already in flight, through
+// the store MOTIR-4067 shipped, at the phase boundary `runWalk` already has.
+
+/** What one boundary check finds — motir-ai's own shape, mirrored back to the
+ *  client so the composer can say how much is still queued. */
+export interface MailboxDeliveryResponse {
+  turns: Array<{
+    id: string;
+    text: string;
+    receivedAt: string;
+    disposition: 'fold' | 'restart';
+    target: string | null;
+  }>;
+  stopped: boolean;
+}
+
+/**
+ * END the run (Story MOTIR-4054 · MOTIR-4068).
+ *
+ * ⚠️ `idempotencyKey` IS THE CALLER'S, and it is per-CLICK rather than per-render:
+ * a double-clicked Stop must raise ONE stop, and the server cannot recognise the
+ * second request as the same act unless the client says so. Reuse the key across
+ * a retry of the SAME click; mint a new one for a new one.
+ *
+ * ⚠️ IT RETURNS AS SOON AS THE FLAG IS STORED. The run ends when the walk reads
+ * it at its next phase boundary, which can be a whole authoring session away — so
+ * a resolved promise here means *the stop is recorded*, never *the run is over*,
+ * and the surface has to keep saying "stopping" until the stream actually ends.
+ */
+export async function stopPlanChangeRun(
+  jobId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<MailboxDeliveryResponse> {
+  return post<MailboxDeliveryResponse>(
+    '/api/ai/plan-change/session/mailbox/stop',
+    { jobId, idempotencyKey },
+    signal,
+  );
+}
+
 // ─── The ASK door — one entrance for every turn on the PROJECT thread ─────────
 //
 // `POST /api/ai/ask` is not an "ask-only" endpoint the client picks when it
