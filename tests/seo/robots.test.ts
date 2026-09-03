@@ -30,6 +30,25 @@ describe('robots policy', () => {
   });
 
   // ── the ALLOW half ───────────────────────────────────────────────────────
+  //
+  // ⚠️ `/legal` AND `/legal/privacy` WERE HERE AND ARE NOT ANY MORE (MOTIR-4103).
+  // They came off because this application stopped having an opinion about them
+  // at all: `content/legal/` and `app/(public)/legal/` are deleted, the seven
+  // documents are served from `motir.co`, and what is left on this host is a
+  // 404 before the cutover and `proxy.ts`'s 308 after it. A robots policy that
+  // still promised those two addresses were crawlable HERE was asserting
+  // something about a surface this repository no longer has.
+  //
+  // The four entries below that are in the SAME state — `/explore`, `/docs`,
+  // `/p/*` and `/` — are deliberately left, and the difference is worth being
+  // explicit about because it is not obvious. MOTIR-3951 deleted their pages
+  // from this application too, so none of them RENDERS here either; they stay
+  // because they are the paths `PUBLIC_REDIRECT_SEGMENTS` 308s onto `motir.co`,
+  // and a `Disallow` on this host would stop a crawler ever following that
+  // redirect to the page that does render. `/legal` is 308'd by that same set,
+  // so it would qualify on that reading — this card's own acceptance criterion
+  // is what takes it out, and the criterion is right for the narrower reason
+  // that nothing in this repository can now say what is at that address.
   it('allows the whole public reading surface', () => {
     const denied = disallowedPaths();
     for (const path of [
@@ -38,8 +57,6 @@ describe('robots policy', () => {
       '/explore/topic/design',
       '/docs',
       '/docs/api',
-      '/legal',
-      '/legal/privacy',
       '/p/ACME',
       '/p/ACME/roadmap',
     ]) {

@@ -507,7 +507,7 @@ describe('previewAccountErasure — the three ledger groups', () => {
     const preview = await accountErasureService.previewAccountErasure(user.id);
 
     // Article 17 erasure is not absolute, and the ledger names the exceptions in
-    // approved copy (`content/legal/privacy.md` §6) rather than deriving them.
+    // approved copy (`motir.co/legal/privacy` §6) rather than deriving them.
     expect(preview.kept).toEqual(['billing_records', 'backups']);
   });
 

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 
 // MOTIR-1150 — every surface the mark enters (design/brand/design-notes.md §7),
@@ -9,13 +9,29 @@ import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 // The three findings the 8.3.1 renders produced are the three things most likely
 // to be undone by a later edit, so each gets a case that names it:
 //
-//   §7c  ExploreTopBar's tile + letter M becomes the real lockup, and the link
-//        KEEPS its accessible name "Motir" — `tests/e2e/acceptance-api-docs.spec.ts`
-//        asserts that name, so changing it turns an unrelated E2E red.
 //   §7d  PublicTopBar's left tile is the PROJECT's initial and is left alone;
 //        the brand gets its own quiet slot on the right.
 //   §7b  The auth lockup lives in the LAYOUT, so all five screens inherit it —
 //        and is suppressed on the one screen whose fold budget is measured.
+//
+// ── ⚠️ §7c IS NOT ASSERTED HERE ANY MORE (MOTIR-4103) ──────────────────────
+// It used to be, over `ExploreTopBar` — the marketing chrome's bar, and once
+// the ONLY shipped brand lockup in this repository. That component is deleted:
+// it survived MOTIR-3951 solely because `app/(public)/legal/`'s layout still
+// imported it, and this card deletes that layout with the rest of the legal
+// route, leaving the bar with no caller at all.
+//
+// The case is REMOVED rather than re-pointed because its subject left the
+// repository rather than moved within it. The marketing bar is
+// `motir-marketing`'s `app/_components/SiteHeader.tsx`, which renders
+// `<BrandMark size={26} label="Motir" />` from `@motir/brand` and is covered by
+// that repository's own `tests/siteHeader.test.tsx`; the MARK itself is
+// asserted against `brand.css` in `packages/brand/test/`
+// (`docs/decisions/brand-asset-distribution.md`). Nothing this case guarded is
+// left unguarded in the place that now ships it.
+//
+// §7b and §7d below are untouched: `AuthLayout` and `PublicTopBar` are both
+// still this application's.
 //
 // The server translator is mocked to echo keys, the pattern
 // `public-top-bar.test.tsx` already uses for these async server components.
@@ -35,32 +51,10 @@ vi.mock('@/lib/auth/client', () => ({
 }));
 
 import AuthLayout from '@/app/(auth)/layout';
-import { ExploreTopBar } from '@/app/(public)/legal/_components/ExploreTopBar';
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-});
-
-describe('ExploreTopBar — the tile + letter M becomes the mark (§7c)', () => {
-  it('renders the wave band and no letter-M stand-in', async () => {
-    const { container } = render(await ExploreTopBar());
-    expect(container.querySelector('path')!.getAttribute('d')).toBe(WAVE_BAND_PATH);
-    // The old brand tile was a 7x7 --el-accent square bearing a literal "M".
-    // It was a placeholder for a mark that did not exist; nothing should now
-    // render a bare "M" in this bar.
-    expect(screen.queryByText('M')).toBeNull();
-  });
-
-  it('keeps the home link named by its visible wordmark, with no aria-label (§8)', async () => {
-    const { container } = render(await ExploreTopBar());
-    const home = container.querySelector('a[href="/"]')!;
-    expect(home.textContent).toBe('brand');
-    // "Never both": the glyph is decorative here because the wordmark is beside
-    // it, so a label on the link would announce the brand twice.
-    expect(home.getAttribute('aria-label')).toBeNull();
-    expect(home.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
-  });
 });
 
 describe('AuthLayout — one lockup, five screens, one measured exception (§7b)', () => {

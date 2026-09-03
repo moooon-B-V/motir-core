@@ -366,7 +366,7 @@ describe('DELETED — what is theirs alone', () => {
   // ── The personal-data export (Bug MOTIR-3732) ──────────────────────────────
   // The defect these four pin: a reader who exported and then deleted kept a
   // downloadable archive of EVERYTHING the account held for the archive's full
-  // seven-day window, under a published promise (`content/legal/privacy.md` §6)
+  // seven-day window, under a published promise (`motir.co/legal/privacy` §6)
   // that the data was gone. Neither of the two mechanisms that look like they
   // would catch it does: the `ON DELETE CASCADE` hangs off a `user` row this
   // sweep deliberately never deletes, and the expiry sweep selects `ready` rows

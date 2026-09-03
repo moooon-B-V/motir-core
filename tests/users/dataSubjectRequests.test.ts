@@ -54,20 +54,35 @@ function barrier(parties: number): () => Promise<void> {
 }
 
 describe('the erasure window is the published promise', () => {
-  it('equals the number `content/legal/privacy.md` §6 states to users', () => {
-    // §6 ("How long we keep it") is a PROMISE, not documentation: it tells every
-    // user we "erase or anonymise within 30 days". This assertion is what stops
-    // the copy and the behaviour drifting apart in either direction — an edit to
-    // the constant with no edit to the policy fails here, and so does the
-    // reverse.
-    const privacy = readFileSync(path.join(process.cwd(), 'content/legal/privacy.md'), 'utf8');
-    const match = privacy.match(/we erase or anonymise within \*\*(\d+) days\*\*/);
-    expect(
-      match,
-      'privacy.md §6 no longer states the erasure window in the expected words — ' +
-        'update this test AND check ACCOUNT_ERASURE_WINDOW_DAYS still matches the new copy',
-    ).not.toBeNull();
-    expect(Number(match![1])).toBe(ACCOUNT_ERASURE_WINDOW_DAYS);
+  // ⚠️ THIS ASSERTION USED TO READ THE POLICY OFF DISK, AND IT CANNOT ANY MORE
+  // (MOTIR-4103). It opened `content/legal/privacy.md`, pulled the retention
+  // window out of §6 with a regex, and compared it with the constant below —
+  // which failed in BOTH directions, an edit to the constant and an edit to the
+  // copy alike. That is the strongest form this guard can take and it is not
+  // available here now: the documents are moooon B.V.'s contract text and left
+  // this GPL-3.0 repository with MOTIR-3909, so the file the regex read is in
+  // `motir-marketing` and no test in this repository can open it.
+  //
+  // ⚠️ SO ONE HALF OF THE COUPLING IS UNGUARDED, AND IT IS TRACKED RATHER THAN
+  // ACCEPTED — bug MOTIR-4233, which owes `motir-marketing` the guard that reads
+  // §6 and this file the cross-reference to it. Until that lands, an edit to the
+  // POLICY passes here silently. Do not read the green below as the old guard.
+  //
+  // What survives is the half this repository can still assert: the constant is
+  // pinned to the number the Privacy Policy publishes, quoted, so an edit to
+  // `ACCOUNT_ERASURE_WINDOW_DAYS` alone still goes red and arrives here with the
+  // published sentence in front of it.
+  it('equals the number the published Privacy Policy §6 states to users', () => {
+    // https://motir.co/legal/privacy §6 ("How long we keep it"), verbatim:
+    //
+    //   "After you delete it, we erase or anonymise within **30 days**, except
+    //    where something below applies"
+    //
+    // §6 is a PROMISE, not documentation. If this line is failing, do not simply
+    // update the literal: read the published §6 first, because the two are only
+    // allowed to differ if the policy changed and somebody meant it.
+    const PUBLISHED_ERASURE_WINDOW_DAYS = 30;
+    expect(ACCOUNT_ERASURE_WINDOW_DAYS).toBe(PUBLISHED_ERASURE_WINDOW_DAYS);
   });
 
   it('derives the due date from the constant, not from a literal', () => {

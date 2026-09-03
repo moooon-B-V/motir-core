@@ -52,8 +52,8 @@ export const legalAcceptanceService = {
    * nothing. Returns the number of rows genuinely created.
    */
   async recordAcceptance(userId: string): Promise<number> {
-    // ⚠️ NO EMPTY-SET GUARD HERE, DELIBERATELY. A deployment whose
-    // `content/legal/` holds none of the three documents is not a case this
+    // ⚠️ NO EMPTY-SET GUARD HERE, DELIBERATELY. A deployment whose configured
+    // manifest holds none of the three documents is not a case this
     // method has to recognise: `createMany` already returns 0 for an empty
     // batch without touching the database, and `outstandingReconsent` already
     // answers `[]` for an empty document list. A second guard at this tier would
@@ -61,7 +61,7 @@ export const legalAcceptanceService = {
     // only thing it could buy is skipping a transaction that does nothing.
     const documents = reconsentDocuments();
 
-    // ONE timestamp for the whole act. `terms.md` §15 makes the three documents
+    // ONE timestamp for the whole act. `motir.co/legal/terms` §15 makes the three documents
     // a single agreement and the interstitial offers a single button, so three
     // rows a few milliseconds apart would misrepresent one decision as three.
     const acceptedAt = new Date();

@@ -428,7 +428,7 @@ export interface JobEventDataMap {
   'system.automation-retention-sweep': SystemScheduledData;
   /** The ACCOUNT-ERASURE sweep (Story 8.4 · MOTIR-3702) — erases and anonymises
    *  the accounts whose 30-day grace period has run out, which is what makes
-   *  `content/legal/privacy.md` §6's *"we erase or anonymise within 30 days"*
+   *  `motir.co/legal/privacy` §6's *"we erase or anonymise within 30 days"*
    *  true. Cron triggered, so it carries no tenant: the due set spans users and
    *  tenants and the ledger row is untenanted, like every `system.*` sweep. */
   'system.account-erasure-sweep': SystemScheduledData;
