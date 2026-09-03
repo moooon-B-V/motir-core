@@ -394,6 +394,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
                       workspaceTierRevealed={workspaceTierRevealed}
+                      publicProjectsAvailable={publicProjectsAvailable}
                       legalIndexUrl={legalIndexUrl}
                       docsIndexUrl={docsIndexUrl}
                     />
@@ -481,6 +482,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
                     workspaceTierRevealed={workspaceTierRevealed}
+                    publicProjectsAvailable={publicProjectsAvailable}
                     legalIndexUrl={legalIndexUrl}
                     docsIndexUrl={docsIndexUrl}
                   />
@@ -497,6 +499,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   hasProject={Boolean(activeProject)}
                   settingsPermissions={settingsPermissions}
                   aiPlanningConfigured={aiPlanningConfigured}
+                  publicProjectsAvailable={publicProjectsAvailable}
                 />
 
                 {/* The floating "M" entrance (MOTIR-1299) — the second of the two
