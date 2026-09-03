@@ -510,10 +510,10 @@ describe('migrateOnboardingService — generate step (code-aware precondition ·
       migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
     ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
     const generated = await migrateOnboardingService.getById(run.id, fx.ctx);
-    expect(generated.generateJobId).toBe('job-generate_tree');
+    expect(generated.generateJobId).toBe('job-plan');
     expect(generated.step).toBe('generate'); // exit condition unmet → not advanced yet
 
-    await setPlanStatus('job-generate_tree', 'planned');
+    await setPlanStatus('job-plan', 'planned');
     const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
     expect(dto.step).toBe('review');
   });
@@ -550,7 +550,7 @@ describe('migrateOnboardingService — generate step (code-aware precondition ·
 
     // The generation was submitted with the reconcile prompt.
     expect(mocks.submitJob).toHaveBeenCalledWith(
-      'generate_tree',
+      'plan',
       expect.objectContaining({
         projectId: fx.projectId,
       }),
@@ -580,9 +580,9 @@ describe('migrateOnboardingService — generate + review (plan status)', () => {
       migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
     ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
     const generated = await migrateOnboardingService.getById(run.id, fx.ctx);
-    expect(generated.generateJobId).toBe('job-generate_tree');
+    expect(generated.generateJobId).toBe('job-plan');
 
-    await setPlanStatus('job-generate_tree', 'planned');
+    await setPlanStatus('job-plan', 'planned');
     let dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
     expect(dto.step).toBe('review');
 
@@ -590,7 +590,7 @@ describe('migrateOnboardingService — generate + review (plan status)', () => {
     await expect(migrateOnboardingService.advanceFromReview(run.id, fx.ctx)).rejects.toBeInstanceOf(
       MigrateOnboardingExitConditionError,
     );
-    await setPlanStatus('job-generate_tree', 'approved');
+    await setPlanStatus('job-plan', 'approved');
     dto = await migrateOnboardingService.advanceFromReview(run.id, fx.ctx);
     expect(dto.step).toBe('done');
     expect(dto.status).toBe('completed');
@@ -620,7 +620,7 @@ describe('migrateOnboardingService — generate + review (plan status)', () => {
       migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
     ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
 
-    await setPlanStatus('job-generate_tree', 'declined');
+    await setPlanStatus('job-plan', 'declined');
     const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
     expect(dto.step).toBe('review');
   });
@@ -782,11 +782,9 @@ describe('migrateOnboardingService — advanceNext from intermediate steps', () 
     await expect(migrateOnboardingService.advanceNext(run.id, fx.ctx)).rejects.toBeInstanceOf(
       MigrateOnboardingExitConditionError,
     );
-    expect((await migrateOnboardingService.getById(run.id, fx.ctx)).generateJobId).toBe(
-      'job-generate_tree',
-    );
+    expect((await migrateOnboardingService.getById(run.id, fx.ctx)).generateJobId).toBe('job-plan');
 
-    await setPlanStatus('job-generate_tree', 'planned');
+    await setPlanStatus('job-plan', 'planned');
     const dto = await migrateOnboardingService.advanceNext(run.id, fx.ctx);
     expect(dto.step).toBe('review');
   });
@@ -803,11 +801,11 @@ describe('migrateOnboardingService — mid-flow resumability', () => {
       codeGraphReady: true,
       conventionApprovedAt: new Date(),
       discoveryJobId: 'job-discovery',
-      generateJobId: 'job-generate_tree',
+      generateJobId: 'job-plan',
     });
 
     // Job was already kicked (a prior run submitted it) and the Plan was created.
-    await seedPlan(fx, 'job-generate_tree', 'planned');
+    await seedPlan(fx, 'job-plan', 'planned');
     const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
     expect(dto.step).toBe('review');
     expect(mocks.submitJob).not.toHaveBeenCalled(); // idempotent — not re-kicked
