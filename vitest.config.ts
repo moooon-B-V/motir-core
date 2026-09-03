@@ -3379,6 +3379,7 @@ export default defineConfig({
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch
         // first, with `tests/workflows/`, `tests/github/ciGreenPromotion`,
+        // `tests/github/ciExpectedCheckSet`,
         // `tests/github/changeRequestSessionCloseOut`,
         // `tests/components/status-pill` and
         // `tests/integration/implemented-lifecycle`:
@@ -3389,12 +3390,25 @@ export default defineConfig({
         //   lib/workflows/statusColor.ts            100 · 100 · 100 · 100
         //   components/issues/StatusPill.tsx        100 · 100 · 100 · 100
         //
-        // `ciPromotion`'s one uncovered branch is the rethrow of an error that is
-        // NOT one of the three refusals a per-card skip tolerates — reachable
-        // only by injecting a fault into the shipped service, which would assert
-        // the mock rather than the code. Pinned at the 90 floor rather than at
-        // the measured number, so a later refactor has room without anyone
-        // loosening a gate to make a build pass.
+        // ⚠️ RE-MEASURED (MOTIR-4199): `ciPromotion.ts` is now
+        // **97.7 stmts · 93.1 branch · 100 fn · 100 lines**, with
+        // `tests/github/ciExpectedCheckSet` added to the list above. The
+        // sentence that stood here said it had **one** uncovered branch; it has
+        // two, and the count is stated rather than left to be re-derived:
+        //
+        //   * the rethrow of an error that is NOT one of the refusals a per-card
+        //     skip tolerates — the original, unchanged, reachable only by
+        //     injecting a fault into the shipped service, which would assert the
+        //     mock rather than the code;
+        //   * `if (!subject) continue` in the check-set reconcile — a pull
+        //     request row that vanishes between being listed and being read,
+        //     inside ONE transaction. Kept because the read is nullable and the
+        //     compiler says so; not reachable from a test that does not fabricate
+        //     the race.
+        //
+        // Pinned at the 90 floor rather than at the measured number, so a later
+        // refactor has room without anyone loosening a gate to make a build pass
+        // — which is what that headroom just paid for.
         'lib/services/ciPromotion.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/changeRequestWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workflows/defaultWorkflow.ts': { branches: 90, functions: 90, lines: 90 },

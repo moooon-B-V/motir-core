@@ -1,4 +1,6 @@
 import { mintInstallationToken } from './appAuth';
+import { mapGithubCiConclusion } from '@/lib/git/providers/github';
+import type { CiConclusion } from '@/lib/git/types';
 
 // Writing a CHECK RUN — the leaf primitive Motir did not have (MOTIR-3675).
 //
@@ -262,4 +264,134 @@ export async function readPullRequestHeadSha(
   const head = body?.['head'];
   const sha = typeof head === 'object' && head !== null ? (head as GithubJson)['sha'] : null;
   return typeof sha === 'string' && sha.length > 0 ? sha : null;
+}
+
+// ── READING THE COMMIT'S WHOLE CHECK SET (MOTIR-4199) ───────────────────────
+//
+// Everything above WRITES a check; this reads them, and it exists because every
+// verdict Motir forms about a commit was a fold over *the rows we had recorded*.
+// Nothing in that path knew how many checks a commit HAS, so "no pending row"
+// was read as "nothing pending" — and GitHub delivers check runs one webhook at
+// a time, so a recorded set that is a PREFIX of the real one is the ordinary
+// state of every pull request for the first minutes of its life. A commit with
+// five jobs whose first three successes landed before the other two were
+// recorded produced `✅ all 3 checks succeeded — verified` and promoted the card
+// to In Review with the suite still running.
+//
+// The provider is the only party that knows the answer, so this asks it. What it
+// establishes is a FACT ("these are the check runs GitHub holds for this
+// commit"), not an inference from an absence.
+//
+// ⚠️ WHAT IT DOES NOT ANSWER, stated because the caller must not read more into
+// it than it says: it is a snapshot of the runs GitHub has CREATED. A workflow
+// that has not started at all — a `workflow_dispatch` nobody fired, a job queued
+// after the call — is in no snapshot, and no read of the provider can be. It
+// narrows the window from "however many webhooks have been processed" to
+// "however many runs the host has created", which is the whole of the
+// improvement and the whole of the limit.
+//
+// `checks: read` covers it — the same permission `findExistingRun` above uses —
+// so it needs no new consent from any installation.
+
+/** One check run as the host reports it, in the normalized vocabulary the
+ *  webhook parser produces, so a row written from here is indistinguishable from
+ *  the row that delivery would have written. */
+export interface ReportedCheckRun {
+  checkName: string;
+  /** The run it belongs to (`check_suite.id`), as `github_check_run` stores it —
+   *  `''` is never produced here, since every REST check run names its suite. */
+  checkSuiteId: string;
+  conclusion: CiConclusion;
+}
+
+/** At most this many check runs are read for one commit. motir-core's own
+ *  pull requests carry ~34; the cap exists so a pathological commit cannot turn
+ *  one verdict into an unbounded number of round trips. Exceeding it returns
+ *  `null` — "the set could not be established" — rather than a truncated set,
+ *  because a truncated set is exactly the defect this module exists to remove. */
+const MAX_CHECK_RUNS = 500;
+const PER_PAGE = 100;
+
+/**
+ * Every check run GitHub holds for one commit, or `null` when the set could not
+ * be established (the App is unconfigured, the token cannot be minted, the host
+ * is unreachable or refuses, the payload does not parse, or the commit carries
+ * more checks than the cap).
+ *
+ * ⚠️ `null` IS NOT "no checks" — it is "no answer". A commit with no check runs
+ * at all returns an EMPTY ARRAY. Callers must read the two differently: an empty
+ * array says the host has nothing recorded for this commit, a `null` says ask
+ * again later and meanwhile fall back to whatever was already known.
+ */
+export async function readCommitCheckRuns(
+  installationId: string,
+  owner: string,
+  name: string,
+  headSha: string,
+): Promise<ReportedCheckRun[] | null> {
+  let token: string;
+  try {
+    ({ token } = await mintInstallationToken(installationId));
+  } catch {
+    return null;
+  }
+
+  const base = repoUrl(owner, name);
+  if (base === null || !COMMIT_SHA.test(headSha)) return null;
+
+  const collected: ReportedCheckRun[] = [];
+  // `filter=latest` is GitHub's own answer to "which run of a re-run counts",
+  // and it is deliberately NOT used: which recorded run still gets a vote is
+  // `liveCheckRows`' single decision (MOTIR-3209), and a host-side filter here
+  // would be a second one. `filter=all` gives the rows; the existing rule judges
+  // them.
+  for (let page = 1; page * PER_PAGE <= MAX_CHECK_RUNS + PER_PAGE; page++) {
+    let res: Response;
+    try {
+      res = await fetch(
+        `${base}/commits/${headSha}/check-runs?filter=all&per_page=${PER_PAGE}&page=${page}`,
+        { headers: headers(token) },
+      );
+    } catch {
+      return null;
+    }
+    if (!res.ok) return null;
+
+    let body: GithubJson | null;
+    try {
+      body = (await res.json()) as GithubJson;
+    } catch {
+      return null;
+    }
+
+    const totalCount = body?.['total_count'];
+    if (typeof totalCount !== 'number') return null;
+    if (totalCount > MAX_CHECK_RUNS) return null;
+
+    const runs = Array.isArray(body?.['check_runs']) ? (body['check_runs'] as unknown[]) : [];
+    for (const raw of runs) {
+      const run = raw as GithubJson | null;
+      if (!run || typeof run !== 'object') continue;
+      const checkName = run['name'];
+      if (typeof checkName !== 'string' || checkName.length === 0) continue;
+      const suite = run['check_suite'];
+      const suiteId =
+        typeof suite === 'object' && suite !== null ? (suite as GithubJson)['id'] : undefined;
+      const status = typeof run['status'] === 'string' ? run['status'] : null;
+      const conclusion = typeof run['conclusion'] === 'string' ? run['conclusion'] : null;
+      collected.push({
+        checkName,
+        checkSuiteId:
+          typeof suiteId === 'number' || typeof suiteId === 'string' ? String(suiteId) : '',
+        // The SAME rule the `check_run` webhook parser applies: anything not
+        // `completed` is `pending`, whatever conclusion the payload carries.
+        conclusion:
+          status !== 'completed' ? 'pending' : mapGithubCiConclusion(conclusion ?? 'neutral'),
+      });
+    }
+
+    if (collected.length >= totalCount || runs.length === 0) break;
+  }
+
+  return collected;
 }
