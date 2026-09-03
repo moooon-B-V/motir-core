@@ -106,6 +106,22 @@ export interface ProjectMembersSettingsProps {
    * this half is what stops a person meeting that refusal.
    */
   publicAccessAvailable: boolean;
+  /**
+   * The project's absolute address ON THE PUBLIC SITE — `https://motir.co/p/<key>`
+   * once `MOTIR_PUBLIC_SITE_URL` is configured (MOTIR-4242).
+   *
+   * Resolved on the server page by `publicProjectUrl()`, the ONE module that
+   * owns *where does a reader find a public project?* (`lib/publicProjects/urls.ts`,
+   * MOTIR-3881; `tests/hosting/appUrlSeam.test.ts` pins it as that variable's
+   * only reader). Threaded as a prop for the same reason `publicAccessAvailable`
+   * is: `MOTIR_PUBLIC_SITE_URL` is a server variable and this is a client
+   * island.
+   *
+   * It replaces `window.location.origin`, which is the APPLICATION's origin —
+   * `app.motir.co`, where `app/(public)/p/` no longer exists (MOTIR-3951), so
+   * every address this room gave out 404'd.
+   */
+  publicPageUrl: string;
 }
 
 export function ProjectMembersSettings({
@@ -119,6 +135,7 @@ export function ProjectMembersSettings({
   currentUserId,
   canManage,
   publicAccessAvailable,
+  publicPageUrl,
 }: ProjectMembersSettingsProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
@@ -520,11 +537,11 @@ export function ProjectMembersSettings({
           {/* The status badge + manage / stop row (Story 6.17.4, design Panel
               12) — admins get Stop; non-admins see the badge + link read-only. */}
           <BuildInPublicManageRow
-            projectKey={projectKey}
+            publicPageUrl={publicPageUrl}
             canManage={canManage}
             onStop={() => setStopConfirmOpen(true)}
           />
-          <PublicShareSection projectKey={projectKey} canManage={canManage} />
+          <PublicShareSection publicPageUrl={publicPageUrl} canManage={canManage} />
         </>
       ) : null}
 
@@ -681,6 +698,15 @@ function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label:
   );
 }
 
+// `https://motir.co/p/MOTIR` → `motir.co/p/MOTIR`. The mono path beside the
+// status badge shows the HOST, so a reader can see which site the link goes to,
+// without the scheme's noise (MOTIR-4242, design Panel A frame 3). Purely
+// presentational: it never re-resolves the origin, it trims the one the server
+// already resolved.
+function stripScheme(url: string): string {
+  return url.replace(/^https?:\/\//, '');
+}
+
 // The "Building in public" status + manage row (Story 6.17 · Subtask 6.17.4,
 // design/public-projects Panel 12) — rendered in the access area while the
 // project is public. Pairs the status badge with the live public URL, a "View
@@ -688,25 +714,31 @@ function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label:
 // confirm. Non-admins see the badge + link read-only (no Stop) — the gate stays
 // legible rather than the control vanishing, matching the Members card.
 function BuildInPublicManageRow({
-  projectKey,
+  publicPageUrl,
   canManage,
   onStop,
 }: {
-  projectKey: string;
+  publicPageUrl: string;
   canManage: boolean;
   onStop: () => void;
 }) {
   const t = useTranslations('settings');
-  const publicPath = `/p/${projectKey}`;
+  // MOTIR-4242 — the link and the mono path beside the badge are the PUBLIC
+  // site's address, not this application's. The displayed form drops the scheme
+  // (`motir.co/p/<key>`) and the link keeps it; both come from the one resolved
+  // value, so they can never disagree the way three hand-spelled sites did.
+  const publicPageDisplay = stripScheme(publicPageUrl);
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <BuildingInPublicBadge label={t('buildInPublic.statusBadge')} className="self-start" />
-          <span className="text-(--el-text-muted) truncate font-mono text-xs">{publicPath}</span>
+          <span className="text-(--el-text-muted) truncate font-mono text-xs">
+            {publicPageDisplay}
+          </span>
         </div>
         <a
-          href={publicPath}
+          href={publicPageUrl}
           target="_blank"
           rel="noreferrer"
           className={buttonVariants({ variant: 'secondary', size: 'md' })}
@@ -730,14 +762,25 @@ function BuildInPublicManageRow({
 }
 
 // The public-only follow-on to the Access card (Story 6.12 · Subtask 6.12.8 +
-// 6.16.6, design/public-projects Panel 6) — rendered ONLY while the project is
-// public:
-//   • the shareable public link (a stable, crawlable `/p/<key>` URL + Copy);
-//   • the "Hero & overview" row → an "Edit on the public page →" link that opens
-//     the public Overview with the on-page in-place editor (Subtask 6.16.5).
+// 6.16.6, design/public-projects Panel 6; retargeted by MOTIR-4242 against
+// design/projects/public-page.mock.html Panel A frames 2 and 3) — rendered ONLY
+// while the project is public:
+//   • the shareable public link — the PUBLIC SITE's absolute URL + Copy;
+//   • the "Hero & overview" row → an "Edit the public page" link that opens
+//     Settings > Public page, the room MOTIR-4171 mounts.
+//
+// ⚠️ MOTIR-4242 — BOTH targets used to name this application. The share value
+// was `window.location.origin` + the site-relative path, i.e.
+// `https://app.motir.co/p/<key>`, and the edit link was that path plus
+// `?edit=1`. `app/(public)/p/` was deleted by MOTIR-3951 and the editing surface
+// moved into the application (`docs/decisions/public-surface-hosts.md`
+// AMENDMENT 4 row 7), so the first 404'd on the wrong host and the second 404'd
+// on this one. The absolute URL now arrives as a prop, resolved on the server by
+// the single owner of the public origin.
+//
 // The old in-settings Overview split-editor (`EditOverview`, Panel 7) is REMOVED
-// (6.16.6, explicit user request) — there is one editing surface, on the public
-// page itself, where the page IS the preview.
+// (6.16.6, explicit user request) — there is one editing surface, and since
+// MOTIR-4171 it is the Public page room rather than the public page itself.
 // Deviation from the Panel-6 mock, noted in the PR: the mock drew Copy/Rotate/
 // Disable, but the locked model (Yue, 2026-06-14) is a FULLY PUBLIC, crawlable,
 // SEO/GEO-indexed page, and the 6.12.4 public route is the stable project key
@@ -746,24 +789,27 @@ function BuildInPublicManageRow({
 // fold "stop sharing" into the access control above (set a non-public level) —
 // the GitHub / Canny model. "Rotate" is dropped (no stated use case; rung-1
 // "no complexity for nothing").
-function PublicShareSection({ projectKey, canManage }: { projectKey: string; canManage: boolean }) {
+function PublicShareSection({
+  publicPageUrl,
+  canManage,
+}: {
+  publicPageUrl: string;
+  canManage: boolean;
+}) {
   const t = useTranslations('settings');
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
-  // The path is stable + server-relative; the absolute origin is only resolvable
-  // client-side, so build the display/copy value after mount to avoid a
-  // hydration mismatch. The path itself (`/p/<key>`) renders immediately.
-  const publicPath = `/p/${projectKey}`;
-  // `?edit=1` lands the admin on the public Overview already in edit mode — the
-  // single editing surface (Subtask 6.16.5's on-page editor).
-  const editPath = `${publicPath}?edit=1`;
+  // The room is in THIS application, so its link is site-relative (MOTIR-4171
+  // mounts the route; MOTIR-4242 retargets the door). The `?edit=1` deep link
+  // into the retired on-page editor is gone with the page that hosted it.
+  const editPath = '/settings/project/public';
 
   async function copyLink() {
-    const href =
-      typeof window !== 'undefined' ? `${window.location.origin}${publicPath}` : publicPath;
     try {
-      await navigator.clipboard.writeText(href);
+      // What a person pastes into a tweet. The value is server-resolved, so it
+      // is the same string the field shows and needs no after-mount dance.
+      await navigator.clipboard.writeText(publicPageUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -787,7 +833,7 @@ function PublicShareSection({ projectKey, canManage }: { projectKey: string; can
         <div className="flex items-center gap-2">
           <span className="border-(--el-border) bg-(--el-surface) flex h-(--height-input) min-w-0 flex-1 items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x)">
             <Link2 className="text-(--el-text-muted) size-4 shrink-0" aria-hidden />
-            <span className="truncate font-mono text-xs text-(--el-text)">{publicPath}</span>
+            <span className="truncate font-mono text-xs text-(--el-text)">{publicPageUrl}</span>
           </span>
           <Button
             variant="secondary"
@@ -810,10 +856,10 @@ function PublicShareSection({ projectKey, canManage }: { projectKey: string; can
         </div>
       </Card>
 
-      {/* Hero & overview → the on-page editor (design Panel 6 `.ov-link-row`,
-          Subtask 6.16.6). Editing happens in place on the public page; this is
-          just the entry point. Admin-gated — a non-admin sees the copy without
-          the link. */}
+      {/* Hero & overview → the Public page room (MOTIR-4242, design
+          public-page.mock.html Panel A frame 2). Editing happens in Settings >
+          Public page; this is the door to it. Admin-gated — a non-admin sees the
+          copy without the link. */}
       <Card
         header={
           <div>

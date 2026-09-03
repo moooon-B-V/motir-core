@@ -32,6 +32,30 @@ describe('publicProjectUrl', () => {
     vi.stubEnv('MOTIR_BASE_URL', 'https://motir.co');
     expect(publicProjectUrl('a b')).toBe(`https://motir.co${publicProjectPath('a b')}`);
   });
+
+  // MOTIR-4242 — the two arms of `publicSiteOrigin()`, read off THIS module,
+  // because this is the accessor the settings room now depends on for the
+  // address it hands a customer. The seam suite asserts the same split from the
+  // consumer side (`tests/hosting/appUrlSeam.test.ts`); this is the unit half,
+  // and the two are worth having separately: a change to the fallback would be
+  // a change to the ordering guarantee, not a refactor.
+
+  it('the PUBLIC variable OVERRIDES the application origin when it is set', () => {
+    vi.stubEnv('MOTIR_BASE_URL', 'https://app.motir.co');
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', 'https://motir.co');
+    expect(publicProjectUrl('MOTIR')).toBe('https://motir.co/p/MOTIR');
+  });
+
+  it('UNSET falls back to the application origin — the ordering guarantee (MOTIR-3881)', () => {
+    // Deliberate, and load-bearing: until `motir.co` renders these pages the
+    // canonical, `og:url` and sitemap entries must keep naming the host that is
+    // actually serving them. So this is the state today, and the retargeted
+    // settings room follows the variable rather than hard-coding a host — the
+    // links become right at the cutover, with no second code change.
+    vi.stubEnv('MOTIR_BASE_URL', 'https://app.motir.co');
+    vi.stubEnv('MOTIR_PUBLIC_SITE_URL', undefined);
+    expect(publicProjectUrl('MOTIR')).toBe('https://app.motir.co/p/MOTIR');
+  });
 });
 
 // MOTIR-3885 — the story's gate found this function shipped with no test of its

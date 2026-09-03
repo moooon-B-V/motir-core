@@ -152,6 +152,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         staleReasons: [],
         revised: false,
         targetMissing: false,
+        proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
       },
     ],
     stale: false,

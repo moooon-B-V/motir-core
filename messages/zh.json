@@ -269,23 +269,10 @@
     "writtenByMotir": "由 Motir AI 撰写",
     "autoPlannedNobodyAsked": "自动规划 — 无人发起",
     "notYetCreated": "尚未创建",
-    "sectionDescription": "描述",
     "sectionExplanation": "为何重要",
-    "descriptionAria": "提议描述",
-    "explanationAria": "该提议为何重要",
     "noDescription": "暂无描述。",
     "noExplanation": "暂无说明。",
     "aiDrafted": "AI 起草",
-    "railType": "类型",
-    "railPriority": "优先级",
-    "railPoints": "点数",
-    "railEstimate": "预估",
-    "railRepository": "代码库",
-    "railExecutor": "执行者",
-    "railParent": "父项",
-    "executorHuman": "人工",
-    "executorAgent": "编码智能体",
-    "minutes": "{n} 分钟",
     "viewTriggerAria": "查看提议",
     "revisePlaceholder": "请 Motir 修改此计划…",
     "reviseNote": "Motir 会修改此计划。在你批准之前，不会有任何内容进入你的待办列表。",
@@ -301,7 +288,14 @@
     "searchLabel": "搜索本计划",
     "showChangesAll": "此层级的每一项都来自本计划",
     "locateChange": "定位到本计划的下一项",
-    "rowOpenAria": "打开 {name}"
+    "rowOpenAria": "打开 {name}",
+    "openTargetAsItStands": "查看工作项的当前状态",
+    "railChangedMark": "将变更",
+    "railChangeCount": "此计划将变更它可设置的 {m} 个字段中的 {n} 个。",
+    "railChangeNone": "此计划不变更这些字段，只变更描述与说明。",
+    "railAddAll": "此处的每个值都是批准后将创建的内容。",
+    "railRemoveArchives": "批准此计划将归档 {key}。",
+    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。"
   },
   "planEdits": {
     "submitting": "提交中…",
@@ -334,10 +328,6 @@
     "actionError": "出了点问题，请重试。",
     "immutableRejection": "一个或多个工作项处于终止状态，无法更改。这些项在审阅中已被锁定。",
     "decidedRejection": "该提案已被处理，未做任何更改。",
-    "expandAction": "展开",
-    "expandTooltip": "为此工作项生成子项",
-    "replanAction": "重新规划",
-    "replanTooltip": "重新规划此 epic/story — 已完成的工作保持不变",
     "creditsError": "你的 AI 积分已用尽",
     "emptyError": "没有返回建议 — 请尝试更具体的提示或目标",
     "failedError": "任务未完成。你的待办列表未受影响。"
@@ -591,7 +581,6 @@
       "estimate": "预估",
       "points": "故事点",
       "status": "状态",
-      "actions": "操作",
       "unassigned": "未分配"
     },
     "list": {
@@ -1598,6 +1587,7 @@
       },
       "details": "详情",
       "members": "成员与访问",
+      "publicPage": "公开页面",
       "roles": "角色与权限",
       "codeAccess": "代码访问",
       "workflow": "工作流",
@@ -2156,6 +2146,10 @@
       "errorLastAdmin": "这是唯一的项目管理员——请先指定另一名管理员。",
       "errorGeneric": "出了点问题，请重试。"
     },
+    "publicPage": {
+      "title": "公开页面",
+      "subtitle": "<strong>{projectName}</strong> 公开页面上的标语、标签和 README。"
+    },
     "codeAccess": {
       "title": "代码访问",
       "subtitle": "谁可以克隆并推送到 Motir 为 <strong>{projectName}</strong> 创建的仓库。",
@@ -2271,9 +2265,9 @@
       "copyError": "无法复制链接。",
       "linkNote": "任何人都可以无需登录打开此链接，页面也可被搜索引擎抓取。访客仅在提交、点赞或评论时才需要登录。若要停止分享，请将上方的访问级别设为“公开构建”以外的任意级别。",
       "heroOverviewHeading": "横幅与概览",
-      "heroOverviewSubheading": "直接在公开页面上编辑标语、标签和 README——你编辑的内容就是访客看到的内容。",
-      "editOnPublicPage": "在公开页面上编辑",
-      "heroOverviewNote": "在公开“概览”页打开页内编辑器。项目未公开时将隐藏。"
+      "heroOverviewSubheading": "访客在你的公开页面上看到的标语、标签和 README。",
+      "editOnPublicPage": "编辑公开页面",
+      "heroOverviewNote": "打开“设置 › 公开页面”。项目公开前也可以先写好。"
     },
     "jobs": {
       "title": "任务运行",
@@ -3313,6 +3307,7 @@
         "details": "项目详情，以及更改它们的操作——名称、标识、头像、归档——由项目管理员管理。如需修改，请联系管理员。",
         "repositories": "本项目代码所在的位置，以及由谁接管，由项目管理员管理。如需连接或迁移仓库，请联系管理员。",
         "members": "谁在本项目中、每个人能做什么，由项目管理员管理。如需添加成员或调整角色，请联系管理员。",
+        "public-page": "本项目公开页面上展示的内容——标语、标签和 README——由项目管理员撰写。如需调整，请联系管理员。",
         "roles": "本项目中每个角色能做什么，由项目管理员管理。如需调整角色，请联系管理员。",
         "code-access": "谁可以克隆和推送本项目的代码，由项目管理员管理。你仍可在 Git 设置中连接自己的 GitHub 账号。",
         "workflow": "状态及其之间的流转由项目管理员管理。如需调整工作流，请联系管理员。",

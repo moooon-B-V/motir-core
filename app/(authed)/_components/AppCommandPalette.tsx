@@ -84,6 +84,17 @@ export interface AppCommandPaletteProps {
    * value defaults CLOSED, so a missing prop never leaks a deep link.
    */
   settingsPermissions?: readonly PermissionKey[];
+  /**
+   * Whether public projects exist on this BUILD (`isCloud()`, MOTIR-3908) —
+   * resolved on the server in `app/(authed)/layout.tsx` and threaded here for
+   * the same reason `settingsPermissions` is: this is a client component.
+   *
+   * The registry's second axis (MOTIR-4243). The settings deep links are
+   * generated FROM the registry, so without it ⌘K would offer **Public page**
+   * on a self-hosted build and land the reader on a 404 — the rail's own
+   * failure, one surface over. Defaults CLOSED.
+   */
+  publicProjectsAvailable?: boolean;
 }
 
 export function AppCommandPalette({
@@ -94,6 +105,7 @@ export function AppCommandPalette({
   hasProject,
   settingsPermissions,
   aiPlanningConfigured = false,
+  publicProjectsAvailable = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -351,7 +363,9 @@ export function AppCommandPalette({
   // registry (Subtask 6.5.2), filtered by the actor's access. A new settings page
   // appears here automatically by adding a registry entry (no hand-kept list).
   if (hasProject) {
-    const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES);
+    const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES, {
+      publicProjectsAvailable,
+    });
     if (settingsEntries.length > 0) {
       groups.push({
         heading: ts('nav.eyebrow'),

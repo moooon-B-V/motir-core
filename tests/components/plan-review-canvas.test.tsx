@@ -195,6 +195,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     staleReasons: [],
     revised: false,
     targetMissing: false,
+    proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
     ...over,
   };
 }
@@ -346,6 +347,16 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek?key=MOTIR-7')),
       ).toBe(true),
     );
+
+    // ⚠️ AND NO PROPOSAL CHROME (MOTIR-4185 AC 3) — the arm the routing change
+    // could silently break. The canvas draws committed neighbours BESIDE
+    // proposals, and those neighbours are ordinary work items this plan says
+    // nothing about. Routing *everything on the plan canvas* through proposal
+    // mode would satisfy every criterion about proposals and quietly tell a
+    // reviewer that a work item is being changed when it is not — the same class
+    // of false statement as the defect being fixed, pointed the other way.
+    expect(screen.queryByTestId('proposal-peek')).toBeNull();
+    expect(screen.queryByTestId('quick-view-op')).toBeNull();
   });
 
   // ── The PROPOSED half of the same contract ────────────────────────────────
@@ -364,17 +375,27 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
 
     // The PROPOSAL peek, not the work-item one: an `add` has no work item, so
     // nothing may be asked of `/api/work-items/peek` on its behalf.
-    const peek = await screen.findByTestId('proposal-quick-view');
+    const peek = await screen.findByTestId('proposal-peek');
     expect(within(peek).getByText('A proposed subtask')).toBeTruthy();
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek'))).toBe(
       false,
     );
   });
 
-  it('peeks a DRIFTED modify by the live target it names, not as a proposal', async () => {
-    // A `modify` whose target is not at this level is pushed as its own node by
-    // the same branch as an `add` — it is viewable too, and it names a real work
-    // item, so View opens the SHIPPED work-item peek keyed by that identifier.
+  it('peeks a DRIFTED modify as a PROPOSAL, over the live target it names', async () => {
+    // ⚠️ REWRITTEN by MOTIR-4185, and the previous assertion is the defect.
+    //
+    // This read: *"it names a real work item, so View opens the SHIPPED
+    // work-item peek keyed by that identifier"* — which is true of the KEY and
+    // wrong about the SURFACE. The shipped work-item peek shows the target's
+    // CURRENT values with no sign a plan is about to change them, on the surface
+    // a person approves from. That is half of what story MOTIR-4181 exists to
+    // close (the other half was the list door opening a different component).
+    //
+    // The NEW contract keeps both halves of the old one and fixes the surface: a
+    // `modify` still names its target and the peek still FETCHES that target's
+    // payload by key — it is the base the proposal is overlaid on — but what
+    // renders is the shipped peek in PROPOSAL MODE.
     const fetchMock = stubRoadmap();
     mount([
       proposal({
@@ -384,6 +405,12 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         identifier: 'MOTIR-3083',
         title: 'A drifted modify',
         changes: [],
+        proposal: {
+          op: 'modify',
+          identifier: 'MOTIR-3083',
+          changedFields: [],
+          settableRailFields: [],
+        },
       }),
     ]);
     await screen.findByText('A drifted modify');
@@ -391,6 +418,8 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
     selectNode('pi_mod');
     fireEvent.click(within(el('pi_mod') as HTMLElement).getByTestId('view-button'));
 
+    // The TARGET is still fetched by key — unchanged, and it is what the
+    // proposal's own values are laid over.
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(([u]) =>
@@ -398,7 +427,13 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         ),
       ).toBe(true),
     );
-    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+    // …and the surface is the PROPOSAL's, which is what changed. This harness
+    // 404s `/api/work-items/peek` (see `stubRoadmap`), and a 404 on a `modify`'s
+    // target is the DOCUMENTED case — the live target is archived or
+    // hard-deleted, which the review model also reports as `targetMissing`. Part
+    // XIV §8 says that shows the peek's shipped NOT-FOUND panel rather than an
+    // empty proposal, so THAT is what a drifted modify lands on here.
+    expect(await screen.findByTestId('proposal-peek-missing')).toBeTruthy();
   });
 
   // ── MOTIR-3161 (bug MOTIR-3154) — the DOOR must open what the label claims ──
@@ -438,7 +473,7 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         ),
       ).toBe(true),
     );
-    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+    expect(screen.queryByTestId('proposal-peek')).toBeNull();
   });
 
   it('still peeks an UN-materialized add as a proposal — the other direction', async () => {
@@ -451,7 +486,7 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
     selectNode('pi_1');
     fireEvent.click(within(el('pi_1') as HTMLElement).getByTestId('view-button'));
 
-    const peek = await screen.findByTestId('proposal-quick-view');
+    const peek = await screen.findByTestId('proposal-peek');
     expect(within(peek).getByText('A refused proposal')).toBeTruthy();
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek'))).toBe(
       false,

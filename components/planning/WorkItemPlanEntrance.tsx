@@ -45,6 +45,28 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 // site. The state props are REQUIRED for exactly that reason: a new host cannot
 // mount the door without stating the item's plannability.
 
+// ── THE PER-SURFACE DOORS THIS ONE REPLACED, and why (the breadcrumb) ──────
+// This note lived in `PlanEditsLauncher.tsx` until MOTIR-4258 deleted that file;
+// it moved HERE because this is the surviving door, and so the place a person
+// asking "why is there only one?" actually arrives.
+//
+//   * The one-shot `AugmentPromptButton` — a toolbar `Button` → `Modal` with a
+//     single `Input` → `POST /api/ai/augment` — was RETIRED by MOTIR-1731.
+//     Changing a plan is a CONVERSATION, so the entrance is the universal
+//     Plan-with-AI workspace (the global `TopNav` pill / ⌘K / the floating orb),
+//     never a per-surface button with no way to refine. See
+//     `design/ai-chat/design-notes.md` ("the retired 'Augment from prompt'
+//     door", MOTIR-1727) panel 5.
+//   * The `/items` row ⋯ menu's `Expand` / `Re-plan` rows — which opened the
+//     IN-PLACE plan-edits dock rather than the workspace — went the same way in
+//     MOTIR-4258, when the row's ⋯ was removed. They were the last per-surface
+//     plan control, and the fact that they read THIS file's rule while opening a
+//     different flow is what MOTIR-2097 had already been filed about.
+//
+// In both cases the JOB PATH is untouched — only the door went. `/api/ai/augment`
+// is driven by the conversation; `/api/ai/expand` by `/ready`'s expansion nudge.
+// `/api/ai/replan` is the one left with no caller, and that is MOTIR-4261.
+
 export interface WorkItemPlanEntranceProps {
   /** The item's human identifier (e.g. `MOTIR-42`) — the workspace's anchor. */
   itemKey: string;

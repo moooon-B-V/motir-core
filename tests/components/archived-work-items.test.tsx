@@ -39,7 +39,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/items/archived',
 }));
 
-// Both keys are read from the provider (the WorkItemRowActions pattern), so every
+// Both keys are read from the provider (the shared-menu pattern), so every
 // render wraps one. `canArchive` defaults to TRUE — it is what a MEMBER holds,
 // and it is what the 2.9.3 page-state cases are about — while `canDelete`
 // defaults to false, so the actions column starts as Restore-only.

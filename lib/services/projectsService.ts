@@ -895,17 +895,40 @@ export const projectsService = {
   },
 
   /**
-   * Read the project's current public Overview/README Markdown body (Story
-   * 6.12 · Subtask 6.12.8) — the initial value for the "Edit overview"
-   * authoring view. A plain browse-scoped read (the settings surface decides
-   * editable-vs-read-only via `getManageCapabilities`); the WRITE
-   * (`setPublicOverview`) is admin-gated. `null` ⇒ never authored (the public
-   * tab falls back to its auto-intro).
+   * Read the project's public HERO — the three fields `motir.co/p/<key>` renders
+   * from what an admin wrote: the README body, the tagline and the tags. The
+   * initial values for the **Settings › Project › Public page** room
+   * (`design/projects/design-notes.md` § *Public page — the room in project
+   * settings*, MOTIR-4205 · MOTIR-4243).
+   *
+   * A plain browse-scoped read; the WRITE ({@link setPublicOverview}) is
+   * admin-gated. Each field is independently nullable — `publicOverviewMd` /
+   * `publicTagline` are `null` until authored (the public page falls back to its
+   * auto-intro for the first), and `publicTags` is `[]` rather than null, which
+   * is the column's own default.
+   *
+   * ⚠️ WIDENED FROM `getPublicOverview`, WHICH RETURNED THE BODY ALONE
+   * (MOTIR-4243). That method was the 6.12.8 read for the in-place editor on the
+   * app-hosted public page, and it lost its last caller when MOTIR-3951 deleted
+   * that page — a tested method with nothing calling it, which is exactly the
+   * shape the room's own door was found in. The room needs all three fields, so
+   * the read is widened rather than joined by a second one that would run the
+   * same query. (The `getPublicOverview` in `lib/publicProjects/viewerContext.ts`
+   * is an unrelated `cache()` wrapper over `publicProjectsService.getOverview` —
+   * a name collision, not this method.)
    */
-  async getPublicOverview(input: { key: string; ctx: WorkspaceContext }): Promise<string | null> {
+  async getPublicHero(input: { key: string; ctx: WorkspaceContext }): Promise<{
+    publicOverviewMd: string | null;
+    publicTagline: string | null;
+    publicTags: string[];
+  }> {
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
-      return project.publicOverviewMd;
+      return {
+        publicOverviewMd: project.publicOverviewMd,
+        publicTagline: project.publicTagline,
+        publicTags: project.publicTags,
+      };
     });
   },
 
