@@ -235,17 +235,31 @@ wait on a PSL submission.
 > With no script on a tenant host there is no way to set a cookie at the base
 > domain, which is the entire class a listing defends.
 >
-> **THE MOMENT ANYTHING ON `*.<base>` CAN RUN CUSTOMER CODE, THE REFINEMENT
-> BECOMES A PREREQUISITE** — cookies are DOMAIN-scoped, not origin-scoped, so one
-> tenant's script could set `Domain=<base>` and every other tenant would receive
-> it. The same-origin policy does not cover this and no application-level fix
-> does either. **MOTIR-4213 carries the mechanism, the lead time and the entry
-> conditions**; the point to note here is that the listing must be MERGED AND
-> SHIPPING IN BROWSERS before such a surface serves its first request, and that
-> is months of other people's release cadence, not ours.
+> **THE MOMENT ANYTHING ON `*.<base>` COULD RUN CUSTOMER CODE, THAT STOPS
+> HOLDING** — cookies are DOMAIN-scoped, not origin-scoped, so one tenant's
+> script could set `Domain=<base>` and every other tenant would receive it on
+> every request. The same-origin policy does not cover it (the origins are
+> already separate; the cookie jar is not) and no application-level fix reaches
+> it.
 >
-> This note records a CONDITION, not a plan: no decision to host customer code on
-> `*.<base>` is taken here or anywhere else in this record.
+> **AND THE ANSWER WOULD STILL NOT BE TO LIST `<base>`.** Every platform that
+> hosts customer code already carries the listing — verified against
+> `https://publicsuffix.org/list/public_suffix_list.dat` on 2026-09-03:
+> `fly.dev`, `vercel.app`, `netlify.app`, `pages.dev`, `workers.dev`,
+> `github.io` and `herokuapp.com` are all public suffixes. **Serving a customer's
+> application at the platform's own hostname INHERITS the isolation** instead of
+> applying for it: no submission, no volunteer-paced review, and — the part that
+> cannot be recovered — no wait for browsers to ship an updated list before the
+> first request is served. Owning the namespace buys branding and nothing else,
+> and if branding is ever worth it the answer is a SEPARATE registrable domain
+> with its own single entry, not `<base>`: apps at `acme.app.<base>` would need
+> `<base>` **and** `app.<base>` listed, and either one alone is a silent no-op
+> that looks like a fix.
+>
+> So this note records a CONDITION and its answer, and no card is owed. No
+> decision to host customer code is taken here or anywhere else in this record.
+> **MOTIR-4213 — the submission for `<base>` — was cancelled on 2026-09-03 for
+> exactly this reasoning.**
 
 ---
 
@@ -1606,4 +1620,7 @@ not a decision this record is waiting on. §9 is updated in place.
   way.
 - It does **not** depend on the Public Suffix List. §4 already said so —
   _"A separate domain gets the isolation immediately; PSL listing is a later
-  refinement"_ — and MOTIR-4213 owns the submission.
+  refinement"_ — and §4's note now records why no submission is owed at all:
+  nothing on this namespace can execute script, and if that ever changes the
+  isolation is INHERITED from the hosting platform's own already-listed domain
+  rather than applied for. MOTIR-4213 was cancelled on that reasoning.

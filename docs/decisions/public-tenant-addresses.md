@@ -9,8 +9,7 @@
   custom domains.
 - **Consumed by:** MOTIR-4208 (buy the base domain), MOTIR-4209 (the address
   store), MOTIR-4210 (the Fly certificates adapter), MOTIR-4211 (the settings
-  design), MOTIR-4212 (the AUP clause), MOTIR-4213 (the PSL submission),
-  MOTIR-4214 (the runtime configuration), MOTIR-4215 (claim/rename the
+  design), MOTIR-4212 (the AUP clause), MOTIR-4214 (the runtime configuration), MOTIR-4215 (claim/rename the
   subdomain), MOTIR-4216 (the customer-domain lifecycle), MOTIR-4217 (the host
   contract), MOTIR-4218 (CORS + return target), MOTIR-4219 (the certificate
   status job), MOTIR-4220 (the host router), MOTIR-4221 / MOTIR-4229 (the
@@ -98,10 +97,15 @@ must have; MOTIR-4208 buys one and MOTIR-4214 configures it.
    certificate `*.<base>` covers every tenant. A three-level address
    (`acme.open.motir.co`) needs a certificate `*.open.motir.co` that
    `*.motir.co` does not cover, which is §4's second reason verbatim.
-3. **Submittable to the Public Suffix List** (MOTIR-4213), which is the later
-   refinement that adds isolation _between tenants_. §4 is explicit that nothing
-   here waits on it: _"A separate domain gets the isolation immediately; PSL
-   listing is a later refinement."_
+3. **Submittable to the Public Suffix List** — an OPTION the shape retains, not
+   a plan it commits to. §4 is explicit that nothing here waits on it, and §4's
+   note now goes further: **no submission is owed at all.** Nothing served on
+   this namespace can execute script, so a listing would protect against
+   nothing; and if a surface that CAN ever ships, the isolation is inherited
+   from the hosting platform's own already-listed domain (`fly.dev`,
+   `vercel.app` and every peer are public suffixes today) rather than applied
+   for. The criterion earns its place here because a namespace that could NEVER
+   be listed would be a one-way door; this one is not.
 4. **Registrable at Spaceship**, the registrar that already holds `motir.co`
    (`marketing-site-hosting.md` §3, nameservers `launch1.spaceship.net` /
    `launch2.spaceship.net`). No new vendor, and therefore no subprocessor row —
@@ -671,7 +675,6 @@ epic, not a settings toggle.
 | **MOTIR-4210** (the certificates adapter)             | §6's three endpoints, the check response's field names, `https://api.machines.dev/v1`, the `%2A.` wildcard encoding, and §10's `FLY_CERTS_TOKEN` / `FLY_CERTS_APP` with the no-fallback token rule.                                                                                                                                                                                                                                   |
 | **MOTIR-4211** (the design)                           | §5's add → verify → issue order and its two record shapes; §6's certificate states; §7's _make primary_; §9's tier upsell on `EntitlementExceededError('custom_domains')`; §8's rename warning ("the old address keeps redirecting and is never released").                                                                                                                                                                           |
 | **MOTIR-4212** (the AUP clause)                       | §12 (our chrome stays), and §5's point that we serve hostnames whose zones we do not control — which is what the acceptable-use clause is about.                                                                                                                                                                                                                                                                                      |
-| **MOTIR-4213** (the PSL submission)                   | §2 rule 3, and §4's statement that PSL listing is a **later refinement** nothing waits on.                                                                                                                                                                                                                                                                                                                                            |
 | **MOTIR-4214** (provisioning)                         | §10's table, in full: four variables, which app each lives on, and which one is a build arg rather than a secret.                                                                                                                                                                                                                                                                                                                     |
 | **MOTIR-4215** (claim / rename)                       | §3 (a subdomain names a workspace), §8's cap of **5**, the reserved-name set, and the retained-alias rule.                                                                                                                                                                                                                                                                                                                            |
 | **MOTIR-4216** (the customer-domain lifecycle)        | §5's four-step order — a certificate is **never** requested before the TXT verifies — and §9's cap assert, run inside the create's transaction.                                                                                                                                                                                                                                                                                       |
@@ -716,8 +719,13 @@ later"_ without an owner.
 
 - **Which string the base domain actually is.** §2 fixes the shape and ranks the
   candidates; **MOTIR-4208** buys one. No code changes when it does.
-- **The Public Suffix List submission.** **MOTIR-4213**. Trigger: the base domain
-  is registered and serving.
+- **The Public Suffix List submission.** **No card, and none should exist** —
+  MOTIR-4213 was cancelled on 2026-09-03. The trigger recorded here used to be
+  _"the base domain is registered and serving"_, and that was wrong: serving
+  build-in-public pages is precisely the case a listing does nothing for, because
+  nothing on them can execute script. See `public-surface-hosts.md` §4's note for
+  the measurement, the condition that would change it, and why even then the
+  answer is to INHERIT a platform's listing rather than apply for our own.
 - **The per-tier values of `maxCustomDomains`.** `billing-tiering.md` §4, via
   Stories **8.1 / 8.6**. §9 seeds them provisionally so MOTIR-4228 is total.
 - **White-labelling a customer address.** §12, with its reversal condition. No
